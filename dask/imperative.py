@@ -128,14 +128,14 @@ def applyfunc(func, args, kwargs, pure=False):
 
 
 @curry
-def do(func, pure=False):
+def delayed(func, pure=False):
     """Wraps a function so that it outputs a ``Value``.
 
     Examples
     --------
     Can be used as a decorator:
 
-    >>> @do
+    >>> @delayed
     ... def add(a, b):
     ...     return a + b
     >>> res = add(1, 2)
@@ -147,7 +147,7 @@ def do(func, pure=False):
     For other cases, it may be cleaner to call ``do`` on a function at call
     time:
 
-    >>> res2 = do(sum)([res, 2, 3])
+    >>> res2 = delayed(sum)([res, 2, 3])
     >>> res2.compute()
     8
 
@@ -156,8 +156,8 @@ def do(func, pure=False):
     for non-pure functions (such as ``time`` or ``random``).
 
     >>> from random import random
-    >>> out1 = do(random)()
-    >>> out2 = do(random)()
+    >>> out1 = delayed(random)()
+    >>> out2 = delayed(random)()
     >>> out1.key == out2.key
     False
 
@@ -166,7 +166,7 @@ def do(func, pure=False):
     consistent name to the output, but will fallback on the same behavior of
     ``pure=False`` if this fails.
 
-    >>> @do(pure=True)
+    >>> @delayed(pure=True)
     ... def add(a, b):
     ...     return a + b
     >>> out1 = add(1, 2)
@@ -181,6 +181,9 @@ def do(func, pure=False):
         _dfunc = wraps(func)(_dfunc)
 
     return _dfunc
+
+
+do = delayed
 
 
 def compute(*args, **kwargs):
