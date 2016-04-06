@@ -6,6 +6,7 @@ import math
 import bz2
 import os
 import uuid
+from collections import Iterable
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
@@ -1474,8 +1475,50 @@ def bag_range(n, npartitions):
     return Bag(dsk, name, npartitions)
 
 
-def bag_zip(*bags):
+def is_scalar(iterable_or_scalar):
+    return (not isinstance(iterable_or_scalar, Iterable) or
+            isinstance(iterable_or_scalar, (str, unicode)))
+
+
+def scalar_zip(*iterable_or_scalars):
+    """ A zip that promotes non-iterables through itertools.repeat.
+
+    Useful for attaching scalar data to the element(s) of one-or-more
+    iterable(s).  At least one of the iterable_or_scalars must be an iterable.
+    For this function's purposes, strings are considered to be scalar, not
+    iterables.
+
+    Examples
+    --------
+
+    >>> from dask.bag.core import scalar_zip
+
+    One iterable and a scalar:
+
+    >>> list(scalar_zip([1, 2, 3], 'abc'))
+    [(1, 'abc'), (2, 'abc'), (3, 'abc')]
+
+    Two iterables and a scalar:
+    >>> list(scalar_zip([3, 1, 4], [6, 2, 8, 2], 'pi'))
+    [(3, 6, 'pi'), (1, 2, 'pi'), (4, 8, 'pi')]
+
+    No scalar:
+    >>> list(scalar_zip([3, 1, 4], [6, 2, 8, 2]))
+    [(3, 6), (1, 2), (4, 8)]
+    """
+    assert any(isinstance(part, Iterable)
+               for part in iterable_or_scalars)
+    iterables = (itertools.repeat(part) if is_scalar(part) else part
+                 for part in iterable_or_scalars)
+    return zip(*iterables)
+
+
+def bag_zip(*parts):
     """ Partition-wise bag zip
+
+    Parts may either be a Bag or an Item; Items are treated as scalars: their
+    value is included in every result tuple.  At least one of the passed parts
+    must be a Bag.
 
     All passed bags must have the same number of partitions.
 
@@ -1487,7 +1530,7 @@ def bag_zip(*bags):
     Examples
     --------
 
-    Correct usage:
+    Normal usage with just Bags:
 
     >>> import dask.bag as db
     >>> evens = db.from_sequence(range(0, 10, 2), partition_size=4)
@@ -1495,6 +1538,13 @@ def bag_zip(*bags):
     >>> pairs = db.zip(evens, odds)
     >>> list(pairs)
     [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
+
+    Usage with a scalar:
+
+    >>> nums = db.from_sequence(range(5))
+    >>> num_with_sums = db.zip(nums, nums.sum())
+    >>> list(num_with_sums)
+    [(0, 10), (1, 10), (2, 10), (3, 10), (4, 10)]
 
     Incorrect usage:
 
@@ -1510,16 +1560,21 @@ def bag_zip(*bags):
     [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
      (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
     """
+    assert all(isinstance(part, Bag) or isinstance(part, Item)
+               for part in parts)
+    bags = tuple(part for part in parts if isinstance(part, Bag))
     npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)
     # TODO: do more checks
 
-    name = 'zip-' + tokenize(*bags)
-    dsk = dict(
-        ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
+    name = 'zip-' + tokenize(*parts)
+    dsk = merge(*(part.dask for part in parts))
+    dsk.update(
+        ((name, i), (reify, (scalar_zip,) + tuple(
+            (part.name, i) if isinstance(part, Bag) else part.key
+            for part in parts)))
         for i in range(npartitions))
-    bags_dsk = merge(*(bag.dask for bag in bags))
-    return Bag(merge(bags_dsk, dsk), name, npartitions)
+    return Bag(dsk, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):

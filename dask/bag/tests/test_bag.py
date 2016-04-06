@@ -19,6 +19,7 @@ import bz2
 import io
 import shutil
 import os
+import sys
 import partd
 from tempfile import mkdtemp
 
@@ -886,6 +887,10 @@ def test_zip(npartitions, hi=1000):
     pairs = db.zip(evens, odds)
     assert pairs.npartitions == npartitions
     assert list(pairs) == list(zip(range(0, hi, 2), range(1, hi, 2)))
+    nums = db.from_sequence(range(hi), npartitions=npartitions)
+    assert abs(1.0 - db.zip(nums, nums.sum())
+               .map(lambda n, total: float(n) / total).sum().compute()
+               ) <= sys.float_info.epsilon
 
 
 def test_repartition():
