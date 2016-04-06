@@ -317,3 +317,9 @@ class AllProgress(SchedulerPlugin):
                     d[k].remove(key)
                 if not d[k]:
                     del d[k]
+
+    def restart(self, scheduler):
+        self.all.clear()
+        self.in_memory.clear()
+        self.erred.clear()
+        self.released.clear()

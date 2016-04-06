@@ -10,6 +10,7 @@ from tornado.queues import Queue
 from dask.core import get_deps
 from distributed.executor import _wait
 from distributed.worker import dumps_task
+from distributed import Nanny
 from distributed.utils_test import (gen_cluster, cluster, inc, dec, gen_test,
         div)
 from distributed.utils import All, key_split
@@ -121,7 +122,7 @@ def check_bar_completed(capsys, width=40):
     assert percent == '100% Completed'
 
 
-@gen_cluster(executor=True)
+@gen_cluster(executor=True, Worker=Nanny)
 def test_AllProgress(e, s, a, b):
     x, y, z = e.map(inc, [1, 2, 3])
     xx, yy, zz = e.map(dec, [x, y, z])
@@ -163,3 +164,8 @@ def test_AllProgress(e, s, a, b):
 
     yield _wait([future])
     assert p.in_memory == {'f': {future.key}}
+
+    yield e._restart()
+
+    for c in [p.all, p.in_memory, p.released, p.erred]:
+        assert not c
