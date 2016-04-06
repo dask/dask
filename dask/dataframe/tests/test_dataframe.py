@@ -1454,6 +1454,13 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+def test_cov_corr_stable():
+    df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])
+    ddf = dd.from_pandas(df, npartitions=50)
+    assert eq(ddf.cov(), df.cov())
+    assert eq(ddf.corr(), df.corr())
+
+
 def test_apply_infer_columns():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)

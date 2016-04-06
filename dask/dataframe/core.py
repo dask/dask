@@ -1510,7 +1510,9 @@ class DataFrame(_Frame):
         return to_bag(self, index)
 
     def _get_numeric_data(self, how='any', subset=None):
-
+        # If unknown dtype, need to infer from head.
+        if not self._known_dtype:
+            self.dtypes
         # calculate columns to avoid unnecessary calculation
         numerics = self._pd._get_numeric_data()
 
@@ -2258,18 +2260,21 @@ def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     sums = np.nan_to_num(data['sum'])
     counts = data['count']
 
-    totals = np.cumsum(sums, 0)
-    ns = np.cumsum(counts, 0)
+    cum_sums = np.cumsum(sums, 0)
+    cum_counts = np.cumsum(counts, 0)
 
-    ts = ns[:-1] * sums[1:] - counts[1:] * totals[:-1]
-    dens = ns[1:] * ns[:-1] * counts[1:]
-    dens = np.where(dens, dens, np.nan)
-    C = (np.nansum(data['cov'], 0) +
-         np.nansum(ts * ts.transpose((0, 2, 1)) / dens, 0))
-    C[ns[-1] < min_periods] = np.nan
-    nobs = np.where(ns[-1], ns[-1], np.nan)
+    s1 = cum_sums[:-1]
+    s2 = sums[1:]
+    n1 = cum_counts[:-1]
+    n2 = counts[1:]
+    d = (s2/n2) - (s1/n1)
+    C = (np.nansum((n1 * n2)/(n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
+         np.nansum(data['cov'], 0))
+
+    C[cum_counts[-1] < min_periods] = np.nan
+    nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
     if corr:
-        mu = totals[-1] / nobs
+        mu = cum_sums[-1] / nobs
         counts_na = np.where(counts, counts, np.nan)
         m2 = np.nansum(data['m'] + counts*(sums/counts_na - mu)**2, axis=0)
         den = np.sqrt(m2 * m2.T)
