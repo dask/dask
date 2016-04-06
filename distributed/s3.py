@@ -199,7 +199,7 @@ def read_csv(path, executor=None, fs=None, lazy=True, collection=True, linetermi
     with fs.open(filenames[0], mode='rb') as f:
         b = f.read(10000)
         ff = io.BytesIO(b)
-        if kwargs.get('header', None) in (None, 'infer', 0):
+        if kwargs.get('header', 'infer') in ('infer', 0):
             header = ff.readline()
             ff.seek(0)
         else:

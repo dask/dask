@@ -128,7 +128,7 @@ def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
                for fn in filenames]
 
     with hdfs.open(filenames[0]) as f:
-        if kwargs.get('header') in (0, 'infer'):
+        if kwargs.get('header', 'infer') in (0, 'infer'):
             header = f.readline()
             f.seek(0)
         else:
