@@ -189,6 +189,7 @@ help make debugging and profiling graph execution easier.
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`get-involved`
+* :doc:`cite`
 
 .. toctree::
    :maxdepth: 1
@@ -203,6 +204,7 @@ help make debugging and profiling graph execution easier.
    spark.rst
    caching.rst
    get-involved.rst
+   cite.rst
 
 **Contact**
 
