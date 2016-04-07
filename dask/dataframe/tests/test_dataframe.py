@@ -1602,3 +1602,12 @@ def test_to_imperative():
     assert isinstance(b, Value)
 
     assert eq(a.compute(), df.iloc[:2])
+
+
+def test_astype():
+    df = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
+                      index=[10, 20, 30, 40])
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.astype(float), df.astype(float))
+    assert eq(a.x.astype(float), df.x.astype(float))

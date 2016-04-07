@@ -1697,6 +1697,11 @@ class DataFrame(_Frame):
                                       "implemented")
         return cov_corr(self, min_periods, True)
 
+    @derived_from(pd.DataFrame)
+    def astype(self, dtype):
+        empty = self._pd.astype(dtype)
+        return map_partitions(pd.DataFrame.astype, empty, self, dtype=dtype)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
