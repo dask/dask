@@ -118,6 +118,7 @@ then you should start here.
    bag.rst
    dataframe.rst
    imperative.rst
+   custom-collections.rst
 
 **Graphs**
 
