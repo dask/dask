@@ -779,6 +779,14 @@ def test_reductions_frame_dtypes():
     assert numerics._get_numeric_data().dask == numerics.dask
 
 
+def test_get_numeric_data_unknown_part():
+    df = pd.DataFrame({'a': range(5), 'b': range(5), 'c': list('abcde')})
+    ddf = dd.from_pandas(df, 3)
+    # Drop dtype information
+    ddf = dd.DataFrame(ddf.dask, ddf._name, ['a', 'b', 'c'], ddf.divisions)
+    assert eq(ddf._get_numeric_data(), df._get_numeric_data())
+
+
 def test_reductions_frame_nan():
     df = pd.DataFrame({'a': [1, 2, np.nan, 4, 5, 6, 7, 8],
                        'b': [1, 2, np.nan, np.nan, np.nan, 5, np.nan, np.nan],
