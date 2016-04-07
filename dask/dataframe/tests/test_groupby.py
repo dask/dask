@@ -7,6 +7,87 @@ import dask.dataframe as dd
 from dask.dataframe.utils import eq, assert_dask_graph
 
 
+def groupby_internal_repr():
+    pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
+                        'y': list('abcbabbcda')})
+    ddf = dd.from_pandas(pdf, 3)
+
+    gp = pdf.groupby('y')
+    dp = ddf.groupby('y')
+    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp.obj, dd.DataFrame)
+    assert eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby('y')['x']
+    dp = ddf.groupby('y')['x']
+    assert isinstance(dp, dd.groupby.SeriesGroupBy)
+    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    # slicing should not affect to internal
+    assert isinstance(dp.obj, dd.Series)
+    assert eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby('y')[['x']]
+    dp = ddf.groupby('y')[['x']]
+    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    # slicing should not affect to internal
+    assert isinstance(dp.obj, dd.DataFrame)
+    assert eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby(pdf.y)['x']
+    dp = ddf.groupby(ddf.y)['x']
+    assert isinstance(dp, dd.groupby.SeriesGroupBy)
+    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    # slicing should not affect to internal
+    assert isinstance(dp.obj, dd.Series)
+    assert eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby(pdf.y)[['x']]
+    dp = ddf.groupby(ddf.y)[['x']]
+    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    # slicing should not affect to internal
+    assert isinstance(dp.obj, dd.DataFrame)
+    assert eq(dp.obj, gp.obj)
+
+def groupby_error():
+    pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
+                        'y': list('abcbabbcda')})
+    ddf = dd.from_pandas(pdf, 3)
+
+    with tm.assertRaises(KeyError):
+        ddf.groupby('A')
+
+    with tm.assertRaises(KeyError):
+        ddf.groupby(['x', 'A'])
+
+    dp = ddf.groupby('y')
+
+    msg = 'Column not found: '
+    with tm.assertRaisesRegexp(KeyError, msg):
+        dp['A']
+
+    with tm.assertRaisesRegexp(KeyError, msg):
+        dp[['x', 'A']]
+
+
+def groupby_internal_head():
+    pdf = pd.DataFrame({'A': [1, 2] * 10,
+                       'B': np.random.randn(20),
+                       'C': np.random.randn(20)})
+    ddf = dd.from_pandas(df, 3)
+
+    assert eq(ddf.groupby('A')._head().sum(),
+              pdf.head().groupby('A').sum())
+
+    assert eq(ddf.groupby(ddf['A'])._head().sum(),
+              pdf.head().groupby(pdf['A']).sum())
+
+    assert eq(ddf.groupby(ddf['A'] + 1)._head().sum(),
+              pdf.head().groupby(pdf['A'] + 1).sum())
+
+
 def test_full_groupby():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                                   index=[0, 1, 3]),
@@ -25,9 +106,6 @@ def test_full_groupby():
         return df
 
     assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
-
-    assert sorted(d.groupby('a').apply(func).dask) == \
-           sorted(d.groupby('a').apply(func).dask)
 
 
 def test_groupby_on_index():
@@ -119,8 +197,6 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     assert eq(s.groupby('strings')['data'].nunique(), expected)
 
 
-
-
 def test_series_groupby_propagates_names():
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     ddf = dd.from_pandas(df, 2)
@@ -130,8 +206,7 @@ def test_series_groupby_propagates_names():
 
     expected = df.groupby('x').apply(func)
     expected.name = 'y'
-
-    tm.assert_series_equal(result.compute(), expected)
+    assert eq(result, expected)
 
 def test_series_groupby():
     s = pd.Series([1, 2, 2, 1, 1])
@@ -149,9 +224,36 @@ def test_series_groupby():
         assert eq(dg.min(), pdg.min())
         assert eq(dg.max(), pdg.max())
 
-    assert raises(TypeError, lambda: ss.groupby([1, 2]))
+def test_series_groupby_errors():
+    s = pd.Series([1, 2, 2, 1, 1])
+    pd_group = s.groupby(s)
+
+    ss = dd.from_pandas(s, npartitions=2)
+
+    msg = "Grouper for '1' not 1-dimensional"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        s.groupby([1, 2])  # pandas
+    with tm.assertRaisesRegexp(ValueError, msg):
+        ss.groupby([1, 2]) # dask should raise the same error
+    msg = "Grouper for '2' not 1-dimensional"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        s.groupby([2])  # pandas
+    with tm.assertRaisesRegexp(ValueError, msg):
+        ss.groupby([2]) # dask should raise the same error
+
+    msg = "No group keys passed!"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        s.groupby([])  # pandas
+    with tm.assertRaisesRegexp(ValueError, msg):
+        ss.groupby([]) # dask should raise the same error
+
     sss = dd.from_pandas(s, npartitions=3)
     assert raises(NotImplementedError, lambda: ss.groupby(sss))
+
+    with tm.assertRaises(KeyError):
+        s.groupby('x')  # pandas
+    with tm.assertRaises(KeyError):
+        ss.groupby('x') # dask should raise the same error
 
 
 def test_groupby_index_array():
@@ -271,3 +373,41 @@ def test_split_apply_combine_on_series():
     # mean consists from sum and count operations
     assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-sum')
     assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-count')
+
+
+def test_apply_shuffle():
+    pdf = pd.DataFrame({'A': [1, 2, 3, 4] * 5,
+                        'B': np.random.randn(20),
+                        'C': np.random.randn(20),
+                        'D': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 3)
+
+    assert eq(ddf.groupby('A').apply(lambda x: x.sum()),
+              pdf.groupby('A').apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A']).apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A']).apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
+
+    # SeriesGroupBy
+    assert eq(ddf.groupby('A')['B'].apply(lambda x: x.sum()),
+              pdf.groupby('A')['B'].apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A'])['B'].apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A'])['B'].apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
+
+    # DataFrameGroupBy with column slice
+    assert eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
+              pdf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A'])[['B', 'C']].apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A'])[['B', 'C']].apply(lambda x: x.sum()))
+
+    assert eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
+              pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
+

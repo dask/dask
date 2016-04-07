@@ -184,13 +184,6 @@ class _Frame(Base):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @property
-    def _pd(self):
-        """
-        Return an empty pd.DataFrame / pd.Series to emulate calculation result.
-        """
-        return self._pd_cache
-
     @classmethod
     def _build_pd(cls, metadata):
         """ build pandas instance from passed metadata """
@@ -355,7 +348,7 @@ class _Frame(Base):
     def head(self, n=5, compute=True):
         """ First n rows of the dataset
 
-        Caveat, the only checks the first n rows of the first partition.
+        Caveat, this only checks the first n rows of the first partition.
         """
         name = 'head-%d-%s' % (n, self._name)
         dsk = {(name, 0): (lambda x, n: x.head(n=n), (self._name, 0), n)}
@@ -891,7 +884,7 @@ class Series(_Frame):
         result.dask = dsk
         result._name = _name
 
-        result._pd_cache, result._known_dtype = cls._build_pd(name)
+        result._pd, result._known_dtype = cls._build_pd(name)
 
         result.divisions = tuple(divisions)
         return result
@@ -931,8 +924,8 @@ class Series(_Frame):
         if self._known_dtype:
             return self.dtype
         else:
-            self._pd_cache, self._known_dtype = self._build_pd(self.head())
-            return self._pd_cache.dtype
+            self._pd, self._known_dtype = self._build_pd(self.head())
+            return self._pd.dtype
 
     def __getattr__(self, key):
         if key == 'cat':
@@ -1205,10 +1198,10 @@ class Series(_Frame):
 
         if name is no_default:
             msg = ("name is not specified, inferred from partial data. "
-                   "Please provide name if the result is unecpected.\n"
-                   "  Before: s.apply(func)\n"
-                   "  After:  s.apply(func, name=['x', 'y']) for dataframe result\n"
-                   "  or:     s.apply(func, name='x')        for series result")
+                   "Please provide name if the result is unexpected.\n"
+                   "  Before: .apply(func)\n"
+                   "  After:  .apply(func, name=['x', 'y']) for dataframe result\n"
+                   "  or:     .apply(func, name='x')        for series result")
             warnings.warn(msg)
 
             name = _emulate(pd.Series.apply, self.head(), func,
@@ -1251,6 +1244,21 @@ class Index(Series):
     @property
     def _constructor(self):
         return Index
+
+    def head(self, n=5, compute=True):
+        """ First n items of the Index.
+
+        Caveat, this only checks the first partition.
+        """
+        name = 'head-%d-%s' % (n, self._name)
+        dsk = {(name, 0): (lambda x, n: x[:n], (self._name, 0), n)}
+
+        result = self._constructor(merge(self.dask, dsk), name,
+                                   self._pd, self.divisions[:2])
+
+        if compute:
+            result = result.compute()
+        return result
 
     def nunique(self):
         return self.drop_duplicates().count()
@@ -1295,7 +1303,7 @@ class DataFrame(_Frame):
         result.dask = dask
         result._name = name
 
-        result._pd_cache, result._known_dtype = cls._build_pd(columns)
+        result._pd, result._known_dtype = cls._build_pd(columns)
         result.divisions = tuple(divisions)
         return result
 
@@ -1386,8 +1394,8 @@ class DataFrame(_Frame):
         if self._known_dtype:
             return self._pd.dtypes
         else:
-            self._pd_cache, self._known_dtype = self._build_pd(self.head())
-            return self._pd_cache.dtypes
+            self._pd, self._known_dtype = self._build_pd(self.head())
+            return self._pd.dtypes
 
     @derived_from(pd.DataFrame)
     def set_index(self, other, drop=True, **kwargs):
@@ -1664,10 +1672,10 @@ class DataFrame(_Frame):
 
         if columns is no_default:
             msg = ("columns is not specified, inferred from partial data. "
-                   "Please provide columns if the result is unecpected.\n"
-                   "  Before: df.apply(func)\n"
-                   "  After:  df.apply(func, columns=['x', 'y']) for dataframe result\n"
-                   "  or:     df.apply(func, columns='x')        for series result")
+                   "Please provide columns if the result is unexpected.\n"
+                   "  Before: .apply(func)\n"
+                   "  After:  .apply(func, columns=['x', 'y']) for dataframe result\n"
+                   "  or:     .apply(func, columns='x')        for series result")
             warnings.warn(msg)
 
             columns = _emulate(pd.DataFrame.apply, self.head(), func,
