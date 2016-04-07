@@ -200,6 +200,8 @@ def key_split(s):
     'hello-world'
     >>> key_split('ae05086432ca935f6eba409a8ecd4896')
     'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    'myclass'
     >>> key_split(None)
     'Other'
     """
@@ -218,6 +220,8 @@ def key_split(s):
         if len(result) == 32 and re.match(r'[a-f0-9]{32}', result):
             return 'data'
         else:
+            if result[0] == '<':
+                result = result.strip('<>').split()[0].split('.')[-1]
             return result
     except:
         return 'Other'

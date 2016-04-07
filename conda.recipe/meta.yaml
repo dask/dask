@@ -17,6 +17,7 @@ requirements:
     - locket
     - six
     - tblib
+    - joblib
     - lz4
     - psutil
 
@@ -31,6 +32,7 @@ requirements:
     - locket
     - six
     - tblib
+    - joblib
     - lz4
     - psutil
 
