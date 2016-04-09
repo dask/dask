@@ -194,9 +194,6 @@ class Server(TCPServer):
                     type(self).__name__)
 
 
-sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
-
-
 @gen.coroutine
 def read(stream):
     """ Read a message from a stream """
@@ -204,8 +201,9 @@ def read(stream):
         msg = yield stream.recv()
         raise Return(msg)
     else:
-        msg = yield stream.read_until(sentinel)
-        msg = msg[:-len(sentinel)]
+        nbytes = yield stream.read_bytes(8)
+        nbytes = struct.unpack('L', nbytes)[0]
+        msg = yield stream.read_bytes(nbytes)
         try:
             msg = protocol.loads(msg)
             if 'op' in msg:
@@ -227,7 +225,7 @@ def write(stream, msg):
         except Exception as e:
             logger.exception(e)
             raise
-        yield stream.write(msg + sentinel)
+        yield stream.write(struct.pack('L', len(msg)) + msg)
         logger.debug("Written %s", orig)
 
 
