@@ -1040,6 +1040,26 @@ def test_traceback(e, s, a, b):
         assert any('x / y' in line
                    for line in pluck(3, traceback.extract_tb(tb)))
 
+@gen_cluster(executor=True)
+def test_get_traceback(e, s, a, b):
+    try:
+        yield e._get({'x': (div, 1, 0)}, 'x')
+    except ZeroDivisionError:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        L = traceback.format_tb(exc_traceback)
+        assert any('x / y' in line for line in L)
+
+
+@gen_cluster(executor=True)
+def test_gather_traceback(e, s, a, b):
+    x = e.submit(div, 1, 0)
+    try:
+        yield e._gather(x)
+    except ZeroDivisionError:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        L = traceback.format_tb(exc_traceback)
+        assert any('x / y' in line for line in L)
+
 
 def test_traceback_sync(loop):
     with cluster() as (s, [a, b]):
