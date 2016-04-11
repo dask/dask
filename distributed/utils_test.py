@@ -55,7 +55,7 @@ def deep(n):
 
 
 def throws(x):
-    raise Exception()
+    raise Exception('hello!')
 
 
 def double(x):
