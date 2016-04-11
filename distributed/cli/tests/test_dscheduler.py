@@ -42,6 +42,7 @@ def test_no_bokeh():
             os.kill(proc.pid, signal.SIGINT)
 
 
+@pytest.mark.skipif('TRAVIS_PYTHON_VERSION' in os.environ, reason="don't know")
 def test_bokeh():
     pytest.importorskip('bokeh')
 
