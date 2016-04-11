@@ -3,12 +3,13 @@ from __future__ import print_function, division, absolute_import
 from collections import Iterator
 import pytest
 import io
+from time import time, sleep
 from threading import Thread
 import threading
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
-from time import time, sleep
+import traceback
 
 import dask
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
@@ -84,8 +85,29 @@ def test_sync_error(loop):
     while not loop._running:
         sleep(0.01)
 
-    with pytest.raises(Exception):
+    try:
         result = sync(loop, throws, 1)
+    except Exception as exc:
+        f = exc
+        assert 'hello' in str(exc)
+        tb = get_traceback()
+        L = traceback.format_tb(tb)
+        assert any('throws' in line for line in L)
+
+    def function1(x):
+        return function2(x)
+
+    def function2(x):
+        return throws(x)
+
+    try:
+        result = sync(loop, function1, 1)
+    except Exception as exc:
+        assert 'hello' in str(exc)
+        tb = get_traceback()
+        L = traceback.format_tb(tb)
+        assert any('function1' in line for line in L)
+        assert any('function2' in line for line in L)
 
     loop.add_callback(e.set)
     thread.join()

@@ -105,7 +105,7 @@ task_stream_index = [0]
 def task_stream_update():
     with log_errors():
         index = messages['task-events']['index']
-        rectangles = messages['task-events']['rectangles']
+        old = rectangles = messages['task-events']['rectangles']
 
         if not index or index[-1] == task_stream_index[0]:
             return
@@ -114,6 +114,13 @@ def task_stream_update():
         rectangles = {k: [v[i] for i in range(ind, len(index))]
                       for k, v in rectangles.items()}
         task_stream_index[0] = index[-1]
+
+        # If there has been a five second delay, clear old rectangles
+        if rectangles['start']:
+            last_end = old['start'][ind - 1] + old['duration'][ind - 1]
+            if min(rectangles['start']) > last_end + 20000:  # long delay
+                task_stream_source.data.update(rectangles)
+                return
 
         task_stream_source.stream(rectangles, 1000)
 

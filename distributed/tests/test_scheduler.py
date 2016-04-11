@@ -892,6 +892,7 @@ def test_host_health(s, a, b, c):
 
         assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
         assert s.host_info[w.ip]['heartbeat-port'] in s.host_info[w.ip]['ports']
+        assert -1 < s.host_info[w.ip]['time-delay'] < 1
 
     assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
     assert s.host_info['127.0.0.1']['cores'] == 3

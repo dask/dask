@@ -649,16 +649,22 @@ class Executor(object):
             logger.debug("Waiting on futures to clear before gather")
             yield All([self.futures[key]['event'].wait() for key in keys
                                                     if key in self.futures])
-            exceptions = {key: self.futures[key]['exception'] for key in keys
-                          if self.futures[key]['status'] == 'error'}
-            if exceptions:
-                if errors == 'raise':
-                    raise first(exceptions.values())
-                if errors == 'skip':
-                    keys = [key for key in keys if key not in exceptions]
-                    bad_data.update({key: None for key in exceptions})
-                else:
-                    raise ValueError("Bad value, `errors=%s`" % errors)
+            exceptions = set()
+            bad_keys = set()
+            for key in keys:
+                if self.futures[key]['status'] == 'error':
+                    exceptions.add(key)
+                    if errors == 'raise':
+                        d = self.futures[key]
+                        six.reraise(type(d['exception']),
+                                    d['exception'],
+                                    d['traceback'])
+                    if errors == 'skip':
+                        bad_keys.add(key)
+                        bad_data[key] = None
+                    else:
+                        raise ValueError("Bad value, `errors=%s`" % errors)
+            keys = [k for k in keys if k not in bad_keys]
 
             response = yield self.scheduler.gather(keys=keys)
 

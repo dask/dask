@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import socket
+import six
 import sys
 import tblib.pickling_support
 import tempfile
@@ -89,6 +90,7 @@ def sync(loop, func, *args, **kwargs):
     e = Event()
     result = [None]
     error = [False]
+    traceback = [False]
 
     @gen.coroutine
     def f():
@@ -97,7 +99,9 @@ def sync(loop, func, *args, **kwargs):
         except Exception as exc:
             logger.exception(exc)
             result[0] = exc
-            error[0] = True
+            error[0] = exc
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback[0] = exc_traceback
         finally:
             e.set()
 
@@ -105,7 +109,7 @@ def sync(loop, func, *args, **kwargs):
     while not e.is_set():
         e.wait(1000000)
     if error[0]:
-        raise result[0]
+        six.reraise(type(error[0]), error[0], traceback[0])
     else:
         return result[0]
 

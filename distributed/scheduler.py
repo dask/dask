@@ -1105,6 +1105,18 @@ class Scheduler(Server):
 
         self.worker_streams[ident].send(msg)
 
+    def correct_time_delay(self, worker, msg):
+        """ Apply offset time delay in message times
+
+        Operates in place
+        """
+        if 'time-delay' in self.host_info[worker]:
+            delay = self.host_info[worker]['time-delay']
+            for key in ['transfer-start', 'transfer-stop', 'time', 'compute-start',
+                    'compute-stop']:
+                if key in msg:
+                    msg[key] += delay
+
     @gen.coroutine
     def worker_stream(self, ident):
         yield gen.sleep(0)
@@ -1126,6 +1138,8 @@ class Scheduler(Server):
 
                     if msg == 'OK':  # from close
                         break
+
+                    self.correct_time_delay(ip, msg)
 
                     if msg['status'] == 'error':
                         self.mark_task_erred(worker=ident, **msg)
@@ -1189,6 +1203,7 @@ class Scheduler(Server):
     @gen.coroutine
     def heartbeat(self, host):
         port = self.host_info[host]['heartbeat-port']
+        start_time = time()
         start = default_timer()
 
         try:
@@ -1201,10 +1216,12 @@ class Scheduler(Server):
             logger.exception(e)
 
         end = default_timer()
+        end_time = time()
         last_seen = datetime.now()
 
         d['latency'] = end - start
         d['last-seen'] = last_seen
+        d['time-delay'] = (end_time + start_time) / 2 - d['time']
 
         self.host_info[host].update(d)
 

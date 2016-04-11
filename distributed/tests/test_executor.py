@@ -1040,6 +1040,26 @@ def test_traceback(e, s, a, b):
         assert any('x / y' in line
                    for line in pluck(3, traceback.extract_tb(tb)))
 
+@gen_cluster(executor=True)
+def test_get_traceback(e, s, a, b):
+    try:
+        yield e._get({'x': (div, 1, 0)}, 'x')
+    except ZeroDivisionError:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        L = traceback.format_tb(exc_traceback)
+        assert any('x / y' in line for line in L)
+
+
+@gen_cluster(executor=True)
+def test_gather_traceback(e, s, a, b):
+    x = e.submit(div, 1, 0)
+    try:
+        yield e._gather(x)
+    except ZeroDivisionError:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        L = traceback.format_tb(exc_traceback)
+        assert any('x / y' in line for line in L)
+
 
 def test_traceback_sync(loop):
     with cluster() as (s, [a, b]):
@@ -1064,7 +1084,6 @@ def test_traceback_sync(loop):
 
 @gen_cluster(Worker=Nanny, executor=True)
 def test_restart(e, s, a, b):
-    from distributed import Nanny, rpc
     assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
     x = e.submit(inc, 1)
@@ -1089,6 +1108,22 @@ def test_restart(e, s, a, b):
 
     assert not s.who_wants
     assert not s.wants_what
+
+
+@gen_cluster(Worker=Nanny, executor=True)
+def test_restart_cleared(e, s, a, b):
+    x = 2 * value(1) + 1
+    f = e.compute(x)
+    yield _wait([f])
+    assert s.released
+
+    yield e._restart()
+
+    for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
+            s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
+            s.released, s.keyorder, s.exceptions, s.who_wants,
+            s.exceptions_blame]:
+        assert not coll
 
 
 def test_restart_sync_no_center(loop):

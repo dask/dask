@@ -26,7 +26,6 @@ outside of this module though and is not baked in.
 """
 from __future__ import print_function, division, absolute_import
 
-from io import BytesIO
 import struct
 
 try:
@@ -76,13 +75,10 @@ def dumps(msg):
         header_bytes = msgpack.dumps(header, use_bin_type=True)
     else:
         header_bytes = b''
-    out = BytesIO()
-    out.write(struct.pack('I', len(header_bytes)))
-    out.write(header_bytes)
-    out.write(payload)
-
-    out.seek(0)
-    return out.read()
+    out = b''.join([struct.pack('I', len(header_bytes)),
+                    header_bytes,
+                    payload])
+    return out
 
 
 def loads(b):
@@ -103,13 +99,5 @@ def loads(b):
                     " installed" % header['compression'].decode())
 
     msg = msgpack.loads(payload, encoding='utf8')
-
-    if header.get('decode'):
-        if isinstance(msg, dict) and msg:
-            msg = keymap(bytes.decode, msg)
-        elif isinstance(msg, bytes):
-            msg = msg.decode()
-        else:
-            raise TypeError("Asked to decode a %s" % type(msg).__name__)
 
     return msg
