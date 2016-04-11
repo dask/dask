@@ -71,3 +71,5 @@
 [Wesley Emeneker](http://github.com/nevermindewe/)
 
 [Will Warner](https://github.com/electronwill/)
+
+[Daniel Davis](https://github.com/wabu)

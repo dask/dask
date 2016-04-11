@@ -16,6 +16,7 @@ if PY3:
     from io import StringIO, BytesIO
     from bz2 import BZ2File
     from gzip import GzipFile
+    from lzma import LZMAFile
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
@@ -168,6 +169,14 @@ else:
                 return self.__obj.writelines(*args, **kwargs)
     else:
         GzipFile = gzip.GzipFile
+
+    try:
+        from backports.lzma import LZMAFile
+    except ImportError:
+        class LZMAFile:
+            def __init__(self, *args, **kwargs):
+                raise ValueError("xz files requires the lzma module. "
+                                 "To use, install backports.lzma.")
 
 
 def getargspec(func):
