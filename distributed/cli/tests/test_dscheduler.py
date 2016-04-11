@@ -1,6 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import os
 import requests
+import signal
 import socket
 from subprocess import Popen, PIPE
 from time import sleep, time
@@ -21,7 +23,7 @@ def test_defaults():
         assert response.json()['status'] == 'running'
     finally:
         e.shutdown()
-        proc.kill()
+        os.kill(proc.pid, signal.SIGINT)
 
 
 @pytest.mark.skipif('True', reason='')
@@ -37,7 +39,7 @@ def test_no_bokeh():
         with ignoring(Exception):
             e.shutdown()
         with ignoring(Exception):
-            proc.kill()
+            os.kill(proc.pid, signal.SIGINT)
 
 
 def test_bokeh():
@@ -67,7 +69,4 @@ def test_bokeh():
         with ignoring(Exception):
             e.shutdown()
         with ignoring(Exception):
-            import distributed.diagnostics.bokeh
-            distributed.diagnostics.bokeh.server_process.kill()
-        with ignoring(Exception):
-            proc.kill()
+            os.kill(proc.pid, signal.SIGINT)

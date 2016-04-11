@@ -22,13 +22,12 @@ ip = get_ip()
 
 import signal
 
+bokeh_proc = [False]
+
 
 def handle_signal(sig, frame):
-    try:
-        import distributed.bokeh
-        distributed.bokeh.server_process.kill()
-    except Exception:
-        pass
+    if bokeh_proc[0]:
+        bokeh_proc[0].terminate()
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 signal.signal(signal.SIGINT, handle_signal)
@@ -71,9 +70,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
                      sum([['--host', host] for host in hosts], []))
             if show:
                 args.append('--show')
-            proc = subprocess.Popen(args)
-
-            distributed.bokeh.server_process = proc  # monkey patch
+            bokeh_proc[0] = subprocess.Popen(args)
 
             logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
                         % (ip, bokeh_port))
@@ -85,11 +82,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
     loop.start()
     loop.close()
     scheduler.stop()
-    if _bokeh:
-        try:
-            distributed.bokeh.server_process.kill()
-        except:
-            pass
+    bokeh_proc[0].terminate()
 
     logger.info("End scheduler at %s:%d", ip, port)
 

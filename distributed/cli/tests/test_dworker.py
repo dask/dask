@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+import os
 import requests
 from subprocess import Popen, PIPE
+import signal
 from time import time, sleep
 
 from distributed import Scheduler, Executor
@@ -32,7 +34,7 @@ def test_nanny_worker_ports(loop):
             sync(loop, w.terminate)
 
         with ignoring(Exception):
-            sched.kill()
+            os.kill(sched.pid, signal.SIGINT)
 
         with ignoring(Exception):
             worker.kill()
