@@ -9,6 +9,8 @@ import types
 PY3 = sys.version_info[0] == 3
 PY2 = sys.version_info[0] == 2
 
+LZMA_AVAILABLE = True
+
 if PY3:
     import builtins
     from queue import Queue, Empty
@@ -183,6 +185,7 @@ else:
             def __init__(self, *args, **kwargs):
                 raise ValueError("xz files requires the lzma module. "
                                  "To use, install lzmaffi or backports.lzma.")
+        LZMA_AVAILABLE = False
 
 
 def getargspec(func):

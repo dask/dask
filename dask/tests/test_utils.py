@@ -3,16 +3,16 @@ import os
 import numpy as np
 import pytest
 
-from dask.compatibility import BZ2File, GzipFile, LZMAFile
+from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, different_seeds)
+                        Dispatch, tmpfile, different_seeds, file_size)
 
 
+SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
 @pytest.mark.parametrize('myopen,compression',
-                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'), (LZMAFile, 'xz')])
+                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'),
+                          SKIP_XZ((LZMAFile, 'xz'))])
 def test_textblock(myopen, compression):
-    if compression == 'xz':
-        pytest.importorskip('lzma')
     text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
     with filetext(text, open=myopen, mode='wb') as fn:
         text = ''.join(textblock(fn, 1, 11, compression)).encode()
@@ -22,6 +22,15 @@ def test_textblock(myopen, compression):
         k = 3 + len(os.linesep)
         assert ''.join(textblock(fn, 0, k, compression)).encode() == ('123' + os.linesep).encode()
         assert ''.join(textblock(fn, k, k, compression)).encode() == b''
+
+
+@pytest.mark.parametrize('myopen,compression',
+                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'),
+                          SKIP_XZ((LZMAFile, 'xz'))])
+def test_filesize(myopen, compression):
+    text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
+    with filetext(text, open=myopen, mode='wb') as fn:
+        assert file_size(fn, compression) == len(text)
 
 
 def test_textblock_multibyte_linesep():
