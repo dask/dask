@@ -3,7 +3,7 @@ import datetime
 
 from tornado import gen
 
-from distributed.diagnostics.worker_monitor import (resource_profile_plot,
+from distributed.bokeh.worker_monitor import (resource_profile_plot,
         resource_profile_update, resource_append)
 from distributed.diagnostics.scheduler import workers, tasks
 from distributed.utils_test import gen_cluster

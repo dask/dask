@@ -22,8 +22,12 @@ ip = get_ip()
 
 import signal
 
+bokeh_proc = [False]
+
 
 def handle_signal(sig, frame):
+    if bokeh_proc[0]:
+        bokeh_proc[0].terminate()
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 signal.signal(signal.SIGINT, handle_signal)
@@ -52,11 +56,11 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
     if _bokeh:
         try:
             import bokeh
-            import distributed.diagnostics.bokeh
+            import distributed.bokeh
             hosts = ['%s:%d' % (h, bokeh_port) for h in
                      ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
             dirname = os.path.dirname(distributed.__file__)
-            paths = [os.path.join(dirname, 'diagnostics', 'bokeh', name)
+            paths = [os.path.join(dirname, 'bokeh', name)
                      for name in ['status', 'tasks']]
             args = (['bokeh', 'serve'] + paths +
                     ['--log-level', 'warning',
@@ -66,9 +70,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
                      sum([['--host', host] for host in hosts], []))
             if show:
                 args.append('--show')
-            proc = subprocess.Popen(args)
-
-            distributed.diagnostics.bokeh.server_process = proc  # monkey patch
+            bokeh_proc[0] = subprocess.Popen(args)
 
             logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
                         % (ip, bokeh_port))
@@ -80,6 +82,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
     loop.start()
     loop.close()
     scheduler.stop()
+    bokeh_proc[0].terminate()
 
     logger.info("End scheduler at %s:%d", ip, port)
 
