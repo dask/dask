@@ -6,12 +6,12 @@ from bisect import bisect
 from toolz import valmap
 
 from bokeh.plotting import curdoc, vplot
-from distributed.diagnostics.status_monitor import (task_stream_plot,
+from distributed.bokeh.status_monitor import (task_stream_plot,
         progress_plot)
 from distributed.utils import log_errors
-import distributed.diagnostics.bokeh
+import distributed.bokeh
 
-messages = distributed.diagnostics.bokeh.messages  # global message store
+messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
 width = 800
 

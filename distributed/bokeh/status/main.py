@@ -8,17 +8,17 @@ import json
 from bokeh.plotting import curdoc, vplot
 from toolz import valmap
 
-from distributed.diagnostics.status_monitor import (
+from distributed.bokeh.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
         task_table_update, progress_plot, task_stream_plot)
-from distributed.diagnostics.worker_monitor import (
+from distributed.bokeh.worker_monitor import (
         resource_profile_plot, resource_profile_update)
 from distributed.diagnostics.progress_stream import progress_quads
 from distributed.utils import log_errors
-import distributed.diagnostics.bokeh
+import distributed.bokeh
 
 
-messages = distributed.diagnostics.bokeh.messages  # global message store
+messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
 table_width = 800
 width = 600

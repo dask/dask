@@ -12,13 +12,13 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read
 from distributed.diagnostics.progress_stream import progress_stream
-from distributed.diagnostics.worker_monitor import resource_append
-import distributed.diagnostics.bokeh
+from distributed.bokeh.worker_monitor import resource_append
+import distributed.bokeh
 from distributed.utils import log_errors
 
 client = AsyncHTTPClient()
 
-messages = distributed.diagnostics.bokeh.messages  # monkey-patching
+messages = distributed.bokeh.messages  # monkey-patching
 
 
 @gen.coroutine
