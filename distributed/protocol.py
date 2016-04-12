@@ -33,13 +33,14 @@ try:
 except ImportError:
     import msgpack
 
-from toolz import first, keymap
+from toolz import first, keymap, identity
 
 from .utils import ignoring
 from .compatibility import unicode
 
 
-compressions = {}
+compressions = {None: {'compress': identity,
+                       'decompress': identity}}
 
 default_compression = None
 
@@ -63,13 +64,44 @@ with ignoring(ImportError):
 
 def dumps(msg):
     """ Transform Python value to bytestream suitable for communication """
-    header = {}
+    small_header = {}
 
+    if isinstance(msg, dict):
+        big = {k: v for k, v in msg.items()
+                    if isinstance(v, bytes) and len(v) > 1e6}
+    else:
+        big = False
+    if big:
+        small = {k: v for k, v in msg.items() if k not in big}
+    else:
+        small = msg
+
+    frames = dumps_msgpack(small)
+    if big:
+        frames += dumps_big_byte_dict(big)
+
+    return frames
+
+
+def loads(frames):
+    """ Transform bytestream back into Python value """
+    header, payload, frames = frames[0], frames[1], frames[2:]
+    msg = loads_msgpack(header, payload)
+
+    if frames:
+        big = loads_big_byte_dict(*frames)
+        msg.update(big)
+
+    return msg
+
+
+def dumps_msgpack(msg):
+    header = {}
     payload = msgpack.dumps(msg, use_bin_type=True)
 
     if len(payload) > 1e3 and default_compression:
         compressed = compressions[default_compression]['compress'](payload)
-        if len(compressed ) < 0.9 * len(payload):  # significant compression
+        if len(compressed) < 0.9 * len(payload):  # significant compression
             header['compression'] = default_compression
             payload = compressed
 
@@ -77,12 +109,12 @@ def dumps(msg):
         header_bytes = msgpack.dumps(header, use_bin_type=True)
     else:
         header_bytes = b''
-    return [header_bytes] + payload
+
+    return [header_bytes, payload]
 
 
-def loads(frames):
+def loads_msgpack(header, payload):
     """ Transform bytestream back into Python value """
-    header, payload = frames[0], frames[1:]
     if header:
         header = msgpack.loads(header, encoding='utf8')
     else:
@@ -91,11 +123,42 @@ def loads(frames):
     if header.get('compression'):
         try:
             decompress = compressions[header['compression']]['decompress']
-            payload = list(map(decompress, payload))
+            payload = decompress(payload)
         except KeyError:
             raise ValueError("Data is compressed as %s but we don't have this"
                     " installed" % header['compression'].decode())
 
-    msg = msgpack.loads(payload, encoding='utf8')
+    return msgpack.loads(payload, encoding='utf8')
 
-    return msg
+
+def dumps_big_byte_dict(d):
+    """ Serialize large byte dictionary to sequence of frames """
+    assert isinstance(d, dict) and all(isinstance(v, bytes) for v in d.values())
+    keys, values = zip(*d.items())
+
+    compress = compressions[default_compression]['compress']
+    compression = []
+    values2 = []
+    for v in values:
+        compressed = compress(v)
+        if len(compressed) < 0.9 * len(v):
+            compression.append(default_compression)
+            values2.append(compressed)
+        else:
+            compression.append(None)
+            values2.append(v)
+
+    header = {'encoding': 'big-byte-dict',
+              'keys': keys,
+              'compression': compression}
+
+    return [msgpack.dumps(header, use_bin_type=True)] + values2
+
+
+def loads_big_byte_dict(header, *values):
+    """ Deserialize frames to large byte dictionary """
+    header = msgpack.loads(header, encoding='utf8')
+
+    values2 = [compressions[c]['decompress'](v)
+               for c, v in zip(header['compression'], values)]
+    return dict(zip(header['keys'], values2))

@@ -99,10 +99,13 @@ def test_large_packets(loop):
         server.listen(8887)
 
         data = b'0' * int(200e6)  # slightly more than 100MB
-
         conn = rpc(ip='127.0.0.1', port=8887)
         result = yield conn.echo(x=data)
         assert result == data
+
+        d = {'x': data}
+        result = yield conn.echo(x=d)
+        assert result == d
 
         server.stop()
 
