@@ -5,7 +5,7 @@ import pytest
 
 def test_protocol():
     for msg in [1, 'a', b'a', {'x': 1}, {b'x': 1}, {}]:
-        assert loads(*dumps(msg)) == msg
+        assert loads(dumps(msg)) == msg
 
 
 def test_compression():

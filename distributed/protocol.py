@@ -77,11 +77,12 @@ def dumps(msg):
         header_bytes = msgpack.dumps(header, use_bin_type=True)
     else:
         header_bytes = b''
-    return header_bytes, payload
+    return [header_bytes] + payload
 
 
-def loads(header, payload):
+def loads(frames):
     """ Transform bytestream back into Python value """
+    header, payload = frames[0], frames[1:]
     if header:
         header = msgpack.loads(header, encoding='utf8')
     else:
@@ -90,7 +91,7 @@ def loads(header, payload):
     if header.get('compression'):
         try:
             decompress = compressions[header['compression']]['decompress']
-            payload = decompress(payload)
+            payload = list(map(decompress, payload))
         except KeyError:
             raise ValueError("Data is compressed as %s but we don't have this"
                     " installed" % header['compression'].decode())
