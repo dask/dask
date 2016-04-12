@@ -86,4 +86,5 @@ def make_timeseries(start, end, dtypes, freq, partition_freq, seed=None):
     dsk = dict(((name, i), (make_timeseries_part, divisions[i], divisions[i + 1],
                                                  dtypes, freq, seeds[i]))
                 for i in range(len(divisions) - 1))
-    return DataFrame(dsk, name, sorted(dtypes), divisions)
+    head = make_timeseries_part('2000','2000', dtypes, '1H', 1)
+    return DataFrame(dsk, name, head, divisions)
