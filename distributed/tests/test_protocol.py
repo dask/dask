@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from distributed.protocol import loads, dumps
+from distributed.protocol import loads, dumps, msgpack
 import pytest
 
 def test_protocol():
@@ -16,6 +16,15 @@ def test_compression():
     assert len(b) < x.nbytes
     y = loads(b)
     assert x.tobytes() == y
+
+
+def test_compression():
+    pytest.importorskip('lz4')
+    np = pytest.importorskip('numpy')
+    x = np.random.random(10000)
+    header, payload = dumps(x.tobytes())
+    assert (not header or
+            not msgpack.loads(header, encoding='utf8').get('compression'))
 
 
 def test_small():

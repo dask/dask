@@ -68,8 +68,10 @@ def dumps(msg):
     payload = msgpack.dumps(msg, use_bin_type=True)
 
     if len(payload) > 1e3 and default_compression:
-        payload = compressions[default_compression]['compress'](payload)
-        header['compression'] = default_compression
+        compressed = compressions[default_compression]['compress'](payload)
+        if len(compressed ) < 0.9 * len(payload):  # significant compression
+            header['compression'] = default_compression
+            payload = compressed
 
     if header:
         header_bytes = msgpack.dumps(header, use_bin_type=True)
