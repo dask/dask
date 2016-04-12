@@ -20,3 +20,25 @@ A BibTeX entry for LaTeX users follows::
      year = {2016},
      url = {http://dask.pydata.org},
    }
+
+The full author list is available using git, or by looking at the `AUTHORS file
+<https://raw.githubusercontent.com/dask/dask/master/AUTHORS.md>`_.
+
+Papers about parts of Dask
+--------------------------
+
+
+Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
+Scheduling." (2015).
+`PDF <http://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
+
+::
+
+   @InProceedings{ matthew_rocklin-proc-scipy-2015,
+     author    = { Matthew Rocklin },
+     title     = { Dask: Parallel Computation with Blocked algorithms and Task Scheduling },
+     booktitle = { Proceedings of the 14th Python in Science Conference },
+     pages     = { 130 - 136 },
+     year      = { 2015 },
+     editor    = { Kathryn Huff and James Bergstra }
+   }
