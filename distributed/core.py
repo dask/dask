@@ -202,15 +202,16 @@ def read(stream):
         msg = yield stream.recv()
         raise Return(msg)
     else:
-        nbytes = yield stream.read_bytes(8)
-        nbytes = struct.unpack('L', nbytes)[0]
-        msg = yield stream.read_bytes(nbytes)
-        try:
-            msg = protocol.loads(msg)
-            if 'op' in msg:
-                msg['op'] = msg['op'].decode()
-        except Exception as e:
-            f = e
+        header_length = yield stream.read_bytes(8)
+        header_length = struct.unpack('L', header_length)[0]
+        if header_length:
+            header = yield stream.read_bytes(header_length)
+        else:
+            header = b''
+        payload_length = yield stream.read_bytes(8)
+        payload_length = struct.unpack('L', payload_length)[0]
+        payload = yield stream.read_bytes(payload_length)
+        msg = protocol.loads(header, payload)
         raise Return(msg)
 
 
@@ -222,15 +223,16 @@ def write(stream, msg):
     else:
         orig = msg
         try:
-            msg = protocol.dumps(msg)
+            header, payload = protocol.dumps(msg)
         except Exception as e:
             logger.exception(e)
             raise
-        if len(msg) > 100000:  # long message, avoid memcpy
-            yield stream.write(struct.pack('L', len(msg)))
-            yield stream.write(msg)
-        else:                  # short message, avoid tornado overhead
-            yield stream.write(struct.pack('L', len(msg)) + msg)
+        for b in [header, payload]:
+            if len(b) > 100000:  # long message, avoid memcpy
+                yield stream.write(struct.pack('L', len(b)))
+                yield stream.write(b)
+            else:                  # short message, avoid tornado overhead
+                yield stream.write(struct.pack('L', len(b)) + b)
         logger.debug("Written %s", orig)
 
 

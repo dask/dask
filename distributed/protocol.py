@@ -77,20 +77,15 @@ def dumps(msg):
         header_bytes = msgpack.dumps(header, use_bin_type=True)
     else:
         header_bytes = b''
-    out = b''.join([struct.pack('I', len(header_bytes)),
-                    header_bytes,
-                    payload])
-    return out
+    return header_bytes, payload
 
 
-def loads(b):
+def loads(header, payload):
     """ Transform bytestream back into Python value """
-    header_length, = struct.unpack('I', b[:4])
-    if header_length:
-        header = msgpack.loads(b[4: header_length + 4], encoding='utf8')
+    if header:
+        header = msgpack.loads(header, encoding='utf8')
     else:
         header = {}
-    payload = b[header_length + 4:]
 
     if header.get('compression'):
         try:

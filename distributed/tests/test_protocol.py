@@ -5,16 +5,16 @@ import pytest
 
 def test_protocol():
     for msg in [1, 'a', b'a', {'x': 1}, {b'x': 1}, {}]:
-        assert loads(dumps(msg)) == msg
+        assert loads(*dumps(msg)) == msg
 
 
 def test_compression():
     pytest.importorskip('lz4')
     np = pytest.importorskip('numpy')
     x = np.ones(1000000)
-    b = dumps(x.tobytes())
-    assert len(b) < x.nbytes
-    y = loads(b)
+    header, payload = dumps(x.tobytes())
+    assert len(payload) < x.nbytes
+    y = loads(header, payload)
     assert x.tobytes() == y
 
 
@@ -28,5 +28,5 @@ def test_compression():
 
 
 def test_small():
-    assert len(dumps(b'')) < 10
-    assert len(dumps(1)) < 10
+    assert sum(map(len, dumps(b''))) < 10
+    assert sum(map(len, dumps(1))) < 10
