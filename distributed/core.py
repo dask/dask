@@ -141,6 +141,7 @@ class Server(TCPServer):
 
         Coroutines should expect a single IOStream object.
         """
+        stream.set_nodelay(True)
         ip, port = address
         logger.info("Connection from %s:%d to %s", ip, port,
                     type(self).__name__)
@@ -225,7 +226,11 @@ def write(stream, msg):
         except Exception as e:
             logger.exception(e)
             raise
-        yield stream.write(struct.pack('L', len(msg)) + msg)
+        if len(msg) > 100000:  # long message, avoid memcpy
+            yield stream.write(struct.pack('L', len(msg)))
+            yield stream.write(msg)
+        else:                  # short message, avoid tornado overhead
+            yield stream.write(struct.pack('L', len(msg)) + msg)
         logger.debug("Written %s", orig)
 
 
@@ -241,6 +246,7 @@ def connect(ip, port, timeout=3):
         future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
         try:
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
+            stream.set_nodelay(True)
             raise Return(stream)
         except StreamClosedError:
             if time() - start < timeout:
