@@ -5,6 +5,7 @@ import uuid
 
 import numpy as np
 import pandas as pd
+from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
 from ..optimize import cull
@@ -222,8 +223,9 @@ def shuffle(df, index, npartitions=None):
 
     # Collect groups
     name = 'shuffle-collect-' + token
+    meta = df._pd
     dsk4 = dict(((name, i),
-                 (collect, i, p, barrier_token))
+                 (collect, i, p, meta, barrier_token))
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
@@ -235,6 +237,53 @@ def shuffle(df, index, npartitions=None):
     return DataFrame(dsk, name, df.columns, divisions)
 
 
+def partitioning_index(df, npartitions):
+    """Computes a deterministic index mapping each record to a partition.
+
+    Identical rows are mapped to the same partition.
+
+    Parameters
+    ----------
+    df : DataFrame/Series/Index
+    npartitions : int
+        The number of partitions to group into.
+
+    Returns
+    -------
+    partitions : ndarray
+        An array of int64 values mapping each record to a partition.
+    """
+    if isinstance(df, (pd.Series, pd.Index)):
+        h = hash_series(df).astype('int64')
+    elif isinstance(df, pd.DataFrame):
+        cols = df.iteritems()
+        h = hash_series(next(cols)[1]).astype('int64')
+        for _, col in cols:
+            h = np.multiply(h, 3, h)
+            h = np.add(h, hash_series(col), h)
+    else:
+        raise TypeError("Unexpected type %s" % type(df))
+    return h % int(npartitions)
+
+
+def hash_series(s):
+    """Given a series, return a numpy array of deterministic integers."""
+    vals = s.values
+    dt = vals.dtype
+    if is_categorical_dtype(dt):
+        return vals.codes
+    elif np.issubdtype(dt, np.integer):
+        return vals
+    elif np.issubdtype(dt, np.floating):
+        return np.nan_to_num(vals).astype('int64')
+    elif dt == np.bool:
+        return vals.view('int8')
+    elif np.issubdtype(dt, np.datetime64) or np.issubdtype(dt, np.timedelta64):
+        return vals.view('int64')
+    else:
+        return s.apply(hash).values
+
+
 def partition(df, index, npartitions, p):
     """ Partition a dataframe along a grouper, store partitions to partd """
     rng = pd.Series(np.arange(len(df)))
@@ -242,20 +291,13 @@ def partition(df, index, npartitions, p):
         index = list(index)
     if not isinstance(index, (pd.Index, pd.Series, pd.DataFrame)):
         index = df[index]
-
-    if isinstance(index, pd.Index):
-        groups = rng.groupby([abs(hash(x)) % npartitions for x in index])
-    if isinstance(index, pd.Series):
-        groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
-    elif isinstance(index, pd.DataFrame):
-        groups = rng.groupby(index.apply(
-                    lambda row: abs(hash(tuple(row))) % npartitions,
-                    axis=1).values)
+    groups = rng.groupby(partitioning_index(index, npartitions))
     d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
                                             if i in groups.groups)
     p.append(d)
 
 
-def collect(group, p, barrier_token):
+def collect(group, p, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    return p.get(group)
+    res = p.get(group)
+    return res if len(res) > 0 else meta
