@@ -14,7 +14,10 @@ import uuid
 from toolz import assoc, first
 
 import tornado
-import pickle
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import cloudpickle
 from tornado import ioloop, gen
 from tornado.gen import Return
@@ -24,12 +27,25 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode
-from .utils import get_traceback, truncate_exception
+from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
+
+pickle_types = [str, bytes]
+with ignoring(ImportError):
+    import numpy as np
+    pickle_types.append(np.ndarray)
+with ignoring(ImportError):
+    import pandas as pd
+    pickle_types.append(pd.core.generic.NDFrame)
+
+pickle_types = tuple(pickle_types)
 
 def dumps(x):
     try:
-        return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        if isinstance(x, pickle_types):
+            return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
     except Exception as e:
         logger.info("Failed to serialize %s", x, exc_info=True)
         raise
