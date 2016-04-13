@@ -66,6 +66,7 @@ Contents
    scheduler
    resilience
    journey
+   protocol
    plugins
    related-work
    dec2
