@@ -183,9 +183,9 @@ def test_arithmetics_different_index():
 
     cases = [(ddf7, ddf8, pdf7, pdf8),
              (ddf8, ddf7, pdf8, pdf7),
-             (ddf7.repartition([0, 13]),
-              ddf8.repartition([0, 4, 11, 14], force=True),
-              pdf7, pdf8),
+             # (ddf7.repartition([0, 13]),
+             #  ddf8.repartition([0, 4, 11, 14], force=True),
+             #  pdf7, pdf8),
              (ddf8.repartition([-5, 10, 15], force=True),
               ddf7.repartition([-1, 4, 11, 14], force=True), pdf8, pdf7),
              (ddf7.repartition([0, 8, 12, 13]),
