@@ -14,7 +14,10 @@ import uuid
 from toolz import assoc, first
 
 import tornado
-import pickle
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import cloudpickle
 from tornado import ioloop, gen
 from tornado.gen import Return
@@ -24,12 +27,25 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode
-from .utils import get_traceback, truncate_exception
+from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
+
+pickle_types = [str, bytes]
+with ignoring(ImportError):
+    import numpy as np
+    pickle_types.append(np.ndarray)
+with ignoring(ImportError):
+    import pandas as pd
+    pickle_types.append(pd.core.generic.NDFrame)
+
+pickle_types = tuple(pickle_types)
 
 def dumps(x):
     try:
-        return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        if isinstance(x, pickle_types):
+            return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
     except Exception as e:
         logger.info("Failed to serialize %s", x, exc_info=True)
         raise
@@ -141,6 +157,7 @@ class Server(TCPServer):
 
         Coroutines should expect a single IOStream object.
         """
+        stream.set_nodelay(True)
         ip, port = address
         logger.info("Connection from %s:%d to %s", ip, port,
                     type(self).__name__)
@@ -201,15 +218,16 @@ def read(stream):
         msg = yield stream.recv()
         raise Return(msg)
     else:
-        nbytes = yield stream.read_bytes(8)
-        nbytes = struct.unpack('L', nbytes)[0]
-        msg = yield stream.read_bytes(nbytes)
-        try:
-            msg = protocol.loads(msg)
-            if 'op' in msg:
-                msg['op'] = msg['op'].decode()
-        except Exception as e:
-            f = e
+        header_length = yield stream.read_bytes(8)
+        header_length = struct.unpack('L', header_length)[0]
+        if header_length:
+            header = yield stream.read_bytes(header_length)
+        else:
+            header = b''
+        payload_length = yield stream.read_bytes(8)
+        payload_length = struct.unpack('L', payload_length)[0]
+        payload = yield stream.read_bytes(payload_length)
+        msg = protocol.loads(header, payload)
         raise Return(msg)
 
 
@@ -221,11 +239,16 @@ def write(stream, msg):
     else:
         orig = msg
         try:
-            msg = protocol.dumps(msg)
+            header, payload = protocol.dumps(msg)
         except Exception as e:
             logger.exception(e)
             raise
-        yield stream.write(struct.pack('L', len(msg)) + msg)
+        for b in [header, payload]:
+            if len(b) > 100000:  # long message, avoid memcpy
+                yield stream.write(struct.pack('L', len(b)))
+                yield stream.write(b)
+            else:                  # short message, avoid tornado overhead
+                yield stream.write(struct.pack('L', len(b)) + b)
         logger.debug("Written %s", orig)
 
 
@@ -241,6 +264,7 @@ def connect(ip, port, timeout=3):
         future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
         try:
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
+            stream.set_nodelay(True)
             raise Return(stream)
         except StreamClosedError:
             if time() - start < timeout:

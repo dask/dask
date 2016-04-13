@@ -68,27 +68,24 @@ def dumps(msg):
     payload = msgpack.dumps(msg, use_bin_type=True)
 
     if len(payload) > 1e3 and default_compression:
-        payload = compressions[default_compression]['compress'](payload)
-        header['compression'] = default_compression
+        compressed = compressions[default_compression]['compress'](payload)
+        if len(compressed ) < 0.9 * len(payload):  # significant compression
+            header['compression'] = default_compression
+            payload = compressed
 
     if header:
         header_bytes = msgpack.dumps(header, use_bin_type=True)
     else:
         header_bytes = b''
-    out = b''.join([struct.pack('I', len(header_bytes)),
-                    header_bytes,
-                    payload])
-    return out
+    return header_bytes, payload
 
 
-def loads(b):
+def loads(header, payload):
     """ Transform bytestream back into Python value """
-    header_length, = struct.unpack('I', b[:4])
-    if header_length:
-        header = msgpack.loads(b[4: header_length + 4], encoding='utf8')
+    if header:
+        header = msgpack.loads(header, encoding='utf8')
     else:
         header = {}
-    payload = b[header_length + 4:]
 
     if header.get('compression'):
         try:
