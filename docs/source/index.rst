@@ -54,6 +54,7 @@ Contents
    efficiency
    locality
    api
+   web
    joblib
 
 **Developer Documentation**
