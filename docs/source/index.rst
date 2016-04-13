@@ -39,7 +39,7 @@ Familiar user interface
 .. code-block:: python
 
    import numpy as np                       import dask.array as da
-   f = h5py.File('myfile.hdf5')
+   f = h5py.File('myfile.hdf5')             f = h5py.File('myfile.hdf5')
    x = np.array(f['/small-data'])           x = da.from_array(f['/big-data'],
                                                               chunks=(1000, 1000))
    x - x.mean(axis=1)                       x - x.mean(axis=1).compute()
