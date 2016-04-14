@@ -33,7 +33,7 @@ try:
 except ImportError:
     import msgpack
 
-from toolz import first, keymap, identity
+from toolz import first, keymap, identity, merge
 
 from .utils import ignoring
 from .compatibility import unicode
@@ -96,6 +96,13 @@ def loads(frames):
 
 
 def dumps_msgpack(msg):
+    """ Dump msg into header and payload, both bytestrings
+
+    All of the message must be msgpack encodable
+
+    See Also:
+        loads_msgpack
+    """
     header = {}
     payload = msgpack.dumps(msg, use_bin_type=True)
 
@@ -114,7 +121,11 @@ def dumps_msgpack(msg):
 
 
 def loads_msgpack(header, payload):
-    """ Transform bytestream back into Python value """
+    """ Read msgpack header and payload back to Python object
+
+    See Also:
+        dumps_msgpack
+    """
     if header:
         header = msgpack.loads(header, encoding='utf8')
     else:
@@ -132,7 +143,16 @@ def loads_msgpack(header, payload):
 
 
 def dumps_big_byte_dict(d):
-    """ Serialize large byte dictionary to sequence of frames """
+    """ Serialize large byte dictionary to sequence of frames
+
+    The input must be a dictionary and all values of that dictionary must be
+    bytestrings.  These should probably be large.
+
+    Returns a sequence of frames, one header followed by each of the values
+
+    See Also:
+        loads_big_byte_dict
+    """
     assert isinstance(d, dict) and all(isinstance(v, bytes) for v in d.values())
     keys, values = zip(*d.items())
 
@@ -156,7 +176,11 @@ def dumps_big_byte_dict(d):
 
 
 def loads_big_byte_dict(header, *values):
-    """ Deserialize frames to large byte dictionary """
+    """ Deserialize big-byte frames to large byte dictionary
+
+    See Also:
+        dumps_big_byte_dict
+    """
     header = msgpack.loads(header, encoding='utf8')
 
     values2 = [compressions[c]['decompress'](v)

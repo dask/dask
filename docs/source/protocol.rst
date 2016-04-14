@@ -1,13 +1,14 @@
 Protocol
 ========
 
-The Scheduler, Workers, and Clients must pass messages between each other.
+The scheduler, workers, and clients pass messages between each other.
 Semantically these messages encode commands, status updates, and data, like the
 following:
 
 *  Please compute the function ``sum`` on the data ``x`` and store in ``y``
 *  The computation ``y`` has been completed
 *  Be advised that a new worker named ``alice`` is available for use
+*  Here is the data for the keys ``'x'``, and ``'y'``
 
 In practice we represent these messages with dictionaries/mappings::
 
@@ -24,16 +25,36 @@ In practice we represent these messages with dictionaries/mappings::
     'name': 'alice',
     'ncores': 4}
 
+   {'x': b'...',
+    'y': b'...'}
+
 When we communicate these messages between nodes we need to serialize these
 messages down to a string of bytes that can then be deserialized on the other
 end to their in-memory dictionary form.  For simple cases several options exist
 like JSON, MsgPack, Protobuffers, and Thrift.  The situation is made more
 complex by concerns like serializing Python functions and Python objects,
-optional compression, cross-language support, and efficiency.
+optional compression, cross-language support, large messages, and efficiency.
 
-This document describes the protocol used by ``dask.distributed`` today.
-Be advised that this protocol is rapidly changing as we continue to optimize
-for performance.
+This document describes the protocol used by ``dask.distributed`` today.  Be
+advised that this protocol changes rapidly as we continue to optimize for
+performance.
+
+
+Overview
+--------
+
+We may split a single message into multiple message-part to suit different
+protocols.  Generally small bits of data are encoded with MsgPack while large
+bytestrings are handled specially by a custom format.  Each message-part gets
+its own header, which is always encoded as msgpack.  After serializing all
+message parts we have a sequence of bytestrings or *frames* which we send along
+the wire, prepended with length information.
+
+The application doesn't know any of this, it just sends us Python dictionaries
+with various datatypes and we produce a list of bytestrings that get written to
+a socket.  This format is fast both for many frequent messages and for large
+messages.
+
 
 MsgPack for Messages
 --------------------
@@ -55,9 +76,16 @@ MsgPack as a base serialization format for the following reasons:
 *  It is widely implemented in a number of languages (see cross language
    section below)
 
-However, msgpack does not provide any way for us to encode Python functions or
-user defined data structures (objects), and so must be complemented with a
-language-specific protocol
+However, MsgPack fails (correctly) in the following ways:
+
+*  It does not provide any way for us to encode Python functions or user
+   defined data types
+*  It does not support bytestrings greater than 4GB and is generally
+   inefficient for very large messages.
+
+Because of these failings we supplement it with a language-specific protocol
+and a special case for large bytestrings.
+
 
 CloudPickle for Functions and Data
 ----------------------------------
@@ -111,7 +139,6 @@ This has a few advantages:
     which is complex.
 4.  The scheduler might some day be rewritten in more heavily optimized C or Go
 
-
 Compression
 -----------
 
@@ -133,39 +160,53 @@ The header is a small dictionary encoded in msgpack that includes some metadata
 about the message, such as compression.
 
 
+Large Bytestrings
+-----------------
+
+Whenever a message comes in with very large byte values like the following::
+
+   {'key': 'x',
+    'address': 'alice',
+    'data-1': b'...'  # very long bytestring
+    'data-2': b'...'  # very long bytestring
+    }
+
+We separate the message into two messages, one encoding all of the large
+bytestrings, and one encoding everything else::
+
+   {'key': 'x', 'addresss': 'alice'}
+   {'data-1': b'...', 'data-2': b'...'}
+
+The first message we pass normally with msgpack, the second we pass in multiple
+parts, including a header that contains the keys and compression used for each
+value::
+
+   {'keys': ['data-1', 'data-2'],
+    'compression': ['lz4', None]}
+   b'...'
+   b'...'
+
+
 Frames
 ------
 
-Every message often has a header and a main body, both encoded as msgpack, the
-latter of which is possibly compressed.  We send these bytestrings one after
-another, each prepended with a length, encoded as an eight byte unsigned
-integer (typecode ``'L'`` in the Python ``struct`` module).
+At the end of the pipeline we have a sequence of bytestrings or frames.  We
+need to tell the receiving end how many frames there are and how long each
+these frames are.  We order the frames and lengths of frames as follows:
+
+1.  The number of frames, stored as an 8 byte unsigned integer
+2.  The length of each frame, each stored as an 8 byte unsigned integer
+3.  Each of the frames
+
+In the following sections we describe how we create these frames.
 
 
-All together
-------------
+Performance
+-----------
 
-And so our final message looks like the following::
-
-   0-8:         Eight byte encoded length of header, N
-   8-N+8:       Header, encoded as msgpack
-   N+8:N+16:    Eight byte encoded length of message, M
-   N+16:N+M+16: Message, encoded as msgpack, possibly compressed
+For large numpy arrays this can saturate 500MB/s connections.  Current
+bottlenecks include numpy serialization (About twice as slow as memcopy),
+a memory copy within Tornado (which is fixable if necessary), and calls to
+lz4 compression (which is useful in lower-bandwidth situations.)
 
 .. _MsgPack: http://msgpack.org/index.html
-
-Copies
-------
-
-Current performance is limited mostly by msgpack and making copies.  For
-example for large array data our data gets copied in the following stages:
-
-1.  From numpy array to bytes with ``pickle``, around 1000 MB/s
-2.  Include pickled bytes in msgpack dictionary, around 500 MB/s
-3.  Pass bytes through Tornado, which currently does another memory copy,
-    around 2000 MB/s
-
-While each stage is fairly high bandwidth the chain can add up to slow things
-down considerably.  In the future we'll likely treat long bytestrings
-differently and bypass MsgPack for these cases.  We're also looking into
-changes in Tornado to avoid the final memcopy.
