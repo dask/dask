@@ -87,13 +87,13 @@ data.
 
 Valid arguments for ``workers=`` include the following:
 
-*   A single IP addresses, IP/Port pair, or hostname like the following::
+*  A single IP addresses, IP/Port pair, or hostname like the following::
 
-   192.168.1.100, 192.168.1.100:8989, alice, alice:8989
+      192.168.1.100, 192.168.1.100:8989, alice, alice:8989
 
 *  A list or set of the above::
 
-   ['alice'], ['192.168.1.100', '192.168.1.101:9999']
+      ['alice'], ['192.168.1.100', '192.168.1.101:9999']
 
 If only a hostname or IP is given then any worker on that machine will be
 considered valid.  Additionally, you can provide aliases to workers upon

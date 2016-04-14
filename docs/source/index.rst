@@ -49,6 +49,7 @@ Contents
    quickstart
    setup
    dec2
+   web
    examples-overview
 
 .. toctree::
@@ -70,5 +71,6 @@ Contents
    scheduler
    resilience
    journey
+   protocol
    plugins
    related-work

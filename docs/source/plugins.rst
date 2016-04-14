@@ -1,7 +1,7 @@
 Scheduler Plugins
 =================
 
-.. autoclass:: distributed.diagnostics.SchedulerPlugin
+.. autoclass:: distributed.diagnostics.plugin.SchedulerPlugin
    :members:
 
 Progress Bar

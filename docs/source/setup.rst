@@ -5,8 +5,8 @@ A ``distributed`` network consists of one ``Scheduler`` node and several
 ``Worker`` nodes.  One can set these up in a variety of ways
 
 
-``dscheduler`` and ``dworker``
----------------------------
+Using the Command Line
+----------------------
 
 We launch the ``dscheduler`` executable in one process and the ``dworker``
 executable in several processes, possibly on different machines.
@@ -35,14 +35,9 @@ There are various mechanisms to deploy these executables on a cluster, ranging
 from manualy SSH-ing into all of the nodes to more automated systems like
 SGE/SLURM/Torque or Yarn/Mesos.
 
-EC2 Easy Startup Script
------------------------
 
-See the :doc:`EC2 quickstart <dec2>` for information on the ``dec2`` easy setup
-script to launch a canned cluster on EC2.
-
-``dcluster``
-------------
+Using SSH
+---------
 
 The convenience script ``dcluster`` opens several SSH connections to your
 target computers and initializes the network accordingly.  You can give it a
@@ -65,8 +60,8 @@ Or you can specify a hostfile that includes a list of hosts::
    $ dcluster --hostfile hostfile.txt
 
 
-``Scheduler`` and ``Worker`` objects
----------------------------------
+Using the Python API
+--------------------
 
 Alternatively you can start up the ``distributed.scheduler.Scheduler`` and
 ``distributed.worker.Worker`` objects within a Python session manually.  Both
@@ -104,6 +99,13 @@ and start one, possibly in a separate thread.
    from threading import Thread
    t = Thread(target=loop.start)
    t.start()
+
+
+Using Amazon EC2
+----------------
+
+See the :doc:`EC2 quickstart <dec2>` for information on the ``dec2`` easy setup
+script to launch a canned cluster on EC2.
 
 
 Cleanup

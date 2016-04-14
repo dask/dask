@@ -1,5 +1,5 @@
-Install
-=======
+Install Distributed
+===================
 
 You can install distributed with ``conda``, with ``pip``, or by installing from
 source.

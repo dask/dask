@@ -13,6 +13,4 @@ coroutines rounning in a single event loop.
 
 .. autoclass:: Scheduler
    :members:
-.. autofunction:: heal_missing_data
 .. autofunction:: decide_worker
-.. autofunction:: assign_many_tasks

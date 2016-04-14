@@ -190,7 +190,6 @@ IPython Parallel has the following advantages over ``distributed``
     variety of helpful features like IPython interaction magics, ``@parallel``
     decorators, etc..
 
-.. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
 .. _`a recipe`: https://ipython.org/ipython-doc/3/parallel/dag_dependencies.html#dag-dependencies
 .. _dask: http://dask.pydata.org/en/latest/
 
