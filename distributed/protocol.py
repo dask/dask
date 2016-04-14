@@ -26,6 +26,7 @@ outside of this module though and is not baked in.
 """
 from __future__ import print_function, division, absolute_import
 
+import random
 import struct
 
 try:
@@ -95,6 +96,50 @@ def loads(frames):
     return msg
 
 
+def byte_sample(b, size, n):
+    """ Sample a bytestring from many locations """
+    starts = [random.randint(0, len(b) - size) for j in range(n)]
+    ends = []
+    for i, start in enumerate(starts[:-1]):
+        ends.append(min(start + size, starts[i + 1]))
+    ends.append(starts[-1] + size)
+
+    return b''.join([b[start:end] for start, end in zip(starts, ends)])
+
+
+def maybe_compress(payload, compression=default_compression, min_size=1e4,
+        sample_size=1e4, nsamples=5):
+    """ Maybe compress payload
+
+    1.  We don't compress small messages
+    2.  We sample the payload in a few spots, compress that, and if it doesn't
+        do any good we return the original
+    3.  We then compress the full original, it it doesn't compress well then we
+        return the original
+    4.  We return the compressed result
+    """
+    if not compression:
+        return None, payload
+    if len(payload) < min_size:
+        return None, payload
+
+    min_size = int(min_size)
+    sample_size = int(sample_size)
+
+    compress = compressions[compression]['compress']
+
+    # Compress a sample, return original if not very compressed
+    sample = byte_sample(payload, sample_size, nsamples)
+    if len(compress(sample)) > 0.9 * len(sample):  # not very compressible
+        return None, payload
+
+    compressed = compress(payload)
+    if len(compressed) > 0.9 * len(payload):  # not very compressible
+        return None, payload
+
+    return compression, compress(payload)
+
+
 def dumps_msgpack(msg):
     """ Dump msg into header and payload, both bytestrings
 
@@ -106,11 +151,9 @@ def dumps_msgpack(msg):
     header = {}
     payload = msgpack.dumps(msg, use_bin_type=True)
 
-    if len(payload) > 1e3 and default_compression:
-        compressed = compressions[default_compression]['compress'](payload)
-        if len(compressed) < 0.9 * len(payload):  # significant compression
-            header['compression'] = default_compression
-            payload = compressed
+    fmt, payload = maybe_compress(payload)
+    if fmt:
+        header['compression'] = fmt
 
     if header:
         header_bytes = msgpack.dumps(header, use_bin_type=True)
@@ -160,13 +203,9 @@ def dumps_big_byte_dict(d):
     compression = []
     values2 = []
     for v in values:
-        compressed = compress(v)
-        if len(compressed) < 0.9 * len(v):
-            compression.append(default_compression)
-            values2.append(compressed)
-        else:
-            compression.append(None)
-            values2.append(v)
+        fmt, vv = maybe_compress(v)
+        compression.append(fmt)
+        values2.append(vv)
 
     header = {'encoding': 'big-byte-dict',
               'keys': keys,

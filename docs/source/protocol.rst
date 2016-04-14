@@ -152,6 +152,11 @@ compression is at least a 10% improvement, we send the compressed bytes rather
 than the original payload.  We record the compression used within the header as
 a string like ``'lz4'`` or ``'snappy'``.
 
+To avoid compressing large amounts of uncompressable data we first try to
+compress a sample.  We take 10kB chunks from five locations in the dataset,
+arrange them together, and try compressing the result.  If this doesn't result
+in significant compression then we don't try to compress the full result.
+
 
 Header
 ------
@@ -204,9 +209,11 @@ In the following sections we describe how we create these frames.
 Performance
 -----------
 
-For large numpy arrays this can saturate 500MB/s connections.  Current
-bottlenecks include numpy serialization (About twice as slow as memcopy),
-a memory copy within Tornado (which is fixable if necessary), and calls to
-lz4 compression (which is useful in lower-bandwidth situations.)
+For large numpy arrays we currently suffer three memory copies.  On a nice
+machine this ends up being a 1-1.5 GB/s bottleneck, which is almost always
+faster than the network bandwidth.  These copies come from NumPy (two
+memcopies) and Tornado (one memcopy).
+
+For small messages we generally serialize in around 5 microseconds.
 
 .. _MsgPack: http://msgpack.org/index.html

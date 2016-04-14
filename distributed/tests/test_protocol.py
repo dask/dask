@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from distributed.protocol import (loads, dumps, dumps_msgpack, loads_msgpack,
-        dumps_big_byte_dict, loads_big_byte_dict, msgpack)
+        dumps_big_byte_dict, loads_big_byte_dict, msgpack, maybe_compress)
 import pytest
 
 def test_protocol():
@@ -52,9 +52,30 @@ def test_big_bytes():
 
 def test_big_bytes_protocol():
     np = pytest.importorskip('numpy')
-    data = np.random.randint(0, 255, dtype='u1', size=2000000).data.tobytes()
+    data = np.random.randint(0, 255, dtype='u1', size=2000000).tobytes()
     d = {'x': data, 'y': b'1' * 2000000}
     L = dumps(d)
     assert d['x'] in L
     dd = loads(L)
     assert dd == d
+
+
+def test_maybe_compress():
+    import zlib
+    payload = b'123'
+    assert maybe_compress(payload, None) == (None, payload)
+    assert maybe_compress(payload, 'zlib') == (None, payload)
+
+    assert maybe_compress(b'111', 'zlib') == (None, b'111')
+
+    payload = b'0' * 10000
+    assert maybe_compress(payload, 'zlib') == ('zlib', zlib.compress(payload))
+
+
+def test_maybe_compress_sample():
+    np = pytest.importorskip('numpy')
+    lz4 = pytest.importorskip('lz4')
+    payload = np.random.randint(0, 255, dtype='u1', size=10000).tobytes()
+    fmt, compressed = maybe_compress(payload, 'lz4')
+    assert fmt == None
+    assert compressed == payload
