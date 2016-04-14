@@ -43,3 +43,5 @@ as follows:
 
    with parallel_backend('distributed', scheduler_host='localhost:8786'):
        search.fit(digits.data, digits.target)
+
+.. _`Joblib`: https://pythonhosted.org/joblib/

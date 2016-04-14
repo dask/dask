@@ -41,28 +41,33 @@ In particular it meets the following needs:
 Contents
 --------
 
-**User Documentation**
+.. toctree::
+   :maxdepth: 1
+   :caption: Getting Started
+
+   install
+   quickstart
+   setup
+   dec2
+   web
+   examples-overview
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: Using Distributed
 
-   quickstart
-   install
-   examples-overview
    executor
-   setup
    efficiency
    locality
-   api
-   web
    joblib
-
-**Developer Documentation**
+   api
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: Developer Documentation
 
    foundations
+   clients
    worker-center
    scheduler
    resilience
@@ -70,4 +75,3 @@ Contents
    protocol
    plugins
    related-work
-   dec2
