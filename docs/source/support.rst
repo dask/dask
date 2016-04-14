@@ -1,5 +1,5 @@
-Get involved
-============
+Support
+=======
 
 User questions and discussion
 -----------------------------
@@ -42,7 +42,7 @@ developed by employees of `Continuum Analytics, Inc. <https://www.continuum.io/>
 In addition to the previous options, Continuum offers paid training and support:
 
 * `Python training <https://www.continuum.io/training>`_ — online and on-premises.
-* `Consulting <https://www.continuum.io/consulting>`_ — leverage our expertise to solve your analytics puzzles.
+* `Consulting <https://www.continuum.io/continuum-consulting>`_ — leverage our expertise to solve your analytics puzzles.
 * `Paid support plans <https://www.continuum.io/content/support-plan>`_ — helping you get the most out of Python data tools.
 
 
@@ -50,4 +50,3 @@ Give us feedback
 ----------------
 
 Help us make the documentation better! Please send feedback about the dask documentation to documentation@continuum.io.
-

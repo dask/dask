@@ -103,7 +103,6 @@ Index
 * :doc:`install`
 * :doc:`examples-overview`
 * :doc:`cheatsheet`
-* :doc:`faq`
 
 .. toctree::
    :maxdepth: 1
@@ -113,7 +112,6 @@ Index
    install.rst
    examples-overview.rst
    cheatsheet.rst
-   faq.rst
 
 **Collections**
 
@@ -198,9 +196,10 @@ help make debugging and profiling graph execution easier.
 
 **Help & reference**
 
+* :doc:`support`
+* :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
-* :doc:`get-involved`
 * :doc:`cite`
 * :doc:`glossary`
 
@@ -209,10 +208,11 @@ help make debugging and profiling graph execution easier.
    :hidden:
    :caption: Help & reference
 
+   support.rst
+   faq.rst
    blaze.rst
    spark.rst
    caching.rst
-   get-involved.rst
    cite.rst
    glossary.rst
 

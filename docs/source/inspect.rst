@@ -1,5 +1,5 @@
-How to inspect dask objects
-===========================
+Inspecting Dask objects
+=======================
 
 Dask itself is just a specification on top of normal Python dictionaries.
 Objects like ``dask.Array`` are just a thin wrapper around these dictionaries
