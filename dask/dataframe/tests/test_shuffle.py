@@ -1,8 +1,9 @@
-import dask.dataframe as dd
-import pandas.util.testing as tm
 import pandas as pd
-from dask.dataframe.shuffle import shuffle
-import partd
+import pandas.util.testing as tm
+import numpy as np
+
+import dask.dataframe as dd
+from dask.dataframe.shuffle import shuffle, hash_series, partitioning_index
 from dask.async import get_sync
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
@@ -36,6 +37,7 @@ def test_index_with_non_series():
     tm.assert_frame_equal(shuffle(d, d.b).compute(),
                           shuffle(d, 'b').compute())
 
+
 def test_index_with_dataframe():
     assert sorted(shuffle(d, d[['b']]).compute().values.tolist()) ==\
            sorted(shuffle(d, ['b']).compute().values.tolist()) ==\
@@ -49,3 +51,44 @@ def test_shuffle_from_one_partition_to_one_other():
     for i in [1, 2]:
         b = shuffle(a, 'x', i)
         assert len(a.compute(get=get_sync)) == len(b.compute(get=get_sync))
+
+
+def test_shuffle_empty_partitions():
+    df = pd.DataFrame({'x': [1, 2, 3] * 10})
+    ddf = dd.from_pandas(df, npartitions=3)
+    s = shuffle(ddf, ddf.x, npartitions=6)
+    parts = s._get(s.dask, s._keys())
+    for p in parts:
+        assert s.columns == p.columns
+
+
+df2 = pd.DataFrame({'i32': np.array([1, 2, 3] * 3, dtype='int32'),
+                    'f32': np.array([None, 2.5, 3.5] * 3, dtype='float32'),
+                    'cat': pd.Series(['a', 'b', 'c'] * 3).astype('category'),
+                    'obj': pd.Series(['d', 'e', 'f'] * 3),
+                    'bool': np.array([True, False, True]*3),
+                    'dt': pd.Series(pd.date_range('20130101', periods=9)),
+                    'dt_tz': pd.Series(pd.date_range('20130101', periods=9, tz='US/Eastern')),
+                    'td': pd.Series(pd.timedelta_range('2000', periods=9))})
+
+
+def test_hash_series():
+    for name, s in df2.iteritems():
+        np.testing.assert_equal(hash_series(s), hash_series(s))
+
+
+def test_partitioning_index():
+    res = partitioning_index(df2.i32, 3)
+    exp = np.array([1, 2, 0] * 3)
+    np.testing.assert_equal(res, exp)
+
+    res = partitioning_index(df2[['i32']], 3)
+    np.testing.assert_equal(res, exp)
+
+    res = partitioning_index(df2[['cat', 'bool', 'f32']], 2)
+    exp = np.array([1, 1, 0] * 3)
+    np.testing.assert_equal(res, exp)
+
+    res = partitioning_index(df2.index, 4)
+    exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
+    np.testing.assert_equal(res, exp)
