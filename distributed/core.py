@@ -218,16 +218,21 @@ def read(stream):
         msg = yield stream.recv()
         raise Return(msg)
     else:
-        header_length = yield stream.read_bytes(8)
-        header_length = struct.unpack('L', header_length)[0]
-        if header_length:
-            header = yield stream.read_bytes(header_length)
-        else:
-            header = b''
-        payload_length = yield stream.read_bytes(8)
-        payload_length = struct.unpack('L', payload_length)[0]
-        payload = yield stream.read_bytes(payload_length)
-        msg = protocol.loads(header, payload)
+        n_frames = yield stream.read_bytes(8)
+        n_frames = struct.unpack('L', n_frames)[0]
+
+        lengths = yield stream.read_bytes(8 * n_frames)
+        lengths = struct.unpack('L' * n_frames, lengths)
+
+        frames = []
+        for length in lengths:
+            if length:
+                frame = yield stream.read_bytes(length)
+            else:
+                frame = b''
+            frames.append(frame)
+
+        msg = protocol.loads(frames)
         raise Return(msg)
 
 
@@ -239,16 +244,18 @@ def write(stream, msg):
     else:
         orig = msg
         try:
-            header, payload = protocol.dumps(msg)
+            frames = protocol.dumps(msg)
         except Exception as e:
             logger.exception(e)
             raise
-        for b in [header, payload]:
-            if len(b) > 100000:  # long message, avoid memcpy
-                yield stream.write(struct.pack('L', len(b)))
-                yield stream.write(b)
-            else:                  # short message, avoid tornado overhead
-                yield stream.write(struct.pack('L', len(b)) + b)
+
+        lengths = ([struct.pack('L', len(frames))] +
+                   [struct.pack('L', len(frame)) for frame in frames])
+        yield stream.write(b''.join(lengths))
+
+        for frame in frames:
+            yield stream.write(frame)
+
         logger.debug("Written %s", orig)
 
 
