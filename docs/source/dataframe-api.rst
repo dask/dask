@@ -28,23 +28,11 @@ Series Methods
    :members:
    :inherited-members:
 
-GroupBy Methods
-~~~~~~~~~~~~~~~
-
-.. autoclass:: GroupBy
-   :members:
-   :inherited-members:
-
-.. autoclass:: SeriesGroupBy
-   :members:
-   :inherited-members:
-
 Other functions
 ~~~~~~~~~~~~~~~
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
-.. autofunction:: categorize
 .. autofunction:: quantile
 
 .. currentmodule:: dask.dataframe.multi

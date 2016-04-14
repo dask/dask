@@ -12,5 +12,4 @@ semi-structured data like JSON blobs or log files.
    bag-example.rst
    bag-creation.rst
    bag-execution.rst
-   bag-limitations.rst
    bag-api.rst
