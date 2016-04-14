@@ -67,6 +67,7 @@ Contents
    :caption: Developer Documentation
 
    foundations
+   clients
    worker-center
    scheduler
    resilience

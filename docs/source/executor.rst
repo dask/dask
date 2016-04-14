@@ -155,7 +155,7 @@ This both resets the scheduler state and all of the worker processes.  All
 current data and computations will be lost.  All existing futures set their
 status to ``'cancelled'``.
 
-See :doc:`resilience <resilence>` for more information.
+See :doc:`resilience <resilience>` for more information.
 
 
 Internals
