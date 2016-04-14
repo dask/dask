@@ -98,6 +98,23 @@ messy situations in everyday problems.
 Index
 -----
 
+**Getting Started**
+
+* :doc:`install`
+* :doc:`examples-overview`
+* :doc:`cheatsheet`
+* :doc:`faq`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Getting Started
+
+   install.rst
+   examples-overview.rst
+   cheatsheet.rst
+   faq.rst
+
 **Collections**
 
 Dask collections are the main interaction point for users. They look like
@@ -181,30 +198,23 @@ help make debugging and profiling graph execution easier.
 
 **Help & reference**
 
-* :doc:`install`
-* :doc:`examples-overview`
-* :doc:`cheatsheet`
-* :doc:`glossary`
-* :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`get-involved`
 * :doc:`cite`
+* :doc:`glossary`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Help & reference
 
-   install.rst
-   examples-overview.rst
-   cheatsheet.rst
-   glossary.rst
-   faq.rst
+   blaze.rst
    spark.rst
    caching.rst
    get-involved.rst
    cite.rst
+   glossary.rst
 
 **Contact**
 
