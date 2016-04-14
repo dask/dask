@@ -62,13 +62,16 @@ def read_bytes(fn, executor=None, s3=None, lazy=True, delimiter=None,
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
     logger.debug("Read %d blocks of binary bytes from %s", len(names), fn)
+    s3safe_pars = s3pars.copy()
+    s3safe_pars.update(s3.get_delegated_s3pars())
     if lazy:
-        values = [Value(name, [{name: (read_block_from_s3, fn, offset, length, s3pars, delimiter)}])
+        values = [Value(name, [{name: (read_block_from_s3, fn, offset, length,
+                        s3safe_pars, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
     else:
         return executor.map(read_block_from_s3, filenames, offsets, lengths,
-                s3pars=s3pars, delimiter=delimiter)
+                            s3pars=s3safe_pars, delimiter=delimiter)
 
 
 def read_block_from_s3(filename, offset, length, s3pars={}, delimiter=None):
