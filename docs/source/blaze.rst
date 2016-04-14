@@ -1,5 +1,5 @@
-Blaze
-=====
+Comparison to Blaze
+===================
 
 Difference between Dask Arrays and Blaze
 ----------------------------------------
