@@ -1,11 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import defaultdict
 from itertools import cycle
 from operator import itemgetter, add
 
 from toolz import unique, groupby, accumulate, pluck
+from toolz.compatibility import iteritems, zip
 import bokeh.plotting as bp
-from bokeh.io import _state
+from bokeh.io import _state, push_notebook
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool, LinearAxis, Range1d
 
@@ -195,84 +197,133 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
-    """Visualize the results of profiling in a bokeh plot.
+class TasksPlot(object):
+    def __init__(self, palette='YlGnBu', label_size=60, **kwargs):
+        '''
+        Create a new TasksPlot
 
-    Parameters
-    ----------
-    results : sequence
-        Output of Profiler.results
-    dsk : dict
-        The dask graph being profiled.
-    palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
-    label_size: int (optional)
-        Maximum size of output labels in plot, defaults to 60
-    **kwargs
-        Other keyword arguments, passed to bokeh.figure. These will override
-        all defaults set by visualize.
+        Parameters
+        ----------
+        palette : string, optional
+            Name of the bokeh palette to use, must be key in
+            bokeh.palettes.brewer.
+        label_size: int (optional)
+            Maximum size of output labels in plot, defaults to 60
+        **kwargs
+            Other keyword arguments, passed to bokeh.figure. These will
+            override all defaults set by visualize.
+        '''
 
-    Returns
-    -------
-    The completed bokeh plot object.
-    """
+        defaults = dict(title="Profile Results",
+                        tools="hover,save,reset,resize,xwheel_zoom,xpan",
+                        plot_width=800, plot_height=300)
+        defaults.update((k, v) for (k, v) in kwargs.items() if k in
+                        bp.Figure.properties())
 
-    defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,resize,xwheel_zoom,xpan",
-                    plot_width=800, plot_height=300)
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+        self.palette = palette
+        self.label_size = label_size
+        self.plot = bp.figure(**defaults)
+        self.plot.x_range.start = 0
+        self.plot.y_range.start = 0
+        self.plot.grid.grid_line_color = None
+        self.plot.axis.axis_line_color = None
+        self.plot.axis.major_tick_line_color = None
+        self.plot.yaxis.axis_label = "Worker ID"
+        self.plot.xaxis.axis_label = "Time (s)"
 
-    if results:
+        self.worker_y = {}
+        self.left = None
+        self.worker_tasks = defaultdict(list)
+
+        hover = self.plot.select(HoverTool)
+        hover.tooltips = """
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@key</span>
+        </div>
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
+        </div>
+        """
+        hover.point_policy = 'follow_mouse'
+
+        # TODO: was there any benefit to the discrete y_range:
+        # y_range=[str(i) for i in range(len(self.worker_y))], x_range=[0, right - left]
+
+        self.rect = self.plot.rect(
+            source=bp.ColumnDataSource(data={}),
+            x='x', y='y', height=1, width='width',
+            color='color', line_color='gray')
+
+    def update_task(self, task, dsk, push=True):
+        if self.left is None:
+            self.left = task.start_time
+        if task.worker_id not in self.worker_y:
+            self.worker_y[task.worker_id] = len(self.worker_y)
+        width = task.end_time - task.start_time
+        func = pprint_task(task.task, dsk, self.label_size)
+        data = self.rect.data_source.data
+        data['width'].append(width)
+        data['x'].append(width / 2 + task.start_time - self.left)
+        data['y'].append(self.worker_y[task.worker_id] + 1)
+        data['function'].append(func)
+        data['color'] = get_colors(self.palette, data['function'])
+        data['key'].append(str(task.key))
+
+        if push and _state._notebook:
+            # TODO: verify last plot is p-ish
+            push_notebook()
+
+    def update(self, results, dsk, push=True):
+        '''
+        Update the task plot data source
+
+        Parameters
+        ----------
+        results : sequence
+            Output of Profiler.results
+        dsk : dict
+            The dask graph being profiled.
+        push : bool, optional
+            If True (the default) call bokeh.io.push_notebook(); useful to set
+            this False for the first update before output_notebook() has
+            happened.
+        '''
+        data = self.rect.data_source.data
+
+        if not results:
+            data['width'] = []
+            data['x'] = []
+            data['y'] = []
+            data['function'] = []
+            data['color'] = []
+            data['key'] = []
+            return
+
+        for task in results:
+            self.worker_tasks[task.id].append(task)
+
         keys, tasks, starts, ends, ids = zip(*results)
 
-        id_group = groupby(itemgetter(4), results)
-        timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                    id_group.items())
-        id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                    key=itemgetter(1), reverse=True)))
+        timings = ((k, [i.end_time - i.start_time for i in v])
+                   for (k, v) in iteritems(self.worker_tasks))
+        timings = sorted(timings, key=itemgetter(1), reverse=True)
 
-        left = min(starts)
-        right = max(ends)
-
-        p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                    x_range=[0, right - left], **defaults)
-
-        data = {}
-        data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
-        data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
-        data['y'] = [id_lk[i] + 1 for i in ids]
-        data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
-        data['color'] = get_colors(palette, funcs)
+        self.worker_y = dict((t[0], n) for (n, t) in enumerate(timings))
+        self.left = min(starts)
+        funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
+        width = [e - s for (s, e) in zip(starts, ends)]
+        data['width'] = width
+        data['x'] = [w/2 + s - self.left for (w, s) in zip(width, starts)]
+        data['y'] = [self.worker_y[i] + 1 for i in ids]
+        data['function'] = funcs
+        data['color'] = get_colors(self.palette, funcs)
         data['key'] = [str(i) for i in keys]
 
-        source = bp.ColumnDataSource(data=data)
-
-        p.rect(source=source, x='x', y='y', height=1, width='width',
-            color='color', line_color='gray')
-    else:
-        p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
-                      **defaults)
-    p.grid.grid_line_color = None
-    p.axis.axis_line_color = None
-    p.axis.major_tick_line_color = None
-    p.yaxis.axis_label = "Worker ID"
-    p.xaxis.axis_label = "Time (s)"
-
-    hover = p.select(HoverTool)
-    hover.tooltips = """
-    <div>
-        <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@key</span>
-    </div>
-    <div>
-        <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
-    </div>
-    """
-    hover.point_policy = 'follow_mouse'
-
-    return p
+        if push and _state._notebook:
+            # TODO: verify last plot is p-ish
+            push_notebook()
 
 
 def plot_resources(results, palette='YlGnBu', **kwargs):

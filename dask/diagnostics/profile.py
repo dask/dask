@@ -53,14 +53,24 @@ class Profiler(Callback):
     >>> prof.clear()
 
     """
-    def __init__(self):
+    def __init__(self, watch=False):
         self._results = {}
         self.results = []
         self._dsk = {}
+        self._tasks_plot = None
+        self.watch = watch
+        self.watching = False
 
     def __enter__(self):
         self.clear()
-        return super(Profiler, self).__enter__()
+        r = super(Profiler, self).__enter__()
+        if self.watch:
+            self.visualize(watch=True)
+        return r
+
+    def __exit__(self, exc_type, exc_val, tb):
+        self.watching = False
+        self._tasks_plot = None
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -71,16 +81,24 @@ class Profiler(Callback):
 
     def _posttask(self, key, value, dsk, state, id):
         end = default_timer()
-        self._results[key] += (end, id)
+        try:
+            data = self._results.pop(key)
+        except KeyError:
+            return
+        data += (end, id)
+        task_data = TaskData(*data)
+        self.results.append(task_data)
+        if self._tasks_plot:
+            self._tasks_plot.update_task(task_data, self._dsk)
 
     def _finish(self, dsk, state, failed):
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
-        self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_tasks
-        return plot_tasks(self.results, self._dsk, **kwargs)
+        from .profile_visualize import TasksPlot
+        self._tasks_plot = TasksPlot(**kwargs)
+        self._tasks_plot.update(self.results, self._dsk, push=False)
+        return self._tasks_plot.plot
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -90,6 +108,7 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
+        self.watching = kwargs.pop('watch', False)
         return visualize(self, **kwargs)
 
     def clear(self):
@@ -97,6 +116,8 @@ class Profiler(Callback):
         self._results.clear()
         del self.results[:]
         self._dsk = {}
+        self.watching = False
+        self._tasks_plot = None
 
 
 ResourceData = namedtuple('ResourceData', ('time', 'mem', 'cpu'))
