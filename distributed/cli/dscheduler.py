@@ -1,9 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import multiprocessing
 import os
 import socket
-import subprocess
 from sys import argv, exit
 from time import sleep
 
@@ -22,12 +22,8 @@ ip = get_ip()
 
 import signal
 
-bokeh_proc = [False]
-
 
 def handle_signal(sig, frame):
-    if bokeh_proc[0]:
-        bokeh_proc[0].terminate()
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 signal.signal(signal.SIGINT, handle_signal)
@@ -70,7 +66,10 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
                      sum([['--host', host] for host in hosts], []))
             if show:
                 args.append('--show')
-            bokeh_proc[0] = subprocess.Popen(args)
+            from bokeh.command.bootstrap import main
+            proc = multiprocessing.Process(target=main, args=(args,))
+            proc.daemon = True
+            proc.start()
 
             logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
                         % (ip, bokeh_port))
@@ -82,7 +81,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
     loop.start()
     loop.close()
     scheduler.stop()
-    bokeh_proc[0].terminate()
+    proc.terminate()
 
     logger.info("End scheduler at %s:%d", ip, port)
 
