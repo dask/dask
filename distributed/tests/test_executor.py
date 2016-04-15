@@ -2481,3 +2481,16 @@ def test_add_worker_after_tasks(e, s):
     result = yield e._gather(futures)
 
     yield n._close()
+
+
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_workers_register_indirect_data(e, s, a, b):
+    [x] = yield e._scatter([1], workers=a.address)
+    y = e.submit(inc, x, workers=b.ip)
+    yield y._result()
+    assert b.data[x.key] == 1
+    assert s.who_has[x.key] == {a.address, b.address}
+    assert s.has_what[b.address] == {x.key, y.key}
+    s.validate()

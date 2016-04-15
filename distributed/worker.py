@@ -232,27 +232,30 @@ class Worker(Server):
 
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
-            task=None, who_has=None):
+                    task=None, who_has=None):
+        who_has = who_has or {}
         diagnostics = {}
+        data = {k: self.data[k] for k in who_has if k in self.data}
+        who_has = {k: set(map(coerce_to_address, v))
+                   for k, v in who_has.items()
+                   if k not in self.data}
         if who_has:
-            local_data = {k: self.data[k] for k in who_has if k in self.data}
-            who_has = {k: set(map(coerce_to_address, v))
-                       for k, v in who_has.items()
-                       if k not in self.data}
             try:
                 logger.info("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
                 diagnostics['transfer-start'] = time()
                 other = yield gather_from_workers(who_has)
                 diagnostics['transfer-stop'] = time()
-                data = merge(local_data, other)
+                self.data.update(other)
+                yield self.center.add_keys(address=self.address,
+                                           keys=list(other))
+                data.update(other)
             except KeyError as e:
                 logger.warn("Could not find data for %s", key)
                 raise Return({'status': 'missing-data',
                               'keys': e.args,
                               'key': key})
         else:
-            data = {}
             transfer_time = 0
         try:
             start = default_timer()

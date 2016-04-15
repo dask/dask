@@ -733,6 +733,8 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
+        if isinstance(workers, str):
+            workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, str))
                                                for k in data):
             d = yield self._scatter(keymap(tokey, data), workers, broadcast)

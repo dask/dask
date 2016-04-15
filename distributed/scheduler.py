@@ -215,6 +215,7 @@ class Scheduler(Server):
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has,
+                         'add_keys': self.add_keys,
                          'rebalance': self.rebalance}
 
         self.services = {}
@@ -247,6 +248,13 @@ class Scheduler(Server):
     @property
     def address_tuple(self):
         return (self.ip, self.port)
+
+    def add_keys(self, stream, address=None, keys=()):
+        address = coerce_to_address(address)
+        self.has_what[address].update(keys)
+        for key in keys:
+            self.who_has[key].add(address)
+        return 'OK'
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """

@@ -137,6 +137,8 @@ def test_compute_who_has(loop):
                          key='b')
         assert z.data['b'] == 2
 
+        if 'a' in z.data:
+            del z.data['a']
         yield zz.compute(function=dumps(inc),
                          args=dumps(('a',)),
                          who_has={'a': [y.address]},
