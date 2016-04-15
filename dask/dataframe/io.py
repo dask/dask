@@ -720,7 +720,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         else:
             divisions, starts, stops = _find_divisions(division_column, start,
                                                        stop, chunksize, path,
-                                                       key, lock)
+                                                       key)
             ss = zip(starts, stops)
             dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
                 {'start': s[0],
@@ -741,52 +741,50 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                    for k, s in zip(keys, stops)])
 
 
-def _find_divisions(division_column, start, stop, chunksize, path, key, lock):
+def _find_divisions(division_column, start, stop, chunksize, path, key):
     divisions = list()
     starts = [start]
     stops = list()
     row = start
-    if isinstance(division_column, string_types):
-        _div_col = lambda x: x[division_column]
-    elif division_column:
-        _div_col = lambda x: pd.Series(x.index)
-    stop = _get_last_row(path, key, lock, stop)
-    data = _pd_read_hdf(path, key, lock,
-                        {'start': row, 'stop': row + 1})
-    divisions.append(_div_col(data).iloc[0])
+    stop = pd.HDFStore(path).get_storer(key).nrows if stop is None else stop
+    data = _read_hdf_column(path, key, division_column, row, 1)
+    divisions.append(data[0])
     for row in range(start + chunksize, stop, chunksize):
-        data = _pd_read_hdf(path, key, lock,
-                            {'start': row - 1, 'stop': row + 1})
-        while _div_col(data).iloc[0] == _div_col(data).iloc[1]:
-            row += 1
-            if row >= stop:
-                break 
-            data = _pd_read_hdf(path, key, lock,
-                                {'start': row - 1, 'stop': row + 1})
-        if row >= stop:
-            break
-        starts.append(row)
-        stops.append(row)
-        divisions.append(_div_col(data).iloc[1])
+        data = _read_hdf_column(path, key, division_column, row - 1, 100)
+        split = _find_split(data)
+        while not split and row < stop:
+            row = row + 100
+            data = _read_hdf_column(path, key, division_column, row - 1, 100)
+            if len(data) == 0:
+                split = False
+            else:
+                split = _find_split(data)
+        if split > 0:
+            starts.append(row)
+            stops.append(row)
+            divisions.append(data[split])
     stops.append(stop)
-    data = _pd_read_hdf(path, key, lock,
-                        {'start': stop - 1, 'stop': stop})
-    divisions.append(_div_col(data).iloc[0])
+    data = _read_hdf_column(path, key, division_column, stop - 1, 1)
+    divisions.append(data[0])
     return divisions, starts, stops
 
 
-def _get_last_row(path, key, lock, stop):
-    if stop is None:
-        if lock:
-            lock.acquire()
-        try:
-            nrows = pd.HDFStore(path).get_storer(key).nrows
-        finally:
-            if lock:
-                lock.release()
-        return nrows
-    else:
-        return stop
+def _find_split(data):
+    i = 0
+    while data[i] == data[i + 1]:
+        i += 1
+        if i == len(data) - 1:
+            return False
+    return i + 1
+
+
+def _read_hdf_column(path, key, column, start, rows):
+    if isinstance(column, string_types):
+        return pd.HDFStore(path).select(key, start=start, stop=start + rows,
+                                        columns=[column])[column].values
+    elif column:
+        return pd.HDFStore(path).select(key, start=start,
+                                        stop=start + rows).index.values
 
 
 def _pd_read_hdf(path, key, lock, kwargs):
