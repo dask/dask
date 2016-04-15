@@ -101,7 +101,7 @@ Index
 **Getting Started**
 
 * :doc:`install`
-* :doc:`examples-overview`
+* :doc:`examples-tutorials`
 * :doc:`cheatsheet`
 
 .. toctree::
@@ -110,7 +110,7 @@ Index
    :caption: Getting Started
 
    install.rst
-   examples-overview.rst
+   examples-tutorials.rst
    cheatsheet.rst
 
 **Collections**

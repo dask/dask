@@ -9,6 +9,7 @@ the complete pandas interface.
    :maxdepth: 1
 
    dataframe-overview.rst
+   dataframe-examples.rst
    dataframe-create.rst
    dataframe-partitions.rst
    dataframe-api.rst
