@@ -10,7 +10,7 @@ methods.
 As an example, consider the case where we store tabular data in a custom format
 not known by ``dask.dataframe``.  This format is naturally broken apart into
 pieces and we have a function that reads one piece into a Pandas DataFrame.
-We use ``dask.imperrative`` to lazily read these files into Pandas DataFrames,
+We use ``dask.imperative`` to lazily read these files into Pandas DataFrames,
 use ``dd.from_imperative`` to wrap these pieces up into a single
 ``dask.dataframe``, use the complex algorithms within ``dask.dataframe``
 (groupby, join, etc..) and then switch back to imperative to save our results

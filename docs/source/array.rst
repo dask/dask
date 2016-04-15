@@ -8,8 +8,10 @@ blocked algorithms and task scheduling.
    :maxdepth: 1
 
    array-overview.rst
-   array-example.rst
+   array-examples.rst
    array-creation.rst
+   array-api.rst
+   array-random.rst
+   array-ghost.rst
    array-design.rst
    array-extend.rst
-   array-api.rst

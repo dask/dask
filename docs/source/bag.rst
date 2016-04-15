@@ -9,7 +9,7 @@ semi-structured data like JSON blobs or log files.
    :maxdepth: 1
 
    bag-overview.rst
-   bag-example.rst
+   bag-examples.rst
    bag-creation.rst
-   bag-execution.rst
    bag-api.rst
+   bag-execution.rst
