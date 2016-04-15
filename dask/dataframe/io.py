@@ -217,7 +217,8 @@ def read_csv(fn, **kwargs):
     # Handle glob strings
     if '*' in fn:
         from .multi import concat
-        return concat([read_csv(f, **kwargs) for f in sorted(glob(fn))])
+        return concat([read_csv(f, chunkbytes=chunkbytes, index=index, **kwargs)
+                       for f in sorted(glob(fn))])
 
     token = tokenize(os.path.getmtime(fn), kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
