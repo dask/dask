@@ -2494,3 +2494,12 @@ def test_workers_register_indirect_data(e, s, a, b):
     assert s.who_has[x.key] == {a.address, b.address}
     assert s.has_what[b.address] == {x.key, y.key}
     s.validate()
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 4), ('127.0.0.2', 4)])
+def test_work_stealing(e, s, a, b):
+    [x] = yield e._scatter([1])
+    futures = e.map(slowadd, range(50), [x] * 50)
+    yield _wait(futures)
+    assert len(a.data) > 10
+    assert len(b.data) > 10
