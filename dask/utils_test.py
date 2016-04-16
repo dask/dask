@@ -19,8 +19,9 @@ class GetFunctionTestCase(unittest.TestCase):
     To use the class, inherit from it and override the `get` function. For
     example:
 
-    class CustomGetTestCase(GetFunctionTestCase):
-        get = staticmethod(myget)
+    > from dask.utils_test import GetFunctionTestCase
+    > class CustomGetTestCase(GetFunctionTestCase):
+         get = staticmethod(myget)
 
     Note that the foreign `myget` function has to be explicitly decorated as a
     staticmethod.
