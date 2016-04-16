@@ -6,4 +6,3 @@ Examples
 
    examples/array-random.rst
    examples/array-numpy.rst
-   examples/array-pickle.rst
