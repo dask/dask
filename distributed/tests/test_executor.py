@@ -1848,6 +1848,12 @@ def test__broadcast(e, s, a, b):
     assert a.data == b.data == {x.key: 1, y.key: 2}
 
 
+@gen_cluster(executor=True)
+def test__broadcast_dict(e, s, a, b):
+    d = yield e._scatter({'x': 1}, broadcast=True)
+    assert a.data == b.data == {'x': 1}
+
+
 def test_broadcast(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
