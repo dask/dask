@@ -47,7 +47,7 @@ Concatenation and Stacking
 
 Often we store data in several different locations and want to stitch them
 together.  For this case please see docs on
-:doc:`concatenation and stacking <stack>`.
+:doc:`concatenation and stacking <array-stack>`.
 
 
 Complex case

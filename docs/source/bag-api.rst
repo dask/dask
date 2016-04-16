@@ -5,8 +5,43 @@ API
 
 .. autosummary::
     Bag
-    Bag.map
+    Bag.all
+    Bag.any
+    Bag.compute
+    Bag.concat
+    Bag.count
+    Bag.dask
+    Bag.distinct
     Bag.filter
+    Bag.fold
+    Bag.foldby
+    Bag.frequencies
+    Bag.from_filenames
+    Bag.from_sequence
+    Bag.groupby
+    Bag.join
+    Bag.map
+    Bag.map_partitions
+    Bag.max
+    Bag.mean
+    Bag.min
+    Bag.name
+    Bag.npartitions
+    Bag.pluck
+    Bag.product
+    Bag.reduction
+    Bag.remove
+    Bag.repartition
+    Bag.std
+    Bag.str
+    Bag.sum
+    Bag.take
+    Bag.to_dataframe
+    Bag.to_imperative
+    Bag.to_textfiles
+    Bag.topk
+    Bag.var
+    Bag.visualize
 
 Create Bags
 -----------
