@@ -215,6 +215,7 @@ class Scheduler(Server):
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has,
+                         'add_keys': self.add_keys,
                          'rebalance': self.rebalance}
 
         self.services = {}
@@ -247,6 +248,13 @@ class Scheduler(Server):
     @property
     def address_tuple(self):
         return (self.ip, self.port)
+
+    def add_keys(self, stream, address=None, keys=()):
+        address = coerce_to_address(address)
+        self.has_what[address].update(keys)
+        for key in keys:
+            self.who_has[key].add(address)
+        return 'OK'
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
@@ -381,7 +389,47 @@ class Scheduler(Server):
             self.ensure_idle_ready()
 
     def ensure_idle_ready(self):
-        """ Run ready tasks on idle workers """
+        """ Run ready tasks on idle workers
+
+        **Work stealing policy**
+
+        If some workers are idle but not others, if there are no globally ready
+        tasks, and if there are tasks in worker stacks then we start to pull
+        preferred tasks from overburdened workers and deploy them back into the
+        global pool in the following manner.
+
+        We determine the number of tasks to reclaim as the number of all tasks
+        in all stacks times the fraction of idle workers to all workers.  We
+        sort the stacks by size and walk through them, reclaiming half of each
+        stack until we have enough task to fill the global pool.  We are
+        careful not to reclaim tasks that are restricted to run on certain
+        workers.
+        """
+        if 0 < len(self.idle) < len(self.ncores) and not self.ready:
+            n = sum(map(len, self.stacks)) * len(self.idle) / len(self.ncores)
+
+            if not n:
+                return
+            stacks = sorted([(w, self.stacks[w]) for w in self.ncores
+                                                  if w not in self.idle],
+                            key=lambda kv: len(kv[1]), reverse=True)
+
+            for w, stack in stacks:
+                k = min(len(stack) // 2, len(stack) - self.ncores[w])
+                if k <= 0:
+                    continue
+                tasks = stack[:k]
+                good = [t for t in tasks if t not in self.restrictions]
+                bad = [t for t in tasks if t in self.restrictions]
+                del self.stacks[w][:k]
+                self.stacks[w][:0] = bad
+                self.ready.extend(good)
+
+                n -= len(good)
+
+                if n <= 0:
+                    break
+
         while self.idle and self.ready and self.ncores:
             worker = min(self.idle, key=lambda w: len(self.has_what[w]))
             self.ensure_occupied(worker)
