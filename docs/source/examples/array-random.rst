@@ -1,7 +1,8 @@
 Creating random arrays
 ======================
 
-We can create arrays with random variables using ``da.random.normal``.
+In a simple case, we can create arrays with random data using the `da.random`
+module.
 
 .. code-block:: python
 

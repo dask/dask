@@ -3,6 +3,11 @@ API
 
 .. currentmodule:: dask.bag.core
 
+.. autosummary::
+    Bag
+    Bag.map
+    Bag.filter
+
 Create Bags
 -----------
 

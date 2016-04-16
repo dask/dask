@@ -15,6 +15,10 @@ You can view examples for each Dask collection:
 Tutorials
 ---------
 
+You can view a tutorial of Dask, including slides and notebooks on Dask arrays,
+graphs, dataframes, imperative, and bags in the
+`dask-tutorials repository <https://github.com/dask/dask-tutorial>`_.
+
 You can try a live tutorial of dask dataframe's basics `here
 <http://mybinder.org/repo/dask/dask-examples/dask-dataframe-basics.ipynb>`_.
 

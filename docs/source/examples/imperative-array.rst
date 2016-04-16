@@ -1,5 +1,5 @@
-Simple parallel example
-=======================
+Imperative example with arrays
+==============================
 
 Here we have a serial blocked computation for computing the mean of all
 positive elements in a large, on disk array:

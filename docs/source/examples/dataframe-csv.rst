@@ -41,12 +41,12 @@ Suppose we have a collection of CSV files with data:
 
 and so on.
 
-We can create Dask dataframes from CSV files using ``ddf.read_csv``.
+We can create Dask dataframes from CSV files using ``dd.read_csv``.
 
 .. code-block:: python
 
-    >>> import dask.dataframe as ddf
-    >>> df = ddf.read_csv('data*.csv')
+    >>> import dask.dataframe as dd
+    >>> df = dd.read_csv('data*.csv')
 
 We can work with the Dask dataframe as usual, which is composed of Pandas
 dataframes. We can list the first few rows.

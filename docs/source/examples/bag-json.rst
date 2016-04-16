@@ -1,5 +1,5 @@
-Simple example
-==============
+Read JSON records from disk
+===========================
 
 We commonly use ``dask.bag`` to process unstructured or semi-structured data:
 

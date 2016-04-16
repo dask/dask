@@ -210,7 +210,6 @@ help make debugging and profiling graph execution easier.
 
    support.rst
    faq.rst
-   blaze.rst
    spark.rst
    caching.rst
    cite.rst

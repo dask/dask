@@ -12,6 +12,8 @@ blocked algorithms and task scheduling.
    array-creation.rst
    array-api.rst
    array-random.rst
+   array-slicing.rst
+   array-stack.rst
    array-ghost.rst
    array-design.rst
    array-extend.rst

@@ -1,5 +1,5 @@
-Custom workflows
-================
+Custom workflows with imperative
+================================
 
 `Example notebook <http://nbviewer.ipython.org/github/dask/dask-examples/blob/master/do-and-profiler.ipynb>`_.
 
