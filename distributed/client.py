@@ -247,7 +247,7 @@ def broadcast_to_workers(workers, data, report=False, rpc=rpc, serialize=True):
     scatter_to_workers
     """
     if isinstance(data, dict):
-        names, data = list(zip(*data.items()))
+        names = list(data)
     else:
         names = []
         for x in data:
