@@ -123,21 +123,28 @@ def get(d, key, get=None, **kwargs):
     """
     get = get or _get
     if isinstance(key, list):
-        v = [get(d, k, get=get) for k in key]
-    elif ishashable(key) and key in d:
-        v = d[key]
+        v = tuple(get(d, k, get=get) for k in key)
     elif istask(key):
         v = key
+    elif ishashable(key):
+        v = d[key]
     else:
-        return key
+        message = '%s is neither a task or a dask key'
+        raise KeyError(message % key)
 
     if istask(v):
         if get is _get:
             # use non-recursive method by default
             return _get_task(d, v)
         func, args = v[0], v[1:]
-        args2 = [get(d, arg, get=get) for arg in args]
-        return func(*[get(d, arg, get=get) for arg in args2])
+
+        args2 = []
+        for arg in args:
+            if not istask(arg) and arg not in d:
+                args2.append(arg)
+            else:
+                args2.append(get(d, arg, get=get))
+        return func(*args2)
     else:
         return v
 
