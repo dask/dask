@@ -99,5 +99,14 @@ Frequently Asked Questions
         case you could also report your problem on our `issue tracker`_ and
         work with the dask development team to improve our scheduling policies.
 
+5. **How does Dask serialize functions?**
+
+When operating with the single threaded or multithreaded scheduler no function
+serialization is necessary.  When operating with the distributed memory or
+multiprocessing scheduler Dask uses cloudpickle_ to serialize functions to send
+to worker processes.  cloudpickle supports almost any kind of function,
+including lambdas, closures, partials and functions defined interactively.
+
+.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 .. _`Chest`: https://github.com/blaze/chest
 .. _`issue tracker`: https://github.com/dask/dask/issues/new
