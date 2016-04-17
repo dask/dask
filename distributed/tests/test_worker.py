@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from numbers import Integral
 from operator import add
 import os
 import shutil
@@ -72,7 +73,7 @@ def test_worker(loop):
         assert c.who_has['x'] == {a.address}
         assert isinstance(response['compute-start'], float)
         assert isinstance(response['compute-stop'], float)
-        assert isinstance(response['thread'], int)
+        assert isinstance(response['thread'], Integral)
 
         response = yield bb.compute(key='y',
                                     function=dumps(add),

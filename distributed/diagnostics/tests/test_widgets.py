@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
+pytest.importorskip('ipywidgets')
+
 from ipykernel.comm import Comm
 import ipywidgets as widgets
 from ipywidgets import Widget

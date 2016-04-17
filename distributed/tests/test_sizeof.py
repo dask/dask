@@ -4,15 +4,15 @@ import sys
 
 import pytest
 
-from distributed.sizeof import sizeof
+from distributed.sizeof import sizeof, getsizeof
 
 
 def test_base():
-    assert sizeof(1) == sys.getsizeof(1)
+    assert sizeof(1) == getsizeof(1)
 
 
 def test_containers():
-    assert sizeof([1, 2, [3]]) > (sys.getsizeof(3) * 3 + sys.getsizeof([]))
+    assert sizeof([1, 2, [3]]) > (getsizeof(3) * 3 + getsizeof([]))
 
 
 def test_numpy():

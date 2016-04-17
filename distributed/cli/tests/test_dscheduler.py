@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
+pytest.importorskip('requests')
+
 import os
 import requests
 import signal
@@ -7,7 +10,6 @@ import socket
 from subprocess import Popen, PIPE
 from time import sleep, time
 
-import pytest
 
 from distributed import Scheduler, Executor
 from distributed.utils import get_ip, ignoring

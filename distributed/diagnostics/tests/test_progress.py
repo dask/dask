@@ -159,6 +159,7 @@ def test_AllProgress(e, s, a, b):
 
     for i in range(4):
         future = e.submit(f, i)
+    import gc; gc.collect()
 
     yield gen.sleep(1)
 
