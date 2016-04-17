@@ -8,9 +8,15 @@ blocked algorithms and task scheduling.
    :maxdepth: 1
 
    array-overview.rst
-   array-examples.rst
    array-creation.rst
    array-api.rst
+   array-examples.rst
+
+Other topics
+
+.. toctree::
+   :maxdepth: 1
+
    array-slicing.rst
    array-stack.rst
    array-ghost.rst

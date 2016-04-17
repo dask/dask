@@ -1,8 +1,8 @@
 Working with Collections
 ========================
 
-Often we want to do a bit of custom work with ``dask.imperative`` (for example for
-complex data ingest), then leverage the algorithms in ``dask.array`` or
+Often we want to do a bit of custom work with ``dask.imperative`` (for example
+for complex data ingest), then leverage the algorithms in ``dask.array`` or
 ``dask.dataframe``, and then switch back to custom work.  To this end, all
 collections support ``from_imperative`` functions and ``to_imperative``
 methods.

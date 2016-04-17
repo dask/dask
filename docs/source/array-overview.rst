@@ -6,10 +6,25 @@ algorithms, cutting up the large array into many small arrays. This lets us
 compute on arrays larger than memory using all of our cores. We coordinate these
 blocked algorithms using dask graphs.
 
-For a live tutorial in your browser,
-visit our Binder_.
+Design
+------
 
-.. _Binder: http://mybinder.org/repo/dask/dask-examples/dask-array-basics.ipynb
+.. image:: images/dask-array-black-text.svg
+   :alt: Dask arrays coordinate many numpy arrays
+   :align: right
+
+Dask arrays coordinate many NumPy arrays arranged into a grid.  These
+arrays may live on disk or on other machines.
+
+Common Uses
+-----------
+
+Today Dask array is commonly used in the sort of gridded data analysis that
+arises in weather, climate modeling, or oceanograhy, especially when data
+sizes become inconveniently large.  Dask array complements large on-disk array
+stores like HDF5, NetCDF, and BColz.  Additionally Dask.array is commonly used
+to speed up expensive in-memory computations using multiple cores, such as you
+might find in image analysis or statistical and machine learning applications.
 
 Scope
 -----
@@ -23,115 +38,19 @@ The ``dask.array`` library supports the following interface from ``numpy``:
 *  Slicing, ``x[:100, 500:100:-2]``
 *  Fancy indexing along single axes with lists or numpy arrays, ``x[:, [10, 1, 5]]``
 *  The array protocol ``__array__``
+*  Some linear algebra ``svd, qr, solve, solve_triangular, lstsq``
 
-NOTE: These operations must match the NumPy interface exactly.
+See :doc:`the dask.array API<array-api>` for a more extensive list of
+functionality.
 
-Construct
+Execution
 ---------
 
-We can construct dask array objects from other array objects that support
-numpy-style slicing.  In this example, we wrap a dask array around an HDF5 dataset,
-chunking that dataset into blocks of size ``(1000, 1000)``:
+By default dask.array uses the threaded scheduler in order to avoid data
+transfer costs and because NumPy releases the GIL well.  It is also quite
+effective on a cluster using the `dask.distributed`_ scheduler.
 
-.. code-block:: Python
-
-   >>> import h5py
-   >>> f = h5py.File('myfile.hdf5')
-   >>> dset = f['/data/path']
-
-   >>> import dask.array as da
-   >>> x = da.from_array(dset, chunks=(1000, 1000))
-
-Often we have many such datasets.  We can use the ``stack`` or ``concatenate``
-functions to bind many dask arrays into one:
-
-.. code-block:: Python
-
-   >>> dsets = [h5py.File(fn)['/data'] for fn in sorted(glob('myfiles.*.hdf5')]
-   >>> arrays = [da.from_array(dset, chunks=(1000, 1000))
-                   for dset in dsets]
-
-   >>> x = da.stack(arrays, axis=0)  # Stack along a new first axis
-
-Interact
---------
-
-Dask copies the NumPy API for an important subset of operations, including
-arithmetic operators, ufuncs, slicing, dot products, and reductions:
-
-.. code-block:: Python
-
-   >>> y = log(x + 1)[:5].sum(axis=1)
-
-Store
------
-
-In Memory
-~~~~~~~~~
-
-If you have a small amount of data, you can call ``np.array`` on your dask array to turn it
-in to a normal NumPy array:
-
-.. code-block:: Python
-
-   >>> x = da.arange(6, chunks=3)
-   >>> y = x**2
-   >>> np.array(y)
-   array([0, 1, 4, 9, 16, 25])
-
-
-HDF5
-~~~~
-
-Use the ``to_hdf5`` function to store data into HDF5 using ``h5py``:
-
-.. code-block:: Python
-
-   >>> da.to_hdf5('myfile.hdf5', '/y', y)  # doctest: +SKIP
-
-Store several arrays in one computation with the function
-``da.to_hdf5`` by passing in a dict:
-
-.. code-block:: Python
-
-   >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
-
-Other On-Disk Storage
-~~~~~~~~~~~~~~~~~~~~~
-
-Alternatively, you can store dask arrays in any object that supports numpy-style
-slice assignment like ``h5py.Dataset``, or ``bcolz.carray``:
-
-.. code-block:: Python
-
-   >>> import bcolz  # doctest: +SKIP
-   >>> out = bcolz.zeros(shape=y.shape, rootdir='myfile.bcolz')  # doctest: +SKIP
-   >>> da.store(y, out)  # doctest: +SKIP
-
-You can store several arrays in one computation by passing lists of sources and
-destinations:
-
-   >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
-
-
-On-Disk Storage
----------------
-
-In the example above we used ``h5py``, but ``dask.array`` works equally well
-with ``pytables``, ``bcolz``, or any library that provides an array object from
-which we can slice out numpy arrays:
-
-.. code-block:: Python
-
-   >>> x = dataset[1000:2000, :2000]  # pull out numpy array from on-disk object
-
-This API has become a standard in Scientific Python.  Dask works with any
-object that supports this operation and the equivalent assignment syntax:
-
-.. code-block:: Python
-
-   >>> dataset[1000:2000, :2000] = x  # Store numpy array in on-disk object
-
+.. _`dask.distributed`: http://distributed.readthedocs.org/en/latest/
 
 Limitations
 -----------
@@ -153,4 +72,3 @@ will be disappointed.  Notably, dask.array has the following limitations:
     Often we include parallel-friendly alternatives like ``topk``.
 4.  Dask development is driven by immediate need, and so many lesser used
     functions have not been implemented. Community contributions are encouraged.
-
