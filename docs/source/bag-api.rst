@@ -1,7 +1,9 @@
 API
 ===
 
-.. currentmodule:: dask.bag.core
+.. currentmodule:: dask.bag
+
+Top level user functions:
 
 .. autosummary::
     Bag
@@ -10,7 +12,6 @@ API
     Bag.compute
     Bag.concat
     Bag.count
-    Bag.dask
     Bag.distinct
     Bag.filter
     Bag.fold
@@ -25,15 +26,12 @@ API
     Bag.max
     Bag.mean
     Bag.min
-    Bag.name
-    Bag.npartitions
     Bag.pluck
     Bag.product
     Bag.reduction
     Bag.remove
     Bag.repartition
     Bag.std
-    Bag.str
     Bag.sum
     Bag.take
     Bag.to_dataframe

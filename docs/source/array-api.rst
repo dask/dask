@@ -198,8 +198,8 @@ Random
    random.zipf
 
 
-Slightly Overlaping Ghost Computations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Slightly Overlapping Ghost Computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
    ghost.ghost
