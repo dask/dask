@@ -6,6 +6,7 @@ API
 Top level user functions:
 
 .. autosummary::
+
     DataFrame
     DataFrame.add
     DataFrame.append
@@ -85,21 +86,43 @@ Top level user functions:
     DataFrame.visualize
     DataFrame.where
 
+Rolling Operations
+~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   rolling.rolling_apply
+   rolling.rolling_chunk
+   rolling.rolling_count
+   rolling.rolling_kurt
+   rolling.rolling_max
+   rolling.rolling_mean
+   rolling.rolling_median
+   rolling.rolling_min
+   rolling.rolling_quantile
+   rolling.rolling_skew
+   rolling.rolling_std
+   rolling.rolling_sum
+   rolling.rolling_var
+   rolling.rolling_window
+
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe.io
 
 .. autosummary::
-   read_csv
    from_array
-   from_pandas
    from_bcolz
-
-.. currentmodule:: dask.dataframe.core
+   from_castra
+   read_csv
+   from_dask_array
+   from_imperative
+   from_pandas
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
 
 .. autoclass:: DataFrame
    :members:
@@ -130,3 +153,19 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
+
+
+.. autofunction:: rolling.rolling_apply
+.. autofunction:: rolling.rolling_chunk
+.. autofunction:: rolling.rolling_count
+.. autofunction:: rolling.rolling_kurt
+.. autofunction:: rolling.rolling_max
+.. autofunction:: rolling.rolling_mean
+.. autofunction:: rolling.rolling_median
+.. autofunction:: rolling.rolling_min
+.. autofunction:: rolling.rolling_quantile
+.. autofunction:: rolling.rolling_skew
+.. autofunction:: rolling.rolling_std
+.. autofunction:: rolling.rolling_sum
+.. autofunction:: rolling.rolling_var
+.. autofunction:: rolling.rolling_window
