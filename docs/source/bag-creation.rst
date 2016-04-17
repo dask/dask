@@ -65,3 +65,53 @@ attached directly to bags with ``.str.methodname``:
 .. code-block:: python
 
    >>> b = db.from_filenames('myfile.*.csv.gz').str.strip().str.split(',')
+
+
+``db.from_imperative``
+----------------------
+
+You can construct a dask bag from :doc:`dask.delayed<imperative.rst>` values
+using the ``db.from_imperative`` function.  See
+:doc:`documentation on using dask.delayed with collections`<imperative-collections>`
+for more information.
+
+
+Store Dask Bags
+===============
+
+In Memory
+---------
+
+You can convert a dask bag to a list or Python iterable by calling ``compute()`` or by converting the object into a list
+
+.. code-block:: python
+
+   >>> result = b.compute()
+   or
+   >>> result = list(b)
+
+To Textfiles
+------------
+
+You can convert a dask bag into a sequence of files on disk by calling the
+``.to_textfiles()`` method
+
+.. autofunction:: dask.bag.core.to_textfiles
+
+
+To DataFrames
+-------------
+
+You can convert a dask bag into a :doc:`dask dataframe<dataframe>` and use
+those storage solutions.
+
+.. autofunction:: dask.bag.core.Bag.to_dataframe
+
+
+To Delayed Values
+-----------------
+
+You can convert a dask bag into a list of :doc:`dask delayed values<imperative>`
+and custom storage solutions from there.
+
+.. autofunction:: dask.bag.core.Bag.to_imperative

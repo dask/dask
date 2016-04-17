@@ -1,20 +1,25 @@
 Overview
 ========
 
-*Bag* is an abstract collection, like *list* or *set*.  It is a friendly
-synonym to multiset_. A bag or a multiset is a generalization of the concept
-of a set that, unlike a set, allows multiple instances of the multiset's
-elements.
+Dask Bag implements a operations like ``map, filter, fold, frequencies`` and
+``groupby`` on lists of Python objects.  It does this in parallel using
+multiple processes and in small memory using Python iterators building off of
+libraries like PyToolz_.
 
-* ``list``: *ordered* collection *with repeats*, ``[1, 2, 3, 2]``
-* ``set``: *unordered* collection *without repeats*,  ``{1, 2, 3}``
-* ``bag``: *unordered* collection *with repeats*, ``{1, 2, 2, 3}``
+.. _PyToolz: http://toolz.readthedocs.org/en/latest/
 
-So a bag is like a list, but it doesn't guarantee an ordering among elements.
-There can be repeated elements but you can't ask for a particular element.
+Design
+------
 
-.. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
+Dask bags coordinate many Python lists or Iterators, each of which forms a
+partition of a larger linear collection.
 
+Common Uses
+-----------
+
+Dask bags are often used to parallelize simple computations on unstructured or
+semi-structured data like text data, log files, JSON records, or user defined
+Python objects.
 
 Execution
 ---------
@@ -26,33 +31,6 @@ Execution on bags provide two benefits:
 2.  Parallel: data is split up, allowing multiple cores to execute in parallel.
 
 
-Trigger Evaluation
-~~~~~~~~~~~~~~~~~~
-
-Bags have a ``.compute()`` method to trigger computation:
-
-.. code-block:: python
-
-   >>> c = b.map(func)
-   >>> c.compute()
-   [1, 2, 3, 4, ...]
-
-You must ensure that your result will fit in memory:
-
-Bags also support the ``__iter__``
-protocol and so work well with pythonic collections like ``list, tuple, set,
-dict``.  Converting your object into a list or dict can look more Pythonic
-than calling ``.compute()``:
-
-.. code-block:: python
-
-   >>> list(b.map(lambda x: x + 1))
-   [1, 2, 3, 4, ...]
-
-   >>> dict(b.frequencies())
-   {'Alice': 100, 'Bob': 200, ...}
-
-
 Default scheduler
 ~~~~~~~~~~~~~~~~~
 
@@ -62,9 +40,6 @@ As a drawback dask.bag doesn't perform well on computations that include a
 great deal of inter-worker communication.  For common operations this is
 rarely an issue as most ``dask.bag`` workflows are embarrassingly parallel or
 result in reductions with little data moving between workers.
-
-Additionally, using multiprocessing opens up potential problems with function
-serialization (see below).
 
 Shuffle
 ~~~~~~~
@@ -79,41 +54,9 @@ Shuffle operations are expensive and better handled by projects like
 then transform it into an array or dataframe before embarking on the more
 complex operations that require shuffle steps.
 
-Dask.bag uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
+Dask uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
 
 .. _partd: https://github.com/mrocklin/partd
-
-
-Function Serialization and Error Handling
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Dask.bag uses cloudpickle_ to serialize functions to send to worker processes.
-cloudpickle supports almost any kind of function, including lambdas, closures,
-partials and functions defined interactively.
-
-When an error occurs in a remote process the dask schedulers record the
-Exception and the traceback and delivers these to the main process.  These
-tracebacks can not be navigated (i.e. you can't use ``pdb``) but still contain
-valuable contextual information.
-
-These two features are arguably the most important when comparing ``dask.bag``
-to direct use of ``multiprocessing``.
-
-If you would like to turn off multiprocessing you can do so by setting the
-default get function to the synchronous single-core scheduler:
-
-.. code-block:: python
-
-   >>> from dask.async import get_sync
-   >>> b.compute(get=get_sync)
-
-   or
-
-   >>> import dask
-   >>> dask.set_options(get=get_sync)  # set global
-   >>> list(b)  # uses synchronous scheduler
-
-.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Known Limitations
@@ -129,3 +72,21 @@ comes at cost.  Bags have the following known limitations:
 3.  ``Bag.groupby`` is slow.  You should try to use ``Bag.foldby`` if possible.
     Using ``Bag.foldby`` requires more thought.
 4.  The implementation backing ``Bag.groupby`` is under heavy churn.
+
+
+Name
+----
+
+*Bag* is the mathematical name for an unordered collection allowing repeats. It
+is a friendly synonym to multiset_. A bag or a multiset is a generalization of
+the concept of a set that, unlike a set, allows multiple instances of the
+multiset's elements.
+
+* ``list``: *ordered* collection *with repeats*, ``[1, 2, 3, 2]``
+* ``set``: *unordered* collection *without repeats*,  ``{1, 2, 3}``
+* ``bag``: *unordered* collection *with repeats*, ``{1, 2, 2, 3}``
+
+So a bag is like a list, but it doesn't guarantee an ordering among elements.
+There can be repeated elements but you can't ask for the ith element.
+
+.. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
