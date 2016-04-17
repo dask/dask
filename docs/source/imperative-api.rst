@@ -4,6 +4,8 @@ API
 .. currentmodule:: dask.imperative
 
 .. autosummary::
-   value
    delayed
-   compute
+   value
+
+.. autofunction:: delayed
+.. autofunction:: value

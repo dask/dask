@@ -11,6 +11,6 @@ directly with a light annotation of normal python code.
    :maxdepth: 1
 
    imperative-overview.rst
-   imperative-examples.rst
    imperative-api.rst
+   imperative-examples.rst
    imperative-collections.rst

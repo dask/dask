@@ -1,5 +1,5 @@
-Custom workflows with imperative
-================================
+Data Processing Pipelines
+=========================
 
 `Example notebook <http://nbviewer.ipython.org/github/dask/dask-examples/blob/master/do-and-profiler.ipynb>`_.
 

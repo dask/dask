@@ -1,5 +1,5 @@
-Imperative example with arrays
-==============================
+Build Custom Arrays
+===================
 
 Here we have a serial blocked computation for computing the mean of all
 positive elements in a large, on disk array:
