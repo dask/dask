@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from functools import partial
 import logging
 from math import ceil
+import random
 import socket
 from time import time
 from timeit import default_timer
@@ -249,7 +250,7 @@ class Scheduler(Server):
     def address_tuple(self):
         return (self.ip, self.port)
 
-    def add_keys(self, stream, address=None, keys=()):
+    def add_keys(self, stream=None, address=None, keys=()):
         address = coerce_to_address(address)
         self.has_what[address].update(keys)
         for key in keys:
@@ -1293,22 +1294,23 @@ class Scheduler(Server):
         """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.")
-        if not broadcast:
-            if workers:
-                workers = [self.coerce_address(w) for w in workers]
-            ncores = workers if workers is not None else self.ncores
-            keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
-                                                             report=False,
-                                                             serialize=False)
-        else:
-            workers2 = workers if workers is not None else list(self.ncores)
-            keys, nbytes = yield broadcast_to_workers(workers2, data,
-                                                      report=False,
-                                                      serialize=False)
-            who_has = {k: set(workers2) for k in keys}
+        if workers is not None:
+            workers = [self.coerce_address(w) for w in workers]
+        ncores = workers if workers is not None else self.ncores
+        keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
+                                                         report=False,
+                                                         serialize=False)
 
         self.update_data(who_has=who_has, nbytes=nbytes)
         self.client_wants_keys(keys=keys, client=client)
+
+        if broadcast:
+            if broadcast == True:
+                n = len(ncores)
+            else:
+                n = broadcast
+            yield self.replicate(keys=keys, workers=workers, n=n)
+
         raise gen.Return(keys)
 
     @gen.coroutine
@@ -1470,6 +1472,7 @@ class Scheduler(Server):
         with log_errors():
             keys = set(keys or self.who_has)
             workers = set(workers or self.ncores)
+
             if not keys.issubset(self.who_has):
                 raise Return({'status': 'missing-data',
                               'keys': list(keys - set(self.who_has))})
@@ -1536,6 +1539,57 @@ class Scheduler(Server):
                 self.has_what[sender].remove(key)
 
             raise Return({'status': 'OK'})
+
+    @gen.coroutine
+    def replicate(self, stream=None, keys=None, n=None, workers=None, branching_factor=2):
+        """ Replicate data throughout cluster
+
+        This performs a tree copy of the data throughout the network
+        individually on each piece of data.
+
+        Parameters
+        ----------
+        keys: Iterable
+            list of keys to replicate
+        n: int
+            Number of replications we expect to see within the cluster
+        branching_factor: int, optional
+            The number of workers that can copy data in each generation
+
+        See also
+        --------
+        Scheduler.rebalance
+        """
+        original_keys = set(keys)
+        if workers is None:
+            workers = self.ncores
+        workers = set(workers)
+        n = min(n, len(self.ncores))
+        with log_errors():
+            keys = set(keys)
+
+            if not keys.issubset(self.who_has):
+                raise Return({'status': 'missing-data',
+                              'keys': list(keys - set(self.who_has))})
+
+            while keys:
+                gathers = defaultdict(dict)
+                for k in list(keys):
+                    missing = workers - self.who_has[k]
+                    count = min(max(n - len(self.who_has[k]), 0),
+                                branching_factor * len(self.who_has[k]))
+                    if not count:
+                        keys.remove(k)
+                    else:
+                        sample = random.sample(missing, count)
+                        for w in sample:
+                            gathers[w][k] = list(self.who_has[k])
+
+                results = yield {w: self.rpc(addr=w).gather(who_has=who_has)
+                                    for w, who_has in gathers.items()}
+                for w, v in results.items():
+                    if v['status'] == 'OK':
+                        self.add_keys(address=w, keys=list(gathers[w]))
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,
