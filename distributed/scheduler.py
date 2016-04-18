@@ -1294,22 +1294,23 @@ class Scheduler(Server):
         """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.")
-        if not broadcast:
-            if workers:
-                workers = [self.coerce_address(w) for w in workers]
-            ncores = workers if workers is not None else self.ncores
-            keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
-                                                             report=False,
-                                                             serialize=False)
-        else:
-            workers2 = workers if workers is not None else list(self.ncores)
-            keys, nbytes = yield broadcast_to_workers(workers2, data,
-                                                      report=False,
-                                                      serialize=False)
-            who_has = {k: set(workers2) for k in keys}
+        if workers is not None:
+            workers = [self.coerce_address(w) for w in workers]
+        ncores = workers if workers is not None else self.ncores
+        keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
+                                                         report=False,
+                                                         serialize=False)
 
         self.update_data(who_has=who_has, nbytes=nbytes)
         self.client_wants_keys(keys=keys, client=client)
+
+        if broadcast:
+            if broadcast == True:
+                n = len(ncores)
+            else:
+                n = broadcast
+            yield self.replicate(keys=keys, workers=workers, n=n)
+
         raise gen.Return(keys)
 
     @gen.coroutine
@@ -1469,12 +1470,8 @@ class Scheduler(Server):
     @gen.coroutine
     def rebalance(self, stream=None, keys=None, workers=None):
         with log_errors():
-            if keys is None:
-                keys = self.who_has
-            keys = set(keys)
-            if workers is None:
-                workers = self.ncores
-            workers = set(workers)
+            keys = set(keys or self.who_has)
+            workers = set(workers or self.ncores)
 
             if not keys.issubset(self.who_has):
                 raise Return({'status': 'missing-data',

@@ -1848,6 +1848,13 @@ def test__broadcast(e, s, a, b):
     assert a.data == b.data == {x.key: 1, y.key: 2}
 
 
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 4)
+def test__broadcast_integer(e, s, *workers):
+    x, y = yield e._scatter([1, 2], broadcast=2)
+    assert len(s.who_has[x.key]) == 2
+    assert len(s.who_has[y.key]) == 2
+
+
 @gen_cluster(executor=True)
 def test__broadcast_dict(e, s, a, b):
     d = yield e._scatter({'x': 1}, broadcast=True)
