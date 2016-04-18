@@ -6,7 +6,6 @@ import os
 import socket
 import subprocess
 import sys
-from sys import argv, exit
 from time import sleep
 
 import click
@@ -59,7 +58,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
             dirname = os.path.dirname(distributed.__file__)
             paths = [os.path.join(dirname, 'bokeh', name)
                      for name in ['status', 'tasks']]
-            args = (['bokeh', 'serve'] + paths +
+            binname = sys.argv[0][:-len('dscheduler')] + 'bokeh'
+            args = ([binname, 'serve'] + paths +
                     ['--log-level', 'warning',
                      '--check-unused-sessions=50',
                      '--unused-session-lifetime=1',
