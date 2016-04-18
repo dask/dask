@@ -187,9 +187,9 @@ def get_bin_linesep(encoding, linesep):
         return linesep.encode(encoding)
 
 
-def textblock(filename, start, end, compression=None, encoding=system_encoding,
-              linesep=os.linesep, buffersize=4096):
-    """Pull out a block of text from a file given start and stop bytes.
+class BlockIOReader(io.RawIOBase):
+    """
+    Emulates IOReader on a block of text from a file given start and stop bytes.
 
     This gets data starting/ending from the next linesep delimiter. Each block
     consists of bytes in the range [start,end[, i.e. the stop byte is excluded.
@@ -207,85 +207,171 @@ def textblock(filename, start, end, compression=None, encoding=system_encoding,
 
     In the example below, 1 and 10 don't line up with endlines.
 
-    >> u''.join(textblock('myfile.txt', 1, 10))
+    >> with BlockIOReader('myfile.text, 1, 10) as blk:
+    ..     u''.join(blk)
     '456\n789\n'
     """
-    # Make sure `linesep` is not a byte string because
-    # `io.TextIOWrapper` in Python versions other than 2.7 dislike byte
-    # strings for the `newline` argument.
-    linesep = str(linesep)
+    def __init__(self, filename, start, end, compression=None,
+                 encoding=system_encoding, linesep=os.linesep, buffersize=4096):
+        self.buf = io.BufferedReader(
+            open(filename, 'rb', compression), buffersize)
+        self.start = start
+        self.end = end
+        self.compression = compression
+        self.encoding = encoding
 
-    # Get byte representation of the line separator.
-    bin_linesep = get_bin_linesep(encoding, linesep)
-    bin_linesep_len = len(bin_linesep)
+        # Get byte representation of the line separator.
+        self.bin_linesep = get_bin_linesep(encoding, linesep)
+        self.bin_linesep_len = len(self.bin_linesep)
+        # Number of bytes to shift the file pointer before reading a
+        # new chunk to make sure that a multi-byte line separator, that
+        # is split by the chunk reader, is still detected.
+        self.bin_linesep_shift = 1 - len(self.bin_linesep)
 
-    if buffersize < bin_linesep_len:
-        error = ('`buffersize` ({0:d}) must be at least as large as the '
-                 'number of line separator bytes ({1:d}).')
-        raise ValueError(error.format(buffersize, bin_linesep_len))
+        if buffersize < self.bin_linesep_shift:
+            error = ('`buffersize` ({0:d}) must be at least as large as the '
+                     'number of line separator bytes ({1:d}).')
+            raise ValueError(error.format(buffersize, self.bin_linesep_len))
+        self.buffersize = buffersize
 
-    chunksize = end - start
+        self.end_of_block = False
 
-    with open(filename, 'rb', compression) as f:
-        with io.BufferedReader(f) as fb:
-            # If `start` does not correspond to the beginning of the file, we
-            # need to move the file pointer to `start - len(bin_linesep)`,
-            # search for the position of the next a line separator, and set
-            # `start` to the position after that line separator.
-            if start > 0:
-                # `start` is decremented by `len(bin_linesep)` to detect the
-                # case where the original `start` value corresponds to the
-                # beginning of a line.
-                start = max(0, start - bin_linesep_len)
-                # Set the file pointer to `start`.
-                fb.seek(start)
-                # Number of bytes to shift the file pointer before reading a
-                # new chunk to make sure that a multi-byte line separator, that
-                # is split by the chunk reader, is still detected.
-                shift = 1 - bin_linesep_len
-                while True:
-                    buf = f.read(buffersize)
-                    if len(buf) < bin_linesep_len:
-                        raise StopIteration
-                    try:
-                        # Find the position of the next line separator and add
-                        # `len(bin_linesep)` which yields the position of the
-                        # first byte of the next line.
-                        start += buf.index(bin_linesep)
-                        start += bin_linesep_len
-                    except ValueError:
-                        # No line separator was found in the current chunk.
-                        # Before reading the next chunk, we move the file
-                        # pointer back `len(bin_linesep) - 1` bytes to make
-                        # sure that a multi-byte line separator, that may have
-                        # been split by the chunk reader, is still detected.
-                        start += len(buf)
-                        start += shift
-                        fb.seek(shift, os.SEEK_CUR)
-                    else:
-                        # We have found the next line separator, so we need to
-                        # set the file pointer to the first byte of the next
-                        # line.
-                        fb.seek(start)
-                        break
+        # for readline use TextIOWrapper to make things easy
+        self.text_io = None
+        # Make sure `linesep` is not a byte string because
+        # `io.TextIOWrapper` in Python versions other than 2.7 dislike byte
+        # strings for the `newline` argument.
+        self.linesep = str(linesep)
 
-            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
-                # Retrieve and yield lines until the file pointer reaches
-                # `end`.
-                while start < end:
-                    line = next(fbw)
-                    # We need to encode the line again to get the byte length
-                    # in order to correctly update `start`.
-                    bin_line_len = len(line.encode(encoding))
-                    if chunksize < bin_line_len:
-                        error = ('`chunksize` ({0:d}) is less than the line '
-                                 'length ({1:d}). This may cause duplicate '
-                                 'processing of this line. It is advised to '
-                                 'increase `chunksize`.')
-                        raise IOError(error.format(chunksize, bin_line_len))
+    def fileno(self):
+        return self.buf.filno()
 
-                    yield line
-                    start += bin_line_len
+    def readable(self):
+        return True
+
+    def close(self):
+        if self.text_io:
+            self.text_io.close()
+        else:
+            self.buf.close()
+
+    def seek_start(self):
+        if self.start == 0:
+            return
+
+        # `start` is decremented by `len(bin_linesep)` to detect the
+        # case where the original `start` value corresponds to the
+        # beginning of a line.
+        start = max(0, self.start - self.bin_linesep_len)
+        # Set the file pointer to `start`.
+        self.buf.seek(start)
+
+        # now find the next linesep
+        while True:
+            buf = self.buf.peek(self.buffersize)
+            if len(buf) < self.bin_linesep_len:
+                # No more data, but block has not seperator yet,
+                # so we have an empty block here
+                self.buf.seek(len(buf), os.SEEK_CUR)
+                break
+            try:
+                # Find the position of the next line separator and add
+                # `len(bin_linesep)` which yields the position of the
+                # first byte of the next line.
+                skip = buf.index(self.bin_linesep) + self.bin_linesep_len
+                self.buf.seek(skip, os.SEEK_CUR)
+                break
+            except ValueError:
+                # No line separator was found in the current chunk.
+                # Before reading the next chunk, we move the file
+                # pointer back `len(bin_linesep) - 1` bytes to make
+                # sure that a multi-byte line separator, that may have
+                # been split by the chunk reader, is still detected.
+                skip = len(buf) - self.bin_linesep_shift
+                self.buf.seek(skip, os.SEEK_CUR)
+
+        if self.buf.tell() == self.end:
+            self.end_of_block = True
+
+        elif self.buf.tell() > self.end:
+            error = ('`chunksize` ({0:d}) is less than the line length ({1:d}).'
+                     ' This may cause duplicate processing of this line. It is'
+                     ' advised to increase `chunksize`.')
+            raise IOError(error.format(self.end - self.start,
+                                       self.buf.tell() - self.start))
+
+    def read(self, size=-1):
+        if size < 0:
+            return self.readall()
+
+        if self.buf.tell() < self.start:
+            self.seek_start()
+
+        if self.end_of_block:
+            return b''
+
+        limit = self.end - self.buf.tell() - self.bin_linesep_len
+        if size <= limit:
+            # Away from end of block, so we can safely read
+            return self.buf.read(size)
+
+        # Read more to find linesep, but at most size bytes
+        buf = self.buf.read(min(size, limit + self.buffersize))
+
+        if len(buf) <= limit:
+            # Did not reach limit, also save to return
+            return buf
+
+        try:
+            # Find the line seperator after the limit. If successfull,
+            # return buffer including the line sperator found. Also mark
+            # as `end_of_block`.
+            end = buf[limit:].index(self.bin_linesep) + self.bin_linesep_len
+            self.end_of_block = True
+            return buf[:limit+end]
+        except ValueError:
+            # As we may be in the middle of linesep for multi-byte line
+            # line seperators, we have to seek some bytes back
+            if self.bin_linesep_shift:
+                self.buf.seek(self.bin_linesep_shift)
+                return buf[:self.bin_linesep_shift]
+            else:
+                return buf
+
+    def readline(self, size=-1):
+        if self.buf.tell() < self.start:
+            self.seek_start()
+
+        if self.end_of_block:
+            return b''
+
+        # Lazyly create text_io for readline
+        if self.text_io is None:
+            self.text_io = io.TextIOWrapper(self.buf, self.encoding,
+                                            newline=self.linesep)
+
+        line = self.text_io.readline(size)
+
+        # Check if end of block is reached
+        if self.text_io.tell() >= self.end:
+            self.end_of_block = True
+
+        return line
+
+    def seek(self, pos, whence=0):
+        raise ValueError('Seek not Implemented')
+
+    def readall(self):
+        raise ValueError('ReadAll not Implemented')
+
+
+def textblock(filename, start, end, compression=None, encoding=system_encoding,
+              linesep=os.linesep, buffersize=4096):
+
+    with BlockIOReader(filename, start, end, compression, encoding, linesep,
+                       buffersize) as blk:
+        for line in blk:
+            yield line
 
 
 def concrete(seq):
