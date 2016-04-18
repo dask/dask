@@ -25,7 +25,10 @@ messages = distributed.bokeh.messages  # monkey-patching
 def http_get(route):
     """ Get data from JSON route, store in messages deques """
     with log_errors():
-        response = yield client.fetch('http://localhost:9786/%s.json' % route)
+        try:
+            response = yield client.fetch('http://localhost:9786/%s.json' % route)
+        except ConnectionRefusedError:
+            import sys; sys.exit(0)
         msg = json.loads(response.body.decode())
         messages[route]['deque'].append(msg)
         messages[route]['times'].append(time())
