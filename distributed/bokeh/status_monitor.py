@@ -15,14 +15,15 @@ from ..utils import ignoring, is_kernel, log_errors, key_split
 from ..executor import default_executor
 from ..scheduler import Scheduler
 
-with ignoring(ImportError):
+try:
     from bokeh.palettes import Spectral11
     from bokeh.models import (ColumnDataSource, FactorRange, DataRange1d,
             HoverTool)
     from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
-
+except ImportError:
+    Spectral11 = None
 
 class Status_Monitor(object):
     """ Display the tasks running and waiting on each worker

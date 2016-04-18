@@ -848,6 +848,20 @@ class Scheduler(Server):
             self.who_wants[k].add(client)
             self.wants_what[client].add(k)
 
+        n = 0
+        while len(tasks) != n:  # walk thorough new tasks, cancel any bad deps
+            n = len(tasks)
+            for k, deps in list(dependencies.items()):
+                if any(dep not in self.dependencies and dep not in tasks
+                        for dep in deps):  # bad key
+                    logger.info('User asked for computation on lost data, %s', k)
+                    del tasks[k]
+                    del dependencies[k]
+                    if k in keys:
+                        keys.remove(k)
+                    self.report({'op': 'cancelled-key', 'key': k})
+                    self.client_releases_keys(keys=[k], client=client)
+
         stack = list(keys)
         touched = set()
         while stack:

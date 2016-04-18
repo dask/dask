@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
+pytest.importorskip('s3fs')
+
 import io
 import json
 from math import ceil
-import pytest
 
 import boto3
 from tornado import gen

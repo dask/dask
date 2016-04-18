@@ -10,6 +10,7 @@ from tornado.httpserver import HTTPServer
 
 from distributed import Scheduler, Executor
 from distributed.executor import _wait
+from distributed.sizeof import getsizeof
 from distributed.utils_test import gen_cluster, gen_test, inc, div
 from distributed.http.scheduler import HTTPScheduler
 from distributed.http.worker import HTTPWorker
@@ -123,7 +124,7 @@ def test_with_data(e, s, a, b):
 
     assert all(isinstance(v, int) for v in out.values())
     assert set(out) == {a.address, b.address}
-    assert sum(out.values()) == sum(map(sys.getsizeof,
+    assert sum(out.values()) == sum(map(getsizeof,
                                         [1, 2, 3, 'Hello', 'world!']))
 
     response = yield client.fetch('http://localhost:%s/memory-load-by-key.json'
@@ -135,7 +136,7 @@ def test_with_data(e, s, a, b):
     assert all(isinstance(v, int) for d in out.values() for v in d.values())
 
     assert sum(v for d in out.values() for v in d.values()) == \
-            sum(map(sys.getsizeof, [1, 2, 3, 'Hello', 'world!']))
+            sum(map(getsizeof, [1, 2, 3, 'Hello', 'world!']))
 
     ss.stop()
 

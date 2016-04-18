@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
+pytest.importorskip('requests')
+
 import os
 import requests
 from subprocess import Popen, PIPE

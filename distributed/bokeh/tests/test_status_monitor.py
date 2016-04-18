@@ -1,3 +1,8 @@
+from __future__ import print_function, division, absolute_import
+
+import pytest
+pytest.importorskip('bokeh')
+
 from distributed.bokeh.status_monitor import (worker_table_plot,
         worker_table_update, task_table_plot, task_table_update,
         task_stream_plot, task_stream_append, progress_plot)

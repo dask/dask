@@ -4,16 +4,22 @@ import sys
 from .compatibility import singledispatch
 from .utils import ignoring
 
+try:  # PyPy does not support sys.getsizeof
+    sys.getsizeof(1)
+    getsizeof = sys.getsizeof
+except:  # Monkey patch
+    getsizeof = lambda x: 100
+
 @singledispatch
 def sizeof(o):
-    return sys.getsizeof(o)
+    return getsizeof(o)
 
 @sizeof.register(list)
 @sizeof.register(tuple)
 @sizeof.register(set)
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
-    return sys.getsizeof(seq) + sum(map(sizeof, seq))
+    return getsizeof(seq) + sum(map(sizeof, seq))
 
 with ignoring(ImportError):
     import numpy as np
@@ -26,7 +32,7 @@ with ignoring(ImportError):
     import pandas as pd
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        o = sys.getsizeof(df)
+        o = getsizeof(df)
         try:
             return int(o + df.memory_usage(index=True, deep=True).sum())
         except:

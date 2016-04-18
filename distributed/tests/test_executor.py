@@ -2509,3 +2509,15 @@ def test_work_stealing(e, s, a, b):
     yield _wait(futures)
     assert len(a.data) > 10
     assert len(b.data) > 10
+
+
+@gen_cluster(executor=True)
+def test_submit_on_cancelled_future(e, s, a, b):
+    x = e.submit(inc, 1)
+    yield x._result()
+
+    yield e._cancel(x)
+
+    y = e.submit(inc, x)
+    yield _wait(y)
+    assert y.cancelled()
