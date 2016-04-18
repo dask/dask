@@ -15,7 +15,7 @@ Design
    :width: 50%
 
 Dask dataframes coordinate many Pandas arrays arranged along an index.  These
-dataframes may live on disk or on other machines.
+Pandas dataframes may live on disk or on other machines.
 
 
 Common Uses
@@ -116,6 +116,9 @@ or distributed scheduler.
 .. code-block:: python
 
    >>> dask.set_options(get=dask.multiprocessing.get)
+
+See :doc:`scheduler docs<scheduler-overview>` for more information.
+
 
 Limitations
 -----------

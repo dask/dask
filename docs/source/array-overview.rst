@@ -14,7 +14,7 @@ Design
    :align: right
 
 Dask arrays coordinate many NumPy arrays arranged into a grid.  These
-arrays may live on disk or on other machines.
+NumPy arrays may live on disk or on other machines.
 
 Common Uses
 -----------

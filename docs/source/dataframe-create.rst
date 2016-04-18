@@ -62,7 +62,7 @@ and not actively maintained; use at your own risk.
    >>> c = Castra(path='/my/castra/file')
    >>> df = c.to_dask()
 
-.. _Castra: http://github.com/Blosc/castra
+.. _Castra: http://github.com/blaze/castra
 
 
 From Bags
@@ -78,7 +78,9 @@ Using ``dask.delayed``
 You can create a plan to arrange many Pandas frames into a sequence with normal
 for loops using :doc:`dask.delayed<imperative-overview>` and then convert these
 into a dask dataframe later.  See :doc:`documentation on using dask.delayed with
-collections<imperative-collections>`.
+collections<imperative-collections>` or an `example notebook<https://gist.github.com/mrocklin/e7b7b3a65f2835cda813096332ec73ca>`_.
+Dask.delayed is more useful when simple ``map`` operations aren't sufficient to
+capture the complexity of your data layout.
 
 
 From Raw Dask Graphs

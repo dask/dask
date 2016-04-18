@@ -16,7 +16,7 @@ Simple case - Format Supports NumPy Slicing
 Many storage formats have Python projects that expose storage using NumPy
 slicing syntax.  These include HDF5, NetCDF, BColz, Zarr, GRIB, etc..  For
 example the ``HDF5`` file format has the ``h5py`` Python project, which
-provides a ``Dataset`` object into which we can slice in NumPy fashion
+provides a ``Dataset`` object into which we can slice in NumPy fashion.
 
 .. code-block:: Python
 
@@ -156,8 +156,8 @@ Store Dask Arrays
 In Memory
 ---------
 
-If you have a small amount of data, you can call ``np.array`` on your dask array to tur
-in to a normal NumPy array:
+If you have a small amount of data, you can call ``np.array`` on your dask
+array to turn in to a normal NumPy array:
 
 .. code-block:: Python
 
@@ -212,8 +212,9 @@ which we can slice out numpy arrays:
 
    >>> x = dataset[1000:2000, :2000]  # pull out numpy array from on-disk object
 
-This API has become a standard in Scientific Python.  Dask works with any
-object that supports this operation and the equivalent assignment syntax:
+This API has become a standard in the numeric Python ecosystem.  Dask works
+with any object that supports this operation and the equivalent assignment
+syntax:
 
 .. code-block:: Python
 

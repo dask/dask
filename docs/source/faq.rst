@@ -99,13 +99,27 @@ Frequently Asked Questions
         case you could also report your problem on our `issue tracker`_ and
         work with the dask development team to improve our scheduling policies.
 
-5. **How does Dask serialize functions?**
+5.  **How does Dask serialize functions?**
 
-When operating with the single threaded or multithreaded scheduler no function
-serialization is necessary.  When operating with the distributed memory or
-multiprocessing scheduler Dask uses cloudpickle_ to serialize functions to send
-to worker processes.  cloudpickle supports almost any kind of function,
-including lambdas, closures, partials and functions defined interactively.
+    When operating with the single threaded or multithreaded scheduler no
+    function serialization is necessary.  When operating with the distributed
+    memory or multiprocessing scheduler Dask uses cloudpickle_ to serialize
+    functions to send to worker processes.  cloudpickle supports almost any
+    kind of function, including lambdas, closures, partials and functions
+    defined interactively.
+
+    Cloudpickle can not serialize things like iterators, open files, locks, or
+    other objects that are heavily tied to your current process.  Attempts to
+    serialize these objects (or functions that implicitly rely on these
+    objects) will result in scheduler errors.  You can verify that your objects
+    are easily serializable by running them through the
+    ``cloudpickle.dumps/loads`` functions
+
+    .. code-block:: python
+
+       from cloudpickle import dumps, loads
+       obj2 = loads(dumps(obj))
+       assert obj2 == obj
 
 .. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 .. _`Chest`: https://github.com/blaze/chest

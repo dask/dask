@@ -70,9 +70,9 @@ attached directly to bags with ``.str.methodname``:
 ``db.from_imperative``
 ----------------------
 
-You can construct a dask bag from :doc:`dask.delayed<imperative.rst>` values
+You can construct a dask bag from :doc:`dask.delayed <imperative>` values
 using the ``db.from_imperative`` function.  See
-:doc:`documentation on using dask.delayed with collections`<imperative-collections>`
+:doc:`documentation on using dask.delayed with collections <imperative-collections>`
 for more information.
 
 
