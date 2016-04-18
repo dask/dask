@@ -2521,3 +2521,52 @@ def test_submit_on_cancelled_future(e, s, a, b):
     y = e.submit(inc, x)
     yield _wait(y)
     assert y.cancelled()
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_replicate(e, s, *workers):
+    [a, b] = yield e._scatter([1, 2])
+    yield s.replicate(keys=[a.key, b.key], n=5)
+
+    assert len(s.who_has[a.key]) == 5
+    assert len(s.who_has[b.key]) == 5
+
+    assert sum(a.key in w.data for w in workers) == 5
+    assert sum(b.key in w.data for w in workers) == 5
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_replicate_workers(e, s, *workers):
+
+    [a, b] = yield e._scatter([1, 2], workers=[workers[0].address])
+    yield s.replicate(keys=[a.key, b.key], n=5,
+                      workers=[w.address for w in workers[:5]])
+
+    assert len(s.who_has[a.key]) == 5
+    assert len(s.who_has[b.key]) == 5
+
+    assert sum(a.key in w.data for w in workers[:5]) == 5
+    assert sum(b.key in w.data for w in workers[:5]) == 5
+    assert sum(a.key in w.data for w in workers[5:]) == 0
+    assert sum(b.key in w.data for w in workers[5:]) == 0
+
+
+class CountSerialization(object):
+    def __init__(self):
+        self.n = 0
+
+    def __setstate__(self, n):
+        self.n = n + 1
+
+    def __getstate__(self):
+        return self.n
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_replicate_tree_branching(e, s, *workers):
+    obj = CountSerialization()
+    [future] = yield e._scatter([obj])
+    yield s.replicate(keys=[future.key], n=10)
+
+    max_count = max(w.data[future.key].n for w in workers)
+    assert max_count > 1
