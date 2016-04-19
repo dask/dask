@@ -323,3 +323,9 @@ class AllProgress(SchedulerPlugin):
         self.in_memory.clear()
         self.erred.clear()
         self.released.clear()
+
+    def validate(self):
+        for c in [self.in_memory, self.erred, self.released]:
+            assert set(self.all).issuperset(set(c))
+            for k in c:
+                assert c[k] <= self.all[k]

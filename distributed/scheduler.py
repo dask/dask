@@ -966,6 +966,8 @@ class Scheduler(Server):
         This removes all knowledge of how to produce a key from the scheduler.
         This is almost exclusively called by release_held_data
         """
+        if key not in self.tasks and key not in self.who_has:
+            return
         assert not self.dependents[key] and key not in self.who_wants
         if key in self.tasks:
             del self.tasks[key]
@@ -1244,24 +1246,28 @@ class Scheduler(Server):
         raise Return('OK')
 
     def delete_data(self, stream=None, keys=None):
+        def trigger_plugins(key):
+            for plugin in self.plugins:
+                try:
+                    plugin.delete(self, key)
+                except Exception as e:
+                    logger.exception(e)
+            self.released.add(key)
+
         with log_errors():
             for key in keys:
                 if key in self.who_has:
                     for worker in self.who_has.pop(key):
                         self.has_what[worker].remove(key)
                         self.deleted_keys[worker].add(key)
-                else:
-                    if key in self.ready:  # O(n), though infrequent
-                        self.ready.remove(key)
+                    trigger_plugins(key)
+                elif key in self.ready:  # O(n), though infrequent
+                    self.ready.remove(key)
+                    trigger_plugins(key)
+
                 if key in self.waiting_data:
                     del self.waiting_data[key]
-                self.released.add(key)
 
-                for plugin in self.plugins:
-                    try:
-                        plugin.delete(self, key)
-                    except Exception as e:
-                        logger.exception(e)
 
     @gen.coroutine
     def heartbeat(self, host):

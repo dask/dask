@@ -170,3 +170,7 @@ def test_AllProgress(e, s, a, b):
 
     for c in [p.all, p.in_memory, p.released, p.erred]:
         assert not c
+
+    x = e.submit(div, 1, 2)
+    yield _wait([x])
+    p.validate()
