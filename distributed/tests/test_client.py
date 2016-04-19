@@ -102,7 +102,7 @@ def test_gather_errors_voluminously(loop):
             assert set(e.args) == {'x', 'y', 'z'}
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason='KQueue error - uncertain cause')
 def test_gather_scatter(loop):
     with cluster_center() as (c, [a, b]):

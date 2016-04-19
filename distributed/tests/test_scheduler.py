@@ -877,7 +877,7 @@ def test_update_graph_culls(s, a, b):
     assert 'z' not in s.dependencies
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(ncores=[('127.0.0.1', 2), ('127.0.0.2', 2), ('127.0.0.1', 1)])
 def test_host_health(s, a, b, c):

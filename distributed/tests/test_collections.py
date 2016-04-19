@@ -246,7 +246,7 @@ def test_futures_to_dask_bag(loop):
             assert b.map(lambda x: x + 1).sum().compute(get=e.get) == sum(range(2, 11))
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason='KQueue error - uncertain cause')
 def test_futures_to_dask_array(loop):
     with cluster() as (c, [a, b]):

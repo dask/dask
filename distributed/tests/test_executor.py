@@ -557,7 +557,7 @@ def test_tokenize_on_futures(e, s, a, b):
     assert tok == tokenize(y)
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_restrictions_submit(e, s, a, b):
@@ -585,7 +585,7 @@ def test_restrictions_ip_port(e, s, a, b):
     assert y.key in b.data
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_restrictions_map(e, s, a, b):
@@ -610,7 +610,7 @@ def test_restrictions_map(e, s, a, b):
         e.map(inc, [10, 11, 12], workers=[{a.ip}])
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_restrictions_get(e, s, a, b):
@@ -869,7 +869,7 @@ def test_nbytes(e, s, a, b):
                         y.key: sizeof(2)}
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_nbytes_determines_worker(e, s, a, b):
@@ -1381,7 +1381,7 @@ def test_executor_with_scheduler(loop):
     _test_scheduler(f)
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_allow_restrictions(e, s, a, b):
@@ -2496,7 +2496,7 @@ def test_add_worker_after_tasks(e, s):
     yield n._close()
 
 
-@pytest.mark.skipif(sys.platform!='linux',
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
 def test_workers_register_indirect_data(e, s, a, b):
