@@ -194,7 +194,7 @@ The complete Python script for this example is shown below:
 
 .. code-block:: python
 
-   # word-count.py   
+   # word-count.py
 
    # Local computation
 

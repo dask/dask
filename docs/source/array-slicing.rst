@@ -16,7 +16,6 @@ It does not currently support the following:
 Both of these are straightforward to add though.  If you have a use case then
 raise an issue.
 
-
 Efficiency
 ----------
 

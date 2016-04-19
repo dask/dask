@@ -14,7 +14,7 @@ from . import base
 from .compatibility import apply
 from . import threaded
 
-__all__ = ['compute', 'do', 'value', 'Value']
+__all__ = ['compute', 'do', 'value', 'Value', 'delayed']
 
 
 def flat_unique(ls):
@@ -144,16 +144,16 @@ def delayed(func, pure=False):
     >>> res.compute()
     3
 
-    For other cases, it may be cleaner to call ``do`` on a function at call
+    For other cases, it may be cleaner to call ``delayed`` on a function at call
     time:
 
     >>> res2 = delayed(sum)([res, 2, 3])
     >>> res2.compute()
     8
 
-    ``do`` also accepts an optional keyword ``pure``. If False (default), then
-    subsequent calls will always produce a different ``Value``. This is useful
-    for non-pure functions (such as ``time`` or ``random``).
+    ``delayed`` also accepts an optional keyword ``pure``. If False (default),
+    then subsequent calls will always produce a different ``Value``. This is
+    useful for non-pure functions (such as ``time`` or ``random``).
 
     >>> from random import random
     >>> out1 = delayed(random)()
@@ -257,7 +257,7 @@ class Value(base.Base):
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
-            return do(getattr, pure=True)(self, attr)
+            return delayed(getattr, pure=True)(self, attr)
         else:
             raise AttributeError("Attribute {0} not found".format(attr))
 
@@ -271,51 +271,51 @@ class Value(base.Base):
         raise TypeError("Value objects are not iterable")
 
     def __call__(self, *args, **kwargs):
-        return do(apply, kwargs.pop('pure', False))(self, args, kwargs)
+        return delayed(apply, kwargs.pop('pure', False))(self, args, kwargs)
 
     def __bool__(self):
         raise TypeError("Truth of Value objects is not supported")
 
     __nonzero__ = __bool__
 
-    __abs__ = do(operator.abs, True)
-    __add__ = do(operator.add, True)
-    __and__ = do(operator.and_, True)
-    __div__ = do(operator.floordiv, True)
-    __eq__ = do(operator.eq, True)
-    __floordiv__ = do(operator.floordiv, True)
-    __ge__ = do(operator.ge, True)
-    __getitem__ = do(operator.getitem, True)
-    __gt__ = do(operator.gt, True)
-    __index__ = do(operator.index, True)
-    __invert__ = do(operator.invert, True)
-    __le__ = do(operator.le, True)
-    __lshift__ = do(operator.lshift, True)
-    __lt__ = do(operator.lt, True)
-    __mod__ = do(operator.mod, True)
-    __mul__ = do(operator.mul, True)
-    __ne__ = do(operator.ne, True)
-    __neg__ = do(operator.neg, True)
-    __or__ = do(operator.or_, True)
-    __pos__ = do(operator.pos, True)
-    __pow__ = do(operator.pow, True)
-    __radd__ = do(right(operator.add), True)
-    __rand__ = do(right(operator.and_), True)
-    __rdiv__ = do(right(operator.floordiv), True)
-    __rfloordiv__ = do(right(operator.floordiv), True)
-    __rlshift__ = do(right(operator.lshift), True)
-    __rmod__ = do(right(operator.mod), True)
-    __rmul__ = do(right(operator.mul), True)
-    __ror__ = do(right(operator.or_), True)
-    __rpow__ = do(right(operator.pow), True)
-    __rrshift__ = do(right(operator.rshift), True)
-    __rshift__ = do(operator.rshift, True)
-    __rsub__ = do(right(operator.sub), True)
-    __rtruediv__ = do(right(operator.truediv), True)
-    __rxor__ = do(right(operator.xor), True)
-    __sub__ = do(operator.sub, True)
-    __truediv__ = do(operator.truediv, True)
-    __xor__ = do(operator.xor, True)
+    __abs__ = delayed(operator.abs, True)
+    __add__ = delayed(operator.add, True)
+    __and__ = delayed(operator.and_, True)
+    __div__ = delayed(operator.floordiv, True)
+    __eq__ = delayed(operator.eq, True)
+    __floordiv__ = delayed(operator.floordiv, True)
+    __ge__ = delayed(operator.ge, True)
+    __getitem__ = delayed(operator.getitem, True)
+    __gt__ = delayed(operator.gt, True)
+    __index__ = delayed(operator.index, True)
+    __invert__ = delayed(operator.invert, True)
+    __le__ = delayed(operator.le, True)
+    __lshift__ = delayed(operator.lshift, True)
+    __lt__ = delayed(operator.lt, True)
+    __mod__ = delayed(operator.mod, True)
+    __mul__ = delayed(operator.mul, True)
+    __ne__ = delayed(operator.ne, True)
+    __neg__ = delayed(operator.neg, True)
+    __or__ = delayed(operator.or_, True)
+    __pos__ = delayed(operator.pos, True)
+    __pow__ = delayed(operator.pow, True)
+    __radd__ = delayed(right(operator.add), True)
+    __rand__ = delayed(right(operator.and_), True)
+    __rdiv__ = delayed(right(operator.floordiv), True)
+    __rfloordiv__ = delayed(right(operator.floordiv), True)
+    __rlshift__ = delayed(right(operator.lshift), True)
+    __rmod__ = delayed(right(operator.mod), True)
+    __rmul__ = delayed(right(operator.mul), True)
+    __ror__ = delayed(right(operator.or_), True)
+    __rpow__ = delayed(right(operator.pow), True)
+    __rrshift__ = delayed(right(operator.rshift), True)
+    __rshift__ = delayed(operator.rshift, True)
+    __rsub__ = delayed(right(operator.sub), True)
+    __rtruediv__ = delayed(right(operator.truediv), True)
+    __rxor__ = delayed(right(operator.xor), True)
+    __sub__ = delayed(operator.sub, True)
+    __truediv__ = delayed(operator.truediv, True)
+    __xor__ = delayed(operator.xor, True)
 
 
 base.normalize_token.register(Value, lambda a: a.key)

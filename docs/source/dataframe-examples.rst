@@ -3,5 +3,5 @@ Examples
 
 .. toctree::
    :maxdepth: 1
-   
-   examples/word-count
+
+   examples/dataframe-csv.rst

@@ -13,9 +13,10 @@ their arrangement can be as simple or as complex as the situation dictates.
 Simple case - Format Supports NumPy Slicing
 -------------------------------------------
 
-Many formats have Python projects that expose storage using NumPy slicing syntax.
-For example the HDF5 file format has the ``h5py`` project, which provides a
-``Dataset`` object into which we can slice in NumPy fashion
+Many storage formats have Python projects that expose storage using NumPy
+slicing syntax.  These include HDF5, NetCDF, BColz, Zarr, GRIB, etc..  For
+example the ``HDF5`` file format has the ``h5py`` Python project, which
+provides a ``Dataset`` object into which we can slice in NumPy fashion.
 
 .. code-block:: Python
 
@@ -46,17 +47,32 @@ Concatenation and Stacking
 --------------------------
 
 Often we store data in several different locations and want to stitch them
-together.  For this case please see docs on
-:doc:`concatenation and stacking <stack>`.
+together.
 
+.. code-block:: Python
 
-Complex case
-------------
+   >>> filenames = sorted(glob('2015-*-*.hdf5')
+   >>> dsets = [h5py.File(fn)['/data'] for fn in filenames]
+   >>> arrays = [da.from_array(dset, chunks=(1000, 1000)) for dset in dsets]
+   >>> x = da.concatenate(arrays, axis=0)  # Concatenate arrays along first axis
 
-If your format does not provide a convenient slicing solution you will need to
-dive down one layer to interact with dask dictionaries.  Your goal is to create
-a dictionary with tasks that create NumPy arrays, see docs on
-:doc:`array design <array-design>` before continuing with this subsection.
+For more information see :doc:`concatenation and stacking <array-stack>` docs.
+
+Using ``dask.delayed``
+----------------------
+
+You can create a plan to arrange many numpy arrays into a grid with normal for
+loops using :doc:`dask.delayed<imperative-overview>` and then convert these
+into a dask array later.  See :doc:`documentation on using dask.delayed with
+collections<imperative-collections>`.
+
+Raw dask graphs
+---------------
+
+If your format does not provide a convenient slicing solution you can dive down
+one layer to interact with dask dictionaries.  Your goal is to create a
+dictionary with tasks that create NumPy arrays, see docs on :doc:`array design
+<array-design>` before continuing with this subsection.
 
 To construct a dask array manually you need a dict with tasks that form numpy
 arrays
@@ -81,7 +97,7 @@ array.
 
 
 Chunks
-------
+~~~~~~
 
 We always specify a ``chunks`` argument to tell dask.array how to break up the
 underlying array into chunks.  This strongly impacts performance.  We can
@@ -110,12 +126,12 @@ A good choice of ``chunks`` follows the following rules:
 
 
 Example
-```````
+~~~~~~~
 
-As an example we might load a grid of pickle files known to contain 1000
-by 1000 NumPy arrays
+As an example, we might load a grid of pickle files known to contain 1000 by
+1000 NumPy arrays.
 
-.. code-block:: Python
+.. code-block:: python
 
    def load(fn):
        with open(fn) as f:
@@ -132,3 +148,74 @@ by 1000 NumPy arrays
     chunks = ((1000, 1000), (1000, 1000, 1000))
 
     x = da.Array(dsk, 'x', chunks)
+
+
+Store Dask Arrays
+=================
+
+In Memory
+---------
+
+If you have a small amount of data, you can call ``np.array`` on your dask
+array to turn in to a normal NumPy array:
+
+.. code-block:: Python
+
+   >>> x = da.arange(6, chunks=3)
+   >>> y = x**2
+   >>> np.array(y)
+   array([0, 1, 4, 9, 16, 25])
+
+
+HDF5
+----
+
+Use the ``to_hdf5`` function to store data into HDF5 using ``h5py``:
+
+.. code-block:: Python
+
+   >>> da.to_hdf5('myfile.hdf5', '/y', y)  # doctest: +SKIP
+
+Store several arrays in one computation with the function
+``da.to_hdf5`` by passing in a dict:
+
+.. code-block:: Python
+
+   >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
+
+Other On-Disk Storage
+---------------------
+
+Alternatively, you can store dask arrays in any object that supports numpy-style
+slice assignment like ``h5py.Dataset``, or ``bcolz.carray``:
+
+.. code-block:: Python
+
+   >>> import bcolz  # doctest: +SKIP
+   >>> out = bcolz.zeros(shape=y.shape, rootdir='myfile.bcolz')  # doctest: +SKIP
+   >>> da.store(y, out)  # doctest: +SKIP
+
+You can store several arrays in one computation by passing lists of sources and
+destinations:
+
+   >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
+
+
+On-Disk Storage
+---------------
+
+In the example above we used ``h5py``, but ``dask.array`` works equally well
+with ``pytables``, ``bcolz``, or any library that provides an array object from
+which we can slice out numpy arrays:
+
+.. code-block:: Python
+
+   >>> x = dataset[1000:2000, :2000]  # pull out numpy array from on-disk object
+
+This API has become a standard in the numeric Python ecosystem.  Dask works
+with any object that supports this operation and the equivalent assignment
+syntax:
+
+.. code-block:: Python
+
+   >>> dataset[1000:2000, :2000] = x  # Store numpy array in on-disk object
