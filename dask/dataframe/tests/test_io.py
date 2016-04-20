@@ -92,8 +92,9 @@ def test_read_multiple_csv():
             f.write(text)
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
-        df = dd.read_csv('_foo.*.csv')
+        df = dd.read_csv('_foo.*.csv', chunkbytes=30)
         assert df._known_dtype
+        assert df.npartitions > 2
 
         assert (len(read_csv('_foo.*.csv').compute()) ==
                 len(read_csv('_foo.1.csv').compute()) * 2)
