@@ -139,6 +139,15 @@ class ResourceProfiler(Callback):
         self._tracker.start()
         self.results = []
 
+    def __enter__(self):
+        self.clear()
+        return super(ResourceProfiler, self).__enter__()
+
+    def __exit__(self, *args):
+        if self._tracker.is_alive():
+            self._tracker.parent_conn.send('stop')
+        super(ResourceProfiler, self).__exit__(*args)
+
     def _start(self, dsk):
         assert self._tracker.is_alive(), "Resource tracker is shutdown"
         self._tracker.parent_conn.send('start')
@@ -150,6 +159,8 @@ class ResourceProfiler(Callback):
     def close(self):
         """Shutdown the resource tracker process"""
         self._tracker.shutdown()
+
+    __del__ = close
 
     def clear(self):
         self.results = []
@@ -185,12 +196,11 @@ class _Tracker(Process):
             self.parent_conn.close()
         self.join()
 
-    __del__ = shutdown
-
     def _collect(self):
         data = []
         pid = current_process()
-        ps = [self.parent] + [p for p in self.parent.children() if p.pid != pid]
+        ps = [self.parent] + [p for p in self.parent.children()
+                              if p.pid != pid and p.status() != 'zombie']
         while not self.child_conn.poll():
             tic = default_timer()
             mem = sum(p.memory_info().rss for p in ps)/1e6
