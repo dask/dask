@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import json
 import logging
 import multiprocessing
 import os
@@ -19,7 +20,7 @@ from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
 
-ip = get_ip()
+global_ip = ip = get_ip()
 
 import signal
 
@@ -37,10 +38,12 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--bokeh-port', type=int, default=8787, help="HTTP port")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
-@click.option('--host', type=str, default=ip,
+@click.option('--host', type=str, default=None,
               help="Serving host defaults to %s" % ip)
 @click.option('--show/--no-show', default=False, help="Show web UI")
 def main(center, host, port, http_port, bokeh_port, show, _bokeh):
+    given_host = host
+    host = host or global_ip
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
@@ -67,6 +70,13 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
                      sum([['--host', host] for host in hosts], []))
             if show:
                 args.append('--show')
+
+            bokeh_options = {'host': host if given_host else '127.0.0.1',
+                             'http-port': http_port,
+                             'tcp-port': port,
+                             'bokeh-port': bokeh_port}
+            with open('.dask-web-ui.json', 'w') as f:
+                json.dump(bokeh_options, f, indent=2)
 
             if sys.version_info[0] >= 3:
                 from bokeh.command.bootstrap import main

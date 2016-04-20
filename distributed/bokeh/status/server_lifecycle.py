@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import deque
 import json
+import os
 from time import time
 
 from tornado import gen
@@ -20,13 +21,23 @@ client = AsyncHTTPClient()
 
 messages = distributed.bokeh.messages  # monkey-patching
 
+if os.path.exists('.dask-web-ui.json'):
+    with open('.dask-web-ui.json', 'r') as f:
+        options = json.load(f)
+else:
+    options = {'host': '127.0.0.1',
+               'tcp-port': 8786,
+               'http-port': 9786}
+
 
 @gen.coroutine
 def http_get(route):
     """ Get data from JSON route, store in messages deques """
     with log_errors():
         try:
-            response = yield client.fetch('http://localhost:9786/%s.json' % route)
+            response = yield client.fetch(
+                    'http://%(host)s:%(http-port)d/' % options
+                     + route + '.json')
         except ConnectionRefusedError:
             import sys; sys.exit(0)
         msg = json.loads(response.body.decode())
@@ -39,7 +50,8 @@ last_index = [0]
 def workers():
     """ Get data from JSON route, store in messages deques """
     with log_errors():
-        response = yield client.fetch('http://localhost:9786/workers.json')
+        response = yield client.fetch(
+                'http://%(host)s:%(http-port)d/workers.json' % options)
         msg = json.loads(response.body.decode())
         if msg:
             messages['workers']['deque'].append(msg)
@@ -53,7 +65,7 @@ def workers():
 @gen.coroutine
 def progress():
     with log_errors():
-        stream = yield progress_stream('localhost:8786', 0.050)
+        stream = yield progress_stream('%(host)s:%(tcp-port)d' % options, 0.050)
         while True:
             try:
                 msg = yield read(stream)

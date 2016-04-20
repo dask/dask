@@ -5,6 +5,7 @@ from __future__ import print_function, division, absolute_import
 from collections import deque
 from datetime import datetime
 import json
+import os
 from time import time
 
 from tornado import gen
@@ -24,11 +25,21 @@ client = AsyncHTTPClient()
 messages = distributed.bokeh.messages  # monkey-patching
 
 
+if os.path.exists('.dask-web-ui.json'):
+    with open('.dask-web-ui.json', 'r') as f:
+        options = json.load(f)
+else:
+    options = {'host': '127.0.0.1',
+               'tcp-port': 8786,
+               'http-port': 9786}
+
+
+
 @gen.coroutine
 def task_events(interval, deque, times, index, rectangles, workers, last_seen):
     i = 0
     with log_errors():
-        stream = yield eventstream('localhost:8786', 0.100)
+        stream = yield eventstream('%(host)s:%(tcp-port)d' % options, 0.100)
         while True:
             try:
                 msgs = yield read(stream)
