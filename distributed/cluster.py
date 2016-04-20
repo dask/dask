@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from time import sleep
 import socket
 import os
+import sys
 import traceback
 
 try:
@@ -90,7 +91,7 @@ def async_ssh(cmd_dict):
 
     print('[ {label} ] : {cmd}'.format(label = cmd_dict['label'],
                                        cmd = cmd_dict['cmd']))
-    stdin, stdout, stderr = ssh.exec_command('$SHELL -i -l -c \'' + cmd_dict['cmd'] + '\'', get_pty = True)
+    stdin, stdout, stderr = ssh.exec_command('$SHELL -i -c \'' + cmd_dict['cmd'] + '\'', get_pty = True)
 
     # Set up channel timeouts (which we rely on below to make readline()
     # non-blocking.
@@ -149,7 +150,7 @@ def async_ssh(cmd_dict):
 
 
 def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key):
-    cmd = 'dscheduler --port {port}'.format(port=port, logdir=logdir)
+    cmd = '{python} -m distributed.cli.dscheduler --port {port}'.format(python=sys.executable, port=port, logdir=logdir)
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
@@ -182,7 +183,8 @@ def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key)
 def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, nprocs,
                  ssh_username, ssh_port, ssh_private_key):
 
-    cmd = 'dworker {scheduler_addr}:{scheduler_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
+    cmd = '{python} -m distributed.cli.dworker {scheduler_addr}:{scheduler_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
+        python = sys.executable,
         scheduler_addr = scheduler_addr, scheduler_port = scheduler_port,
         worker_addr = worker_addr,
         nthreads = nthreads,
