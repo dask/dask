@@ -14,8 +14,10 @@ API
    Executor.get
    Executor.has_what
    Executor.map
-   Executor.persist
    Executor.ncores
+   Executor.persist
+   Executor.rebalance
+   Executor.replicate
    Executor.restart
    Executor.run
    Executor.scatter

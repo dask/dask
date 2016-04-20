@@ -1220,6 +1220,52 @@ class Executor(object):
         """
         sync(self.loop, self._rebalance, futures, workers),
 
+    @gen.coroutine
+    def _replicate(self, futures, n=None, workers=None, branching_factor=2):
+        futures = futures_of(futures)
+        yield _wait(futures)
+        keys = {f.key for f in futures}
+        yield self.scheduler.replicate(keys=list(keys), n=n, workers=workers,
+                branching_factor=branching_factor)
+
+    def replicate(self, futures, n=None, workers=None, branching_factor=2):
+        """ Set replication of futures within network
+
+        This performs a tree copy of the data throughout the network
+        individually on each piece of data.
+
+        This operation blocks until complete.  It does not guarantee
+        replication of data to future workers.
+
+        Parameters
+        ----------
+        futures: list of futures
+            Futures we wish to replicate
+        n: int, optional
+            Number of processes on the cluster on which to replicate the data.
+            Defaults to all.
+        workers: list of worker addresses
+            Workers on which we want to restrict the replication.
+            Defaults to all.
+        branching_factor: int, optional
+            The number of workers that can copy data in each generation
+
+        Examples
+        --------
+        >>> x = e.submit(func, *args)  # doctest: +SKIP
+        >>> e.replicate([x])  # send to all workers  # doctest: +SKIP
+        >>> e.replicate([x], n=3)  # send to three workers  # doctest: +SKIP
+        >>> e.replicate([x], workers=['alice', 'bob'])  # send to specific  # doctest: +SKIP
+        >>> e.replicate([x], n=1, workers=['alice', 'bob'])  # send to one of specific workers  # doctest: +SKIP
+        >>> e.replicate([x], n=1)  # reduce replications # doctest: +SKIP
+
+        See also
+        --------
+        Executor.rebalance
+        """
+        sync(self.loop, self._replicate, futures, n=n, workers=workers,
+                branching_factor=branching_factor)
+
     def ncores(self, workers=None):
         """ The number of threads/cores available on each worker node
 

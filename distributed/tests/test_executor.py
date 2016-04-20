@@ -2557,6 +2557,27 @@ def test_replicate_workers(e, s, *workers):
     assert sum(a.key in w.data for w in workers[5:]) == 0
     assert sum(b.key in w.data for w in workers[5:]) == 0
 
+    yield s.replicate(keys=[a.key, b.key], n=1)
+
+    assert len(s.who_has[a.key]) == 1
+    assert len(s.who_has[b.key]) == 1
+    assert sum(a.key in w.data for w in workers) == 1
+    assert sum(b.key in w.data for w in workers) == 1
+
+    s.validate()
+
+    yield s.replicate(keys=[a.key, b.key], n=None) # all
+    assert len(s.who_has[a.key]) == 10
+    assert len(s.who_has[b.key]) == 10
+    s.validate()
+
+    yield s.replicate(keys=[a.key, b.key], n=1,
+                      workers=[w.address for w in workers[:5]])
+    assert sum(a.key in w.data for w in workers[:5]) == 1
+    assert sum(b.key in w.data for w in workers[:5]) == 1
+    assert sum(a.key in w.data for w in workers[5:]) == 5
+    assert sum(b.key in w.data for w in workers[5:]) == 5
+
 
 class CountSerialization(object):
     def __init__(self):
@@ -2577,3 +2598,55 @@ def test_replicate_tree_branching(e, s, *workers):
 
     max_count = max(w.data[future.key].n for w in workers)
     assert max_count > 1
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_executor_replicate(e, s, *workers):
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    yield e._replicate([x, y], n=5)
+
+    assert len(s.who_has[x.key]) == 5
+    assert len(s.who_has[y.key]) == 5
+
+    yield e._replicate([x, y], n=3)
+
+    assert len(s.who_has[x.key]) == 3
+    assert len(s.who_has[y.key]) == 3
+
+    yield e._replicate([x, y])
+
+    assert len(s.who_has[x.key]) == 10
+    assert len(s.who_has[y.key]) == 10
+
+
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1),
+                                    ('127.0.0.2', 1),
+                                    ('127.0.0.2', 1)], timeout=None)
+def test_executor_replicate_host(e, s, a, b, c):
+    x = e.submit(inc, 1, workers='127.0.0.2')
+    yield _wait([x])
+    assert (s.who_has[x.key] == {b.address} or
+            s.who_has[x.key] == {c.address})
+
+    yield e._replicate([x], workers=['127.0.0.2'])
+    assert s.who_has[x.key] == {b.address, c.address}
+
+    yield e._replicate([x], workers=['127.0.0.1'])
+    assert s.who_has[x.key] == {a.address, b.address, c.address}
+
+
+def test_executor_replicate_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+            e.replicate([x, y], n=2)
+
+            who_has = e.who_has()
+            assert len(who_has[x.key]) == len(who_has[y.key]) == 2
+
+            with pytest.raises(ValueError):
+                e.replicate([x], n=0)

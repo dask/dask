@@ -217,7 +217,8 @@ class Scheduler(Server):
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has,
                          'add_keys': self.add_keys,
-                         'rebalance': self.rebalance}
+                         'rebalance': self.rebalance,
+                         'replicate': self.replicate}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -1546,6 +1547,24 @@ class Scheduler(Server):
 
             raise Return({'status': 'OK'})
 
+    def workers_list(self, workers):
+        """ List of qualifying workers
+
+        Takes a list of worker addresses or hostnames.
+        Returns a list of all worker addresses that match
+        """
+        if workers is None:
+            return list(self.ncores)
+
+        out = set()
+        for w in workers:
+            if ':' in w:
+                out.add(w)
+            else:
+                out.update({ww for ww in self.ncores if w in ww}) # TODO: quadratic
+        return list(out)
+
+
     @gen.coroutine
     def replicate(self, stream=None, keys=None, n=None, workers=None, branching_factor=2):
         """ Replicate data throughout cluster
@@ -1566,23 +1585,43 @@ class Scheduler(Server):
         --------
         Scheduler.rebalance
         """
-        original_keys = set(keys)
-        if workers is None:
-            workers = self.ncores
-        workers = set(workers)
-        n = min(n, len(self.ncores))
         with log_errors():
+            original_keys = set(keys)
+            workers = set(self.workers_list(workers))
+            if n is None:
+                n = len(workers)
+            n = min(n, len(workers))
             keys = set(keys)
+
+            if n == 0:
+                raise ValueError("Can not use replicate to delete data")
 
             if not keys.issubset(self.who_has):
                 raise Return({'status': 'missing-data',
                               'keys': list(keys - set(self.who_has))})
 
+            # Delete extraneous data
+            del_keys = {k: random.sample(self.who_has[k] & workers,
+                                         len(self.who_has[k] & workers) - n)
+                        for k in keys
+                        if len(self.who_has[k] & workers) > n}
+            del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
+            yield [self.rpc(addr=worker).delete_data(keys=list(keys),
+                                                     report=False)
+                    for worker, keys in del_workers.items()]
+
+            for worker, keys in del_workers.items():
+                self.has_what[worker] -= keys
+                for key in keys:
+                    self.who_has[key].remove(worker)
+
+            keys = {k for k in keys if len(self.who_has[k] & workers) < n}
+            # Copy not-yet-filled data
             while keys:
                 gathers = defaultdict(dict)
                 for k in list(keys):
                     missing = workers - self.who_has[k]
-                    count = min(max(n - len(self.who_has[k]), 0),
+                    count = min(max(n - len(self.who_has[k] & workers), 0),
                                 branching_factor * len(self.who_has[k]))
                     if not count:
                         keys.remove(k)
