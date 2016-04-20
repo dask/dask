@@ -775,9 +775,9 @@ class Array(Base):
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
 
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
+    _dask_optimize_ = staticmethod(optimize)
+    _dask_default_get_ = staticmethod(threaded.get)
+    _dask_finalize_ = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask

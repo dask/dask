@@ -4,7 +4,6 @@ from functools import partial
 from hashlib import md5
 from operator import attrgetter
 import os
-import sys
 import uuid
 import warnings
 
@@ -15,11 +14,50 @@ from .compatibility import bind_method, unicode
 from .context import _globals
 from .utils import Dispatch, ignoring
 
-__all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
+__all__ = ("Base", "is_dask_collection", "compute", "normalize_token",
+           "tokenize", "visualize")
 
 
-class Base(object):
+class DaskInterface(object):
+    """Minimal interface required for dask-like duck typing"""
+    def _dask_optimize_(self, dsk, keys, **kwargs):
+        """Return an optimized dask graph"""
+        raise NotImplementedError()
+
+    def _dask_finalize_(self, results):
+        """Finalize the computed keys into an output object"""
+        raise NotImplementedError()
+
+    def _dask_default_get_(self, dsk, key, **kwargs):
+        """The default scheduler `get` to use for this object"""
+        raise NotImplementedError()
+
+    def _dask_keys_(self):
+        """The keys for the dask graph"""
+        raise NotImplementedError()
+
+    def _dask_graph_(self):
+        """The dask graph"""
+        raise NotImplementedError()
+
+
+def is_dask_collection(x):
+    """Return if the object is a dask collection"""
+    return isinstance(x, DaskInterface) or (hasattr(x, '_dask_optimize_') and
+                                            hasattr(x, '_dask_finalize_') and
+                                            hasattr(x, '_dask_default_get_') and
+                                            hasattr(x, '_dask_keys_') and
+                                            hasattr(x, '_dask_graph_'))
+
+
+class Base(DaskInterface):
     """Base class for dask collections"""
+
+    def _dask_graph_(self):
+        return self.dask
+
+    def _dask_keys_(self):
+        return self._keys()
 
     def visualize(self, filename='mydask', format=None, optimize_graph=False,
                   **kwargs):
@@ -38,8 +76,8 @@ class Base(object):
 
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
-        get = get or _globals['get'] or cls._default_get
-        dsk2 = cls._optimize(dsk, keys, **kwargs)
+        get = get or _globals['get'] or cls._dask_default_get_
+        dsk2 = cls._dask_optimize_(dsk, keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -88,43 +126,44 @@ def compute(*args, **kwargs):
     >>> compute(a, b)
     (45, 4.5)
     """
-    variables = [a for a in args if isinstance(a, Base)]
+    is_collection = list(map(is_dask_collection, args))
+    variables = [a for a, p in zip(args, is_collection) if p]
     if not variables:
         return args
-    groups = groupby(attrgetter('_optimize'), variables)
+    groups = groupby(attrgetter('_dask_optimize_'), variables)
 
-    get = kwargs.pop('get', None) or _globals['get']
+    get = kwargs.pop('get', _globals['get'])
 
     if not get:
-        get = variables[0]._default_get
-        if not all(a._default_get == get for a in variables):
+        get = variables[0]._dask_default_get_
+        if not all(a._dask_default_get_ == get for a in variables):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = merge([opt(merge([v.dask for v in val]),
-                     [v._keys() for v in val], **kwargs)
+    dsk = merge([opt(merge([v._dask_graph_() for v in val]),
+                     [v._dask_keys_() for v in val], **kwargs)
                 for opt, val in groups.items()])
-    keys = [var._keys() for var in variables]
+    keys = [var._dask_keys_() for var in variables]
     results = get(dsk, keys, **kwargs)
 
-    results_iter = iter(results)
-    return tuple(a if not isinstance(a, Base)
-                   else a._finalize(next(results_iter))
-                   for a in args)
+    results = iter(results)
+    return tuple(a if not p else a._dask_finalize_(next(results))
+                 for a, p in zip(args, is_collection))
 
 
 def visualize(*args, **kwargs):
     dsks = [arg for arg in args if isinstance(arg, dict)]
-    args = [arg for arg in args if isinstance(arg, Base)]
+    args = [arg for arg in args if is_dask_collection(arg)]
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks.extend([arg._optimize(arg.dask, arg._keys()) for arg in args])
+        dsks.extend([arg._dask_optimize_(arg._dask_graph_(), arg._dask_keys_())
+                     for arg in args])
     else:
-        dsks.extend([arg.dask for arg in args])
+        dsks.extend([arg._dask_graph_() for arg in args])
     dsk = merge(dsks)
 
     return dot_graph(dsk, filename=filename, **kwargs)
@@ -149,24 +188,31 @@ normalize_token.register((int, float, str, unicode, bytes, type(None), type,
                           slice),
                          identity)
 
+
 @partial(normalize_token.register, dict)
 def normalize_dict(d):
     return normalize_token(sorted(d.items()))
+
 
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
 
+
 @partial(normalize_token.register, object)
 def normalize_object(o):
+    keys = getattr(o, '_dask_keys_', None)
+    if keys is not None:
+        return type(o).__name__, keys()
     if callable(o):
         return normalize_function(o)
     else:
         return uuid.uuid4().hex
 
+
 @partial(normalize_token.register, Base)
 def normalize_base(b):
-    return type(b).__name__, b.key
+    return type(b).__name__, b._dask_keys_()
 
 
 with ignoring(ImportError):

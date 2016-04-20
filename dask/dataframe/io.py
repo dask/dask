@@ -856,7 +856,7 @@ def to_bag(df, index=False):
         raise TypeError("df must be either DataFrame or Series")
     name = 'to_bag-' + tokenize(df, index)
     dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
-    dsk.update(df._optimize(df.dask, df._keys()))
+    dsk.update(df._dask_optimize_(df.dask, df._keys()))
     return Bag(dsk, name, df.npartitions)
 
 

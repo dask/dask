@@ -22,7 +22,7 @@ with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from ..base import Base, normalize_token, tokenize
+from ..base import Base, normalize_token, tokenize, is_dask_collection
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
                              GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
@@ -202,7 +202,7 @@ def unpack_kwargs(kwargs):
             dsk.update(val.dask)
             val = val.key
         # TODO elif isinstance(val, Value):
-        elif isinstance(val, Base):
+        elif is_dask_collection(val):
             raise NotImplementedError(
                 '%s not supported as kwarg value to Bag.map_partitions'
                 % type(val).__name__)
@@ -211,9 +211,9 @@ def unpack_kwargs(kwargs):
 
 
 class Item(Base):
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize_item)
+    _dask_optimize_ = staticmethod(optimize)
+    _dask_default_get_ = staticmethod(mpget)
+    _dask_finalize_ = staticmethod(finalize_item)
 
     @staticmethod
     def from_imperative(value):
@@ -290,9 +290,9 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize)
+    _dask_optimize_ = staticmethod(optimize)
+    _dask_default_get_ = staticmethod(mpget)
+    _dask_finalize_ = staticmethod(finalize)
 
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk

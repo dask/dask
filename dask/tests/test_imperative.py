@@ -2,11 +2,13 @@ from collections import Iterator, namedtuple
 from operator import add
 import pickle
 from random import random
+from uuid import uuid4
 
 import pytest
 
 from dask.imperative import value, do, to_task_dasks, compute, Value
 from dask.utils import raises
+from dask.threaded import get as threaded_get
 
 
 def test_value():
@@ -98,6 +100,29 @@ def test_compute():
     assert compute(b, c) == (7, 8)
     assert compute(b) == (7,)
     assert compute([a, b], c) == ([6, 7], 8)
+
+
+class Duck(object):
+    """Duck-typed dask collection"""
+    def __init__(self, val):
+        self.key = str(uuid4())
+        self.val = val
+
+    _dask_graph_ = lambda self: {self.key: self.val}
+    _dask_keys_ = lambda self: self.key
+    _dask_finalize_ = staticmethod(lambda x: x)
+    _dask_optimize_ = staticmethod(lambda d, k, **kws: d)
+    _dask_default_get_ = staticmethod(threaded_get)
+
+
+def test_duck_typing():
+    a = Duck(1)
+    b = value(1)
+    assert (a + b).compute() == 2
+    c = do(lambda a, b: a + b + 2)(a, b)
+    assert c.compute() == 4
+    d = do(sum)([a, b, 1, 2])
+    assert d.compute() == 5
 
 
 def test_named_value():
