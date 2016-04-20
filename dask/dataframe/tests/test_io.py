@@ -12,12 +12,13 @@ import tempfile
 import shutil
 from time import sleep
 import threading
+from distutils.version import LooseVersion
 
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
                                from_array, from_bcolz, from_dask_array)
-from dask.compatibility import StringIO, BZ2File, GzipFile
+from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 
 from dask.utils import filetext, tmpfile, ignoring, compressions
 from dask.async import get_sync
@@ -37,12 +38,29 @@ Charlie,300
 Dennis,400
 Edith,-500
 Frank,600
+Alice,200
+Frank,-200
+Bob,600
+Alice,400
+Frank,200
+Alice,300
+Edith,600
 """.strip()
 
 
+SKIP_PD_XZ = pytest.mark.skipif(
+    not LZMA_AVAILABLE or LooseVersion(pd.__version__) <= LooseVersion('0.18.0'),
+    reason=('no lzma module found' if not LZMA_AVAILABLE else
+            'pandas <= 0.18.0 does not support xz compression'))
+
+
 @pytest.mark.parametrize('open_comp_pair,infer',
-                         list(product([(open, None), (GzipFile, 'gzip'),
-                                       (BZ2File, 'bz2')], (True, False))))
+                         [SKIP_PD_XZ(((o, c), i)) if c == 'xz' else ((o, c), i)
+                          for (o, c), i in product([(open, None),
+                                                    (GzipFile, 'gzip'),
+                                                    (BZ2File, 'bz2'),
+                                                    (LZMAFile, 'xz')],
+                                                   (True, False))])
 def test_read_csv(open_comp_pair, infer):
     myopen, compression = open_comp_pair
     text_ = text if compression is None else text.encode()
