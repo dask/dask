@@ -1958,6 +1958,16 @@ def tensordot(lhs, rhs, axes=2):
         raise NotImplementedError("Simultaneous Contractions of multiple "
                 "indices not yet supported")
 
+    if isinstance(lhs, np.ndarray):
+        chunks = [(d,) for d in lhs.shape]
+        chunks[left_axes[0]] = rhs.chunks[right_axes[0]]
+        lhs = from_array(lhs, chunks=chunks)
+
+    if isinstance(rhs, np.ndarray):
+        chunks = [(d,) for d in rhs.shape]
+        chunks[right_axes[0]] = lhs.chunks[left_axes[0]]
+        rhs = from_array(rhs, chunks=chunks)
+
     if lhs._dtype is not None and rhs._dtype is not None :
         dt = np.promote_types(lhs._dtype, rhs._dtype)
     else:
