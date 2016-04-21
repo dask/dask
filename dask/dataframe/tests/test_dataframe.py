@@ -642,12 +642,12 @@ def test_loc():
 
     assert d.loc[5].divisions == (5, 5)
 
-    assert eq(d.loc[5], full.loc[5])
+    assert eq(d.loc[5], full.loc[5:5])
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
 
-    assert eq(d.a.loc[5], full.a.loc[5])
+    assert eq(d.a.loc[5], full.a.loc[5:5])
     assert eq(d.a.loc[3:8], full.a.loc[3:8])
     assert eq(d.a.loc[:8], full.a.loc[:8])
     assert eq(d.a.loc[3:], full.a.loc[3:])
@@ -660,11 +660,27 @@ def test_loc():
     assert sorted(d.loc[5].dask) != sorted(d.loc[6].dask)
 
 
+def test_loc_non_informative_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[10, 20, 30, 40])
+    ddf = dd.from_pandas(df, npartitions=2, sort=True)
+    ddf.divisions = (None,) * 3
+    assert not ddf.known_divisions
+
+    ddf.loc[20:30].compute(get=dask.get)
+
+    assert eq(ddf.loc[20:30], df.loc[20:30])
+
+
+    df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[10, 20, 20, 40])
+    ddf = dd.from_pandas(df, npartitions=2, sort=True)
+    assert eq(ddf.loc[20], df.loc[20:20])
+
+
 def test_loc_with_text_dates():
     A = tm.makeTimeSeries(10).iloc[:5]
     B = tm.makeTimeSeries(10).iloc[5:]
     s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None,
-                  [A.index.min(), A.index.max(), B.index.max()])
+                  [A.index.min(), B.index.min(), B.index.max()])
 
     assert s.loc['2000': '2010'].divisions == s.divisions
     assert eq(s.loc['2000': '2010'], s)
@@ -764,8 +780,6 @@ def test_unknown_divisions():
 
     assert eq(d.a.sum(), full.a.sum())
     assert eq(d.a + d.b + 1, full.a + full.b + 1)
-
-    assert raises(ValueError, lambda: d.loc[3])
 
 
 def test_concat2():
