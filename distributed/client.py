@@ -76,7 +76,7 @@ _gather.__doc__ = gather.__doc__
 
 
 @gen.coroutine
-def gather_from_workers(who_has, deserialize=True):
+def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
     """ Gather data directly from peers
 
     Parameters
@@ -111,7 +111,7 @@ def gather_from_workers(who_has, deserialize=True):
         if bad_keys:
             raise KeyError(*bad_keys)
 
-        coroutines = [rpc(address).get_data(keys=keys, close=True)
+        coroutines = [rpc(address).get_data(keys=keys, close=close)
                             for address, keys in d.items()]
         response = yield ignore_exceptions(coroutines, socket.error,
                                                        StreamClosedError)

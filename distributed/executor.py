@@ -687,9 +687,15 @@ class Executor(object):
     def _threaded_gather(self, qin, qout, **kwargs):
         """ Internal function for gathering Queue """
         while True:
-            d = qin.get()
-            f = self.gather(d, **kwargs)
-            qout.put(f)
+            L = [qin.get()]
+            while qin.empty():
+                try:
+                    L.append(qin.get_nowait())
+                except Empty:
+                    break
+            results = self.gather(L, **kwargs)
+            for item in results:
+                qout.put(item)
 
     def gather(self, futures, errors='raise'):
         """ Gather futures from distributed memory
@@ -774,14 +780,24 @@ class Executor(object):
             get = next
 
         while True:
-            try:
-                d = get(q_or_i)
-            except StopIteration:
-                qout.put(StopIteration)
-                break
+            if isqueue(q_or_i):
+                L = [q_or_i.get()]
+                while not q_or_i.empty():
+                    try:
+                        L.append(q_or_i.get_nowait())
+                    except Empty:
+                        break
+            else:
+                try:
+                    L = [next(q_or_i)]
+                except StopIteration:
+                    L = [StopIteration]
+                    qout.put(StopIteration)
+                    break
 
-            [f] = self.scatter([d], **kwargs)
-            qout.put(f)
+            futures = self.scatter(L, **kwargs)
+            for future in futures:
+                qout.put(future)
 
     def scatter(self, data, workers=None, broadcast=False):
         """ Scatter data into distributed memory

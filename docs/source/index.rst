@@ -60,6 +60,7 @@ Contents
    efficiency
    locality
    joblib
+   queues
    api
 
 .. toctree::
