@@ -22,3 +22,4 @@ Other topics
    array-ghost.rst
    array-design.rst
    array-extend.rst
+   array-linear-operator.rst
