@@ -1291,7 +1291,15 @@ class Scheduler(Server):
 
         d['latency'] = end - start
         d['last-seen'] = last_seen
-        d['time-delay'] = (end_time + start_time) / 2 - d['time']
+
+        delay = (end_time + start_time) / 2 - d['time']
+        try:
+            avg_delay = self.host_info[host]['time-delay']
+            avg_delay = (0.95 * avg_delay + 0.05 * delay)
+        except KeyError:
+            avg_delay = delay
+
+        d['time-delay'] = delay
 
         self.host_info[host].update(d)
 
