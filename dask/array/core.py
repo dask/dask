@@ -1033,6 +1033,10 @@ class Array(Base):
         return tensordot(self, other, axes=((self.ndim-1,), (other.ndim-2,)))
 
     @property
+    def A(self):
+        return self
+
+    @property
     def T(self):
         return transpose(self)
 

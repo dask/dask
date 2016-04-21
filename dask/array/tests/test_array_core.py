@@ -1996,3 +1996,7 @@ def test_atop_names():
     y = atop(add, 'i', x, 'i')
     assert y.name.startswith('add')
 
+
+def test_A_property():
+    x = da.ones(5, chunks=(2,))
+    assert x.A is x
