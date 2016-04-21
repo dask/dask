@@ -217,6 +217,10 @@ class Item(Base):
 
     @staticmethod
     def from_imperative(value):
+        print(
+
+    @staticmethod
+    def from_delayed(value):
         """ Create bag item from an imperative value
 
         Parameters
