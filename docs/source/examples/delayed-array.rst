@@ -23,7 +23,7 @@ Below is the same code, parallelized using ``dask.delayed``:
 
 .. code-block:: python
 
-    x = value(h5py.File('myfile.hdf5')['/x'])   # Trillion element array on disk
+    x = delayed(h5py.File('myfile.hdf5')['/x'])   # Trillion element array on disk
 
     sums = []
     counts = []
@@ -40,8 +40,8 @@ Below is the same code, parallelized using ``dask.delayed``:
 
 Only 3 lines had to change to make this computation parallel instead of serial.
 
-- Wrap the original array in ``value``. This makes all the slices on it return
-  ``Value`` objects.
+- Wrap the original array in ``delayed``. This makes all the slices on it return
+  ``Delayed`` objects.
 - Wrap both calls to ``sum`` with ``delayed``.
 - Call the ``compute`` method on the result.
 

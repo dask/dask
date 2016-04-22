@@ -55,12 +55,12 @@ class Base(object):
 
         meth = '__{0}__'.format(name)
 
-        if name in ('abs', 'invert', 'neg'):
+        if name in ('abs', 'invert', 'neg', 'pos'):
             bind_method(cls, meth, cls._get_unary_operator(op))
         else:
             bind_method(cls, meth, cls._get_binary_operator(op))
 
-            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne'):
+            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
                 return
 
             rmeth = '__r{0}__'.format(name)
