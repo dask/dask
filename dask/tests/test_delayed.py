@@ -5,7 +5,7 @@ from random import random
 
 import pytest
 
-from dask.imperative import value, do, to_task_dasks, compute, Value
+from dask.delayed import value, do, to_task_dasks, compute, Value
 from dask.utils import raises
 
 
@@ -178,7 +178,7 @@ def test_kwargs():
     assert ten.compute() == 10
 
 
-def test_array_imperative():
+def test_array_delayed():
     np = pytest.importorskip('numpy')
     da = pytest.importorskip('dask.array')
 
@@ -199,7 +199,7 @@ def test_array_imperative():
     assert len(diff) == 1
 
 
-def test_array_bag_imperative():
+def test_array_bag_delayed():
     db = pytest.importorskip('dask.bag')
     da = pytest.importorskip('dask.array')
     np = pytest.importorskip('numpy')
@@ -231,7 +231,7 @@ def test_value_picklable():
     assert x._key == y._key
 
 
-def test_imperative_compute_forward_kwargs():
+def test_delayed_compute_forward_kwargs():
     x = value(1) + 2
     x.compute(bogus_keyword=10)
 

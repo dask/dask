@@ -542,7 +542,7 @@ class _Frame(Base):
 
         Returns a list of values, one value per partition.
         """
-        from ..imperative import Value
+        from ..delayed import Value
         return [Value(k, [self.dask]) for k in self._keys()]
 
     @classmethod

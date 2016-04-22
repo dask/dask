@@ -1,7 +1,7 @@
 Overview
 ========
 
-The ``dask.imperative`` interface consists of two functions:
+The ``dask.delayed`` interface consists of two functions:
 
 1. ``delayed``
 

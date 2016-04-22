@@ -719,7 +719,7 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
     if compute:
         Array._get(dsk, keys, **kwargs)
     else:
-        from ..imperative import Value
+        from ..delayed import Value
         name = tokenize(*keys)
         dsk[name] = keys
         return Value(name, [dsk])
@@ -1382,7 +1382,7 @@ class Array(Base):
 
         Returns an array of values, one value per chunk.
         """
-        from ..imperative import Value
+        from ..delayed import Value
         return np.array(deepmap(lambda k: Value(k, [self.dask]), self._keys()),
                         dtype=object)
 
@@ -1478,11 +1478,10 @@ def from_imperative(*args, **kwargs):
 
 
 def from_delayed(value, shape, dtype=None, name=None):
-    """ Create a dask array from a dask imperative value
+    """ Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
-    using dask imperative, particularly when combined with stack and
-    concatenate.
+    using dask delayed, particularly when combined with stack and concatenate.
 
     The dask array will consist of a single chunk.
 

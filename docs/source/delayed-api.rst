@@ -1,7 +1,7 @@
 API
 ===
 
-.. currentmodule:: dask.imperative
+.. currentmodule:: dask.delayed
 
 .. autosummary::
    delayed

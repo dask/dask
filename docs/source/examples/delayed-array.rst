@@ -19,7 +19,7 @@ positive elements in a large, on disk array:
     result = sum(sums) / sum(counts)            # Aggregate results
 
 
-Below is the same code, parallelized using ``dask.imperative``:
+Below is the same code, parallelized using ``dask.delayed``:
 
 .. code-block:: python
 

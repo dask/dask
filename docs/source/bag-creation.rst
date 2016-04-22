@@ -70,9 +70,9 @@ attached directly to bags with ``.str.methodname``:
 ``db.from_delayed``
 ----------------------
 
-You can construct a dask bag from :doc:`dask.delayed <imperative>` values
+You can construct a dask bag from :doc:`dask.delayed <delayed>` values
 using the ``db.from_delayed`` function.  See
-:doc:`documentation on using dask.delayed with collections <imperative-collections>`
+:doc:`documentation on using dask.delayed with collections <delayed-collections>`
 for more information.
 
 
@@ -111,7 +111,7 @@ those storage solutions.
 To Delayed Values
 -----------------
 
-You can convert a dask bag into a list of :doc:`dask delayed values<imperative>`
+You can convert a dask bag into a list of :doc:`dask delayed values<delayed>`
 and custom storage solutions from there.
 
 .. autofunction:: dask.bag.core.Bag.to_delayed

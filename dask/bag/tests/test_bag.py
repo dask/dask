@@ -844,7 +844,7 @@ def test_bag_compute_forward_kwargs():
 
 
 def test_to_delayed():
-    from dask.imperative import Value
+    from dask.delayed import Value
 
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     a, b, c = b.map(inc).to_delayed()
@@ -858,7 +858,7 @@ def test_to_delayed():
 
 
 def test_from_delayed():
-    from dask.imperative import value, do
+    from dask.delayed import value, do
     a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
     bb = from_delayed([a, b, c])
     assert bb.name == from_delayed([a, b, c]).name

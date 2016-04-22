@@ -14,7 +14,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
-from dask.imperative import delayed
+from dask.delayed import delayed
 from dask.async import get_sync
 from dask.array.core import *
 from dask.utils import raises, ignoring, tmpfile

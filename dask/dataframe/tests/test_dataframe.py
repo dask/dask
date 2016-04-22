@@ -1594,7 +1594,7 @@ def test_from_delayed():
 
 
 def test_to_delayed():
-    from dask.imperative import Value
+    from dask.delayed import Value
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     a, b = ddf.to_delayed()

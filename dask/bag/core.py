@@ -222,12 +222,12 @@ class Item(Base):
 
     @staticmethod
     def from_delayed(value):
-        """ Create bag item from an imperative value
+        """ Create bag item from a dask.delayed value
 
         Parameters
         ----------
         value: a Value
-            A single dask.imperative.Value object, such as come from dask.do
+            A single dask.delayed.Value object, such as come from dask.do
 
         Returns
         -------
@@ -237,7 +237,7 @@ class Item(Base):
         --------
         >>> b = db.Item.from_delayed(x)  # doctest: +SKIP
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         assert isinstance(value, Value)
         return Item(value.dask, value.key)
 
@@ -265,7 +265,7 @@ class Item(Base):
 
         Returns a single value.
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         return Value(self.key, [self.dask])
 
 
@@ -963,7 +963,7 @@ class Bag(Base):
 
         Returns list of values, one value per partition.
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         return [Value(k, [self.dask]) for k in self._keys()]
 
     def repartition(self, npartitions):
@@ -1427,12 +1427,12 @@ def from_imperative(values):
 
 
 def from_delayed(values):
-    """ Create bag from many imperative objects
+    """ Create bag from many dask.delayed objects
 
     Parameters
     ----------
     values: list of Values
-        An iterable of dask.imperative.Value objects, such as come from dask.do
+        An iterable of dask.delayed.Value objects, such as come from dask.do
         These comprise the individual partitions of the resulting bag
 
     Returns
@@ -1443,12 +1443,12 @@ def from_delayed(values):
     --------
     >>> b = from_delayed([x, y, z])  # doctest: +SKIP
     """
-    from dask.imperative import Value
+    from dask.delayed import Value
     if isinstance(values, Value):
         values = [values]
     dsk = merge(v.dask for v in values)
 
-    name = 'bag-from-imperative-' + tokenize(*values)
+    name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
     values = [v.key for v in values]
     dsk2 = dict(zip(names, values))
