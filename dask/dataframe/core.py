@@ -2450,7 +2450,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         k += 1
 
     # right part of new division can remain
-    if a[-1] < b[-1]:
+    if a[-1] < b[-1] or b[-1] == b[-2]:
         for _j in range(j, len(b)):
             # always use right-most of old division
             # because it may contain last element
@@ -2479,7 +2479,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         while c[i] < b[j]:
             tmp.append((out1, i))
             i += 1
-        if last_elem and c[i] == b[-1] and i < k:
+        if last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
             # append if last split is not included
             tmp.append((out1, i))
             i += 1

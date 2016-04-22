@@ -23,7 +23,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 5, 9, 9])
 full = d.compute()
 
 
@@ -944,6 +944,10 @@ def test_append():
     ddf = dd.from_pandas(df, 2)
     ddf2 = dd.from_pandas(df2, 2)
     ddf3 = dd.from_pandas(df3, 2)
+
+    s = pd.Series([7, 8], name=6, index=['a', 'b'])
+    assert eq(ddf.append(s), df.append(s))
+
     assert eq(ddf.append(ddf2), df.append(df2))
     assert eq(ddf.a.append(ddf2.a), df.a.append(df2.a))
     # different columns
@@ -956,9 +960,6 @@ def test_append():
 
     assert eq(ddf.append(df3), df.append(df3))
     assert eq(ddf.a.append(df3.b), df.a.append(df3.b))
-
-    s = pd.Series([7, 8], name=6, index=['a', 'b'])
-    assert eq(ddf.append(s), df.append(s))
 
 
 
@@ -1141,7 +1142,13 @@ def test_repartition():
 
 
 def test_repartition_divisions():
-    result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    result = repartition_divisions([0, 6], [0, 6, 6], 'a', 'b', 'c')
+    assert result == {('b', 0): (_loc, ('a', 0), 0, 6, False),
+                      ('b', 1): (_loc, ('a', 0), 6, 6, True),
+                      ('c', 0): ('b', 0),
+                      ('c', 1): ('b', 1)}
+
+    result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
     assert result == {('b', 0): (_loc, ('a', 0), 1, 3, False),
                       ('b', 1): (_loc, ('a', 1), 3, 4, False),
                       ('b', 2): (_loc, ('a', 1), 4, 6, False),
@@ -1149,6 +1156,7 @@ def test_repartition_divisions():
                       ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
+
 
 def test_repartition_on_pandas_dataframe():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
