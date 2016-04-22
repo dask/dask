@@ -480,6 +480,13 @@ def test_from_pandas_non_sorted():
     eq(df, ddf)
 
 
+def test_from_pandas_single_row():
+    df = pd.DataFrame({'x': [1]}, index=[1])
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert ddf.divisions == (1, 1)
+    assert eq(ddf, df)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
 

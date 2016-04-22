@@ -396,16 +396,16 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
     if sort:
-        divisions = tuple(data.index[i]
-                          for i in range(0, nrows, chunksize))
-        divisions = divisions + (data.index[-1],)
+        divisions, locations = sorted_division_locations(data.index,
+                                                         chunksize=chunksize)
     else:
         divisions = [None] * (npartitions + 1)
+        locations = list(range(0, nrows, chunksize)) + [len(data)]
 
     name = 'from_pandas-' + tokenize(data, chunksize)
-    dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
-               for i in range(npartitions - 1))
-    dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
+    dsk = dict(((name, i), data.iloc[start: stop])
+               for i, (start, stop) in enumerate(zip(locations[:-1],
+                   locations[1:])))
     return _Frame(dsk, name, data, divisions)
 
 
