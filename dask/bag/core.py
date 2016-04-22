@@ -1,15 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
+import bz2
+from collections import Iterable, Iterator, defaultdict
+from fnmatch import fnmatchcase
+from functools import wraps, partial
+from glob import glob
 import io
 import itertools
 import math
-import bz2
 import os
 import uuid
-from fnmatch import fnmatchcase
-from glob import glob
-from collections import Iterable, Iterator, defaultdict
-from functools import wraps, partial
+from warnings import warn
 
 from ..utils import ignoring
 
@@ -217,7 +218,7 @@ class Item(Base):
 
     @staticmethod
     def from_imperative(value):
-        print("Deprecation warning: moved to from_delayed")
+        warn("Deprecation warning: moved to from_delayed")
         return self.from_delayed(value)
 
     @staticmethod
@@ -257,7 +258,7 @@ class Item(Base):
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
     def to_imperative(self):
-        print("Deprecation warning: moved to to_delayed")
+        warn("Deprecation warning: moved to to_delayed")
         return self.to_delayed()
 
     def to_delayed(self):
@@ -955,7 +956,7 @@ class Bag(Base):
                             name, columns, divisions)
 
     def to_imperative(self):
-        print("Deprecation warning: moved to to_delayed")
+        warn("Deprecation warning: moved to to_delayed")
         return self.to_delayed()
 
     def to_delayed(self):
@@ -1422,7 +1423,7 @@ def reify(seq):
 
 
 def from_imperative(values):
-    print("Deprecation warning: moved to from_delayed")
+    warn("Deprecation warning: moved to from_delayed")
     return from_delayed(values)
 
 

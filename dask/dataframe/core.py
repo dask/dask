@@ -534,7 +534,7 @@ class _Frame(Base):
         return to_csv(self, filename, get=get, **kwargs)
 
     def to_imperative(self):
-        print("Deprecation warning: moved to to_delayed")
+        warnings.warn("Deprecation warning: moved to to_delayed")
         return self.to_delayed()
 
     def to_delayed(self):

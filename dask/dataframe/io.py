@@ -10,6 +10,7 @@ import os
 import re
 from threading import Lock
 import uuid
+from warnings import warn
 
 import pandas as pd
 import numpy as np
@@ -861,7 +862,7 @@ def to_bag(df, index=False):
 
 
 def from_imperative(*args, **kwargs):
-    print("Deprecation warning: moved to from_delayed")
+    warn("Deprecation warning: moved to from_delayed")
     return from_delayed(*args, **kwargs)
 
 
@@ -877,7 +878,7 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None):
     divisions: list or None
     """
     if columns is not None:
-        print("Deprecation warning: Use metadata argument, not columns")
+        warn("Deprecation warning: Use metadata argument, not columns")
         metadata = columns
     from dask.delayed import Value
     if isinstance(dfs, Value):

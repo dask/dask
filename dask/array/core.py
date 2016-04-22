@@ -1,24 +1,25 @@
 from __future__ import absolute_import, division, print_function
 
-import operator
-from operator import add, getitem
-import inspect
-from numbers import Number
-from collections import Iterable, MutableMapping
 from bisect import bisect
-from itertools import product
+from collections import Iterable, MutableMapping
 from collections import Iterator
 from functools import partial, wraps
+import inspect
+from itertools import product
+from numbers import Number
+import operator
+from operator import add, getitem
+import os
+import pickle
+from threading import Lock
+import uuid
+from warnings import warn
 
 from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
                            curry, reduce, interleave, sliding_window, partial)
 import numpy as np
-import os
-import pickle
-import uuid
 
-from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
@@ -1374,7 +1375,7 @@ class Array(Base):
         return out
 
     def to_imperative(self):
-        print("Deprecation warning: moved to to_delayed")
+        warn("Deprecation warning: moved to to_delayed")
         return self.to_delayed()
 
     def to_delayed(self):
@@ -1473,7 +1474,7 @@ def from_array(x, chunks, name=None, lock=False):
 
 
 def from_imperative(*args, **kwargs):
-    print("Deprecation warning: moved to from_delayed")
+    warn("Deprecation warning: moved to from_delayed")
     return from_delayed(*args, **kwargs)
 
 
