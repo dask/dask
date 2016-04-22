@@ -80,7 +80,7 @@ Top level user functions:
     DataFrame.to_castra
     DataFrame.to_csv
     DataFrame.to_hdf
-    DataFrame.to_imperative
+    DataFrame.to_delayed
     DataFrame.truediv
     DataFrame.var
     DataFrame.visualize
@@ -116,7 +116,7 @@ Create DataFrames
    from_castra
    read_csv
    from_dask_array
-   from_imperative
+   from_delayed
    from_pandas
 
 DataFrame Methods

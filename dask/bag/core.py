@@ -1,15 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
+import bz2
+from collections import Iterable, Iterator, defaultdict
+from fnmatch import fnmatchcase
+from functools import wraps, partial
+from glob import glob
 import io
 import itertools
 import math
-import bz2
 import os
 import uuid
-from fnmatch import fnmatchcase
-from glob import glob
-from collections import Iterable, Iterator, defaultdict
-from functools import wraps, partial
+from warnings import warn
 
 from ..utils import ignoring
 
@@ -217,12 +218,17 @@ class Item(Base):
 
     @staticmethod
     def from_imperative(value):
-        """ Create bag item from an imperative value
+        warn("Deprecation warning: moved to from_delayed")
+        return self.from_delayed(value)
+
+    @staticmethod
+    def from_delayed(value):
+        """ Create bag item from a dask.delayed value
 
         Parameters
         ----------
         value: a Value
-            A single dask.imperative.Value object, such as come from dask.do
+            A single dask.delayed.Value object, such as come from dask.do
 
         Returns
         -------
@@ -230,9 +236,9 @@ class Item(Base):
 
         Examples
         --------
-        >>> b = db.Item.from_imperative(x)  # doctest: +SKIP
+        >>> b = db.Item.from_delayed(x)  # doctest: +SKIP
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         assert isinstance(value, Value)
         return Item(value.dask, value.key)
 
@@ -252,11 +258,15 @@ class Item(Base):
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
     def to_imperative(self):
+        warn("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert bag item to dask Value
 
         Returns a single value.
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         return Value(self.key, [self.dask])
 
 
@@ -946,11 +956,15 @@ class Bag(Base):
                             name, columns, divisions)
 
     def to_imperative(self):
+        warn("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert bag to dask Values
 
         Returns list of values, one value per partition.
         """
-        from dask.imperative import Value
+        from dask.delayed import Value
         return [Value(k, [self.dask]) for k in self._keys()]
 
     def repartition(self, npartitions):
@@ -1409,12 +1423,17 @@ def reify(seq):
 
 
 def from_imperative(values):
-    """ Create bag from many imperative objects
+    warn("Deprecation warning: moved to from_delayed")
+    return from_delayed(values)
+
+
+def from_delayed(values):
+    """ Create bag from many dask.delayed objects
 
     Parameters
     ----------
     values: list of Values
-        An iterable of dask.imperative.Value objects, such as come from dask.do
+        An iterable of dask.delayed.Value objects, such as come from dask.do
         These comprise the individual partitions of the resulting bag
 
     Returns
@@ -1423,14 +1442,14 @@ def from_imperative(values):
 
     Examples
     --------
-    >>> b = from_imperative([x, y, z])  # doctest: +SKIP
+    >>> b = from_delayed([x, y, z])  # doctest: +SKIP
     """
-    from dask.imperative import Value
+    from dask.delayed import Value
     if isinstance(values, Value):
         values = [values]
     dsk = merge(v.dask for v in values)
 
-    name = 'bag-from-imperative-' + tokenize(*values)
+    name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
     values = [v.key for v in values]
     dsk2 = dict(zip(names, values))

@@ -9,7 +9,7 @@ import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize, system_encoding,
-        from_imperative)
+        from_delayed)
 from dask.compatibility import BZ2File, GzipFile, reduce
 from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
@@ -843,31 +843,31 @@ def test_bag_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-def test_to_imperative():
-    from dask.imperative import Value
+def test_to_delayed():
+    from dask.delayed import Value
 
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
-    a, b, c = b.map(inc).to_imperative()
+    a, b, c = b.map(inc).to_delayed()
     assert all(isinstance(x, Value) for x in [a, b, c])
     assert b.compute() == [4, 5]
 
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
-    t = b.sum().to_imperative()
+    t = b.sum().to_delayed()
     assert isinstance(t, Value)
     assert t.compute() == 21
 
 
-def test_from_imperative():
-    from dask.imperative import value, do
+def test_from_delayed():
+    from dask.delayed import value, do
     a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
-    bb = from_imperative([a, b, c])
-    assert bb.name == from_imperative([a, b, c]).name
+    bb = from_delayed([a, b, c])
+    assert bb.name == from_delayed([a, b, c]).name
 
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     asum_value = do(lambda X: sum(X))(a)
-    asum_item = db.Item.from_imperative(asum_value)
+    asum_item = db.Item.from_delayed(asum_value)
     assert asum_value.compute() == asum_item.compute() == 6
 
 

@@ -534,11 +534,15 @@ class _Frame(Base):
         return to_csv(self, filename, get=get, **kwargs)
 
     def to_imperative(self):
+        warnings.warn("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert dataframe into dask Values
 
         Returns a list of values, one value per partition.
         """
-        from ..imperative import Value
+        from ..delayed import Value
         return [Value(k, [self.dask]) for k in self._keys()]
 
     @classmethod

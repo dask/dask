@@ -7,7 +7,7 @@ Now, rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 
 .. code-block:: python
 
-    from dask.imperative import delayed, value
+    from dask import delayed, value
 
     @delayed
     def load(filename):

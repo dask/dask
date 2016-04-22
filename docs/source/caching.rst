@@ -134,7 +134,7 @@ of the column.
 
 This means that the opportunistic caching mechanism described above works for *all* dask
 computations, as long as those computations employ a consistent naming scheme
-(as all of dask.dataframe, dask.array, and dask.imperative do.)
+(as all of dask.dataframe, dask.array, and dask.delayed do.)
 
 You can see which tasks are held by the cache by inspecting the following
 attributes of the cache object:

@@ -14,6 +14,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+from dask.delayed import delayed
 from dask.async import get_sync
 from dask.array.core import *
 from dask.utils import raises, ignoring, tmpfile
@@ -1859,11 +1860,11 @@ def test_timedelta_op():
     assert a.compute() == x / y
 
 
-def test_to_imperative():
+def test_to_delayed():
     x = da.random.random((4, 4), chunks=(2, 2))
     y = x + 10
 
-    [[a, b], [c, d]] = y.to_imperative()
+    [[a, b], [c, d]] = y.to_delayed()
     assert_eq(a.compute(), y[:2, :2])
 
 
@@ -1996,3 +1997,9 @@ def test_atop_names():
     y = atop(add, 'i', x, 'i')
     assert y.name.startswith('add')
 
+
+def test_from_delayed():
+    v = delayed(np.ones)((5, 3))
+    x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
+    assert isinstance(x, Array)
+    assert_eq(x, np.ones((5, 3)))

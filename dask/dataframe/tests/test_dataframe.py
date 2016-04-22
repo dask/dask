@@ -1574,30 +1574,30 @@ def test_dataframe_itertuples():
         assert a == b
 
 
-def test_from_imperative():
+def test_from_delayed():
     from dask import do
     dfs = [do(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
-    df = dd.from_imperative(dfs, columns=['A', 'B', 'C', 'D'])
+    df = dd.from_delayed(dfs, columns=['A', 'B', 'C', 'D'])
 
     assert (df.compute().columns == df.columns).all()
     assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
-    s = dd.from_imperative(ss, columns='A')
+    s = dd.from_delayed(ss, columns='A')
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
 
-    df = dd.from_imperative(dfs, tm.makeTimeDataFrame(1))
+    df = dd.from_delayed(dfs, tm.makeTimeDataFrame(1))
     assert df._known_dtype
     assert list(df.columns) == ['A', 'B', 'C', 'D']
 
 
-def test_to_imperative():
-    from dask.imperative import Value
+def test_to_delayed():
+    from dask.delayed import Value
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    a, b = ddf.to_imperative()
+    a, b = ddf.to_delayed()
     assert isinstance(a, Value)
     assert isinstance(b, Value)
 

@@ -7,16 +7,16 @@ Examples
 You can view examples for each Dask collection:
 
 * :doc:`Dask Array Examples <array-examples>`
-* :doc:`Dask Bag Examples <imperative-examples>`
+* :doc:`Dask Bag Examples <delayed-examples>`
 * :doc:`Dask DataFrame Examples <dataframe-examples>`
-* :doc:`Dask Imperative Examples <imperative-examples>`
+* :doc:`Dask delayed Examples <delayed-examples>`
 
 
 Tutorials
 ---------
 
 You can view a tutorial of Dask, including slides and notebooks on Dask arrays,
-graphs, dataframes, imperative, and bags in the
+graphs, dataframes, delayed, and bags in the
 `dask-tutorials repository <https://github.com/dask/dask-tutorial>`_.
 
 You can try a live tutorial of dask dataframe's basics `here

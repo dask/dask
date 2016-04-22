@@ -10,6 +10,7 @@ import os
 import re
 from threading import Lock
 import uuid
+from warnings import warn
 
 import pandas as pd
 import numpy as np
@@ -860,26 +861,31 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
-def from_imperative(dfs, metadata=None, divisions=None, columns=None):
-    """ Create DataFrame from many imperative objects
+def from_imperative(*args, **kwargs):
+    warn("Deprecation warning: moved to from_delayed")
+    return from_delayed(*args, **kwargs)
+
+
+def from_delayed(dfs, metadata=None, divisions=None, columns=None):
+    """ Create DataFrame from many dask.delayed objects
 
     Parameters
     ----------
     dfs: list of Values
-        An iterable of dask.imperative.Value objects, such as come from dask.do
+        An iterable of dask.delayed.Value objects, such as come from dask.do
         These comprise the individual partitions of the resulting dataframe
     metadata: list or string of column names or empty dataframe
     divisions: list or None
     """
     if columns is not None:
-        print("Deprecation warning: Use metadata argument, not columns")
+        warn("Deprecation warning: Use metadata argument, not columns")
         metadata = columns
-    from dask.imperative import Value
+    from dask.delayed import Value
     if isinstance(dfs, Value):
         dfs = [dfs]
     dsk = merge(df.dask for df in dfs)
 
-    name = 'from-imperative-' + tokenize(*dfs)
+    name = 'from-delayed-' + tokenize(*dfs)
     names = [(name, i) for i in range(len(dfs))]
     values = [df.key for df in dfs]
     dsk2 = dict(zip(names, values))
