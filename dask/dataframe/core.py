@@ -4,6 +4,7 @@ import bisect
 from collections import Iterable, Iterator
 from datetime import datetime
 from distutils.version import LooseVersion
+import math
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -456,14 +457,16 @@ class _Frame(Base):
         # see https://github.com/dask/dask/pull/507
         raise NotImplementedError("Dask Dataframe does not support iloc")
 
-    def repartition(self, divisions, force=False):
+    def repartition(self, divisions=None, npartitions=None, force=False):
         """ Repartition dataframe along new divisions
 
         Parameters
         ----------
-
         divisions : list
             List of partitions to be used
+        npartitions : int
+            Number of partitions of output, must be less than npartitions of
+            input
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
@@ -471,10 +474,18 @@ class _Frame(Base):
 
         Examples
         --------
-
-        >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+        >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
+        >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         """
-        return repartition(self, divisions, force=force)
+        if npartitions is not None:
+            if npartitions > self.npartitions:
+                raise ValueError("Can only repartition to fewer partitions")
+            return repartition_npartitions(self, npartitions)
+        elif divisions is not None:
+            return repartition(self, divisions, force=force)
+        else:
+            raise ValueError(
+                "Provide either divisions= or npartitions= to repartition")
 
     def __getstate__(self):
         return self.__dict__
@@ -2499,7 +2510,17 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     return d
 
 
-def repartition(df, divisions, force=False):
+def repartition_npartitions(df, npartitions):
+    """ Repartition dataframe to a smaller number of partitions """
+    npartitions = min(npartitions, df.npartitions)
+    k = int(math.ceil(df.npartitions / npartitions))
+    divisions = df.divisions[::k]
+    if len(divisions) <= npartitions:
+        divisions = divisions + (df.divisions[-1],)
+    return df.repartition(divisions=divisions)
+
+
+def repartition(df, divisions=None, force=False):
     """ Repartition dataframe along new divisions
 
     Dask.DataFrame objects are partitioned along their index.  Often when
@@ -2518,7 +2539,6 @@ def repartition(df, divisions, force=False):
         Allows the expansion of the existing divisions.
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
-
 
     Examples
     --------

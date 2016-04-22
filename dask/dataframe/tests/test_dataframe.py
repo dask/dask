@@ -1053,7 +1053,6 @@ def test_set_partition_2():
 
 
 def test_repartition():
-
     def _check_split_data(orig, d):
         """Check data is split properly"""
         keys = [k for k in d.dask if k[0].startswith('repartition-split')]
@@ -1162,6 +1161,25 @@ def test_repartition_on_pandas_dataframe():
     assert isinstance(ddf, dd.Series)
     assert ddf.divisions == (10, 20, 50, 60)
     assert eq(ddf, df.y)
+
+
+def test_repartition_npartitions():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    for n in [1, 2, 4, 5]:
+        for k in [1, 2, 4, 5]:
+            if k > n:
+                continue
+            a = dd.from_pandas(df, npartitions=n)
+            k = min(a.npartitions, k)
+
+            b = a.repartition(npartitions=k)
+            eq(a, b)
+            assert b.npartitions == k
+
+    a = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(ValueError):
+        a.repartition(npartitions=5)
 
 
 def test_embarrassingly_parallel_operations():

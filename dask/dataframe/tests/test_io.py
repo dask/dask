@@ -452,6 +452,14 @@ def test_from_pandas_small():
         assert a.divisions[-1] == 2
 
 
+@pytest.mark.xfail(reason="")
+def test_from_pandas_npartitions_is_accurate():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    for n in [1, 2, 4, 5]:
+        assert dd.from_pandas(df, npartitions=n).npartitions == n
+
+
 def test_from_pandas_series():
     n = 20
     s = pd.Series(np.random.randn(n),
