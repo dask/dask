@@ -408,7 +408,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     return _Frame(dsk, name, data, divisions)
 
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
+def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
+               **kwargs):
     """ Read dask Dataframe from bcolz.ctable
 
     Parameters
@@ -423,12 +424,17 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
         Automatically categorize all string dtypes
     index : string, optional
         Column to make the index
+    lock: bool or Lock
+        Lock to use when reading or False for no lock (not-thread-safe)
 
     See Also
     --------
 
     from_array: more generic function not optimized for bcolz
     """
+    if lock is True:
+        lock = Lock()
+
     import dask.array as da
     import bcolz
 
@@ -459,10 +465,10 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     new_name = 'from_bcolz-' + token
 
     dsk = dict(((new_name, i),
-                (locked_df_from_ctable,
+                (dataframe_from_ctable,
                  x,
                  (slice(i * chunksize, (i + 1) * chunksize),),
-                 columns, categories))
+                 columns, categories, lock))
                for i in range(0, int(ceil(len(x) / chunksize))))
 
     result = DataFrame(dsk, new_name, columns, divisions)
@@ -477,7 +483,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
         return result
 
 
-def dataframe_from_ctable(x, slc, columns=None, categories=None):
+def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     """ Get DataFrame from bcolz.ctable
 
     Parameters
@@ -520,29 +526,30 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
         stop = slc[0].stop if slc[0].stop < len(x) else len(x)
     idx = pd.Index(range(start, stop))
 
-    if isinstance(x, bcolz.ctable):
-        chunks = [x[name][slc] for name in columns]
-        if categories is not None:
-            chunks = [pd.Categorical.from_codes(np.searchsorted(categories[name],
-                                                                chunk),
-                                                categories[name], True)
-                       if name in categories else chunk
-                       for name, chunk in zip(columns, chunks)]
-        return pd.DataFrame(dict(zip(columns, chunks)), columns=columns,
-                            index=idx)
+    if lock:
+        lock.acquire()
+    try:
+        if isinstance(x, bcolz.ctable):
+            chunks = [x[name][slc] for name in columns]
+            if categories is not None:
+                chunks = [pd.Categorical.from_codes(
+                                    np.searchsorted(categories[name], chunk),
+                                    categories[name], True)
+                           if name in categories else chunk
+                           for name, chunk in zip(columns, chunks)]
+            result = pd.DataFrame(dict(zip(columns, chunks)), columns=columns,
+                                index=idx)
 
-    elif isinstance(x, bcolz.carray):
-        chunk = x[slc]
-        if categories is not None and columns and columns in categories:
-            chunk = pd.Categorical.from_codes(
-                        np.searchsorted(categories[columns], chunk),
-                        categories[columns], True)
-        return pd.Series(chunk, name=columns, index=idx)
-
-
-def locked_df_from_ctable(*args, **kwargs):
-    with lock:
-        result = dataframe_from_ctable(*args, **kwargs)
+        elif isinstance(x, bcolz.carray):
+            chunk = x[slc]
+            if categories is not None and columns and columns in categories:
+                chunk = pd.Categorical.from_codes(
+                            np.searchsorted(categories[columns], chunk),
+                            categories[columns], True)
+            result = pd.Series(chunk, name=columns, index=idx)
+    finally:
+        if lock:
+            lock.release()
     return result
 
 

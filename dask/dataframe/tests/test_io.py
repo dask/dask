@@ -7,6 +7,7 @@ import os
 import dask
 from operator import getitem
 import pytest
+from threading import Lock
 from toolz import valmap
 import tempfile
 import shutil
@@ -321,6 +322,23 @@ def test_from_bcolz():
 
     assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
            sorted(dsk)
+
+
+def test_from_bcolz_no_lock():
+    bcolz = pytest.importorskip('bcolz')
+    locktype = type(Lock())
+
+    t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                     names=['x', 'y', 'a'], chunklen=2)
+    a = dd.from_bcolz(t, chunksize=2)
+    b = dd.from_bcolz(t, chunksize=2, lock=True)
+    c = dd.from_bcolz(t, chunksize=2, lock=False)
+    eq(a, b)
+    eq(a, c)
+
+    assert not any(isinstance(item, locktype)
+                   for v in c.dask.values()
+                   for item in v)
 
 
 def test_from_bcolz_filename():
