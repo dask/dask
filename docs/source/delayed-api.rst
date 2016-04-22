@@ -5,7 +5,5 @@ API
 
 .. autosummary::
    delayed
-   value
 
 .. autofunction:: delayed
-.. autofunction:: value

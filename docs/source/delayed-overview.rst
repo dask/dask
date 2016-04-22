@@ -1,22 +1,22 @@
 Overview
 ========
 
-The ``dask.delayed`` interface consists of two functions:
+The ``dask.delayed`` interface consists of one function, ``delayed``
 
-1. ``delayed``
+1. ``delayed`` wraps functions
 
    Wraps functions. Can be used as a decorator, or around function calls
    directly (i.e. ``delayed(foo)(a, b, c)``). Outputs from functions wrapped in
-   ``delayed`` are proxy objects of type ``Value`` that contain a graph of all
-   operations done to get to this result.
+   ``delayed`` are proxy objects of type ``DelayedValue`` that contain a graph
+   of all operations done to get to this result.
 
-2. ``value``
+2. ``delayed`` wraps objects
 
-   Wraps objects. Used to create ``Value`` proxies directly.
+   Wraps objects. Used to create ``DelayedValue`` proxies directly.
 
-``Value`` objects can be thought of as representing a key in the dask. A
-``Value`` supports *most* python operations, each of which creates another
-``Value`` representing the result:
+``DelayedValue`` objects can be thought of as representing a key in the dask. A
+``DelayedValue`` supports *most* python operations, each of which creates another
+``DelayedValue`` representing the result:
 
 - Most operators (``*``, ``-``, and so on)
 - Item access and slicing (``a[0]``)
@@ -30,6 +30,7 @@ Operations that aren't supported include:
 - Iteration. (``for i in a: ...``)
 - Use as a predicate (``if a: ...``)
 
-The last two in particular mean that ``Value`` objects cannot be used for
-control flow, meaning that no ``Value`` can appear in a loop or if statement.
-Even with this limitation, many workflows can easily be parallelized.
+The last two in particular mean that ``DelayedValue`` objects cannot be used
+for control flow, meaning that no ``DelayedValue`` can appear in a loop or if
+statement.  Even with this limitation, many workflows can easily be
+parallelized.
