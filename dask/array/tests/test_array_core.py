@@ -1860,11 +1860,11 @@ def test_timedelta_op():
     assert a.compute() == x / y
 
 
-def test_to_imperative():
+def test_to_delayed():
     x = da.random.random((4, 4), chunks=(2, 2))
     y = x + 10
 
-    [[a, b], [c, d]] = y.to_imperative()
+    [[a, b], [c, d]] = y.to_delayed()
     assert_eq(a.compute(), y[:2, :2])
 
 

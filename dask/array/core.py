@@ -1374,6 +1374,10 @@ class Array(Base):
         return out
 
     def to_imperative(self):
+        print("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert Array into dask Values
 
         Returns an array of values, one value per chunk.

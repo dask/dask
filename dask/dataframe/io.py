@@ -860,7 +860,12 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
-def from_imperative(dfs, metadata=None, divisions=None, columns=None):
+def from_imperative(*args, **kwargs):
+    print("Deprecation warning: moved to from_delayed")
+    return from_delayed(*args, **kwargs)
+
+
+def from_delayed(dfs, metadata=None, divisions=None, columns=None):
     """ Create DataFrame from many imperative objects
 
     Parameters

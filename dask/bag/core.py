@@ -217,7 +217,8 @@ class Item(Base):
 
     @staticmethod
     def from_imperative(value):
-        print(
+        print("Deprecation warning: moved to from_delayed")
+        return self.from_delayed(value)
 
     @staticmethod
     def from_delayed(value):
@@ -234,7 +235,7 @@ class Item(Base):
 
         Examples
         --------
-        >>> b = db.Item.from_imperative(x)  # doctest: +SKIP
+        >>> b = db.Item.from_delayed(x)  # doctest: +SKIP
         """
         from dask.imperative import Value
         assert isinstance(value, Value)
@@ -256,6 +257,10 @@ class Item(Base):
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
     def to_imperative(self):
+        print("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert bag item to dask Value
 
         Returns a single value.
@@ -950,6 +955,10 @@ class Bag(Base):
                             name, columns, divisions)
 
     def to_imperative(self):
+        print("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert bag to dask Values
 
         Returns list of values, one value per partition.
@@ -1413,6 +1422,11 @@ def reify(seq):
 
 
 def from_imperative(values):
+    print("Deprecation warning: moved to from_delayed")
+    return from_delayed(values)
+
+
+def from_delayed(values):
     """ Create bag from many imperative objects
 
     Parameters
@@ -1427,7 +1441,7 @@ def from_imperative(values):
 
     Examples
     --------
-    >>> b = from_imperative([x, y, z])  # doctest: +SKIP
+    >>> b = from_delayed([x, y, z])  # doctest: +SKIP
     """
     from dask.imperative import Value
     if isinstance(values, Value):

@@ -211,7 +211,7 @@ Create and Store Arrays
 
 .. autosummary::
    from_array
-   from_imperative
+   from_delayed
    from_npy_stack
    store
    to_hdf5
@@ -222,7 +222,7 @@ Other functions
 ~~~~~~~~~~~~~~~
 
 .. autofunction:: from_array
-.. autofunction:: from_imperative
+.. autofunction:: from_delayed
 .. autofunction:: store
 .. autofunction:: topk
 .. autofunction:: coarsen
@@ -380,7 +380,7 @@ Other functions
 .. currentmodule:: dask.array
 
 .. autofunction:: from_array
-.. autofunction:: from_imperative
+.. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
 .. autofunction:: store
 .. autofunction:: to_hdf5

@@ -4,14 +4,14 @@ Working with Collections
 Often we want to do a bit of custom work with ``dask.imperative`` (for example
 for complex data ingest), then leverage the algorithms in ``dask.array`` or
 ``dask.dataframe``, and then switch back to custom work.  To this end, all
-collections support ``from_imperative`` functions and ``to_imperative``
+collections support ``from_delayed`` functions and ``to_delayed``
 methods.
 
 As an example, consider the case where we store tabular data in a custom format
 not known by ``dask.dataframe``.  This format is naturally broken apart into
 pieces and we have a function that reads one piece into a Pandas DataFrame.
 We use ``dask.imperative`` to lazily read these files into Pandas DataFrames,
-use ``dd.from_imperative`` to wrap these pieces up into a single
+use ``dd.from_delayed`` to wrap these pieces up into a single
 ``dask.dataframe``, use the complex algorithms within ``dask.dataframe``
 (groupby, join, etc..) and then switch back to imperative to save our results
 back to the custom format.
@@ -26,10 +26,10 @@ back to the custom format.
    filenames = ...
    dfs = [delayed(load)(fn) for fn in filenames]
 
-   df = dd.from_imperative(dfs)
+   df = dd.from_delayed(dfs)
    df = ... # do work with dask.dataframe
 
-   dfs = df.to_imperative()
+   dfs = df.to_delayed()
    writes = [delayed(save)(df, fn) for df, fn in zip(dfs, filenames)]
 
    dd.compute(writes)

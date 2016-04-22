@@ -67,11 +67,11 @@ attached directly to bags with ``.str.methodname``:
    >>> b = db.from_filenames('myfile.*.csv.gz').str.strip().str.split(',')
 
 
-``db.from_imperative``
+``db.from_delayed``
 ----------------------
 
 You can construct a dask bag from :doc:`dask.delayed <imperative>` values
-using the ``db.from_imperative`` function.  See
+using the ``db.from_delayed`` function.  See
 :doc:`documentation on using dask.delayed with collections <imperative-collections>`
 for more information.
 
@@ -114,4 +114,4 @@ To Delayed Values
 You can convert a dask bag into a list of :doc:`dask delayed values<imperative>`
 and custom storage solutions from there.
 
-.. autofunction:: dask.bag.core.Bag.to_imperative
+.. autofunction:: dask.bag.core.Bag.to_delayed

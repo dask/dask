@@ -35,7 +35,7 @@ Top level user functions:
     Bag.sum
     Bag.take
     Bag.to_dataframe
-    Bag.to_imperative
+    Bag.to_delayed
     Bag.to_textfiles
     Bag.topk
     Bag.var
