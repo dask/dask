@@ -161,6 +161,8 @@ def _maybe_sort(a):
 
 
 def eq(a, b, check_names=True, **kwargs):
+    test_divisions(a)
+    test_divisions(b)
     a = _check_dask(a, check_names=check_names)
     b = _check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
@@ -196,3 +198,22 @@ def assert_dask_graph(dask, label):
     else:
         msg = "given dask graph doesn't contan label: {0}"
         raise AssertionError(msg.format(label))
+
+
+def test_divisions(ddf):
+    if not hasattr(ddf, 'divisions'):
+        return
+    if not hasattr(ddf, 'index'):
+        return
+    if not ddf.known_divisions:
+        return
+
+    results = get_sync(ddf.dask, ddf._keys())
+    for i, df in enumerate(results[:-1]):
+        if len(df):
+            assert df.index.min() >= ddf.divisions[i]
+            assert df.index.max() < ddf.divisions[i + 1]
+
+    if len(results[-1]):
+        assert results[-1].index.min() >= ddf.divisions[-2]
+        assert results[-1].index.max() <= ddf.divisions[-1]
