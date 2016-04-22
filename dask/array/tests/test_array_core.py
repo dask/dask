@@ -505,12 +505,15 @@ def test_field_access():
 
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, chunks=(5, 5))
+    a = from_array(x, chunks=(5, 4))
     y = np.arange(200).reshape((20, 10))
-    b = from_array(y, chunks=(5, 5))
+    b = from_array(y, chunks=(4, 5))
 
-    assert_eq(tensordot(a, b, axes=1), np.tensordot(x, y, axes=1))
-    assert_eq(tensordot(a, b, axes=(1, 0)), np.tensordot(x, y, axes=(1, 0)))
+    for axes in [1, (1, 0)]:
+        assert_eq(tensordot(a, b, axes=axes), np.tensordot(x, y, axes=axes))
+        assert_eq(tensordot(x, b, axes=axes), np.tensordot(x, y, axes=axes))
+        assert_eq(tensordot(a, y, axes=axes), np.tensordot(x, y, axes=axes))
+
     assert same_keys(tensordot(a, b, axes=(1, 0)), tensordot(a, b, axes=(1, 0)))
     assert not same_keys(tensordot(a, b, axes=0), tensordot(a, b, axes=1))
 
@@ -2003,3 +2006,8 @@ def test_from_delayed():
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
     assert isinstance(x, Array)
     assert_eq(x, np.ones((5, 3)))
+
+
+def test_A_property():
+    x = da.ones(5, chunks=(2,))
+    assert x.A is x

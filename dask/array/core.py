@@ -1034,6 +1034,10 @@ class Array(Base):
         return tensordot(self, other, axes=((self.ndim-1,), (other.ndim-2,)))
 
     @property
+    def A(self):
+        return self
+
+    @property
     def T(self):
         return transpose(self)
 
@@ -1962,6 +1966,16 @@ def tensordot(lhs, rhs, axes=2):
     if len(left_axes) > 1:
         raise NotImplementedError("Simultaneous Contractions of multiple "
                 "indices not yet supported")
+
+    if isinstance(lhs, np.ndarray):
+        chunks = [(d,) for d in lhs.shape]
+        chunks[left_axes[0]] = rhs.chunks[right_axes[0]]
+        lhs = from_array(lhs, chunks=chunks)
+
+    if isinstance(rhs, np.ndarray):
+        chunks = [(d,) for d in rhs.shape]
+        chunks[right_axes[0]] = lhs.chunks[left_axes[0]]
+        rhs = from_array(rhs, chunks=chunks)
 
     if lhs._dtype is not None and rhs._dtype is not None :
         dt = np.promote_types(lhs._dtype, rhs._dtype)
