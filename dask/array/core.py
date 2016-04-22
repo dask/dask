@@ -1377,6 +1377,12 @@ class Array(Base):
         out._chunks = chunks
         return out
 
+    def copy(self):
+        """
+        Copy array.  This is a no-op for dask.arrays, which are immutable
+        """
+        return self
+
     def to_imperative(self):
         """ Convert Array into dask Values
 
