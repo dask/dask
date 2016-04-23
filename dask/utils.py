@@ -651,3 +651,21 @@ def read_block(f, offset, length, delimiter=None):
     f.seek(offset)
     bytes = f.read(length)
     return bytes
+
+
+def ensure_bytes(s):
+    """ Turn string or bytes to bytes
+
+    >>> ensure_bytes(u'123')
+    '123'
+    >>> ensure_bytes('123')
+    '123'
+    >>> ensure_bytes(b'123')
+    '123'
+    """
+    if isinstance(s, bytes):
+        return s
+    if hasattr(s, 'encode'):
+        return s.encode()
+    raise TypeError(
+            "Object %s is neither a bytes object nor has an encode method" % s)
