@@ -62,9 +62,9 @@ Using ``dask.delayed``
 ----------------------
 
 You can create a plan to arrange many numpy arrays into a grid with normal for
-loops using :doc:`dask.delayed<imperative-overview>` and then convert these
+loops using :doc:`dask.delayed<delayed-overview>` and then convert these
 into a dask array later.  See :doc:`documentation on using dask.delayed with
-collections<imperative-collections>`.
+collections<delayed-collections>`.
 
 Raw dask graphs
 ---------------

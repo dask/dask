@@ -5,7 +5,8 @@ from .core import (Array, stack, concatenate, take, tensordot, transpose,
         from_array, from_imperative, choose, where, coarsen, insert,
         broadcast_to, ravel, reshape, fromfunction, unique, store, squeeze,
         topk, bincount, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
-        dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress)
+        dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
+        from_delayed)
 from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,
         hypot, sinh, cosh, tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg,

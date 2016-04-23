@@ -52,11 +52,11 @@ Familiar user interface
    b = db.from_filenames('2015-*-*.json.gz').map(json.loads)
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
-**Dask Imperative** mimics for loops and wraps custom code
+**Dask Delayed** mimics for loops and wraps custom code
 
 .. code-block:: python
 
-   from dask.imperative import delayed
+   from dask import delayed
    L = []
    for fn in filenames:                  # Use for loops to build up computation
        data = delayed(load)(fn)          # Delay execution of function
@@ -122,7 +122,7 @@ then you should start here.
 * :doc:`array`
 * :doc:`bag`
 * :doc:`dataframe`
-* :doc:`imperative`
+* :doc:`delayed`
 
 .. toctree::
    :maxdepth: 1
@@ -132,7 +132,7 @@ then you should start here.
    array.rst
    bag.rst
    dataframe.rst
-   imperative.rst
+   delayed.rst
 
 **Graphs**
 

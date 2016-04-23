@@ -1,24 +1,25 @@
 from __future__ import absolute_import, division, print_function
 
-import operator
-from operator import add, getitem
-import inspect
-from numbers import Number
-from collections import Iterable, MutableMapping
 from bisect import bisect
-from itertools import product
+from collections import Iterable, MutableMapping
 from collections import Iterator
 from functools import partial, wraps
+import inspect
+from itertools import product
+from numbers import Number
+import operator
+from operator import add, getitem
+import os
+import pickle
+from threading import Lock
+import uuid
+from warnings import warn
 
 from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
                            curry, reduce, interleave, sliding_window, partial)
 import numpy as np
-import os
-import pickle
-import uuid
 
-from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
@@ -719,7 +720,7 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
     if compute:
         Array._get(dsk, keys, **kwargs)
     else:
-        from ..imperative import Value
+        from ..delayed import Value
         name = tokenize(*keys)
         dsk[name] = keys
         return Value(name, [dsk])
@@ -1378,11 +1379,15 @@ class Array(Base):
         return out
 
     def to_imperative(self):
+        warn("Deprecation warning: moved to to_delayed")
+        return self.to_delayed()
+
+    def to_delayed(self):
         """ Convert Array into dask Values
 
         Returns an array of values, one value per chunk.
         """
-        from ..imperative import Value
+        from ..delayed import Value
         return np.array(deepmap(lambda k: Value(k, [self.dask]), self._keys()),
                         dtype=object)
 
@@ -1472,12 +1477,16 @@ def from_array(x, chunks, name=None, lock=False):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def from_imperative(value, shape, dtype=None, name=None):
-    """ Create a dask array from a dask imperative value
+def from_imperative(*args, **kwargs):
+    warn("Deprecation warning: moved to from_delayed")
+    return from_delayed(*args, **kwargs)
+
+
+def from_delayed(value, shape, dtype=None, name=None):
+    """ Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
-    using dask imperative, particularly when combined with stack and
-    concatenate.
+    using dask delayed, particularly when combined with stack and concatenate.
 
     The dask array will consist of a single chunk.
 
@@ -1486,7 +1495,7 @@ def from_imperative(value, shape, dtype=None, name=None):
 
     >>> from dask import do
     >>> value = do(np.ones)(5)
-    >>> array = from_imperative(value, (5,), dtype=float)
+    >>> array = from_delayed(value, (5,), dtype=float)
     >>> array
     dask.array<from-va..., shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
