@@ -5,6 +5,7 @@ import logging
 from s3fs import S3FileSystem
 
 from ..delayed import delayed
+from ..base import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +49,18 @@ def read_bytes(fn, s3=None, delimiter=None,
             filenames.extend([afile]*len(offset))
             lengths.extend([blocksize]*len(offset))
 
+    token = tokenize(delimiter, blocksize, not_zero)
+    names = ['read-s3-block-%s-%d-%s-%s' % (fn, offset, length, token)
+             for fn, offset, length in zip(filenames, offsets, lengths)]
+
     logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
     s3safe_pars = s3_params.copy()
     s3safe_pars.update(s3.get_delegated_s3pars())
 
-    read = delayed(read_block_from_s3)
-
-    return [read(fn, offset, length, s3safe_pars, delimiter)
-             for fn, offset, length in zip(filenames, offsets, lengths)]
+    return [delayed(read_block_from_s3, name=name)(
+                    fn, offset, length, s3safe_pars, delimiter)
+            for fn, offset, length, name
+            in zip(filenames, offsets, lengths, names)]
 
 
 def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None):
