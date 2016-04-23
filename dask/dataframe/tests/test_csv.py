@@ -9,8 +9,9 @@ dd = pytest.importorskip('dask.dataframe')
 from toolz import partition_all
 
 from dask.compatibility import gzip_compress
-from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv
+from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
 from dask.dataframe.utils import eq
+from dask.utils import filetexts
 
 
 files = {'2014-01-01.csv': (b'name,amount,id\n'
@@ -106,3 +107,9 @@ def test_blocked():
                              {'usecols': ['name', 'id']})
     eq(df.compute().reset_index(drop=True),
        expected2.reset_index(drop=True), check_dtype=False)
+
+
+def test_read_csv_files():
+    with filetexts(files, mode='b'):
+        df = read_csv('2014-01-*.csv')
+        eq(df, expected, check_dtype=False)

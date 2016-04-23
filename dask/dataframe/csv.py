@@ -2,10 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 
+import pandas as pd
+
 from ..delayed import delayed
 from .io import from_delayed
 
 from ..bytes.compression import compressors, decompressors
+from ..bytes import storage_systems
 
 from ..utils import ensure_bytes
 
@@ -25,7 +28,6 @@ def bytes_read_csv(b, header, kwargs):
     See Also:
         dask.dataframe.csv.read_csv_from_bytes
     """
-    import pandas as pd
     compression = kwargs.pop('compression', None)
     b2 = decompressors[compression](b)
     bio = BytesIO()
@@ -72,3 +74,33 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True):
         return from_delayed(dfs2, head)
     else:
         return dfs2
+
+
+def read_csv(filename, blocksize=2**25, chunkbytes=None,
+        collection=True, lineterminator='\n',
+        **kwargs):
+    kwargs.update({'lineterminator': lineterminator})
+    if chunkbytes is not None:
+        warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
+
+    if '://' in filename:
+        protocol, filename = filename.split('://', 1)
+        try:
+            read_bytes = storage_systems[protocol]
+        except KeyError:
+            raise NotImplementedError("Unknown protocol %s://%s" %
+                        (protocol, filename))
+    else:
+        read_bytes = storage_systems[None]
+
+    b_lineterminator = lineterminator.encode()
+    sample, values = read_bytes(filename, delimiter=b_lineterminator,
+                                          blocksize=blocksize,
+                                          sample=10000)
+    header = sample.split(b_lineterminator)[0] + b_lineterminator
+    head = pd.read_csv(BytesIO(sample), **kwargs)
+
+    df = read_csv_from_bytes(values, header, head, kwargs,
+            collection=collection)
+
+    return df
