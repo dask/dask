@@ -20,9 +20,11 @@ if PY3:
     from gzip import (GzipFile, compress as gzip_compress,
             decompress as gzip_decompress)
     try:
-        from lzmaffi import LZMAFile
+        from lzmaffi import (LZMAFile, compress as lzma_compress,
+                             decompress as lzma_decompress)
     except ImportError:
-        from lzma import LZMAFile
+        from lzma import (LZMAFile, compress as lzma_compress,
+                          decompress as lzma_decompress)
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
@@ -193,9 +195,12 @@ else:
 
     try:
         try:
-            from lzmaffi import LZMAFile
+            from lzmaffi import (LZMAFile, compress as lzma_compress,
+                                 decompress as lzma_decompress)
         except ImportError:
             from backports.lzma import LZMAFile
+            from backports.lzma import (LZMAFile, compress as lzma_compress,
+                                        decompress as lzma_decompress)
     except ImportError:
         class LZMAFile:
             def __init__(self, *args, **kwargs):
