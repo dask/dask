@@ -70,3 +70,7 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27, sample=True)
 def read_block_from_file(fn, offset, length, delimiter):
     with open(fn, 'rb') as f:
         return read_block(f, offset, length, delimiter)
+
+
+from . import storage_systems
+storage_systems[None] = read_bytes

@@ -78,3 +78,7 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
 def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None):
     s3 = S3FileSystem(**s3_params)
     return s3.read_block(filename, offset, length, delimiter)
+
+
+from . import storage_systems
+storage_systems['s3'] = read_bytes
