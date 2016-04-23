@@ -17,7 +17,8 @@ if PY3:
     from itertools import zip_longest
     from io import StringIO, BytesIO
     from bz2 import BZ2File
-    from gzip import GzipFile
+    from gzip import (GzipFile, compress as gzip_compress,
+            decompress as gzip_decompress)
     try:
         from lzmaffi import LZMAFile
     except ImportError:
@@ -59,6 +60,21 @@ else:
 
     def _getargspec(func):
         return inspect.getargspec(func)
+
+    def gzip_decompress(b):
+        f = gzip.GzipFile(fileobj=BytesIO(b))
+        result = f.read()
+        f.close()
+        return result
+
+    def gzip_compress(b):
+        bio = BytesIO()
+        f = gzip.GzipFile(fileobj=bio, mode='w')
+        f.write(b)
+        f.close()
+        bio.seek(0)
+        result = bio.read()
+        return result
 
     if sys.version_info[1] <= 7:
         class BZ2File(BufferedIOBase):
