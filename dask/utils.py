@@ -119,14 +119,14 @@ class IndexCallable(object):
 
 
 @contextmanager
-def filetexts(d, open=open):
+def filetexts(d, open=open, mode='t'):
     """ Dumps a number of textfiles to disk
 
     d - dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
     """
     for filename, text in d.items():
-        f = open(filename, 'wt')
+        f = open(filename, 'w' + mode)
         try:
             f.write(text)
         finally:
@@ -606,8 +606,7 @@ def read_block(f, offset, length, delimiter=None):
 
     Parameters
     ----------
-    fn: string
-        Path to filename on S3
+    f: File
     offset: int
         Byte offset to start read
     length: int
