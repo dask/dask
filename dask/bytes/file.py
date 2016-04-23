@@ -28,42 +28,40 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27, sample=True)
 
     Returns
     -------
-    List of ``dask.Delayed`` objects
+    10kB sample header and list of ``dask.Delayed`` objects or list of lists of
+    delayed objects if ``fn`` is a globstring.
     """
-    filenames, lengths, offsets = [], [], []
-    if blocksize is None:
+    if '*' in fn:
         filenames = sorted(glob(fn))
-        lengths = [None] * len(filenames)
-        offsets = [0] * len(filenames)
+        sample, first = read_bytes(filenames[0], delimiter, not_zero,
+                                    blocksize, sample=True)
+        rest = [read_bytes(f, delimiter, not_zero, blocksize, sample=False)[1]
+                 for f in filenames[1:]]
+        return sample, [first] + rest
     else:
-        for afile in sorted(glob(fn)):
-            size = os.path.getsize(afile)
-            offset = list(range(0, size, blocksize))
-            if not_zero:
-                offset[0] = 1
-            offsets.extend(offset)
-            filenames.extend([afile]*len(offset))
-            lengths.extend([blocksize]*len(offset))
-
-    token = tokenize(delimiter, blocksize, not_zero)
-    names = ['read-file-block-%s-%d-%s-%s' % (fn, offset, length, token)
-             for fn, offset, length in zip(filenames, offsets, lengths)]
-
-    logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
-
-    values = [delayed(read_block_from_file, name=name)(
-                    fn, offset, length, delimiter)
-              for fn, offset, length, name
-              in zip(filenames, offsets, lengths, names)]
-
-    if sample:
-        if isinstance(sample, int) and not isinstance(sample, bool):
-            nbytes = sample
+        if blocksize is None:
+            offsets = [0]
         else:
-            nbytes = 10000
-        sample = read_block_from_file(filenames[0], 0, nbytes, delimiter)
+            size = os.path.getsize(fn)
+            offsets = list(range(0, size, blocksize))
+            if not_zero:
+                offsets[0] = 1
 
-    return sample, values
+        token = tokenize(delimiter, blocksize, not_zero)
+
+        logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
+
+        values = [delayed(read_block_from_file, name='read-file-block-%s-%d-%s-%s' % (fn, offset, blocksize, token))(fn, offset, blocksize, delimiter)
+                  for offset in offsets]
+
+        if sample:
+            if isinstance(sample, int) and not isinstance(sample, bool):
+                nbytes = sample
+            else:
+                nbytes = 10000
+            sample = read_block_from_file(fn, 0, nbytes, delimiter)
+
+        return sample, values
 
 
 # TODO add modification time to input

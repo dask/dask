@@ -31,48 +31,47 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
 
     Returns
     -------
-    List of ``dask.Delayed`` objects
+    10kB sample header and list of ``dask.Delayed`` objects or list of lists of
+    delayed objects if ``fn`` is a globstring.
     """
     if s3 is None:
         s3 = S3FileSystem(**s3_params)
 
-    filenames, lengths, offsets = [], [], []
-    if blocksize is None:
+    if '*' in fn:
         filenames = sorted(s3.glob(fn))
-        lengths = [None] * len(filenames)
-        offsets = [0] * len(filenames)
+        sample, first = read_bytes(filenames[0], s3, delimiter, not_zero,
+                                   blocksize, sample=True, **s3_params)
+        rest = [read_bytes(f, s3, delimiter, not_zero, blocksize,
+                       sample=False, **s3_params)[1] for f in filenames[1:]]
+        return sample, [first] + rest
     else:
-        for afile in sorted(s3.glob(fn)):
-            size = s3.info(afile)['Size']
-            offset = list(range(0, size, blocksize))
-            if not_zero:
-                offset[0] = 1
-            offsets.extend(offset)
-            filenames.extend([afile]*len(offset))
-            lengths.extend([blocksize]*len(offset))
-
-    token = tokenize(delimiter, blocksize, not_zero)
-    names = ['read-s3-block-%s-%d-%s-%s' % (fn, offset, length, token)
-             for fn, offset, length in zip(filenames, offsets, lengths)]
-
-    logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
-    s3safe_pars = s3_params.copy()
-    s3safe_pars.update(s3.get_delegated_s3pars())
-
-    values = [delayed(read_block_from_s3, name=name)(
-                      fn, offset, length, s3safe_pars, delimiter)
-              for fn, offset, length, name
-              in zip(filenames, offsets, lengths, names)]
-
-    if sample:
-        if isinstance(sample, int) and not isinstance(sample, bool):
-            nbytes = sample
+        if blocksize is None:
+            offsets = [0]
         else:
-            nbytes = 10000
-        sample = read_block_from_s3(filenames[0], 0, nbytes, s3safe_pars,
-                                    delimiter)
+            size = s3.info(fn)['Size']
+            offsets = list(range(0, size, blocksize))
+            if not_zero:
+                offsets[0] = 1
 
-    return sample, values
+        token = tokenize(delimiter, blocksize, not_zero)
+
+        logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
+
+        s3safe_pars = s3_params.copy()
+        s3safe_pars.update(s3.get_delegated_s3pars())
+
+        values = [delayed(read_block_from_s3, name='read-s3-block-%s-%d-%s-%s'
+            % (fn, offset, blocksize, token))(fn, offset, blocksize, s3safe_pars,
+                delimiter) for offset in offsets]
+
+        if sample:
+            if isinstance(sample, int) and not isinstance(sample, bool):
+                nbytes = sample
+            else:
+                nbytes = 10000
+            sample = read_block_from_s3(fn, 0, nbytes, s3safe_pars, delimiter)
+
+        return sample, values
 
 
 def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None):
