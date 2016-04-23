@@ -11,7 +11,7 @@ from ..base import tokenize
 logger = logging.getLogger(__name__)
 
 
-def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27):
+def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27, sample=True):
     """ Convert location on filesystem to a list of delayed values
 
     Parameters
@@ -23,6 +23,8 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27):
     not_zero: force seek of start-of-file delimiter, discarding header
     blocksize: int (=128MB)
         Chunk size
+    sample: bool, int
+        Whether or not to return a sample from the first 10k bytes
 
     Returns
     -------
@@ -49,10 +51,19 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27):
 
     logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
 
-    return [delayed(read_block_from_file, name=name)(
+    values = [delayed(read_block_from_file, name=name)(
                     fn, offset, length, delimiter)
-            for fn, offset, length, name
-            in zip(filenames, offsets, lengths, names)]
+              for fn, offset, length, name
+              in zip(filenames, offsets, lengths, names)]
+
+    if sample:
+        if isinstance(sample, int) and not isinstance(sample, bool):
+            nbytes = sample
+        else:
+            nbytes = 10000
+        sample = read_block_from_file(filenames[0], 0, nbytes, delimiter)
+
+    return sample, values
 
 
 # TODO add modification time to input

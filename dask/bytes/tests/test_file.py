@@ -28,7 +28,10 @@ csv_files = {'.test.2014-01-01.csv': (b'name,amount,id\n'
 
 def test_read_bytes():
     with filetexts(files, mode='b'):
-        values = read_bytes('.test.accounts.*')
+        sample, values = read_bytes('.test.accounts.*')
+        assert isinstance(sample, bytes)
+        assert sample[:5] == files[sorted(files)[0]][:5]
+
         assert len(values) >= len(files)
         results = compute(*values)
         assert set(results) == set(files.values())
@@ -36,15 +39,14 @@ def test_read_bytes():
 
 def test_read_bytes_blocksize_none():
     with filetexts(files, mode='b'):
-        values = read_bytes('.test.accounts.*',
-                            blocksize=None)
+        sample, values = read_bytes('.test.accounts.*', blocksize=None)
         assert len(values) == len(files)
 
 
 def test_read_bytes_block():
     with filetexts(files, mode='b'):
         for bs in [5, 15, 45, 1500]:
-            vals = read_bytes('.test.account*', blocksize=bs)
+            sample, vals = read_bytes('.test.account*', blocksize=bs)
             assert len(vals) == sum([(len(v) // bs + 1) for v in files.values()])
 
             results = compute(*vals)
@@ -59,10 +61,10 @@ def test_read_bytes_block():
 def test_read_bytes_delimited():
     with filetexts(files, mode='b'):
         for bs in [5, 15, 45, 1500]:
-            values = read_bytes('.test.accounts*',
-                                 blocksize=bs, delimiter=b'\n')
-            values2 = read_bytes('.test.accounts*',
-                                 blocksize=bs, delimiter=b'foo')
+            _, values = read_bytes('.test.accounts*',
+                                    blocksize=bs, delimiter=b'\n')
+            _, values2 = read_bytes('.test.accounts*',
+                                    blocksize=bs, delimiter=b'foo')
             assert [a.key for a in values] != [b.key for b in values2]
 
             results = compute(*values)
@@ -74,7 +76,7 @@ def test_read_bytes_delimited():
 
             # delimiter not at the end
             d = b'}'
-            values = read_bytes('.test.accounts*', blocksize=bs, delimiter=d)
+            _, values = read_bytes('.test.accounts*', blocksize=bs, delimiter=d)
             results = compute(*values)
             res = [r for r in results if r]
             # All should end in } except EOF

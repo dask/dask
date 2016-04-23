@@ -10,8 +10,8 @@ from ..base import tokenize
 logger = logging.getLogger(__name__)
 
 
-def read_bytes(fn, s3=None, delimiter=None,
-               not_zero=False, blocksize=2**27, **s3_params):
+def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
+               sample=True, **s3_params):
     """ Convert location in S3 to a list of delayed values
 
     Parameters
@@ -24,6 +24,8 @@ def read_bytes(fn, s3=None, delimiter=None,
     not_zero: force seek of start-of-file delimiter, discarding header
     blocksize: int (=128MB)
         Chunk size
+    sample: bool, int
+        Whether or not to return a sample from the first 10k bytes
     **s3_params: keyword arguments
         Extra keywords to send to boto3 session (anon, key, secret...)
 
@@ -57,10 +59,20 @@ def read_bytes(fn, s3=None, delimiter=None,
     s3safe_pars = s3_params.copy()
     s3safe_pars.update(s3.get_delegated_s3pars())
 
-    return [delayed(read_block_from_s3, name=name)(
-                    fn, offset, length, s3safe_pars, delimiter)
-            for fn, offset, length, name
-            in zip(filenames, offsets, lengths, names)]
+    values = [delayed(read_block_from_s3, name=name)(
+                      fn, offset, length, s3safe_pars, delimiter)
+              for fn, offset, length, name
+              in zip(filenames, offsets, lengths, names)]
+
+    if sample:
+        if isinstance(sample, int) and not isinstance(sample, bool):
+            nbytes = sample
+        else:
+            nbytes = 10000
+        sample = read_block_from_s3(filenames[0], 0, nbytes, s3safe_pars,
+                                    delimiter)
+
+    return sample, values
 
 
 def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None):
