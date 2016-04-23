@@ -6,6 +6,7 @@ import os
 
 from ..delayed import delayed
 from ..utils import read_block
+from ..base import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +43,16 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27):
             filenames.extend([afile]*len(offset))
             lengths.extend([blocksize]*len(offset))
 
+    token = tokenize(delimiter, blocksize, not_zero)
+    names = ['read-file-block-%s-%d-%s-%s' % (fn, offset, length, token)
+             for fn, offset, length in zip(filenames, offsets, lengths)]
+
     logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
 
-    read = delayed(read_block_from_file)
-
-    return [read(fn, offset, length, delimiter)
-             for fn, offset, length in zip(filenames, offsets, lengths)]
+    return [delayed(read_block_from_file, name=name)(
+                    fn, offset, length, delimiter)
+            for fn, offset, length, name
+            in zip(filenames, offsets, lengths, names)]
 
 
 # TODO add modification time to input
