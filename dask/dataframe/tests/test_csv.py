@@ -6,7 +6,7 @@ import pytest
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 
-from toolz import partition_all
+from toolz import partition_all, valmap
 
 from dask.compatibility import gzip_compress
 from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
@@ -112,4 +112,18 @@ def test_blocked():
 def test_read_csv_files():
     with filetexts(files, mode='b'):
         df = read_csv('2014-01-*.csv')
+        eq(df, expected, check_dtype=False)
+
+
+from dask.bytes.compression import compressors
+fmt_bs = [(None, None), (None, 10), ('gzip', None), ('bz2', None),
+          ('xz', None), ('xz', 10)]
+fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compressors]
+
+@pytest.mark.parametrize('fmt,blocksize', fmt_bs)
+def test_read_csv(fmt, blocksize):
+    compress = compressors[fmt]
+    files2 = valmap(compress, files)
+    with filetexts(files2, mode='b'):
+        df = read_csv('2014-01-*.csv', compression=fmt)
         eq(df, expected, check_dtype=False)

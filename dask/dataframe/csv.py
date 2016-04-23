@@ -77,7 +77,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True):
 
 
 def read_csv(filename, blocksize=2**25, chunkbytes=None,
-        collection=True, lineterminator='\n',
+        collection=True, lineterminator='\n', compression=None,
         **kwargs):
     kwargs.update({'lineterminator': lineterminator})
     if chunkbytes is not None:
@@ -96,7 +96,7 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     b_lineterminator = lineterminator.encode()
     sample, values = read_bytes(filename, delimiter=b_lineterminator,
                                           blocksize=blocksize,
-                                          sample=10000)
+                                          sample=10000, compression=compression)
     header = sample.split(b_lineterminator)[0] + b_lineterminator
     head = pd.read_csv(BytesIO(sample), **kwargs)
 
