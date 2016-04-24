@@ -7,9 +7,7 @@ import pandas as pd
 from ..delayed import delayed
 from .io import from_delayed
 
-from ..bytes.compression import compressors, decompressors
 from ..bytes import read_bytes
-
 from ..utils import ensure_bytes
 
 

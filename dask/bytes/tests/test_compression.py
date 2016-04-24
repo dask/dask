@@ -1,17 +1,17 @@
 from io import BytesIO
 
 import pytest
-from dask.bytes.compression import compressors, decompressors, files
+from dask.bytes.compression import compress, decompress, files
 
 def test_compression():
-    assert set(compressors) == set(decompressors)
+    assert set(compress) == set(decompress)
 
     a = b'Hello, world!'
-    for k in compressors:
-        compress = compressors[k]
-        decompress = decompressors[k]
-        b = compress(a)
-        c = decompress(b)
+    for k in compress:
+        comp = compress[k]
+        decomp = decompress[k]
+        b = comp(a)
+        c = decomp(b)
         assert a == c
         if k is not None:
             assert a != b

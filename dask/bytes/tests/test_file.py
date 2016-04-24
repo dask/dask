@@ -90,7 +90,7 @@ fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compression.files]
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_compression(fmt, blocksize):
-    compress = compression.compressors[fmt]
+    compress = compression.compress[fmt]
     files2 = valmap(compress, files)
     with filetexts(files2, mode='b'):
         sample, values = read_bytes('.test.accounts.*.json',

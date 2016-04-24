@@ -118,11 +118,11 @@ def test_read_csv_files():
         eq(df, expected, check_dtype=False)
 
 
-from dask.bytes.compression import compressors
+from dask.bytes.compression import compress
 fmt_bs = [(None, None), (None, 10), ('gzip', None), ('bz2', None),
           ('xz', None)]
-fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compressors]
-if 'xz' in compressors:
+fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compress]
+if 'xz' in compress:
     if sys.version_info[0] == 2:  # backports.lzma doesn't seek
         fmt_bs.append(pytest.mark.xfail(('xz', 10)))
     else:
@@ -130,8 +130,7 @@ if 'xz' in compressors:
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
-    compress = compressors[fmt]
-    files2 = valmap(compress, files)
+    files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode='b'):
         df = read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
         eq(df.compute(get=get_sync).reset_index(drop=True),
