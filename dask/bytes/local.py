@@ -20,7 +20,7 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
     if compression is not None and compression not in compress_files:
         raise ValueError("Compression type %s not supported" % compression)
     if '*' in fn:
-        filenames = sorted(glob(fn))
+        filenames = list(map(os.path.abspath, sorted(glob(fn))))
         sample, first = read_bytes(filenames[0], delimiter, not_zero,
                                 blocksize, sample=True, compression=compression)
         rest = [read_bytes(f, delimiter, not_zero, blocksize, sample=False,

@@ -1,5 +1,5 @@
 from ..utils import ignoring
-from .core import read_bytes
+from .core import read_bytes, open_files, open_text_files
 
 with ignoring(ImportError):
     from . import s3
