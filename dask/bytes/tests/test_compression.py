@@ -1,5 +1,6 @@
 from io import BytesIO
 
+import pytest
 from dask.bytes.compression import compressors, decompressors, files
 
 def test_compression():
@@ -16,20 +17,20 @@ def test_compression():
             assert a != b
 
 
-def test_files():
-    for File in files.values():
-        data = b'1234'*1000
-        out = BytesIO()
-        f = File(out, mode='w')
-        f.write(data)
-        f.close()
+@pytest.mark.parametrize('fmt,File', files.items())
+def test_files(fmt,File):
+    data = b'1234'*1000
+    out = BytesIO()
+    f = File(out, mode='wb')
+    f.write(data)
+    f.close()
 
-        out.seek(0)
-        compressed = out.read()
+    out.seek(0)
+    compressed = out.read()
 
-        assert len(data) > len(compressed)
+    assert len(data) > len(compressed)
 
-        g = File(BytesIO(compressed), mode='r')
-        data2 = g.read()
-        g.close()
-        assert data == data2
+    g = File(BytesIO(compressed), mode='rb')
+    data2 = g.read()
+    g.close()
+    assert data == data2

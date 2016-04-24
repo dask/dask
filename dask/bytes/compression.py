@@ -1,22 +1,19 @@
-from toolz import identity
-
+import sys
 import zlib
-import bz2
+
+from toolz import identity
 
 from ..compatibility import gzip_compress, gzip_decompress, GzipFile
 from ..utils import ignoring
 
 
 compressors = {'gzip': gzip_compress,
-               'bz2': bz2.compress,
                'zlib': zlib.compress,
                None: identity}
 decompressors = {'gzip': gzip_decompress,
-                 'bz2': bz2.decompress,
                  'zlib': zlib.decompress,
                  None: identity}
-files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
-         'bz2': bz2.BZ2File}
+files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs)}
 
 with ignoring(ImportError):
     import snappy
@@ -34,3 +31,9 @@ with ignoring(ImportError):
     compressors['xz'] = lzma_compress
     decompressors['xz'] = lzma_decompress
     files['xz'] = LZMAFile
+
+if sys.version_info[0] >= 3:
+    import bz2
+    compressors['bz2'] = bz2.compress
+    decompressors['bz2'] = bz2.decompress
+    files['bz2'] = bz2.BZ2File
