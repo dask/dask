@@ -8,6 +8,7 @@ from ..delayed import delayed
 from .io import from_delayed
 
 from ..bytes import read_bytes
+from ..bytes.compression import seekable_files, files as cfiles
 from ..utils import ensure_bytes
 
 
@@ -76,6 +77,15 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     kwargs.update({'lineterminator': lineterminator})
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
+    if blocksize and compression not in seekable_files:
+        print("Warning %s compression does not support breaking apart files\n"
+              "Please ensure that each individiaul file can fit in memory and\n"
+              "use the keyword ``blocksize=None to remove this message``\n"
+              "Setting ``blocksize=None``" % compression)
+        blocksize = None
+    if compression not in seekable_files and compression not in cfiles:
+        raise NotImplementedError("Compression format %s not installed" %
+                                  compression)
 
     b_lineterminator = lineterminator.encode()
     sample, values = read_bytes(filename, delimiter=b_lineterminator,

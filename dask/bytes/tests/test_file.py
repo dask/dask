@@ -85,8 +85,9 @@ def test_read_bytes_delimited():
             test = b"".join(files[v] for v in sorted(files))
             assert ours == test
 
-fmt_bs = [('gzip', None), ('bz2', None), ('xz', None), ('xz', 10)]
-fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compression.files]
+
+from dask.bytes.compression import compress, files as cfiles, seekable_files
+fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_compression(fmt, blocksize):

@@ -19,6 +19,8 @@ def test_compression():
 
 @pytest.mark.parametrize('fmt,File', files.items())
 def test_files(fmt,File):
+    if fmt is None:
+        return
     data = b'1234'*1000
     out = BytesIO()
     f = File(out, mode='wb')
@@ -30,7 +32,8 @@ def test_files(fmt,File):
 
     assert len(data) > len(compressed)
 
-    g = File(BytesIO(compressed), mode='rb')
+    b = BytesIO(compressed)
+    g = File(b, mode='rb')
     data2 = g.read()
     g.close()
     assert data == data2

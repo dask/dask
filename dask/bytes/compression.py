@@ -1,3 +1,4 @@
+import bz2
 import sys
 import zlib
 
@@ -7,13 +8,20 @@ from ..compatibility import gzip_compress, gzip_decompress, GzipFile
 from ..utils import ignoring
 
 
+def noop_file(file, **kwargs):
+    return file
+
 compress = {'gzip': gzip_compress,
             'zlib': zlib.compress,
+            'bz2': bz2.compress,
             None: identity}
 decompress = {'gzip': gzip_decompress,
               'zlib': zlib.decompress,
+              'bz2': bz2.decompress,
               None: identity}
-files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs)}
+files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
+         None: noop_file}
+seekable_files = {None: noop_file}
 
 
 with ignoring(ImportError):
@@ -32,6 +40,15 @@ with ignoring(ImportError):
     compress['xz'] = lzma_compress
     decompress['xz'] = lzma_decompress
     files['xz'] = LZMAFile
+
+with ignoring(ImportError):
+    import lzma
+    seekable_files['xz'] = lzma.LZMAFile
+
+with ignoring(ImportError):
+    import lzmaffi
+    seekable_files['xz'] = lzmaffi.LZMAFile
+
 
 if sys.version_info[0] >= 3:
     import bz2

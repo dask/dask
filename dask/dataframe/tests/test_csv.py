@@ -118,15 +118,8 @@ def test_read_csv_files():
         eq(df, expected, check_dtype=False)
 
 
-from dask.bytes.compression import compress
-fmt_bs = [(None, None), (None, 10), ('gzip', None), ('bz2', None),
-          ('xz', None)]
-fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compress]
-if 'xz' in compress:
-    if sys.version_info[0] == 2:  # backports.lzma doesn't seek
-        fmt_bs.append(pytest.mark.xfail(('xz', 10)))
-    else:
-        fmt_bs.append(('xz', 10))
+from dask.bytes.compression import compress, files as cfiles, seekable_files
+fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
@@ -135,3 +128,19 @@ def test_read_csv_compression(fmt, blocksize):
         df = read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
         eq(df.compute(get=get_sync).reset_index(drop=True),
            expected.reset_index(drop=True), check_dtype=False)
+
+
+def test_warn_non_seekable_files(capsys):
+    files2 = valmap(compress['gzip'], files)
+    with filetexts(files2, mode='b'):
+        df = read_csv('2014-01-*.csv', compression='gzip')
+        out, err = capsys.readouterr()
+        assert 'gzip' in out
+        assert 'blocksize=None' in out
+
+        df = read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
+        out, err = capsys.readouterr()
+        assert not out
+
+        with pytest.raises(NotImplementedError):
+            df = read_csv('2014-01-*.csv', compression='foo')

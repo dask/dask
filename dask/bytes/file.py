@@ -3,6 +3,9 @@ from __future__ import print_function, division, absolute_import
 from glob import glob
 import logging
 import os
+import sys
+
+from toolz import identity
 
 from .compression import files as compress_files
 from ..delayed import delayed
@@ -70,10 +73,25 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         return sample, values
 
 
+if sys.version_info[0] < 3:
+    class SeekableFile(object):
+        def __init__(self, file):
+            self.file = file
+
+        def seekable(self):
+            return True
+
+        def __getattr__(self, key):
+            return getattr(self.file, key)
+else:
+    SeekableFile = identity
+
+
 # TODO add modification time to input
 def read_block_from_file(fn, offset, length, delimiter, compression):
     with open(fn, 'rb') as f:
         if compression:
+            f = SeekableFile(f)
             f = compress_files[compression](f)
         result = read_block(f, offset, length, delimiter)
         if compression:
