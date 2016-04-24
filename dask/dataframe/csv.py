@@ -28,14 +28,10 @@ def bytes_read_csv(b, header, kwargs):
     See Also:
         dask.dataframe.csv.read_csv_from_bytes
     """
-    compression = kwargs.pop('compression', None)
-    b2 = decompressors[compression](b)
     bio = BytesIO()
     if header:
-        if not header.endswith(b'\n') and not header.endswith(b'\r'):
-            header = header + ensure_bytes(kwargs.get('lineterminator', b'\n'))
         bio.write(header)
-    bio.write(b2)
+    bio.write(b)
     bio.seek(0)
     return pd.read_csv(bio, **kwargs)
 

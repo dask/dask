@@ -49,6 +49,7 @@ def test_bytes_read_csv_kwargs():
 def test_bytes_read_csv_with_header():
     b = files['2014-01-01.csv']
     header, b = b.split(b'\n', 1)
+    header = header + b'\n'
     df = bytes_read_csv(b, header, {})
     assert list(df.columns) == ['name', 'amount', 'id']
     assert len(df) == 3
