@@ -81,5 +81,5 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
     return result
 
 
-from . import storage_systems
-storage_systems[None] = read_bytes
+from .core import storage_systems
+storage_systems['local'] = read_bytes

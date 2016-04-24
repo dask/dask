@@ -8,7 +8,7 @@ from ..delayed import delayed
 from .io import from_delayed
 
 from ..bytes.compression import compressors, decompressors
-from ..bytes import storage_systems
+from ..bytes import read_bytes
 
 from ..utils import ensure_bytes
 
@@ -82,16 +82,6 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     kwargs.update({'lineterminator': lineterminator})
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
-
-    if '://' in filename:
-        protocol, filename = filename.split('://', 1)
-        try:
-            read_bytes = storage_systems[protocol]
-        except KeyError:
-            raise NotImplementedError("Unknown protocol %s://%s" %
-                        (protocol, filename))
-    else:
-        read_bytes = storage_systems[None]
 
     b_lineterminator = lineterminator.encode()
     sample, values = read_bytes(filename, delimiter=b_lineterminator,
