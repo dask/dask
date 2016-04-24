@@ -1,6 +1,18 @@
+import io
+import sys
+
+from toolz import merge
+
+from .compression import seekable_files, files as cfiles
+from .utils import SeekableFile
+from ..delayed import delayed
+from ..utils import system_encoding
+
+delayed = delayed(pure=True)
 
 _read_bytes = dict()
 _open_files = dict()
+_open_text_files = dict()
 
 
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
@@ -55,7 +67,7 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
             blocksize=blocksize, sample=sample, compression=compression)
 
 
-def open_files(path, mode='rb', **kwargs):
+def open_files(path, compression=None, **kwargs):
     """ Given path return dask.delayed file-like objects
 
     Examples
@@ -69,12 +81,51 @@ def open_files(path, mode='rb', **kwargs):
     """
     if '://' in path:
         protocol, path = path.split('://', 1)
-        try:
-            open_files = _open_files[protocol]
-        except KeyError:
-            raise NotImplementedError("Unknown protocol %s://%s" %
-                                      (protocol, path))
     else:
-        open_files = _open_files['local']
+        protocol = 'local'
 
-    return open_files(path, mode=mode, **kwargs)
+    try:
+        files = _open_files[protocol](path, **kwargs)
+    except KeyError:
+        raise NotImplementedError("Unknown protocol %s://%s" %
+                                  (protocol, path))
+    if compression:
+        decompress = merge(seekable_files, cfiles)[compression]
+        if sys.version_info[0] < 3:
+            files = [delayed(SeekableFile)(file) for file in files]
+        files = [delayed(decompress)(file) for file in files]
+
+    return files
+
+
+def open_text_files(path, encoding=system_encoding, errors='strict',
+        compression=None, **kwargs):
+    """ Given path return dask.delayed file-like objects in text mode
+
+    Examples
+    --------
+    >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
+    >>> files = open_files('s3://2015-*-*.csv')  # doctest: +SKIP
+
+    Returns
+    -------
+    List of ``dask.delayed`` objects that compute to file-like objects in text
+    mode
+    """
+    if '://' in path:
+        protocol, path = path.split('://', 1)
+    else:
+        protocol = 'local'
+
+    if protocol in _open_text_files and compression is None:
+        return _open_text_files[protocol](path, encoding=encoding,
+                                          errors=errors, **kwargs)
+    elif protocol in _open_files:
+        files = open_files(path, compression=compression, **kwargs)
+        if sys.version_info[0] < 3:
+            files = [delayed(SeekableFile)(file) for file in files]
+        return [delayed(io.TextIOWrapper)(file, encoding=encoding,
+                                          errors=errors) for file in files]
+    else:
+        raise NotImplementedError("Unknown protocol %s://%s" %
+                                  (protocol, path))

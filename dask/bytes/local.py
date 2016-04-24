@@ -5,11 +5,10 @@ import logging
 import os
 import sys
 
-from toolz import identity
-
 from .compression import files as compress_files
+from .utils import SeekableFile
 from ..delayed import delayed
-from ..utils import read_block
+from ..utils import read_block, system_encoding
 from ..base import tokenize
 
 logger = logging.getLogger(__name__)
@@ -53,20 +52,6 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         return sample, values
 
 
-if sys.version_info[0] < 3:
-    class SeekableFile(object):
-        def __init__(self, file):
-            self.file = file
-
-        def seekable(self):
-            return True
-
-        def __getattr__(self, key):
-            return getattr(self.file, key)
-else:
-    SeekableFile = identity
-
-
 # TODO add modification time to input
 def read_block_from_file(fn, offset, length, delimiter, compression):
     with open(fn, 'rb') as f:
@@ -79,13 +64,24 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
     return result
 
 
-def open_files(path, mode='rb'):
+def open_files(path):
     """ Open many files.  Return delayed objects. """
     myopen = delayed(open)
     filenames = sorted(glob(path))
-    return [myopen(fn, mode) for fn in filenames]
+    return [myopen(fn, mode='rb') for fn in filenames]
 
 
 from . import core
 core._read_bytes['local'] = read_bytes
 core._open_files['local'] = open_files
+
+
+if sys.version_info[0] >= 3:
+    def open_text_files(path, encoding=system_encoding, errors='strict'):
+        """ Open many files in text mode.  Return delayed objects. """
+        myopen = delayed(open)
+        filenames = sorted(glob(path))
+        return [myopen(fn, encoding=encoding, errors=errors)
+                for fn in filenames]
+
+    core._open_text_files['local'] = open_text_files

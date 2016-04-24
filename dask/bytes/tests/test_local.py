@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 import pytest
-from toolz import concat, valmap
+from toolz import concat, valmap, partial
 
 from dask import compute, get
 from dask.bytes.local import read_bytes, open_files
 from dask.utils import filetexts
 from dask.bytes import compression
 
+compute = partial(compute, get=get)
 
 # These get mirrored on s3://distributed-test/
 files = {'.test.accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
@@ -98,7 +99,7 @@ def test_compression(fmt, blocksize):
                 blocksize=blocksize, delimiter=b'\n', compression=fmt)
         assert sample[:5] == files[sorted(files)[0]][:5]
 
-        results = compute(*concat(values), get=get)
+        results = compute(*concat(values))
         assert (b''.join(results) ==
                 b''.join([files[k] for k in sorted(files)]))
 
@@ -115,20 +116,45 @@ def test_registered_read_bytes():
 def test_registered_open_files():
     from dask.bytes.core import open_files
     with filetexts(files, mode='b'):
-        myfiles = open_files('.test.accounts.*', mode='rb')
+        myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
         data = compute(*[file.read() for file in myfiles])
         assert list(data) == [files[k] for k in sorted(files)]
 
 
-def test_files():
+@pytest.mark.parametrize('encoding', ['utf-8', 'ascii'])
+def test_registered_open_text_files(encoding):
+    from dask.bytes.core import open_text_files
     with filetexts(files, mode='b'):
-        myfiles = open_files('.test.accounts.*', mode='r')
+        myfiles = open_text_files('.test.accounts.*', encoding=encoding)
         assert len(myfiles) == len(files)
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k].decode(encoding=encoding)
+                              for k in sorted(files)]
 
+def test_open_files():
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*')
+        assert len(myfiles) == len(files)
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k] for k in sorted(files)]
+
+
+@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+def test_compression_binary(fmt):
+    from dask.bytes.core import open_files
+    files2 = valmap(compression.compress[fmt], files)
+    with filetexts(files2, mode='b'):
+        myfiles = open_files('.test.accounts.*', compression=fmt)
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k] for k in sorted(files)]
+
+
+@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+def test_compression_text(fmt):
+    from dask.bytes.core import open_text_files
+    files2 = valmap(compression.compress[fmt], files)
+    with filetexts(files2, mode='b'):
+        myfiles = open_text_files('.test.accounts.*', compression=fmt)
         data = compute(*[file.read() for file in myfiles])
         assert list(data) == [files[k].decode() for k in sorted(files)]
-
-        myfiles = open_files('.test.accounts.*', mode='rb')
-        data = compute(*[file.read() for file in myfiles])
-        assert list(data) == [files[k] for k in sorted(files)]
