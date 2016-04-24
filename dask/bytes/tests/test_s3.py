@@ -6,7 +6,7 @@ pytest.importorskip('s3fs')
 from toolz import concat
 
 from dask import compute
-from dask.bytes.s3 import read_bytes
+from dask.bytes.s3 import read_bytes, open_files
 
 
 # These get mirrored on s3://distributed-test/
@@ -108,7 +108,7 @@ def test_read_bytes_delimited():
 def test_registered():
     from dask.bytes.core import read_bytes
 
-    sample, values = read_bytes('s3://' + test_bucket_name + '/.test.accounts.*')
+    sample, values = read_bytes('s3://' + test_bucket_name + '/accounts.*.json')
 
     results = compute(*concat(values))
     assert set(results) == set(files.values())
@@ -123,3 +123,18 @@ def test_compression():
             b'name,amount,id\nAlice,100,1\nBob,200,2\nCharlie,300,3\n',
             b'name,amount,id\n',
             b'name,amount,id\nDennis,400,4\nEdith,500,5\nFrank,600,6\n')
+
+
+def test_files():
+    myfiles = open_files(test_bucket_name+'/test/accounts.*', mode='rb')
+    assert len(myfiles) == len(files)
+    data = compute(*[file.read() for file in myfiles])
+    assert list(data) == [files[k] for k in sorted(files)]
+
+
+@pytest.mark.xfail(reason="s3fs doesn't support text")
+def test_files_textmode():
+    myfiles = open_files(test_bucket_name+'/test/accounts.*', mode='rt')
+    data = compute(*[list(file) for file in myfiles])
+    assert list(data) == [list(StringIO(files[k].decode()))
+                          for k in sorted(files)]

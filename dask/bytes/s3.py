@@ -97,5 +97,25 @@ def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None,
     return result
 
 
-from .core import storage_systems
-storage_systems['s3'] = read_bytes
+def s3_open_file(fn, s3_params):
+    s3 = S3FileSystem(**s3_params)
+    return s3.open(fn, mode='rb')
+
+
+def open_files(path, mode='rb', **s3_params):
+    """ Open many files.  Return delayed objects. """
+    if mode != 'rb':
+        raise NotImplementedError("Only support readbyte mode, got %s" % mode)
+
+    s3 = S3FileSystem(**s3_params)
+    filenames = sorted(s3.glob(path))
+    myopen = delayed(s3_open_file)
+    s3_params = s3_params.copy()
+    s3_params.update(s3.get_delegated_s3pars())
+
+    return [myopen(fn, s3_params) for fn in filenames]
+
+
+from . import core
+core.storage_systems['s3'] = read_bytes
+core.open_files['s3'] = open_files
