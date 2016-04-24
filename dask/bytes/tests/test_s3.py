@@ -103,3 +103,23 @@ def test_read_bytes_delimited():
         ours = b"".join(res)
         test = b"".join(files[v] for v in sorted(files))
         assert ours == test
+
+
+def test_registered():
+    from dask.bytes.core import read_bytes
+
+    sample, values = read_bytes('s3://' + test_bucket_name + '/.test.accounts.*')
+
+    results = compute(*concat(values))
+    assert set(results) == set(files.values())
+
+
+def test_compression():
+    sample, values = read_bytes('distributed-test/csv/gzip/*',
+                                compression='gzip')
+    assert sample.startswith(b'name,amount,id\n')
+    results = compute(*concat(values))
+    assert results == (
+            b'name,amount,id\nAlice,100,1\nBob,200,2\nCharlie,300,3\n',
+            b'name,amount,id\n',
+            b'name,amount,id\nDennis,400,4\nEdith,500,5\nFrank,600,6\n')

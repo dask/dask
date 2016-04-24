@@ -4,14 +4,17 @@ import logging
 
 from s3fs import S3FileSystem
 
-from ..delayed import delayed
+from .compression import files as compress_files
+
 from ..base import tokenize
+from ..delayed import delayed
+from ..utils import read_block
 
 logger = logging.getLogger(__name__)
 
 
 def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, **s3_params):
+               sample=True, compression=None, **s3_params):
     """ Convert location in S3 to a list of delayed values
 
     Parameters
@@ -26,6 +29,8 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         Chunk size
     sample: bool, int
         Whether or not to return a sample from the first 10k bytes
+    compression: string or None
+        String like 'gzip' or 'xz'.  Must support efficient random access.
     **s3_params: keyword arguments
         Extra keywords to send to boto3 session (anon, key, secret...)
 
@@ -34,15 +39,20 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
     10kB sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
     if s3 is None:
         s3 = S3FileSystem(**s3_params)
 
     if '*' in fn:
         filenames = sorted(s3.glob(fn))
         sample, first = read_bytes(filenames[0], s3, delimiter, not_zero,
-                                   blocksize, sample=True, **s3_params)
+                                   blocksize, sample=True,
+                                   compression=compression, **s3_params)
         rest = [read_bytes(f, s3, delimiter, not_zero, blocksize,
-                       sample=False, **s3_params)[1] for f in filenames[1:]]
+                       sample=False, compression=compression,  **s3_params)[1]
+                for f in filenames[1:]]
         return sample, [first] + rest
     else:
         if blocksize is None:
@@ -53,7 +63,7 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
             if not_zero:
                 offsets[0] = 1
 
-        token = tokenize(delimiter, blocksize, not_zero)
+        token = tokenize(delimiter, blocksize, not_zero, compression)
 
         logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
 
@@ -62,21 +72,29 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
 
         values = [delayed(read_block_from_s3, name='read-s3-block-%s-%d-%s-%s'
             % (fn, offset, blocksize, token))(fn, offset, blocksize, s3safe_pars,
-                delimiter) for offset in offsets]
+                delimiter, compression) for offset in offsets]
 
         if sample:
             if isinstance(sample, int) and not isinstance(sample, bool):
                 nbytes = sample
             else:
                 nbytes = 10000
-            sample = read_block_from_s3(fn, 0, nbytes, s3safe_pars, delimiter)
+            sample = read_block_from_s3(fn, 0, nbytes, s3safe_pars, delimiter,
+                                        compression)
 
         return sample, values
 
 
-def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None):
+def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None,
+                       compression=None):
     s3 = S3FileSystem(**s3_params)
-    return s3.read_block(filename, offset, length, delimiter)
+    with s3.open(filename, 'rb') as f:
+        if compression:
+            f = compress_files[compression](f)
+        result = read_block(f, offset, length, delimiter)
+        if compression:
+            f.close()
+    return result
 
 
 from .core import storage_systems
