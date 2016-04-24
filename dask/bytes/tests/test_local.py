@@ -4,7 +4,7 @@ import pytest
 from toolz import concat, valmap
 
 from dask import compute, get
-from dask.bytes.file import read_bytes
+from dask.bytes.local import read_bytes
 from dask.utils import filetexts
 from dask.bytes import compression
 
