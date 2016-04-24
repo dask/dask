@@ -1,5 +1,6 @@
 
 storage_systems = dict()
+open_files = dict()
 
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
                      sample=True, compression=None):

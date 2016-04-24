@@ -4,7 +4,7 @@ import pytest
 from toolz import concat, valmap
 
 from dask import compute, get
-from dask.bytes.local import read_bytes
+from dask.bytes.local import read_bytes, open_files
 from dask.utils import filetexts
 from dask.bytes import compression
 
@@ -110,3 +110,16 @@ def test_registered():
 
         results = compute(*concat(values))
         assert set(results) == set(files.values())
+
+
+def test_files():
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*')
+        assert len(myfiles) == len(files)
+
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k].decode() for k in sorted(files)]
+
+        myfiles = open_files('.test.accounts.*', mode='rb')
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k] for k in sorted(files)]

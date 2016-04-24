@@ -99,5 +99,13 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
     return result
 
 
-from .core import storage_systems
-storage_systems['local'] = read_bytes
+def open_files(path, mode='r'):
+    """ Open many files.  Return delayed objects. """
+    myopen = delayed(open)
+    filenames = sorted(glob(path))
+    return [myopen(fn, mode) for fn in filenames]
+
+
+from . import core
+core.storage_systems['local'] = read_bytes
+core.open_files['local'] = open_files
