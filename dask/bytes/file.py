@@ -65,7 +65,7 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
                 nbytes = sample
             else:
                 nbytes = 10000
-            sample = read_block_from_file(fn, 0, nbytes, delimiter, compression)
+            sample = read_block_from_file(fn, 0, nbytes, None, compression)
 
         return sample, values
 
@@ -75,10 +75,7 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
     with open(fn, 'rb') as f:
         if compression:
             f = compress_files[compression](f)
-        if length is None and offset == 0:
-            result = f.read()
-        else:
-            result = read_block(f, offset, length, delimiter)
+        result = read_block(f, offset, length, delimiter)
         if compression:
             f.close()
     return result

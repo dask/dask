@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
+import sys
 
 import pytest
 pd = pytest.importorskip('pandas')
@@ -8,6 +9,7 @@ dd = pytest.importorskip('dask.dataframe')
 
 from toolz import partition_all, valmap
 
+from dask.async import get_sync
 from dask.compatibility import gzip_compress
 from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
 from dask.dataframe.utils import eq
@@ -53,7 +55,7 @@ def test_bytes_read_csv_with_header():
     assert df.id.sum() == 1 + 2 + 3
 
 
-def test_read_csv():
+def test_read_csv_simple():
     bytes = [files[k] for k in sorted(files)]
     gzbytes = [gzip_compress(b) for b in bytes]
     kwargs = {}
@@ -117,13 +119,19 @@ def test_read_csv_files():
 
 from dask.bytes.compression import compressors
 fmt_bs = [(None, None), (None, 10), ('gzip', None), ('bz2', None),
-          ('xz', None), ('xz', 10)]
+          ('xz', None)]
 fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compressors]
+if 'xz' in compressors:
+    if sys.version_info[0] == 2:  # backports.lzma doesn't seek
+        fmt_bs.append(pytest.mark.xfail(('xz', 10)))
+    else:
+        fmt_bs.append(('xz', 10))
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
-def test_read_csv(fmt, blocksize):
+def test_read_csv_compression(fmt, blocksize):
     compress = compressors[fmt]
     files2 = valmap(compress, files)
     with filetexts(files2, mode='b'):
-        df = read_csv('2014-01-*.csv', compression=fmt)
-        eq(df, expected, check_dtype=False)
+        df = read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
+        eq(df.compute(get=get_sync).reset_index(drop=True),
+           expected.reset_index(drop=True), check_dtype=False)

@@ -1,10 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
 from toolz import concat, valmap
 
 from dask import compute, get
 from dask.bytes.file import read_bytes
 from dask.utils import filetexts
+from dask.bytes import compression
 
 
 # These get mirrored on s3://distributed-test/
@@ -83,18 +85,18 @@ def test_read_bytes_delimited():
             test = b"".join(files[v] for v in sorted(files))
             assert ours == test
 
+fmt_bs = [('gzip', None), ('bz2', None), ('xz', None), ('xz', 10)]
+fmt_bs = [(fmt, bs) for fmt, bs in fmt_bs if fmt in compression.files]
 
-def test_compression():
-    from dask.bytes import compression
+@pytest.mark.parametrize('fmt,blocksize', fmt_bs)
+def test_compression(fmt, blocksize):
+    compress = compression.compressors[fmt]
+    files2 = valmap(compress, files)
+    with filetexts(files2, mode='b'):
+        sample, values = read_bytes('.test.accounts.*.json',
+                blocksize=blocksize, delimiter=b'\n', compression=fmt)
+        assert sample[:5] == files[sorted(files)[0]][:5]
 
-    for fmt, blocksize in [('gzip', None), ('bz2', None), ('xz', None), ('xz', 10)]:
-        compress = compression.compressors[fmt]
-        files2 = valmap(compress, files)
-        with filetexts(files2, mode='b'):
-            sample, values = read_bytes('.test.accounts.*.json',
-                    blocksize=blocksize, delimiter=b'\n', compression=fmt)
-            assert sample[:5] == files[sorted(files)[0]][:5]
-
-            results = compute(*concat(values), get=get)
-            assert (b''.join(results) ==
-                    b''.join([files[k] for k in sorted(files)]))
+        results = compute(*concat(values), get=get)
+        assert (b''.join(results) ==
+                b''.join([files[k] for k in sorted(files)]))

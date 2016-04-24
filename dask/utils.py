@@ -634,8 +634,13 @@ def read_block(f, offset, length, delimiter=None):
     >>> read_block(f, 10, 10, delimiter=b'\\n')  # doctest: +SKIP
     b'Bob, 200\\nCharlie, 300'
     """
-    if delimiter:
+    if offset != f.tell():  # commonly both zero
         f.seek(offset)
+
+    if not offset and length is None and f.tell() == 0:
+        return f.read()
+
+    if delimiter:
         seek_delimiter(f, delimiter, 2**16)
         start = f.tell()
         length -= start - offset
@@ -648,9 +653,9 @@ def read_block(f, offset, length, delimiter=None):
         offset = start
         length = end - start
 
-    f.seek(offset)
-    bytes = f.read(length)
-    return bytes
+        f.seek(offset)
+
+    return f.read(length)
 
 
 def ensure_bytes(s):
