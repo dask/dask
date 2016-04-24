@@ -117,5 +117,5 @@ def open_files(path, mode='rb', **s3_params):
 
 
 from . import core
-core.storage_systems['s3'] = read_bytes
-core.open_files['s3'] = open_files
+core._read_bytes['s3'] = read_bytes
+core._open_files['s3'] = open_files

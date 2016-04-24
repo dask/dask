@@ -17,27 +17,7 @@ logger = logging.getLogger(__name__)
 
 def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         sample=True, compression=None):
-    """ Convert location on filesystem to a list of delayed values
-
-    Parameters
-    ----------
-    fn: string
-        location in S3
-    delimiter: bytes
-        An optional delimiter, like ``b'\n'`` on which to split blocks of bytes
-    not_zero: force seek of start-of-file delimiter, discarding header
-    blocksize: int (=128MB)
-        Chunk size
-    compression: string or None
-        String like 'gzip' or 'xz'.  Must support efficient random access.
-    sample: bool, int
-        Whether or not to return a sample from the first 10k bytes
-
-    Returns
-    -------
-    10kB sample header and list of ``dask.Delayed`` objects or list of lists of
-    delayed objects if ``fn`` is a globstring.
-    """
+    """ See dask.bytes.core.read_bytes for docstring """
     if compression is not None and compression not in compress_files:
         raise ValueError("Compression type %s not supported" % compression)
     if '*' in fn:
@@ -99,7 +79,7 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
     return result
 
 
-def open_files(path, mode='r'):
+def open_files(path, mode='rb'):
     """ Open many files.  Return delayed objects. """
     myopen = delayed(open)
     filenames = sorted(glob(path))
@@ -107,5 +87,5 @@ def open_files(path, mode='r'):
 
 
 from . import core
-core.storage_systems['local'] = read_bytes
-core.open_files['local'] = open_files
+core._read_bytes['local'] = read_bytes
+core._open_files['local'] = open_files

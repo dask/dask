@@ -108,10 +108,19 @@ def test_read_bytes_delimited():
 def test_registered():
     from dask.bytes.core import read_bytes
 
-    sample, values = read_bytes('s3://' + test_bucket_name + '/accounts.*.json')
+    sample, values = read_bytes('s3://' + test_bucket_name + '/test/accounts.*.json')
 
     results = compute(*concat(values))
     assert set(results) == set(files.values())
+
+
+def test_registered_open_files():
+    from dask.bytes.core import open_files
+    myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*.json',
+                         mode='rb')
+    assert len(myfiles) == len(files)
+    data = compute(*[file.read() for file in myfiles])
+    assert list(data) == [files[k] for k in sorted(files)]
 
 
 def test_compression():

@@ -103,7 +103,7 @@ def test_compression(fmt, blocksize):
                 b''.join([files[k] for k in sorted(files)]))
 
 
-def test_registered():
+def test_registered_read_bytes():
     from dask.bytes.core import read_bytes
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*')
@@ -112,9 +112,18 @@ def test_registered():
         assert set(results) == set(files.values())
 
 
+def test_registered_open_files():
+    from dask.bytes.core import open_files
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*', mode='rb')
+        assert len(myfiles) == len(files)
+        data = compute(*[file.read() for file in myfiles])
+        assert list(data) == [files[k] for k in sorted(files)]
+
+
 def test_files():
     with filetexts(files, mode='b'):
-        myfiles = open_files('.test.accounts.*')
+        myfiles = open_files('.test.accounts.*', mode='r')
         assert len(myfiles) == len(files)
 
         data = compute(*[file.read() for file in myfiles])
