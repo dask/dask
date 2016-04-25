@@ -476,7 +476,7 @@ def test_from_filenames_large_gzip():
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
-    boto = pytest.importorskip('boto')
+    boto = pytest.importorskip('s3fs')
 
     five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
                  u'16.99,1.01,Female,No,Sun,Dinner,2\n',
@@ -485,21 +485,14 @@ def test_from_s3():
                  u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test compressed data
-    e = db.from_s3('tip-data', 't*.gz')
+    e = db.from_filenames('s3://tip-data/t*.gz')
     assert e.take(5) == five_tips
 
-    # test wit specific key
-    b = db.from_s3('tip-data', 't?ps.csv')
-    assert b.npartitions == 1
-
     # test all keys in bucket
-    c = db.from_s3('tip-data')
+    c = db.from_filenames('s3://tip-data/*')
     assert c.npartitions == 4
 
-    d = db.from_s3('s3://tip-data')
-    assert d.npartitions == 4
-
-    e = db.from_s3('tip-data', 'tips.bz2')
+    e = db.from_filenames('s3://tip-data/tips.bz2')
     assert e.take(5) == five_tips
 
 
