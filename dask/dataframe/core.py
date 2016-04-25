@@ -381,10 +381,13 @@ class _Frame(Base):
         """ Helper function for the .loc accessor """
         if isinstance(ind, Series):
             return self._loc_series(ind)
-        elif isinstance(ind, slice):
-            return self._loc_slice(ind)
+        if self.known_divisions:
+            if isinstance(ind, slice):
+                return self._loc_slice(ind)
+            else:
+                return self._loc_element(ind)
         else:
-            return self._loc_element(ind)
+            return map_partitions(try_loc, self, self, ind)
 
     def _loc_series(self, ind):
         if not self.divisions == ind.divisions:
@@ -397,14 +400,13 @@ class _Frame(Base):
         part = _partition_of_index_value(self.divisions, ind)
         if ind < self.divisions[0] or ind > self.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(ind))
-        dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
+        dsk = {(name, 0): (lambda df: df.loc[ind:ind], (self._name, part))}
 
         if self.ndim == 1:
             columns = self.name
         else:
             columns = ind
-        return self._constructor_sliced(merge(self.dask, dsk), name,
-                                        columns, [ind, ind])
+        return self._constructor(merge(self.dask, dsk), name, self, [ind, ind])
 
     def _loc_slice(self, ind):
         name = 'loc-slice-%s-%s' % (str(ind), self._name)
@@ -2049,21 +2051,22 @@ def _emulate(func, *args, **kwargs):
     return func(*_extract_pd(args), **_extract_pd(kwargs))
 
 
-def map_partitions(func, columns, *args, **kwargs):
+def map_partitions(func, metadata, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
     Parameters
     ----------
 
-    column_info : tuple or string
-        Column names or name of the output
+    metadata: _Frame, columns, name
+        Metadata for output
     targets : list
         List of target DataFrame / Series.
     """
+    metadata = _extract_pd(metadata)
 
     assert callable(func)
     token = kwargs.pop('token', 'map-partitions')
-    token_key = tokenize(token or func, columns, kwargs, *args)
+    token_key = tokenize(token or func, metadata, kwargs, *args)
     name = '{0}-{1}'.format(token, token_key)
 
     if all(isinstance(arg, Scalar) for arg in args):
@@ -2076,14 +2079,20 @@ def map_partitions(func, columns, *args, **kwargs):
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
 
-    if columns is no_default:
+    if metadata is no_default:
         # pass no_default as much, because it updates internal cache
         try:
-            columns = _emulate(func, *args, **kwargs)
+            metadata = _emulate(func, *args, **kwargs)
         except Exception:
             # user function may fail
-            columns = None
-    metadata = columns
+            metadata = None
+
+    if isinstance(metadata, pd.DataFrame):
+        columns = metadata.columns
+    elif isinstance(metadata, pd.Series):
+        columns = metadata.name
+    else:
+        columns = metadata
 
     return_type = _get_return_type(dfs[0], metadata)
 
@@ -2092,7 +2101,7 @@ def map_partitions(func, columns, *args, **kwargs):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
         values = (apply, func, (tuple, values), kwargs)
-        dsk[(name, i)] = (_rename, metadata, values)
+        dsk[(name, i)] = (_rename, columns, values)
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
     return return_type(merge(dsk, *dasks), name, metadata, args[0].divisions)
@@ -2465,7 +2474,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         k += 1
 
     # right part of new division can remain
-    if a[-1] < b[-1]:
+    if a[-1] < b[-1] or b[-1] == b[-2]:
         for _j in range(j, len(b)):
             # always use right-most of old division
             # because it may contain last element
@@ -2494,7 +2503,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         while c[i] < b[j]:
             tmp.append((out1, i))
             i += 1
-        if last_elem and c[i] == b[-1] and i < k:
+        if last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
             # append if last split is not included
             tmp.append((out1, i))
             i += 1
@@ -2634,3 +2643,10 @@ class StringAccessor(Accessor):
     @staticmethod
     def call(obj, attr, *args):
         return getattr(obj.str, attr)(*args)
+
+
+def try_loc(df, ind):
+    try:
+        return df.loc[ind]
+    except KeyError:
+        return df.head(0)

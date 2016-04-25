@@ -344,7 +344,6 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     chunksize : int, optional
         The size of the partitions of the index.
 
-
     Returns
     -------
     dask.DataFrame or dask.Series
@@ -387,7 +386,9 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
 
     if ((npartitions is None) == (chunksize is None)):
         raise ValueError('Exactly one of npartitions and chunksize must be specified.')
+
     nrows = len(data)
+
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
     else:
@@ -396,16 +397,16 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
     if sort:
-        divisions = tuple(data.index[i]
-                          for i in range(0, nrows, chunksize))
-        divisions = divisions + (data.index[-1],)
+        divisions, locations = sorted_division_locations(data.index,
+                                                         chunksize=chunksize)
     else:
         divisions = [None] * (npartitions + 1)
+        locations = list(range(0, nrows, chunksize)) + [len(data)]
 
     name = 'from_pandas-' + tokenize(data, chunksize)
-    dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
-               for i in range(npartitions - 1))
-    dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
+    dsk = dict(((name, i), data.iloc[start: stop])
+               for i, (start, stop) in enumerate(zip(locations[:-1],
+                   locations[1:])))
     return _Frame(dsk, name, data, divisions)
 
 
@@ -904,3 +905,51 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None):
         return Series(merge(dsk, dsk2), name, metadata, divisions)
     else:
         return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
+
+
+def sorted_division_locations(seq, npartitions=None, chunksize=None):
+    """ Find division locations and values in sorted list
+
+    Examples
+    --------
+
+    >>> L = ['A', 'B', 'C', 'D', 'E', 'F']
+    >>> sorted_division_locations(L, chunksize=2)
+    (['A', 'C', 'E', 'F'], [0, 2, 4, 6])
+
+    >>> sorted_division_locations(L, chunksize=3)
+    (['A', 'D', 'F'], [0, 3, 6])
+
+    >>> L = ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C']
+    >>> sorted_division_locations(L, chunksize=3)
+    (['A', 'B', 'C'], [0, 4, 8])
+
+    >>> sorted_division_locations(L, chunksize=2)
+    (['A', 'B', 'C'], [0, 4, 8])
+
+    >>> sorted_division_locations(['A'], chunksize=2)
+    (['A', 'A'], [0, 1])
+    """
+    if ((npartitions is None) == (chunksize is None)):
+        raise ValueError('Exactly one of npartitions and chunksize must be specified.')
+
+    if npartitions:
+        chunksize = ceil(len(seq) / npartitions)
+
+    positions = [0]
+    values = [seq[0]]
+    for pos in list(range(0, len(seq), chunksize)):
+        if pos <= positions[-1]:
+            continue
+        while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
+            pos += 1
+        values.append(seq[pos])
+        if pos == len(seq) - 1:
+            pos += 1
+        positions.append(pos)
+
+    if positions[-1] != len(seq):
+        positions.append(len(seq))
+        values.append(seq[-1])
+
+    return values, positions

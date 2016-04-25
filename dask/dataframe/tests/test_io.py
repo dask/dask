@@ -360,7 +360,7 @@ def test_from_bcolz_column_order():
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
     df = dd.from_bcolz(t, chunksize=2)
-    assert list(df.loc[0].compute().index) == ['x', 'y', 'a']
+    assert list(df.loc[0].compute().columns) == ['x', 'y', 'a']
 
 
 def test_skipinitialspace():
@@ -504,6 +504,13 @@ def test_from_pandas_non_sorted():
     ddf = dd.from_pandas(df, chunksize=2, sort=False)
     assert not ddf.known_divisions
     eq(df, ddf)
+
+
+def test_from_pandas_single_row():
+    df = pd.DataFrame({'x': [1]}, index=[1])
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert ddf.divisions == (1, 1)
+    assert eq(ddf, df)
 
 
 def test_DataFrame_from_dask_array():
