@@ -143,10 +143,19 @@ def test_registered(s3):
 def test_registered_open_files(s3):
     from dask.bytes.core import open_files
     myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*.json',
-                         mode='rb', s3=s3)
+                         s3=s3)
     assert len(myfiles) == len(files)
     data = compute(*[file.read() for file in myfiles])
     assert list(data) == [files[k] for k in sorted(files)]
+
+
+def test_registered_open_text_files(s3):
+    from dask.bytes.core import open_text_files
+    myfiles = open_text_files('s3://' + test_bucket_name + '/test/accounts.*.json',
+                              s3=s3)
+    assert len(myfiles) == len(files)
+    data = compute(*[file.read() for file in myfiles])
+    assert list(data) == [files[k].decode() for k in sorted(files)]
 
 
 from dask.bytes.compression import compress, files as cfiles, seekable_files

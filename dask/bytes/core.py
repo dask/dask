@@ -113,6 +113,7 @@ def open_text_files(path, encoding=system_encoding, errors='strict',
     List of ``dask.delayed`` objects that compute to file-like objects in text
     mode
     """
+    original_path = path
     if '://' in path:
         protocol, path = path.split('://', 1)
     else:
@@ -122,7 +123,7 @@ def open_text_files(path, encoding=system_encoding, errors='strict',
         return _open_text_files[protocol](path, encoding=encoding,
                                           errors=errors, **kwargs)
     elif protocol in _open_files:
-        files = open_files(path, compression=compression, **kwargs)
+        files = open_files(original_path, compression=compression, **kwargs)
         if sys.version_info[0] < 3:
             files = [delayed(SeekableFile)(file) for file in files]
         return [delayed(io.TextIOWrapper)(file, encoding=encoding,
