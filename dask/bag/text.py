@@ -74,7 +74,7 @@ def read_text(path, blocksize=None, compression='infer',
                 **kwargs)
         if isinstance(blocks[0], (tuple, list)):
             blocks = list(concat(blocks))
-        blocks = [delayed(decode)(b, encoding=encoding, errors=errors)
+        blocks = [delayed(decode)(b, encoding, errors)
                   for b in blocks]
         result = from_delayed(blocks)
 
@@ -82,6 +82,6 @@ def read_text(path, blocksize=None, compression='infer',
 
 
 def decode(block, encoding, errors):
-    text = block.decode(encoding=encoding, errors=errors)
+    text = block.decode(encoding, errors)
     lines = io.StringIO(text)
     return list(lines)
