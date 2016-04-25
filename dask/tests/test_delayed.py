@@ -245,3 +245,14 @@ def test_delayed_callable():
 
     assert f.dask == {f.key: add}
     assert f.compute() == add
+
+
+def test_delayed_prefix():
+    f = delayed(add, prefix='foo')
+    assert f(1, 2)._key.startswith('foo')
+    assert f(1, 2)._key != f(2, 3)._key
+
+
+def test_delayed_name_on_call():
+    f = delayed(add, pure=True)
+    assert f(1, 2, dask_key_name='foo')._key == 'foo'
