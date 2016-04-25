@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from time import sleep, time
+
 import pytest
 from toolz import concat, valmap, partial
 
@@ -165,3 +167,30 @@ def test_getsize(fmt):
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode = 'b'):
         assert getsize('.tmp.getsize', fmt) == 10
+
+
+def test_not_found():
+    fn = 'not-a-file'
+    with pytest.raises(FileNotFoundError) as e:
+        read_bytes(fn)
+    assert fn in str(e)
+
+
+@pytest.mark.slow
+def test_names():
+    with filetexts(files, mode='b'):
+        _, a = read_bytes('.test.accounts.*')
+        _, b = read_bytes('.test.accounts.*')
+        a = list(concat(a))
+        b = list(concat(b))
+
+        assert [aa._key for aa in a] == [bb._key for bb in b]
+
+        sleep(1)
+        for fn in files:
+            with open(fn, 'ab') as f:
+                f.write(b'x')
+
+        _, c = read_bytes('.test.accounts.*')
+        c = list(concat(c))
+        assert [aa._key for aa in a] != [cc._key for cc in c]

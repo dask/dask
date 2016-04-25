@@ -27,6 +27,9 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
                            compression=compression)[1] for f in filenames[1:]]
         return sample, [first] + rest
     else:
+        if not os.path.exists(fn):
+            raise FileNotFoundError(fn)
+
         if blocksize is None:
             offsets = [0]
         else:
@@ -36,11 +39,14 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
             if not_zero:
                 offsets[0] = 1
 
-        token = tokenize(delimiter, blocksize, not_zero, compression)
+        token = tokenize(fn, delimiter, blocksize, not_zero, compression,
+                         os.path.getmtime(fn))
 
         logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
+        f = delayed(read_block_from_file)
 
-        values = [delayed(read_block_from_file, name='read-file-block-%s-%d-%s' % (fn, offset, token))(fn, offset, blocksize, delimiter, compression)
+        values = [f(fn, offset, blocksize, delimiter, compression,
+                    dask_key_name='read-file-block-%s-%d' % (token, offset))
                   for offset in offsets]
 
         if sample:
