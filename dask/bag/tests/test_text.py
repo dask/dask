@@ -11,30 +11,33 @@ from dask.bag.text import read_text
 compute = partial(compute, get=get)
 
 
-files = {'.test.accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
-                                    b'{"amount": 200, "name": "Bob"}\n'
-                                    b'{"amount": 300, "name": "Charlie"}\n'
-                                    b'{"amount": 400, "name": "Dennis"}\n'),
-         '.test.accounts.2.json':  (b'{"amount": 500, "name": "Alice"}\n'
-                                    b'{"amount": 600, "name": "Bob"}\n'
-                                    b'{"amount": 700, "name": "Charlie"}\n'
-                                    b'{"amount": 800, "name": "Dennis"}\n')}
+files = {'.test.accounts.1.json':  ('{"amount": 100, "name": "Alice"}\n'
+                                    '{"amount": 200, "name": "Bob"}\n'
+                                    '{"amount": 300, "name": "Charlie"}\n'
+                                    '{"amount": 400, "name": "Dennis"}\n'),
+         '.test.accounts.2.json':  ('{"amount": 500, "name": "Alice"}\n'
+                                    '{"amount": 600, "name": "Bob"}\n'
+                                    '{"amount": 700, "name": "Charlie"}\n'
+                                    '{"amount": 800, "name": "Dennis"}\n')}
 
-expected = b''.join([files[v] for v in sorted(files)])
+
+expected = ''.join([files[v] for v in sorted(files)])
 
 from dask.bytes.compression import compress, files as cfiles, seekable_files
 fmt_bs = ([(fmt, None) for fmt in cfiles]
         + [(fmt, 10) for fmt in seekable_files]
         + [(fmt, None) for fmt in seekable_files])
+encodings = ['ascii', 'utf-8'] # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs
-                                  for encoding in ['ascii', 'utf-8']]
+                                  for encoding in encodings]
 
 
 @pytest.mark.parametrize('fmt,bs,encoding', fmt_bs_enc)
 def test_read_text(fmt, bs, encoding):
-    files2 = valmap(compression.compress[fmt], files)
+    compress = compression.compress[fmt]
+    files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
     with filetexts(files2, mode='b'):
         b = read_text('.test.accounts.*.json', compression=fmt, blocksize=bs,
                 encoding=encoding)
         L, = compute(b)
-        assert ''.join(L) == expected.decode(encoding)
+        assert ''.join(L) == expected
