@@ -68,7 +68,8 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
 
         s3safe_pars = s3_params.copy()
-        s3safe_pars.update(s3.get_delegated_s3pars())
+        if not s3.anon:
+            s3safe_pars.update(s3.get_delegated_s3pars())
 
         values = [delayed(read_block_from_s3, name='read-s3-block-%s-%d-%s-%s'
             % (fn, offset, blocksize, token))(fn, offset, blocksize, s3safe_pars,
@@ -102,12 +103,12 @@ def s3_open_file(fn, s3_params):
     return s3.open(fn, mode='rb')
 
 
-def open_files(path, mode='rb', **s3_params):
+def open_files(path, mode='rb', s3=None, **s3_params):
     """ Open many files.  Return delayed objects. """
     if mode != 'rb':
         raise NotImplementedError("Only support readbyte mode, got %s" % mode)
 
-    s3 = S3FileSystem(**s3_params)
+    s3 = s3 or S3FileSystem(**s3_params)
     filenames = sorted(s3.glob(path))
     myopen = delayed(s3_open_file)
     s3_params = s3_params.copy()

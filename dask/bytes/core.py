@@ -64,7 +64,8 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
         read_bytes = _read_bytes['local']
 
     return read_bytes(path, delimiter=delimiter, not_zero=not_zero,
-            blocksize=blocksize, sample=sample, compression=compression)
+            blocksize=blocksize, sample=sample, compression=compression,
+            **kwargs)
 
 
 def open_files(path, compression=None, **kwargs):
