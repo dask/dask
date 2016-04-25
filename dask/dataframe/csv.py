@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
+from warnings import warn
 
 import pandas as pd
 
@@ -12,7 +13,10 @@ from ..bytes.compression import seekable_files, files as cfiles
 from ..utils import ensure_bytes
 
 
-def bytes_read_csv(b, header, kwargs):
+delayed = delayed(pure=True)
+
+
+def bytes_read_csv(b, header, kwargs, dtypes=None):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -23,6 +27,8 @@ def bytes_read_csv(b, header, kwargs):
         An optional header to prepend to b
     kwargs: dict
         A dictionary of keyword arguments to be passed to pandas.read_csv
+    dtypes: dict
+        DTypes to assign to columns
 
     See Also:
         dask.dataframe.csv.read_csv_from_bytes
@@ -32,10 +38,16 @@ def bytes_read_csv(b, header, kwargs):
         bio.write(header)
     bio.write(b)
     bio.seek(0)
-    return pd.read_csv(bio, **kwargs)
+    df = pd.read_csv(bio, **kwargs)
+    if dtypes is not None:
+        d = dict((c, df[c].astype(dt)) for c, dt in dtypes.items()
+                                        if df[c].dtype != dt)
+        df = df.assign(**d)
+    return df
 
 
-def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True):
+def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
+        enforce_dtypes=True):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -60,8 +72,12 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True):
     -------
     A dask.dataframe or list of delayed values
     """
-    dfs1 = [[delayed(bytes_read_csv)(blocks[0], '', kwargs)] +
-            [delayed(bytes_read_csv)(b, header, kwargs) for b in blocks[1:]]
+    if enforce_dtypes:
+        dt = head.dtypes.to_dict()
+    else:
+        dt = None
+    dfs1 = [[delayed(bytes_read_csv)(blocks[0], '', kwargs, dt)] +
+            [delayed(bytes_read_csv)(b, header, kwargs, dt) for b in blocks[1:]]
             for blocks in block_lists]
     dfs2 = sum(dfs1, [])
 
@@ -77,6 +93,11 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     kwargs.update({'lineterminator': lineterminator})
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
+        blocksize=chunkbytes
+    if 'index' in kwargs or 'index_col' in kwargs:
+        raise ValueError("Keyword 'index' not supported "
+                         "dd.read_csv(...).set_index('my-index') instead")
+
     if blocksize and compression not in seekable_files:
         print("Warning %s compression does not support breaking apart files\n"
               "Please ensure that each individiaul file can fit in memory and\n"

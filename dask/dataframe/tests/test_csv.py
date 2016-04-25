@@ -7,14 +7,17 @@ import pytest
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 
-from toolz import partition_all, valmap
+from toolz import partition_all, valmap, partial
 
+from dask import compute
 from dask.async import get_sync
 from dask.compatibility import gzip_compress
 from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
 from dask.dataframe.utils import eq
 from dask.utils import filetexts
 
+
+compute = partial(compute, get=get_sync)
 
 files = {'2014-01-01.csv': (b'name,amount,id\n'
                             b'Alice,100,1\n'
@@ -44,6 +47,12 @@ def test_bytes_read_csv_kwargs():
     b = files['2014-01-01.csv']
     df = bytes_read_csv(b, '', {'usecols': ['name', 'id']})
     assert list(df.columns) == ['name', 'id']
+
+
+def test_bytes_read_csv():
+    b = files['2014-01-01.csv']
+    df = bytes_read_csv(b, '', {}, {'amount': 'float'})
+    assert df.amount.dtype == 'float'
 
 
 def test_bytes_read_csv_with_header():
@@ -110,6 +119,16 @@ def test_blocked():
                              {'usecols': ['name', 'id']})
     eq(df.compute().reset_index(drop=True),
        expected2.reset_index(drop=True), check_dtype=False)
+
+
+def test_enforce_dtypes():
+    blocks = [[b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40'],
+              [b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40']]
+    head = pd.read_csv(BytesIO(blocks[0][0]), header=0)
+    dfs = read_csv_from_bytes(blocks, b'aa,bb\n', head, {}, enforce_dtypes=True,
+            collection=False)
+    dfs = compute(*dfs)
+    assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
 
 def test_read_csv_files():
