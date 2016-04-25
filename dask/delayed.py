@@ -249,48 +249,6 @@ def right(method):
     return _inner
 
 
-class DelayedFunction(base.Base):
-    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
-    _finalize = staticmethod(first)
-    _default_get = staticmethod(get_sync)
-
-    def __init__(self, function, pure=False, prefix=None):
-        self.function = function
-        self.pure = pure
-        self.prefix = prefix
-
-    @property
-    def dask(self):
-        return {self.key: self.function}
-
-    @property
-    def key(self):
-        return '%s-%d' % (funcname(self.function), id(self.function))
-
-    def _keys(self):
-        return [self.key]
-
-    def __call__(self, *args, **kwargs):
-        dask_key_name = kwargs.pop('dask_key_name', None)
-        pure = kwargs.pop('pure', False)
-        args, dasks = unzip(map(to_task_dasks, args), 2)
-        if kwargs:
-            dask_kwargs, dasks2 = to_task_dasks(kwargs)
-            dasks = dasks + (dasks2,)
-            task = (apply, self.function, list(args), dask_kwargs)
-        else:
-            task = (self.function,) + args
-
-        if dask_key_name is None:
-            name = ((self.prefix or funcname(self.function)) + '-' +
-                    tokenize(*task, pure=self.pure))
-        else:
-            name = dask_key_name
-        dasks = flat_unique(dasks)
-        dasks.append({name: task})
-        return Delayed(name, dasks)
-
-
 class Delayed(base.Base):
     """Represents a value to be computed by dask.
 
@@ -364,6 +322,43 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
+class DelayedFunction(Delayed):
+    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
+    _finalize = staticmethod(first)
+    _default_get = staticmethod(get_sync)
+
+    def __init__(self, function, name=None, pure=False, prefix=None):
+        name = name or (funcname(function), id(function))
+        object.__setattr__(self, '_key', name)
+        object.__setattr__(self, 'function', function)
+        object.__setattr__(self, 'pure', pure)
+        object.__setattr__(self, 'prefix', prefix)
+
+    @property
+    def _dasks(self):
+        return [{self.key: self.function}]
+
+    def __call__(self, *args, **kwargs):
+        dask_key_name = kwargs.pop('dask_key_name', None)
+        pure = kwargs.pop('pure', False)
+        args, dasks = unzip(map(to_task_dasks, args), 2)
+        if kwargs:
+            dask_kwargs, dasks2 = to_task_dasks(kwargs)
+            dasks = dasks + (dasks2,)
+            task = (apply, self.function, list(args), dask_kwargs)
+        else:
+            task = (self.function,) + args
+
+        if dask_key_name is None:
+            name = ((self.prefix or funcname(self.function)) + '-' +
+                    tokenize(*task, pure=self.pure))
+        else:
+            name = dask_key_name
+        dasks = flat_unique(dasks)
+        dasks.append({name: task})
+        return Delayed(name, dasks)
+
+
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
            operator.add, operator.sub, operator.mul, operator.floordiv,
            operator.truediv, operator.mod, operator.pow, operator.and_,
@@ -374,7 +369,6 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
 
 
 base.normalize_token.register(Delayed, lambda a: a.key)
-
 
 Value = Delayed
 
