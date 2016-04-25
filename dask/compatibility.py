@@ -28,6 +28,7 @@ if PY3:
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
+    FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
     def apply(func, args, kwargs=None):
@@ -59,6 +60,7 @@ else:
     range = xrange
     reduce = reduce
     operator_div = operator.div
+    FileNotFoundError = IOError
 
     def _getargspec(func):
         return inspect.getargspec(func)

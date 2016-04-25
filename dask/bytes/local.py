@@ -7,9 +7,10 @@ import sys
 
 from .compression import files as compress_files, seekable_files
 from .utils import SeekableFile
+from ..base import tokenize
+from ..compatibility import FileNotFoundError
 from ..delayed import delayed
 from ..utils import read_block, system_encoding
-from ..base import tokenize
 
 logger = logging.getLogger(__name__)
 
