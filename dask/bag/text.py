@@ -14,7 +14,7 @@ delayed = delayed(pure=True)
 
 def read_text(path, blocksize=None, compression='infer',
               encoding=system_encoding, errors='strict',
-              linedelimiter=os.linesep, **kwargs):
+              linedelimiter=os.linesep, collection=True, **kwargs):
     """ Read lines from text files
 
     Parameters
@@ -28,6 +28,8 @@ def read_text(path, blocksize=None, compression='infer',
     encoding: string
     errors: string
     linedelimiter: string
+    collection: bool, optional
+        Return dask.bag if True, or list of delayed values if false
     **kwargs: dict
         Extra parameters to hand to backend storage system.
         Often used for authentication when using remote storage like S3 or HDFS
@@ -51,34 +53,46 @@ def read_text(path, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
-    if compression == 'infer':
-        compression = infer_compression(path)
-
-    if blocksize and compression not in seekable_files:
-        raise ValueError(
-              "Compression %s does not support breaking apart files\n"
-              "Use ``blocksize=None`` or decompress file externally"
-              % compression)
-    if compression not in seekable_files and compression not in cfiles:
-        raise NotImplementedError("Compression format %s not installed" %
-                                  compression)
-
-    if blocksize is None:
-        files = open_text_files(path, encoding=encoding, errors=errors,
-                                      compression=compression, **kwargs)
-        return from_delayed(files)
-
+    if isinstance(path, (tuple, list, set)):
+        blocks = sum([read_text(fn, blocksize=blocksize,
+                      compression=compression, encoding=encoding, errors=errors,
+                      linedelimiter=linedelimiter, collection=False, **kwargs)
+                     for fn in path], [])
     else:
-        _, blocks = read_bytes(path, delimiter=linedelimiter.encode(),
-                blocksize=blocksize, sample=False, compression=compression,
-                **kwargs)
-        if isinstance(blocks[0], (tuple, list)):
-            blocks = list(concat(blocks))
-        blocks = [delayed(decode)(b, encoding, errors)
-                  for b in blocks]
-        result = from_delayed(blocks)
+        if compression == 'infer':
+            compression = infer_compression(path)
 
-    return result
+        if blocksize and compression not in seekable_files:
+            raise ValueError(
+                  "Compression %s does not support breaking apart files\n"
+                  "Use ``blocksize=None`` or decompress file externally"
+                  % compression)
+        if compression not in seekable_files and compression not in cfiles:
+            raise NotImplementedError("Compression format %s not installed" %
+                                      compression)
+
+        elif blocksize is None:
+            files = open_text_files(path, encoding=encoding, errors=errors,
+                                          compression=compression, **kwargs)
+            blocks = [delayed(list)(file) for file in files]
+
+
+        else:
+            _, blocks = read_bytes(path, delimiter=linedelimiter.encode(),
+                    blocksize=blocksize, sample=False, compression=compression,
+                    **kwargs)
+            if isinstance(blocks[0], (tuple, list)):
+                blocks = list(concat(blocks))
+            blocks = [delayed(decode)(b, encoding, errors)
+                      for b in blocks]
+
+    if not blocks:
+        raise ValueError("No files found", path)
+
+    if not collection:
+        return blocks
+    else:
+        return from_delayed(blocks)
 
 
 def decode(block, encoding, errors):
