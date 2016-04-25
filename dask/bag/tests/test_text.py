@@ -35,7 +35,7 @@ fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs
 @pytest.mark.parametrize('fmt,bs,encoding', fmt_bs_enc)
 def test_read_text(fmt, bs, encoding):
     compress = compression.compress[fmt]
-    files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
+    files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
     with filetexts(files2, mode='b'):
         b = read_text('.test.accounts.*.json', compression=fmt, blocksize=bs,
                 encoding=encoding)

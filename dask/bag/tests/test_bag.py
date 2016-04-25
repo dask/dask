@@ -7,9 +7,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial, valmap)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, system_encoding,
-        from_delayed)
+        reduceby, reify, partition, inline_singleton_lists, optimize,
+        system_encoding, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, reduce
 from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
@@ -434,38 +433,6 @@ def test_from_filenames():
     assert raises(ValueError, lambda: db.from_filenames('non-existent-*-path'))
 
 
-def test_from_filenames_gzip():
-    b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
-
-    assert (set(b.dask.values()) ==
-            set([(list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('foo.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, os.linesep)),
-                 (list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('bar.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, os.linesep))]))
-
-
-def test_from_filenames_bz2():
-    b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
-
-    assert (set(b.dask.values()) ==
-            set([(list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('foo.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, os.linesep)),
-                 (list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('bar.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, os.linesep))]))
-
-
 def test_from_filenames_large():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
@@ -498,10 +465,11 @@ def test_from_filenames_large_gzip():
         f.write(b'Hello, world!\n' * 100)
         f.close()
 
-        b = db.from_filenames(fn, chunkbytes=100, linesep='\n')
+        with pytest.raises(ValueError):
+            b = db.from_filenames(fn, chunkbytes=100, linesep='\n')
+
         c = db.from_filenames(fn, linesep='\n')
-        assert len(b.dask) > 5
-        assert list(b) == list(c)
+        assert c.npartitions == 1
 
 
 @pytest.mark.slow
@@ -533,20 +501,6 @@ def test_from_s3():
 
     e = db.from_s3('tip-data', 'tips.bz2')
     assert e.take(5) == five_tips
-
-
-def test__parse_s3_URI():
-    bn, p = _parse_s3_URI('s3://mybucket/mykeys', '*')
-    assert (bn == 'mybucket') and (p == 'mykeys')
-
-    bn, p = _parse_s3_URI('s3://snow/g?obes', '*')
-    assert (bn == 'snow') and (p == 'g?obes')
-
-    bn, p = _parse_s3_URI('s3://tupper/wea*', '*')
-    assert (bn == 'tupper') and (p == 'wea*')
-
-    bn, p = _parse_s3_URI('s3://sand/', 'cast?es')
-    assert (bn == 'sand') and (p == 'cast?es')
 
 
 def test_from_sequence():
@@ -743,13 +697,6 @@ def test_to_textfiles_endlines():
         assert result == ['a\n', 'b\n', 'c']
 
 
-def test_bz2_stream():
-    text = '\n'.join(map(str, range(10000)))
-    compressed = bz2.compress(text.encode())
-    assert (list(take(100, bz2_stream(compressed))) ==
-            list(map(lambda x: str(x) + '\n', range(100))))
-
-
 def test_string_namespace():
     b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'],
                          npartitions=2)
@@ -780,22 +727,6 @@ def test_str_empty_split():
     assert list(b.str.split()) == [['Alice', 'Smith'],
                                    ['Bob', 'Jones'],
                                    ['Charlie', 'Smith']]
-
-
-def test_stream_decompress():
-    data = 'abc\ndef\n123'.encode()
-    assert [s.strip() for s in stream_decompress('', data)] == \
-            ['abc', 'def', '123']
-    assert [s.strip() for s in stream_decompress('bz2', bz2.compress(data))] == \
-            ['abc', 'def', '123']
-    with tmpfile() as fn:
-        f = GzipFile(fn, 'wb')
-        f.write(data)
-        f.close()
-        with open(fn, 'rb') as f:
-            compressed = f.read()
-    assert [s.strip() for s in stream_decompress('gz', compressed)] == \
-            [b'abc', b'def', b'123']
 
 
 def test_map_with_iterator_function():

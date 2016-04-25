@@ -1037,48 +1037,9 @@ def from_filenames(filenames, chunkbytes=None, compression='infer',
     --------
     from_sequence: A more generic bag creation function
     """
-    if isinstance(filenames, str):
-        filenames = sorted(glob(filenames))
-
-    if not filenames:
-        raise ValueError("No filenames found")
-
-    full_filenames = [os.path.abspath(f) for f in filenames]
-
-    name = 'from-filenames-' + uuid.uuid4().hex
-
-    # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
-    # python versions other than 2.7 dislike byte strings for the `newline`
-    # argument.
-    linesep = str(linesep)
-
-    def get_compression(path, compression=compression):
-        if compression == 'infer':
-            compression = infer_compression(path)
-        return compression
-
-    if chunkbytes:
-        chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes, get_compression(fn),
-                                   encoding, linesep)
-                  for fn in full_filenames]
-        d = dict(((name, i), task)
-                 for i, task in enumerate(toolz.concat(taskss)))
-    else:
-        d = dict(((name, i), (list,
-                              (io.TextIOWrapper,
-                               (io.BufferedReader,
-                                (open, fn, 'rb', get_compression(fn))),
-                               encoding, None, linesep)))
-                 for i, fn in enumerate(full_filenames))
-
-    return Bag(d, name, len(d))
-
-
-def _chunk_read_file(filename, chunkbytes, compression, encoding, linesep):
-    return [(list, (textblock, filename, i, i + chunkbytes, compression,
-                    encoding, linesep))
-            for i in range(0, file_size(filename, compression), chunkbytes)]
+    from .text import read_text
+    return read_text(filenames, blocksize=chunkbytes, compression=compression,
+            encoding=encoding, linedelimiter=linesep)
 
 
 def write(data, filename, compression, encoding):
@@ -1107,106 +1068,6 @@ def write(data, filename, compression, encoding):
 
     finally:
         f.close()
-
-
-def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
-                   anon):
-    """Connect to s3 and return a bucket"""
-    import boto
-    if anon is True:
-        connection = boto.connect_s3(anon=anon)
-    elif connection is None:
-        connection = boto.connect_s3(aws_access_key, aws_secret_key)
-    return connection.get_bucket(bucket_name)
-
-
-# we need an unmemoized function to call in the main thread. And memoized
-# functions for the dask.
-_memoized_get_bucket = toolz.memoize(_get_s3_bucket)
-
-
-def _get_key(bucket_name, conn_args, key_name):
-    bucket = _memoized_get_bucket(bucket_name, *conn_args)
-    key = bucket.get_key(key_name)
-    ext = key_name.split('.')[-1]
-    return stream_decompress(ext, key.read())
-
-
-def _parse_s3_URI(bucket_name, paths):
-    from ..compatibility import quote, unquote
-    assert bucket_name.startswith('s3://')
-    o = urlparse('s3://' + quote(bucket_name[len('s3://'):]))
-    # if path is specified
-    if (paths == '*') and (o.path != '' and o.path != '/'):
-        paths = unquote(o.path[1:])
-    bucket_name = unquote(o.hostname)
-    return bucket_name, paths
-
-
-def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
-            connection=None, anon=False):
-    """ Create a Bag by loading textfiles from s3
-
-    Each line will be treated as one element and each file in S3 as one
-    partition.
-
-    You may specify a full s3 bucket
-
-    >>> b = from_s3('s3://bucket-name')  # doctest: +SKIP
-
-    Or select files, lists of files, or globstrings of files within that bucket
-
-    >>> b = from_s3('s3://bucket-name', 'myfile.json')  # doctest: +SKIP
-    >>> b = from_s3('s3://bucket-name', ['alice.json', 'bob.json'])  # doctest: +SKIP
-    >>> b = from_s3('s3://bucket-name', '*.json')  # doctest: +SKIP
-    """
-    conn_args = (aws_access_key, aws_secret_key, connection, anon)
-
-    bucket_name, paths = normalize_s3_names(bucket_name, paths, conn_args)
-
-    get_key = partial(_get_key, bucket_name, conn_args)
-
-    name = 'from_s3-' + uuid.uuid4().hex
-    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(paths))
-    return Bag(dsk, name, len(paths))
-
-
-def normalize_s3_names(bucket_name, paths, conn_args):
-    """ Normalize bucket name and paths """
-    if bucket_name.startswith('s3://'):
-        bucket_name, paths = _parse_s3_URI(bucket_name, paths)
-
-    if isinstance(paths, str):
-        if ('*' not in paths) and ('?' not in paths):
-            return bucket_name, [paths]
-        else:
-            bucket = _get_s3_bucket(bucket_name, *conn_args)
-            keys = bucket.list()  # handle globs
-
-            matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
-            return bucket_name, matches
-    else:
-        return bucket_name, paths
-
-
-def stream_decompress(fmt, data):
-    """ Decompress a block of compressed bytes into a stream of strings """
-    if fmt == 'gz':
-        return GzipFile(fileobj=BytesIO(data))
-    if fmt == 'bz2':
-        return bz2_stream(data)
-    else:
-        return map(bytes.decode, BytesIO(data))
-
-
-def bz2_stream(compressed, chunksize=100000):
-    """ Stream lines from a chunk of compressed bz2 data """
-    decompressor = bz2.BZ2Decompressor()
-    for i in range(0, len(compressed), chunksize):
-        chunk = compressed[i: i+chunksize]
-        decompressed = decompressor.decompress(chunk).decode()
-        for line in decompressed.split('\n'):
-            yield line + '\n'
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
