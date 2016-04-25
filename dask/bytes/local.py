@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 
-from .compression import files as compress_files
+from .compression import files as compress_files, seekable_files
 from .utils import SeekableFile
 from ..delayed import delayed
 from ..utils import read_block, system_encoding
@@ -30,7 +30,8 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         if blocksize is None:
             offsets = [0]
         else:
-            size = os.path.getsize(fn)
+            size = getsize(fn, compression)
+
             offsets = list(range(0, size, blocksize))
             if not_zero:
                 offsets[0] = 1
@@ -85,3 +86,15 @@ if sys.version_info[0] >= 3:
                 for fn in filenames]
 
     core._open_text_files['local'] = open_text_files
+
+
+def getsize(fn, compression=None):
+    if compression is None:
+        return os.path.getsize(fn)
+    else:
+        with open(fn, 'rb') as f:
+            g = seekable_files[compression](f)
+            g.seek(0, 2)
+            result = g.tell()
+            g.close()
+        return result

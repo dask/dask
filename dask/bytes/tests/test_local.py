@@ -4,7 +4,7 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get
-from dask.bytes.local import read_bytes, open_files
+from dask.bytes.local import read_bytes, open_files, getsize
 from dask.utils import filetexts
 from dask.bytes import compression
 
@@ -158,3 +158,10 @@ def test_compression_text(fmt):
         myfiles = open_text_files('.test.accounts.*', compression=fmt)
         data = compute(*[file.read() for file in myfiles])
         assert list(data) == [files[k].decode() for k in sorted(files)]
+
+
+@pytest.mark.parametrize('fmt', list(seekable_files))
+def test_getsize(fmt):
+    compress = compression.compress[fmt]
+    with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode = 'b'):
+        assert getsize('.tmp.getsize', fmt) == 10
