@@ -117,6 +117,11 @@ def test_read_csv_files():
         df = read_csv('2014-01-*.csv')
         eq(df, expected, check_dtype=False)
 
+        fn = '2014-01-01.csv'
+        df = read_csv(fn)
+        expected2 = pd.read_csv(BytesIO(files[fn]))
+        eq(df, expected2, check_dtype=False)
+
 
 from dask.bytes.compression import compress, files as cfiles, seekable_files
 fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]

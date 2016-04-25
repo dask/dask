@@ -91,6 +91,8 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     sample, values = read_bytes(filename, delimiter=b_lineterminator,
                                           blocksize=blocksize,
                                           sample=10000, compression=compression)
+    if not isinstance(values[0], (tuple, list)):
+        values = [values]
     header = sample.split(b_lineterminator)[0] + b_lineterminator
     head = pd.read_csv(BytesIO(sample), **kwargs)
 
