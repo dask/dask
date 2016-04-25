@@ -135,6 +135,12 @@ def test_iter():
     assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
 
 
+@pytest.mark.parametrize('func', [str, repr])
+def test_repr(func):
+    assert str(b.npartitions) in func(b)
+    assert b.name[:5] in func(b)
+
+
 def test_pluck():
     d = {('x', 0): [(1, 10), (2, 20)],
          ('x', 1): [(3, 30), (4, 40)]}

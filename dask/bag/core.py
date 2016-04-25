@@ -310,6 +310,12 @@ class Bag(Base):
         self.npartitions = npartitions
         self.str = StringAccessor(self)
 
+    def __str__(self):
+        name = self.name if len(self.name) < 10 else self.name[:7] + '...'
+        return 'dask.bag<%s, npartitions=%d>' % (name, self.npartitions)
+
+    __repr__ = __str__
+
     def map(self, func, **kwargs):
         """ Map a function across all elements in collection
 

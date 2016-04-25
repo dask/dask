@@ -52,7 +52,7 @@ def read_text(path, blocksize=None, compression='infer',
     from_sequence: Build bag from Python sequence
     """
     if compression == 'infer':
-        compression = infer_compression(filename)
+        compression = infer_compression(path)
 
     if blocksize and compression not in seekable_files:
         raise ValueError(
