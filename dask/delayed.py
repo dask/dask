@@ -209,11 +209,13 @@ def delayed(obj, name=None, pure=False, prefix=None):
     """
     if isinstance(obj, Delayed):
         return obj
-    if callable(obj):
+
+    task, dasks = to_task_dasks(obj)
+
+    if not dasks and callable(obj):
         return DelayedFunction(obj, pure=pure, prefix=prefix)
     else:
-        task, dasks = to_task_dasks(obj)
-        name = name or '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
+        name = name or '%s-%s' % (type(obj).__name__, tokenize(task))
         dasks.append({name: task})
         return Delayed(name, dasks)
 
