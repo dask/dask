@@ -14,7 +14,7 @@ from dask.async import get_sync
 from dask.compatibility import gzip_compress
 from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
 from dask.dataframe.utils import eq
-from dask.utils import filetexts
+from dask.utils import filetexts, filetext
 
 
 compute = partial(compute, get=get_sync)
@@ -168,3 +168,11 @@ def test_warn_non_seekable_files(capsys):
 
         with pytest.raises(NotImplementedError):
             df = read_csv('2014-01-*.csv', compression='foo')
+
+
+def test_windows_line_terminator():
+    text = 'a,b\r\n1,2\r\n2,3\r\n3,4\r\n4,5\r\n5,6\r\n6,7'
+    with filetext(text) as fn:
+        df = read_csv(fn, blocksize=5, lineterminator='\r\n')
+        assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7
+        assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
