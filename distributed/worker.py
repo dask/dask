@@ -308,15 +308,7 @@ class Worker(Server):
             if sys.version_info < (3, 2):
                 yield future
             else:
-                while not future.done() and future._state != 'FINISHED':
-                    try:
-                        yield gen.with_timeout(timedelta(seconds=1), future,
-                                               io_loop=self.loop)
-                        break
-                    except gen.TimeoutError:
-                        logger.info("work queue size: %d", self.executor._work_queue.qsize())
-                        logger.info("future state: %s", future._state)
-                        logger.info("Pending job %d: %s", i, future)
+                yield future
         finally:
             pc.stop()
             self.thread_tokens.put(token)
