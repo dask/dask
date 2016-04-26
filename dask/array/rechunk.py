@@ -201,7 +201,8 @@ def rechunk(x, chunks):
     chunks = normalize_chunks(chunks, x.shape)
     if chunks == x.chunks:
         return x
-    if not len(chunks) == x.ndim or tuple(map(sum, chunks)) != x.shape:
+    ndim = x.ndim
+    if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 
     crossed = intersect_chunks(x.chunks, chunks)
@@ -212,21 +213,21 @@ def rechunk(x, chunks):
         new_idx = new_index[flat_idx]
         key = (temp_name,) + new_idx
         cr2 = iter(cross1)
-        old_blocks = tuple(tuple(ind  for ind,_ in cr) for cr in cross1)
-        subdims = tuple(len(set(ss[i] for ss in old_blocks)) for i in range(x.ndim))
-        rec_cat_arg =np.empty(subdims).tolist()
-        inds_in_block = product(*(range(s) for s in subdims))
+        old_blocks = [[ind for ind, _ in cr] for cr in cross1]
+        subdims = [len(set([ss[i] for ss in old_blocks])) for i in range(ndim)]
+        rec_cat_arg = np.empty(subdims).tolist()
+        inds_in_block = product(*[range(s) for s in subdims])
         for old_block in old_blocks:
             ind_slics = next(cr2)
-            old_inds = tuple(tuple(s[0] for s in ind_slics) for i in range(x.ndim))
+            old_inds = [[s[0] for s in ind_slics] for i in range(ndim)]
             # list of nd slices
-            slic = tuple(tuple(s[1] for s in ind_slics)  for i in range(x.ndim))
+            slic = [[s[1] for s in ind_slics] for i in range(ndim)]
             ind_in_blk = next(inds_in_block)
             temp = rec_cat_arg
-            for i in range(x.ndim -1):
+            for i in range(ndim -1):
                 temp = getitem(temp, ind_in_blk[i])
             for ind, slc in zip(old_inds, slic):
-                temp[ind_in_blk[-1]] = (getitem, (x.name,) + ind, slc)
+                temp[ind_in_blk[-1]] = (getitem, (x.name,) + tuple(ind), slc)
         x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2)
     return Array(x2, temp_name, chunks, dtype=x.dtype)
