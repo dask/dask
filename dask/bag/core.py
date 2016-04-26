@@ -275,7 +275,6 @@ class Bag(Base):
 
     Examples
     --------
-
     Create Bag from sequence
 
     >>> import dask.bag as db
@@ -285,7 +284,7 @@ class Bag(Base):
 
     Create Bag from filename or globstring of filenames
 
-    >>> b = db.from_filenames('/path/to/mydata.*.json.gz').map(json.loads)  # doctest: +SKIP
+    >>> b = db.read_text('/path/to/mydata.*.json.gz').map(json.loads)  # doctest: +SKIP
 
     Create manually (expert use)
 
@@ -468,16 +467,6 @@ class Bag(Base):
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
-
-    @classmethod
-    def from_sequence(cls, *args, **kwargs):
-        raise AttributeError("db.Bag.from_sequence is deprecated.\n"
-                             "Use db.from_sequence instead.")
-
-    @classmethod
-    def from_filenames(cls, *args, **kwargs):
-        raise AttributeError("db.Bag.from_filenames is deprecated.\n"
-                             "Use db.from_filenames instead.")
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=str, compression='infer',
@@ -1018,25 +1007,8 @@ def collect(grouper, group, p, barrier_token):
 
 def from_filenames(filenames, chunkbytes=None, compression='infer',
                    encoding=system_encoding, linesep=os.linesep):
-    """ Create dask by loading in lines from many files
-
-    Provide list of filenames
-
-    >>> b = from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
-
-    Or a globstring
-
-    >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
-
-    Parallelize a large files by providing the number of uncompressed bytes to
-    load into each partition.
-
-    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
-
-    See Also
-    --------
-    from_sequence: A more generic bag creation function
-    """
+    """ Deprecated.  See read_text """
+    warn("db.from_filenames is deprecated in favor of db.read_text")
     from .text import read_text
     return read_text(filenames, blocksize=chunkbytes, compression=compression,
             encoding=encoding, linedelimiter=linesep)
@@ -1079,7 +1051,6 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     Parameters
     ----------
-
     seq: Iterable
         A sequence of elements to put into the dask
     partition_size: int (optional)
@@ -1092,12 +1063,11 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     Examples
     --------
-
     >>> b = from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
 
     See Also
     --------
-    from_filenames: Specialized bag creation function for textfiles
+    read_text: Create bag from textfiles
     """
     seq = list(seq)
     if npartitions and not partition_size:

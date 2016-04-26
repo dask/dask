@@ -49,7 +49,7 @@ Familiar user interface
 .. code-block:: python
 
    import dask.bag as db
-   b = db.from_filenames('2015-*-*.json.gz').map(json.loads)
+   b = db.read_text('2015-*-*.json.gz').map(json.loads)
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
 **Dask Delayed** mimics for loops and wraps custom code

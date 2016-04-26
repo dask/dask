@@ -423,52 +423,52 @@ def test_from_url():
     assert b'Dask\n' in b.take(10)
 
 
-def test_from_filenames():
+def test_read_text():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
-        assert set(line.strip() for line in db.from_filenames(fns)) == \
+        assert set(line.strip() for line in db.read_text(fns)) == \
                 set('ABCD')
-        assert set(line.strip() for line in db.from_filenames('a*.log')) == \
+        assert set(line.strip() for line in db.read_text('a*.log')) == \
                 set('ABCD')
 
-    assert raises(ValueError, lambda: db.from_filenames('non-existent-*-path'))
+    assert raises(ValueError, lambda: db.read_text('non-existent-*-path'))
 
 
-def test_from_filenames_large():
+def test_read_text_large():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write(('Hello, world!' + os.linesep).encode() * 100)
-        b = db.from_filenames(fn, chunkbytes=100)
-        c = db.from_filenames(fn)
+        b = db.read_text(fn, blocksize=100)
+        c = db.read_text(fn)
         assert len(b.dask) > 5
         assert list(map(str, b)) == list(map(str, c))
 
-        d = db.from_filenames([fn], chunkbytes=100)
+        d = db.read_text([fn], blocksize=100)
         assert list(b) == list(d)
 
 
-def test_from_filenames_encoding():
+def test_read_text_encoding():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write((u'你好！' + os.linesep).encode('gb18030') * 100)
-        b = db.from_filenames(fn, chunkbytes=100, encoding='gb18030')
-        c = db.from_filenames(fn, encoding='gb18030')
+        b = db.read_text(fn, blocksize=100, encoding='gb18030')
+        c = db.read_text(fn, encoding='gb18030')
         assert len(b.dask) > 5
         assert list(map(lambda x: x.encode('utf-8'), b)) == list(map(lambda x: x.encode('utf-8'), c))
 
-        d = db.from_filenames([fn], chunkbytes=100, encoding='gb18030')
+        d = db.read_text([fn], blocksize=100, encoding='gb18030')
         assert list(b) == list(d)
 
 
-def test_from_filenames_large_gzip():
+def test_read_text_large_gzip():
     with tmpfile('gz') as fn:
         f = GzipFile(fn, 'wb')
         f.write(b'Hello, world!\n' * 100)
         f.close()
 
         with pytest.raises(ValueError):
-            b = db.from_filenames(fn, chunkbytes=100, linesep='\n')
+            b = db.read_text(fn, blocksize=100, lineterminator='\n')
 
-        c = db.from_filenames(fn, linesep='\n')
+        c = db.read_text(fn)
         assert c.npartitions == 1
 
 
@@ -485,11 +485,11 @@ def test_from_s3():
                  u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test compressed data
-    e = db.from_filenames('s3://tip-data/t*.gz')
+    e = db.read_text('s3://tip-data/t*.gz')
     assert e.take(5) == five_tips
 
     # test all keys in bucket
-    c = db.from_filenames('s3://tip-data/*')
+    c = db.read_text('s3://tip-data/*')
     assert c.npartitions == 4
 
 
@@ -761,7 +761,7 @@ def test_gh715():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write(bin_data)
-        a = db.from_filenames(fn)
+        a = db.read_text(fn)
         assert a.compute()[0] == bin_data.decode('utf-8')
 
 

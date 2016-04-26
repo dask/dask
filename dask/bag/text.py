@@ -20,9 +20,9 @@ def read_text(path, blocksize=None, compression='infer',
     Parameters
     ----------
     path: string
-        Can include protocol like s3:// or globstrings
+        Path to data.  Can include ``'*'`` or protocol like ``'s3://'``
     blocksize: None or int
-        Size to cut up larger files.  Streams by default
+        Size to cut up larger files.  Streams by default.
     compression: string
         Compression format like 'gzip' or 'xz'.  Defaults to 'infer'
     encoding: string
@@ -36,6 +36,7 @@ def read_text(path, blocksize=None, compression='infer',
 
     Examples
     --------
+    >>> b = read_text('myfiles.1.txt')  # doctest: +SKIP
     >>> b = read_text('myfiles.*.txt')  # doctest: +SKIP
     >>> b = read_text('myfiles.*.txt.gz')  # doctest: +SKIP
     >>> b = read_text('s3://bucket/myfiles.*.txt')  # doctest: +SKIP
@@ -43,11 +44,11 @@ def read_text(path, blocksize=None, compression='infer',
     Parallelize a large file by providing the number of uncompressed bytes to
     load into each partition.
 
-    >>> b = read_text('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
+    >>> b = read_text('largefile.txt', blocksize=1e7)  # doctest: +SKIP
 
     Returns
     -------
-    dask.bag.Bag
+    dask.bag.Bag if collection is True or list of Delayed lists otherwise
 
     See Also
     --------
