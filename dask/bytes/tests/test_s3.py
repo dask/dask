@@ -11,7 +11,7 @@ from toolz import concat, valmap, partial
 from s3fs import S3FileSystem
 
 from dask import compute, get
-from dask.bytes.s3 import read_bytes, open_files
+from dask.bytes.s3 import read_bytes, open_files, getsize
 
 
 compute = partial(compute, get=get)
@@ -164,11 +164,11 @@ def test_registered_open_text_files(s3):
 from dask.bytes.compression import compress, files as cfiles, seekable_files
 fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
 
-@pytest.mark.parametrize('fmt,bs', fmt_bs)
-def test_compression(s3, fmt, bs):
+@pytest.mark.parametrize('fmt,blocksize', fmt_bs)
+def test_compression(s3, fmt, blocksize):
     with s3_context('compress', valmap(compress[fmt], files)) as s3:
-        sample, values = read_bytes('compress/test/accounts.*',
-                                    compression=fmt, s3=s3)
+        sample, values = read_bytes('compress/test/accounts.*', s3=s3,
+                                    compression=fmt, blocksize=blocksize)
         assert sample.startswith(files[sorted(files)[0]][:10])
 
         results = compute(*concat(values))
@@ -176,15 +176,13 @@ def test_compression(s3, fmt, bs):
 
 
 def test_files(s3):
-    myfiles = open_files(test_bucket_name+'/test/accounts.*', mode='rb', s3=s3)
+    myfiles = open_files(test_bucket_name+'/test/accounts.*', s3=s3)
     assert len(myfiles) == len(files)
     data = compute(*[file.read() for file in myfiles])
     assert list(data) == [files[k] for k in sorted(files)]
 
 
-@pytest.mark.xfail(reason="s3fs doesn't support text")
-def test_files_textmode(s3):
-    myfiles = open_files(test_bucket_name+'/test/accounts.*', mode='rt', s3=s3)
-    data = compute(*[list(file) for file in myfiles])
-    assert list(data) == [list(StringIO(files[k].decode()))
-                          for k in sorted(files)]
+@pytest.mark.parametrize('fmt', list(seekable_files))
+def test_getsize(fmt):
+    with s3_context('compress', {'x': compress[fmt](b'1234567890')}) as s3:
+        assert getsize('compress/x', fmt, s3=s3) == 10

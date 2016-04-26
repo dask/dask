@@ -4,7 +4,7 @@ import logging
 
 from s3fs import S3FileSystem
 
-from .compression import files as compress_files
+from .compression import files as compress_files, seekable_files
 
 from ..base import tokenize
 from ..delayed import delayed
@@ -58,7 +58,7 @@ def read_bytes(fn, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         if blocksize is None:
             offsets = [0]
         else:
-            size = s3.info(fn)['Size']
+            size = getsize(fn, compression, s3)
             offsets = list(range(0, size, blocksize))
             if not_zero:
                 offsets[0] = 1
@@ -103,11 +103,13 @@ def s3_open_file(fn, s3_params):
     return s3.open(fn, mode='rb')
 
 
-def open_files(path, mode='rb', s3=None, **s3_params):
-    """ Open many files.  Return delayed objects. """
-    if mode != 'rb':
-        raise NotImplementedError("Only support readbyte mode, got %s" % mode)
+def open_files(path, s3=None, **s3_params):
+    """ Open many files.  Return delayed objects.
 
+    See Also
+    --------
+    dask.bytes.core.open_files:  User function
+    """
     s3 = s3 or S3FileSystem(**s3_params)
     filenames = sorted(s3.glob(path))
     myopen = delayed(s3_open_file)
@@ -115,6 +117,18 @@ def open_files(path, mode='rb', s3=None, **s3_params):
     s3_params.update(s3.get_delegated_s3pars())
 
     return [myopen(fn, s3_params) for fn in filenames]
+
+
+def getsize(fn, compression, s3):
+    if compression is None:
+        return s3.info(fn)['Size']
+    else:
+        with s3.open(fn, 'rb') as f:
+            g = seekable_files[compression](f)
+            g.seek(0, 2)
+            result = g.tell()
+            g.close()
+        return result
 
 
 from . import core
