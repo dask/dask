@@ -492,9 +492,6 @@ def test_from_s3():
     c = db.from_filenames('s3://tip-data/*')
     assert c.npartitions == 4
 
-    e = db.from_filenames('s3://tip-data/tips.bz2')
-    assert e.take(5) == five_tips
-
 
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)

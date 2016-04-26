@@ -7,11 +7,14 @@ pytest.importorskip('s3fs')
 
 import boto3
 import moto
-from toolz import concat, valmap
+from toolz import concat, valmap, partial
 from s3fs import S3FileSystem
 
-from dask import compute
+from dask import compute, get
 from dask.bytes.s3 import read_bytes, open_files
+
+
+compute = partial(compute, get=get)
 
 
 test_bucket_name = 'test'
@@ -85,49 +88,49 @@ def test_read_bytes_blocksize_on_large_data():
     assert len(L) == 12
 
 
-def test_read_bytes_block(s3):
-    for bs in [5, 15, 45, 1500]:
-        _, vals = read_bytes(test_bucket_name+'/test/account*', blocksize=bs,
-                             s3=s3)
-        assert (list(map(len, vals)) ==
-                [(len(v) // bs + 1) for v in files.values()])
+@pytest.mark.parametrize('blocksize', [5, 15, 45, 1500])
+def test_read_bytes_block(s3, blocksize):
+    _, vals = read_bytes(test_bucket_name+'/test/account*',
+                         blocksize=blocksize, s3=s3)
+    assert (list(map(len, vals)) ==
+            [(len(v) // blocksize + 1) for v in files.values()])
 
-        results = compute(*concat(vals))
-        assert (sum(len(r) for r in results) ==
-                sum(len(v) for v in files.values()))
+    results = compute(*concat(vals))
+    assert (sum(len(r) for r in results) ==
+            sum(len(v) for v in files.values()))
 
-        ourlines = b"".join(results).split(b'\n')
-        testlines = b"".join(files.values()).split(b'\n')
-        assert set(ourlines) == set(testlines)
+    ourlines = b"".join(results).split(b'\n')
+    testlines = b"".join(files.values()).split(b'\n')
+    assert set(ourlines) == set(testlines)
 
 
-def test_read_bytes_delimited(s3):
-    for bs in [5, 15, 45, 1500]:
-        _, values = read_bytes(test_bucket_name+'/test/accounts*',
-                               blocksize=bs, delimiter=b'\n', s3=s3)
-        _, values2 = read_bytes(test_bucket_name+'/test/accounts*',
-                                blocksize=bs, delimiter=b'foo', s3=s3)
-        assert ([a.key for a in concat(values)] !=
-                [b.key for b in concat(values2)])
+@pytest.mark.parametrize('blocksize', [5, 15, 45, 1500])
+def test_read_bytes_delimited(s3, blocksize):
+    _, values = read_bytes(test_bucket_name+'/test/accounts*',
+                           blocksize=blocksize, delimiter=b'\n', s3=s3)
+    _, values2 = read_bytes(test_bucket_name+'/test/accounts*',
+                            blocksize=blocksize, delimiter=b'foo', s3=s3)
+    assert ([a.key for a in concat(values)] !=
+            [b.key for b in concat(values2)])
 
-        results = compute(*concat(values))
-        res = [r for r in results if r]
-        assert all(r.endswith(b'\n') for r in res)
-        ourlines = b''.join(res).split(b'\n')
-        testlines = b"".join(files[k] for k in sorted(files)).split(b'\n')
-        assert ourlines == testlines
+    results = compute(*concat(values))
+    res = [r for r in results if r]
+    assert all(r.endswith(b'\n') for r in res)
+    ourlines = b''.join(res).split(b'\n')
+    testlines = b"".join(files[k] for k in sorted(files)).split(b'\n')
+    assert ourlines == testlines
 
-        # delimiter not at the end
-        d = b'}'
-        _, values = read_bytes(test_bucket_name+'/test/accounts*',
-                               blocksize=bs, delimiter=d, s3=s3)
-        results = compute(*concat(values))
-        res = [r for r in results if r]
-        # All should end in } except EOF
-        assert sum(r.endswith(b'}') for r in res) == len(res) - 2
-        ours = b"".join(res)
-        test = b"".join(files[v] for v in sorted(files))
-        assert ours == test
+    # delimiter not at the end
+    d = b'}'
+    _, values = read_bytes(test_bucket_name+'/test/accounts*',
+                           blocksize=blocksize, delimiter=d, s3=s3)
+    results = compute(*concat(values))
+    res = [r for r in results if r]
+    # All should end in } except EOF
+    assert sum(r.endswith(b'}') for r in res) == len(res) - 2
+    ours = b"".join(res)
+    test = b"".join(files[v] for v in sorted(files))
+    assert ours == test
 
 
 def test_registered(s3):
