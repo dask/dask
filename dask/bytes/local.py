@@ -80,7 +80,8 @@ def open_files(path):
     """
     myopen = delayed(open)
     filenames = sorted(glob(path))
-    return [myopen(fn, mode='rb') for fn in filenames]
+    return [myopen(fn, mode='rb', dask_key_name='open-%s' %
+                   tokenize(fn, os.path.getmtime(fn))) for fn in filenames]
 
 
 from . import core
@@ -98,7 +99,9 @@ if sys.version_info[0] >= 3:
         """
         myopen = delayed(open)
         filenames = sorted(glob(path))
-        return [myopen(fn, encoding=encoding, errors=errors)
+        return [myopen(fn, encoding=encoding, errors=errors,
+                       dask_key_name='open-%s' %
+                       tokenize(fn, encoding, errors, os.path.getmtime(fn)))
                 for fn in filenames]
 
     core._open_text_files['local'] = open_text_files

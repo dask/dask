@@ -6,7 +6,7 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get
-from dask.bytes.local import read_bytes, open_files, getsize
+from dask.bytes.local import read_bytes, open_files, open_text_files, getsize
 from dask.compatibility import FileNotFoundError
 from dask.utils import filetexts
 from dask.bytes import compression
@@ -195,3 +195,19 @@ def test_names():
         _, c = read_bytes('.test.accounts.*')
         c = list(concat(c))
         assert [aa._key for aa in a] != [cc._key for cc in c]
+
+
+@pytest.mark.parametrize('open_files', [open_files, open_text_files])
+def test_modification_time_open_files(open_files):
+    with filetexts(files, mode='b'):
+        a = open_files('.test.accounts.*')
+        b = open_files('.test.accounts.*')
+
+        assert [aa._key for aa in a] == [bb._key for bb in b]
+
+    sleep(1)
+
+    with filetexts({k: v + v for k, v in files.items()}, mode='b'):
+        c = open_files('.test.accounts.*')
+
+    assert [aa._key for aa in a] != [cc._key for cc in c]
