@@ -60,7 +60,6 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         return sample, values
 
 
-# TODO add modification time to input
 def read_block_from_file(fn, offset, length, delimiter, compression):
     with open(fn, 'rb') as f:
         if compression:
@@ -73,7 +72,12 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
 
 
 def open_files(path):
-    """ Open many files.  Return delayed objects. """
+    """ Open many files.  Return delayed objects.
+
+    See Also
+    --------
+    dask.bytes.core.open_files: User function
+    """
     myopen = delayed(open)
     filenames = sorted(glob(path))
     return [myopen(fn, mode='rb') for fn in filenames]
@@ -86,7 +90,12 @@ core._open_files['local'] = open_files
 
 if sys.version_info[0] >= 3:
     def open_text_files(path, encoding=system_encoding, errors='strict'):
-        """ Open many files in text mode.  Return delayed objects. """
+        """ Open many files in text mode.  Return delayed objects.
+
+        See Also
+        --------
+        dask.bytes.core.open_text_files: User function
+        """
         myopen = delayed(open)
         filenames = sorted(glob(path))
         return [myopen(fn, encoding=encoding, errors=errors)

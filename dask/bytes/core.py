@@ -19,13 +19,15 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
                      sample=True, compression=None, **kwargs):
     """ Convert path to a list of delayed values
 
-    The path may be a filename, like ``'2015-01-01.csv'`` or a globstring,
-    like ``'2015-*-*.csv'``.  The path may be preceeded by a protocol, like
-    ``s3://`` or ``hdfs://`` and, if those libraries are installed, the futures
-    will point to those locations instead.
+    The path may be a filename like ``'2015-01-01.csv'`` or a globstring
+    like ``'2015-*-*.csv'``.
 
-    This cleanly breaks data by a delimiter, if given, so that block boundaries
-    are guaranteed to start directly after a delimiter.
+    The path may be preceeded by a protocol, like ``s3://`` or ``hdfs://`` and,
+    if those libraries are installed, the futures will point to those locations
+    instead.
+
+    This cleanly breaks data by a delimiter if given, so that block boundaries
+    start directly after a delimiter and end on the delimiter.
 
     Parameters
     ----------
@@ -71,10 +73,20 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
 def open_files(path, compression=None, **kwargs):
     """ Given path return dask.delayed file-like objects
 
+    Parameters
+    ----------
+    path: string
+        Filename or globstring
+    compression: string
+        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    **kwargs: dict
+        Options to pass to storage backend.  Often used to pass authentication
+        information to S3 or HDFS.
+
     Examples
     --------
     >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
-    >>> files = open_files('s3://2015-*-*.csv')  # doctest: +SKIP
+    >>> files = open_files('s3://2015-*-*.csv.gz', compression='gzip')  # doctest: +SKIP
 
     Returns
     -------
@@ -103,15 +115,26 @@ def open_text_files(path, encoding=system_encoding, errors='strict',
         compression=None, **kwargs):
     """ Given path return dask.delayed file-like objects in text mode
 
+    Parameters
+    ----------
+    path: string
+        Filename or globstring
+    encoding: string
+    errors: string
+    compression: string
+        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    **kwargs: dict
+        Options to pass to storage backend.  Often used to pass authentication
+        information to S3 or HDFS.
+
     Examples
     --------
-    >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
-    >>> files = open_files('s3://2015-*-*.csv')  # doctest: +SKIP
+    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
+    >>> files = open_text_files('s3://2015-*-*.csv')  # doctest: +SKIP
 
     Returns
     -------
-    List of ``dask.delayed`` objects that compute to file-like objects in text
-    mode
+    List of ``dask.delayed`` objects that compute to text file-like objects
     """
     original_path = path
     if '://' in path:
