@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 from warnings import warn
 
+import numpy as np
 import pandas as pd
 
 from ..delayed import delayed
@@ -16,7 +17,7 @@ from ..utils import ensure_bytes
 delayed = delayed(pure=True)
 
 
-def bytes_read_csv(b, header, kwargs, dtypes=None):
+def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -34,16 +35,37 @@ def bytes_read_csv(b, header, kwargs, dtypes=None):
         dask.dataframe.csv.read_csv_from_bytes
     """
     bio = BytesIO()
-    if header:
+    if not b.startswith(header.rstrip()):
         bio.write(header)
     bio.write(b)
     bio.seek(0)
     df = pd.read_csv(bio, **kwargs)
-    if dtypes is not None:
-        d = dict((c, df[c].astype(dt)) for c, dt in dtypes.items()
-                                        if df[c].dtype != dt)
-        df = df.assign(**d)
+    if dtypes:
+        coerce_dtypes(df, dtypes)
+
+    if columns and (list(df.columns) != list(columns)):
+        raise ValueError("Columns do not match", df.columns, columns)
     return df
+
+
+def coerce_dtypes(df, dtypes):
+    """ Coerce dataframe to dtypes safely
+
+    Operates in place
+
+    Parameters
+    ----------
+    df: Pandas DataFrame
+    dtypes: dict like {'x': float}
+    """
+    for c in df.columns:
+        if c in dtypes and df.dtypes[c] != dtypes[c]:
+            if (np.issubdtype(df.dtypes[c], np.floating) and
+                np.issubdtype(dtypes[c], np.integer)):
+                if (df[c] % 1).any():
+                    raise TypeError("Runtime type mismatch. "
+                    "Add {'%s': float} to dtype= keyword in read_csv" % c)
+            df[c] = df[c].astype(dtypes[c])
 
 
 def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
@@ -72,13 +94,11 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     -------
     A dask.dataframe or list of delayed values
     """
-    if enforce_dtypes:
-        dt = head.dtypes.to_dict()
-    else:
-        dt = None
-    dfs1 = [[delayed(bytes_read_csv)(blocks[0], '', kwargs, dt)] +
-            [delayed(bytes_read_csv)(b, header, kwargs, dt) for b in blocks[1:]]
-            for blocks in block_lists]
+    dtypes = head.dtypes.to_dict()
+    columns = list(head.columns)
+    dfs1 = [[delayed(bytes_read_csv)(b, header, kwargs, dtypes, columns)
+              for b in blocks]
+              for blocks in block_lists]
     dfs2 = sum(dfs1, [])
 
     if collection:

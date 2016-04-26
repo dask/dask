@@ -37,7 +37,7 @@ expected = pd.concat([pd.read_csv(BytesIO(files[k])) for k in sorted(files)])
 
 def test_bytes_read_csv():
     b = files['2014-01-01.csv']
-    df = bytes_read_csv(b, '', {})
+    df = bytes_read_csv(b, b'', {})
     assert list(df.columns) == ['name', 'amount', 'id']
     assert len(df) == 3
     assert df.id.sum() == 1 + 2 + 3
@@ -45,13 +45,13 @@ def test_bytes_read_csv():
 
 def test_bytes_read_csv_kwargs():
     b = files['2014-01-01.csv']
-    df = bytes_read_csv(b, '', {'usecols': ['name', 'id']})
+    df = bytes_read_csv(b, b'', {'usecols': ['name', 'id']})
     assert list(df.columns) == ['name', 'id']
 
 
 def test_bytes_read_csv():
     b = files['2014-01-01.csv']
-    df = bytes_read_csv(b, '', {}, {'amount': 'float'})
+    df = bytes_read_csv(b, b'', {}, {'amount': 'float'})
     assert df.amount.dtype == 'float'
 
 
@@ -66,36 +66,30 @@ def test_bytes_read_csv_with_header():
 
 
 def test_read_csv_simple():
-    bytes = [files[k] for k in sorted(files)]
-    gzbytes = [gzip_compress(b) for b in bytes]
+    blocks = [[files[k]] for k in sorted(files)]
     kwargs = {}
-    head = bytes_read_csv(files['2014-01-01.csv'], '', {})
+    head = bytes_read_csv(files['2014-01-01.csv'], b'', {})
 
-    for blocks, compression in [(bytes, None),
-                                (gzbytes, 'gzip')]:
-        blocks = [[b] for b in blocks]
-        kwargs = {'compression': compression}
+    df = read_csv_from_bytes(blocks, header, head, kwargs, collection=True)
+    assert isinstance(df, dd.DataFrame)
+    assert list(df.columns) == ['name', 'amount', 'id']
 
-        df = read_csv_from_bytes(blocks, header, head, kwargs, collection=True)
-        assert isinstance(df, dd.DataFrame)
-        assert list(df.columns) == ['name', 'amount', 'id']
+    values = read_csv_from_bytes(blocks, header, head, kwargs,
+                                 collection=False)
+    assert isinstance(values, list)
+    assert len(values) == 3
+    assert all(hasattr(item, 'dask') for item in values)
 
-        values = read_csv_from_bytes(blocks, header, head, kwargs,
-                                     collection=False)
-        assert isinstance(values, list)
-        assert len(values) == 3
-        assert all(hasattr(item, 'dask') for item in values)
-
-        f = df.amount.sum().compute()
-        result = df.amount.sum().compute()
-        assert result == (100 + 200 + 300 + 400 + 500 + 600)
+    f = df.amount.sum().compute(get=get_sync)
+    result = df.amount.sum().compute(get=get_sync)
+    assert result == (100 + 200 + 300 + 400 + 500 + 600)
 
 
 def test_kwargs():
     blocks = [files[k] for k in sorted(files)]
     blocks = [[b] for b in blocks]
     kwargs = {'usecols': ['name', 'id']}
-    head = bytes_read_csv(files['2014-01-01.csv'], '', kwargs)
+    head = bytes_read_csv(files['2014-01-01.csv'], b'', kwargs)
 
     df = read_csv_from_bytes(blocks, header, head, kwargs, collection=True)
     assert list(df.columns) == ['name', 'id']
@@ -176,3 +170,21 @@ def test_windows_line_terminator():
         df = read_csv(fn, blocksize=5, lineterminator='\r\n')
         assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
+
+
+def test_late_dtypes():
+    text = 'a,b\n1,2\n2,3\n3,4\n4,5\n5.5,6\n6,7.5'
+    with filetext(text) as fn:
+        df = read_csv(fn, blocksize=5, sample=10)
+        try:
+            df.b.sum().compute()
+            assert False
+        except TypeError as e:
+            assert ("'b': float" in str(e) or
+                    "'a': float" in str(e))
+
+        df = read_csv(fn, blocksize=5, sample=10,
+                          dtype={'a': float, 'b': float})
+
+        assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5.5 + 6
+        assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7.5
