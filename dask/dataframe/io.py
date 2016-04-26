@@ -328,7 +328,7 @@ def from_array(x, chunksize=50000, columns=None):
     return _Frame(dsk, name, dummy, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True):
+def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     """Construct a dask object from a pandas object.
 
     If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
@@ -403,7 +403,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
         divisions = [None] * (npartitions + 1)
         locations = list(range(0, nrows, chunksize)) + [len(data)]
 
-    name = 'from_pandas-' + tokenize(data, chunksize)
+    name = name or ('from_pandas-' + tokenize(data, chunksize))
     dsk = dict(((name, i), data.iloc[start: stop])
                for i, (start, stop) in enumerate(zip(locations[:-1],
                    locations[1:])))
