@@ -1405,13 +1405,13 @@ class Scheduler(Server):
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
-        import cloudpickle
+        import pickle
         if function:
-            function = cloudpickle.loads(function)
+            function = pickle.loads(function)
         if setup:
-            setup = cloudpickle.loads(setup)
+            setup = pickle.loads(setup)
         if teardown:
-            teardown = cloudpickle.loads(teardown)
+            teardown = pickle.loads(teardown)
         state = setup(self) if setup else None
         if isinstance(state, gen.Future):
             state = yield state

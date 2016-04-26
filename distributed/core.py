@@ -30,30 +30,48 @@ from .compatibility import PY3, unicode
 from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
-pickle_types = [str, bytes]
+pickle_types = []
 with ignoring(ImportError):
     import numpy as np
     pickle_types.append(np.ndarray)
 with ignoring(ImportError):
     import pandas as pd
-    pickle_types.append(pd.core.generic.NDFrame)
-
+    pickle_types.append(pd.core.base.PandasObject)
+from numbers import Number
+pickle_types.extend([Number, str, bytes])
 pickle_types = tuple(pickle_types)
 
+
 def dumps(x):
+    """ Manage between cloudpickle and pickle
+
+    1.  Try pickle
+    2.  If it is short then check if it contains __main__
+    3.  If it is long, then first check type, then check __main__
+    """
     try:
-        if isinstance(x, pickle_types):
-            return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        result = pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(result) < 1000:
+            if b'__main__' in result:
+                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+            else:
+                return result
         else:
+            if isinstance(x, pickle_types) or b'__main__' not in result:
+                return result
+            else:
+                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+    except:
+        try:
             return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-    except Exception as e:
-        logger.info("Failed to serialize %s", x, exc_info=True)
-        raise
+        except Exception as e:
+            logger.info("Failed to serialize %s", x, exc_info=True)
+            raise
 
 
 def loads(x):
     try:
-        return cloudpickle.loads(x)
+        return pickle.loads(x)
     except Exception as e:
         logger.info("Failed to deserialize %s", x, exc_info=True)
         raise

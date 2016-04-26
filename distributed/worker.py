@@ -110,9 +110,6 @@ class Worker(Server):
         self.status = None
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
-        self.thread_tokens = Queue()  # https://github.com/tornadoweb/tornado/issues/1595#issuecomment-198551572
-        for i in range(self.ncores):
-            self.thread_tokens.put_nowait(i)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
         self.name = name
@@ -297,7 +294,6 @@ class Worker(Server):
         callbacks to ensure things run smoothly.  This can get tricky, so we
         pull it off into an separate method.
         """
-        token = yield self.thread_tokens.get()
         job_counter[0] += 1
         i = job_counter[0]
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
@@ -305,10 +301,7 @@ class Worker(Server):
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
             key, future._state), 1000); pc.start()
         try:
-            if sys.version_info < (3, 2):
-                yield future
-            else:
-                yield future
+            yield future
         finally:
             pc.stop()
             self.thread_tokens.put(token)

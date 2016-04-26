@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import cloudpickle
 from collections import defaultdict, Iterator, Iterable
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
@@ -33,7 +32,7 @@ from .batched import BatchedSend
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
-        clean_exception)
+        clean_exception, loads)
 from .scheduler import Scheduler
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
@@ -370,7 +369,7 @@ class Executor(object):
                             self.futures[msg['key']]['event'].set()
                             if (msg.get('type') and
                                 not self.futures[msg['key']].get('type')):
-                                self.futures[msg['key']]['type'] = cloudpickle.loads(msg['type'])
+                                self.futures[msg['key']]['type'] = loads(msg['type'])
                     elif msg['op'] == 'lost-data':
                         if msg['key'] in self.futures:
                             self.futures[msg['key']]['status'] = 'lost'
@@ -383,11 +382,11 @@ class Executor(object):
                         if msg['key'] in self.futures:
                             self.futures[msg['key']]['status'] = 'error'
                             try:
-                                self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
+                                self.futures[msg['key']]['exception'] = loads(msg['exception'])
                             except TypeError:
                                 self.futures[msg['key']]['exception'] = \
                                     Exception('Undeserializable exception', msg['exception'])
-                            self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
+                            self.futures[msg['key']]['traceback'] = (loads(msg['traceback'])
                                                                      if msg['traceback'] else None)
                             self.futures[msg['key']]['event'].set()
                     elif msg['op'] == 'restart':
@@ -680,7 +679,7 @@ class Executor(object):
         if bad_data and errors == 'skip' and isinstance(futures2, list):
             futures2 = [f for f in futures2 if f not in exceptions]
 
-        data = valmap(cloudpickle.loads, response['data'])
+        data = valmap(loads, response['data'])
         result = pack_data(futures2, merge(data, bad_data))
         raise gen.Return(result)
 
@@ -895,9 +894,9 @@ class Executor(object):
         results = {}
         for key, resp in responses.items():
             if resp['status'] == 'OK':
-                results[key] = cloudpickle.loads(resp['result'])
+                results[key] = loads(resp['result'])
             elif resp['status'] == 'error':
-                raise cloudpickle.loads(resp['exception'])
+                raise loads(resp['exception'])
         raise Return(results)
 
     def run(self, function, *args, **kwargs):
@@ -1177,7 +1176,7 @@ class Executor(object):
                                                 'data': data})
 
         if any(v['status'] == 'error' for v in d.values()):
-            exceptions = [cloudpickle.loads(v['exception']) for v in d.values()
+            exceptions = [loads(v['exception']) for v in d.values()
                           if v['status'] == 'error']
             if raise_on_error:
                 raise exceptions[0]
