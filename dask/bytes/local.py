@@ -112,6 +112,7 @@ def getsize(fn, compression=None):
         return os.path.getsize(fn)
     else:
         with open(fn, 'rb') as f:
+            f = SeekableFile(f)
             g = seekable_files[compression](f)
             g.seek(0, 2)
             result = g.tell()

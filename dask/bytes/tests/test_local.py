@@ -6,7 +6,8 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get
-from dask.bytes.local import read_bytes, open_files, open_text_files, getsize
+from dask.bytes.local import read_bytes, open_files, getsize
+from dask.bytes.core import open_text_files
 from dask.compatibility import FileNotFoundError
 from dask.utils import filetexts
 from dask.bytes import compression
@@ -155,7 +156,6 @@ def test_compression_binary(fmt):
 
 @pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
 def test_compression_text(fmt):
-    from dask.bytes.core import open_text_files
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_text_files('.test.accounts.*', compression=fmt)
@@ -207,7 +207,8 @@ def test_modification_time_open_files(open_files):
 
     sleep(1)
 
-    with filetexts({k: v + v for k, v in files.items()}, mode='b'):
+    double = lambda x: x + x
+    with filetexts(valmap(double, files), mode='b'):
         c = open_files('.test.accounts.*')
 
     assert [aa._key for aa in a] != [cc._key for cc in c]

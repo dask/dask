@@ -188,6 +188,9 @@ def test_getsize(fmt):
         assert getsize('compress/x', fmt, s3=s3) == 10
 
 
+double = lambda x: x * 2
+
+
 def test_modification_time_read_bytes():
     with s3_context('compress', files) as s3:
         _, a = read_bytes('compress/test/accounts.*', s3=s3)
@@ -195,7 +198,7 @@ def test_modification_time_read_bytes():
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
-    with s3_context('compress', {k: v + v for k, v in files.items()}) as s3:
+    with s3_context('compress', valmap(double, files)) as s3:
         _, c = read_bytes('compress/test/accounts.*', s3=s3)
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
@@ -208,7 +211,7 @@ def test_modification_time_open_files():
 
         assert [aa._key for aa in a] == [bb._key for bb in b]
 
-    with s3_context('compress', {k: v + v for k, v in files.items()}) as s3:
+    with s3_context('compress', valmap(double, files)) as s3:
         c = open_files('compress/test/accounts.*', s3=s3)
 
     assert [aa._key for aa in a] != [cc._key for cc in c]
