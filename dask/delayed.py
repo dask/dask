@@ -347,6 +347,13 @@ class DelayedFunction(Delayed):
     def __call__(self, *args, **kwargs):
         dask_key_name = kwargs.pop('dask_key_name', None)
         pure = kwargs.pop('pure', False)
+
+        if dask_key_name is None:
+            name = ((self.prefix or funcname(self.function)) + '-' +
+                    tokenize(self._key, *args, pure=self.pure, **kwargs))
+        else:
+            name = dask_key_name
+
         args, dasks = unzip(map(to_task_dasks, args), 2)
         if kwargs:
             dask_kwargs, dasks2 = to_task_dasks(kwargs)
@@ -355,11 +362,6 @@ class DelayedFunction(Delayed):
         else:
             task = (self.function,) + args
 
-        if dask_key_name is None:
-            name = ((self.prefix or funcname(self.function)) + '-' +
-                    tokenize(self._key, args, pure=self.pure, **kwargs))
-        else:
-            name = dask_key_name
         dasks = flat_unique(dasks)
         dasks.append({name: task})
         return Delayed(name, dasks)

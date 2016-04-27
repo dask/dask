@@ -147,6 +147,10 @@ def test_tokenize_sequences():
     assert tokenize([x]) != tokenize([y])
 
 
+def test_tokenize_dict():
+    assert tokenize({'x': 1, 1: 'x'}) == tokenize({'x': 1, 1: 'x'})
+
+
 def test_tokenize_ordered_dict():
     with ignoring(ImportError):
         from collections import OrderedDict

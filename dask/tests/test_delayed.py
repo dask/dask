@@ -276,9 +276,16 @@ def test_callable_obj():
 
 def test_name_consitent_across_instances():
     func = delayed(identity, pure=True)
-    assert func(1)._key == 'identity-2ad77b789acfb7f92e39cbb8cb91172d'
+
+    data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
+    assert func(data)._key == 'identity-51ba0a5e8802714adbfebe0e459b329c'
+
+    data = {'x': 1, 1: 'x'}
+    assert func(data)._key == func(data)._key
+
+    assert func(1)._key == 'identity-4b2538dc5ee69432194831bfdfbe40c3'
 
 
-def test_name_sensitive_to_partials():
+def test_sensitive_to_partials():
     assert (delayed(partial(add, 10), pure=True)(2)._key !=
             delayed(partial(add, 20), pure=True)(2)._key)

@@ -564,6 +564,5 @@ def funcname(func, full=False):
             return func.__qualname__
         else:
             return func.__name__
-
     except:
         return str(func)

@@ -151,7 +151,7 @@ normalize_token.register((int, float, str, unicode, bytes, type(None), type,
 
 @partial(normalize_token.register, dict)
 def normalize_dict(d):
-    return normalize_token(sorted(d.items()))
+    return normalize_token(sorted(d.items(), key=str))
 
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
