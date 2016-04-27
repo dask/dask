@@ -44,10 +44,14 @@ class Callback(object):
     """
 
     def __init__(self, start=None, pretask=None, posttask=None, finish=None):
-        self._start = start
-        self._pretask = pretask
-        self._posttask = posttask
-        self._finish = finish
+        if start:
+            self._start = start
+        if pretask:
+            self._pretask = pretask
+        if posttask:
+            self._posttask = posttask
+        if finish:
+            self._finish = finish
 
     @property
     def _callback(self):
