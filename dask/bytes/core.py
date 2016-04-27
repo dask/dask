@@ -1,15 +1,17 @@
 import io
-import sys
 
 from toolz import merge
 
-from .compression import seekable_files, files as cfiles
+from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
+from ..compatibility import PY2
 from ..delayed import delayed
 from ..utils import system_encoding
 
 delayed = delayed(pure=True)
 
+# Global registration dictionaries for backend storage functions
+# See docstrings to functions below for more information
 _read_bytes = dict()
 _open_files = dict()
 _open_text_files = dict()
@@ -22,9 +24,8 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
     like ``'2015-*-*.csv'``.
 
-    The path may be preceeded by a protocol, like ``s3://`` or ``hdfs://`` and,
-    if those libraries are installed, the futures will point to those locations
-    instead.
+    The path may be preceeded by a protocol, like ``s3://`` or ``hdfs://`` if
+    those libraries are installed.
 
     This cleanly breaks data by a delimiter if given, so that block boundaries
     start directly after a delimiter and end on the delimiter.
@@ -55,6 +56,9 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
     10kB sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
     if '://' in path:
         protocol, path = path.split('://', 1)
         try:
@@ -63,7 +67,7 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
             raise NotImplementedError("Unknown protocol %s://%s" %
                                       (protocol, path))
     else:
-        read_bytes = _read_bytes['local']
+        read_bytes = _read_bytes['file']
 
     return read_bytes(path, delimiter=delimiter, not_zero=not_zero,
             blocksize=blocksize, sample=sample, compression=compression,
@@ -92,10 +96,13 @@ def open_files(path, compression=None, **kwargs):
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
     if '://' in path:
         protocol, path = path.split('://', 1)
     else:
-        protocol = 'local'
+        protocol = 'file'
 
     try:
         files = _open_files[protocol](path, **kwargs)
@@ -103,8 +110,8 @@ def open_files(path, compression=None, **kwargs):
         raise NotImplementedError("Unknown protocol %s://%s" %
                                   (protocol, path))
     if compression:
-        decompress = merge(seekable_files, cfiles)[compression]
-        if sys.version_info[0] < 3:
+        decompress = merge(seekable_files, compress_files)[compression]
+        if PY2:
             files = [delayed(SeekableFile)(file) for file in files]
         files = [delayed(decompress)(file) for file in files]
 
@@ -136,18 +143,21 @@ def open_text_files(path, encoding=system_encoding, errors='strict',
     -------
     List of ``dask.delayed`` objects that compute to text file-like objects
     """
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
     original_path = path
     if '://' in path:
         protocol, path = path.split('://', 1)
     else:
-        protocol = 'local'
+        protocol = 'file'
 
     if protocol in _open_text_files and compression is None:
         return _open_text_files[protocol](path, encoding=encoding,
                                           errors=errors, **kwargs)
     elif protocol in _open_files:
         files = open_files(original_path, compression=compression, **kwargs)
-        if sys.version_info[0] < 3:
+        if PY2:
             files = [delayed(SeekableFile)(file) for file in files]
         return [delayed(io.TextIOWrapper)(file, encoding=encoding,
                                           errors=errors) for file in files]

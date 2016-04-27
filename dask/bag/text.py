@@ -19,8 +19,9 @@ def read_text(path, blocksize=None, compression='infer',
 
     Parameters
     ----------
-    path: string
+    path: string or list
         Path to data.  Can include ``'*'`` or protocol like ``'s3://'``
+        Can also be a list of filenames
     blocksize: None or int
         Size to cut up larger files.  Streams by default.
     compression: string
@@ -76,7 +77,6 @@ def read_text(path, blocksize=None, compression='infer',
             files = open_text_files(path, encoding=encoding, errors=errors,
                                           compression=compression, **kwargs)
             blocks = [delayed(list)(file) for file in files]
-
 
         else:
             _, blocks = read_bytes(path, delimiter=linedelimiter.encode(),

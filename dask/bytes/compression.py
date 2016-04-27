@@ -52,6 +52,4 @@ with ignoring(ImportError):
 
 if sys.version_info[0] >= 3:
     import bz2
-    compress['bz2'] = bz2.compress
-    decompress['bz2'] = bz2.decompress
     files['bz2'] = bz2.BZ2File

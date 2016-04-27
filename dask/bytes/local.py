@@ -6,11 +6,11 @@ import os
 import sys
 
 from .compression import files as compress_files, seekable_files
-from .utils import SeekableFile
+from .utils import SeekableFile, read_block
 from ..base import tokenize
 from ..compatibility import FileNotFoundError
 from ..delayed import delayed
-from ..utils import read_block, system_encoding
+from ..utils import system_encoding
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
         sample=True, compression=None):
     """ See dask.bytes.core.read_bytes for docstring """
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
     if '*' in fn:
         filenames = list(map(os.path.abspath, sorted(glob(fn))))
         sample, first = read_bytes(filenames[0], delimiter, not_zero,
@@ -51,7 +49,7 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
                   for offset in offsets]
 
         if sample:
-            if isinstance(sample, int) and not isinstance(sample, bool):
+            if sample is not True:
                 nbytes = sample
             else:
                 nbytes = 10000
@@ -65,8 +63,9 @@ def read_block_from_file(fn, offset, length, delimiter, compression):
         if compression:
             f = SeekableFile(f)
             f = compress_files[compression](f)
-        result = read_block(f, offset, length, delimiter)
-        if compression:
+        try:
+            result = read_block(f, offset, length, delimiter)
+        finally:
             f.close()
     return result
 
@@ -85,8 +84,8 @@ def open_files(path):
 
 
 from . import core
-core._read_bytes['local'] = read_bytes
-core._open_files['local'] = open_files
+core._read_bytes['file'] = read_bytes
+core._open_files['file'] = open_files
 
 
 if sys.version_info[0] >= 3:
@@ -104,7 +103,7 @@ if sys.version_info[0] >= 3:
                        tokenize(fn, encoding, errors, os.path.getmtime(fn)))
                 for fn in filenames]
 
-    core._open_text_files['local'] = open_text_files
+    core._open_text_files['file'] = open_text_files
 
 
 def getsize(fn, compression=None):

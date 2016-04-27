@@ -14,7 +14,6 @@ from dask.bytes import compression
 
 compute = partial(compute, get=get)
 
-# These get mirrored on s3://distributed-test/
 files = {'.test.accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                               b'{"amount": 200, "name": "Bob"}\n'
                               b'{"amount": 300, "name": "Charlie"}\n'
@@ -136,6 +135,7 @@ def test_registered_open_text_files(encoding):
         assert list(data) == [files[k].decode(encoding)
                               for k in sorted(files)]
 
+
 def test_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
@@ -169,6 +169,14 @@ def test_getsize(fmt):
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode = 'b'):
         assert getsize('.tmp.getsize', fmt) == 10
 
+
+def test_bad_compression():
+    from dask.bytes.core import read_bytes, open_files, open_text_files
+    with filetexts(files, mode='b'):
+        for func in [read_bytes, open_files, open_text_files]:
+            with pytest.raises(ValueError):
+                sample, values = func('.test.accounts.*',
+                                      compression='not-found')
 
 def test_not_found():
     fn = 'not-a-file'

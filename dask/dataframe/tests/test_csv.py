@@ -152,13 +152,14 @@ def test_warn_non_seekable_files(capsys):
     files2 = valmap(compress['gzip'], files)
     with filetexts(files2, mode='b'):
         df = read_csv('2014-01-*.csv', compression='gzip')
+        assert df.npartitions == 3
         out, err = capsys.readouterr()
-        assert 'gzip' in out
-        assert 'blocksize=None' in out
+        assert 'gzip' in err
+        assert 'blocksize=None' in err
 
         df = read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
         out, err = capsys.readouterr()
-        assert not out
+        assert not err and not out
 
         with pytest.raises(NotImplementedError):
             df = read_csv('2014-01-*.csv', compression='foo')

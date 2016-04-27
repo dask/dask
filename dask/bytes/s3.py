@@ -5,10 +5,10 @@ import logging
 from s3fs import S3FileSystem
 
 from .compression import files as compress_files, seekable_files
+from .utils import read_block
 
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import read_block
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,6 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
     10kB sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``path`` is a globstring.
     """
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
-
     if s3 is None:
         s3 = S3FileSystem(**s3_params)
 
@@ -70,8 +67,7 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         logger.debug("Read %d blocks of binary bytes from %s", len(offsets), path)
 
         s3safe_pars = s3_params.copy()
-        if not s3.anon:
-            s3safe_pars.update(s3.get_delegated_s3pars())
+        s3safe_pars.update(s3.get_delegated_s3pars())
 
         values = [delayed(read_block_from_s3)(path, offset, blocksize,
                     s3safe_pars, delimiter, compression,
@@ -95,8 +91,9 @@ def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None,
     with s3.open(filename, 'rb') as f:
         if compression:
             f = compress_files[compression](f)
-        result = read_block(f, offset, length, delimiter)
-        if compression:
+        try:
+            result = read_block(f, offset, length, delimiter)
+        finally:
             f.close()
     return result
 
