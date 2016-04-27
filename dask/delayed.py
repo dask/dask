@@ -6,7 +6,7 @@ from warnings import warn
 import operator
 import uuid
 
-from toolz import merge, unique, curry, first
+from toolz import merge, unique, curry, first, assoc
 
 from .async import get_sync
 from .utils import concrete, funcname
@@ -330,7 +330,11 @@ class DelayedFunction(Delayed):
     _default_get = staticmethod(get_sync)
 
     def __init__(self, function, name=None, pure=False, prefix=None):
-        name = name or (funcname(function), id(function))
+        if name is None:
+            name = funcname(function, full=True)
+        if hasattr(function, 'args') or hasattr(function, 'kwargs'):
+            name = name + '-' + tokenize(*getattr(function, 'args', ()),
+                                         **getattr(function, 'kwargs', {}))
         object.__setattr__(self, '_key', name)
         object.__setattr__(self, 'function', function)
         object.__setattr__(self, 'pure', pure)
@@ -353,7 +357,7 @@ class DelayedFunction(Delayed):
 
         if dask_key_name is None:
             name = ((self.prefix or funcname(self.function)) + '-' +
-                    tokenize(*task, pure=self.pure))
+                    tokenize(self._key, args, pure=self.pure, **kwargs))
         else:
             name = dask_key_name
         dasks = flat_unique(dasks)

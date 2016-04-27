@@ -3,6 +3,7 @@ from operator import add, setitem
 import pickle
 from random import random
 
+from toolz import identity, partial
 import pytest
 
 from dask.delayed import delayed, to_task_dasks, compute, Delayed
@@ -271,3 +272,13 @@ def test_callable_obj():
     assert f.compute() is foo
     assert f.a.compute() == 1
     assert f().compute() == 2
+
+
+def test_name_consitent_across_instances():
+    func = delayed(identity, pure=True)
+    assert func(1)._key == 'identity-2ad77b789acfb7f92e39cbb8cb91172d'
+
+
+def test_name_sensitive_to_partials():
+    assert (delayed(partial(add, 10), pure=True)(2)._key !=
+            delayed(partial(add, 20), pure=True)(2)._key)
