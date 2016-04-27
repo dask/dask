@@ -82,7 +82,7 @@ def unpack_callbacks(cbs):
     if cbs:
         return [[i for i in f if i] for f in zip(*cbs)]
     else:
-        return [(), (), (), ()]
+        return [(), (), (), (), ()]
 
 
 def normalize_callback(cb):
