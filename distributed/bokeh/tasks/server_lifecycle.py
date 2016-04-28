@@ -3,7 +3,6 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import deque
-from datetime import datetime
 import json
 import os
 from time import time
@@ -15,7 +14,6 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read
 from distributed.diagnostics.eventstream import eventstream
-from distributed.diagnostics.progress_stream import progress_stream
 from distributed.bokeh.status_monitor import task_stream_append
 import distributed.bokeh
 from distributed.utils import log_errors
@@ -60,12 +58,14 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
                         task_stream_append(rectangles, msg, workers)
 
 
+n = 100000
+
 def on_server_loaded(server_context):
     messages['task-events'] = {'interval': 200,
-                               'deque': deque(maxlen=20000),
-                               'times': deque(maxlen=20000),
-                               'index': deque(maxlen=20000),
-                               'rectangles':{name: deque(maxlen=20000) for name in
+                               'deque': deque(maxlen=n),
+                               'times': deque(maxlen=n),
+                               'index': deque(maxlen=n),
+                               'rectangles':{name: deque(maxlen=n) for name in
                                             'start duration key name color worker worker_thread y'.split()},
                                'workers': dict(),
                                'last_seen': [time()]}
