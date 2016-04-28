@@ -78,7 +78,7 @@ def test_update_state(loop):
     assert s.who_wants == {'z': {'client'}, 'y': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
 
-    assert list(s.ready) == ['a']
+    assert 'a' in s.ready or 'a' in s.processing[alice]
 
     s.stop()
 
@@ -109,7 +109,7 @@ def test_update_state_with_processing(loop):
                    client='client')
 
     assert s.waiting == {'z': {'y'}, 'b': {'a', 'y'}, 'c': {'z'}}
-    assert s.stacks[alice] == ['a']
+    assert 'a' in s.stacks[alice] or 'a' in s.processing[alice]
     assert not s.ready
     assert s.waiting_data == {'x': {'y', 'a'}, 'y': {'z', 'b'}, 'z': {'c'},
                               'a': {'b'}, 'b': set(), 'c': set()}
@@ -480,7 +480,7 @@ def test_server_listens_to_other_ops(s, a, b):
 
 @gen_cluster()
 def test_remove_worker_from_scheduler(s, a, b):
-    dsk = {('x', i): (inc, i) for i in range(10)}
+    dsk = {('x', i): (inc, i) for i in range(20)}
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk),
                    dependencies={k: set() for k in dsk})
     assert s.ready
@@ -727,7 +727,7 @@ def test_ready_remove_worker(s, a, b):
                    client='client',
                    dependencies={'x-%d' % i: [] for i in range(20)})
 
-    assert all(len(s.processing[w]) == s.ncores[w]
+    assert all(len(s.processing[w]) >= s.ncores[w]
                 for w in s.ncores)
     assert not any(stack for stack in s.stacks.values())
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
@@ -736,7 +736,7 @@ def test_ready_remove_worker(s, a, b):
 
     for collection in [s.ncores, s.stacks, s.processing]:
         assert set(collection) == {b.address}
-    assert all(len(s.processing[w]) == s.ncores[w]
+    assert all(len(s.processing[w]) >= s.ncores[w]
                 for w in s.ncores)
     assert set(s.processing) == {b.address}
     assert not any(stack for stack in s.stacks.values())

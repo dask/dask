@@ -396,16 +396,16 @@ class Scheduler(Server):
         **Work stealing policy**
 
         If some workers are idle but not others, if there are no globally ready
-        tasks, and if there are tasks in worker stacks then we start to pull
+        tasks, and if there are tasks in worker stacks, then we start to pull
         preferred tasks from overburdened workers and deploy them back into the
         global pool in the following manner.
 
         We determine the number of tasks to reclaim as the number of all tasks
-        in all stacks times the fraction of idle workers to all workers.  We
-        sort the stacks by size and walk through them, reclaiming half of each
-        stack until we have enough task to fill the global pool.  We are
-        careful not to reclaim tasks that are restricted to run on certain
-        workers.
+        in all stacks times the fraction of idle workers to all workers.
+        We sort the stacks by size and walk through them, reclaiming half of
+        each stack until we have enough task to fill the global pool.
+        We are careful not to reclaim tasks that are restricted to run on
+        certain workers.
         """
         if 0 < len(self.idle) < len(self.ncores) and not self.ready:
             n = sum(map(len, self.stacks)) * len(self.idle) / len(self.ncores)
@@ -490,6 +490,21 @@ class Scheduler(Server):
                 if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
+    def task_load(self, address):
+        if time() - self.worker_info[address].get('last-task', 0) > 2:
+            tasks_per_core = 2
+        else:
+            duration = max(self.worker_info[address]['avg-task-duration'],
+                           50e-6)
+            try:
+                latency = self.host_info[address.split(':')[0]]['latency']
+            except KeyError:
+                latency = 0
+            latency = max(latency, 10e-3)
+            tasks_per_core = max(2, latency // duration)
+            tasks_per_core = min(500, tasks_per_core)
+        return tasks_per_core * self.ncores[address]
+
     def ensure_occupied(self, worker):
         """ Send tasks to worker while it has tasks and free cores
 
@@ -500,8 +515,10 @@ class Scheduler(Server):
         """
         logger.debug('Ensure worker is occupied: %s', worker)
 
+        load = self.task_load(worker)
+
         while (self.stacks[worker] and
-               1 * self.ncores[worker] > len(self.processing[worker])):
+               load * self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
             if key not in self.tasks:
                 continue
@@ -512,7 +529,7 @@ class Scheduler(Server):
             self.send_task_to_worker(worker, key)
 
         while (self.ready and
-               1 * self.ncores[worker] > len(self.processing[worker])):
+               load * self.ncores[worker] > len(self.processing[worker])):
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
@@ -522,7 +539,7 @@ class Scheduler(Server):
             logger.debug("Send job to worker: %s, %s", worker, key)
             self.send_task_to_worker(worker, key)
 
-        if 1 * self.ncores[worker] > len(self.processing[worker]):
+        if load * self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
         elif worker in self.idle:
             self.idle.remove(worker)
@@ -600,6 +617,13 @@ class Scheduler(Server):
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
             self.ensure_occupied(worker)
+            self.worker_info[worker]['last-task'] = time()
+            try:
+                self.worker_info[worker]['avg-task-duration'] = (
+                    0.95 * self.worker_info[worker]['avg-task-duration'] +
+                    0.05 * (kwargs['compute-stop'] - kwargs['compute-start']))
+            except KeyError:
+                pass
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_finished(self, key=key, worker=worker,
@@ -771,6 +795,7 @@ class Scheduler(Server):
 
         info['name'] = name
         self.worker_info[address] = info
+        self.worker_info[address]['avg-task-duration'] = 1.0
 
         if address not in self.processing:
             self.has_what[address] = set()
@@ -1401,8 +1426,6 @@ class Scheduler(Server):
                 set(self.worker_info) == \
                 set(self.worker_streams)):
             raise ValueError("Workers not the same in all collections")
-        for w, n in self.ncores.items():
-            assert (len(self.processing[w]) < n) == (w in self.idle)
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):

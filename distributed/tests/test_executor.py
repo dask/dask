@@ -2509,7 +2509,7 @@ def test_workers_register_indirect_data(e, s, a, b):
     s.validate()
 
 
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 4), ('127.0.0.2', 4)])
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)])
 def test_work_stealing(e, s, a, b):
     [x] = yield e._scatter([1])
     futures = e.map(slowadd, range(50), [x] * 50)
@@ -2650,3 +2650,20 @@ def test_executor_replicate_sync(loop):
 
             with pytest.raises(ValueError):
                 e.replicate([x], n=0)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
+def test_task_load(e, s, a):
+    assert 4 < s.task_load(a.address) < 20
+    L = e.map(inc, range(100))  # very fast
+    yield _wait(L)
+    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+
+    assert 8 <= s.task_load(a.address) < 10000
+
+    L = e.map(sleep, [0.1] * 10, pure=False)
+    yield _wait(L)
+
+    assert 0.0001 < s.worker_info[a.address]['avg-task-duration'] < 0.2
+
+    assert 4 < s.task_load(a.address) < 100
