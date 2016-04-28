@@ -32,7 +32,7 @@ install:
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
   - pip install blosc --upgrade
-  - pip install graphviz
+  - pip install graphviz moto
   - if [[ $TRAVIS_PYTHON_VERSION < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
 
   # Install dask

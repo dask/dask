@@ -108,7 +108,7 @@ Rolling Operations
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.io
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    from_array
@@ -147,7 +147,7 @@ Other functions
 .. autofunction:: concat
 .. autofunction:: merge
 
-.. currentmodule:: dask.dataframe.io
+.. currentmodule:: dask.dataframe
 
 .. autofunction:: read_csv
 .. autofunction:: from_array

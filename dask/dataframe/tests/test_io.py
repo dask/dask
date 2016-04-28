@@ -17,11 +17,11 @@ from distutils.version import LooseVersion
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
+from dask.dataframe.io import (file_size,  dataframe_from_ctable,
                                from_array, from_bcolz, from_dask_array)
-from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
+from dask.compatibility import GzipFile, FileNotFoundError
 
-from dask.utils import filetext, tmpfile, ignoring, compressions
+from dask.utils import filetext, filetexts, tmpfile, ignoring, compressions
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
@@ -49,34 +49,15 @@ Edith,600
 """.strip()
 
 
-SKIP_PD_XZ = pytest.mark.skipif(
-    not LZMA_AVAILABLE or LooseVersion(pd.__version__) <= LooseVersion('0.18.0'),
-    reason=('no lzma module found' if not LZMA_AVAILABLE else
-            'pandas <= 0.18.0 does not support xz compression'))
-
-
-@pytest.mark.parametrize('open_comp_pair,infer',
-                         [SKIP_PD_XZ(((o, c), i)) if c == 'xz' else ((o, c), i)
-                          for (o, c), i in product([(open, None),
-                                                    (GzipFile, 'gzip'),
-                                                    (BZ2File, 'bz2'),
-                                                    (LZMAFile, 'xz')],
-                                                   (True, False))])
-def test_read_csv(open_comp_pair, infer):
-    myopen, compression = open_comp_pair
-    text_ = text if compression is None else text.encode()
-    ext = dict((v, k) for (k, v) in compressions.items()).get(compression, '')
-    with filetext(text_, open=myopen, extension=ext) as fn:
-        compression = 'infer' if infer else compression
-        f = dd.read_csv(fn, chunkbytes=30, compression=compression,
-                lineterminator='\n')
+def test_read_csv():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunkbytes=30, lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions > 1
         assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, compression=compression, lineterminator='\n'))
+                  pd.read_csv(fn, lineterminator='\n'))
 
 
 
@@ -97,8 +78,8 @@ def test_read_multiple_csv():
         assert df._known_dtype
         assert df.npartitions > 2
 
-        assert (len(read_csv('_foo.*.csv').compute()) ==
-                len(read_csv('_foo.1.csv').compute()) * 2)
+        assert (len(dd.read_csv('_foo.*.csv').compute()) ==
+                len(dd.read_csv('_foo.1.csv').compute()) * 2)
 
     finally:
         os.remove('_foo.1.csv')
@@ -135,7 +116,7 @@ Dan,400,2014-01-01
 
 def test_read_csv_index():
     with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=20, index='amount')
+        f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
         assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
@@ -245,7 +226,8 @@ def test_from_array():
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
-    pytest.raises(ValueError, dd.from_array, np.ones(shape=(10, 10, 10)))
+    with pytest.raises(ValueError):
+        dd.from_array(np.ones(shape=(10, 10, 10)))
 
 
 def test_from_array_with_record_dtype():
@@ -804,11 +786,12 @@ def test_read_csv_with_nrows():
 
 
 def test_read_csv_raises_on_no_files():
+    fn = '.not.a.real.file.csv'
     try:
-        dd.read_csv('21hflkhfisfshf.*.csv')
+        dd.read_csv(fn)
         assert False
-    except Exception as e:
-        assert "21hflkhfisfshf.*.csv" in str(e)
+    except IOError as e:
+        assert fn in str(e)
 
 
 def test_read_csv_has_deterministic_name():
@@ -816,7 +799,7 @@ def test_read_csv_has_deterministic_name():
         a = dd.read_csv(fn)
         b = dd.read_csv(fn)
         assert a._name == b._name
-        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+        assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
         assert isinstance(a._name, str)
 
         c = dd.read_csv(fn, skiprows=1, na_values=[0])
@@ -824,18 +807,11 @@ def test_read_csv_has_deterministic_name():
 
 
 def test_multiple_read_csv_has_deterministic_name():
-    try:
-        with open('_foo.1.csv', 'w') as f:
-            f.write(text)
-        with open('_foo.2.csv', 'w') as f:
-            f.write(text)
+    with filetexts({'_foo.1.csv': text, '_foo.2.csv': text}):
         a = dd.read_csv('_foo.*.csv')
         b = dd.read_csv('_foo.*.csv')
 
-        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
-    finally:
-        os.remove('_foo.1.csv')
-        os.remove('_foo.2.csv')
+        assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
 
 
 def test_csv_with_integer_names():
@@ -872,33 +848,16 @@ def test_to_bag():
     assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
 
 
-def test_csv_expands_dtypes():
-    with filetext(text) as fn:
-        a = dd.read_csv(fn, chunkbytes=30, dtype={})
-        a_kwargs = list(a.dask.values())[0][-2]
-
-        b = dd.read_csv(fn, chunkbytes=30)
-        b_kwargs = list(b.dask.values())[0][-2]
-
-        assert a_kwargs['dtype'] == b_kwargs['dtype']
-
-        a = dd.read_csv(fn, chunkbytes=30, dtype={'amount': float})
-        a_kwargs = list(a.dask.values())[0][-2]
-
-        assert a_kwargs['dtype']['amount'] == float
-
-
+@pytest.mark.xfail(reason='we might want permissive behavior here')
 def test_report_dtype_correction_on_csvs():
     text = 'numbers,names\n'
     for i in range(1000):
         text += '1,foo\n'
     text += '1.5,bar\n'
     with filetext(text) as fn:
-        try:
+        with pytest.raises(ValueError) as e:
             dd.read_csv(fn).compute(get=get_sync)
-            assert False
-        except ValueError as e:
-            assert "'numbers': 'float64'" in str(e)
+        assert "'numbers': 'float64'" in str(e)
 
 
 def test_hdf_globbing():
@@ -942,7 +901,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            f = read_csv(fn, chunkbytes=30, index_col='name')
+            f = dd.read_csv(fn, chunkbytes=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -967,13 +926,14 @@ def test_read_csv_with_datetime_index_partitions_one():
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
         # chunkbytes set to explicitly set to single chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'],  chunkbytes=10000000)
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date'],
+                          chunkbytes=10000000).set_index('Date')
         eq(df, ddf)
 
         # because fn is so small, by default, this will only be one chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'])
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date']).set_index('Date')
         eq(df, ddf)
 
 def test_read_csv_with_datetime_index_partitions_n():
@@ -981,8 +941,9 @@ def test_read_csv_with_datetime_index_partitions_n():
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
         # because fn is so small, by default, set chunksize small
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'], chunkbytes=400)
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date'],
+                          chunkbytes=400).set_index('Date')
         eq(df, ddf)
 
 def test_from_pandas_with_datetime_index():

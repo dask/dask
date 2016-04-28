@@ -19,7 +19,7 @@ Import ``dask.bag`` and create a ``bag`` from the single text file:
 .. code-block:: python
 
    >>> import dask.bag as db
-   >>> b = db.from_filenames('merged.txt')
+   >>> b = db.read_text('merged.txt', blocksize=10000000)
 
 View the first ten lines of the text file with ``.take()``:
 
@@ -199,7 +199,7 @@ The complete Python script for this example is shown below:
    # Local computation
 
    import dask.bag as db
-   b = db.from_filenames('merged.txt')
+   b = db.read_text('merged.txt')
    b.take(10)
    wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
    wordcount.compute()
@@ -223,5 +223,5 @@ The complete Python script for this example is shown below:
    results = e.gather(future)
    print(results)
 
-.. _distributed: http://distributed.readthedocs.org/en/latest/
-.. _hdfs3: http://hdfs3.readthedocs.org/en/latest/
+.. _distributed: http://distributed.readthedocs.io/en/latest/
+.. _hdfs3: http://hdfs3.readthedocs.io/en/latest/

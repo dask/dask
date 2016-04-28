@@ -17,8 +17,6 @@ Top level user functions:
     Bag.fold
     Bag.foldby
     Bag.frequencies
-    Bag.from_filenames
-    Bag.from_sequence
     Bag.groupby
     Bag.join
     Bag.map
@@ -45,9 +43,9 @@ Create Bags
 -----------
 
 .. autosummary::
-   from_sequence
-   from_filenames
    concat
+   from_sequence
+   read_text
 
 Turn Bags into other things
 ---------------------------
@@ -66,5 +64,5 @@ Other functions
 ---------------
 
 .. autofunction:: from_sequence
-.. autofunction:: from_filenames
+.. autofunction:: read_text
 .. autofunction:: concat

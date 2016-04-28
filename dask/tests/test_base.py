@@ -21,19 +21,37 @@ from dask.compatibility import unicode
 def test_normalize_function():
     def f1(a, b, c=1):
         pass
-    cf1 = curry(f1)
     def f2(a, b=1, c=2):
         pass
     def f3(a):
         pass
-    assert normalize_function(f2) == str(f2)
+
+    assert normalize_function(f2)
+
     f = lambda a: a
-    assert normalize_function(f) == str(f)
-    comp = compose(partial(f2, b=2), f3)
-    assert normalize_function(comp) == ((str(f2), (), (('b', 2),)), str(f3))
-    assert normalize_function(cf1) == (str(f1), (), ())
-    assert normalize_function(cf1(2, c=2)) == (str(f1), (2,), (('c', 2),))
-    assert normalize_token(cf1) == normalize_function(cf1)
+    assert normalize_function(f)
+
+    assert (normalize_function(partial(f2, b=2)) ==
+            normalize_function(partial(f2, b=2)))
+
+    assert (normalize_function(partial(f2, b=2)) !=
+            normalize_function(partial(f2, b=3)))
+
+    assert (normalize_function(partial(f1, b=2)) !=
+            normalize_function(partial(f2, b=2)))
+
+    assert (normalize_function(compose(f2, f3)) ==
+            normalize_function(compose(f2, f3)))
+
+    assert (normalize_function(compose(f2, f3)) !=
+            normalize_function(compose(f2, f1)))
+
+    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
+    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
+    assert (normalize_function(curry(f2, b=1)) ==
+            normalize_function(curry(f2, b=1)))
+    assert (normalize_function(curry(f2, b=1)) !=
+            normalize_function(curry(f2, b=2)))
 
 
 def test_tokenize():
@@ -145,6 +163,10 @@ def test_tokenize_sequences():
     y = np.arange(2000)
     y[1000] = 0  # middle isn't printed in repr
     assert tokenize([x]) != tokenize([y])
+
+
+def test_tokenize_dict():
+    assert tokenize({'x': 1, 1: 'x'}) == tokenize({'x': 1, 1: 'x'})
 
 
 def test_tokenize_ordered_dict():

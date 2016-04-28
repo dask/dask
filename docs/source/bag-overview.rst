@@ -6,7 +6,7 @@ Dask Bag implements a operations like ``map, filter, fold, frequencies`` and
 multiple processes and in small memory using Python iterators building off of
 libraries like PyToolz_.
 
-.. _PyToolz: http://toolz.readthedocs.org/en/latest/
+.. _PyToolz: http://toolz.readthedocs.io/en/latest/
 
 Design
 ------

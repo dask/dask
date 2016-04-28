@@ -3,8 +3,10 @@ from operator import add, setitem
 import pickle
 from random import random
 
+from toolz import identity, partial
 import pytest
 
+from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dasks, compute, Delayed
 from dask.utils import raises
 
@@ -245,3 +247,46 @@ def test_delayed_callable():
 
     assert f.dask == {f.key: add}
     assert f.compute() == add
+
+
+def test_delayed_name_on_call():
+    f = delayed(add, pure=True)
+    assert f(1, 2, dask_key_name='foo')._key == 'foo'
+
+
+def test_callable_obj():
+    class Foo(object):
+        def __init__(self, a):
+            self.a = a
+
+        def __call__(self):
+            return 2
+
+    foo = Foo(1)
+    f = delayed(foo)
+    assert f.compute() is foo
+    assert f.a.compute() == 1
+    assert f().compute() == 2
+
+
+def test_name_consitent_across_instances():
+    func = delayed(identity, pure=True)
+
+    data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
+    if PY2:
+        assert func(data)._key == 'identity-69e6d664a9054dce0e4dcaf48b919b8b'
+    if PY3:
+        assert func(data)._key == 'identity-6611a0dc9183f09b04a35db23d14fb7d'
+
+    data = {'x': 1, 1: 'x'}
+    assert func(data)._key == func(data)._key
+
+    if PY2:
+        assert func(1)._key == 'identity-9ed591b193ff79d4909cc7ae58786091'
+    if PY3:
+        assert func(1)._key == 'identity-1b6bde2fbd96b2278a4d2e7514366606'
+
+
+def test_sensitive_to_partials():
+    assert (delayed(partial(add, 10), pure=True)(2)._key !=
+            delayed(partial(add, 20), pure=True)(2)._key)

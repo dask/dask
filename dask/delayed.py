@@ -6,8 +6,9 @@ from warnings import warn
 import operator
 import uuid
 
-from toolz import merge, unique, curry, first
+from toolz import merge, unique, curry, first, assoc
 
+from .async import get_sync
 from .utils import concrete, funcname
 from . import base
 from .compatibility import apply
@@ -208,11 +209,15 @@ def delayed(obj, name=None, pure=False):
     """
     if isinstance(obj, Delayed):
         return obj
+
     task, dasks = to_task_dasks(obj)
-    root = not dasks
-    name = name or '%s-%s' % (type(obj).__name__, tokenize(task, pure=True))
-    dasks.append({name: task})
-    return Delayed(name, dasks, pure=pure, root=root)
+
+    if not dasks:
+        return DelayedLeaf(obj, pure=pure, name=name)
+    else:
+        name = name or '%s-%s' % (type(obj).__name__, tokenize(task))
+        dasks.append({name: task})
+        return Delayed(name, dasks)
 
 
 do = delayed
@@ -251,23 +256,21 @@ class Delayed(base.Base):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_key', '_dasks', '_pure', '_root')
+    __slots__ = ('_key', '_dasks')
     _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
 
-    def __init__(self, name, dasks, pure=False, root=False):
+    def __init__(self, name, dasks):
         object.__setattr__(self, '_key', name)
         object.__setattr__(self, '_dasks', dasks)
-        object.__setattr__(self, '_pure', pure)
-        object.__setattr__(self, '_root', root)
 
     def __setstate__(self, state):
         self.__init__(*state)
         return self
 
     def __getstate__(self):
-        return (self._key, self._dasks, self._pure, self._root)
+        return (self._key, self._dasks)
 
     @property
     def dask(self):
@@ -305,20 +308,7 @@ class Delayed(base.Base):
         raise TypeError("Delayed objects are not iterable")
 
     def __call__(self, *args, **kwargs):
-        pure = kwargs.pop('pure', self._pure)
-        if self._root:
-            func = self._dasks[0][self._key]
-            args, dasks = unzip(map(to_task_dasks, args), 2)
-            if kwargs:
-                dask_kwargs, dasks2 = to_task_dasks(kwargs)
-                dasks = dasks + (dasks2,)
-                task = (apply, func, list(args), dask_kwargs)
-            else:
-                task = (func,) + args
-            name = funcname(func) + '-' + tokenize(*task, pure=pure)
-            dasks = flat_unique(dasks)
-            dasks.append({name: task})
-            return Delayed(name, dasks)
+        pure = kwargs.pop('pure', False)
         return delayed(apply, pure=pure)(self, args, kwargs)
 
     def __bool__(self):
@@ -334,6 +324,54 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
+class DelayedLeaf(Delayed):
+    def __init__(self, obj, name=None, pure=False):
+        if name is None:
+            try:
+                name = obj.__name__ + tokenize(obj, pure=pure)
+            except AttributeError:
+                name = type(obj).__name__ + tokenize(obj, pure=pure)
+        object.__setattr__(self, '_dasks', [{name: obj}])
+        object.__setattr__(self, 'pure', pure)
+
+    def __setstate__(self, state):
+        self.__init__(*state)
+        return self
+
+    def __getstate__(self):
+        return (self._data, self._key, self.pure)
+
+    @property
+    def _key(self):
+        return first(self._dasks[0])
+
+    @property
+    def _data(self):
+        return first(self._dasks[0].values())
+
+    def __call__(self, *args, **kwargs):
+        dask_key_name = kwargs.pop('dask_key_name', None)
+        pure = kwargs.pop('pure', self.pure)
+
+        if dask_key_name is None:
+            name = (funcname(self._data) + '-' +
+                    tokenize(self._key, *args, pure=self.pure, **kwargs))
+        else:
+            name = dask_key_name
+
+        args, dasks = unzip(map(to_task_dasks, args), 2)
+        if kwargs:
+            dask_kwargs, dasks2 = to_task_dasks(kwargs)
+            dasks = dasks + (dasks2,)
+            task = (apply, self._data, list(args), dask_kwargs)
+        else:
+            task = (self._data,) + args
+
+        dasks = flat_unique(dasks)
+        dasks.append({name: task})
+        return Delayed(name, dasks)
+
+
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
            operator.add, operator.sub, operator.mul, operator.floordiv,
            operator.truediv, operator.mod, operator.pow, operator.and_,
@@ -344,7 +382,6 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
 
 
 base.normalize_token.register(Delayed, lambda a: a.key)
-
 
 Value = Delayed
 

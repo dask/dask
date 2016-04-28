@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial
 from hashlib import md5
 from operator import attrgetter
+import pickle
 import os
 import sys
 import uuid
@@ -141,7 +142,14 @@ def normalize_function(func):
         kws = tuple(sorted(func.keywords.items())) if func.keywords else ()
         return (normalize_function(func.func), func.args, kws)
     else:
-        return str(func)
+        try:
+            return pickle.dumps(func, protocol=0)
+        except:
+            try:
+                import cloudpickle
+                return cloudpickle.dumps(func, protocol=0)
+            except:
+                return str(func)
 
 
 normalize_token = Dispatch()
@@ -151,7 +159,7 @@ normalize_token.register((int, float, str, unicode, bytes, type(None), type,
 
 @partial(normalize_token.register, dict)
 def normalize_dict(d):
-    return normalize_token(sorted(d.items()))
+    return normalize_token(sorted(d.items(), key=str))
 
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
