@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial
 from hashlib import md5
 from operator import attrgetter
+import pickle
 import os
 import sys
 import uuid
@@ -141,7 +142,15 @@ def normalize_function(func):
         kws = tuple(sorted(func.keywords.items())) if func.keywords else ()
         return (normalize_function(func.func), func.args, kws)
     else:
-        return str(func)
+        try:
+            return pickle.dumps(func, protocol=pickle.HIGHEST_PROTOCOL)
+        except:
+            try:
+                import cloudpickle
+                return cloudpickle.dumps(func,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+            except:
+                return str(func)
 
 
 normalize_token = Dispatch()

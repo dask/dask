@@ -248,12 +248,6 @@ def test_delayed_callable():
     assert f.compute() == add
 
 
-def test_delayed_prefix():
-    f = delayed(add, prefix='foo')
-    assert f(1, 2)._key.startswith('foo')
-    assert f(1, 2)._key != f(2, 3)._key
-
-
 def test_delayed_name_on_call():
     f = delayed(add, pure=True)
     assert f(1, 2, dask_key_name='foo')._key == 'foo'
@@ -278,12 +272,12 @@ def test_name_consitent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
-    assert func(data)._key == 'identity-51ba0a5e8802714adbfebe0e459b329c'
+    assert func(data)._key == 'identity-96264b683ea5350c2067dede25197638'
 
     data = {'x': 1, 1: 'x'}
     assert func(data)._key == func(data)._key
 
-    assert func(1)._key == 'identity-4b2538dc5ee69432194831bfdfbe40c3'
+    assert func(1)._key == 'identity-dbec0aef480428bd17026e745b7e8e11'
 
 
 def test_sensitive_to_partials():

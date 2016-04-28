@@ -109,7 +109,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=False, prefix=None):
+def delayed(obj, name=None, pure=False):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -212,8 +212,8 @@ def delayed(obj, name=None, pure=False, prefix=None):
 
     task, dasks = to_task_dasks(obj)
 
-    if not dasks and callable(obj):
-        return DelayedFunction(obj, pure=pure, prefix=prefix)
+    if not dasks:
+        return DelayedLeaf(obj, pure=pure, name=name)
     else:
         name = name or '%s-%s' % (type(obj).__name__, tokenize(task))
         dasks.append({name: task})
@@ -261,7 +261,7 @@ class Delayed(base.Base):
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
 
-    def __init__(self, name, dasks, pure=False, root=False):
+    def __init__(self, name, dasks):
         object.__setattr__(self, '_key', name)
         object.__setattr__(self, '_dasks', dasks)
 
@@ -324,32 +324,41 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-class DelayedFunction(Delayed):
+class DelayedLeaf(Delayed):
     _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
     _finalize = staticmethod(first)
     _default_get = staticmethod(get_sync)
 
-    def __init__(self, function, name=None, pure=False, prefix=None):
+    def __init__(self, obj, name=None, pure=False):
         if name is None:
-            name = funcname(function, full=True)
-        if hasattr(function, 'args') or hasattr(function, 'kwargs'):
-            name = name + '-' + tokenize(*getattr(function, 'args', ()),
-                                         **getattr(function, 'kwargs', {}))
-        object.__setattr__(self, '_key', name)
-        object.__setattr__(self, 'function', function)
+            try:
+                name = obj.__name__ + tokenize(obj, pure=pure)
+            except AttributeError:
+                name = type(obj).__name__ + tokenize(obj, pure=pure)
+        object.__setattr__(self, '_dasks', [{name: obj}])
         object.__setattr__(self, 'pure', pure)
-        object.__setattr__(self, 'prefix', prefix)
+
+    def __setstate__(self, state):
+        self.__init__(*state)
+        return self
+
+    def __getstate__(self):
+        return (self._data, self._key, self.pure)
 
     @property
-    def _dasks(self):
-        return [{self.key: self.function}]
+    def _key(self):
+        return first(self._dasks[0])
+
+    @property
+    def _data(self):
+        return first(self._dasks[0].values())
 
     def __call__(self, *args, **kwargs):
         dask_key_name = kwargs.pop('dask_key_name', None)
-        pure = kwargs.pop('pure', False)
+        pure = kwargs.pop('pure', self.pure)
 
         if dask_key_name is None:
-            name = ((self.prefix or funcname(self.function)) + '-' +
+            name = (funcname(self._data) + '-' +
                     tokenize(self._key, *args, pure=self.pure, **kwargs))
         else:
             name = dask_key_name
@@ -358,9 +367,9 @@ class DelayedFunction(Delayed):
         if kwargs:
             dask_kwargs, dasks2 = to_task_dasks(kwargs)
             dasks = dasks + (dasks2,)
-            task = (apply, self.function, list(args), dask_kwargs)
+            task = (apply, self._data, list(args), dask_kwargs)
         else:
-            task = (self.function,) + args
+            task = (self._data,) + args
 
         dasks = flat_unique(dasks)
         dasks.append({name: task})
