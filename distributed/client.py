@@ -76,7 +76,8 @@ _gather.__doc__ = gather.__doc__
 
 
 @gen.coroutine
-def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
+def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
+                        permissive=False):
     """ Gather data directly from peers
 
     Parameters
@@ -94,8 +95,9 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
     bad_addresses = set()
     who_has = {k: set(v) for k, v in who_has.items()}
     results = dict()
+    all_bad_keys = set()
 
-    while len(results) < len(who_has):
+    while len(results) + len(all_bad_keys) < len(who_has):
         d = defaultdict(list)
         rev = dict()
         bad_keys = set()
@@ -109,19 +111,25 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
             except IndexError:
                 bad_keys.add(key)
         if bad_keys:
-            raise KeyError(*bad_keys)
+            if permissive:
+                all_bad_keys |= bad_keys
+            else:
+                raise KeyError(*bad_keys)
 
         coroutines = [rpc(address).get_data(keys=keys, close=close)
                             for address, keys in d.items()]
         response = yield ignore_exceptions(coroutines, socket.error,
-                                                       StreamClosedError)
+                                           StreamClosedError)
         response = merge(response)
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(merge(response))
 
     if deserialize:
         results = valmap(loads, results)
-    raise Return(results)
+    if permissive:
+        raise Return((results, all_bad_keys))
+    else:
+        raise Return(results)
 
 
 class WrappedKey(object):
