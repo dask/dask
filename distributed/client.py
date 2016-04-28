@@ -361,15 +361,18 @@ def pack_data(o, d):
     >>> pack_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
-    if isinstance(o, (str, bytes)):
+    typ = type(o)
+    if typ is str or typ is bytes:
         if o in d:
             return d[o]
-    elif tokey(o) in d:
-        return d[tokey(o)]
+    else:
+        k = tokey(o)
+        if k in d:
+            return d[k]
 
-    if isinstance(o, (tuple, list, set, frozenset)):
-        return type(o)([pack_data(x, d) for x in o])
-    elif isinstance(o, dict):
+    if typ in (tuple, list, set, frozenset):
+        return typ([pack_data(x, d) for x in o])
+    elif typ is dict:
         return {k: pack_data(v, d) for k, v in o.items()}
     else:
         return o

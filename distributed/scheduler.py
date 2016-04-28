@@ -501,7 +501,7 @@ class Scheduler(Server):
         logger.debug('Ensure worker is occupied: %s', worker)
 
         while (self.stacks[worker] and
-               self.ncores[worker] > len(self.processing[worker])):
+               1 * self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
             if key not in self.tasks:
                 continue
@@ -512,7 +512,7 @@ class Scheduler(Server):
             self.send_task_to_worker(worker, key)
 
         while (self.ready and
-               self.ncores[worker] > len(self.processing[worker])):
+               1 * self.ncores[worker] > len(self.processing[worker])):
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
@@ -522,7 +522,7 @@ class Scheduler(Server):
             logger.debug("Send job to worker: %s, %s", worker, key)
             self.send_task_to_worker(worker, key)
 
-        if self.ncores[worker] > len(self.processing[worker]):
+        if 1 * self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
         elif worker in self.idle:
             self.idle.remove(worker)
@@ -780,7 +780,7 @@ class Scheduler(Server):
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
-        self.worker_streams[address] = BatchedSend(interval=10, loop=self.loop)
+        self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
         self._worker_coroutines.append(self.worker_stream(address))
 
         if self.ncores[address] > len(self.processing[address]):
@@ -1065,7 +1065,7 @@ class Scheduler(Server):
     def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
-        bstream = BatchedSend(interval=10, loop=self.loop)
+        bstream = BatchedSend(interval=2, loop=self.loop)
         bstream.start(stream)
         self.streams[client] = bstream
 
@@ -1161,9 +1161,10 @@ class Scheduler(Server):
 
     def send_task_to_worker(self, ident, key):
         msg = {'op': 'compute-task',
-               'key': key,
-               'who_has': {dep: list(self.who_has[dep])
-                           for dep in self.dependencies[key]}}
+               'key': key}
+        if self.dependencies[key]:
+            msg['who_has'] = {dep: list(self.who_has[dep])
+                              for dep in self.dependencies[key]}
         if isinstance(self.tasks[key], dict):
             msg.update(self.tasks[key])
         else:
@@ -1207,12 +1208,12 @@ class Scheduler(Server):
 
                     self.correct_time_delay(ip, msg)
 
-                    if msg['status'] == 'error':
+                    if msg['status'] == 'OK':
+                        self.mark_task_finished(worker=ident, **msg)
+                    elif msg['status'] == 'error':
                         self.mark_task_erred(worker=ident, **msg)
                     elif msg['status'] == 'missing-data':
                         self.mark_missing_data(worker=ident, **msg)
-                    elif msg['status'] == 'OK':
-                        self.mark_task_finished(worker=ident, **msg)
                     else:
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)

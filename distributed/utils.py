@@ -336,7 +336,8 @@ def tokey(o):
     >>> tokey(1)
     '1'
     """
-    if isinstance(o, (str, bytes)):
+    t = type(o)
+    if t is str or t is bytes:
         return o
     else:
         return str(o)

@@ -238,8 +238,7 @@ class Worker(Server):
                    if k not in self.data}
         if who_has:
             try:
-                logger.info("gather %d keys from peers: %s",
-                            len(who_has), str(who_has))
+                logger.info("gather %d keys from peers", len(who_has))
                 diagnostics['transfer-start'] = time()
                 other = yield gather_from_workers(who_has)
                 diagnostics['transfer-stop'] = time()
@@ -267,7 +266,9 @@ class Worker(Server):
             diagnostics['deserialization'] = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
-            raise Return(assoc(error_message(e), 'key', key))
+            emsg = error_message(e)
+            emsg['key'] = key
+            raise Return(emsg)
 
         if task is not None:
             assert not function and not args and not kwargs
@@ -304,18 +305,18 @@ class Worker(Server):
             yield future
         finally:
             pc.stop()
-            self.thread_tokens.put(token)
+            pass
 
         result = future.result()
 
-        logger.info("Finish job %d, %s", i, key)
+        # logger.info("Finish job %d, %s", i, key)
         raise gen.Return(result)
 
     @gen.coroutine
     def compute_stream(self, stream):
         with log_errors():
             logger.debug("Open compute stream")
-            bstream = BatchedSend(interval=10, loop=self.loop)
+            bstream = BatchedSend(interval=2, loop=self.loop)
             bstream.start(stream)
 
         @gen.coroutine
@@ -325,7 +326,9 @@ class Worker(Server):
                 bstream.send(result)
             except Exception as e:
                 logger.exception(e)
-                bstream.send(assoc(error_message(e), 'key', msg.get('key')))
+                emsg = error_message(e)
+                emsg['key'] = msg.get('key')
+                bstream.send(emsg)
 
         with log_errors():
             while True:
