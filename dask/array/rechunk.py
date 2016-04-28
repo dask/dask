@@ -207,7 +207,9 @@ def rechunk(x, chunks):
 
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
-    temp_name = 'rechunk-' + tokenize(x, chunks)
+    intermediates = dict()
+    token = tokenize(x, chunks)
+    temp_name = 'rechunk-' + token
     new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
     for flat_idx, cross1 in enumerate(crossed):
         new_idx = new_index[flat_idx]
@@ -227,7 +229,12 @@ def rechunk(x, chunks):
             for i in range(ndim -1):
                 temp = getitem(temp, ind_in_blk[i])
             for ind, slc in zip(old_inds, slic):
-                temp[ind_in_blk[-1]] = (getitem, (x.name,) + tuple(ind), slc)
+                name = (('rechunk-intermediate-' + token,)
+                        + tuple(ind)
+                        + sum([(s.start, s.stop) for s in slc], ()))
+                intermediates[name] = (getitem, (x.name,) + tuple(ind),
+                                                 tuple(slc))
+                temp[ind_in_blk[-1]] = name
         x2[key] = (concatenate3, rec_cat_arg)
-    x2 = merge(x.dask, x2)
+    x2 = merge(x.dask, x2, intermediates)
     return Array(x2, temp_name, chunks, dtype=x.dtype)
