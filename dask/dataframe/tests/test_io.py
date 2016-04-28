@@ -1,27 +1,21 @@
 import gzip
-from itertools import product
 import pandas as pd
 import numpy as np
 import pandas.util.testing as tm
 import os
 import dask
-from operator import getitem
 import pytest
 from threading import Lock
-from toolz import valmap
 import tempfile
 import shutil
 from time import sleep
 import threading
-from distutils.version import LooseVersion
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
-                               from_array, from_bcolz, from_dask_array)
-from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
+from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
 
-from dask.utils import filetext, tmpfile, ignoring, compressions
+from dask.utils import filetext, filetexts, tmpfile
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
@@ -49,43 +43,16 @@ Edith,600
 """.strip()
 
 
-SKIP_PD_XZ = pytest.mark.skipif(
-    not LZMA_AVAILABLE or LooseVersion(pd.__version__) <= LooseVersion('0.18.0'),
-    reason=('no lzma module found' if not LZMA_AVAILABLE else
-            'pandas <= 0.18.0 does not support xz compression'))
-
-
-@pytest.mark.parametrize('open_comp_pair,infer',
-                         [SKIP_PD_XZ(((o, c), i)) if c == 'xz' else ((o, c), i)
-                          for (o, c), i in product([(open, None),
-                                                    (GzipFile, 'gzip'),
-                                                    (BZ2File, 'bz2'),
-                                                    (LZMAFile, 'xz')],
-                                                   (True, False))])
-def test_read_csv(open_comp_pair, infer):
-    myopen, compression = open_comp_pair
-    text_ = text if compression is None else text.encode()
-    ext = dict((v, k) for (k, v) in compressions.items()).get(compression, '')
-    with filetext(text_, open=myopen, extension=ext) as fn:
-        compression = 'infer' if infer else compression
-        f = dd.read_csv(fn, chunkbytes=30, compression=compression,
-                lineterminator='\n')
+def test_read_csv():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunkbytes=30, lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions > 1
         assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, compression=compression, lineterminator='\n'))
+                  pd.read_csv(fn, lineterminator='\n'))
 
-
-
-def test_file_size():
-    counts = (len(text), len(text) + text.count('\n'))
-    with filetext(text) as fn:
-        assert file_size(fn) in counts
-    with filetext(text.encode(), open=GzipFile) as fn:
-        assert file_size(fn, 'gzip') in counts
 
 def test_read_multiple_csv():
     try:
@@ -97,8 +64,8 @@ def test_read_multiple_csv():
         assert df._known_dtype
         assert df.npartitions > 2
 
-        assert (len(read_csv('_foo.*.csv').compute()) ==
-                len(read_csv('_foo.1.csv').compute()) * 2)
+        assert (len(dd.read_csv('_foo.*.csv').compute()) ==
+                len(dd.read_csv('_foo.1.csv').compute()) * 2)
 
     finally:
         os.remove('_foo.1.csv')
@@ -107,6 +74,7 @@ def test_read_multiple_csv():
 
 def normalize_text(s):
     return '\n'.join(map(str.strip, s.strip().split('\n')))
+
 
 def test_consistent_dtypes():
     text = normalize_text("""
@@ -135,7 +103,7 @@ Dan,400,2014-01-01
 
 def test_read_csv_index():
     with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=20, index='amount')
+        f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
         assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
@@ -210,6 +178,7 @@ def test_dummy_from_1darray():
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.io._dummy_from_array(x, columns=['a', 'b'])
 
+
 def test_dummy_from_recarray():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
@@ -229,6 +198,7 @@ def test_dummy_from_recarray():
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
 
+
 def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
@@ -245,7 +215,8 @@ def test_from_array():
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
-    pytest.raises(ValueError, dd.from_array, np.ones(shape=(10, 10, 10)))
+    with pytest.raises(ValueError):
+        dd.from_array(np.ones(shape=(10, 10, 10)))
 
 
 def test_from_array_with_record_dtype():
@@ -277,10 +248,10 @@ def test_from_bcolz_multiple_threads():
         assert L == [1, 2, 3] or L == [1, 3, 2]
 
         # Names
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
-               sorted(dd.from_bcolz(t, chunksize=2).dask)
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
-               sorted(dd.from_bcolz(t, chunksize=3).dask)
+        assert (sorted(dd.from_bcolz(t, chunksize=2).dask) ==
+                sorted(dd.from_bcolz(t, chunksize=2).dask))
+        assert (sorted(dd.from_bcolz(t, chunksize=2).dask) !=
+                sorted(dd.from_bcolz(t, chunksize=3).dask))
 
     threads = []
     for i in range(5):
@@ -310,18 +281,18 @@ def test_from_bcolz():
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
     # Names
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
-           sorted(dd.from_bcolz(t, chunksize=2).dask)
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
-           sorted(dd.from_bcolz(t, chunksize=3).dask)
+    assert (sorted(dd.from_bcolz(t, chunksize=2).dask) ==
+            sorted(dd.from_bcolz(t, chunksize=2).dask))
+    assert (sorted(dd.from_bcolz(t, chunksize=2).dask) !=
+            sorted(dd.from_bcolz(t, chunksize=3).dask))
 
     dsk = dd.from_bcolz(t, chunksize=3).dask
 
     t.append((4, 4., 'b'))
     t.flush()
 
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
-           sorted(dsk)
+    assert (sorted(dd.from_bcolz(t, chunksize=2).dask) !=
+            sorted(dsk))
 
 
 def test_from_bcolz_no_lock():
@@ -381,7 +352,7 @@ def test_skipinitialspace():
         assert df.amount.max().compute() == 600
 
 
-def test_consistent_dtypes():
+def test_consistent_dtypes_2():
     text1 = normalize_text("""
     name,amount
     Alice,100
@@ -638,7 +609,7 @@ def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
-                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
@@ -673,7 +644,7 @@ def test_from_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
-                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
@@ -699,7 +670,7 @@ def test_from_castra_with_selection():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
-                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     b = dd.from_castra(a.to_castra())
@@ -727,6 +698,7 @@ def test_to_hdf():
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data')
 
+
 def test_read_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -751,8 +723,8 @@ def test_read_hdf():
               dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
 
-        assert sorted(dd.read_hdf(fn, '/data').dask) == \
-               sorted(dd.read_hdf(fn, '/data').dask)
+        assert (sorted(dd.read_hdf(fn, '/data').dask) ==
+                sorted(dd.read_hdf(fn, '/data').dask))
 
 
 def test_to_csv():
@@ -804,11 +776,12 @@ def test_read_csv_with_nrows():
 
 
 def test_read_csv_raises_on_no_files():
+    fn = '.not.a.real.file.csv'
     try:
-        dd.read_csv('21hflkhfisfshf.*.csv')
+        dd.read_csv(fn)
         assert False
-    except Exception as e:
-        assert "21hflkhfisfshf.*.csv" in str(e)
+    except IOError as e:
+        assert fn in str(e)
 
 
 def test_read_csv_has_deterministic_name():
@@ -816,7 +789,7 @@ def test_read_csv_has_deterministic_name():
         a = dd.read_csv(fn)
         b = dd.read_csv(fn)
         assert a._name == b._name
-        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+        assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
         assert isinstance(a._name, str)
 
         c = dd.read_csv(fn, skiprows=1, na_values=[0])
@@ -824,18 +797,11 @@ def test_read_csv_has_deterministic_name():
 
 
 def test_multiple_read_csv_has_deterministic_name():
-    try:
-        with open('_foo.1.csv', 'w') as f:
-            f.write(text)
-        with open('_foo.2.csv', 'w') as f:
-            f.write(text)
+    with filetexts({'_foo.1.csv': text, '_foo.2.csv': text}):
         a = dd.read_csv('_foo.*.csv')
         b = dd.read_csv('_foo.*.csv')
 
-        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
-    finally:
-        os.remove('_foo.1.csv')
-        os.remove('_foo.2.csv')
+        assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
 
 
 def test_csv_with_integer_names():
@@ -847,7 +813,6 @@ def test_csv_with_integer_names():
 @pytest.mark.slow
 def test_read_csv_of_modified_file_has_different_name():
     with filetext(text) as fn:
-        mtime = os.path.getmtime(fn)
         sleep(1)
         a = dd.read_csv(fn)
         sleep(1)
@@ -872,33 +837,16 @@ def test_to_bag():
     assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
 
 
-def test_csv_expands_dtypes():
-    with filetext(text) as fn:
-        a = dd.read_csv(fn, chunkbytes=30, dtype={})
-        a_kwargs = list(a.dask.values())[0][-2]
-
-        b = dd.read_csv(fn, chunkbytes=30)
-        b_kwargs = list(b.dask.values())[0][-2]
-
-        assert a_kwargs['dtype'] == b_kwargs['dtype']
-
-        a = dd.read_csv(fn, chunkbytes=30, dtype={'amount': float})
-        a_kwargs = list(a.dask.values())[0][-2]
-
-        assert a_kwargs['dtype']['amount'] == float
-
-
+@pytest.mark.xfail(reason='we might want permissive behavior here')
 def test_report_dtype_correction_on_csvs():
     text = 'numbers,names\n'
     for i in range(1000):
         text += '1,foo\n'
     text += '1.5,bar\n'
     with filetext(text) as fn:
-        try:
+        with pytest.raises(ValueError) as e:
             dd.read_csv(fn).compute(get=get_sync)
-            assert False
-        except ValueError as e:
-            assert "'numbers': 'float64'" in str(e)
+        assert "'numbers': 'float64'" in str(e)
 
 
 def test_hdf_globbing():
@@ -934,7 +882,7 @@ def test_hdf_globbing():
 
             res = dd.read_hdf(os.path.join(tdir, '*.h5'), '/*/data', chunksize=2)
             assert res.npartitions == 2 + 2 + 2
-            tm.assert_frame_equal(res.compute(), pd.concat([df] *  3))
+            tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
     finally:
         shutil.rmtree(tdir)
 
@@ -942,7 +890,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            f = read_csv(fn, chunkbytes=30, index_col='name')
+            f = dd.read_csv(fn, chunkbytes=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -967,23 +915,27 @@ def test_read_csv_with_datetime_index_partitions_one():
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
         # chunkbytes set to explicitly set to single chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'],  chunkbytes=10000000)
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date'],
+                          chunkbytes=10000000).set_index('Date')
         eq(df, ddf)
 
         # because fn is so small, by default, this will only be one chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'])
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date']).set_index('Date')
         eq(df, ddf)
+
 
 def test_read_csv_with_datetime_index_partitions_n():
     with filetext(timeseries) as fn:
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
         # because fn is so small, by default, set chunksize small
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
-                          parse_dates=['Date'], chunkbytes=400)
+        ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
+                          parse_dates=['Date'],
+                          chunkbytes=400).set_index('Date')
         eq(df, ddf)
+
 
 def test_from_pandas_with_datetime_index():
     with filetext(timeseries) as fn:
@@ -993,6 +945,7 @@ def test_from_pandas_with_datetime_index():
         eq(df, ddf)
         ddf = dd.from_pandas(df, chunksize=2)
         eq(df, ddf)
+
 
 @pytest.mark.parametrize('encoding', ['utf-16', 'utf-16-le', 'utf-16-be'])
 def test_encoding_gh601(encoding):
@@ -1040,7 +993,6 @@ def test_none_usecols():
         eq(df, pd.read_csv(fn, usecols=None))
 
 
-
 pdmc_text = """
 ID,date,time
 10,2003-11-04,180036
@@ -1073,6 +1025,7 @@ name###amount
 alice###100
 bob###200
 charlie###300"""
+
 
 def test_read_csv_sep():
     with filetext(sep_text) as fn:

@@ -1,265 +1,29 @@
 from __future__ import absolute_import, division, print_function
 
-import codecs
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
 from math import ceil
 from operator import getitem
 import os
-import re
 from threading import Lock
 import uuid
 from warnings import warn
 
 import pandas as pd
 import numpy as np
-from toolz import merge, assoc, dissoc
+from toolz import merge
 
-from ..compatibility import StringIO, unicode, range, apply
-from ..utils import (textblock, file_size, get_bom, system_encoding,
-                     infer_compression)
 from ..base import tokenize
+from ..compatibility import unicode, apply
 from .. import array as da
 from ..async import get_sync
 
-from . import core
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 
 
 lock = Lock()
-csv_defaults = {'compression': 'infer'}
-
-
-def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
-    kwargs = kwargs.copy()
-    linesep = kwargs.get('lineterminator', os.linesep)
-    encoding = kwargs.pop('encoding', system_encoding)
-
-    start = i * chunkbytes
-    end = start + chunkbytes
-
-    if encoding == 'utf-16':
-        bom_encoding = {codecs.BOM_UTF16_BE: 'utf-16-be',
-                        codecs.BOM_UTF16_LE: 'utf-16-le'}
-        if not bom:
-            bom = codecs.BOM_UTF16
-        if i > 0:
-            encoding = bom_encoding[bom]
-
-    block = StringIO(u''.join(textblock(fn, start, end, compression, encoding,
-                                        linesep)))
-    try:
-        return pd.read_csv(block, **kwargs)
-    except ValueError as e:
-        msg = """
-    Dask dataframe inspected the first 1,000 rows of your csv file to guess the
-    data types of your columns.  These first 1,000 rows led us to an incorrect
-    guess.
-
-    For example a column may have had integers in the first 1000
-    rows followed by a float or missing value in the 1,001-st row.
-
-    You will need to specify some dtype information explicitly using the
-    ``dtype=`` keyword argument for the right column names and dtypes.
-
-        df = dd.read_csv(..., dtype={'my-column': float})
-
-    Pandas has given us the following error when trying to parse the file:
-
-      "%s"
-        """ % e.args[0]
-        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.args[0])
-        if match:
-            d = match.groupdict()
-            d['column'] = kwargs['names'][int(d['column_number'])]
-            msg += """
-    From this we think that you should probably add the following column/dtype
-    pair to your dtype= dictionary
-
-    '%(column)s': '%(new_dtype)s'
-        """ % d
-
-        # TODO: add more regexes and msg logic here for other pandas errors
-        #       as apporpriate
-
-        raise ValueError(msg)
-    finally:
-        block.close()
-
-
-def _clean_kwargs(kwargs):
-    """ Do some sanity checks on kwargs
-
-    >>> _clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
-    {'parse_dates': ['b'], 'usecols': ['b', 'c']}
-
-    >>> _clean_kwargs({'names': ['a', 'b'], 'usecols': [1]})
-    {'parse_dates': [], 'names': ['a', 'b'], 'usecols': ['b']}
-    """
-    kwargs = kwargs.copy()
-
-    if kwargs.get('usecols') and 'names' in kwargs:
-        kwargs['usecols'] = [kwargs['names'][c]
-                              if isinstance(c, int) and c not in kwargs['names']
-                              else c
-                              for c in kwargs['usecols']]
-
-    kwargs['parse_dates'] = [col for col in kwargs.get('parse_dates', ())
-            if kwargs.get('usecols') is None
-            or isinstance(col, (tuple, list)) and all(c in kwargs['usecols']
-                                                      for c in col)
-            or col in kwargs['usecols']]
-
-    return kwargs
-
-
-def _fill_kwargs(fn, **kwargs):
-    """ Read a csv file and fill up kwargs
-
-    This normalizes kwargs against a sample file.  It does the following:
-
-    1.  If given a globstring, just use one file
-    2.  Get names from csv file if not given
-    3.  Identify the presence of a header
-    4.  Identify dtypes
-    5.  Establish column names
-    6.  Switch around dtypes and column names if parse_dates is active
-
-    Normally ``pd.read_csv`` does this for us.  However for ``dd.read_csv`` we
-    need to be consistent across multiple files and don't want to do these
-    heuristics each time so we use the pandas solution once, record the
-    results, and then send back a fully explicit kwargs dict to send to future
-    calls to ``pd.read_csv``.
-
-    Returns
-    -------
-
-    head: pd.DataFrame
-        data read by pd.read_csv
-    kwargs: dict
-        keyword arguments to give to pd.read_csv
-    """
-
-    if 'index_col' in kwargs:
-        msg = """
-        The index column cannot be set at dataframe creation time. Instead use
-        the `set_index` method on the dataframe after it is created.
-        """
-        raise ValueError(msg)
-
-    kwargs = merge(csv_defaults, kwargs)
-    sample_nrows = kwargs.pop('sample_nrows', 1000)
-    essentials = ['columns', 'names', 'header', 'parse_dates', 'dtype']
-    if set(essentials).issubset(kwargs):
-        return kwargs
-
-    # Let pandas infer on the first 100 rows
-    if '*' in fn:
-        filenames = sorted(glob(fn))
-        if not filenames:
-            raise ValueError("No files found matching name %s" % fn)
-        fn = filenames[0]
-
-    if kwargs['compression'] == 'infer':
-        kwargs['compression'] = infer_compression(fn)
-
-    if 'names' not in kwargs:
-        kwargs['names'] = _csv_names(fn, **kwargs)
-        if 'header' not in kwargs:
-            kwargs['header'] = 0
-    else:
-        if 'header' not in kwargs:
-            kwargs['header'] = None
-
-    kwargs = _clean_kwargs(kwargs)
-    try:
-        head = pd.read_csv(fn, **assoc(kwargs, 'nrows', sample_nrows))
-    except StopIteration:
-        head = pd.read_csv(fn, **kwargs)
-
-    if 'parse_dates' not in kwargs:
-        kwargs['parse_dates'] = [col for col in head.dtypes.index
-                           if np.issubdtype(head.dtypes[col], np.datetime64)]
-
-    if 'sep' not in kwargs:
-        new_dtype = dict(head.dtypes)
-        dtype = kwargs.get('dtype', dict())
-        for k, v in dict(head.dtypes).items():
-            if k not in dtype:
-                dtype[k] = v
-
-        if kwargs.get('parse_dates'):
-            for col in kwargs['parse_dates']:
-                if isinstance(col, (tuple, list)):
-                    del dtype['_'.join(col)]
-                else:
-                    del dtype[col]
-
-        kwargs['dtype'] = dtype
-
-    head.columns = head.columns.map(lambda s: s.strip() if isinstance(s, str) else s)
-    return head, kwargs
-
-
-@wraps(pd.read_csv)
-def read_csv(fn, **kwargs):
-    if 'nrows' in kwargs:  # Just create single partition
-        df = read_csv(fn, **dissoc(kwargs, 'nrows'))
-        return df.head(kwargs['nrows'], compute=False)
-
-    chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
-    index = kwargs.pop('index', None)
-    kwargs = kwargs.copy()
-
-    head, kwargs = _fill_kwargs(fn, **kwargs)
-
-    # Handle glob strings
-    if '*' in fn:
-        from .multi import concat
-        return concat([read_csv(f, chunkbytes=chunkbytes, index=index, **kwargs)
-                       for f in sorted(glob(fn))])
-
-    token = tokenize(os.path.getmtime(fn), kwargs)
-    name = 'read-csv-%s-%s' % (fn, token)
-    bom = get_bom(fn, kwargs.get('compression', None))
-
-    # Chunk sizes and numbers
-    total_bytes = file_size(fn, kwargs['compression'])
-    nchunks = int(ceil(total_bytes / chunkbytes))
-    divisions = [None] * (nchunks + 1)
-
-    first_kwargs = merge(kwargs, dict(compression=None))
-    rest_kwargs = merge(kwargs, dict(header=None, compression=None))
-
-    # Create dask graph
-    dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                            kwargs['compression'], rest_kwargs, bom))
-               for i in range(1, nchunks))
-
-    dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                      first_kwargs, b'')
-
-    result = DataFrame(dsk, name, head, divisions)
-
-    if index:
-        result = result.set_index(index)
-
-    return result
-
-
-def _csv_names(fn, encoding='utf-8', compression=None, names=None,
-               parse_dates=None, usecols=None, dtype=None, **kwargs):
-    try:
-        kwargs['nrows'] = 5
-        df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                         names=names, **kwargs)
-    except StopIteration:
-        kwargs['nrows'] = None
-        df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                         names=names, **kwargs)
-    return list(df.columns)
 
 
 def _dummy_from_array(x, columns=None):
@@ -874,7 +638,8 @@ def from_imperative(*args, **kwargs):
     return from_delayed(*args, **kwargs)
 
 
-def from_delayed(dfs, metadata=None, divisions=None, columns=None):
+def from_delayed(dfs, metadata=None, divisions=None, columns=None,
+                      prefix='from-delayed'):
     """ Create DataFrame from many dask.delayed objects
 
     Parameters
@@ -893,7 +658,7 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None):
         dfs = [dfs]
     dsk = merge(df.dask for df in dfs)
 
-    name = 'from-delayed-' + tokenize(*dfs)
+    name = prefix + '-' + tokenize(*dfs)
     names = [(name, i) for i in range(len(dfs))]
     values = [df.key for df in dfs]
     dsk2 = dict(zip(names, values))

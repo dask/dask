@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from dask.dataframe.core import (_Frame, DataFrame, Series,
+from dask.dataframe.core import (DataFrame, Series,
                                  aca, map_partitions, no_default)
 from dask.utils import derived_from
 

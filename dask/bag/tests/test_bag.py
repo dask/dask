@@ -7,9 +7,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial, valmap)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, system_encoding,
-        from_delayed)
+        reduceby, reify, partition, inline_singleton_lists, optimize,
+        system_encoding, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, reduce
 from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
@@ -133,6 +132,12 @@ def test_remove():
 def test_iter():
     assert sorted(list(b)) == sorted(L)
     assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
+
+
+@pytest.mark.parametrize('func', [str, repr])
+def test_repr(func):
+    assert str(b.npartitions) in func(b)
+    assert b.name[:5] in func(b)
 
 
 def test_pluck():
@@ -418,91 +423,60 @@ def test_from_url():
     assert b'Dask\n' in b.take(10)
 
 
-def test_from_filenames():
+def test_read_text():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
-        assert set(line.strip() for line in db.from_filenames(fns)) == \
+        assert set(line.strip() for line in db.read_text(fns)) == \
                 set('ABCD')
-        assert set(line.strip() for line in db.from_filenames('a*.log')) == \
+        assert set(line.strip() for line in db.read_text('a*.log')) == \
                 set('ABCD')
 
-    assert raises(ValueError, lambda: db.from_filenames('non-existent-*-path'))
+    assert raises(ValueError, lambda: db.read_text('non-existent-*-path'))
 
 
-def test_from_filenames_gzip():
-    b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
-
-    assert (set(b.dask.values()) ==
-            set([(list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('foo.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, os.linesep)),
-                 (list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('bar.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, os.linesep))]))
-
-
-def test_from_filenames_bz2():
-    b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
-
-    assert (set(b.dask.values()) ==
-            set([(list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('foo.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, os.linesep)),
-                 (list,
-                  (io.TextIOWrapper,
-                   (io.BufferedReader,
-                    (open, os.path.abspath('bar.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, os.linesep))]))
-
-
-def test_from_filenames_large():
+def test_read_text_large():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write(('Hello, world!' + os.linesep).encode() * 100)
-        b = db.from_filenames(fn, chunkbytes=100)
-        c = db.from_filenames(fn)
+        b = db.read_text(fn, blocksize=100)
+        c = db.read_text(fn)
         assert len(b.dask) > 5
         assert list(map(str, b)) == list(map(str, c))
 
-        d = db.from_filenames([fn], chunkbytes=100)
+        d = db.read_text([fn], blocksize=100)
         assert list(b) == list(d)
 
 
-def test_from_filenames_encoding():
+def test_read_text_encoding():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write((u'你好！' + os.linesep).encode('gb18030') * 100)
-        b = db.from_filenames(fn, chunkbytes=100, encoding='gb18030')
-        c = db.from_filenames(fn, encoding='gb18030')
+        b = db.read_text(fn, blocksize=100, encoding='gb18030')
+        c = db.read_text(fn, encoding='gb18030')
         assert len(b.dask) > 5
         assert list(map(lambda x: x.encode('utf-8'), b)) == list(map(lambda x: x.encode('utf-8'), c))
 
-        d = db.from_filenames([fn], chunkbytes=100, encoding='gb18030')
+        d = db.read_text([fn], blocksize=100, encoding='gb18030')
         assert list(b) == list(d)
 
 
-def test_from_filenames_large_gzip():
+def test_read_text_large_gzip():
     with tmpfile('gz') as fn:
         f = GzipFile(fn, 'wb')
         f.write(b'Hello, world!\n' * 100)
         f.close()
 
-        b = db.from_filenames(fn, chunkbytes=100, linesep='\n')
-        c = db.from_filenames(fn, linesep='\n')
-        assert len(b.dask) > 5
-        assert list(b) == list(c)
+        with pytest.raises(ValueError):
+            b = db.read_text(fn, blocksize=100, lineterminator='\n')
+
+        c = db.read_text(fn)
+        assert c.npartitions == 1
 
 
 @pytest.mark.slow
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
-    boto = pytest.importorskip('boto')
+    boto = pytest.importorskip('s3fs')
 
     five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
                  u'16.99,1.01,Female,No,Sun,Dinner,2\n',
@@ -511,36 +485,12 @@ def test_from_s3():
                  u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test compressed data
-    e = db.from_s3('tip-data', 't*.gz')
+    e = db.read_text('s3://tip-data/t*.gz')
     assert e.take(5) == five_tips
-
-    # test wit specific key
-    b = db.from_s3('tip-data', 't?ps.csv')
-    assert b.npartitions == 1
 
     # test all keys in bucket
-    c = db.from_s3('tip-data')
+    c = db.read_text('s3://tip-data/*')
     assert c.npartitions == 4
-
-    d = db.from_s3('s3://tip-data')
-    assert d.npartitions == 4
-
-    e = db.from_s3('tip-data', 'tips.bz2')
-    assert e.take(5) == five_tips
-
-
-def test__parse_s3_URI():
-    bn, p = _parse_s3_URI('s3://mybucket/mykeys', '*')
-    assert (bn == 'mybucket') and (p == 'mykeys')
-
-    bn, p = _parse_s3_URI('s3://snow/g?obes', '*')
-    assert (bn == 'snow') and (p == 'g?obes')
-
-    bn, p = _parse_s3_URI('s3://tupper/wea*', '*')
-    assert (bn == 'tupper') and (p == 'wea*')
-
-    bn, p = _parse_s3_URI('s3://sand/', 'cast?es')
-    assert (bn == 'sand') and (p == 'cast?es')
 
 
 def test_from_sequence():
@@ -737,13 +687,6 @@ def test_to_textfiles_endlines():
         assert result == ['a\n', 'b\n', 'c']
 
 
-def test_bz2_stream():
-    text = '\n'.join(map(str, range(10000)))
-    compressed = bz2.compress(text.encode())
-    assert (list(take(100, bz2_stream(compressed))) ==
-            list(map(lambda x: str(x) + '\n', range(100))))
-
-
 def test_string_namespace():
     b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'],
                          npartitions=2)
@@ -774,22 +717,6 @@ def test_str_empty_split():
     assert list(b.str.split()) == [['Alice', 'Smith'],
                                    ['Bob', 'Jones'],
                                    ['Charlie', 'Smith']]
-
-
-def test_stream_decompress():
-    data = 'abc\ndef\n123'.encode()
-    assert [s.strip() for s in stream_decompress('', data)] == \
-            ['abc', 'def', '123']
-    assert [s.strip() for s in stream_decompress('bz2', bz2.compress(data))] == \
-            ['abc', 'def', '123']
-    with tmpfile() as fn:
-        f = GzipFile(fn, 'wb')
-        f.write(data)
-        f.close()
-        with open(fn, 'rb') as f:
-            compressed = f.read()
-    assert [s.strip() for s in stream_decompress('gz', compressed)] == \
-            [b'abc', b'def', b'123']
 
 
 def test_map_with_iterator_function():
@@ -834,7 +761,7 @@ def test_gh715():
     with tmpfile() as fn:
         with open(fn, 'wb') as f:
             f.write(bin_data)
-        a = db.from_filenames(fn)
+        a = db.read_text(fn)
         assert a.compute()[0] == bin_data.decode('utf-8')
 
 

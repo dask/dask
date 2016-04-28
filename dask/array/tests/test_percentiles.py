@@ -3,7 +3,6 @@ pytest.importorskip('numpy')
 
 from dask.utils import skip
 import dask.array as da
-from dask.array.percentile import _percentile
 import dask
 import numpy as np
 

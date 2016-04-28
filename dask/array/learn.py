@@ -34,7 +34,6 @@ def fit(model, x, y, get=threaded.get, **kwargs):
 
     Examples
     --------
-
     >>> import dask.array as da
     >>> X = da.random.random((10, 3), chunks=(5, 3))
     >>> y = da.random.random(10, chunks=(5,))

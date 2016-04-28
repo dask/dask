@@ -51,6 +51,7 @@ def groupby_internal_repr():
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
 
+
 def groupby_error():
     pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
                         'y': list('abcbabbcda')})
@@ -74,9 +75,9 @@ def groupby_error():
 
 def groupby_internal_head():
     pdf = pd.DataFrame({'A': [1, 2] * 10,
-                       'B': np.random.randn(20),
-                       'C': np.random.randn(20)})
-    ddf = dd.from_pandas(df, 3)
+                        'B': np.random.randn(20),
+                        'C': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 3)
 
     assert eq(ddf.groupby('A')._head().sum(),
               pdf.head().groupby('A').sum())
@@ -101,6 +102,7 @@ def test_full_groupby():
     assert raises(Exception, lambda: d.groupby('does_not_exist'))
     assert raises(Exception, lambda: d.groupby('a').does_not_exist)
     assert 'b' in dir(d.groupby('a'))
+
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
@@ -158,6 +160,7 @@ def test_groupby_multilevel_getitem():
         assert eq(d.count(), p.count())
         assert eq(d.mean(), p.mean().astype(float))
 
+
 def test_groupby_get_group():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
                                   index=[0, 1, 3]),
@@ -178,6 +181,7 @@ def test_groupby_get_group():
         # Series
         assert eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
         assert eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+
 
 def test_dataframe_groupby_nunique():
     strings = list('aaabbccccdddeee')
@@ -208,6 +212,7 @@ def test_series_groupby_propagates_names():
     expected.name = 'y'
     assert eq(result, expected)
 
+
 def test_series_groupby():
     s = pd.Series([1, 2, 2, 1, 1])
     pd_group = s.groupby(s)
@@ -224,9 +229,9 @@ def test_series_groupby():
         assert eq(dg.min(), pdg.min())
         assert eq(dg.max(), pdg.max())
 
+
 def test_series_groupby_errors():
     s = pd.Series([1, 2, 2, 1, 1])
-    pd_group = s.groupby(s)
 
     ss = dd.from_pandas(s, npartitions=2)
 
@@ -410,4 +415,3 @@ def test_apply_shuffle():
 
     assert eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
-

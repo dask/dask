@@ -87,16 +87,6 @@ def test_top_supports_broadcasting_rules():
          ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
-def test_concatenate3():
-    x = np.array([1, 2])
-    assert concatenate3([[x, x, x],
-                            [x, x, x]]).shape == (2, 6)
-
-    x = np.array([[1, 2]])
-    assert concatenate3([[x, x, x],
-                            [x, x, x]]).shape == (2, 6)
-
-
 def test_concatenate3_on_scalars():
     assert_eq(concatenate3([1, 2]), np.array([1, 2]))
 
@@ -1435,7 +1425,7 @@ def test_histogram_extra_args_and_shapes():
            da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
-def test_concatenate3():
+def test_concatenate3_2():
     x = np.array([1, 2])
     assert_eq(concatenate3([x, x, x]),
        np.array([1, 2, 1, 2, 1, 2]))

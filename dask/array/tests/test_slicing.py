@@ -4,7 +4,6 @@ pytest.importorskip('numpy')
 import dask
 from dask.compatibility import skip
 import dask.array as da
-from dask.array import Array
 from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
         sanitize_index)
 from operator import getitem

@@ -1,21 +1,21 @@
-import numpy as np
+from distutils.version import LooseVersion
+
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 
 import dask
 from dask.async import get_sync
-from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.utils import eq, assert_dask_graph
 
 
 def test_categorize():
     dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
                                    'b': ['C', 'D', 'E']},
-                                   index=[0, 1, 2]),
+                                  index=[0, 1, 2]),
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
-                                   index=[3, 4, 5])}
+                                  index=[3, 4, 5])}
     d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 3, 5])
     full = d.compute()
 
@@ -44,12 +44,14 @@ def test_categorical_set_index():
         assert list(b.index.compute()), list(df2.index)
 
 
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
+                    reason="pd.core.dtypes does not exist")
 def test_dataframe_categoricals():
     df = pd.DataFrame({'x': list('a'*5 + 'b'*5 + 'c'*5),
                        'y': range(15)})
     df.x = df.x.astype('category')
     ddf = dd.from_pandas(df, npartitions=2)
-    assert (df.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+    assert (ddf.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
     assert not hasattr(df.y, 'cat')
 
 
@@ -68,4 +70,3 @@ def test_categories():
 
     df3 = dd.categorical._categorize(categories, df2)
     tm.assert_frame_equal(df, df3)
-

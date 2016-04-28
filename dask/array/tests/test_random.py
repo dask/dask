@@ -5,7 +5,6 @@ import numpy as np
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 import dask.array as da
-import dask
 from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 

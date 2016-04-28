@@ -1,12 +1,10 @@
 import pandas as pd
 from dask.dataframe.utils import shard_df_on_index
-import pandas.util.testing as tm
 
 
 def test_shard_df_on_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
-    s = df.y
 
     result = list(shard_df_on_index(df, [20, 50]))
     assert list(result[0].index) == [10]

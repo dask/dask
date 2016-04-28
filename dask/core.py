@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add
+
 from itertools import chain
 
 def inc(x):
@@ -445,7 +446,6 @@ def quote(x):
     >>> quote([1, 2, 3])
     [1, 2, 3]
 
-    >>> from operator import add
     >>> quote((add, 1, 2))  # doctest: +SKIP
     (tuple, [add, 1, 2])
     """

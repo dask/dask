@@ -2,7 +2,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 from dask.utils import raises
 import dask.dataframe as dd
@@ -33,7 +32,7 @@ def test_arithmetics():
             ('y', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
                                    index=[9, 9, 9])}
     ddf4 = dd.DataFrame(dsk4, 'y', ['a', 'b'], [0, 4, 9, 9])
-    pdf4 =ddf4.compute()
+    pdf4 = ddf4.compute()
 
     # Arithmetics
     cases = [(ddf1, ddf1, pdf1, pdf1),
@@ -61,7 +60,7 @@ def test_arithmetics():
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf5 = dd.from_pandas(pdf5, 2)
 
-    pdf6 = pd.DataFrame({'a': [3, 2, 1, 5, 2 ,8, 1, 4, 10],
+    pdf6 = pd.DataFrame({'a': [3, 2, 1, 5, 2, 8, 1, 4, 10],
                          'b': [7, 8, 9, 5, 7, 8, 4, 2, 5]},
                         index=[0, 1, 2, 3, 4, 5, 6, 7, 9])
     ddf6 = dd.from_pandas(pdf6, 4)
@@ -82,7 +81,7 @@ def test_arithmetics():
     pdf10 = pd.DataFrame({'b': [5, 6, 7, 8, 4, 3, 2, 1],
                           'c': [2, 4, 5, 3, 4, 2, 1, 0],
                           'd': [2, 4, 5, 3, 4, 2, 1, 0]},
-                        index=list('abcdefgh'))
+                         index=list('abcdefgh'))
     ddf9 = dd.from_pandas(pdf9, 3)
     ddf10 = dd.from_pandas(pdf10, 4)
 
@@ -108,6 +107,7 @@ def test_arithmetics():
                                  allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er,
                                 allow_comparison_ops=False)
+
 
 def test_arithmetics_different_index():
     # index are different, but overwraps
@@ -164,11 +164,11 @@ def test_arithmetics_different_index():
                                 allow_comparison_ops=False)
 
     pdf7 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
-                          'b': [5, 6, 7, 8, 1, 2, 3, 4]},
-                         index=[0, 2, 4, 8, 9, 10, 11, 13])
+                         'b': [5, 6, 7, 8, 1, 2, 3, 4]},
+                        index=[0, 2, 4, 8, 9, 10, 11, 13])
     pdf8 = pd.DataFrame({'a': [5, 6, 7, 8, 4, 3, 2, 1],
-                          'b': [2, 4, 5, 3, 4, 2, 1, 0]},
-                         index=[1, 3, 4, 8, 9, 11, 12, 13])
+                         'b': [2, 4, 5, 3, 4, 2, 1, 0]},
+                        index=[1, 3, 4, 8, 9, 11, 12, 13])
     ddf7 = dd.from_pandas(pdf7, 3)
     ddf8 = dd.from_pandas(pdf8, 2)
 
@@ -681,8 +681,7 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, 'mean')
         assert eq(dds.nunique(), pds.nunique())
 
-
-    pds= pd.Series(pd.timedelta_range('1 days', freq='D', periods=5))
+    pds = pd.Series(pd.timedelta_range('1 days', freq='D', periods=5))
     dds = dd.from_pandas(pds, 2)
     assert eq(dds.sum(), pds.sum())
     assert eq(dds.min(), pds.min())

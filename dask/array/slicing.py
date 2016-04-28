@@ -459,7 +459,6 @@ def take_sorted(outname, inname, blockdims, index, axis=0):
     --------
     take - calls this function
     """
-    n = len(blockdims)
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about
 
     index_lists = partition_by_size(sizes, sorted(index))

@@ -8,7 +8,7 @@ from toolz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 
-from ..compatibility import builtins, getargspec
+from ..compatibility import getargspec
 from ..utils import ignoring
 
 

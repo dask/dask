@@ -7,7 +7,7 @@ We commonly use ``dask.bag`` to process unstructured or semi-structured data:
 
    >>> import dask.bag as db
    >>> import json
-   >>> js = db.from_filenames('logs/2015-*.json.gz').map(json.loads)
+   >>> js = db.read_text('logs/2015-*.json.gz').map(json.loads)
    >>> js.take(2)
    ({'name': 'Alice', 'location': {'city': 'LA', 'state': 'CA'}},
     {'name': 'Bob', 'location': {'city': 'NYC', 'state': 'NY'})

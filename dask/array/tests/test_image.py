@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip('skimage')
 from dask.array.image import imread as da_imread
 import numpy as np
-from skimage.io import imread, imsave
+from skimage.io import imsave
 
 
 @contextmanager

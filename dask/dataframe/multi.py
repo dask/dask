@@ -63,11 +63,10 @@ import numpy as np
 import pandas as pd
 
 from ..base import tokenize
-from .core import (_get_return_type, _Frame, Scalar, DataFrame, Series,
+from .core import (_Frame, Scalar, DataFrame,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle
-from . import utils
 
 
 def bound(seq, left, right):
