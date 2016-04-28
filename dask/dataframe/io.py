@@ -16,8 +16,8 @@ import pandas as pd
 import numpy as np
 from toolz import merge, assoc, dissoc
 
-from ..compatibility import StringIO, unicode, range, apply
-from ..utils import (textblock, file_size, get_bom, system_encoding,
+from ..compatibility import unicode, range, apply
+from ..utils import (BlockIOReader, file_size, get_bom, system_encoding,
                      infer_compression)
 from ..base import tokenize
 from .. import array as da
@@ -48,12 +48,13 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
         if i > 0:
             encoding = bom_encoding[bom]
 
-    block = StringIO(u''.join(textblock(fn, start, end, compression, encoding,
-                                        linesep)))
-    try:
-        return pd.read_csv(block, **kwargs)
-    except ValueError as e:
-        msg = """
+    # block = StringIO(u''.join(textblock(fn, start, end, compression, encoding,
+    #                                     linesep)))
+    with BlockIOReader(fn, start, end, compression, encoding, linesep) as block:
+        try:
+            return pd.read_csv(block, encoding=encoding, **kwargs)
+        except ValueError as e:
+            msg = """
     Dask dataframe inspected the first 1,000 rows of your csv file to guess the
     data types of your columns.  These first 1,000 rows led us to an incorrect
     guess.
@@ -69,24 +70,22 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
     Pandas has given us the following error when trying to parse the file:
 
       "%s"
-        """ % e.args[0]
-        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.args[0])
-        if match:
-            d = match.groupdict()
-            d['column'] = kwargs['names'][int(d['column_number'])]
-            msg += """
+            """ % e.args[0]
+            match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.args[0])
+            if match:
+                d = match.groupdict()
+                d['column'] = kwargs['names'][int(d['column_number'])]
+                msg += """
     From this we think that you should probably add the following column/dtype
     pair to your dtype= dictionary
 
     '%(column)s': '%(new_dtype)s'
-        """ % d
+            """ % d
 
-        # TODO: add more regexes and msg logic here for other pandas errors
-        #       as apporpriate
+            # TODO: add more regexes and msg logic here for other pandas errors
+            #       as apporpriate
 
-        raise ValueError(msg)
-    finally:
-        block.close()
+            raise ValueError(msg)
 
 
 def _clean_kwargs(kwargs):
