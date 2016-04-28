@@ -19,6 +19,8 @@ def test_start_state_callback():
     class MyCallback(Callback):
         def _start_state(self, dsk, state):
             flag[0] = True
+            assert dsk['x'] == 1
+            assert len(state['cache']) == 1
 
     with MyCallback():
         get_sync({'x': 1}, 'x')
