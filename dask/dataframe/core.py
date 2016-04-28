@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import bisect
-from collections import Iterable, Iterator
+from collections import Iterator
 from datetime import datetime
 from distutils.version import LooseVersion
 import math
@@ -25,7 +25,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import unicode, apply, operator_div, bind_method
+from ..compatibility import apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds)
 from ..base import Base, compute, tokenize, normalize_token
@@ -402,10 +402,6 @@ class _Frame(Base):
             raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (lambda df: df.loc[ind:ind], (self._name, part))}
 
-        if self.ndim == 1:
-            columns = self.name
-        else:
-            columns = ind
         return self._constructor(merge(self.dask, dsk), name, self, [ind, ind])
 
     def _loc_slice(self, ind):
@@ -1167,7 +1163,6 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
-        _name = name if name is not None else self.name
         return map_partitions(pd.Series.to_frame, self._pd.to_frame(name), self, name)
 
     @classmethod
@@ -1462,7 +1457,7 @@ class DataFrame(_Frame):
 
         # Figure out columns of the output
         df2 = self._pd.assign(**_extract_pd(kwargs))
-        return elemwise(_assign, self, *pairs)
+        return elemwise(_assign, self, *pairs, columns=df2)
 
     @derived_from(pd.DataFrame)
     def rename(self, index=None, columns=None):

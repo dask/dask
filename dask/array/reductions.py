@@ -624,7 +624,6 @@ def cumreduction(func, binop, ident, x, axis, dtype=None):
         indices = list(product(*[range(nb) if ii != axis else [i]
                                  for ii, nb in enumerate(x.numblocks)]))
         for old, ind in zip(last_indices, indices):
-            last = (name, 'extra') + old
             this_slice = (name, 'extra') + ind
             dsk[this_slice] = (binop, (name, 'extra') + old,
                                       (operator.getitem, (m.name,) + old, slc))

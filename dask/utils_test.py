@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from .utils import raises
 from .core import get
 import unittest
 
@@ -47,7 +46,7 @@ class GetFunctionTestCase(unittest.TestCase):
              ':z': (add, ':x', ':y')}
         try:
             result = self.get(d, 'badkey')
-        except KeyError as e:
+        except KeyError:
             pass
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'
@@ -59,7 +58,7 @@ class GetFunctionTestCase(unittest.TestCase):
 
         try:
             result = self.get(d, [['badkey'], 'y'])
-        except KeyError as e:
+        except KeyError:
             pass
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'

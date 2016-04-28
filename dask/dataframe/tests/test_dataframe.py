@@ -1,4 +1,3 @@
-from datetime import datetime
 from operator import getitem
 from distutils.version import LooseVersion
 
@@ -14,7 +13,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-from dask.dataframe.utils import eq, assert_dask_graph
+from dask.dataframe.utils import eq
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -29,8 +28,8 @@ full = d.compute()
 
 def test_Dataframe():
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
-                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
-                        name='a')
+                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
+                         name='a')
 
     assert eq(d['a'] + 1, expected)
 
@@ -55,10 +54,10 @@ def test_head_tail():
     assert eq(d['a'].head(2), full['a'].head(2))
     assert eq(d['a'].head(3), full['a'].head(3))
     assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
-    assert sorted(d.head(2, compute=False).dask) == \
-           sorted(d.head(2, compute=False).dask)
-    assert sorted(d.head(2, compute=False).dask) != \
-           sorted(d.head(3, compute=False).dask)
+    assert (sorted(d.head(2, compute=False).dask) ==
+            sorted(d.head(2, compute=False).dask))
+    assert (sorted(d.head(2, compute=False).dask) !=
+            sorted(d.head(3, compute=False).dask))
 
     assert eq(d.tail(2), full.tail(2))
     assert eq(d.tail(3), full.tail(3))
@@ -66,10 +65,10 @@ def test_head_tail():
     assert eq(d['a'].tail(2), full['a'].tail(2))
     assert eq(d['a'].tail(3), full['a'].tail(3))
     assert eq(d['a'].tail(2), dsk[('x', 2)]['a'].tail(2))
-    assert sorted(d.tail(2, compute=False).dask) == \
-           sorted(d.tail(2, compute=False).dask)
-    assert sorted(d.tail(2, compute=False).dask) != \
-           sorted(d.tail(3, compute=False).dask)
+    assert (sorted(d.tail(2, compute=False).dask) ==
+            sorted(d.tail(2, compute=False).dask))
+    assert (sorted(d.tail(2, compute=False).dask) !=
+            sorted(d.tail(3, compute=False).dask))
 
 
 def test_index_head():
@@ -105,7 +104,7 @@ def test_column_names():
     tm.assert_index_equal(d[['b', 'a']].columns, pd.Index(['b', 'a']))
     assert d['a'].name == 'a'
     assert (d['a'] + 1).name == 'a'
-    assert (d['a'] + d['b']).name == None
+    assert (d['a'] + d['b']).name is None
 
 
 def test_index_names():
@@ -142,6 +141,7 @@ def test_set_index():
     assert d4.index.name == 'b'
     assert eq(d4, full.set_index('b'))
 
+
 @pytest.mark.parametrize('drop', [True, False])
 def test_set_index_drop(drop):
 
@@ -176,7 +176,7 @@ def test_set_index_drop(drop):
 
 def test_set_index_raises_error_on_bad_input():
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
-                        'b': [7, 6, 5, 4, 3, 2, 1]})
+                       'b': [7, 6, 5, 4, 3, 2, 1]})
     ddf = dd.from_pandas(df, 2)
 
     msg = r"Dask dataframe does not yet support multi-indexes"
@@ -249,6 +249,7 @@ def test_cumulative():
     assert eq(ddf.a.cummin(), pdf.a.cummin())
     assert eq(ddf.a.cummax(), pdf.a.cummax())
 
+
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
                        'y': [1,      2, np.nan, 4, np.nan, np.nan],
@@ -296,7 +297,7 @@ def test_where_mask():
                          'b': [False, False, True] * 3,
                          'd': [False] * 9,
                          'e': [True] * 9},
-                         index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
+                        index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
     ddf6 = dd.from_pandas(pdf6, 2)
 
     cases = [(ddf1, ddf2, pdf1, pdf2),
@@ -332,6 +333,7 @@ def test_where_mask():
         assert eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a))
         assert eq(ddf.a.where(ddcond.a, -ddf.a), pdf.a.where(pdcond.a, -pdf.a))
         assert eq(ddf.a.mask(ddcond.a, -ddf.a), pdf.a.mask(pdcond.a, -pdf.a))
+
 
 def test_map_partitions_multi_argument():
     assert eq(dd.map_partitions(lambda a, b: a + b, None, d.a, d.b),
@@ -376,7 +378,7 @@ def test_map_partitions_column_info():
     assert eq(df.x, b)
 
     b = dd.map_partitions(lambda df: df.x + df.y, None, a)
-    assert b.name == None
+    assert b.name is None
     assert isinstance(b, dd.Series)
 
     b = dd.map_partitions(lambda df: df.x + 1, 'x', a)
@@ -394,7 +396,7 @@ def test_map_partitions_method_names():
 
     b = a.map_partitions(lambda df: df.x + 1, columns=None)
     assert isinstance(b, dd.Series)
-    assert b.name == None
+    assert b.name is None
 
     b = a.map_partitions(lambda df: df.x + 1, columns='x')
     assert isinstance(b, dd.Series)
@@ -404,7 +406,6 @@ def test_map_partitions_method_names():
 def test_map_partitions_keeps_kwargs_in_dict():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
-
 
     def f(s, x=1):
         return s + x
@@ -433,7 +434,6 @@ def test_drop_duplicates_subset():
         kwargs = [{'take_last': False}, {'take_last': True}]
     else:
         kwargs = [{'keep': 'first'}, {'keep': 'last'}]
-
 
     for kwarg in kwargs:
         assert eq(df.x.drop_duplicates(**kwarg),
@@ -527,6 +527,7 @@ def test_value_counts():
     # https://github.com/pydata/pandas/pull/10419
     assert eq(result, expected, check_names=False)
 
+
 def test_unique():
     pdf = pd.DataFrame({'x': [1, 2, 1, 3, 3, 1, 4, 2, 3, 1],
                         'y': ['a', 'c', 'b', np.nan, 'c',
@@ -546,10 +547,11 @@ def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
 
+
 def test_quantile():
     # series / multiple
     result = d.b.quantile([.3, .7])
-    exp = full.b.quantile([.3, .7]) # result may different
+    exp = full.b.quantile([.3, .7])  # result may different
     assert len(result) == 2
     assert result.divisions == (.3, .7)
     assert eq(result.index, exp.index)
@@ -578,10 +580,11 @@ def test_quantile():
 
     # series / single
     result = d.b.quantile(.5)
-    exp = full.b.quantile(.5) # result may different
+    exp = full.b.quantile(.5)  # result may different
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
     assert 4 < result < 6
+
 
 def test_empty_quantile():
     result = d.b.quantile([])
@@ -594,6 +597,7 @@ def test_empty_quantile():
     assert result.compute().name == 'b'
     assert eq(result, exp, check_names=False)
 
+
 def test_dataframe_quantile():
 
     # column X is for test column order and result division
@@ -601,7 +605,7 @@ def test_dataframe_quantile():
                        'X': np.arange(20, 40),
                        'B': np.arange(10, 30),
                        'C': ['a', 'b', 'c', 'd'] * 5},
-                       columns=['A', 'X', 'B', 'C'])
+                      columns=['A', 'X', 'B', 'C'])
     ddf = dd.from_pandas(df, 3)
 
     result = ddf.quantile()
@@ -631,6 +635,7 @@ def test_dataframe_quantile():
 
     assert eq(ddf.quantile(axis=1), df.quantile(axis=1))
     assert raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
+
 
 def test_index():
     assert eq(d.index, full.index)
@@ -670,7 +675,6 @@ def test_loc_non_informative_index():
 
     assert eq(ddf.loc[20:30], df.loc[20:30])
 
-
     df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[10, 20, 20, 40])
     ddf = dd.from_pandas(df, npartitions=2, sort=True)
     assert eq(ddf.loc[20], df.loc[20:20])
@@ -705,7 +709,7 @@ def test_getitem():
                       columns=list('ABC'))
     ddf = dd.from_pandas(df, 2)
     assert eq(ddf['A'], df['A'])
-    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A']) # check cache consistency
+    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A'])# check cache consistency
 
     assert eq(ddf[['A', 'B']], df[['A', 'B']])
     tm.assert_frame_equal(ddf[['A', 'B']]._pd, ddf._pd[['A', 'B']])
@@ -771,6 +775,7 @@ def test_known_divisions():
                       ['a', 'b'], divisions=[0, 1])
     assert d.known_divisions
 
+
 def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
@@ -825,6 +830,7 @@ def test_concat2():
         with tm.assertRaisesRegexp(ValueError, msg):
             dd.concat(case, axis=1)
 
+
 def test_concat3():
     pdf1 = pd.DataFrame(np.random.randn(6, 5),
                         columns=list('ABCDE'), index=list('abcdef'))
@@ -853,6 +859,7 @@ def test_concat3():
 
     assert eq(dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
               pd.concat([pdf1, pdf2, pdf3]))
+
 
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(np.random.randn(10, 5),
@@ -945,6 +952,7 @@ def test_concat5():
         assert eq(dd.concat(case, axis=1, join='inner'),
                   pd.concat(pdcase, axis=1, join='inner'))
 
+
 def test_append():
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
                        'b': [1, 2, 3, 4, 5, 6]})
@@ -975,8 +983,6 @@ def test_append():
     assert eq(ddf.append(df3), df.append(df3))
     assert eq(ddf.a.append(df3.b), df.a.append(df3.b))
 
-
-
     df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
                         'b': [1, 2, 3, 4, 5, 6]},
                        index=[4, 5, 6, 7, 8, 9])
@@ -987,6 +993,7 @@ def test_append():
            "greater than the divisions/index of the first dataframe.")
     with tm.assertRaisesRegexp(ValueError, msg):
         ddf.append(ddf4)
+
 
 def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
@@ -1282,7 +1289,6 @@ def test_str_accessor():
 
 
 def test_empty_max():
-    df = pd.DataFrame({'x': [1, 2, 3]})
     a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
                       ['x'], [None, None, None])
@@ -1319,7 +1325,6 @@ def test_nlargest_series():
     assert eq(ss.nlargest(2), s.nlargest(2))
 
 
-
 def test_query():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
@@ -1348,10 +1353,10 @@ def test_deterministic_reduction_names():
     assert a.x.max()._name == a.x.max()._name
     assert a.x.count()._name == a.x.count()._name
     # Test reduction without token string
-    assert sorted(reduction(a.x, len, np.sum).dask) !=\
-           sorted(reduction(a.x, np.sum, np.sum).dask)
-    assert sorted(reduction(a.x, len, np.sum).dask) ==\
-           sorted(reduction(a.x, len, np.sum).dask)
+    assert (sorted(reduction(a.x, len, np.sum).dask) !=
+            sorted(reduction(a.x, np.sum, np.sum).dask))
+    assert (sorted(reduction(a.x, len, np.sum).dask) ==
+            sorted(reduction(a.x, len, np.sum).dask))
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -1360,17 +1365,17 @@ def test_deterministic_apply_concat_apply_names():
 
     assert sorted(a.x.nlargest(2).dask) == sorted(a.x.nlargest(2).dask)
     assert sorted(a.x.nlargest(2).dask) != sorted(a.x.nlargest(3).dask)
-    assert sorted(a.x.drop_duplicates().dask) == \
-           sorted(a.x.drop_duplicates().dask)
-    assert sorted(a.groupby('x').y.mean().dask) == \
-           sorted(a.groupby('x').y.mean().dask)
+    assert (sorted(a.x.drop_duplicates().dask) ==
+            sorted(a.x.drop_duplicates().dask))
+    assert (sorted(a.groupby('x').y.mean().dask) ==
+            sorted(a.groupby('x').y.mean().dask))
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
-    assert sorted(aca(a.x, f, f, a.x.name).dask) !=\
-           sorted(aca(a.x, f2, f2, a.x.name).dask)
-    assert sorted(aca(a.x, f, f, a.x.name).dask) ==\
-           sorted(aca(a.x, f, f, a.x.name).dask)
+    assert (sorted(aca(a.x, f, f, a.x.name).dask) !=
+            sorted(aca(a.x, f2, f2, a.x.name).dask))
+    assert (sorted(aca(a.x, f, f, a.x.name).dask) ==
+            sorted(aca(a.x, f, f, a.x.name).dask))
 
 
 def test_gh_517():
@@ -1421,6 +1426,7 @@ def test_to_frame():
     assert a.to_frame()._known_dtype
     assert eq(s.to_frame(), a.to_frame())
     assert eq(s.to_frame('bar'), a.to_frame('bar'))
+
 
 def test_apply():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
@@ -1551,7 +1557,7 @@ def test_index_time_properties():
 
 
 @pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
-        reason="nlargest not in pandas pre 0.16.2")
+                    reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),
@@ -1564,7 +1570,7 @@ def test_nlargest():
 
 
 @pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
-        reason="nlargest not in pandas pre 0.16.2")
+                    reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest_multiple_columns():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),
@@ -1593,11 +1599,13 @@ def test_dataframe_compute_forward_kwargs():
     x = dd.from_pandas(pd.DataFrame({'a': range(10)}), npartitions=2).a.sum()
     x.compute(bogus_keyword=10)
 
+
 def test_series_iteritems():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
     for (a, b) in zip(df['x'].iteritems(), ddf['x'].iteritems()):
         assert a == b
+
 
 def test_dataframe_iterrows():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
@@ -1605,6 +1613,7 @@ def test_dataframe_iterrows():
 
     for (a, b) in zip(df.iterrows(), ddf.iterrows()):
         tm.assert_series_equal(a[1], b[1])
+
 
 def test_dataframe_itertuples():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})

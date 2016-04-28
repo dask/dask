@@ -11,7 +11,6 @@ from .io import from_delayed
 
 from ..bytes import read_bytes
 from ..bytes.compression import seekable_files, files as cfiles
-from ..utils import ensure_bytes
 
 
 delayed = delayed(pure=True)

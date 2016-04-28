@@ -6,9 +6,8 @@ from warnings import warn
 import operator
 import uuid
 
-from toolz import merge, unique, curry, first, assoc
+from toolz import merge, unique, curry, first
 
-from .async import get_sync
 from .utils import concrete, funcname
 from . import base
 from .compatibility import apply
@@ -355,7 +354,7 @@ class DelayedLeaf(Delayed):
 
         if dask_key_name is None:
             name = (funcname(self._data) + '-' +
-                    tokenize(self._key, *args, pure=self.pure, **kwargs))
+                    tokenize(self._key, *args, pure=pure, **kwargs))
         else:
             name = dask_key_name
 

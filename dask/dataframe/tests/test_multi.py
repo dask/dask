@@ -526,4 +526,3 @@ def test_melt():
             pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
     list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
             pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
-

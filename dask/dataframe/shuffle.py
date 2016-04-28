@@ -10,7 +10,6 @@ from toolz import merge
 
 from ..optimize import cull
 from ..base import tokenize
-from ..compatibility import unicode
 from .core import DataFrame, Series, _Frame
 from dask.dataframe.categorical import (strip_categories, _categorize,
                                         get_categories)

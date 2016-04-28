@@ -1,6 +1,6 @@
 import pytest
 from operator import getitem
-from toolz import valmap, merge
+from toolz import merge
 from dask.dataframe.optimize import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd

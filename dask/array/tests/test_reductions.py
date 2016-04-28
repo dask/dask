@@ -6,7 +6,7 @@ pytest.importorskip('numpy')
 import dask.array as da
 from dask.core import get_deps
 from dask.context import set_options
-from dask.utils import ignoring
+
 import numpy as np
 # temporary until numpy functions migrated
 try:

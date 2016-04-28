@@ -5,7 +5,6 @@ from hashlib import md5
 from operator import attrgetter
 import pickle
 import os
-import sys
 import uuid
 import warnings
 

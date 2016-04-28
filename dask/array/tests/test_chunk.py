@@ -5,7 +5,7 @@ pytest.importorskip('numpy')
 
 import numpy as np
 
-from dask.array.chunk import coarsen, keepdims_wrapper, trim
+from dask.array.chunk import coarsen, keepdims_wrapper
 import dask.array as da
 
 
