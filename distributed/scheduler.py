@@ -303,9 +303,9 @@ class Scheduler(Server):
             self.listen(port)
 
             self.status = 'running'
-            logger.info("Start Scheduler at: %20s:%s", self.ip, self.port)
+            logger.info("Scheduler at: %20s:%s", self.ip, self.port)
             for k, v in self.services.items():
-                logger.info("  %13s at: %20s:%s", k, self.ip, v.port)
+                logger.info("%9s at: %20s:%s", k, self.ip, v.port)
 
         return self.finished()
 

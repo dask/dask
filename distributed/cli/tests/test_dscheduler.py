@@ -53,7 +53,7 @@ def test_bokeh():
 
         while True:
             line = proc.stderr.readline()
-            if b'Start Bokeh UI' in line:
+            if b'Bokeh UI' in line:
                 break
 
         start = time()
@@ -86,7 +86,7 @@ def test_bokeh_non_standard_ports():
 
         while True:
             line = proc.stderr.readline()
-            if b'Start Bokeh UI' in line:
+            if b'Bokeh UI' in line:
                 break
 
         start = time()
