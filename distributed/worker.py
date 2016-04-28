@@ -16,7 +16,7 @@ import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import valmap
+from toolz import valmap, merge
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -224,6 +224,45 @@ class Worker(Server):
             self.data.update(result)
             raise Return({'status': 'OK'})
 
+    def deserialize(self, function=None, args=None, kwargs=None, task=None):
+        if task is not None:
+            task = loads(task)
+        if function is not None:
+            function = loads(function)
+        if args:
+            args = loads(args)
+        if kwargs:
+            kwargs = loads(kwargs)
+
+        if task is not None:
+            assert not function and not args and not kwargs
+            function = execute_task
+            args = (task,)
+
+        return function, args or (), kwargs or {}
+
+    @gen.coroutine
+    def gather_many(self, msgs):
+        with log_errors():
+            who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
+            local = {k: self.data[k] for k in who_has if k in self.data}
+            who_has = {k: v for k, v in who_has.items() if k not in local}
+            remote, bad_data = yield gather_from_workers(who_has, permissive=True)
+            if remote:
+                self.data.update(remote)
+                yield self.center.add_keys(address=self.address, keys=list(remote))
+
+            data = merge(local, remote)
+
+            if bad_data:
+                missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
+                            for msg in msgs}
+                bad = {k: v for k, v in missing.items() if v}
+                good = [msg for msg in msgs if msg['key'] not in missing]
+            else:
+                good, bad = msgs, {}
+            raise Return([good, bad, data, len(remote)])
+
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
                     task=None, who_has=None):
@@ -248,27 +287,17 @@ class Worker(Server):
                 raise Return({'status': 'missing-data',
                               'keys': e.args,
                               'key': key})
+
         try:
             start = default_timer()
-            if task is not None:
-                task = loads(task)
-            if function is not None:
-                function = loads(function)
-            if args:
-                args = loads(args)
-            if kwargs:
-                kwargs = loads(kwargs)
+            function, args, kwargs = self.deserialize(function, args, kwargs,
+                    task)
             diagnostics['deserialization'] = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
             emsg = error_message(e)
             emsg['key'] = key
             raise Return(emsg)
-
-        if task is not None:
-            assert not function and not args and not kwargs
-            function = execute_task
-            args = (task,)
 
         # Fill args with data
         args2 = pack_data(args, data)
@@ -313,19 +342,9 @@ class Worker(Server):
             bstream = BatchedSend(interval=2, loop=self.loop)
             bstream.start(stream)
 
-        @gen.coroutine
-        def process(msg):
-            try:
-                result = yield self.compute(report=False, **msg)
-                bstream.send(result)
-            except Exception as e:
-                logger.exception(e)
-                emsg = error_message(e)
-                emsg['key'] = msg.get('key')
-                bstream.send(emsg)
-
         with log_errors():
-            while True:
+            closed = False
+            while not closed:
                 try:
                     msgs = yield read(stream)
                 except StreamClosedError:
@@ -333,17 +352,99 @@ class Worker(Server):
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
+                batch = []
                 for msg in msgs:
                     op = msg.pop('op', None)
                     if op == 'close':
+                        closed = True
                         break
                     elif op == 'compute-task':
-                        self.loop.add_callback(process, msg)
+                        batch.append(msg)
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
+                last = self.compute_many(bstream, msgs)
 
+            yield last  # TODO: there might be more than one lingering
             yield bstream.close()
             logger.info("Close compute stream")
+
+    @gen.coroutine
+    def compute_many(self, bstream, msgs, report=False):
+        with log_errors():
+            transfer_start = time()
+            good, bad, data, num_transferred = yield self.gather_many(msgs)
+            transfer_end = time()
+
+            for msg in msgs:
+                msg.pop('who_has', None)
+
+            for k, v in bad.items():
+                logger.warn("Could not find data for %s", k)
+                bstream.send({'status': 'missing-data',
+                              'key': k,
+                              'keys': list(v)})
+
+            results = yield [self.compute_one(data, report=report, **msg)
+                             for msg in good]
+
+            if results and num_transferred:
+                results[0]['transfer-start'] = transfer_start
+                results[0]['transfer-stop'] = transfer_end
+
+            for msg in results:
+                bstream.send(msg)
+
+    @gen.coroutine
+    def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
+                    report=False, task=None):
+        logger.debug("Compute one on %s", key)
+        with log_errors():
+            diagnostics = dict()
+            try:
+                start = default_timer()
+                function, args, kwargs = self.deserialize(function, args, kwargs,
+                        task)
+                diagnostics['deserialization'] = default_timer() - start
+            except Exception as e:
+                logger.warn("Could not deserialize task", exc_info=True)
+                emsg = error_message(e)
+                emsg['key'] = key
+                raise Return(emsg)
+
+            # Fill args with data
+            args2 = pack_data(args, data)
+            kwargs2 = pack_data(kwargs, data)
+
+            # Log and compute in separate thread
+            result = yield self.executor_submit(key, apply_function, function,
+                                                args2, kwargs2)
+
+            result['key'] = key
+            result.update(diagnostics)
+
+            if result['status'] == 'OK':
+                self.data[key] = result.pop('result')
+                if report:
+                    response = yield self.center.add_keys(keys=[key],
+                                            address=(self.ip, self.port))
+                    if not response == 'OK':
+                        logger.warn('Could not report results to center: %s',
+                                    str(response))
+            else:
+                logger.warn(" Compute Failed\n"
+                    "Function: %s\n"
+                    "args:     %s\n"
+                    "kwargs:   %s\n",
+                    str(funcname(function))[:1000], str(args)[:1000],
+                    str(kwargs)[:1000], exc_info=True)
+
+            logger.debug("Send compute response to scheduler: %s, %s", key,
+                         result)
+            try:
+                self.active.remove(key)
+            except KeyError:
+                pass
+            raise Return(result)
 
     @gen.coroutine
     def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
@@ -421,8 +522,9 @@ class Worker(Server):
         raise Return(response)
 
     @gen.coroutine
-    def update_data(self, stream, data=None, report=True):
-        data = valmap(loads, data)
+    def update_data(self, stream=None, data=None, report=True, deserialize=True):
+        if deserialize:
+            data = valmap(loads, data)
         self.data.update(data)
         if report:
             response = yield self.center.add_keys(address=(self.ip, self.port),
