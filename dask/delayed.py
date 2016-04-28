@@ -325,10 +325,6 @@ class Delayed(base.Base):
 
 
 class DelayedLeaf(Delayed):
-    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
-    _finalize = staticmethod(first)
-    _default_get = staticmethod(get_sync)
-
     def __init__(self, obj, name=None, pure=False):
         if name is None:
             try:
