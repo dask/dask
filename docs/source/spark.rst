@@ -40,7 +40,7 @@ computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
 disk.  That being said dask can run on a distributed_ cluster.
 
-.. _distributed: http://distributed.readthedocs.org/
+.. _distributed: http://distributed.readthedocs.io/
 
 
 Java Python Performance
@@ -155,9 +155,9 @@ Spark and Dask and use Postgres_ or MongoDB_.
 .. _Spark: https://spark.apache.org/
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
 .. _Hadoop: https://hadoop.apache.org/
-.. _MRJob: https://mrjob.readthedocs.org
+.. _MRJob: https://mrjob.readthedocs.io
 .. _`surprisingly fast`: https://www.youtube.com/watch?v=PpBK4zIaFLE
-.. _cytoolz: https://toolz.readthedocs.org
+.. _cytoolz: https://toolz.readthedocs.io
 .. _py4j: http://py4j.sourceforge.net/
 .. _Postgres: http://www.postgresql.org/
 .. _MongoDB: https://www.mongodb.org/

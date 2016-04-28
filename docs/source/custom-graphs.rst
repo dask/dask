@@ -1,9 +1,9 @@
 Custom Graphs
 =============
 
-There may be times that you want to do parallel computing, but your application 
+There may be times that you want to do parallel computing, but your application
 doesn't fit neatly into something like ``dask.array`` or ``dask.bag``.  In these
-cases, you can interact directly with the dask schedulers.  These schedulers 
+cases, you can interact directly with the dask schedulers.  These schedulers
 operate well as standalone modules.
 
 This separation provides a release valve for complex situations and allows
@@ -22,7 +22,7 @@ Example
    :align: right
 
 As discussed in the :doc:`motivation <graphs>` and :doc:`specification <spec>`
-sections, the schedulers take a task graph which is a dict of tuples of 
+sections, the schedulers take a task graph which is a dict of tuples of
 functions, and a list of desired keys from that graph.
 
 Here is a mocked out example building a graph for a traditional clean and
@@ -87,4 +87,4 @@ paradigms.  One should inspect all such projects before selecting one.
 .. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
 .. _`Concurrent.futures`: https://docs.python.org/3/library/concurrent.futures.html
-.. _Luigi: http://luigi.readthedocs.org
+.. _Luigi: http://luigi.readthedocs.io
