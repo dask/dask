@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
-import sys
 
 import pytest
 pd = pytest.importorskip('pandas')
@@ -11,7 +10,6 @@ from toolz import partition_all, valmap, partial
 
 from dask import compute
 from dask.async import get_sync
-from dask.compatibility import gzip_compress
 from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
 from dask.dataframe.utils import eq
 from dask.utils import filetexts, filetext
@@ -49,7 +47,7 @@ def test_bytes_read_csv_kwargs():
     assert list(df.columns) == ['name', 'id']
 
 
-def test_bytes_read_csv():
+def test_bytes_read_csv_dtype_coercion():
     b = files['2014-01-01.csv']
     df = bytes_read_csv(b, b'', {}, {'amount': 'float'})
     assert df.amount.dtype == 'float'
@@ -80,7 +78,6 @@ def test_read_csv_simple():
     assert len(values) == 3
     assert all(hasattr(item, 'dask') for item in values)
 
-    f = df.amount.sum().compute(get=get_sync)
     result = df.amount.sum().compute(get=get_sync)
     assert result == (100 + 200 + 300 + 400 + 500 + 600)
 
@@ -119,8 +116,8 @@ def test_enforce_dtypes():
     blocks = [[b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40'],
               [b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40']]
     head = pd.read_csv(BytesIO(blocks[0][0]), header=0)
-    dfs = read_csv_from_bytes(blocks, b'aa,bb\n', head, {}, enforce_dtypes=True,
-            collection=False)
+    dfs = read_csv_from_bytes(blocks, b'aa,bb\n', head, {},
+                              enforce_dtypes=True, collection=False)
     dfs = compute(*dfs)
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
@@ -138,6 +135,7 @@ def test_read_csv_files():
 
 from dask.bytes.compression import compress, files as cfiles, seekable_files
 fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
+
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
@@ -185,7 +183,7 @@ def test_late_dtypes():
                     "'a': float" in str(e))
 
         df = read_csv(fn, blocksize=5, sample=10,
-                          dtype={'a': float, 'b': float})
+                      dtype={'a': float, 'b': float})
 
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5.5 + 6
         assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7.5

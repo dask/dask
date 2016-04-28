@@ -5,7 +5,6 @@ import operator
 import numpy as np
 
 from ..base import tokenize
-from ..compatibility import reduce
 from .core import top, dotmany, Array, eye
 from .random import RandomState
 

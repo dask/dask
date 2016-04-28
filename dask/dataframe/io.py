@@ -1,29 +1,24 @@
 from __future__ import absolute_import, division, print_function
 
-import codecs
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
 from math import ceil
 from operator import getitem
 import os
-import re
 from threading import Lock
 import uuid
 from warnings import warn
 
 import pandas as pd
 import numpy as np
-from toolz import merge, assoc, dissoc
+from toolz import merge
 
-from ..compatibility import StringIO, unicode, range, apply
-from ..utils import (textblock, file_size, get_bom, system_encoding,
-                     infer_compression)
 from ..base import tokenize
+from ..compatibility import unicode, apply
 from .. import array as da
 from ..async import get_sync
 
-from . import core
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 

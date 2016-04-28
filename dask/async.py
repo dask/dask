@@ -114,15 +114,17 @@ See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
+from operator import add
 import sys
 import traceback
-from operator import add
+
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-        _deps)
+                   _deps)
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
 from .optimize import cull
+
 
 def inc(x):
     return x + 1
@@ -138,8 +140,8 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     --------
 
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    >>> import pprint
-    >>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+    >>> from pprint import pprint
+    >>> pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': set(['y', 'z']),
                       'x': set([]),
@@ -209,6 +211,7 @@ When we execute tasks we both
 1.  Perform the actual work of collecting the appropriate data and calling the function
 2.  Manage administrative state to coordinate with the scheduler
 '''
+
 
 def _execute_task(arg, cache, dsk=None):
     """ Do the actual work of collecting data and executing a function
@@ -318,7 +321,7 @@ def finish_task(dsk, key, state, results, sortkey, delete=True,
                 if DEBUG:
                     from chest.core import nbytes
                     print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
-                        sum(map(nbytes, state['cache'].values()) / 1e6)))
+                          sum(map(nbytes, state['cache'].values()) / 1e6)))
                 release_data(dep, state, delete=delete)
         elif delete and dep not in results:
             release_data(dep, state, delete=delete)
@@ -370,6 +373,7 @@ this first-in-first-out policy reduces memory footprint
 
 The main function of the scheduler.  Get is the main entry point.
 '''
+
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
@@ -558,13 +562,13 @@ class RemoteException(Exception):
     def __str__(self):
         return (str(self.exception) + "\n\n"
                 "Traceback\n"
-                "---------\n"
-                + self.traceback)
+                "---------\n" +
+                self.traceback)
 
     def __dir__(self):
-        return sorted(set(dir(type(self))
-                        + list(self.__dict__)
-                        + dir(self.exception)))
+        return sorted(set(dir(type(self)) +
+                      list(self.__dict__) +
+                      dir(self.exception)))
 
     def __getattr__(self, key):
         try:

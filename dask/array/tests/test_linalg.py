@@ -192,7 +192,6 @@ def test_lu_1():
 
 @pytest.mark.parametrize('size', [10, 20, 30, 50])
 def test_lu_2(size):
-    import scipy.linalg
     np.random.seed(10)
     A = np.random.random_integers(0, 10, (size, size))
 
@@ -407,7 +406,6 @@ def test_cholesky(shape, chunk):
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"),
                          [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk):
-    import scipy.linalg
     np.random.seed(1)
     A = np.random.random_integers(1, 20, (nrow, ncol))
     b = np.random.random_integers(1, 20, nrow)

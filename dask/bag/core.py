@@ -1,11 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import bz2
 from collections import Iterable, Iterator, defaultdict
-from fnmatch import fnmatchcase
 from functools import wraps, partial
-from glob import glob
-import io
 import itertools
 import math
 import os
@@ -14,23 +10,24 @@ from warnings import warn
 
 from ..utils import ignoring
 
-from toolz import (merge, frequencies, merge_with, take, reduce,
-                   join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk, compose, curry)
+from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
+        remove, compose, curry)
 from toolz.compatibility import iteritems, zip
 import toolz
-with ignoring(ImportError):
+try:
     from cytoolz import (frequencies, merge_with, join, reduceby,
+                         count, pluck, groupby, topk)
+except:
+    from toolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
-from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
-                             GzipFile)
+from ..compatibility import apply, unicode, urlopen
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import (file_size, infer_compression, open, system_encoding,
-                     takes_multiple_arguments, textblock, funcname)
+from ..utils import (infer_compression, open, system_encoding,
+                     takes_multiple_arguments, funcname)
 
 no_default = '__no__default__'
 
@@ -219,7 +216,7 @@ class Item(Base):
     @staticmethod
     def from_imperative(value):
         warn("Deprecation warning: moved to from_delayed")
-        return self.from_delayed(value)
+        return from_delayed(value)
 
     @staticmethod
     def from_delayed(value):

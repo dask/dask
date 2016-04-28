@@ -113,7 +113,6 @@ def read_block(f, offset, length, delimiter=None):
         f.seek(start + length)
         seek_delimiter(f, delimiter, 2**16)
         end = f.tell()
-        eof = not f.read(1)
 
         offset = start
         length = end - start

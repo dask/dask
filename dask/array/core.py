@@ -15,16 +15,16 @@ from threading import Lock
 import uuid
 from warnings import warn
 
-from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
+from toolz.curried import (pipe, partition, concat, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
-                           curry, reduce, interleave, sliding_window, partial)
+                           reduce, interleave, sliding_window)
 import numpy as np
 
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
-from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
+from ..utils import (deepmap, ignoring, concrete, is_integer,
         IndexCallable, funcname)
 from ..compatibility import unicode, long, getargspec, zip_longest
 from .. import threaded, core
@@ -1752,7 +1752,6 @@ def stack(seq, axis=0):
                 "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
 
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
-    shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
     chunks = (  seq[0].chunks[:axis]
               + ((1,) * n,)
               + seq[0].chunks[axis:])
@@ -1824,9 +1823,6 @@ def concatenate(seq, axis=0):
             for j in range(len(bds[0])) if j != axis):
         raise ValueError("Block shapes do not align")
 
-    shape = (seq[0].shape[:axis]
-            + (sum(a.shape[axis] for a in seq),)
-            + seq[0].shape[axis + 1:])
     chunks = (  seq[0].chunks[:axis]
               + (sum([bd[axis] for bd in bds], ()),)
               + seq[0].chunks[axis + 1:])
