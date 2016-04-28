@@ -555,11 +555,14 @@ def derived_from(original_klass, version=None, ua_args=[]):
     return wrapper
 
 
-def funcname(func):
+def funcname(func, full=False):
     """Get the name of a function."""
     while hasattr(func, 'func'):
         func = func.func
     try:
-        return func.__name__
+        if full:
+            return func.__qualname__
+        else:
+            return func.__name__
     except:
         return str(func)
