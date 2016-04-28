@@ -1,25 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
-from hashlib import md5
 import logging
-import signal
 import six
-import socket
 import struct
-from time import sleep, time
+from time import time
 import traceback
 import uuid
 
 from toolz import assoc, first
 
-import tornado
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 import cloudpickle
-from tornado import ioloop, gen
+from tornado import gen
 from tornado.gen import Return
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
@@ -27,7 +23,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode
-from .utils import get_traceback, truncate_exception, ignoring
+from .utils import get_traceback, truncate_exception
 from . import protocol
 
 pickle_types = []
@@ -64,7 +60,7 @@ def dumps(x):
     except:
         try:
             return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception as e:
+        except Exception:
             logger.info("Failed to serialize %s", x, exc_info=True)
             raise
 
@@ -72,7 +68,7 @@ def dumps(x):
 def loads(x):
     try:
         return pickle.loads(x)
-    except Exception as e:
+    except Exception:
         logger.info("Failed to deserialize %s", x, exc_info=True)
         raise
 
@@ -156,7 +152,7 @@ class Server(TCPServer):
             try:
                 super(Server, self).listen(port)
                 break
-            except OSError as e:
+            except OSError:
                 if port:
                     raise
                 else:

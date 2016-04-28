@@ -11,27 +11,24 @@ import tempfile
 from threading import current_thread
 from time import time
 from timeit import default_timer
-import traceback
 import shutil
 import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import merge, valmap, assoc
+from toolz import valmap
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
-from tornado.queues import Queue
 
 from .batched import BatchedSend
 from .client import pack_data, gather_from_workers
-from .compatibility import reload, PY3, unicode
+from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
-        error_message, read, write)
+        error_message, read)
 from .sizeof import sizeof
-from .utils import (funcname, get_ip, get_traceback, truncate_exception,
-    ignoring, _maybe_complex, log_errors)
+from .utils import funcname, get_ip, _maybe_complex, log_errors
 
 _ncores = ThreadPool()._processes
 
@@ -251,8 +248,6 @@ class Worker(Server):
                 raise Return({'status': 'missing-data',
                               'keys': e.args,
                               'key': key})
-        else:
-            transfer_time = 0
         try:
             start = default_timer()
             if task is not None:
@@ -296,7 +291,6 @@ class Worker(Server):
         pull it off into an separate method.
         """
         job_counter[0] += 1
-        i = job_counter[0]
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",

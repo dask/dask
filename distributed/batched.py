@@ -3,13 +3,12 @@ from __future__ import print_function, division, absolute_import
 import logging
 from timeit import default_timer
 
-from toolz import partition_all
 from tornado import gen
 from tornado.queues import Queue
-from tornado.iostream import StreamClosedError, IOStream
+from tornado.iostream import StreamClosedError
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .core import read, write, coerce_to_address, connect
+from .core import read, write
 from .utils import log_errors
 
 

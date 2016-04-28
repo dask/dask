@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterable, defaultdict
-from itertools import count, cycle
+from itertools import cycle
 import random
 import socket
 import uuid
@@ -15,7 +15,7 @@ from dask.base import tokenize
 from toolz import merge, concat, groupby, drop, valmap
 
 from .core import rpc, coerce_to_rpc, loads, coerce_to_address, dumps
-from .utils import ignore_exceptions, ignoring, All, log_errors, tokey, sync
+from .utils import ignore_exceptions, All, log_errors, tokey, sync
 
 
 no_default = '__no_default__'
@@ -197,7 +197,6 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
         ncores = {coerce_to_address(worker): k for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
-    in_type = type(data)
     if isinstance(data, dict):
         names, data = list(zip(*data.items()))
     else:

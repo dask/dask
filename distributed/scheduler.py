@@ -2,17 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from functools import partial
 import logging
-from math import ceil
 import random
 import socket
 from time import time
 from timeit import default_timer
-import uuid
 
-from toolz import (frequencies, memoize, concat, identity, valmap, keymap,
-        first, second)
+from toolz import frequencies, memoize, valmap, first, second
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -20,17 +16,15 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
 from dask.compatibility import PY3, unicode
-from dask.core import get_deps, reverse_dict, istask
+from dask.core import reverse_dict
 from dask.order import order
 
-from .batched import BatchedStream, BatchedSend
-from .client import (scatter_to_workers,
-        gather_from_workers, broadcast_to_workers)
-from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address)
-from .utils import (All, ignoring, clear_queue, _deps, get_ip,
-        ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
-        tokey, log_errors)
+from .batched import BatchedSend
+from .client import (scatter_to_workers, gather_from_workers)
+from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
+        Server, send_recv, coerce_to_address, error_message)
+from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
+        ensure_ip, log_errors)
 
 
 logger = logging.getLogger(__name__)
@@ -1244,7 +1238,7 @@ class Scheduler(Server):
                                 msg)
 
                 self.ensure_occupied(ident)
-        except (StreamClosedError, IOError, OSError) as e:
+        except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
             stream.close()
@@ -1307,7 +1301,7 @@ class Scheduler(Server):
                                        self.rpc(ip=host, port=port).health(),
                                        io_loop=self.loop)
         except gen.TimeoutError:
-            logger.warn("Heartbeat failed for %s", address)
+            logger.warn("Heartbeat failed for %s", host)
         except Exception as e:
             logger.exception(e)
 
@@ -1619,7 +1613,6 @@ class Scheduler(Server):
         Scheduler.rebalance
         """
         with log_errors():
-            original_keys = set(keys)
             workers = set(self.workers_list(workers))
             if n is None:
                 n = len(workers)

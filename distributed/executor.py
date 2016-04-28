@@ -2,22 +2,19 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, Iterator, Iterable
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
-from concurrent import futures
 import copy
 from datetime import timedelta
-from functools import wraps, partial
-import itertools
+from functools import partial
 import logging
 import os
 from time import sleep
 import uuid
 from threading import Thread
-import socket
 import six
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten, istask
+from dask.core import flatten
 from dask.compatibility import apply
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
@@ -25,18 +22,17 @@ from tornado import gen
 from tornado.gen import Return, TimeoutError
 from tornado.locks import Event
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.iostream import StreamClosedError, IOStream
+from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .batched import BatchedSend
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .compatibility import Queue as pyQueue, Empty, isqueue
-from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
+from .core import (read, write, connect, coerce_to_rpc, dumps,
         clean_exception, loads)
-from .scheduler import Scheduler
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
-        tokey, log_errors, str_graph, ensure_ip)
+        tokey, log_errors, str_graph)
 
 logger = logging.getLogger(__name__)
 
@@ -773,11 +769,6 @@ class Executor(object):
 
     def _threaded_scatter(self, q_or_i, qout, **kwargs):
         """ Internal function for scattering Iterable/Queue data """
-        if isqueue(q_or_i):  # py2 Queue doesn't support mro
-            get = pyQueue.get
-        elif isinstance(q_or_i, Iterator):
-            get = next
-
         while True:
             if isqueue(q_or_i):
                 L = [q_or_i.get()]
@@ -864,7 +855,7 @@ class Executor(object):
     @gen.coroutine
     def _cancel(self, futures):
         keys = {f.key for f in futures_of(futures)}
-        f = yield self.scheduler.cancel(keys=list(keys), client=self.id)
+        yield self.scheduler.cancel(keys=list(keys), client=self.id)
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
@@ -1437,7 +1428,7 @@ def _as_completed(fs, queue):
     wait_iterator = gen.WaitIterator(*[f.event.wait() for f in firsts])
 
     while not wait_iterator.done():
-        result = yield wait_iterator.next()
+        yield wait_iterator.next()
         # TODO: handle case of restarted futures
         future = firsts[wait_iterator.current_index]
         for f in groups[future.key]:
