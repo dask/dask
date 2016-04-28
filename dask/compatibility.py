@@ -17,14 +17,18 @@ if PY3:
     from itertools import zip_longest
     from io import StringIO, BytesIO
     from bz2 import BZ2File
-    from gzip import GzipFile
+    from gzip import (GzipFile, compress as gzip_compress,
+            decompress as gzip_decompress)
     try:
-        from lzmaffi import LZMAFile
+        from lzmaffi import (LZMAFile, compress as lzma_compress,
+                             decompress as lzma_decompress)
     except ImportError:
-        from lzma import LZMAFile
+        from lzma import (LZMAFile, compress as lzma_compress,
+                          decompress as lzma_decompress)
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
+    FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
     def apply(func, args, kwargs=None):
@@ -56,9 +60,25 @@ else:
     range = xrange
     reduce = reduce
     operator_div = operator.div
+    FileNotFoundError = IOError
 
     def _getargspec(func):
         return inspect.getargspec(func)
+
+    def gzip_decompress(b):
+        f = gzip.GzipFile(fileobj=BytesIO(b))
+        result = f.read()
+        f.close()
+        return result
+
+    def gzip_compress(b):
+        bio = BytesIO()
+        f = gzip.GzipFile(fileobj=bio, mode='w')
+        f.write(b)
+        f.close()
+        bio.seek(0)
+        result = bio.read()
+        return result
 
     if sys.version_info[1] <= 7:
         class BZ2File(BufferedIOBase):
@@ -177,9 +197,12 @@ else:
 
     try:
         try:
-            from lzmaffi import LZMAFile
+            from lzmaffi import (LZMAFile, compress as lzma_compress,
+                                 decompress as lzma_decompress)
         except ImportError:
             from backports.lzma import LZMAFile
+            from backports.lzma import (LZMAFile, compress as lzma_compress,
+                                        decompress as lzma_decompress)
     except ImportError:
         class LZMAFile:
             def __init__(self, *args, **kwargs):

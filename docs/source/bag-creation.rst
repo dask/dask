@@ -31,25 +31,27 @@ parallelizes the loading step and reduces inter-worker communication:
    >>> b = db.from_sequence(['1.dat', '2.dat', ...]).map(load_from_filename)
 
 
-``db.from_filenames``
----------------------
+``db.read_text``
+----------------
 
-Dask.bag can load data from textfiles directly.
+Dask.bag can load data directly from textfiles.
 You can pass either a single filename, a list of filenames, or a globstring.
 The resulting bag will have one item per line, one file per partition:
 
 .. code-block:: python
 
-   >>> b = db.from_filenames('myfile.json')
-   >>> b = db.from_filenames(['myfile.1.json', 'myfile.2.json', ...])
-   >>> b = db.from_filenames('myfile.*.json')
+   >>> b = db.read_text('myfile.json')
+   >>> b = db.read_text(['myfile.1.json', 'myfile.2.json', ...])
+   >>> b = db.read_text('myfile.*.json')
 
-Dask.bag handles standard compression libraries, notably ``gzip`` and ``bz2``,
-based on the filename extension:
+This handles standard compression libraries like ``gzip``, ``bz2``, ``xz``, or
+any easily installed compression library that has a File-like object.
+Compression will be inferred by filename extension, or by using the
+``compression='gzip'`` keyword:
 
 .. code-block:: python
 
-   >>> b = db.from_filenames('myfile.*.json.gz')
+   >>> b = db.read_text('myfile.*.json.gz')
 
 The resulting items in the bag are strings.  You may want to parse them using
 functions like ``json.loads``:
@@ -57,18 +59,18 @@ functions like ``json.loads``:
 .. code-block:: python
 
    >>> import json
-   >>> b = db.from_filenames('myfile.*.json.gz').map(json.loads)
+   >>> b = db.read_text('myfile.*.json.gz', compression='gzip').map(json.loads)
 
 Or do string munging tasks.  For convenience there is a string namespace
 attached directly to bags with ``.str.methodname``:
 
 .. code-block:: python
 
-   >>> b = db.from_filenames('myfile.*.csv.gz').str.strip().str.split(',')
+   >>> b = db.read_text('myfile.*.csv.gz').str.strip().str.split(',')
 
 
 ``db.from_delayed``
-----------------------
+-------------------
 
 You can construct a dask bag from :doc:`dask.delayed <delayed>` values
 using the ``db.from_delayed`` function.  See
