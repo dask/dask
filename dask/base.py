@@ -143,12 +143,11 @@ def normalize_function(func):
         return (normalize_function(func.func), func.args, kws)
     else:
         try:
-            return pickle.dumps(func, protocol=pickle.HIGHEST_PROTOCOL)
+            return pickle.dumps(func, protocol=0)
         except:
             try:
                 import cloudpickle
-                return cloudpickle.dumps(func,
-                        protocol=pickle.HIGHEST_PROTOCOL)
+                return cloudpickle.dumps(func, protocol=0)
             except:
                 return str(func)
 

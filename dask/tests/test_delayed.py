@@ -272,12 +272,12 @@ def test_name_consitent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
-    assert func(data)._key == 'identity-96264b683ea5350c2067dede25197638'
+    assert func(data)._key == 'identity-6611a0dc9183f09b04a35db23d14fb7d'
 
     data = {'x': 1, 1: 'x'}
     assert func(data)._key == func(data)._key
 
-    assert func(1)._key == 'identity-dbec0aef480428bd17026e745b7e8e11'
+    assert func(1)._key == 'identity-1b6bde2fbd96b2278a4d2e7514366606'
 
 
 def test_sensitive_to_partials():
