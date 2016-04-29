@@ -12,6 +12,8 @@ class Callback(object):
 
     >>> def start(dsk):
     ...     pass
+    >>> def start_state(dsk, state):
+    ...     pass
     >>> def pretask(key, dsk, state):
     ...     pass
     >>> def posttask(key, result, dsk, state, worker_id):
@@ -43,9 +45,11 @@ class Callback(object):
     ...     x.compute()  # doctest: +SKIP
     """
 
-    def __init__(self, start=None, pretask=None, posttask=None, finish=None):
+    def __init__(self, start=None, start_state=None, pretask=None, posttask=None, finish=None):
         if start:
             self._start = start
+        if start_state:
+            self._start_state = start_state
         if pretask:
             self._pretask = pretask
         if posttask:
@@ -55,7 +59,7 @@ class Callback(object):
 
     @property
     def _callback(self):
-        fields = ['_start', '_pretask', '_posttask', '_finish']
+        fields = ['_start', '_start_state', '_pretask', '_posttask', '_finish']
         return tuple(getattr(self, i, None) for i in fields)
 
     def __enter__(self):
@@ -78,7 +82,7 @@ def unpack_callbacks(cbs):
     if cbs:
         return [[i for i in f if i] for f in zip(*cbs)]
     else:
-        return [(), (), (), ()]
+        return [(), (), (), (), ()]
 
 
 def normalize_callback(cb):

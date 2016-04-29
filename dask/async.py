@@ -422,7 +422,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     if callbacks is None:
         callbacks = _globals['callbacks']
-    start_cbs, pretask_cbs, posttask_cbs, finish_cbs = unpack_callbacks(callbacks)
+    start_cbs, start_state_cbs, pretask_cbs, posttask_cbs, finish_cbs = unpack_callbacks(callbacks)
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -439,6 +439,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     keyorder = order(dsk)
 
     state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+
+    for f in start_state_cbs:
+        f(dsk, state)
 
     if rerun_exceptions_locally is None:
         rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)

@@ -17,21 +17,26 @@ The callbacks are:
 
 1. ``start(dsk)``
 
-   Run at the beginning of execution, right after the state is initialized.
+   Run at the beginning of execution, right before the state is initialized.
    Receives the dask graph.
 
-2. ``pretask(key, dsk, state)``
+2. ``start_state(dsk, state)``
+
+   Run at the beginning of execution, right after the state is initialized.
+   Receives the dask graph and scheduler state.
+
+3. ``pretask(key, dsk, state)``
 
    Run every time a new task is started. Receives the key of the task to be
    run, the dask graph, and the scheduler state.
 
-3. ``posttask(key, result, dsk, state, id)``
+4. ``posttask(key, result, dsk, state, id)``
 
    Run every time a task is finished. Receives the key of the task that just
    completed, the result, the dask graph, the scheduler state, and the id of
    the worker that ran the task.
 
-4. ``finish(dsk, state, errored)``
+5. ``finish(dsk, state, errored)``
 
    Run at the end of execution, right before the result is returned. Receives
    the dask graph, the scheduler state, and a boolean indicating whether or not
