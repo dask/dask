@@ -352,9 +352,9 @@ def _maybe_complex(task):
 
 def str_graph(dsk):
     def convert(task):
-        if isinstance(task, list):
+        if type(task) is list:
             return [convert(v) for v in task]
-        if isinstance(task, dict):
+        if type(task) is dict:
             return valmap(convert, task)
         if istask(task):
             return (task[0],) + tuple(map(convert, task[1:]))

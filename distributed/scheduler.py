@@ -8,7 +8,11 @@ import socket
 from time import time
 from timeit import default_timer
 
-from toolz import frequencies, memoize, valmap, first, second
+try:
+    from cytoolz import frequencies
+except ImportError:
+    from toolz import frequencies
+from toolz import memoize, valmap, first, second
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -1707,8 +1711,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     'bob:8000'
     """
     deps = dependencies[key]
-    workers = frequencies(w for dep in deps
-                            for w in who_has[dep])
+    workers = frequencies([w for dep in deps
+                             for w in who_has[dep]])
     if not workers:
         workers = stacks
     if key in restrictions:
@@ -1725,8 +1729,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     if not workers or not stacks:
         return None
 
-    commbytes = {w: sum(nbytes[k] for k in dependencies[key]
-                                   if w not in who_has[k])
+    commbytes = {w: sum([nbytes[k] for k in dependencies[key]
+                                   if w not in who_has[k]])
                  for w in workers}
 
     minbytes = min(commbytes.values())

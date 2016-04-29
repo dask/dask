@@ -301,6 +301,9 @@ def clear(center):
     return IOLoop().run_sync(lambda: _clear(center))
 
 
+collections = (tuple, list, set, frozenset)
+
+
 def unpack_remotedata(o, byte_keys=False):
     """ Unpack WrappedKey objects from collection
 
@@ -328,22 +331,22 @@ def unpack_remotedata(o, byte_keys=False):
     >>> unpack_remotedata(rd, byte_keys=True)
     ("('x', 1)", {"('x', 1)"})
     """
-    if isinstance(o, WrappedKey):
-        k = o.key
-        if byte_keys:
-            k = tokey(k)
-        return k, {k}
-    if isinstance(o, (tuple, list, set, frozenset)):
+    if type(o) in collections:
         if not o:
             return o, set()
         out, sets = zip(*[unpack_remotedata(item, byte_keys) for item in o])
         return type(o)(out), set.union(*sets)
-    elif isinstance(o, dict):
+    elif type(o) is dict:
         if o:
             values, sets = zip(*[unpack_remotedata(v, byte_keys) for v in o.values()])
             return dict(zip(o.keys(), values)), set.union(*sets)
         else:
             return o, set()
+    elif isinstance(o, WrappedKey):
+        k = o.key
+        if byte_keys:
+            k = tokey(k)
+        return k, {k}
     else:
         return o, set()
 

@@ -16,7 +16,10 @@ import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import valmap, merge
+try:
+    from cytoolz import valmap, merge
+except ImportError:
+    from toolz import valmap, merge
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -256,7 +259,7 @@ class Worker(Server):
 
             if bad_data:
                 missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
-                            for msg in msgs}
+                            for msg in msgs if 'who_has' in msg}
                 bad = {k: v for k, v in missing.items() if v}
                 good = [msg for msg in msgs if msg['key'] not in missing]
             else:
