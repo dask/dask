@@ -56,6 +56,7 @@ def test_update_state(loop):
                    client='client')
 
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
 
     assert s.processing[alice] == {'y'}
     assert not s.ready
@@ -93,6 +94,7 @@ def test_update_state_with_processing(loop):
                    client='client')
 
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
 
     assert s.waiting == {'z': {'y'}}
     assert s.waiting_data == {'x': {'y'}, 'y': {'z'}, 'z': set()}
@@ -131,6 +133,7 @@ def test_update_state_respects_data_in_memory(loop):
 
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
     s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
 
     assert s.released == {'x'}
     assert s.who_has == {'y': {alice}}
@@ -162,6 +165,7 @@ def test_update_state_supports_recomputing_released_results(loop):
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
     s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
     s.mark_task_finished('z', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
 
     assert not s.waiting
     assert not s.ready

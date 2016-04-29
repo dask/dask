@@ -177,6 +177,7 @@ class Scheduler(Server):
         self.ready = deque()
         self.unrunnable = set()
         self.idle = set()
+        self.maybe_ready = set()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
         self.who_wants = defaultdict(set)
@@ -383,7 +384,8 @@ class Scheduler(Server):
                 self.unrunnable.add(key)
             else:
                 self.stacks[new_worker].append(key)
-                self.ensure_occupied(new_worker)
+                self.maybe_ready.add(new_worker)
+                # self.ensure_occupied(new_worker)
         else:
             self.ready.appendleft(key)
             self.ensure_idle_ready()
@@ -447,9 +449,11 @@ class Scheduler(Server):
             except KeyError:
                 pass
 
-        for dep in sorted(self.dependents.get(key, []),
-                          key=self.keyorder.get,
-                          reverse=True):
+        deps = self.dependents.get(key, [])
+        if len(deps) > 1:
+            deps = sorted(deps, key=self.keyorder.get, reverse=True)
+
+        for dep in deps:
             if dep in self.waiting:
                 s = self.waiting[dep]
                 try:
@@ -464,7 +468,7 @@ class Scheduler(Server):
         msg = {'op': 'key-in-memory',
                'key': key,
                'workers': list(workers)}
-        if type:
+        if type is not None:
             msg['type'] = type
         self.report(msg)
 
@@ -580,7 +584,8 @@ class Scheduler(Server):
             self.exceptions[key] = exception
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_erred(self, key=key, worker=worker,
@@ -614,7 +619,8 @@ class Scheduler(Server):
         if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
             self.worker_info[worker]['last-task'] = time()
             try:
                 self.worker_info[worker]['avg-task-duration'] = (
@@ -631,7 +637,8 @@ class Scheduler(Server):
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def recover_missing(self, key):
@@ -1185,13 +1192,16 @@ class Scheduler(Server):
     def send_task_to_worker(self, ident, key):
         msg = {'op': 'compute-task',
                'key': key}
-        if self.dependencies[key]:
-            msg['who_has'] = {dep: list(self.who_has[dep])
-                              for dep in self.dependencies[key]}
-        if isinstance(self.tasks[key], dict):
-            msg.update(self.tasks[key])
+
+        deps = self.dependencies[key]
+        if deps:
+            msg['who_has'] = {dep: tuple(self.who_has[dep]) for dep in deps}
+
+        task = self.tasks[key]
+        if type(task) is dict:
+            msg.update(task)
         else:
-            msg['task'] = self.tasks[key]
+            msg['task'] = task
 
         self.worker_streams[ident].send(msg)
 
@@ -1241,7 +1251,11 @@ class Scheduler(Server):
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)
 
-                self.ensure_occupied(ident)
+                self.maybe_ready.add(ident)
+                for worker in self.maybe_ready:
+                    self.ensure_occupied(worker)
+                self.maybe_ready.clear()
+                # self.ensure_idle_ready()
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
@@ -1279,19 +1293,18 @@ class Scheduler(Server):
                     logger.exception(e)
             self.released.add(key)
 
-        with log_errors():
-            for key in keys:
-                if key in self.who_has:
-                    for worker in self.who_has.pop(key):
-                        self.has_what[worker].remove(key)
-                        self.deleted_keys[worker].add(key)
-                    trigger_plugins(key)
-                elif key in self.ready:  # O(n), though infrequent
-                    self.ready.remove(key)
-                    trigger_plugins(key)
+        for key in keys:
+            if key in self.who_has:
+                for worker in self.who_has.pop(key):
+                    self.has_what[worker].remove(key)
+                    self.deleted_keys[worker].add(key)
+                trigger_plugins(key)
+            elif key in self.ready:  # O(n), though infrequent
+                self.ready.remove(key)
+                trigger_plugins(key)
 
-                if key in self.waiting_data:
-                    del self.waiting_data[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
 
 
     @gen.coroutine
@@ -1728,6 +1741,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
                     return None
     if not workers or not stacks:
         return None
+
+    if len(workers) == 1:
+        return first(workers)
 
     commbytes = {w: sum([nbytes[k] for k in dependencies[key]
                                    if w not in who_has[k]])
