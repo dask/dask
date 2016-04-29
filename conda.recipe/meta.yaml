@@ -44,6 +44,6 @@ test:
     - distributed.http
 
 about:
-  home: http://distributed.readthedocs.org/en/latest/
+  home: http://distributed.readthedocs.io/en/latest/
   license: BSD
   summary: 'Distributed computing'

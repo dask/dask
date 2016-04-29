@@ -32,7 +32,7 @@ centers around the three projects above, or their derivatives.
 .. _Spark: http://spark.apache.org/
 .. _PySpark: http://spark.apache.org/docs/latest/api/python/
 .. _storm: http://storm.apache.org/
-.. _streamparse: https://streamparse.readthedocs.org/en/latest/index.html
+.. _streamparse: https://streamparse.readthedocs.io/en/latest/index.html
 .. _Disco: http://discoproject.org/
 
 Python Projects
@@ -71,11 +71,11 @@ There are a couple of older projects that often get mentioned
 *   Dispy_: Embarrassingly parallel function evaluation
 *   Pyro_:  Remote objects / RPC
 
-.. _Luigi: http://luigi.readthedocs.org/en/latest/
+.. _Luigi: http://luigi.readthedocs.io/en/latest/
 .. _MPI4Py: http://pythonhosted.org/mpi4py/
 .. _PyZMQ: https://github.com/zeromq/pyzmq
 .. _Celery: http://www.celeryproject.org/
-.. _`IPython Parallel`: https://ipyparallel.readthedocs.org/en/latest/
+.. _`IPython Parallel`: https://ipyparallel.readthedocs.io/en/latest/
 .. _Scoop: https://github.com/soravux/scoop/
 .. _`concurrent.futures`: https://docs.python.org/3/library/concurrent.futures.html
 .. _Dispy: http://dispy.sourceforge.net/

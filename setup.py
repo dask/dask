@@ -14,7 +14,7 @@ if sys.version_info < (3, 4):
 setup(name='distributed',
       version='1.9.5',
       description='Distributed computing',
-      url='http://distributed.readthedocs.org/en/latest/',
+      url='http://distributed.readthedocs.io/en/latest/',
       maintainer='Matthew Rocklin',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',

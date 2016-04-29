@@ -66,7 +66,7 @@ class Scheduler(Server):
         Scheduler(...)
 
     Users typically do not interact with the scheduler except through Plugins.
-    See http://distributed.readthedocs.org/en/latest/plugins.html
+    See http://distributed.readthedocs.io/en/latest/plugins.html
 
     **State**
 
@@ -1045,7 +1045,7 @@ class Scheduler(Server):
     def add_plugin(self, plugin):
         """ Add external plugin to scheduler
 
-        See http://http://distributed.readthedocs.org/en/latest/plugins.html
+        See http://http://distributed.readthedocs.io/en/latest/plugins.html
         """
         self.plugins.append(plugin)
 

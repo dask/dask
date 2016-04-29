@@ -7,7 +7,7 @@ First, add your AWS credentials to ``~/.aws/credentials`` like this::
      aws_access_key_id = YOUR_ACCESS_KEY
      aws_secret_access_key = YOUR_SECRET_KEY
 
-For other ways to manage or troubleshoot credentials, see the `boto3 docs <https://boto3.readthedocs.org/en/latest/guide/quickstart.html>`_.
+For other ways to manage or troubleshoot credentials, see the `boto3 docs <https://boto3.readthedocs.io/en/latest/guide/quickstart.html>`_.
 
 Now, you can quickly deploy a scheduler and workers on EC2 using the ``dec2`` quickstart application::
 

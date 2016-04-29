@@ -116,8 +116,8 @@ todo_include_todos = True
 
 # -- Options for HTML output ----------------------------------------------
 
-# Taken from docs.readthedocs.org:
-# on_rtd is whether we are on readthedocs.org
+# Taken from docs.readthedocs.io:
+# on_rtd is whether we are on readthedocs.io
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 if not on_rtd:  # only import and set the theme if we're building docs locally
