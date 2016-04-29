@@ -350,8 +350,8 @@ def tokey(o):
 def _maybe_complex(task):
     """ Possibly contains a nested task """
     return (istask(task) or
-            isinstance(task, list) and any(map(_maybe_complex, task)) or
-            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
+            type(task) is list and any(map(_maybe_complex, task)) or
+            type(task) is dict and any(map(_maybe_complex, task.values())))
 
 
 def str_graph(dsk):
