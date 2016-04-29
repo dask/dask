@@ -26,7 +26,7 @@ from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .batched import BatchedSend
-from .client import (WrappedKey, unpack_remotedata, pack_data)
+from .client import WrappedKey, unpack_remotedata, pack_data
 from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import (read, write, connect, coerce_to_rpc, dumps,
         clean_exception, loads)

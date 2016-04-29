@@ -304,7 +304,7 @@ def clear(center):
 collections = (tuple, list, set, frozenset)
 
 
-def unpack_remotedata(o, byte_keys=False):
+def unpack_remotedata(o, byte_keys=False, myset=None):
     """ Unpack WrappedKey objects from collection
 
     Returns original collection and set of all found keys
@@ -331,24 +331,32 @@ def unpack_remotedata(o, byte_keys=False):
     >>> unpack_remotedata(rd, byte_keys=True)
     ("('x', 1)", {"('x', 1)"})
     """
-    if type(o) in collections:
+    if myset is None:
+        myset = set()
+        out = unpack_remotedata(o, byte_keys, myset)
+        return out, myset
+
+    typ = type(o)
+
+    if typ in collections:
         if not o:
-            return o, set()
-        out, sets = zip(*[unpack_remotedata(item, byte_keys) for item in o])
-        return type(o)(out), set.union(*sets)
-    elif type(o) is dict:
+            return o
+        outs = [unpack_remotedata(item, byte_keys, myset) for item in o]
+        return type(o)(outs)
+    elif typ is dict:
         if o:
-            values, sets = zip(*[unpack_remotedata(v, byte_keys) for v in o.values()])
-            return dict(zip(o.keys(), values)), set.union(*sets)
+            values = [unpack_remotedata(v, byte_keys, myset) for v in o.values()]
+            return dict(zip(o.keys(), values))
         else:
-            return o, set()
-    elif isinstance(o, WrappedKey):
+            return o
+    elif issubclass(typ, WrappedKey):  # TODO use type is Future
         k = o.key
         if byte_keys:
             k = tokey(k)
-        return k, {k}
+        myset.add(k)
+        return k
     else:
-        return o, set()
+        return o
 
 
 def pack_data(o, d):
