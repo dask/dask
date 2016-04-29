@@ -132,6 +132,7 @@ def test_update_state_respects_data_in_memory(loop):
                    client='client')
 
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
     s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
     s.ensure_occupied(alice)
 
@@ -163,7 +164,9 @@ def test_update_state_supports_recomputing_released_results(loop):
                    client='client')
 
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
     s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
+    s.ensure_occupied(alice)
     s.mark_task_finished('z', alice, nbytes=10, type=dumps(int))
     s.ensure_occupied(alice)
 

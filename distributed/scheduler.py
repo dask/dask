@@ -407,6 +407,10 @@ class Scheduler(Server):
         We are careful not to reclaim tasks that are restricted to run on
         certain workers.
         """
+        for worker in self.maybe_ready:
+            self.ensure_occupied(worker)
+        self.maybe_ready.clear()
+
         if 0 < len(self.idle) < len(self.ncores) and not self.ready:
             n = sum(map(len, self.stacks)) * len(self.idle) / len(self.ncores)
 
@@ -1251,11 +1255,7 @@ class Scheduler(Server):
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)
 
-                self.maybe_ready.add(ident)
-                for worker in self.maybe_ready:
-                    self.ensure_occupied(worker)
-                self.maybe_ready.clear()
-                # self.ensure_idle_ready()
+                self.ensure_idle_ready()
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
