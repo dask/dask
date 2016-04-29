@@ -185,6 +185,7 @@ def _deps(dsk, arg):
             return []
     return [arg]
 
+hex_pattern = re.compile('[a-f]+')
 
 def key_split(s):
     """
@@ -208,6 +209,8 @@ def key_split(s):
     'myclass'
     >>> key_split(None)
     'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    'x'
     """
     if isinstance(s, bytes):
         return key_split(s.decode())
@@ -217,7 +220,8 @@ def key_split(s):
         words = s.split('-')
         result = words[0].lstrip("'(\"")
         for word in words[1:]:
-            if word.isalpha():
+            if word.isalpha() and not (len(word) == 8 and
+                                       hex_pattern.match(word) is not None):
                 result += '-' + word
             else:
                 break
