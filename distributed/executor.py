@@ -14,7 +14,7 @@ import six
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten
+from dask.core import flatten, _deps
 from dask.compatibility import apply
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
@@ -31,7 +31,7 @@ from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import (read, write, connect, coerce_to_rpc, dumps,
         clean_exception, loads)
 from .worker import dumps_function, dumps_task
-from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
+from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph)
 
 logger = logging.getLogger(__name__)
