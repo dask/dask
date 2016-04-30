@@ -187,3 +187,12 @@ def test_late_dtypes():
 
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5.5 + 6
         assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7.5
+
+
+def test_header_None():
+    with filetexts({'.tmp.1.csv': '1,2',
+                    '.tmp.2.csv': '',
+                    '.tmp.3.csv': '3,4'}):
+        df = read_csv('.tmp.*.csv', header=None)
+        expected = pd.DataFrame({0: [1, 3], 1: [2, 4]})
+        eq(df.compute().reset_index(drop=True), expected)
