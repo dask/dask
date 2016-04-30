@@ -1,8 +1,10 @@
 import pytest
 pytest.importorskip('numpy')
 
-from dask.array.optimization import (getitem, rewrite_rules, optimize,
-        remove_full_slices, fuse_slice)
+from dask.optimize import fuse
+from dask.array.optimization import (getitem, optimize, optimize_slices,
+        fuse_slice)
+
 from dask.utils import raises
 from dask.array.core import getarray
 
@@ -13,14 +15,14 @@ def test_fuse_getitem():
 
              ((getitem, (getarray, 'x', (slice(1000, 2000), slice(100, 200))),
                         (slice(15, 20), slice(50, 60))),
-              (getarray, 'x', (slice(1015, 1020), slice(150, 160)))),
+              (getitem, 'x', (slice(1015, 1020), slice(150, 160)))),
 
              ((getarray, (getarray, 'x', slice(1000, 2000)), 10),
               (getarray, 'x', 1010)),
 
              ((getitem, (getarray, 'x', (slice(1000, 2000), 10)),
                         (slice(15, 20),)),
-              (getarray, 'x', (slice(1015, 1020), 10))),
+              (getitem, 'x', (slice(1015, 1020), 10))),
 
              ((getarray, (getarray, 'x', (10, slice(1000, 2000))),
                         (slice(15, 20),)),
@@ -41,12 +43,11 @@ def test_fuse_getitem():
              ((getitem, (getitem, 'x', (slice(1000, 2000),)),
                         (slice(5, 10), slice(10, 20))),
               (getitem, 'x', (slice(1005, 1010), slice(10, 20))))
-
         ]
 
     for inp, expected in pairs:
-        result = rewrite_rules.rewrite(inp)
-        assert result == expected
+        result = optimize_slices({'y': inp})
+        assert result == {'y': expected}
 
 
 def test_optimize_with_getitem_fusion():
@@ -63,21 +64,20 @@ def test_optimize_slicing():
     dsk = {'a': (range, 10),
            'b': (getarray, 'a', (slice(None, None, None),)),
            'c': (getarray, 'b', (slice(None, None, None),)),
-           'd': (getarray, 'c', (slice(None, 5, None),)),
+           'd': (getarray, 'c', (slice(0, 5, None),)),
            'e': (getarray, 'd', (slice(None, None, None),))}
 
-    expected = {'a': (range, 10),
-                'e': (getarray, 'a', (slice(None, 5, None),))}
-
-    assert remove_full_slices(dsk, []) == expected
+    expected = {'e': (getarray, (range, 10), (slice(0, 5, None),))}
+    result = optimize_slices(fuse(dsk, []))
+    assert result == expected
 
     # protect output keys
-    expected = {'a': (range, 10),
-                'c': (getarray, 'a', (slice(None, None, None),)),
-                'd': (getarray, 'c', (slice(None, 5, None),)),
-                'e': (getarray, 'd', (slice(None, None, None),))}
+    expected = {'c': (range, 10),
+                'd': (getarray, 'c', (slice(0, 5, None),)),
+                'e': 'd'}
+    result = optimize_slices(fuse(dsk, ['c', 'd', 'e']))
 
-    assert remove_full_slices(dsk, ['c', 'd', 'e']) == expected
+    assert result == expected
 
 
 def test_fuse_slice():
@@ -106,6 +106,6 @@ def test_fuse_slice_with_lists():
 
 
 def test_hard_fuse_slice_cases():
-    term = (getarray, (getarray, 'x', (None, slice(None, None))),
-                     (slice(None, None), 5))
-    assert rewrite_rules.rewrite(term) == (getarray, 'x', (None, 5))
+    dsk = {'x': (getarray, (getarray, 'x', (None, slice(None, None))),
+                     (slice(None, None), 5))}
+    assert optimize_slices(dsk) == {'x': (getarray, 'x', (None, 5))}
