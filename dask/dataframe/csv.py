@@ -175,7 +175,10 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     if 'nrows' in kwargs:
         values = [[values[0][0]]]
 
-    header = sample.split(b_lineterminator)[0] + b_lineterminator
+    if kwargs.get('header', 'infer') is None:
+        header = b''
+    else:
+        header = sample.split(b_lineterminator)[0] + b_lineterminator
     head = pd.read_csv(BytesIO(sample), **kwargs)
 
     df = read_csv_from_bytes(values, header, head, kwargs,
