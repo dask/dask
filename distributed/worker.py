@@ -228,6 +228,7 @@ class Worker(Server):
             raise Return({'status': 'OK'})
 
     def deserialize(self, function=None, args=None, kwargs=None, task=None):
+        """ Deserialize task inputs and regularize to func, args, kwargs """
         if task is not None:
             task = loads(task)
         if function is not None:
@@ -246,6 +247,15 @@ class Worker(Server):
 
     @gen.coroutine
     def gather_many(self, msgs):
+        """ Gather the data for many compute messages at once
+
+        Returns
+        -------
+        good: the input messages for which we have data
+        bad: a dict of task keys for which we could not find data
+        data: The scope in which to run tasks
+        len(remote): the number of new keys we've gathered
+        """
         with log_errors():
             who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
             local = {k: self.data[k] for k in who_has if k in self.data}

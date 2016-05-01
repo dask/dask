@@ -301,7 +301,7 @@ def clear(center):
     return IOLoop().run_sync(lambda: _clear(center))
 
 
-collections = (tuple, list, set, frozenset)
+collection_types = (tuple, list, set, frozenset)
 
 
 def unpack_remotedata(o, byte_keys=False, myset=None):
@@ -338,7 +338,7 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
 
     typ = type(o)
 
-    if typ in collections:
+    if typ in collection_types:
         if not o:
             return o
         outs = [unpack_remotedata(item, byte_keys, myset) for item in o]
@@ -388,7 +388,7 @@ def pack_data(o, d):
         if k in d:
             return d[k]
 
-    if typ in (tuple, list, set, frozenset):
+    if typ in collection_types:
         return typ([pack_data(x, d) for x in o])
     elif typ is dict:
         return {k: pack_data(v, d) for k, v in o.items()}

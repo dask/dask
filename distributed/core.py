@@ -26,15 +26,13 @@ from .compatibility import PY3, unicode
 from .utils import get_traceback, truncate_exception
 from . import protocol
 
-pickle_types = []
+pickle_types = [str, bytes]
 with ignoring(ImportError):
     import numpy as np
     pickle_types.append(np.ndarray)
 with ignoring(ImportError):
     import pandas as pd
-    pickle_types.append(pd.core.base.PandasObject)
-from numbers import Number
-pickle_types.extend([Number, str, bytes])
+    pickle_types.append(pd.core.generic.NDFrame)
 pickle_types = tuple(pickle_types)
 
 
