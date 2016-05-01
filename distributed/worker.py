@@ -347,6 +347,7 @@ class Worker(Server):
 
         with log_errors():
             closed = False
+            last = gen.sleep(0)
             while not closed:
                 try:
                     msgs = yield read(stream)
