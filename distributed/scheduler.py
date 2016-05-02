@@ -523,7 +523,11 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.send_task_to_worker(worker, key)
+            try:
+                self.send_task_to_worker(worker, key)
+            except StreamClosedError:
+                self.remove_worker(worker)
+                return
 
         while (self.ready and
                load * self.ncores[worker] > len(self.processing[worker])):
@@ -534,7 +538,11 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.send_task_to_worker(worker, key)
+            try:
+                self.send_task_to_worker(worker, key)
+            except StreamClosedError:
+                self.remove_worker(worker)
+                return
 
         if load * self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
@@ -768,6 +776,8 @@ class Scheduler(Server):
 
         if not self.stacks:
             logger.critical("Lost all workers")
+
+        self.ensure_idle_ready()
 
         return 'OK'
 

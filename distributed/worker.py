@@ -272,7 +272,7 @@ class Worker(Server):
                 missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
                             for msg in msgs if 'who_has' in msg}
                 bad = {k: v for k, v in missing.items() if v}
-                good = [msg for msg in msgs if not missing.get('key')]
+                good = [msg for msg in msgs if not missing.get(msg['key'])]
             else:
                 good, bad = msgs, {}
             raise Return([good, bad, data, len(remote)])
