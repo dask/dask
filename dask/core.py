@@ -175,9 +175,9 @@ def _deps(dsk, arg):
         for a in arg[1:]:
             result.extend(_deps(dsk, a))
         return result
-    if isinstance(arg, list):
+    if type(arg) is list:
         return sum([_deps(dsk, a) for a in arg], [])
-    if isinstance(arg, dict):
+    if type(arg) is dict:
         return sum([_deps(dsk, v) for v in arg.values()], [])
     try:
         if arg not in dsk:
@@ -217,7 +217,7 @@ def get_dependencies(dsk, task, as_list=False):
         arg = args.pop()
         if istask(arg):
             args.extend(arg[1:])
-        elif isinstance(arg, list):
+        elif type(arg) is list:
             args.extend(arg)
         else:
             result.append(arg)

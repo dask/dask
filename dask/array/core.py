@@ -721,7 +721,7 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         Array._get(dsk, keys, **kwargs)
     else:
         from ..delayed import Value
-        name = tokenize(*keys)
+        name = 'store-' + tokenize(*keys)
         dsk[name] = keys
         return Value(name, [dsk])
 
@@ -1065,7 +1065,7 @@ class Array(Base):
         """ Copy of the array, cast to a specified type """
         if dtype == self._dtype:
             return self
-        name = tokenize('astype', self, dtype, kwargs)
+        name = 'astype-' + tokenize(self, dtype, kwargs)
         return elemwise(lambda x: x.astype(dtype, **kwargs), self,
                         dtype=dtype, name=name)
 
