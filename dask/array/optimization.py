@@ -20,7 +20,7 @@ def optimize(dsk, keys, **kwargs):
     """
     keys = list(flatten(keys))
     fast_functions = kwargs.get('fast_functions',
-                             set([getarray, getitem, np.transpose]))
+                             set([getarray, np.transpose]))
     dsk2 = cull(dsk, keys)
     dsk4 = fuse(dsk2, keys)
     dsk5 = optimize_slices(dsk4)

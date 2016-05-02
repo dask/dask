@@ -989,7 +989,7 @@ class Array(Base):
                 dt = np.dtype([(name, self._dtype[name]) for name in index])
             else:
                 dt = None
-            return elemwise(getarray, self, index, dtype=dt, name=out)
+            return elemwise(getitem, self, index, dtype=dt, name=out)
 
         # Slicing
         if not isinstance(index, tuple):
@@ -1762,7 +1762,7 @@ def stack(seq, axis=0):
 
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
                 for key in keys]
-    values = [(getarray, inp, (slice(None, None, None),) * axis
+    values = [(getitem, inp, (slice(None, None, None),) * axis
                            + (None,)
                            + (slice(None, None, None),) * (ndim - axis))
                 for inp in inputs]
