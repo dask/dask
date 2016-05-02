@@ -268,8 +268,6 @@ def write(stream, msg):
         for frame in frames:
             yield stream.write(frame)
 
-        logger.debug("Written %s", orig)
-
 
 def pingpong(stream):
     return b'pong'

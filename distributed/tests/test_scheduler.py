@@ -371,6 +371,7 @@ def test_scheduler(s, a, b):
 
     # Test missing data
     yield write(stream, {'op': 'missing-data', 'keys': ['z']})
+    s.ensure_idle_ready()
 
     while True:
         msg = yield read(stream)

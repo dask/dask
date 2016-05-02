@@ -683,7 +683,7 @@ class Scheduler(Server):
             try:
                 self.processing[worker].remove(key)
             except KeyError:
-                logger.debug("Tried to remove %s from %s, but it wasn't there",
+                logger.info("Tried to remove %s from %s, but it wasn't there",
                              key, worker)
 
         missing = set(missing)

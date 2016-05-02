@@ -31,7 +31,7 @@ from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
         error_message, read)
 from .sizeof import sizeof
-from .utils import funcname, get_ip, _maybe_complex, log_errors
+from .utils import funcname, get_ip, _maybe_complex, log_errors, All
 
 _ncores = ThreadPool()._processes
 
@@ -271,7 +271,7 @@ class Worker(Server):
                 missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
                             for msg in msgs if 'who_has' in msg}
                 bad = {k: v for k, v in missing.items() if v}
-                good = [msg for msg in msgs if msg['key'] not in missing]
+                good = [msg for msg in msgs if not missing.get('key')]
             else:
                 good, bad = msgs, {}
             raise Return([good, bad, data, len(remote)])
@@ -374,8 +374,11 @@ class Worker(Server):
                         break
                     elif op == 'compute-task':
                         batch.append(msg)
+                        logger.debug("%s asked to compute %s", self.address,
+                                     msg['key'])
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
+                # self.loop.add_callback(self.compute_many, bstream, msgs)
                 last = self.compute_many(bstream, msgs)
 
             yield last  # TODO: there might be more than one lingering
@@ -392,14 +395,15 @@ class Worker(Server):
             for msg in msgs:
                 msg.pop('who_has', None)
 
+            if bad:
+                logger.warn("Could not find data for %s", sorted(bad))
             for k, v in bad.items():
-                logger.warn("Could not find data for %s", k)
                 bstream.send({'status': 'missing-data',
                               'key': k,
                               'keys': list(v)})
 
-            results = yield [self.compute_one(data, report=report, **msg)
-                             for msg in good]
+            results = yield All([self.compute_one(data, report=report, **msg)
+                                 for msg in good])
 
             if results and num_transferred:
                 results[0]['transfer-start'] = transfer_start
