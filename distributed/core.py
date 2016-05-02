@@ -23,7 +23,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode
-from .utils import get_traceback, truncate_exception
+from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
 pickle_types = [str, bytes]
@@ -262,7 +262,6 @@ def write(stream, msg):
     if isinstance(stream, BatchedStream):
         stream.send(msg)
     else:
-        orig = msg
         try:
             frames = protocol.dumps(msg)
         except Exception as e:

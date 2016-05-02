@@ -6,7 +6,6 @@ import json
 from math import log
 import os
 import io
-import sys
 
 from dask.delayed import Delayed
 from dask.base import tokenize
@@ -14,7 +13,7 @@ from toolz import merge
 
 from .compatibility import unicode
 from .executor import default_executor, ensure_default_get
-from .utils import ignoring, sync, ensure_bytes
+from .utils import ensure_bytes
 from . import formats
 
 
@@ -92,7 +91,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
                                      'restrictions': restrictions,
                                      'loose_restrictions': names,
                                      'client': executor.id})
-        values = [Value(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
+        values = [Delayed(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
     else:
@@ -188,7 +187,7 @@ def read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
     List of futures of Python objects
     """
     from hdfs3 import HDFileSystem
-    from dask import do
+    from dask import delayed
     import fastavro
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
@@ -200,13 +199,12 @@ def read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
         with hdfs.open(fn, 'rb') as f:
             av = fastavro.reader(f)
             header = av._header
-        schema = json.loads(header['meta']['avro.schema'].decode())
 
         blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
                                    delimiter=header['sync'], not_zero=True)
                        for fn in filenames])  # TODO: why is filenames used twice?
 
-    lazy_values = [do(avro_body)(b, header) for blocks in blockss
+    lazy_values = [delayed(avro_body)(b, header) for blocks in blockss
                                             for b in blocks]
 
     if lazy:
@@ -287,8 +285,7 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     Dask bag (if collection=True) or Futures or dask values
     """
     from hdfs3 import HDFileSystem
-    from dask import do
-    import pandas as pd
+    from dask import delayed
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
     ensure_default_get(executor)
@@ -297,8 +294,8 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     blocks = [block for fn in filenames
                     for block in read_bytes(fn, executor, hdfs, lazy=True,
                                             delimiter=lineterminator.encode())]
-    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
-    lines = [do(unicode.split)(s, lineterminator) for s in strings]
+    strings = [delayed(bytes.decode)(b, encoding, errors) for b in blocks]
+    lines = [delayed(unicode.split)(s, lineterminator) for s in strings]
 
     from dask.bag import from_delayed
     if collection:
