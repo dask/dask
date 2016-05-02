@@ -13,10 +13,10 @@ from tornado import gen
 from dask.delayed import Delayed
 from distributed import Executor
 from distributed.executor import _wait, Future
-from distributed.s3 import (read_bytes, read_text, read_csv, seek_delimiter,
+from distributed.s3 import (read_text, read_csv,
         S3FileSystem)
 from distributed.utils import get_ip
-from distributed.utils_test import gen_cluster, loop, cluster, slow
+from distributed.utils_test import gen_cluster, loop, cluster
 
 
 ip = get_ip()
@@ -53,90 +53,6 @@ def s3():
 
 
 @gen_cluster(timeout=60, executor=True)
-def test_read_bytes(e, s, a, b):
-    futures = read_bytes(test_bucket_name+'/test/accounts.*', lazy=False)
-    assert len(futures) >= len(files)
-    results = yield e._gather(futures)
-    assert set(results) == set(files.values())
-
-
-@gen_cluster(timeout=60, executor=True)
-def test_read_bytes_blocksize_none(e, s, a, b):
-    futures = read_bytes(test_bucket_name+'/test/accounts.*', lazy=False,
-                         blocksize=None)
-    assert len(futures) == len(files)
-
-
-@gen_cluster(timeout=60, executor=True)
-def test_read_bytes_blocksize_on_large_data(e, s, a, b):
-    L = read_bytes('dask-data/nyc-taxi/2015/yellow_tripdata_2015-01.csv',
-                    lazy=True, blocksize=None)
-    assert len(L) == 1
-
-    L = read_bytes('dask-data/nyc-taxi/2014/*.csv', lazy=True, blocksize=None)
-    assert len(L) == 12
-
-
-@gen_cluster(timeout=60, executor=True)
-def test_read_bytes_block(e, s, a, b):
-    for bs in [5, 15, 45, 1500]:
-        vals = read_bytes(test_bucket_name+'/test/account*', blocksize=bs)
-        assert len(vals) == sum([(len(v) // bs + 1) for v in files.values()])
-        futures = e.compute(vals)
-        results = yield e._gather(futures)
-        assert sum(len(r) for r in results) == sum(len(v) for v in
-                   files.values())
-        futures = read_bytes(test_bucket_name+'/test/accounts*', blocksize=bs,
-                             lazy=False)
-        assert len(vals) == len(futures)
-        results = yield e._gather(futures)
-        assert sum(len(r) for r in results) == sum(len(v) for v in
-                   files.values())
-        ourlines = b"".join(results).split(b'\n')
-        testlines = b"".join(files.values()).split(b'\n')
-        assert set(ourlines) == set(testlines)
-
-
-@gen_cluster(timeout=60, executor=True)
-def test_read_bytes_delimited(e, s, a, b):
-    for bs in [5, 15, 45, 1500]:
-        futures = read_bytes(test_bucket_name+'/test/accounts*',
-                             lazy=False, blocksize=bs, delimiter=b'\n')
-        futures2 = read_bytes(test_bucket_name+'/test/accounts*',
-                             lazy=False, blocksize=bs, delimiter=b'foo')
-        assert [a.key for a in futures] != [b.key for b in futures2]
-        results = yield e._gather(futures)
-        res = [r for r in results if r]
-        assert all(r.endswith(b'\n') for r in res)
-        ourlines = b''.join(res).split(b'\n')
-        testlines = b"".join(files[k] for k in sorted(files)).split(b'\n')
-        assert ourlines == testlines
-
-        # delimiter not at the end
-        d = b'}'
-        futures = read_bytes(test_bucket_name+'/test/accounts*',
-                             lazy=False, blocksize=bs, delimiter=d)
-        results = yield e._gather(futures)
-        res = [r for r in results if r]
-        # All should end in } except EOF
-        assert sum(r.endswith(b'}') for r in res) == len(res) - 2
-        ours = b"".join(res)
-        test = b"".join(files[v] for v in sorted(files))
-        assert ours == test
-
-
-@gen_cluster(timeout=60, executor=True)
-def test_read_bytes_lazy(e, s, a, b):
-    values = read_bytes(test_bucket_name+'/test/', lazy=True)
-    assert all(isinstance(v, Delayed) for v in values)
-
-    results = e.compute(values, sync=False)
-    results = yield e._gather(results)
-
-    assert set(results).issuperset(set(files.values()))
-
-
-@gen_cluster(timeout=60, executor=True)
 def test_read_text(e, s, a, b):
     import dask.bag as db
 
@@ -170,11 +86,12 @@ def test_read_text_blocksize(e, s, a, b):
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_text_compression(e, s, a, b):
-    b = read_text('distributed-test/csv/gzip/', compression='gzip')
+    b = read_text('distributed-test/csv/gzip/*', compression='gzip',
+                  blocksize=None)
     result = yield e.compute(b)._result()
-    assert result == [line for k in sorted(csv_files)
-                           for line in csv_files[k].decode().split('\n')
-                           if line]
+    assert result == [line + '\n' for k in sorted(csv_files)
+                                  for line in csv_files[k].decode().split('\n')
+                                  if line]
 
 
 def test_read_text_sync(loop):
@@ -193,9 +110,9 @@ def test_read_text_sync(loop):
 def test_read_text_bucket_key_inputs(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            a = read_text(test_bucket_name, '/text/accounts', lazy=True)
-            b = read_text(test_bucket_name, 'text/accounts', lazy=True)
-            c = read_text(test_bucket_name + '/text/accounts', lazy=True)
+            a = read_text(test_bucket_name, '/test/accounts*', lazy=True)
+            b = read_text(test_bucket_name, 'test/accounts*', lazy=True)
+            c = read_text(test_bucket_name + '/test/accounts*', lazy=True)
 
             assert a._keys() == b._keys() == c._keys()
 
@@ -263,12 +180,12 @@ def test_read_csv(e, s, a, b):
     dd = pytest.importorskip('dask.dataframe')
     s3 = S3FileSystem(anon=True)
 
-    df = read_csv('distributed-test/csv/2015/', lazy=True)
+    df = read_csv('distributed-test/csv/2015/*', lazy=True)
     yield gen.sleep(0.1)
     assert not s.tasks
     assert isinstance(df, dd.DataFrame)
 
-    df = read_csv('distributed-test/csv/2015/')
+    df = read_csv('distributed-test/csv/2015/*')
     assert isinstance(df, dd.DataFrame)
     assert list(df.columns) == ['name', 'amount', 'id']
 
@@ -276,7 +193,7 @@ def test_read_csv(e, s, a, b):
     result = yield f._result()
     assert result == (100 + 200 + 300 + 400 + 500 + 600)
 
-    futures = read_csv('distributed-test/csv/2015/',
+    futures = read_csv('distributed-test/csv/2015/*',
                               collection=False, lazy=False)
     assert len(futures) == 3
     assert all(isinstance(f, Future) for f in futures)
@@ -285,18 +202,18 @@ def test_read_csv(e, s, a, b):
     assert results[1].id.sum() == 0
     assert results[2].id.sum() == 4 + 5 + 6
 
-    values = read_csv('distributed-test/csv/2015/',
+    values = read_csv('distributed-test/csv/2015/*',
                               collection=False, lazy=True)
     assert len(values) == 3
     assert all(isinstance(v, Delayed) for v in values)
 
-    df2 = read_csv('distributed-test/csv/2015/',
+    df2 = read_csv('distributed-test/csv/2015/*',
                           collection=True, lazy=True, blocksize=20)
     assert df2.npartitions > df.npartitions
     result = yield e.compute(df2.id.sum())._result()
     assert result == 1 + 2 + 3 + 4 + 5 + 6
 
-    df2 = read_csv('distributed-test/csv/2015/',
+    df2 = read_csv('distributed-test/csv/2015/*',
                           collection=True, lazy=False, blocksize=20)
     f = e.compute(df2.amount.sum())
     result = yield f._result()
@@ -308,7 +225,7 @@ def test_read_csv_gzip(e, s, a, b):
     dd = pytest.importorskip('dask.dataframe')
     s3 = S3FileSystem(anon=True)
 
-    df = read_csv('distributed-test/csv/gzip/', compression='gzip')
+    df = read_csv('distributed-test/csv/gzip/*', compression='gzip')
     assert isinstance(df, dd.DataFrame)
     assert list(df.columns) == ['name', 'amount', 'id']
     f = e.compute(df.amount.sum())
@@ -320,11 +237,11 @@ def test_read_csv_sync(loop):
     dd = pytest.importorskip('dask.dataframe')
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            df = read_csv('distributed-test/csv/2015/', lazy=True)
+            df = read_csv('distributed-test/csv/2015/*', lazy=True)
             assert isinstance(df, dd.DataFrame)
             assert list(df.columns) == ['name', 'amount', 'id']
             f = e.compute(df.amount.sum())
             assert f.result() == (100 + 200 + 300 + 400 + 500 + 600)
 
-            df = read_csv('distributed-test/csv/2015/', lazy=False)
+            df = read_csv('distributed-test/csv/2015/*', lazy=False)
             assert df.amount.sum().compute() == (100 + 200 + 300 + 400 + 500 + 600)
