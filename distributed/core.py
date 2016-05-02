@@ -1,25 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
-from hashlib import md5
 import logging
-import signal
 import six
-import socket
 import struct
-from time import sleep, time
+from time import time
 import traceback
 import uuid
 
 from toolz import assoc, first
 
-import tornado
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 import cloudpickle
-from tornado import ioloop, gen
+from tornado import gen
 from tornado.gen import Return
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
@@ -37,24 +33,40 @@ with ignoring(ImportError):
 with ignoring(ImportError):
     import pandas as pd
     pickle_types.append(pd.core.generic.NDFrame)
-
 pickle_types = tuple(pickle_types)
 
+
 def dumps(x):
+    """ Manage between cloudpickle and pickle
+
+    1.  Try pickle
+    2.  If it is short then check if it contains __main__
+    3.  If it is long, then first check type, then check __main__
+    """
     try:
-        if isinstance(x, pickle_types):
-            return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        result = pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(result) < 1000:
+            if b'__main__' in result:
+                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+            else:
+                return result
         else:
+            if isinstance(x, pickle_types) or b'__main__' not in result:
+                return result
+            else:
+                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+    except:
+        try:
             return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-    except Exception as e:
-        logger.info("Failed to serialize %s", x, exc_info=True)
-        raise
+        except Exception:
+            logger.info("Failed to serialize %s", x, exc_info=True)
+            raise
 
 
 def loads(x):
     try:
-        return cloudpickle.loads(x)
-    except Exception as e:
+        return pickle.loads(x)
+    except Exception:
         logger.info("Failed to deserialize %s", x, exc_info=True)
         raise
 
@@ -117,6 +129,7 @@ class Server(TCPServer):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
+        self._rpcs = dict()
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     @property
@@ -138,7 +151,7 @@ class Server(TCPServer):
             try:
                 super(Server, self).listen(port)
                 break
-            except OSError as e:
+            except OSError:
                 if port:
                     raise
                 else:
@@ -210,6 +223,13 @@ class Server(TCPServer):
         logger.info("Close connection from %s:%d to %s", address[0], address[1],
                     type(self).__name__)
 
+    def rpc(self, arg=None, ip=None, port=None, addr=None):
+        """ Cached rpc objects """
+        key = arg, ip, port, addr
+        if key not in self._rpcs:
+            self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
+        return self._rpcs[key]
+
 
 @gen.coroutine
 def read(stream):
@@ -242,7 +262,6 @@ def write(stream, msg):
     if isinstance(stream, BatchedStream):
         stream.send(msg)
     else:
-        orig = msg
         try:
             frames = protocol.dumps(msg)
         except Exception as e:
@@ -255,8 +274,6 @@ def write(stream, msg):
 
         for frame in frames:
             yield stream.write(frame)
-
-        logger.debug("Written %s", orig)
 
 
 def pingpong(stream):

@@ -2,17 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from functools import partial
 import logging
-from math import ceil
 import random
 import socket
 from time import time
 from timeit import default_timer
-import uuid
 
-from toolz import (frequencies, memoize, concat, identity, valmap, keymap,
-        first, second)
+try:
+    from cytoolz import frequencies
+except ImportError:
+    from toolz import frequencies
+from toolz import memoize, valmap, first, second
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -20,17 +20,15 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
 from dask.compatibility import PY3, unicode
-from dask.core import get_deps, reverse_dict, istask
+from dask.core import reverse_dict
 from dask.order import order
 
-from .batched import BatchedStream, BatchedSend
-from .client import (scatter_to_workers,
-        gather_from_workers, broadcast_to_workers)
-from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address)
-from .utils import (All, ignoring, clear_queue, _deps, get_ip,
-        ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
-        tokey, log_errors)
+from .batched import BatchedSend
+from .client import (scatter_to_workers, gather_from_workers)
+from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
+        Server, send_recv, coerce_to_address, error_message)
+from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
+        ensure_ip, log_errors)
 
 
 logger = logging.getLogger(__name__)
@@ -179,6 +177,7 @@ class Scheduler(Server):
         self.ready = deque()
         self.unrunnable = set()
         self.idle = set()
+        self.maybe_ready = set()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
         self.who_wants = defaultdict(set)
@@ -193,8 +192,6 @@ class Scheduler(Server):
 
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
-
-        self._rpcs = dict()
 
         self.plugins = []
 
@@ -232,13 +229,6 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
-
-    def rpc(self, arg=None, ip=None, port=None, addr=None):
-        """ Cached rpc objects """
-        key = arg, ip, port, addr
-        if key not in self._rpcs:
-            self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
-        return self._rpcs[key]
 
     def __del__(self):
         self.close_streams()
@@ -303,9 +293,9 @@ class Scheduler(Server):
             self.listen(port)
 
             self.status = 'running'
-            logger.info("Start Scheduler at: %20s:%s", self.ip, self.port)
+            logger.info("Scheduler at: %20s:%s", self.ip, self.port)
             for k, v in self.services.items():
-                logger.info("  %13s at: %20s:%s", k, self.ip, v.port)
+                logger.info("%9s at: %20s:%s", k, self.ip, v.port)
 
         return self.finished()
 
@@ -385,7 +375,8 @@ class Scheduler(Server):
                 self.unrunnable.add(key)
             else:
                 self.stacks[new_worker].append(key)
-                self.ensure_occupied(new_worker)
+                self.maybe_ready.add(new_worker)
+                # self.ensure_occupied(new_worker)
         else:
             self.ready.appendleft(key)
             self.ensure_idle_ready()
@@ -396,17 +387,21 @@ class Scheduler(Server):
         **Work stealing policy**
 
         If some workers are idle but not others, if there are no globally ready
-        tasks, and if there are tasks in worker stacks then we start to pull
+        tasks, and if there are tasks in worker stacks, then we start to pull
         preferred tasks from overburdened workers and deploy them back into the
         global pool in the following manner.
 
         We determine the number of tasks to reclaim as the number of all tasks
-        in all stacks times the fraction of idle workers to all workers.  We
-        sort the stacks by size and walk through them, reclaiming half of each
-        stack until we have enough task to fill the global pool.  We are
-        careful not to reclaim tasks that are restricted to run on certain
-        workers.
+        in all stacks times the fraction of idle workers to all workers.
+        We sort the stacks by size and walk through them, reclaiming half of
+        each stack until we have enough task to fill the global pool.
+        We are careful not to reclaim tasks that are restricted to run on
+        certain workers.
         """
+        for worker in self.maybe_ready:
+            self.ensure_occupied(worker)
+        self.maybe_ready.clear()
+
         if 0 < len(self.idle) < len(self.ncores) and not self.ready:
             n = sum(map(len, self.stacks)) * len(self.idle) / len(self.ncores)
 
@@ -449,9 +444,11 @@ class Scheduler(Server):
             except KeyError:
                 pass
 
-        for dep in sorted(self.dependents.get(key, []),
-                          key=self.keyorder.get,
-                          reverse=True):
+        deps = self.dependents.get(key, [])
+        if len(deps) > 1:
+            deps = sorted(deps, key=self.keyorder.get, reverse=True)
+
+        for dep in deps:
             if dep in self.waiting:
                 s = self.waiting[dep]
                 try:
@@ -466,7 +463,7 @@ class Scheduler(Server):
         msg = {'op': 'key-in-memory',
                'key': key,
                'workers': list(workers)}
-        if type:
+        if type is not None:
             msg['type'] = type
         self.report(msg)
 
@@ -490,6 +487,21 @@ class Scheduler(Server):
                 if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
+    def task_load(self, address):
+        if time() - self.worker_info[address].get('last-task', 0) > 2:
+            tasks_per_core = 2
+        else:
+            duration = max(self.worker_info[address]['avg-task-duration'],
+                           50e-6)
+            try:
+                latency = self.host_info[address.split(':')[0]]['latency']
+            except KeyError:
+                latency = 0
+            latency = max(latency, 10e-3)
+            tasks_per_core = max(2, latency // duration)
+            tasks_per_core = min(500, tasks_per_core)
+        return tasks_per_core * self.ncores[address]
+
     def ensure_occupied(self, worker):
         """ Send tasks to worker while it has tasks and free cores
 
@@ -500,8 +512,10 @@ class Scheduler(Server):
         """
         logger.debug('Ensure worker is occupied: %s', worker)
 
+        load = self.task_load(worker)
+
         while (self.stacks[worker] and
-               self.ncores[worker] > len(self.processing[worker])):
+               load * self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
             if key not in self.tasks:
                 continue
@@ -509,10 +523,14 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.send_task_to_worker(worker, key)
+            try:
+                self.send_task_to_worker(worker, key)
+            except StreamClosedError:
+                self.remove_worker(worker)
+                return
 
         while (self.ready and
-               self.ncores[worker] > len(self.processing[worker])):
+               load * self.ncores[worker] > len(self.processing[worker])):
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
@@ -520,9 +538,13 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.send_task_to_worker(worker, key)
+            try:
+                self.send_task_to_worker(worker, key)
+            except StreamClosedError:
+                self.remove_worker(worker)
+                return
 
-        if self.ncores[worker] > len(self.processing[worker]):
+        if load * self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
         elif worker in self.idle:
             self.idle.remove(worker)
@@ -565,7 +587,8 @@ class Scheduler(Server):
             self.exceptions[key] = exception
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_erred(self, key=key, worker=worker,
@@ -599,7 +622,15 @@ class Scheduler(Server):
         if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
+            self.worker_info[worker]['last-task'] = time()
+            try:
+                self.worker_info[worker]['avg-task-duration'] = (
+                    0.95 * self.worker_info[worker]['avg-task-duration'] +
+                    0.05 * (kwargs['compute-stop'] - kwargs['compute-start']))
+            except KeyError:
+                pass
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_finished(self, key=key, worker=worker,
@@ -609,7 +640,8 @@ class Scheduler(Server):
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
-            self.ensure_occupied(worker)
+            self.maybe_ready.add(worker)
+            # self.ensure_occupied(worker)
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def recover_missing(self, key):
@@ -650,7 +682,7 @@ class Scheduler(Server):
             try:
                 self.processing[worker].remove(key)
             except KeyError:
-                logger.debug("Tried to remove %s from %s, but it wasn't there",
+                logger.info("Tried to remove %s from %s, but it wasn't there",
                              key, worker)
 
         missing = set(missing)
@@ -745,6 +777,8 @@ class Scheduler(Server):
         if not self.stacks:
             logger.critical("Lost all workers")
 
+        self.ensure_idle_ready()
+
         return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
@@ -771,6 +805,7 @@ class Scheduler(Server):
 
         info['name'] = name
         self.worker_info[address] = info
+        self.worker_info[address]['avg-task-duration'] = 1.0
 
         if address not in self.processing:
             self.has_what[address] = set()
@@ -780,7 +815,7 @@ class Scheduler(Server):
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
-        self.worker_streams[address] = BatchedSend(interval=10, loop=self.loop)
+        self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
         self._worker_coroutines.append(self.worker_stream(address))
 
         if self.ncores[address] > len(self.processing[address]):
@@ -1065,7 +1100,7 @@ class Scheduler(Server):
     def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
-        bstream = BatchedSend(interval=10, loop=self.loop)
+        bstream = BatchedSend(interval=2, loop=self.loop)
         bstream.start(stream)
         self.streams[client] = bstream
 
@@ -1161,13 +1196,17 @@ class Scheduler(Server):
 
     def send_task_to_worker(self, ident, key):
         msg = {'op': 'compute-task',
-               'key': key,
-               'who_has': {dep: list(self.who_has[dep])
-                           for dep in self.dependencies[key]}}
-        if isinstance(self.tasks[key], dict):
-            msg.update(self.tasks[key])
+               'key': key}
+
+        deps = self.dependencies[key]
+        if deps:
+            msg['who_has'] = {dep: tuple(self.who_has[dep]) for dep in deps}
+
+        task = self.tasks[key]
+        if type(task) is dict:
+            msg.update(task)
         else:
-            msg['task'] = self.tasks[key]
+            msg['task'] = task
 
         self.worker_streams[ident].send(msg)
 
@@ -1207,18 +1246,18 @@ class Scheduler(Server):
 
                     self.correct_time_delay(ip, msg)
 
-                    if msg['status'] == 'error':
+                    if msg['status'] == 'OK':
+                        self.mark_task_finished(worker=ident, **msg)
+                    elif msg['status'] == 'error':
                         self.mark_task_erred(worker=ident, **msg)
                     elif msg['status'] == 'missing-data':
                         self.mark_missing_data(worker=ident, **msg)
-                    elif msg['status'] == 'OK':
-                        self.mark_task_finished(worker=ident, **msg)
                     else:
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)
 
-                self.ensure_occupied(ident)
-        except (StreamClosedError, IOError, OSError) as e:
+                self.ensure_idle_ready()
+        except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
             stream.close()
@@ -1255,19 +1294,18 @@ class Scheduler(Server):
                     logger.exception(e)
             self.released.add(key)
 
-        with log_errors():
-            for key in keys:
-                if key in self.who_has:
-                    for worker in self.who_has.pop(key):
-                        self.has_what[worker].remove(key)
-                        self.deleted_keys[worker].add(key)
-                    trigger_plugins(key)
-                elif key in self.ready:  # O(n), though infrequent
-                    self.ready.remove(key)
-                    trigger_plugins(key)
+        for key in keys:
+            if key in self.who_has:
+                for worker in self.who_has.pop(key):
+                    self.has_what[worker].remove(key)
+                    self.deleted_keys[worker].add(key)
+                trigger_plugins(key)
+            elif key in self.ready:  # O(n), though infrequent
+                self.ready.remove(key)
+                trigger_plugins(key)
 
-                if key in self.waiting_data:
-                    del self.waiting_data[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
 
 
     @gen.coroutine
@@ -1281,7 +1319,7 @@ class Scheduler(Server):
                                        self.rpc(ip=host, port=port).health(),
                                        io_loop=self.loop)
         except gen.TimeoutError:
-            logger.warn("Heartbeat failed for %s", address)
+            logger.warn("Heartbeat failed for %s", host)
         except Exception as e:
             logger.exception(e)
 
@@ -1400,18 +1438,16 @@ class Scheduler(Server):
                 set(self.worker_info) == \
                 set(self.worker_streams)):
             raise ValueError("Workers not the same in all collections")
-        for w, n in self.ncores.items():
-            assert (len(self.processing[w]) < n) == (w in self.idle)
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
-        import cloudpickle
+        import pickle
         if function:
-            function = cloudpickle.loads(function)
+            function = pickle.loads(function)
         if setup:
-            setup = cloudpickle.loads(setup)
+            setup = pickle.loads(setup)
         if teardown:
-            teardown = cloudpickle.loads(teardown)
+            teardown = pickle.loads(teardown)
         state = setup(self) if setup else None
         if isinstance(state, gen.Future):
             state = yield state
@@ -1595,7 +1631,6 @@ class Scheduler(Server):
         Scheduler.rebalance
         """
         with log_errors():
-            original_keys = set(keys)
             workers = set(self.workers_list(workers))
             if n is None:
                 n = len(workers)
@@ -1690,8 +1725,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     'bob:8000'
     """
     deps = dependencies[key]
-    workers = frequencies(w for dep in deps
-                            for w in who_has[dep])
+    workers = frequencies([w for dep in deps
+                             for w in who_has[dep]])
     if not workers:
         workers = stacks
     if key in restrictions:
@@ -1708,8 +1743,11 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     if not workers or not stacks:
         return None
 
-    commbytes = {w: sum(nbytes[k] for k in dependencies[key]
-                                   if w not in who_has[k])
+    if len(workers) == 1:
+        return first(workers)
+
+    commbytes = {w: sum([nbytes[k] for k in dependencies[key]
+                                   if w not in who_has[k]])
                  for w in workers}
 
     minbytes = min(commbytes.values())

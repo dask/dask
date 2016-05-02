@@ -74,7 +74,7 @@ def resource_append(lists, msg):
         interval = (t2 - t1) / 1000
     else:
         interval = 0.5
-    lists['network-send'].append(net / 2**20 / interval)
+    lists['network-send'].append(net / 2**20 / (interval or 0.5))
 
 
 def mean(seq):

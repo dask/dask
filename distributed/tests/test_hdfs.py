@@ -1,16 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
-from contextlib import contextmanager
-from io import BytesIO
-
 import pytest
 from tornado import gen
 
-from dask.imperative import Value
+from dask.delayed import Delayed
 
 from distributed.compatibility import unicode
-from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
+from distributed.utils_test import gen_cluster, cluster, make_hdfs
 from distributed.utils import get_ip
+from distributed.utils_test import loop
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
         read_csv, read_text)
 from distributed import Executor
@@ -127,7 +125,7 @@ def test_read_bytes_sync(loop):
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
-def test_get_block_locations_nested(e, s, a, b):
+def test_get_block_locations_nested_2(e, s, a, b):
     with make_hdfs() as hdfs:
         data = b'a'
 
@@ -160,7 +158,7 @@ def test_lazy_values(e, s, a, b):
                     f.write(data)
 
         values = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True)
-        assert all(isinstance(v, Value) for v in values)
+        assert all(isinstance(v, Delayed) for v in values)
 
         while not s.restrictions:
             yield gen.sleep(0.01)
@@ -217,8 +215,6 @@ def test_read_csv_sync(loop):
 
 
 def test_read_csv_sync_compute(loop):
-    import dask.dataframe as dd
-    import pandas as pd
     with cluster(nworkers=1) as (s, [a]):
         with make_hdfs() as hdfs:
             with hdfs.open('/tmp/test/1.csv', 'wb') as f:
@@ -311,7 +307,7 @@ def test__read_text(e, s, a, b):
 
         L = read_text('/tmp/test/text.*.txt',
                              collection=False, lazy=True)
-        assert all(isinstance(x, Value) for x in L)
+        assert all(isinstance(x, Delayed) for x in L)
 
 
 @gen_cluster([(ip, 1)], timeout=60, executor=True)
@@ -349,7 +345,7 @@ def test_read_text_sync(loop):
             f.write(b'hello\nworld')
 
         with cluster(nworkers=3) as (s, [a, b, c]):
-            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            with Executor(('127.0.0.1', s['port']), loop=loop):
                 b = read_text('/tmp/test/*.txt', lazy=False)
                 assert list(b.str.upper()) == ['HELLO', 'WORLD']
 

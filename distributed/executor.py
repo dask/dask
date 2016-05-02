@@ -1,24 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
-import cloudpickle
 from collections import defaultdict, Iterator, Iterable
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
-from concurrent import futures
 import copy
 from datetime import timedelta
-from functools import wraps, partial
-import itertools
+from functools import partial
 import logging
 import os
 from time import sleep
 import uuid
 from threading import Thread
-import socket
 import six
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten, istask
+from dask.core import flatten, _deps
 from dask.compatibility import apply
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
@@ -26,18 +22,17 @@ from tornado import gen
 from tornado.gen import Return, TimeoutError
 from tornado.locks import Event
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.iostream import StreamClosedError, IOStream
+from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .batched import BatchedSend
-from .client import (WrappedKey, unpack_remotedata, pack_data)
+from .client import WrappedKey, unpack_remotedata, pack_data
 from .compatibility import Queue as pyQueue, Empty, isqueue
-from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
-        clean_exception)
-from .scheduler import Scheduler
+from .core import (read, write, connect, coerce_to_rpc, dumps,
+        clean_exception, loads)
 from .worker import dumps_function, dumps_task
-from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
-        tokey, log_errors, str_graph, ensure_ip)
+from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
+        tokey, log_errors, str_graph)
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +365,7 @@ class Executor(object):
                             self.futures[msg['key']]['event'].set()
                             if (msg.get('type') and
                                 not self.futures[msg['key']].get('type')):
-                                self.futures[msg['key']]['type'] = cloudpickle.loads(msg['type'])
+                                self.futures[msg['key']]['type'] = loads(msg['type'])
                     elif msg['op'] == 'lost-data':
                         if msg['key'] in self.futures:
                             self.futures[msg['key']]['status'] = 'lost'
@@ -383,11 +378,11 @@ class Executor(object):
                         if msg['key'] in self.futures:
                             self.futures[msg['key']]['status'] = 'error'
                             try:
-                                self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
+                                self.futures[msg['key']]['exception'] = loads(msg['exception'])
                             except TypeError:
                                 self.futures[msg['key']]['exception'] = \
                                     Exception('Undeserializable exception', msg['exception'])
-                            self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
+                            self.futures[msg['key']]['traceback'] = (loads(msg['traceback'])
                                                                      if msg['traceback'] else None)
                             self.futures[msg['key']]['event'].set()
                     elif msg['op'] == 'restart':
@@ -680,7 +675,7 @@ class Executor(object):
         if bad_data and errors == 'skip' and isinstance(futures2, list):
             futures2 = [f for f in futures2 if f not in exceptions]
 
-        data = valmap(cloudpickle.loads, response['data'])
+        data = valmap(loads, response['data'])
         result = pack_data(futures2, merge(data, bad_data))
         raise gen.Return(result)
 
@@ -774,11 +769,6 @@ class Executor(object):
 
     def _threaded_scatter(self, q_or_i, qout, **kwargs):
         """ Internal function for scattering Iterable/Queue data """
-        if isqueue(q_or_i):  # py2 Queue doesn't support mro
-            get = pyQueue.get
-        elif isinstance(q_or_i, Iterator):
-            get = next
-
         while True:
             if isqueue(q_or_i):
                 L = [q_or_i.get()]
@@ -865,7 +855,7 @@ class Executor(object):
     @gen.coroutine
     def _cancel(self, futures):
         keys = {f.key for f in futures_of(futures)}
-        f = yield self.scheduler.cancel(keys=list(keys), client=self.id)
+        yield self.scheduler.cancel(keys=list(keys), client=self.id)
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
@@ -895,9 +885,9 @@ class Executor(object):
         results = {}
         for key, resp in responses.items():
             if resp['status'] == 'OK':
-                results[key] = cloudpickle.loads(resp['result'])
+                results[key] = loads(resp['result'])
             elif resp['status'] == 'error':
-                raise cloudpickle.loads(resp['exception'])
+                raise loads(resp['exception'])
         raise Return(results)
 
     def run(self, function, *args, **kwargs):
@@ -1177,7 +1167,7 @@ class Executor(object):
                                                 'data': data})
 
         if any(v['status'] == 'error' for v in d.values()):
-            exceptions = [cloudpickle.loads(v['exception']) for v in d.values()
+            exceptions = [loads(v['exception']) for v in d.values()
                           if v['status'] == 'error']
             if raise_on_error:
                 raise exceptions[0]
@@ -1438,7 +1428,7 @@ def _as_completed(fs, queue):
     wait_iterator = gen.WaitIterator(*[f.event.wait() for f in firsts])
 
     while not wait_iterator.done():
-        result = yield wait_iterator.next()
+        yield wait_iterator.next()
         # TODO: handle case of restarted futures
         future = firsts[wait_iterator.current_index]
         for f in groups[future.key]:
@@ -1503,10 +1493,10 @@ def ensure_default_get(executor):
 
 
 def redict_collection(c, dsk):
-    from dask.imperative import Value
-    if isinstance(c, Value):
+    from dask.delayed import Delayed
+    if isinstance(c, Delayed):
         assert len(dsk) == 1
-        return Value(first(dsk), [dsk])
+        return Delayed(first(dsk), [dsk])
     else:
         cc = copy.copy(c)
         cc.dask = dsk

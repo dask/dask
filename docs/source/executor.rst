@@ -126,7 +126,7 @@ with existing dask code.
 
 **compute**
 
-We can also provide dask collections (arrays, bags, dataframes, imperative
+We can also provide dask collections (arrays, bags, dataframes, delayed
 values) to the executor with the ``compute`` method.
 
 .. code-block:: python

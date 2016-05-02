@@ -11,27 +11,27 @@ import tempfile
 from threading import current_thread
 from time import time
 from timeit import default_timer
-import traceback
 import shutil
 import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import merge, valmap, assoc
+try:
+    from cytoolz import valmap, merge
+except ImportError:
+    from toolz import valmap, merge
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
-from tornado.queues import Queue
 
 from .batched import BatchedSend
 from .client import pack_data, gather_from_workers
-from .compatibility import reload, PY3, unicode
+from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
-        error_message, read, write)
+        error_message, read)
 from .sizeof import sizeof
-from .utils import (funcname, get_ip, get_traceback, truncate_exception,
-    ignoring, _maybe_complex, log_errors)
+from .utils import funcname, get_ip, _maybe_complex, log_errors, All
 
 _ncores = ThreadPool()._processes
 
@@ -110,9 +110,6 @@ class Worker(Server):
         self.status = None
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
-        self.thread_tokens = Queue()  # https://github.com/tornadoweb/tornado/issues/1595#issuecomment-198551572
-        for i in range(self.ncores):
-            self.thread_tokens.put_nowait(i)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
         self.name = name
@@ -230,6 +227,56 @@ class Worker(Server):
             self.data.update(result)
             raise Return({'status': 'OK'})
 
+    def deserialize(self, function=None, args=None, kwargs=None, task=None):
+        """ Deserialize task inputs and regularize to func, args, kwargs """
+        if task is not None:
+            task = loads(task)
+        if function is not None:
+            function = loads(function)
+        if args:
+            args = loads(args)
+        if kwargs:
+            kwargs = loads(kwargs)
+
+        if task is not None:
+            assert not function and not args and not kwargs
+            function = execute_task
+            args = (task,)
+
+        return function, args or (), kwargs or {}
+
+    @gen.coroutine
+    def gather_many(self, msgs):
+        """ Gather the data for many compute messages at once
+
+        Returns
+        -------
+        good: the input messages for which we have data
+        bad: a dict of task keys for which we could not find data
+        data: The scope in which to run tasks
+        len(remote): the number of new keys we've gathered
+        """
+        with log_errors():
+            who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
+            local = {k: self.data[k] for k in who_has if k in self.data}
+            who_has = {k: v for k, v in who_has.items() if k not in local}
+            remote, bad_data = yield gather_from_workers(who_has,
+                    permissive=True, rpc=self.rpc, close=False)
+            if remote:
+                self.data.update(remote)
+                yield self.center.add_keys(address=self.address, keys=list(remote))
+
+            data = merge(local, remote)
+
+            if bad_data:
+                missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
+                            for msg in msgs if 'who_has' in msg}
+                bad = {k: v for k, v in missing.items() if v}
+                good = [msg for msg in msgs if not missing.get(msg['key'])]
+            else:
+                good, bad = msgs, {}
+            raise Return([good, bad, data, len(remote)])
+
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
                     task=None, who_has=None):
@@ -241,8 +288,7 @@ class Worker(Server):
                    if k not in self.data}
         if who_has:
             try:
-                logger.info("gather %d keys from peers: %s",
-                            len(who_has), str(who_has))
+                logger.info("gather %d keys from peers", len(who_has))
                 diagnostics['transfer-start'] = time()
                 other = yield gather_from_workers(who_has)
                 diagnostics['transfer-stop'] = time()
@@ -255,27 +301,17 @@ class Worker(Server):
                 raise Return({'status': 'missing-data',
                               'keys': e.args,
                               'key': key})
-        else:
-            transfer_time = 0
+
         try:
             start = default_timer()
-            if task is not None:
-                task = loads(task)
-            if function is not None:
-                function = loads(function)
-            if args:
-                args = loads(args)
-            if kwargs:
-                kwargs = loads(kwargs)
+            function, args, kwargs = self.deserialize(function, args, kwargs,
+                    task)
             diagnostics['deserialization'] = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
-            raise Return(assoc(error_message(e), 'key', key))
-
-        if task is not None:
-            assert not function and not args and not kwargs
-            function = execute_task
-            args = (task,)
+            emsg = error_message(e)
+            emsg['key'] = key
+            raise Return(emsg)
 
         # Fill args with data
         args2 = pack_data(args, data)
@@ -297,53 +333,33 @@ class Worker(Server):
         callbacks to ensure things run smoothly.  This can get tricky, so we
         pull it off into an separate method.
         """
-        token = yield self.thread_tokens.get()
         job_counter[0] += 1
-        i = job_counter[0]
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
             key, future._state), 1000); pc.start()
         try:
-            if sys.version_info < (3, 2):
-                yield future
-            else:
-                while not future.done() and future._state != 'FINISHED':
-                    try:
-                        yield gen.with_timeout(timedelta(seconds=1), future,
-                                               io_loop=self.loop)
-                        break
-                    except gen.TimeoutError:
-                        logger.info("work queue size: %d", self.executor._work_queue.qsize())
-                        logger.info("future state: %s", future._state)
-                        logger.info("Pending job %d: %s", i, future)
+            yield future
         finally:
             pc.stop()
-            self.thread_tokens.put(token)
+            pass
 
         result = future.result()
 
-        logger.info("Finish job %d, %s", i, key)
+        # logger.info("Finish job %d, %s", i, key)
         raise gen.Return(result)
 
     @gen.coroutine
     def compute_stream(self, stream):
         with log_errors():
             logger.debug("Open compute stream")
-            bstream = BatchedSend(interval=10, loop=self.loop)
+            bstream = BatchedSend(interval=2, loop=self.loop)
             bstream.start(stream)
 
-        @gen.coroutine
-        def process(msg):
-            try:
-                result = yield self.compute(report=False, **msg)
-                bstream.send(result)
-            except Exception as e:
-                logger.exception(e)
-                bstream.send(assoc(error_message(e), 'key', msg.get('key')))
-
         with log_errors():
-            while True:
+            closed = False
+            last = gen.sleep(0)
+            while not closed:
                 try:
                     msgs = yield read(stream)
                 except StreamClosedError:
@@ -351,17 +367,103 @@ class Worker(Server):
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
+                batch = []
                 for msg in msgs:
                     op = msg.pop('op', None)
                     if op == 'close':
+                        closed = True
                         break
                     elif op == 'compute-task':
-                        self.loop.add_callback(process, msg)
+                        batch.append(msg)
+                        logger.debug("%s asked to compute %s", self.address,
+                                     msg['key'])
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
+                # self.loop.add_callback(self.compute_many, bstream, msgs)
+                last = self.compute_many(bstream, msgs)
 
+            yield last  # TODO: there might be more than one lingering
             yield bstream.close()
             logger.info("Close compute stream")
+
+    @gen.coroutine
+    def compute_many(self, bstream, msgs, report=False):
+        with log_errors():
+            transfer_start = time()
+            good, bad, data, num_transferred = yield self.gather_many(msgs)
+            transfer_end = time()
+
+            for msg in msgs:
+                msg.pop('who_has', None)
+
+            if bad:
+                logger.warn("Could not find data for %s", sorted(bad))
+            for k, v in bad.items():
+                bstream.send({'status': 'missing-data',
+                              'key': k,
+                              'keys': list(v)})
+
+            results = yield All([self.compute_one(data, report=report, **msg)
+                                 for msg in good])
+
+            if results and num_transferred:
+                results[0]['transfer-start'] = transfer_start
+                results[0]['transfer-stop'] = transfer_end
+
+            for msg in results:
+                bstream.send(msg)
+
+    @gen.coroutine
+    def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
+                    report=False, task=None):
+        logger.debug("Compute one on %s", key)
+        with log_errors():
+            diagnostics = dict()
+            try:
+                start = default_timer()
+                function, args, kwargs = self.deserialize(function, args, kwargs,
+                        task)
+                diagnostics['deserialization'] = default_timer() - start
+            except Exception as e:
+                logger.warn("Could not deserialize task", exc_info=True)
+                emsg = error_message(e)
+                emsg['key'] = key
+                raise Return(emsg)
+
+            # Fill args with data
+            args2 = pack_data(args, data)
+            kwargs2 = pack_data(kwargs, data)
+
+            # Log and compute in separate thread
+            result = yield self.executor_submit(key, apply_function, function,
+                                                args2, kwargs2)
+
+            result['key'] = key
+            result.update(diagnostics)
+
+            if result['status'] == 'OK':
+                self.data[key] = result.pop('result')
+                if report:
+                    response = yield self.center.add_keys(keys=[key],
+                                            address=(self.ip, self.port))
+                    if not response == 'OK':
+                        logger.warn('Could not report results to center: %s',
+                                    str(response))
+            else:
+                logger.warn(" Compute Failed\n"
+                    "Function: %s\n"
+                    "args:     %s\n"
+                    "kwargs:   %s\n",
+                    str(funcname(function))[:1000], str(args)[:1000],
+                    str(kwargs)[:1000], exc_info=True)
+
+            logger.debug("Send compute response to scheduler: %s, %s", key,
+                         result)
+            try:
+                self.active.remove(key)
+            except KeyError:
+                pass
+            raise Return(result)
 
     @gen.coroutine
     def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
@@ -439,8 +541,9 @@ class Worker(Server):
         raise Return(response)
 
     @gen.coroutine
-    def update_data(self, stream, data=None, report=True):
-        data = valmap(loads, data)
+    def update_data(self, stream=None, data=None, report=True, deserialize=True):
+        if deserialize:
+            data = valmap(loads, data)
         self.data.update(data)
         if report:
             response = yield self.center.add_keys(address=(self.ip, self.port),

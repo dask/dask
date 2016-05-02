@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterable, defaultdict
-from itertools import count, cycle
+from itertools import cycle
 import random
 import socket
 import uuid
@@ -15,7 +15,7 @@ from dask.base import tokenize
 from toolz import merge, concat, groupby, drop, valmap
 
 from .core import rpc, coerce_to_rpc, loads, coerce_to_address, dumps
-from .utils import ignore_exceptions, ignoring, All, log_errors, tokey, sync
+from .utils import ignore_exceptions, All, log_errors, tokey, sync
 
 
 no_default = '__no_default__'
@@ -76,7 +76,8 @@ _gather.__doc__ = gather.__doc__
 
 
 @gen.coroutine
-def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
+def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
+                        permissive=False):
     """ Gather data directly from peers
 
     Parameters
@@ -94,8 +95,9 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
     bad_addresses = set()
     who_has = {k: set(v) for k, v in who_has.items()}
     results = dict()
+    all_bad_keys = set()
 
-    while len(results) < len(who_has):
+    while len(results) + len(all_bad_keys) < len(who_has):
         d = defaultdict(list)
         rev = dict()
         bad_keys = set()
@@ -109,19 +111,25 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True):
             except IndexError:
                 bad_keys.add(key)
         if bad_keys:
-            raise KeyError(*bad_keys)
+            if permissive:
+                all_bad_keys |= bad_keys
+            else:
+                raise KeyError(*bad_keys)
 
         coroutines = [rpc(address).get_data(keys=keys, close=close)
                             for address, keys in d.items()]
         response = yield ignore_exceptions(coroutines, socket.error,
-                                                       StreamClosedError)
+                                           StreamClosedError)
         response = merge(response)
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(merge(response))
 
     if deserialize:
         results = valmap(loads, results)
-    raise Return(results)
+    if permissive:
+        raise Return((results, all_bad_keys))
+    else:
+        raise Return(results)
 
 
 class WrappedKey(object):
@@ -197,7 +205,6 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
         ncores = {coerce_to_address(worker): k for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
-    in_type = type(data)
     if isinstance(data, dict):
         names, data = list(zip(*data.items()))
     else:
@@ -294,7 +301,10 @@ def clear(center):
     return IOLoop().run_sync(lambda: _clear(center))
 
 
-def unpack_remotedata(o, byte_keys=False):
+collection_types = (tuple, list, set, frozenset)
+
+
+def unpack_remotedata(o, byte_keys=False, myset=None):
     """ Unpack WrappedKey objects from collection
 
     Returns original collection and set of all found keys
@@ -321,24 +331,32 @@ def unpack_remotedata(o, byte_keys=False):
     >>> unpack_remotedata(rd, byte_keys=True)
     ("('x', 1)", {"('x', 1)"})
     """
-    if isinstance(o, WrappedKey):
+    if myset is None:
+        myset = set()
+        out = unpack_remotedata(o, byte_keys, myset)
+        return out, myset
+
+    typ = type(o)
+
+    if typ in collection_types:
+        if not o:
+            return o
+        outs = [unpack_remotedata(item, byte_keys, myset) for item in o]
+        return type(o)(outs)
+    elif typ is dict:
+        if o:
+            values = [unpack_remotedata(v, byte_keys, myset) for v in o.values()]
+            return dict(zip(o.keys(), values))
+        else:
+            return o
+    elif issubclass(typ, WrappedKey):  # TODO use type is Future
         k = o.key
         if byte_keys:
             k = tokey(k)
-        return k, {k}
-    if isinstance(o, (tuple, list, set, frozenset)):
-        if not o:
-            return o, set()
-        out, sets = zip(*[unpack_remotedata(item, byte_keys) for item in o])
-        return type(o)(out), set.union(*sets)
-    elif isinstance(o, dict):
-        if o:
-            values, sets = zip(*[unpack_remotedata(v, byte_keys) for v in o.values()])
-            return dict(zip(o.keys(), values)), set.union(*sets)
-        else:
-            return o, set()
+        myset.add(k)
+        return k
     else:
-        return o, set()
+        return o
 
 
 def pack_data(o, d):
@@ -361,15 +379,18 @@ def pack_data(o, d):
     >>> pack_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
-    if isinstance(o, (str, bytes)):
+    typ = type(o)
+    if typ is str or typ is bytes:
         if o in d:
             return d[o]
-    elif tokey(o) in d:
-        return d[tokey(o)]
+    else:
+        k = tokey(o)
+        if k in d:
+            return d[k]
 
-    if isinstance(o, (tuple, list, set, frozenset)):
-        return type(o)([pack_data(x, d) for x in o])
-    elif isinstance(o, dict):
+    if typ in collection_types:
+        return typ([pack_data(x, d) for x in o])
+    elif typ is dict:
         return {k: pack_data(v, d) for k, v in o.items()}
     else:
         return o

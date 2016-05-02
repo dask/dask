@@ -1,9 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
 import json
-from operator import sub
-from time import time
 
 from toolz import memoize
 from tornado import gen
@@ -11,14 +8,13 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop, PeriodicCallback
 
 from ..core import rpc
-from ..utils import ignoring, is_kernel, log_errors, key_split
+from ..utils import is_kernel, log_errors, key_split
 from ..executor import default_executor
 from ..scheduler import Scheduler
 
 try:
     from bokeh.palettes import Spectral11
-    from bokeh.models import (ColumnDataSource, FactorRange, DataRange1d,
-            HoverTool)
+    from bokeh.models import ColumnDataSource, DataRange1d, HoverTool
     from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
@@ -176,7 +172,7 @@ def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
                  responsive=True, x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
-             fill_color='color', line_color='gray', source=source)
+             fill_color='color', line_color='gray', alpha=0.5, source=source)
     if x_range:
         fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'

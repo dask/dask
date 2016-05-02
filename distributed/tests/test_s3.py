@@ -10,7 +10,7 @@ from math import ceil
 import boto3
 from tornado import gen
 
-from dask.imperative import Value
+from dask.delayed import Delayed
 from distributed import Executor
 from distributed.executor import _wait, Future
 from distributed.s3 import (read_bytes, read_text, read_csv, seek_delimiter,
@@ -128,7 +128,7 @@ def test_read_bytes_delimited(e, s, a, b):
 @gen_cluster(timeout=60, executor=True)
 def test_read_bytes_lazy(e, s, a, b):
     values = read_bytes(test_bucket_name+'/test/', lazy=True)
-    assert all(isinstance(v, Value) for v in values)
+    assert all(isinstance(v, Delayed) for v in values)
 
     results = e.compute(values, sync=False)
     results = yield e._gather(results)
@@ -139,7 +139,6 @@ def test_read_bytes_lazy(e, s, a, b):
 @gen_cluster(timeout=60, executor=True)
 def test_read_text(e, s, a, b):
     import dask.bag as db
-    from dask.imperative import Value
 
     b = read_text(test_bucket_name+'/test/accounts*', lazy=True,
                   collection=True)
@@ -154,7 +153,7 @@ def test_read_text(e, s, a, b):
 
     text = read_text(test_bucket_name+'/test/accounts*', lazy=True,
                      collection=False)
-    assert all(isinstance(v, Value) for v in text)
+    assert all(isinstance(v, Delayed) for v in text)
 
     text = read_text(test_bucket_name+'/test/accounts*', lazy=False,
                      collection=False)
@@ -289,7 +288,7 @@ def test_read_csv(e, s, a, b):
     values = read_csv('distributed-test/csv/2015/',
                               collection=False, lazy=True)
     assert len(values) == 3
-    assert all(isinstance(v, Value) for v in values)
+    assert all(isinstance(v, Delayed) for v in values)
 
     df2 = read_csv('distributed-test/csv/2015/',
                           collection=True, lazy=True, blocksize=20)

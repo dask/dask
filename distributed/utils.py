@@ -146,45 +146,7 @@ def is_kernel():
     return getattr(get_ipython(), 'kernel', None) is not None
 
 
-def _deps(dsk, arg):
-    """ Get dependencies from keys or tasks
-
-    Helper function for get_dependencies.
-
-    Examples
-    --------
-    >>> inc = lambda x: x + 1
-    >>> add = lambda x, y: x + y
-
-    >>> dsk = {'x': 1, 'y': 2}
-
-    >>> _deps(dsk, 'x')
-    ['x']
-    >>> _deps(dsk, (add, 'x', 1))
-    ['x']
-    >>> _deps(dsk, ['x', 'y'])
-    ['x', 'y']
-    >>> _deps(dsk, {'name': 'x'})
-    ['x']
-    >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
-    ['x', 'y']
-    """
-    if istask(arg):
-        result = []
-        for a in arg[1:]:
-            result.extend(_deps(dsk, a))
-        return result
-    if isinstance(arg, list):
-        return sum([_deps(dsk, a) for a in arg], [])
-    if isinstance(arg, dict):
-        return sum([_deps(dsk, v) for v in arg.values()], [])
-    try:
-        if arg not in dsk:
-            return []
-    except TypeError:  # not hashable
-            return []
-    return [arg]
-
+hex_pattern = re.compile('[a-f]+')
 
 def key_split(s):
     """
@@ -208,6 +170,8 @@ def key_split(s):
     'myclass'
     >>> key_split(None)
     'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    'x'
     """
     if isinstance(s, bytes):
         return key_split(s.decode())
@@ -217,7 +181,8 @@ def key_split(s):
         words = s.split('-')
         result = words[0].lstrip("'(\"")
         for word in words[1:]:
-            if word.isalpha():
+            if word.isalpha() and not (len(word) == 8 and
+                                       hex_pattern.match(word) is not None):
                 result += '-' + word
             else:
                 break
@@ -336,7 +301,8 @@ def tokey(o):
     >>> tokey(1)
     '1'
     """
-    if isinstance(o, (str, bytes)):
+    t = type(o)
+    if t is str or t is bytes:
         return o
     else:
         return str(o)
@@ -345,15 +311,15 @@ def tokey(o):
 def _maybe_complex(task):
     """ Possibly contains a nested task """
     return (istask(task) or
-            isinstance(task, list) and any(map(_maybe_complex, task)) or
-            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
+            type(task) is list and any(map(_maybe_complex, task)) or
+            type(task) is dict and any(map(_maybe_complex, task.values())))
 
 
 def str_graph(dsk):
     def convert(task):
-        if isinstance(task, list):
+        if type(task) is list:
             return [convert(v) for v in task]
-        if isinstance(task, dict):
+        if type(task) is dict:
             return valmap(convert, task)
         if istask(task):
             return (task[0],) + tuple(map(convert, task[1:]))

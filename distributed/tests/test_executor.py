@@ -1,39 +1,33 @@
 from __future__ import print_function, division, absolute_import
 
-from operator import add, sub
+from operator import add
 
 from collections import Iterator
 from concurrent.futures import CancelledError
-from datetime import timedelta
 import itertools
 from multiprocessing import Process
-import os
-import shutil
 import sys
 from threading import Thread
 from time import sleep, time
 import traceback
 
 import pytest
-from toolz import (identity, isdistinct, first, concat, pluck, keymap, valmap,
+from toolz import (identity, isdistinct, first, concat, pluck, valmap,
         partition_all)
-from tornado.ioloop import IOLoop
 from tornado import gen
 
-from dask import do, value
+from dask import delayed
 from dask.context import _globals
-from dask.compatibility import apply
 from distributed import Worker, Nanny
-from distributed.core import rpc, dumps, loads
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
         default_executor, _first_completed, ensure_default_get, futures_of)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring, sync, tmp_text
+from distributed.utils import sync, tmp_text
 from distributed.utils_test import (cluster, slow,
-        _test_cluster, _test_scheduler, loop, inc, dec, div, throws,
+        _test_scheduler, loop, inc, dec, div, throws,
         gen_cluster, gen_test, double, deep)
 
 
@@ -199,7 +193,7 @@ def test_gc(s, a, b):
     yield e._start()
 
     x = e.submit(inc, 10)
-    result = yield x._result()
+    yield x._result()
 
     assert s.who_has[x.key]
 
@@ -284,7 +278,7 @@ def test_gather_strict(e, s, a, b):
     y = e.submit(div, 1, 0)
 
     with pytest.raises(ZeroDivisionError):
-        result = yield e._gather([x, y])
+        yield e._gather([x, y])
 
     [xx] = yield e._gather([x, y], errors='skip')
     assert xx == 2
@@ -380,7 +374,6 @@ def test_wait_sync(loop):
 
 @gen_cluster(executor=True)
 def test_garbage_collection(e, s, a, b):
-    import gc
     a = e.submit(inc, 1)
     b = e.submit(inc, 1)
 
@@ -849,12 +842,12 @@ def test_exception_on_exception(e, s, a, b):
     y = e.submit(inc, x)
 
     with pytest.raises(ZeroDivisionError):
-        out = yield y._result()
+        yield y._result()
 
     z = e.submit(inc, y)
 
     with pytest.raises(ZeroDivisionError):
-        out = yield z._result()
+        yield z._result()
 
 
 @gen_cluster(executor=True)
@@ -914,7 +907,7 @@ def test_get_with_non_list_key(e, s, a, b):
 def test_get_with_error(e, s, a, b):
     dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
     with pytest.raises(ZeroDivisionError):
-        y = yield e._get(dsk, 'y')
+        yield e._get(dsk, 'y')
 
 
 def test_get_with_error_sync(loop):
@@ -922,7 +915,7 @@ def test_get_with_error_sync(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
             with pytest.raises(ZeroDivisionError):
-                y = e.get(dsk, 'y')
+                e.get(dsk, 'y')
 
 
 @gen_cluster(executor=True)
@@ -940,7 +933,7 @@ def test_directed_scatter_sync(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             futures = e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
             has_what = sync(loop, e.scheduler.has_what)
-            assert len(has_what['127.0.0.1:%d' % b['port']]) == 3
+            assert len(has_what['127.0.0.1:%d' % b['port']]) == len(futures)
             assert len(has_what['127.0.0.1:%d' % a['port']]) == 0
 
 
@@ -1112,7 +1105,7 @@ def test_restart(e, s, a, b):
 
 @gen_cluster(Worker=Nanny, executor=True)
 def test_restart_cleared(e, s, a, b):
-    x = 2 * value(1) + 1
+    x = 2 * delayed(1) + 1
     f = e.compute(x)
     yield _wait([f])
     assert s.released
@@ -1283,10 +1276,10 @@ def test_multiple_executors_restart(s, a, b):
 
 @gen_cluster(executor=True)
 def test_async_compute(e, s, a, b):
-    from dask.imperative import do, value
-    x = value(1)
-    y = do(inc)(x)
-    z = do(dec)(x)
+    from dask.delayed import delayed
+    x = delayed(1)
+    y = delayed(inc)(x)
+    z = delayed(dec)(x)
 
     [yy, zz, aa] = e.compute([y, z, 3], sync=False)
     assert isinstance(yy, Future)
@@ -1305,8 +1298,8 @@ def test_async_compute_with_scatter(e, s, a, b):
     d = yield e._scatter({('x', 1): 1, ('y', 1): 2})
     x, y = d[('x', 1)], d[('y', 1)]
 
-    from dask.imperative import do, value
-    z = do(add)(do(inc)(x), do(inc)(y))
+    from dask.delayed import delayed
+    z = delayed(add)(delayed(inc)(x), delayed(inc)(y))
     zz = e.compute(z)
 
     [result] = yield e._gather([zz])
@@ -1316,10 +1309,9 @@ def test_async_compute_with_scatter(e, s, a, b):
 def test_sync_compute(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            from dask.imperative import do, value
-            x = value(1)
-            y = do(inc)(x)
-            z = do(dec)(x)
+            x = delayed(1)
+            y = delayed(inc)(x)
+            z = delayed(dec)(x)
 
             yy, zz = e.compute([y, z], sync=True)
             assert (yy, zz) == (2, 0)
@@ -1368,6 +1360,8 @@ def test_executor_with_scheduler(loop):
         z = e.submit(add, x, y)
         result = yield x._result()
         assert result == 1 + 1
+        result = yield z._result()
+        assert result == 1 + 1 + 1 + 2
 
         a, b, c = yield e._scatter([1, 2, 3])
         aa, bb, xx = yield e._gather([a, b, x])
@@ -1484,8 +1478,6 @@ def test_failed_worker_without_warning(e, s, a, b):
     L = e.map(inc, range(10))
     yield _wait(L)
 
-    ncores1 = s.ncores.copy()
-
     a.process.terminate()
     start = time()
     while not a.process.is_alive():
@@ -1540,6 +1532,7 @@ def test_badly_serialized_input(e, s, a, b):
 
     L = yield e._gather(futures)
     assert list(L) == list(map(inc, range(10)))
+    assert future.status == 'error'
 
 
 @pytest.mark.xfail
@@ -1556,6 +1549,7 @@ def test_badly_serialized_input_stderr(capsys):
                 if 'hello!' in err:
                     break
                 assert time() - start < 20
+            assert future.status == 'error'
 
 
 @gen_cluster(executor=True)
@@ -1625,11 +1619,11 @@ def test_forget_complex(e, s, A, B):
 
 @gen_cluster(executor=True)
 def test_forget_in_flight(e, s, A, B):
-    a, b, c, d = [do(slowinc)(i) for i in range(4)]
-    ab = do(slowadd)(a, b)
-    cd = do(slowadd)(c, d)
-    ac = do(slowadd)(a, c)
-    acab = do(slowadd)(ac, ab)
+    a, b, c, d = [delayed(slowinc)(i) for i in range(4)]
+    ab = delayed(slowadd)(a, b)
+    cd = delayed(slowadd)(c, d)
+    ac = delayed(slowadd)(a, c)
+    acab = delayed(slowadd)(ac, ab)
 
     x, y = e.compute([ac, acab])
     s.validate()
@@ -2069,11 +2063,11 @@ def test_Future_exception_sync(loop, capsys):
 
 @gen_cluster(timeout=60, executor=True)
 def test_async_persist(e, s, a, b):
-    from dask.imperative import do, value, Value
-    x = value(1)
-    y = do(inc)(x)
-    z = do(dec)(x)
-    w = do(add)(y, z)
+    from dask.imperative import delayed, Delayed
+    x = delayed(1)
+    y = delayed(inc)(x)
+    z = delayed(dec)(x)
+    w = delayed(add)(y, z)
 
     yy, ww = e.persist([y, w])
     assert type(yy) == type(y)
@@ -2095,7 +2089,7 @@ def test_async_persist(e, s, a, b):
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
-    assert isinstance(e.persist(y), Value)
+    assert isinstance(e.persist(y), Delayed)
     assert isinstance(e.persist([y]), (list, tuple))
 
 
@@ -2322,28 +2316,28 @@ def test_worker_aliases():
 def test_persist_get_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            dadd = do(add)
-            x, y = value(1), value(2)
-            xx = do(add)(x, x)
-            yy = do(add)(y, y)
-            xxyy = do(add)(xx, yy)
+            dadd = delayed(add)
+            x, y = delayed(1), delayed(2)
+            xx = delayed(add)(x, x)
+            yy = delayed(add)(y, y)
+            xxyy = delayed(add)(xx, yy)
 
             xxyy2 = e.persist(xxyy)
-            xxyy3 = do(add)(xxyy2, 10)
+            xxyy3 = delayed(add)(xxyy2, 10)
 
             assert xxyy3.compute(get=e.get) == ((1+1) + (2+2)) + 10
 
 
 @gen_cluster(executor=True)
 def test_persist_get(e, s, a, b):
-    dadd = do(add)
-    x, y = value(1), value(2)
-    xx = do(add)(x, x)
-    yy = do(add)(y, y)
-    xxyy = do(add)(xx, yy)
+    dadd = delayed(add)
+    x, y = delayed(1), delayed(2)
+    xx = delayed(add)(x, x)
+    yy = delayed(add)(y, y)
+    xxyy = delayed(add)(xx, yy)
 
     xxyy2 = e.persist(xxyy)
-    xxyy3 = do(add)(xxyy2, 10)
+    xxyy3 = delayed(add)(xxyy2, 10)
 
     yield gen.sleep(0.5)
     result = yield e._get(xxyy3.dask, xxyy3._keys())
@@ -2509,7 +2503,7 @@ def test_workers_register_indirect_data(e, s, a, b):
     s.validate()
 
 
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 4), ('127.0.0.2', 4)])
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)])
 def test_work_stealing(e, s, a, b):
     [x] = yield e._scatter([1])
     futures = e.map(slowadd, range(50), [x] * 50)
@@ -2650,3 +2644,20 @@ def test_executor_replicate_sync(loop):
 
             with pytest.raises(ValueError):
                 e.replicate([x], n=0)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
+def test_task_load(e, s, a):
+    assert 4 < s.task_load(a.address) < 20
+    L = e.map(inc, range(100))  # very fast
+    yield _wait(L)
+    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+
+    assert 8 <= s.task_load(a.address) < 10000
+
+    L = e.map(sleep, [0.1] * 10, pure=False)
+    yield _wait(L)
+
+    assert 0.0001 < s.worker_info[a.address]['avg-task-duration'] < 0.2
+
+    assert 4 < s.task_load(a.address) < 100

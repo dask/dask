@@ -1,23 +1,18 @@
 """ This file is experimental and may disappear without warning """
 from __future__ import print_function, division, absolute_import
 
-from collections import Iterable
 from itertools import product
-from operator import getitem
 
-import dask
-from dask.context import _globals
 import dask.array as da
 import dask.bag as db
 import dask.dataframe as dd
 from dask.base import tokenize
 import numpy as np
 from tornado import gen
-from toolz import compose
 
 from .executor import (default_executor, Future, _first_completed,
         ensure_default_get)
-from .utils import sync, ignoring
+from .utils import sync
 
 
 def index_min(df):

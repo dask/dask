@@ -16,7 +16,7 @@ from distributed.utils_test import (cluster, loop, _test_cluster,
         cluster_center, gen_cluster)
 from distributed.client import (_gather, _scatter, _delete, _clear,
         scatter_to_workers, pack_data, gather, scatter, delete, clear,
-        broadcast_to_workers)
+        broadcast_to_workers, gather_from_workers)
 
 
 def test_scatter_delete(loop):
@@ -157,3 +157,17 @@ def test_broadcast_to_workers(s, a, b):
 
     assert len(keys) == 3
     assert a.data == b.data == dict(zip(keys, [1, 2, 3]))
+
+
+@gen_cluster()
+def test_gather_from_workers_permissive(s, a, b):
+    yield a.update_data(data={'x': 1}, deserialize=False)
+
+    with pytest.raises(KeyError):
+        yield gather_from_workers({'x': [a.address], 'y': [b.address]})
+
+    data, bad = yield gather_from_workers({'x': [a.address], 'y': [b.address]},
+                                          permissive=True)
+
+    assert data == {'x': 1}
+    assert list(bad) == ['y']

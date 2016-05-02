@@ -5,7 +5,6 @@ import logging
 from multiprocessing import Process, Queue, queues
 import os
 import shutil
-import tempfile
 
 from tornado.ioloop import IOLoop
 from tornado import gen

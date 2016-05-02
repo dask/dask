@@ -87,7 +87,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
             else:
                 bokeh_proc = subprocess.Popen(args)
 
-            logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
+            logger.info(" Bokeh UI at:  http://%s:%d/status/"
                         % (ip, bokeh_port))
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")

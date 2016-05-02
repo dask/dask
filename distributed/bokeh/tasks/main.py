@@ -16,7 +16,7 @@ doc = curdoc()
 width = 800
 
 
-task_stream_source, task_stream_plot = task_stream_plot(height=800,
+task_stream_source, task_stream_plot = task_stream_plot(height=600,
         width=width, follow_interval=20000)
 task_stream_plot.min_border_top = 0
 task_stream_plot.min_border_bottom = 0

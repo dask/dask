@@ -66,7 +66,7 @@ def read_csv(block_lists, header, head, kwargs, lazy=True, collection=True,
     A dask.dataframe, or list of futures or values, depending on the value of
     lazy and collection.
     """
-    from dask.dataframe import from_imperative
+    from dask.dataframe import from_delayed
     executor = default_executor(executor)
 
     dfs1 = [[do(bytes_read_csv)(blocks[0], '', kwargs)] +
@@ -78,7 +78,7 @@ def read_csv(block_lists, header, head, kwargs, lazy=True, collection=True,
     ensure_default_get(executor)
 
     if collection:
-        result = from_imperative(dfs2, head)
+        result = from_delayed(dfs2, head)
     else:
         result = dfs2
 
