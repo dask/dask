@@ -129,6 +129,7 @@ class Server(TCPServer):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
+        self._rpcs = dict()
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     @property
@@ -221,6 +222,13 @@ class Server(TCPServer):
                 logger.warn("Failed while closing writer",  exc_info=True)
         logger.info("Close connection from %s:%d to %s", address[0], address[1],
                     type(self).__name__)
+
+    def rpc(self, arg=None, ip=None, port=None, addr=None):
+        """ Cached rpc objects """
+        key = arg, ip, port, addr
+        if key not in self._rpcs:
+            self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
+        return self._rpcs[key]
 
 
 @gen.coroutine

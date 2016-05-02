@@ -193,8 +193,6 @@ class Scheduler(Server):
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
 
-        self._rpcs = dict()
-
         self.plugins = []
 
         self.compute_handlers = {'update-graph': self.update_graph,
@@ -231,13 +229,6 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
-
-    def rpc(self, arg=None, ip=None, port=None, addr=None):
-        """ Cached rpc objects """
-        key = arg, ip, port, addr
-        if key not in self._rpcs:
-            self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
-        return self._rpcs[key]
 
     def __del__(self):
         self.close_streams()
