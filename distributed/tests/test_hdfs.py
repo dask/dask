@@ -6,7 +6,7 @@ from io import BytesIO
 import pytest
 from tornado import gen
 
-from dask.imperative import Value
+from dask.delayed import Delayed
 
 from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
@@ -160,7 +160,7 @@ def test_lazy_values(e, s, a, b):
                     f.write(data)
 
         values = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True)
-        assert all(isinstance(v, Value) for v in values)
+        assert all(isinstance(v, Delayed) for v in values)
 
         while not s.restrictions:
             yield gen.sleep(0.01)
@@ -311,7 +311,7 @@ def test__read_text(e, s, a, b):
 
         L = read_text('/tmp/test/text.*.txt',
                              collection=False, lazy=True)
-        assert all(isinstance(x, Value) for x in L)
+        assert all(isinstance(x, Delayed) for x in L)
 
 
 @gen_cluster([(ip, 1)], timeout=60, executor=True)

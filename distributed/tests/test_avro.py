@@ -15,7 +15,7 @@ except:
     pytestmark = pytest.mark.skipif('True')
 
 import fastavro
-from dask.imperative import Value
+from dask.delayed import Delayed
 
 from distributed.hdfs import avro_body, read_avro
 from distributed.utils_test import gen_cluster, cluster, make_hdfs, loop
@@ -78,7 +78,7 @@ def test_avro(e, s, a, b):
 
         L = read_avro('/tmp/test/*.avro', lazy=True)
         assert isinstance(L, list)
-        assert all(isinstance(x, Value) for x in L)
+        assert all(isinstance(x, Delayed) for x in L)
 
 
 def test_avro_sync(loop):

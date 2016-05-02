@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 import io
 
-from dask.imperative import Value, do
+from dask.delayed import Delayed, delayed
 from dask.base import tokenize
 from s3fs import S3FileSystem
 
@@ -39,7 +39,7 @@ def read_bytes(fn, executor=None, s3=None, lazy=True, delimiter=None,
     Returns
     -------
     List of ``distributed.Future`` objects if ``lazy=False``
-    or ``dask.Value`` objects if ``lazy=True``
+    or ``dask.Delayed`` objects if ``lazy=True``
     """
     if s3 is None:
         s3 = S3FileSystem(**s3pars)
@@ -65,7 +65,7 @@ def read_bytes(fn, executor=None, s3=None, lazy=True, delimiter=None,
     s3safe_pars = s3pars.copy()
     s3safe_pars.update(s3.get_delegated_s3pars())
     if lazy:
-        values = [Value(name, [{name: (read_block_from_s3, fn, offset, length,
+        values = [Delayed(name, [{name: (read_block_from_s3, fn, offset, length,
                         s3safe_pars, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
@@ -145,14 +145,14 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminato
                                             delimiter=lineterminator.encode(),
                                             blocksize=blocksize)]
     if compression:
-        blocks = [do(decompress)(b) for b in blocks]
-    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
-    lines = [do(unicode.split)(s, lineterminator) for s in strings]
+        blocks = [delayed(decompress)(b) for b in blocks]
+    strings = [delayed(bytes.decode)(b, encoding, errors) for b in blocks]
+    lines = [delayed(unicode.split)(s, lineterminator) for s in strings]
 
     ensure_default_get(executor)
-    from dask.bag import from_imperative
+    from dask.bag import from_delayed
     if collection:
-        result = from_imperative(lines).filter(None)
+        result = from_delayed(lines).filter(None)
     else:
         result = lines
 

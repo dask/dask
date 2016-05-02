@@ -1493,10 +1493,10 @@ def ensure_default_get(executor):
 
 
 def redict_collection(c, dsk):
-    from dask.imperative import Value
-    if isinstance(c, Value):
+    from dask.delayed import Delayed
+    if isinstance(c, Delayed):
         assert len(dsk) == 1
-        return Value(first(dsk), [dsk])
+        return Delayed(first(dsk), [dsk])
     else:
         cc = copy.copy(c)
         cc.dask = dsk

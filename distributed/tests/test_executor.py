@@ -20,7 +20,7 @@ from toolz import (identity, isdistinct, first, concat, pluck, keymap, valmap,
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from dask import do, value
+from dask import delayed
 from dask.context import _globals
 from dask.compatibility import apply
 from distributed import Worker, Nanny
@@ -1112,7 +1112,7 @@ def test_restart(e, s, a, b):
 
 @gen_cluster(Worker=Nanny, executor=True)
 def test_restart_cleared(e, s, a, b):
-    x = 2 * value(1) + 1
+    x = 2 * delayed(1) + 1
     f = e.compute(x)
     yield _wait([f])
     assert s.released
@@ -1283,10 +1283,10 @@ def test_multiple_executors_restart(s, a, b):
 
 @gen_cluster(executor=True)
 def test_async_compute(e, s, a, b):
-    from dask.imperative import do, value
-    x = value(1)
-    y = do(inc)(x)
-    z = do(dec)(x)
+    from dask.delayed import delayed
+    x = delayed(1)
+    y = delayed(inc)(x)
+    z = delayed(dec)(x)
 
     [yy, zz, aa] = e.compute([y, z, 3], sync=False)
     assert isinstance(yy, Future)
@@ -1305,8 +1305,8 @@ def test_async_compute_with_scatter(e, s, a, b):
     d = yield e._scatter({('x', 1): 1, ('y', 1): 2})
     x, y = d[('x', 1)], d[('y', 1)]
 
-    from dask.imperative import do, value
-    z = do(add)(do(inc)(x), do(inc)(y))
+    from dask.imperative import delayed
+    z = delayed(add)(delayed(inc)(x), delayed(inc)(y))
     zz = e.compute(z)
 
     [result] = yield e._gather([zz])
@@ -1316,10 +1316,9 @@ def test_async_compute_with_scatter(e, s, a, b):
 def test_sync_compute(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            from dask.imperative import do, value
-            x = value(1)
-            y = do(inc)(x)
-            z = do(dec)(x)
+            x = delayed(1)
+            y = delayed(inc)(x)
+            z = delayed(dec)(x)
 
             yy, zz = e.compute([y, z], sync=True)
             assert (yy, zz) == (2, 0)
@@ -1625,11 +1624,11 @@ def test_forget_complex(e, s, A, B):
 
 @gen_cluster(executor=True)
 def test_forget_in_flight(e, s, A, B):
-    a, b, c, d = [do(slowinc)(i) for i in range(4)]
-    ab = do(slowadd)(a, b)
-    cd = do(slowadd)(c, d)
-    ac = do(slowadd)(a, c)
-    acab = do(slowadd)(ac, ab)
+    a, b, c, d = [delayed(slowinc)(i) for i in range(4)]
+    ab = delayed(slowadd)(a, b)
+    cd = delayed(slowadd)(c, d)
+    ac = delayed(slowadd)(a, c)
+    acab = delayed(slowadd)(ac, ab)
 
     x, y = e.compute([ac, acab])
     s.validate()
@@ -2069,11 +2068,11 @@ def test_Future_exception_sync(loop, capsys):
 
 @gen_cluster(timeout=60, executor=True)
 def test_async_persist(e, s, a, b):
-    from dask.imperative import do, value, Value
-    x = value(1)
-    y = do(inc)(x)
-    z = do(dec)(x)
-    w = do(add)(y, z)
+    from dask.imperative import delayed, Delayed
+    x = delayed(1)
+    y = delayed(inc)(x)
+    z = delayed(dec)(x)
+    w = delayed(add)(y, z)
 
     yy, ww = e.persist([y, w])
     assert type(yy) == type(y)
@@ -2095,7 +2094,7 @@ def test_async_persist(e, s, a, b):
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
-    assert isinstance(e.persist(y), Value)
+    assert isinstance(e.persist(y), Delayed)
     assert isinstance(e.persist([y]), (list, tuple))
 
 
@@ -2322,28 +2321,28 @@ def test_worker_aliases():
 def test_persist_get_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            dadd = do(add)
-            x, y = value(1), value(2)
-            xx = do(add)(x, x)
-            yy = do(add)(y, y)
-            xxyy = do(add)(xx, yy)
+            dadd = delayed(add)
+            x, y = delayed(1), delayed(2)
+            xx = delayed(add)(x, x)
+            yy = delayed(add)(y, y)
+            xxyy = delayed(add)(xx, yy)
 
             xxyy2 = e.persist(xxyy)
-            xxyy3 = do(add)(xxyy2, 10)
+            xxyy3 = delayed(add)(xxyy2, 10)
 
             assert xxyy3.compute(get=e.get) == ((1+1) + (2+2)) + 10
 
 
 @gen_cluster(executor=True)
 def test_persist_get(e, s, a, b):
-    dadd = do(add)
-    x, y = value(1), value(2)
-    xx = do(add)(x, x)
-    yy = do(add)(y, y)
-    xxyy = do(add)(xx, yy)
+    dadd = delayed(add)
+    x, y = delayed(1), delayed(2)
+    xx = delayed(add)(x, x)
+    yy = delayed(add)(y, y)
+    xxyy = delayed(add)(xx, yy)
 
     xxyy2 = e.persist(xxyy)
-    xxyy3 = do(add)(xxyy2, 10)
+    xxyy3 = delayed(add)(xxyy2, 10)
 
     yield gen.sleep(0.5)
     result = yield e._get(xxyy3.dask, xxyy3._keys())

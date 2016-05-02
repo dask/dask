@@ -8,7 +8,7 @@ import os
 import io
 import sys
 
-from dask.imperative import Value
+from dask.delayed import Delayed
 from dask.base import tokenize
 from toolz import merge
 
@@ -300,9 +300,9 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
     lines = [do(unicode.split)(s, lineterminator) for s in strings]
 
-    from dask.bag import from_imperative
+    from dask.bag import from_delayed
     if collection:
-        result = from_imperative(lines).filter(None)
+        result = from_delayed(lines).filter(None)
     else:
         result = lines
 
