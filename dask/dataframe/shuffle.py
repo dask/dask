@@ -144,7 +144,7 @@ def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
         dsk.update(index.dask)
 
     if compute:
-        dsk = cull(dsk, list(dsk4.keys()))
+        dsk, _ = cull(dsk, list(dsk4.keys()))
 
     return DataFrame(dsk, name, metadata, divisions)
 

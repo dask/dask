@@ -1,5 +1,6 @@
 from itertools import chain
-from dask.order import dfs, child_max, ndependents, order, inc, get_deps
+from dask.order import dfs, child_max, ndependents, order, inc
+from dask.core import get_deps
 
 
 def issorted(L, reverse=False):
