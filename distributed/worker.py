@@ -260,7 +260,8 @@ class Worker(Server):
             who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
             local = {k: self.data[k] for k in who_has if k in self.data}
             who_has = {k: v for k, v in who_has.items() if k not in local}
-            remote, bad_data = yield gather_from_workers(who_has, permissive=True)
+            remote, bad_data = yield gather_from_workers(who_has,
+                    permissive=True, rpc=self.rpc, close=False)
             if remote:
                 self.data.update(remote)
                 yield self.center.add_keys(address=self.address, keys=list(remote))
