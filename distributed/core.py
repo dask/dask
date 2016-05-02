@@ -219,10 +219,10 @@ def read(stream):
         raise Return(msg)
     else:
         n_frames = yield stream.read_bytes(8)
-        n_frames = struct.unpack('L', n_frames)[0]
+        n_frames = struct.unpack('Q', n_frames)[0]
 
         lengths = yield stream.read_bytes(8 * n_frames)
-        lengths = struct.unpack('L' * n_frames, lengths)
+        lengths = struct.unpack('Q' * n_frames, lengths)
 
         frames = []
         for length in lengths:
@@ -249,8 +249,8 @@ def write(stream, msg):
             logger.exception(e)
             raise
 
-        lengths = ([struct.pack('L', len(frames))] +
-                   [struct.pack('L', len(frame)) for frame in frames])
+        lengths = ([struct.pack('Q', len(frames))] +
+                   [struct.pack('Q', len(frame)) for frame in frames])
         yield stream.write(b''.join(lengths))
 
         for frame in frames:
