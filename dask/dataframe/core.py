@@ -217,6 +217,16 @@ class _Frame(Base):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
+    def __repr__(self):
+        name = self._name if len(self._name) < 10 else self._name[:7] + '...'
+        if self.known_divisions:
+            div_text = ', divisions=%s' % repr_long_list(self.divisions)
+        else:
+            div_text = ''
+
+        return ("dd.%s<%s, npartitions=%s%s>" %
+                (self.__class__.__name__, name, self.npartitions, div_text))
+
     @property
     def index(self):
         """Return dask Index instance"""
@@ -957,11 +967,6 @@ class Series(_Frame):
     def nbytes(self):
         return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes')
 
-    def __repr__(self):
-        return ("dd.%s<%s, divisions=%s>" %
-                (self.__class__.__name__, self._name,
-                 repr_long_list(self.divisions)))
-
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
         if dtype and x.dtype != dtype:
@@ -1390,10 +1395,6 @@ class DataFrame(_Frame):
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
                       list(self.columns)))
-
-    def __repr__(self):
-        return ("dd.DataFrame<%s, divisions=%s>" %
-                (self._name, repr_long_list(self.divisions)))
 
     @property
     def ndim(self):
