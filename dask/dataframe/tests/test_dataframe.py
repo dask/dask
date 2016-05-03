@@ -1660,3 +1660,17 @@ def test_astype():
 
     assert eq(a.astype(float), df.astype(float))
     assert eq(a.x.astype(float), df.x.astype(float))
+
+
+def test_groupby_callable():
+    a = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
+                      index=[1, 2, 3, 4])
+    b = dd.from_pandas(a, 2)
+
+    def iseven(x):
+        return x % 2 == 0
+
+    assert eq(a.groupby(iseven).y.sum(),
+              b.groupby(iseven).y.sum())
+    assert eq(a.y.groupby(iseven).sum(),
+              b.y.groupby(iseven).sum())
