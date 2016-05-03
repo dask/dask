@@ -55,7 +55,8 @@ def test_update_state(loop):
                    dependencies={'y': 'x', 'x': set()},
                    client='client')
 
-    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int),
+            compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
 
     assert s.processing[alice] == {'y'}
@@ -93,7 +94,8 @@ def test_update_state_with_processing(loop):
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
 
-    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int),
+            compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
 
     assert s.waiting == {'z': {'y'}}
@@ -131,9 +133,11 @@ def test_update_state_respects_data_in_memory(loop):
                    dependencies={'y': {'x'}, 'x': set()},
                    client='client')
 
-    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int),
+                         compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
-    s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('y', alice, nbytes=10, type=dumps(int),
+                         compute_start=11, compute_stop=12)
     s.ensure_occupied(alice)
 
     assert s.released == {'x'}
@@ -163,11 +167,14 @@ def test_update_state_supports_recomputing_released_results(loop):
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
 
-    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('x', alice, nbytes=10, type=dumps(int),
+                         compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
-    s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('y', alice, nbytes=10, type=dumps(int),
+                         compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
-    s.mark_task_finished('z', alice, nbytes=10, type=dumps(int))
+    s.mark_task_finished('z', alice, nbytes=10, type=dumps(int),
+                         compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
 
     assert not s.waiting
