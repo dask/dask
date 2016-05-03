@@ -1051,3 +1051,10 @@ def test_read_csv_slash_r():
     with filetext(data, mode='wb') as fn:
         dd.read_csv(fn, header=None, sep=',', lineterminator='\n',
                     names=['a','b'], blocksize=200).compute(get=dask.get)
+
+
+def test_read_csv_singleton_dtype():
+    data = b'a,b\n1,2\n3,4\n5,6'
+    with filetext(data, mode='wb') as fn:
+        eq(pd.read_csv(fn, dtype=float),
+           dd.read_csv(fn, dtype=float))
