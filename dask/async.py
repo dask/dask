@@ -434,7 +434,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     for f in start_cbs:
         f(dsk)
 
-    dsk = cull(dsk, list(results))
+    dsk, dependencies = cull(dsk, list(results))
 
     keyorder = order(dsk)
 

@@ -319,7 +319,7 @@ def subs(task, key, val):
     return task[:1] + tuple(newargs)
 
 
-def _toposort(dsk, keys=None, returncycle=False):
+def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
     if keys is None:
@@ -340,6 +340,9 @@ def _toposort(dsk, keys=None, returncycle=False):
     # that has already been added to `completed`.
     seen = set()
 
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+
     for key in keys:
         if key in completed:
             continue
@@ -355,7 +358,7 @@ def _toposort(dsk, keys=None, returncycle=False):
 
             # Add direct descendants of cur to nodes stack
             next_nodes = []
-            for nxt in get_dependencies(dsk, cur):
+            for nxt in dependencies[cur]:
                 if nxt not in completed:
                     if nxt in seen:
                         # Cycle detected!
@@ -385,9 +388,9 @@ def _toposort(dsk, keys=None, returncycle=False):
     return ordered
 
 
-def toposort(dsk):
+def toposort(dsk, dependencies=None):
     """ Return a list of keys of dask sorted in topological order."""
-    return _toposort(dsk)
+    return _toposort(dsk, dependencies=dependencies)
 
 
 def getcycle(d, keys):

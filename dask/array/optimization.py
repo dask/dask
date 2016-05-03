@@ -21,10 +21,11 @@ def optimize(dsk, keys, **kwargs):
     keys = list(flatten(keys))
     fast_functions = kwargs.get('fast_functions',
                              set([getarray, np.transpose]))
-    dsk2 = cull(dsk, keys)
-    dsk4 = fuse(dsk2, keys)
+    dsk2, dependencies = cull(dsk, keys)
+    dsk4, dependencies = fuse(dsk2, keys, dependencies)
     dsk5 = optimize_slices(dsk4)
-    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions)
+    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions,
+            dependencies=dependencies)
     return dsk6
 
 

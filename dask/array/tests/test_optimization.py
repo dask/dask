@@ -69,14 +69,14 @@ def test_optimize_slicing():
            'e': (getarray, 'd', (slice(None, None, None),))}
 
     expected = {'e': (getarray, (range, 10), (slice(0, 5, None),))}
-    result = optimize_slices(fuse(dsk, []))
+    result = optimize_slices(fuse(dsk, [])[0])
     assert result == expected
 
     # protect output keys
     expected = {'c': (range, 10),
                 'd': (getarray, 'c', (slice(0, 5, None),)),
                 'e': 'd'}
-    result = optimize_slices(fuse(dsk, ['c', 'd', 'e']))
+    result = optimize_slices(fuse(dsk, ['c', 'd', 'e'])[0])
 
     assert result == expected
 

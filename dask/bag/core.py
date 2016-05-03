@@ -64,7 +64,7 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def inline_singleton_lists(dsk):
+def inline_singleton_lists(dsk, dependencies=None):
     """ Inline lists that are only used once
 
     >>> d = {'b': (list, 'a'),
@@ -74,8 +74,8 @@ def inline_singleton_lists(dsk):
 
     Pairs nicely with lazify afterwards
     """
-
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
@@ -85,9 +85,9 @@ def inline_singleton_lists(dsk):
 
 def optimize(dsk, keys, **kwargs):
     """ Optimize a dask from a dask.bag """
-    dsk2 = cull(dsk, keys)
-    dsk3 = fuse(dsk2, keys)
-    dsk4 = inline_singleton_lists(dsk3)
+    dsk2, dependencies = cull(dsk, keys)
+    dsk3, dependencies = fuse(dsk2, keys, dependencies)
+    dsk4 = inline_singleton_lists(dsk3, dependencies)
     dsk5 = lazify(dsk4)
     return dsk5
 
