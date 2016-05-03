@@ -799,6 +799,10 @@ class Array(Base):
         return tuple(map(len, self.chunks))
 
     @property
+    def npartitions(self):
+        return np.prod(self.numblocks)
+
+    @property
     def shape(self):
         return tuple(map(sum, self.chunks))
 
