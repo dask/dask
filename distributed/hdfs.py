@@ -16,7 +16,6 @@ from toolz import merge
 from .compatibility import unicode
 from .executor import default_executor, ensure_default_get
 from .utils import ensure_bytes
-from . import formats
 
 
 logger = logging.getLogger(__name__)
@@ -129,81 +128,6 @@ def open_files(path, hdfs=None, lazy=None, **auth):
 
 
 dask.bytes.core._open_files['hdfs'] = open_files
-
-
-def avro_body(data, header):
-    """ Convert bytes and header to Python objects
-
-    Parameters
-    ----------
-    data: bytestring
-        bulk avro data, without header information
-    header: bytestring
-        Header information collected from ``fastavro.reader(f)._header``
-
-    Returns
-    -------
-    List of deserialized Python objects, probably dictionaries
-    """
-    import fastavro
-    sync = header['sync']
-    if not data.endswith(sync):
-        # Read delimited should keep end-of-block delimiter
-        data = data + sync
-    stream = io.BytesIO(data)
-    schema = header['meta']['avro.schema'].decode()
-    schema = json.loads(schema)
-    codec = header['meta']['avro.codec'].decode()
-    return list(fastavro._reader._iter_avro(stream, header, codec,
-        schema, schema))
-
-
-def avro_to_df(b, av):
-    """Parse avro binary data with header av into a pandas dataframe"""
-    import pandas as pd
-    return pd.DataFrame(data=avro_body(b, av))
-
-
-def read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
-    """ Read avro encoded data from bytes on HDFS
-
-    Parameters
-    ----------
-    path: string
-        filename or globstring of avro files on HDFS
-    lazy: boolean, optional
-        If True return dask Value objects
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
-    from hdfs3 import HDFileSystem
-    from dask import delayed
-    import fastavro
-    hdfs = hdfs or HDFileSystem()
-    executor = default_executor(executor)
-
-    filenames = walk_glob(hdfs, path)
-
-    blockss = []
-    for fn in filenames:
-        with hdfs.open(fn, 'rb') as f:
-            av = fastavro.reader(f)
-            header = av._header
-
-        blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
-                                   delimiter=header['sync'], not_zero=True)
-                       for fn in filenames])  # TODO: why is filenames used twice?
-
-    lazy_values = [delayed(avro_body)(b, header) for blocks in blockss
-                                            for b in blocks]
-
-    if lazy:
-        return lazy_values
-    else:
-        futures = executor.compute(lazy_values)
-        return futures
 
 
 def write_block_to_hdfs(fn, data, hdfs=None):
