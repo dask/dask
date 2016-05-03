@@ -41,7 +41,9 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--host', type=str, default=None,
               help="Serving host defaults to %s" % ip)
 @click.option('--show/--no-show', default=False, help="Show web UI")
-def main(center, host, port, http_port, bokeh_port, show, _bokeh):
+@click.option('--bokeh-whitelist', default=None, multiple=True,
+              help="IP addresses to whitelist for bokeh.")
+def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelist):
     given_host = host
     host = host or global_ip
     ip = socket.gethostbyname(host)
@@ -57,7 +59,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
             import bokeh
             import distributed.bokeh
             hosts = ['%s:%d' % (h, bokeh_port) for h in
-                     ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
+                     ['localhost', '127.0.0.1', ip, socket.gethostname(),
+                      host] + list(bokeh_whitelist)]
             dirname = os.path.dirname(distributed.__file__)
             paths = [os.path.join(dirname, 'bokeh', name)
                      for name in ['status', 'tasks']]

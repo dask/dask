@@ -8,6 +8,7 @@ import requests
 import signal
 import socket
 from subprocess import Popen, PIPE
+import sys
 from time import sleep, time
 
 
@@ -94,6 +95,40 @@ def test_bokeh_non_standard_ports():
             try:
                 response = requests.get('http://localhost:4832/status/')
                 assert response.ok
+                break
+            except:
+                sleep(0.1)
+                assert time() < start + 5
+
+    finally:
+        with ignoring(Exception):
+            e.shutdown()
+        with ignoring(Exception):
+            os.kill(proc.pid, signal.SIGINT)
+
+
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
+def test_bokeh_whitelist():
+    pytest.importorskip('bokeh')
+
+    try:
+        proc = Popen(['dscheduler', '--bokeh-whitelist', '127.0.0.2',
+                                    '--bokeh-whitelist', '127.0.0.3'],
+                     stdout=PIPE, stderr=PIPE)
+        e = Executor('127.0.0.1:%d' % Scheduler.default_port)
+
+        while True:
+            line = proc.stderr.readline()
+            if b'Bokeh UI' in line:
+                break
+
+        start = time()
+        while True:
+            try:
+                for name in ['127.0.0.2', '127.0.0.3']:
+                    response = requests.get('http://%s:8787/status/' % name)
+                    assert response.ok
                 break
             except:
                 sleep(0.1)
