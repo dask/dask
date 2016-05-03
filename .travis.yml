@@ -66,7 +66,7 @@ script:
     - |
       if [[ $HDFS == true ]]; then
         pwd
-        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py distributed/tests/test_avro.py --verbose
+        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py --verbose
       elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
         coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
       else

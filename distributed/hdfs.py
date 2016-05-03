@@ -6,15 +6,16 @@ import json
 from math import log
 import os
 import io
+from warnings import warn
 
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.base import tokenize
+import dask.bytes.core
 from toolz import merge
 
 from .compatibility import unicode
 from .executor import default_executor, ensure_default_get
 from .utils import ensure_bytes
-from . import formats
 
 
 logger = logging.getLogger(__name__)
@@ -44,13 +45,13 @@ def read_block_from_hdfs(filename, offset, length, host=None, port=None,
     return bytes
 
 
-def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
-               not_zero=False, **hdfs_auth):
+def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
+               not_zero=False, sample=True, blocksize=None, compression=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
     ----------
-    fn: string
+    path: string
         location in HDFS
     executor: Executor (optional)
         defaults to most recently created executor
@@ -68,150 +69,65 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
     List of ``distributed.Future`` objects if ``lazy=False``
     or ``dask.Value`` objects if ``lazy=True``
     """
+    if compression:
+        raise NotImplementedError("hdfs compression")
     from hdfs3 import HDFileSystem
     hdfs = hdfs or HDFileSystem(**hdfs_auth)
     executor = default_executor(executor)
-    blocks = get_block_locations(hdfs, fn)
+    blocks = get_block_locations(hdfs, path)
     filenames = [d['filename'] for d in blocks]
     offsets = [d['offset'] for d in blocks]
     if not_zero:
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [[h.decode() for h in d['hosts']] for d in blocks]
-    names = ['read-binary-hdfs3-%s-%s' % (fn, tokenize(offset, length, delimiter, not_zero))
+    names = ['read-binary-hdfs3-%s-%s' % (path, tokenize(offset, length, delimiter, not_zero))
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
-    logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
-    if lazy:
-        restrictions = dict(zip(names, workers))
-        executor._send_to_scheduler({'op': 'update-graph',
-                                     'tasks': {},
-                                     'dependencies': [],
-                                     'keys': [],
-                                     'restrictions': restrictions,
-                                     'loose_restrictions': names,
-                                     'client': executor.id})
-        values = [Delayed(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
-                  for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
-        return values
+    logger.debug("Read %d blocks of binary bytes from %s", len(blocks), path)
+    restrictions = dict(zip(names, workers))
+
+    if sample is True:
+        sample = 10000
+    if sample:
+        with hdfs.open(filenames[0], 'rb') as f:
+            sample = f.read(sample)
     else:
-        return executor.map(read_block_from_hdfs, filenames, offsets, lengths,
-                host=hdfs.host, port=hdfs.port, delimiter=delimiter,
-                workers=workers, allow_other_workers=True)
+        sample = b''
+
+    executor._send_to_scheduler({'op': 'update-graph',
+                                 'tasks': {},
+                                 'dependencies': [],
+                                 'keys': [],
+                                 'restrictions': restrictions,
+                                 'loose_restrictions': names,
+                                 'client': executor.id})
+    values = [Delayed(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
+              for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
+
+    return sample, values
+
+dask.bytes.core._read_bytes['hdfs'] = read_bytes
 
 
-def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
-        **kwargs):
-    """ Read CSV encoded data from bytes on HDFS
-
-    Parameters
-    ----------
-    fn: string
-        filename or globstring of CSV files on HDFS
-    lazy: boolean, optional
-        If True return dask Value objects
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
+def hdfs_open_file(path, auth):
     from hdfs3 import HDFileSystem
-    import pandas as pd
-    hdfs = hdfs or HDFileSystem()
-    executor = default_executor(executor)
-    lineterminator = kwargs.get('lineterminator', '\n')
-
-    filenames = walk_glob(hdfs, path)
-    blockss = [read_bytes(fn, executor, hdfs, lazy=True,
-                          delimiter=ensure_bytes(lineterminator))
-               for fn in filenames]
-
-    with hdfs.open(filenames[0]) as f:
-        if kwargs.get('header', 'infer') in (0, 'infer'):
-            header = f.readline()
-            f.seek(0)
-        else:
-            header = b''
-        head = pd.read_csv(f, nrows=5, **kwargs)
-
-    result = formats.read_csv(blockss, header, head, kwargs, lazy, collection)
-
-    return result
+    hdfs = HDFileSystem(**auth)
+    return hdfs.open(path, mode='rb')
 
 
-def avro_body(data, header):
-    """ Convert bytes and header to Python objects
-
-    Parameters
-    ----------
-    data: bytestring
-        bulk avro data, without header information
-    header: bytestring
-        Header information collected from ``fastavro.reader(f)._header``
-
-    Returns
-    -------
-    List of deserialized Python objects, probably dictionaries
-    """
-    import fastavro
-    sync = header['sync']
-    if not data.endswith(sync):
-        # Read delimited should keep end-of-block delimiter
-        data = data + sync
-    stream = io.BytesIO(data)
-    schema = header['meta']['avro.schema'].decode()
-    schema = json.loads(schema)
-    codec = header['meta']['avro.codec'].decode()
-    return list(fastavro._reader._iter_avro(stream, header, codec,
-        schema, schema))
-
-
-def avro_to_df(b, av):
-    """Parse avro binary data with header av into a pandas dataframe"""
-    import pandas as pd
-    return pd.DataFrame(data=avro_body(b, av))
-
-
-def read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
-    """ Read avro encoded data from bytes on HDFS
-
-    Parameters
-    ----------
-    fn: string
-        filename or globstring of avro files on HDFS
-    lazy: boolean, optional
-        If True return dask Value objects
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
+def open_files(path, hdfs=None, lazy=None, **auth):
+    if lazy is not None:
+        raise DeprecationWarning("Lazy keyword has been deprecated. "
+                                 "Now always lazy")
     from hdfs3 import HDFileSystem
-    from dask import delayed
-    import fastavro
-    hdfs = hdfs or HDFileSystem()
-    executor = default_executor(executor)
+    hdfs = hdfs or HDFileSystem(**auth)
+    filenames = sorted(hdfs.glob(path))
+    myopen = delayed(hdfs_open_file)
+    return [myopen(fn, auth) for fn in filenames]
 
-    filenames = walk_glob(hdfs, path)
 
-    blockss = []
-    for fn in filenames:
-        with hdfs.open(fn, 'rb') as f:
-            av = fastavro.reader(f)
-            header = av._header
-
-        blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
-                                   delimiter=header['sync'], not_zero=True)
-                       for fn in filenames])  # TODO: why is filenames used twice?
-
-    lazy_values = [delayed(avro_body)(b, header) for blocks in blockss
-                                            for b in blocks]
-
-    if lazy:
-        return lazy_values
-    else:
-        futures = executor.compute(lazy_values)
-        return futures
+dask.bytes.core._open_files['hdfs'] = open_files
 
 
 def write_block_to_hdfs(fn, data, hdfs=None):
@@ -267,13 +183,13 @@ def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
     return executor.map(write_block_to_hdfs, filenames, futures, hdfs=hdfs)
 
 
-def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
+def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
                executor=None, hdfs=None, lazy=True, collection=True):
     """ Read text lines from HDFS
 
     Parameters
     ----------
-    fn: string
+    path: string
         filename or globstring of files on HDFS
     collection: boolean, optional
         Whether or not to return a high level collection
@@ -284,25 +200,49 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     -------
     Dask bag (if collection=True) or Futures or dask values
     """
-    from hdfs3 import HDFileSystem
-    from dask import delayed
-    hdfs = hdfs or HDFileSystem()
+    warn("hdfs.read_text moved to dask.bag.read_text('hdfs://...')")
+    import dask.bag as db
+    result = db.read_text('hdfs://' + path, encoding=encoding, errors=errors,
+            linedelimiter=lineterminator, hdfs=hdfs, collection=collection)
+
     executor = default_executor(executor)
     ensure_default_get(executor)
+    if not lazy:
+        if collection:
+            result = executor.persist(result)
+        else:
+            result = executor.compute(result)
 
-    filenames = sorted(hdfs.glob(fn))
-    blocks = [block for fn in filenames
-                    for block in read_bytes(fn, executor, hdfs, lazy=True,
-                                            delimiter=lineterminator.encode())]
-    strings = [delayed(bytes.decode)(b, encoding, errors) for b in blocks]
-    lines = [delayed(unicode.split)(s, lineterminator) for s in strings]
+    return result
 
-    from dask.bag import from_delayed
-    if collection:
-        result = from_delayed(lines).filter(None)
-    else:
-        result = lines
 
+def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
+               executor=None, hdfs=None, lazy=True, collection=True):
+    warn("hdfs.read_text moved to dask.bag.read_text('hdfs://...')")
+    import dask.bag as db
+    result = db.read_text('hdfs://' + path, encoding=encoding, errors=errors,
+            linedelimiter=lineterminator, hdfs=hdfs, collection=collection)
+
+    executor = default_executor(executor)
+    ensure_default_get(executor)
+    if not lazy:
+        if collection:
+            result = executor.persist(result)
+        else:
+            result = executor.compute(result)
+
+    return result
+
+
+def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
+        **kwargs):
+    warn("hdfs.read_csv moved to dask.dataframe.read_csv('hdfs://...')")
+    import dask.dataframe as dd
+    result = dd.read_csv('hdfs://' + path, hdfs=hdfs, collection=collection,
+            **kwargs)
+
+    executor = default_executor(executor)
+    ensure_default_get(executor)
     if not lazy:
         if collection:
             result = executor.persist(result)

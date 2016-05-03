@@ -25,8 +25,7 @@ setup(name='distributed',
                 'distributed.bokeh',
                 'distributed.bokeh.status',
                 'distributed.bokeh.tasks',
-                'distributed.http',
-                'distributed.formats'],
+                'distributed.http'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
       entry_points='''
