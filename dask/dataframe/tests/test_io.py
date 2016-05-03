@@ -1044,3 +1044,10 @@ def test_to_hdf_kwargs():
     df2 = pd.read_hdf('tst.h5', 'foo4')
 
     tm.assert_frame_equal(df, df2)
+
+
+def test_read_csv_slash_r():
+    data = b'0,my\n1,data\n' * 1000 + b'2,foo\rbar'
+    with filetext(data, mode='wb') as fn:
+        dd.read_csv(fn, header=None, sep=',', lineterminator='\n',
+                    names=['a','b'], blocksize=200).compute(get=dask.get)
