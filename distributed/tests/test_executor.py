@@ -432,9 +432,9 @@ def test_recompute_released_key(e, s, a, b):
     assert result1 == result2
 
 
-def slowinc(x):
+def slowinc(x, delay=0.02):
     from time import sleep
-    sleep(0.02)
+    sleep(delay)
     return x + 1
 
 
@@ -2661,3 +2661,22 @@ def test_task_load(e, s, a):
     assert 0.0001 < s.worker_info[a.address]['avg-task-duration'] < 0.2
 
     assert 4 < s.task_load(a.address) < 100
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
+def test_task_load_adapts_quickly_after_delay(e, s, a):
+    future = e.submit(inc, 1)  # very fast
+    yield _wait(future)
+    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+
+    yield gen.sleep(0.200)  # a sizable gap, compared to latency and task time
+
+    future = e.submit(slowinc, 1, delay=0.500)  # slowish
+    yield _wait(future)
+    assert 0.45 < s.worker_info[a.address]['avg-task-duration'] < 1
+
+    yield gen.sleep(0.200)  # a not-so-sizable gap, compared to task time
+
+    future = e.submit(inc, 2)  # fast but soon, defers to old average
+    yield _wait(future)
+    assert 0.2 < s.worker_info[a.address]['avg-task-duration'] < 1

@@ -47,14 +47,14 @@ def test_task_stream_plot():
 
 
 def test_task_stream_append():
-    msgs = [{'status': 'OK', 'compute-start': 10, 'compute-stop': 20,
+    msgs = [{'status': 'OK', 'compute_start': 10, 'compute_stop': 20,
              'key':'inc-1', 'thread': 5855, 'worker':'127.0.0.1:9999'},
-            {'status': 'OK', 'compute-start': 15, 'compute-stop': 25,
+            {'status': 'OK', 'compute_start': 15, 'compute_stop': 25,
              'key':'inc-2', 'thread': 6000, 'worker':'127.0.0.1:9999'},
-            {'status': 'error', 'compute-start': 10, 'compute-stop': 14,
+            {'status': 'error', 'compute_start': 10, 'compute_stop': 14,
              'key':'inc-3', 'thread': 6000, 'worker':'127.0.0.1:9999'},
-            {'status': 'OK', 'compute-start': 10, 'compute-stop': 30,
-             'transfer-start': 8, 'transfer-stop': 10,
+            {'status': 'OK', 'compute_start': 10, 'compute_stop': 30,
+             'transfer_start': 8, 'transfer_stop': 10,
              'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
 
     lists = {name: [] for name in

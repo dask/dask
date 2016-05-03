@@ -616,33 +616,46 @@ class Scheduler(Server):
             self.mark_failed(dep, failing_key)
 
     def mark_task_finished(self, key=None, worker=None, nbytes=None, type=None,
-            **kwargs):
+            compute_start=None, compute_stop=None, transfer_start=None,
+            transfer_stop=None, **kwargs):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
         if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
             self.maybe_ready.add(worker)
-            # self.ensure_occupied(worker)
-            self.worker_info[worker]['last-task'] = time()
-            try:
-                self.worker_info[worker]['avg-task-duration'] = (
-                    0.95 * self.worker_info[worker]['avg-task-duration'] +
-                    0.05 * (kwargs['compute-stop'] - kwargs['compute-start']))
-            except KeyError:
-                pass
+
+            # Update average task duration for worker
+            info = self.worker_info[worker]
+            gap = (transfer_start or compute_start) - info.get('last-task', 0)
+            old_duration = info.get('avg-task-duration', 0)
+            new_duration = compute_stop - compute_start
+            if (not old_duration or
+                gap > max(10e-3, info.get('latency', 0), old_duration)):
+                avg_duration = new_duration
+            else:
+                avg_duration = (0.5 * old_duration
+                              + 0.5 * new_duration)
+
+            info['avg-task-duration'] = avg_duration
+            info['last-task'] = compute_stop
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_finished(self, key=key, worker=worker,
-                            nbytes=nbytes, type=type, **kwargs)
+                            nbytes=nbytes, type=type,
+                            compute_start=compute_start,
+                            compute_stop=compute_stop,
+                            transfer_start=transfer_start,
+                            transfer_stop=transfer_stop,
+                            **kwargs)
+
+
                 except Exception as e:
                     logger.exception(e)
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
             self.maybe_ready.add(worker)
-            # self.ensure_occupied(worker)
-        # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def recover_missing(self, key):
         """ Recover a recently lost piece of data
@@ -805,7 +818,6 @@ class Scheduler(Server):
 
         info['name'] = name
         self.worker_info[address] = info
-        self.worker_info[address]['avg-task-duration'] = 1.0
 
         if address not in self.processing:
             self.has_what[address] = set()
@@ -1217,8 +1229,8 @@ class Scheduler(Server):
         """
         if 'time-delay' in self.host_info[worker]:
             delay = self.host_info[worker]['time-delay']
-            for key in ['transfer-start', 'transfer-stop', 'time', 'compute-start',
-                    'compute-stop']:
+            for key in ['transfer_start', 'transfer_stop', 'time',
+                        'compute_start', 'compute_stop']:
                 if key in msg:
                     msg[key] += delay
 
@@ -1333,7 +1345,7 @@ class Scheduler(Server):
         delay = (end_time + start_time) / 2 - d['time']
         try:
             avg_delay = self.host_info[host]['time-delay']
-            avg_delay = (0.95 * avg_delay + 0.05 * delay)
+            avg_delay = (0.90 * avg_delay + 0.10 * delay)
         except KeyError:
             avg_delay = delay
 
