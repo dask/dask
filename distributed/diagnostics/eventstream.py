@@ -46,8 +46,8 @@ def eventstream(address, interval):
     form::
 
         {'key': 'mykey', 'worker': 'host:port', 'status': status,
-         'compute-start': time(), 'compute-stop': time(),
-         'transfer-start': time(), 'transfer-stop': time(),
+         'compute_start': time(), 'compute_stop': time(),
+         'transfer_start': time(), 'transfer_stop': time(),
          'other': 'junk'}
 
     Where ``status`` is either 'OK', or 'error'

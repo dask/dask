@@ -628,7 +628,7 @@ class Scheduler(Server):
             try:
                 self.worker_info[worker]['avg-task-duration'] = (
                     0.95 * self.worker_info[worker]['avg-task-duration'] +
-                    0.05 * (kwargs['compute-stop'] - kwargs['compute-start']))
+                    0.05 * (kwargs['compute_stop'] - kwargs['compute_start']))
             except KeyError:
                 pass
             for plugin in self.plugins[:]:
@@ -1217,8 +1217,8 @@ class Scheduler(Server):
         """
         if 'time-delay' in self.host_info[worker]:
             delay = self.host_info[worker]['time-delay']
-            for key in ['transfer-start', 'transfer-stop', 'time', 'compute-start',
-                    'compute-stop']:
+            for key in ['transfer_start', 'transfer_stop', 'time',
+                        'compute_start', 'compute_stop']:
                 if key in msg:
                     msg[key] += delay
 

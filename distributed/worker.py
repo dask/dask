@@ -289,9 +289,9 @@ class Worker(Server):
         if who_has:
             try:
                 logger.info("gather %d keys from peers", len(who_has))
-                diagnostics['transfer-start'] = time()
+                diagnostics['transfer_start'] = time()
                 other = yield gather_from_workers(who_has)
-                diagnostics['transfer-stop'] = time()
+                diagnostics['transfer_stop'] = time()
                 self.data.update(other)
                 yield self.center.add_keys(address=self.address,
                                            keys=list(other))
@@ -407,8 +407,8 @@ class Worker(Server):
                                  for msg in good])
 
             if results and num_transferred:
-                results[0]['transfer-start'] = transfer_start
-                results[0]['transfer-stop'] = transfer_end
+                results[0]['transfer_start'] = transfer_start
+                results[0]['transfer_stop'] = transfer_end
 
             for msg in results:
                 bstream.send(msg)
@@ -712,7 +712,7 @@ def apply_function(function, args, kwargs):
                'type': dumps_function(type(result)) if result is not None else None}
     finally:
         end = time()
-    msg['compute-start'] = start
-    msg['compute-stop'] = end
+    msg['compute_start'] = start
+    msg['compute_stop'] = end
     msg['thread'] = current_thread().ident
     return msg

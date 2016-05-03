@@ -49,11 +49,11 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
 
                 last_seen[0] = time()
                 for msg in msgs:
-                    if 'compute-start' in msg:
+                    if 'compute_start' in msg:
                         deque.append(msg)
-                        times.append(msg['compute-start'])
+                        times.append(msg['compute_start'])
                         index.append(i); i += 1
-                        if 'transfer-start' in msg:
+                        if msg.get('transfer_start') is not None:
                             index.append(i); i += 1
                         task_stream_append(rectangles, msg, workers)
 

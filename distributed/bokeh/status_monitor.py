@@ -207,8 +207,8 @@ def incrementing_index(o):
 
 
 def task_stream_append(lists, msg, workers, palette=Spectral11):
-    lists['start'].append(msg['compute-start'] * 1000)
-    lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
+    lists['start'].append(msg['compute_start'] * 1000)
+    lists['duration'].append(1000 * (msg['compute_stop']-msg['compute_start']))
     key = msg['key']
     name = key_split(key)
     if msg['status'] == 'OK':
@@ -226,10 +226,10 @@ def task_stream_append(lists, msg, workers, palette=Spectral11):
         workers[worker_thread] = len(workers)
     lists['y'].append(workers[worker_thread])
 
-    if 'transfer-start' in msg:
-        lists['start'].append(msg['transfer-start'] * 1000)
-        lists['duration'].append(1000 * (msg['transfer-stop'] -
-                                        msg['transfer-start']))
+    if msg.get('transfer_start') is not None:
+        lists['start'].append(msg['transfer_start'] * 1000)
+        lists['duration'].append(1000 * (msg['transfer_stop'] -
+                                        msg['transfer_start']))
 
         lists['key'].append(key)
         lists['name'].append('transfer-to-' + name)
