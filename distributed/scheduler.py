@@ -634,8 +634,8 @@ class Scheduler(Server):
                 gap > max(10e-3, info.get('latency', 0), old_duration)):
                 avg_duration = new_duration
             else:
-                avg_duration = (0.95 * old_duration
-                              + 0.05 * new_duration)
+                avg_duration = (0.5 * old_duration
+                              + 0.5 * new_duration)
 
             info['avg-task-duration'] = avg_duration
             info['last-task'] = compute_stop
@@ -1345,7 +1345,7 @@ class Scheduler(Server):
         delay = (end_time + start_time) / 2 - d['time']
         try:
             avg_delay = self.host_info[host]['time-delay']
-            avg_delay = (0.95 * avg_delay + 0.05 * delay)
+            avg_delay = (0.90 * avg_delay + 0.10 * delay)
         except KeyError:
             avg_delay = delay
 

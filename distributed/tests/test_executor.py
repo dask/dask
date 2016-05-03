@@ -2664,7 +2664,7 @@ def test_task_load(e, s, a):
 
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
-def test_task_load_adapts_quickly(e, s, a):
+def test_task_load_adapts_quickly_after_delay(e, s, a):
     future = e.submit(inc, 1)  # very fast
     yield _wait(future)
     assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
@@ -2679,4 +2679,4 @@ def test_task_load_adapts_quickly(e, s, a):
 
     future = e.submit(inc, 2)  # fast but soon, defers to old average
     yield _wait(future)
-    assert 0.3 < s.worker_info[a.address]['avg-task-duration'] < 1
+    assert 0.2 < s.worker_info[a.address]['avg-task-duration'] < 1
