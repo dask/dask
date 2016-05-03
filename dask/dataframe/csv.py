@@ -141,6 +141,8 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     **kwargs: dict
         Options to pass down to ``pandas.read_csv``
     """
+    if len(lineterminator) == 1:
+        kwargs['lineterminator'] = lineterminator
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
         blocksize=chunkbytes
