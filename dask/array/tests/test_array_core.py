@@ -2006,3 +2006,8 @@ def test_A_property():
 def test_copy():
     x = da.ones(5, chunks=(2,))
     assert x.copy() is x
+
+
+def test_npartitions():
+    assert da.ones(5, chunks=(2,)).npartitions == 3
+    assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6
