@@ -9,9 +9,9 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
 from distributed.utils_test import gen_cluster, gen_test
-from distributed import Worker
+from distributed import Worker, Executor
 from distributed.http.worker import HTTPWorker
-from distributed import Executor
+from distributed.sizeof import sizeof
 
 
 @gen_cluster()
@@ -29,13 +29,16 @@ def test_simple(s, a, b):
             server.port)
     response = json.loads(response.body.decode())
 
+    a.data['x'] = 1
+
     try:
         import psutil
         assert 0 < response['memory_percent'] < 100
     except ImportError:
         assert response == {}
 
-    endpoints = ['/files.json', '/processing.json']
+    endpoints = ['/files.json', '/processing.json', '/nbytes.json',
+                 '/nbytes-summary.json']
     for endpoint in endpoints:
         response = yield client.fetch(('http://localhost:%d' % server.port)
                                       + endpoint)
@@ -70,3 +73,21 @@ def test_services_port(s, a, b):
 
     c.services['http'].stop()
     yield c._close()
+
+
+@gen_cluster()
+def test_nbytes(s, a, b):
+    server = HTTPWorker(a)
+    server.listen(0)
+    client = AsyncHTTPClient()
+
+    a.data['x-1'] = 1
+    a.data['x-2'] = 1
+
+    nbytes = yield client.fetch('http://localhost:%d/nbytes.json' % server.port)
+    nbytes = json.loads(nbytes.body.decode())
+    summary = yield client.fetch('http://localhost:%d/nbytes-summary.json' % server.port)
+    summary = json.loads(summary.body.decode())
+
+    assert nbytes == {'x-1': sizeof(1), 'x-2': sizeof(2)}
+    assert summary == {'x': sizeof(1) * 2}
