@@ -1361,6 +1361,37 @@ class Executor(object):
             workers = [workers]
         return sync(self.loop, self.scheduler.has_what, keys=workers)
 
+    def nbytes(self, keys=None, summary=True):
+        """ The bytes taken up by each key on the cluster
+
+        This is as measured by ``sys.getsizeof`` which may not accurately
+        reflect the true cost.
+
+        Parameters
+        ----------
+        keys: list (optional)
+            A list of keys, defaults to all keys
+        summary: boolean, (optional)
+            Summarize keys into key types
+
+        Examples
+        --------
+        >>> x, y, z = e.map(inc, [1, 2, 3])  # doctest: +SKIP
+        >>> e.nbytes(summary=False)  # doctest: +SKIP
+        {'inc-1c8dd6be1c21646c71f76c16d09304ea': 28,
+         'inc-1e297fc27658d7b67b3a758f16bcf47a': 28,
+         'inc-fd65c238a7ea60f6a01bf4c8a5fcf44b': 28}
+
+        >>> e.nbytes(summary=True)  # doctest: +SKIP
+        {'inc': 84}
+
+        See Also
+        --------
+        Executor.who_has
+        """
+        return sync(self.loop, self.scheduler.nbytes, keys=keys,
+                    summary=summary)
+
 
 class CompatibleExecutor(Executor):
     """ A concurrent.futures-compatible Executor

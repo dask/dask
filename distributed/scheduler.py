@@ -12,7 +12,7 @@ try:
     from cytoolz import frequencies
 except ImportError:
     from toolz import frequencies
-from toolz import memoize, valmap, first, second
+from toolz import memoize, valmap, first, second, keymap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -28,7 +28,7 @@ from .client import (scatter_to_workers, gather_from_workers)
 from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
-        ensure_ip, log_errors)
+        ensure_ip, log_errors, key_split)
 
 
 logger = logging.getLogger(__name__)
@@ -213,6 +213,7 @@ class Scheduler(Server):
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has,
+                         'nbytes': self.get_nbytes,
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
                          'replicate': self.replicate}
@@ -1475,25 +1476,40 @@ class Scheduler(Server):
             if teardown:
                 teardown(self, state)
 
-    def get_who_has(self, stream, keys=None):
+    def get_who_has(self, stream=None, keys=None):
         if keys is not None:
             return {k: list(self.who_has.get(k, [])) for k in keys}
         else:
             return valmap(list, self.who_has)
 
-    def get_has_what(self, stream, keys=None):
+    def get_has_what(self, stream=None, keys=None):
         if keys is not None:
             keys = map(self.coerce_address, keys)
             return {k: list(self.has_what[k]) for k in keys}
         else:
             return valmap(list, self.has_what)
 
-    def get_ncores(self, stream, addresses=None):
+    def get_ncores(self, stream=None, addresses=None):
         if addresses is not None:
             addresses = map(self.coerce_address, addresses)
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
+
+    def get_nbytes(self, stream=None, keys=None, summary=True):
+        with log_errors():
+            if keys is not None:
+                result = {k: self.nbytes[k] for k in keys}
+            else:
+                result = self.nbytes
+
+            if summary:
+                out = defaultdict(lambda: 0)
+                for k, v in result.items():
+                    out[key_split(k)] += v
+                result = out
+
+            return result
 
     @gen.coroutine
     def broadcast(self, stream=None, msg=None, workers=None):

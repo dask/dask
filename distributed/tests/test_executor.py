@@ -2292,6 +2292,30 @@ def test_diagnostic_ui(loop):
             assert set(d) == {a_addr}
 
 
+def test_diagnostic_nbytes_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            incs = e.map(inc, [1, 2, 3])
+            doubles = e.map(double, [1, 2, 3])
+            wait(incs + doubles)
+
+            assert e.nbytes(summary=False) == {k.key: sizeof(1)
+                                               for k in incs + doubles}
+            assert e.nbytes(summary=True) == {'inc': sizeof(1) * 3,
+                                              'double': sizeof(1) * 3}
+
+@gen_cluster(executor=True)
+def test_diagnostic_nbytes(e, s, a, b):
+    incs = e.map(inc, [1, 2, 3])
+    doubles = e.map(double, [1, 2, 3])
+    yield _wait(incs + doubles)
+
+    assert s.get_nbytes(summary=False) == {k.key: sizeof(1)
+                                           for k in incs + doubles}
+    assert s.get_nbytes(summary=True) == {'inc': sizeof(1) * 3,
+                                          'double': sizeof(1) * 3}
+
+
 @gen_test()
 def test_worker_aliases():
     s = Scheduler()
