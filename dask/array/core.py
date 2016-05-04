@@ -861,15 +861,24 @@ class Array(Base):
         return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
-        if self.ndim == 0:
+        if not args:
+            try:
+                return self._cached_keys
+            except AttributeError:
+                pass
+
+        if not self.chunks:
             return [(self.name,)]
         ind = len(args)
         if ind + 1 == self.ndim:
-            return [(self.name,) + args + (i,)
+            result = [(self.name,) + args + (i,)
                         for i in range(self.numblocks[ind])]
         else:
-            return [self._keys(*(args + (i,)))
+            result = [self._keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
+        if not args:
+            self._cached_keys = result
+        return result
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
