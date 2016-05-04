@@ -26,7 +26,7 @@ from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
         IndexCallable, funcname)
-from ..compatibility import unicode, long, getargspec, zip_longest
+from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from .. import threaded, core
 
 
@@ -320,8 +320,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
      ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
      ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 1))}
+
+    Support keyword arguments with apply
+
+    >>> def f(a, b=0): return a + b
+    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,), b=10})  # doctest: +SKIP
+    {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
+     ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
     """
-    numblocks = kwargs['numblocks']
+    numblocks = kwargs.pop('numblocks')
     argpairs = list(partition(2, arrind_pairs))
 
     assert set(numblocks) == set(pluck(0, argpairs))
@@ -352,7 +359,10 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Add heads to tuples
     keys = [(output,) + kt for kt in keytups]
-    vals = [(func,) + vt for vt in valtups]
+    if kwargs:
+        vals = [(apply, func, list(vt), kwargs) for vt in valtups]
+    else:
+        vals = [(func,) + vt for vt in valtups]
 
     return dict(zip(keys, vals))
 
@@ -1617,6 +1627,8 @@ def atop(func, out_ind, *args, **kwargs):
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
+    **kwargs: dict
+        Extra keyword arguments to pass to function
 
     This is best explained through example.  Consider the following examples:
 
@@ -1672,9 +1684,6 @@ def atop(func, out_ind, *args, **kwargs):
     """
     out = kwargs.pop('name', None)      # May be None at this point
     dtype = kwargs.pop('dtype', None)
-    if kwargs:
-        raise TypeError("%s does not take the following keyword arguments %s" %
-            (func.__name__, str(sorted(kwargs.keys()))))
 
     chunkss, arrays = unify_chunks(*args)
     arginds = list(zip(arrays, args[1::2]))
@@ -1683,9 +1692,10 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype)
+        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype,
+                                              **kwargs)
 
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, _ in arginds]
     chunks = tuple(chunkss[i] for i in out_ind)
 
