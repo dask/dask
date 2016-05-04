@@ -1841,16 +1841,18 @@ def elemwise(op, *args, **kwargs):
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
-    if other:
-        op2 = partial_by_order(op, other)
-    else:
-        op2 = op
 
     # adjust the key length of Scalar
     keys = [d._keys() *  n if isinstance(d, Scalar)
             else d._keys() for d in dasks]
 
-    dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
+    if other:
+        dsk = dict(((_name, i),
+                   (apply, partial_by_order, list(frs),
+                     {'function': op, 'other': other}))
+                   for i, frs in enumerate(zip(*keys)))
+    else:
+        dsk = dict(((_name, i), (op,) + frs) for i, frs in enumerate(zip(*keys)))
     dsk = merge(dsk, *[d.dask for d in dasks])
 
     if columns is no_default:

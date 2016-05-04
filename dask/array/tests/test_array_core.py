@@ -370,9 +370,8 @@ def test_binops():
                                      for i in range(3)))
 
     result = elemwise(pow, a, 2, name='c')
-    assert result.dask[('c', 0)][1] == ('a', 0)
-    f = result.dask[('c', 0)][0]
-    assert f(10) == 100
+    assert "'a', 0" in str(result.dask[('c', 0)])
+    assert "2" in str(result.dask[('c', 0)])
 
 
 def test_isnull():
@@ -413,16 +412,7 @@ def test_elemwise_on_scalars():
 
 
 def test_partial_by_order():
-    f = partial_by_order(add, [(1, 20)])
-    assert f(5) == 25
-    assert f.__name__ == 'add(20)'
-
-    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
-    assert f(3) == 28
-    assert f.__name__ == '<lambda>(...)'
-
-    assert raises(ValueError, lambda: partial_by_order(add, 1))
-    assert raises(ValueError, lambda: partial_by_order(add, [1]))
+    assert partial_by_order(5, function=add, other=[(1, 20)]) == 25
 
 
 def test_elemwise_with_ndarrays():

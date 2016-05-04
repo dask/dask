@@ -522,19 +522,18 @@ def map_blocks(func, *args, **kwargs):
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
-    if kwargs:
-        func = partial(func, **kwargs)
-
-    if args:
-        func = partial_by_order(func, args)
-
     arginds = [(a, tuple(range(a.ndim))[::-1]) for a in arrs]
 
     numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
-    dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks)
+    if args:
+        dsk = top(partial_by_order, name, out_ind, *argindsstr,
+                numblocks=numblocks, function=func, other=args, **kwargs)
+    else:
+        dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks,
+                **kwargs)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -2056,29 +2055,18 @@ def asarray(array):
     return array
 
 
-def partial_by_order(op, other):
+def partial_by_order(*args, **kwargs):
     """
 
-    >>> f = partial_by_order(add, [(1, 10)])
-    >>> f(5)
+    >>> partial_by_order(5, function=add, other=[(1, 10)])
     15
     """
-    if (not isinstance(other, list) or
-        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
-        raise ValueError('input must be list of tuples')
-
-    def f(*args):
-        args2 = list(args)
-        for i, arg in other:
-            args2.insert(i, arg)
-        return op(*args2)
-
-    if len(other) == 1:
-        other_arg = other[0][1]
-    else:
-        other_arg = '...'
-    f.__name__ = '{0}({1})'.format(op.__name__, str(other_arg))
-    return f
+    function = kwargs.pop('function')
+    other = kwargs.pop('other')
+    args2 = list(args)
+    for i, arg in other:
+        args2.insert(i, arg)
+    return function(*args2, **kwargs)
 
 
 def is_scalar_for_elemwise(arg):
@@ -2183,13 +2171,14 @@ def elemwise(op, *args, **kwargs):
     name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
 
     if other:
-        op2 = partial_by_order(op, other)
+        return atop(partial_by_order, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                dtype=dt, name=name, function=op, other=other)
     else:
-        op2 = op
-
-    return atop(op2, expr_inds,
+        return atop(op, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                 dtype=dt, name=name)
+
 
 
 def wrap_elemwise(func, **kwargs):
