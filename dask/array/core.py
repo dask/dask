@@ -1066,8 +1066,7 @@ class Array(Base):
         if dtype == self._dtype:
             return self
         name = 'astype-' + tokenize(self, dtype, kwargs)
-        return elemwise(lambda x: x.astype(dtype, **kwargs), self,
-                        dtype=dtype, name=name)
+        return elemwise(_astype, self, dtype, name=name)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -3363,3 +3362,6 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+def _astype(x, dtype, **kwargs):
+    return x.astype(dtype, **kwargs)
