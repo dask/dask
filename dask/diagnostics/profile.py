@@ -138,23 +138,34 @@ class ResourceProfiler(Callback):
         self._tracker = _Tracker(dt)
         self._tracker.start()
         self.results = []
+        self._entered = False
+
+    def _start_collect(self):
+        assert self._tracker.is_alive(), "Resource tracker is shutdown"
+        self._tracker.parent_conn.send('collect')
+
+    def _stop_collect(self):
+        if self._tracker.is_alive():
+            self._tracker.parent_conn.send('send_data')
+            self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
 
     def __enter__(self):
         self.clear()
+        self._entered = True
+        self._start_collect()
         return super(ResourceProfiler, self).__enter__()
 
     def __exit__(self, *args):
-        if self._tracker.is_alive():
-            self._tracker.parent_conn.send('stop')
+        self._entered = False
+        self._stop_collect()
         super(ResourceProfiler, self).__exit__(*args)
 
     def _start(self, dsk):
-        assert self._tracker.is_alive(), "Resource tracker is shutdown"
-        self._tracker.parent_conn.send('start')
+        self._start_collect()
 
     def _finish(self, dsk, state, failed):
-        self._tracker.parent_conn.send('stop')
-        self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
+        if not self._entered:
+            self._stop_collect()
 
     def close(self):
         """Shutdown the resource tracker process"""
@@ -196,20 +207,14 @@ class _Tracker(Process):
             self.parent_conn.close()
         self.join()
 
-    def _collect(self):
-        data = []
-        pid = current_process()
-        ps = [self.parent] + [p for p in self.parent.children()
-                              if p.pid != pid and p.status() != 'zombie']
-        while not self.child_conn.poll():
-            tic = default_timer()
-            mem = sum(p.memory_info().rss for p in ps)/1e6
-            cpu = sum(p.cpu_percent() for p in ps)
-            data.append((tic, mem, cpu))
-            sleep(self.dt)
-        self.child_conn.send(data)
+    def _update_pids(self, pid):
+        return [self.parent] + [p for p in self.parent.children()
+                                if p.pid != pid and p.status() != 'zombie']
 
     def run(self):
+        pid = current_process()
+        ps = self._update_pids(pid)
+        data = []
         while True:
             try:
                 msg = self.child_conn.recv()
@@ -217,8 +222,17 @@ class _Tracker(Process):
                 continue
             if msg == 'shutdown':
                 break
-            elif msg == 'start':
-                self._collect()
+            elif msg == 'collect':
+                ps = self._update_pids(pid)
+                while not self.child_conn.poll():
+                    tic = default_timer()
+                    mem = sum(p.memory_info().rss for p in ps)/1e6
+                    cpu = sum(p.cpu_percent() for p in ps)
+                    data.append((tic, mem, cpu))
+                    sleep(self.dt)
+            elif msg == 'send_data':
+                self.child_conn.send(data)
+                data = []
         self.child_conn.close()
 
 
