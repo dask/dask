@@ -26,7 +26,7 @@ from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
         IndexCallable, funcname)
-from ..compatibility import unicode, long, getargspec, zip_longest
+from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from .. import threaded, core
 
 
@@ -320,8 +320,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
      ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
      ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 1))}
+
+    Support keyword arguments with apply
+
+    >>> def f(a, b=0): return a + b
+    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,), b=10})  # doctest: +SKIP
+    {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
+     ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
     """
-    numblocks = kwargs['numblocks']
+    numblocks = kwargs.pop('numblocks')
     argpairs = list(partition(2, arrind_pairs))
 
     assert set(numblocks) == set(pluck(0, argpairs))
@@ -352,7 +359,10 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Add heads to tuples
     keys = [(output,) + kt for kt in keytups]
-    vals = [(func,) + vt for vt in valtups]
+    if kwargs:
+        vals = [(apply, func, list(vt), kwargs) for vt in valtups]
+    else:
+        vals = [(func,) + vt for vt in valtups]
 
     return dict(zip(keys, vals))
 
@@ -512,19 +522,18 @@ def map_blocks(func, *args, **kwargs):
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
-    if kwargs:
-        func = partial(func, **kwargs)
-
-    if args:
-        func = partial_by_order(func, args)
-
     arginds = [(a, tuple(range(a.ndim))[::-1]) for a in arrs]
 
     numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
-    dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks)
+    if args:
+        dsk = top(partial_by_order, name, out_ind, *argindsstr,
+                numblocks=numblocks, function=func, other=args, **kwargs)
+    else:
+        dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks,
+                **kwargs)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -856,15 +865,24 @@ class Array(Base):
         return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
-        if self.ndim == 0:
+        if not args:
+            try:
+                return self._cached_keys
+            except AttributeError:
+                pass
+
+        if not self.chunks:
             return [(self.name,)]
         ind = len(args)
         if ind + 1 == self.ndim:
-            return [(self.name,) + args + (i,)
+            result = [(self.name,) + args + (i,)
                         for i in range(self.numblocks[ind])]
         else:
-            return [self._keys(*(args + (i,)))
+            result = [self._keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
+        if not args:
+            self._cached_keys = result
+        return result
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1070,8 +1088,7 @@ class Array(Base):
         if dtype == self._dtype:
             return self
         name = 'astype-' + tokenize(self, dtype, kwargs)
-        return elemwise(lambda x: x.astype(dtype, **kwargs), self,
-                        dtype=dtype, name=name)
+        return elemwise(_astype, self, dtype, name=name)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -1622,6 +1639,8 @@ def atop(func, out_ind, *args, **kwargs):
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
+    **kwargs: dict
+        Extra keyword arguments to pass to function
 
     This is best explained through example.  Consider the following examples:
 
@@ -1677,9 +1696,6 @@ def atop(func, out_ind, *args, **kwargs):
     """
     out = kwargs.pop('name', None)      # May be None at this point
     dtype = kwargs.pop('dtype', None)
-    if kwargs:
-        raise TypeError("%s does not take the following keyword arguments %s" %
-            (func.__name__, str(sorted(kwargs.keys()))))
 
     chunkss, arrays = unify_chunks(*args)
     arginds = list(zip(arrays, args[1::2]))
@@ -1688,9 +1704,10 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype)
+        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype,
+                                              **kwargs)
 
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, _ in arginds]
     chunks = tuple(chunkss[i] for i in out_ind)
 
@@ -2051,29 +2068,18 @@ def asarray(array):
     return array
 
 
-def partial_by_order(op, other):
+def partial_by_order(*args, **kwargs):
     """
 
-    >>> f = partial_by_order(add, [(1, 10)])
-    >>> f(5)
+    >>> partial_by_order(5, function=add, other=[(1, 10)])
     15
     """
-    if (not isinstance(other, list) or
-        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
-        raise ValueError('input must be list of tuples')
-
-    def f(*args):
-        args2 = list(args)
-        for i, arg in other:
-            args2.insert(i, arg)
-        return op(*args2)
-
-    if len(other) == 1:
-        other_arg = other[0][1]
-    else:
-        other_arg = '...'
-    f.__name__ = '{0}({1})'.format(op.__name__, str(other_arg))
-    return f
+    function = kwargs.pop('function')
+    other = kwargs.pop('other')
+    args2 = list(args)
+    for i, arg in other:
+        args2.insert(i, arg)
+    return function(*args2, **kwargs)
 
 
 def is_scalar_for_elemwise(arg):
@@ -2178,13 +2184,14 @@ def elemwise(op, *args, **kwargs):
     name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
 
     if other:
-        op2 = partial_by_order(op, other)
+        return atop(partial_by_order, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                dtype=dt, name=name, function=op, other=other)
     else:
-        op2 = op
-
-    return atop(op2, expr_inds,
+        return atop(op, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                 dtype=dt, name=name)
+
 
 
 def wrap_elemwise(func, **kwargs):
@@ -3367,3 +3374,6 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+def _astype(x, dtype, **kwargs):
+    return x.astype(dtype, **kwargs)
