@@ -524,6 +524,7 @@ class Executor(object):
             try:
                 args = [get(q) for q in qs_in]
             except StopIteration:
+                q_out.put(StopIteration)
                 break
             f = self.submit(func, *args, **kwargs)
             q_out.put(f)

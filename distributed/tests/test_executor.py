@@ -2021,11 +2021,25 @@ def test_map_iterator(e, s, a, b):
     future = next(f2)
     result = yield future._result()
     assert result == (1 + 10) * 2
+    futures = list(f2)
+    results = []
+    for f in futures:
+        r = yield f._result()
+        results.append(r)
+    assert results == [(2 + 20) * 2, (3 + 30) * 2]
 
     items = enumerate(range(10))
     futures = e.map(lambda x: x, items)
+    assert isinstance(futures, Iterator)
+
     result = yield next(futures)._result()
     assert result == (0, 0)
+    futures_l = list(futures)
+    results = []
+    for f in futures_l:
+        r = yield f._result()
+        results.append(r)
+    assert results == [(i, i) for i in range(1,10)]
 
 
 @gen_cluster(executor=True)
