@@ -1,11 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
 import logging
 import os
 
+from toolz import keymap, valmap
 from tornado import web
 
 from .core import RequestHandler, MyApp, Resources
+from ..sizeof import sizeof
+from ..utils import key_split
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +33,22 @@ class Processing(RequestHandler):
         self.write(resp)
 
 
+class NBytes(RequestHandler):
+    """Basic info about the worker """
+    def get(self):
+        resp = keymap(str, valmap(sizeof, self.server.data))
+        self.write(resp)
+
+
+class NBytesSummary(RequestHandler):
+    """Basic info about the worker """
+    def get(self):
+        out = defaultdict(lambda: 0)
+        for k, v in self.server.data.items():
+            out[key_split(k)] += sizeof(v)
+        self.write(dict(out))
+
+
 class LocalFiles(RequestHandler):
     """List the local spill directory"""
     def get(self):
@@ -40,6 +60,8 @@ def HTTPWorker(worker):
         (r'/info.json', Info, {'server': worker}),
         (r'/processing.json', Processing, {'server': worker}),
         (r'/resources.json', Resources, {'server': worker}),
-        (r'/files.json', LocalFiles, {'server': worker})
+        (r'/files.json', LocalFiles, {'server': worker}),
+        (r'/nbytes.json', NBytes, {'server': worker}),
+        (r'/nbytes-summary.json', NBytesSummary, {'server': worker})
         ]))
     return application
