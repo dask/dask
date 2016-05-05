@@ -1685,3 +1685,33 @@ def test_groupby_callable():
               b.groupby(iseven).y.sum())
     assert eq(a.y.groupby(iseven).sum(),
               b.y.groupby(iseven).sum())
+
+
+def test_set_index_sorted_true():
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [10, 20, 30, 40],
+                       'z': [4, 3, 2, 1]})
+    a = dd.from_pandas(df, 2, sort=False)
+    assert not a.known_divisions
+
+    b = a.set_index('x', sorted=True)
+    assert b.known_divisions
+    assert set(a.dask).issubset(set(b.dask))
+
+    for drop in [True, False]:
+        eq(a.set_index('x', drop=drop),
+           df.set_index('x', drop=drop))
+        eq(a.set_index(a.x, sorted=True, drop=drop),
+           df.set_index(df.x, drop=drop))
+        eq(a.set_index(a.x + 1, sorted=True, drop=drop),
+           df.set_index(df.x + 1, drop=drop))
+
+    with pytest.raises(ValueError):
+        a.set_index(a.z, sorted=True)
+
+
+def test_methods_tokenize_differently():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    df = dd.from_pandas(df, npartitions=1)
+    assert (df.x.map_partitions(pd.Series.min)._name !=
+            df.x.map_partitions(pd.Series.max)._name)
