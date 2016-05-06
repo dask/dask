@@ -20,8 +20,6 @@ from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
 
-global_ip = ip = get_ip()
-
 import signal
 
 def handle_signal(sig, frame):
@@ -39,13 +37,13 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=None,
-              help="Serving host defaults to %s" % ip)
+              help="IP or hostname of this server")
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
 def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelist):
     given_host = host
-    host = host or global_ip
+    host = host or get_ip()
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
