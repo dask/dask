@@ -952,9 +952,10 @@ class Series(_Frame):
 
     def __getattr__(self, key):
         if key == 'cat':
-            head = self.head()
-            if isinstance(head.dtype, pd.core.dtypes.CategoricalDtype):
-                return head.cat
+            # If unknown dtype, need to infer from head.
+            if not self._known_dtype:
+                self.dtype
+            return self._pd.cat
         raise AttributeError("'Series' object has no attribute %r" % key)
 
     @property

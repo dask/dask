@@ -1,8 +1,5 @@
-from distutils.version import LooseVersion
-
 import pandas as pd
 import pandas.util.testing as tm
-import pytest
 
 import dask
 from dask.async import get_sync
@@ -44,8 +41,6 @@ def test_categorical_set_index():
         assert list(b.index.compute()), list(df2.index)
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="pd.core.dtypes does not exist")
 def test_dataframe_categoricals():
     df = pd.DataFrame({'x': list('a'*5 + 'b'*5 + 'c'*5),
                        'y': range(15)})
