@@ -443,6 +443,9 @@ class Executor(object):
         workers: set, iterable of sets
             A set of worker hostnames on which computations may be performed.
             Leave empty to default to all workers (common case)
+        allow_other_workers: bool (defaults to False)
+            Used with `workers`. Inidicates whether or not the computations
+            may be performed on workers that are not in the `workers` set(s).
 
         Examples
         --------

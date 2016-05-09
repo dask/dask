@@ -1735,7 +1735,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
     Optionally provide restrictions of where jobs are allowed to occur
 
-    >>> restrictions = {'b': {'alice', 'charile'}}
+    >>> restrictions = {'b': {'alice', 'charlie'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
     'alice:8000'

@@ -29,7 +29,7 @@ data from one worker and send it to another.
    d = yield alice.get_data(keys=['x', 'y'])
 
    bob = rpc(ip='192.168.0.102', port=8788)
-   yield alice.update_data(data=d)
+   yield bob.update_data(data=d)
 
 However, this is only an example, typically one does not manually manage data
 transfer between workers.  They handle that as necessary on their own.

@@ -111,7 +111,7 @@ For each key that it doesn't have it selects a valid worker from ``who_has`` at
 random and gathers data from it.
 
 After this exchange, the worker has both the value for ``x`` and the value for
-``z``.  So it launches the computation ``add(x, y)`` in a local
+``y``.  So it launches the computation ``add(x, y)`` in a local
 ``ThreadPoolExecutor`` and waits on the result.
 
 *In the mean time the worker repeats this process concurrently for other tasks.
