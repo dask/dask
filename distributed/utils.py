@@ -273,8 +273,8 @@ def truncate_exception(e, n=10000):
 def queue_to_iterator(q):
     while True:
         result = q.get()
-        if result == StopIteration:
-            break
+        if isinstance(result, StopIteration):
+            raise result
         yield result
 
 def _dump_to_queue(seq, q):

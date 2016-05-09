@@ -1007,14 +1007,18 @@ def test_iterator_gather(loop):
             i_out = list(ff)
             assert i_out == i_in
 
-            i_in = ['a', 'b', 'c', StopIteration, 'd', 'e']
+            i_in = ['a', 'b', 'c', StopIteration('f'), StopIteration, 'd', 'e']
 
             g = (d for d in i_in)
             futures = ee.scatter(g)
 
             ff = ee.gather(futures)
             i_out = list(ff)
-            assert i_out == i_in
+            assert i_out[:3] == i_in[:3]
+            # This is because StopIteration('f') != StopIteration('f')
+            assert isinstance(i_out[3], StopIteration)
+            assert i_out[3].args == i_in[3].args
+            assert i_out[4:] == i_in[4:]
 
 @gen_cluster(executor=True)
 def test_many_submits_spread_evenly(e, s, a, b):
@@ -2001,6 +2005,32 @@ def test_map_queue(e, s, a, b):
     assert isinstance(f, Future)
     result = yield f._result()
     assert result == (1 + 1) * 2
+
+
+@gen_cluster(executor=True)
+def test_map_iterator_with_return(e, s, a, b):
+    def g():
+        yield 1
+        yield 2
+        raise StopIteration(3)  # py2.7 compat.
+    f1 = e.map(lambda x: x, g())
+    assert isinstance(f1, Iterator)
+    
+    start = time()  # ensure that we compute eagerly
+    while not s.tasks:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    g1 = g()
+    try:
+        while True:
+            f = next(f1)
+            n = yield f._result()
+            assert n == next(g1)
+    except StopIteration as e:
+        with pytest.raises(StopIteration) as exc_info:
+            next(g1)
+        assert e.args == exc_info.value.args
 
 
 @gen_cluster(executor=True)

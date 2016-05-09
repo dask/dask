@@ -523,8 +523,8 @@ class Executor(object):
         while True:
             try:
                 args = [get(q) for q in qs_in]
-            except StopIteration:
-                q_out.put(StopIteration)
+            except StopIteration as e:
+                q_out.put(e)
                 break
             f = self.submit(func, *args, **kwargs)
             q_out.put(f)
@@ -781,9 +781,8 @@ class Executor(object):
             else:
                 try:
                     L = [next(q_or_i)]
-                except StopIteration:
-                    L = [StopIteration]
-                    qout.put(StopIteration)
+                except StopIteration as e:
+                    qout.put(e)
                     break
 
             futures = self.scatter(L, **kwargs)
