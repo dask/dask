@@ -134,6 +134,7 @@ def test_random_all():
     da.random.logistic(size=5, chunks=3).compute()
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
+    da.random.multinomial(20, [1/6.]*6, size=5, chunks=3).compute()
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 
@@ -159,3 +160,11 @@ def test_random_all():
     da.random.standard_gamma(2, size=5, chunks=3).compute()
     da.random.standard_normal(size=5, chunks=3).compute()
     da.random.standard_t(2, size=5, chunks=3).compute()
+
+
+def test_multinomial():
+    for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
+        x = da.random.multinomial(20, [1/6.]*6, size=size, chunks=chunks)
+        y = np.random.multinomial(20, [1/6.]*6, size=size)
+
+        assert x.shape == y.shape == x.compute().shape
