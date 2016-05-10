@@ -429,7 +429,8 @@ class rpc(object):
 
     def close_streams(self):
         for stream in self.streams:
-            stream.close()
+            with ignoring(OSError, IOError):
+                stream.close()
 
     def __getattr__(self, key):
         @gen.coroutine
