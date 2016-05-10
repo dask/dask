@@ -470,3 +470,30 @@ def ensure_bytes(s):
         return s.encode()
     raise TypeError(
             "Object %s is neither a bytes object nor has an encode method" % s)
+
+
+def divide_n_among_bins(n, bins):
+    """
+
+    >>> divide_n_among_bins(12, [1, 1])
+    [6, 6]
+    >>> divide_n_among_bins(12, [1, 2])
+    [4, 8]
+    >>> divide_n_among_bins(12, [1, 2, 1])
+    [3, 6, 3]
+    >>> divide_n_among_bins(11, [1, 2, 1])
+    [2, 6, 3]
+    """
+    total = sum(bins)
+    acc = 0.0
+    out = []
+    for b in bins:
+        now = n / total * b + acc
+        now, acc = divmod(now, 1)
+        out.append(int(now))
+    return out
+
+
+def mean(seq):
+    seq = list(seq)
+    return sum(seq) / len(seq)

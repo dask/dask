@@ -202,12 +202,14 @@ def test_decide_worker_with_many_independent_leaves():
                 {('x', i): i for i in range(100)})
     dependencies, dependents = get_deps(dsk)
     stacks = {alice: [], bob: []}
+    processing = {alice: set(), bob: set()}
     who_has = merge({('x', i * 2): {alice} for i in range(50)},
                     {('x', i * 2 + 1): {bob} for i in range(50)})
     nbytes = {k: 0 for k in who_has}
 
     for key in dsk:
-        worker = decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, key)
+        worker = decide_worker(dependencies, stacks, processing, who_has, {},
+                               {}, set(), nbytes, key)
         stacks[worker].append(key)
 
     nhits = (len([k for k in stacks[alice] if alice in who_has[('x', k[1])]])
@@ -220,21 +222,25 @@ def test_decide_worker_with_restrictions():
     dependencies = {'x': set()}
     alice, bob, charlie = 'alice:8000', 'bob:8000', 'charlie:8000'
     stacks = {alice: [], bob: [], charlie: []}
+    processing = {alice: set(), bob: set(), charlie: set()}
     who_has = {}
     restrictions = {'x': {'alice', 'charlie'}}
     nbytes = {}
-    result = decide_worker(dependencies, stacks, who_has, restrictions, set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, set(), nbytes, 'x')
     assert result in {alice, charlie}
 
 
     stacks = {alice: [1, 2, 3], bob: [], charlie: [4, 5, 6]}
-    result = decide_worker(dependencies, stacks, who_has, restrictions, set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, set(), nbytes, 'x')
     assert result in {alice, charlie}
 
     dependencies = {'x': {'y'}}
     who_has = {'y': {bob}}
     nbytes = {'y': 0}
-    result = decide_worker(dependencies, stacks, who_has, restrictions, set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, set(), nbytes, 'x')
     assert result in {alice, charlie}
 
 
@@ -242,32 +248,33 @@ def test_decide_worker_with_loose_restrictions():
     dependencies = {'x': set()}
     alice, bob, charlie = 'alice:8000', 'bob:8000', 'charlie:8000'
     stacks = {alice: [1, 2, 3], bob: [], charlie: [1]}
+    processing = {alice: set(), bob: set(), charlie: set()}
     who_has = {}
     nbytes = {}
     restrictions = {'x': {'alice', 'charlie'}}
 
-    result = decide_worker(dependencies, stacks, who_has, restrictions,
-                           set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, set(), nbytes, 'x')
     assert result == charlie
 
-    result = decide_worker(dependencies, stacks, who_has, restrictions,
-                           {'x'}, nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, {'x'}, nbytes, 'x')
     assert result == charlie
 
     restrictions = {'x': {'david', 'ethel'}}
-    result = decide_worker(dependencies, stacks, who_has, restrictions,
-                           set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, set(), nbytes, 'x')
     assert result is None
 
     restrictions = {'x': {'david', 'ethel'}}
-    result = decide_worker(dependencies, stacks, who_has, restrictions,
-                           {'x'}, nbytes, 'x')
+    result = decide_worker(dependencies, stacks, processing, who_has, {},
+                           restrictions, {'x'}, nbytes, 'x')
     assert result == bob
 
 
 
 def test_decide_worker_without_stacks():
-    assert not decide_worker({'x': []}, [], {}, {}, set(), {}, 'x')
+    assert not decide_worker({'x': []}, {}, {}, {}, {}, {}, set(), {}, 'x')
 
 
 def test_validate_state():

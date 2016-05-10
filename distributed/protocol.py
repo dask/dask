@@ -45,6 +45,7 @@ compressions = {None: {'compress': identity,
 
 default_compression = None
 
+
 with ignoring(ImportError):
     import zlib
     compressions['zlib'] = {'compress': zlib.compress,
