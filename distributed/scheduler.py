@@ -1077,47 +1077,52 @@ class Scheduler(Server):
         This removes all knowledge of how to produce a key from the scheduler.
         This is almost exclusively called by release_held_data
         """
-        if key not in self.tasks and key not in self.who_has:
-            return
-        assert not self.dependents[key] and key not in self.who_wants
-        if key in self.tasks:
-            del self.tasks[key]
-            self.release_live_dependencies(key)
-            del self.dependents[key]
-            for dep in self.dependencies[key]:
-                s = self.dependents[dep]
-                s.remove(key)
-                if not s and dep not in self.who_wants:
-                    assert dep is not key
-                    self.forget(dep)
-            del self.dependencies[key]
-            if key in self.restrictions:
-                del self.restrictions[key]
-            if key in self.loose_restrictions:
-                self.loose_restrictions.remove(key)
-            del self.keyorder[key]
-            if key in self.exceptions:
-                del self.exceptions[key]
-            if key in self.exceptions_blame:
-                del self.exceptions_blame[key]
-            if key in self.released:
-                self.released.remove(key)
-            if key in self.waiting:
-                del self.waiting[key]
-            if key in self.waiting_data:
-                del self.waiting_data[key]
+        stack = [key]
+        while stack:
+            key = stack.pop()
 
-        if key in self.who_has:
-            self.delete_data(keys=[key])
+            if key not in self.tasks and key not in self.who_has:
+                return
+            assert not self.dependents[key] and key not in self.who_wants
 
-        if key in self.nbytes:
-            del self.nbytes[key]
+            if key in self.tasks:
+                del self.tasks[key]
+                self.release_live_dependencies(key)
+                del self.dependents[key]
+                for dep in self.dependencies[key]:
+                    s = self.dependents[dep]
+                    s.remove(key)
+                    if not s and dep not in self.who_wants:
+                        assert dep is not key
+                        stack.append(dep)
+                del self.dependencies[key]
+                if key in self.restrictions:
+                    del self.restrictions[key]
+                if key in self.loose_restrictions:
+                    self.loose_restrictions.remove(key)
+                del self.keyorder[key]
+                if key in self.exceptions:
+                    del self.exceptions[key]
+                if key in self.exceptions_blame:
+                    del self.exceptions_blame[key]
+                if key in self.released:
+                    self.released.remove(key)
+                if key in self.waiting:
+                    del self.waiting[key]
+                if key in self.waiting_data:
+                    del self.waiting_data[key]
 
-        for plugin in self.plugins:
-            try:
-                plugin.forget(self, key)
-            except Exception as e:
-                logger.exception(e)
+            if key in self.who_has:
+                self.delete_data(keys=[key])
+
+            if key in self.nbytes:
+                del self.nbytes[key]
+
+            for plugin in self.plugins:
+                try:
+                    plugin.forget(self, key)
+                except Exception as e:
+                    logger.exception(e)
 
     def cancel_key(self, key, client, retries=5):
         if key not in self.who_wants:  # no key yet, lets try again in 500ms
