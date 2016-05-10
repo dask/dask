@@ -517,7 +517,7 @@ class Scheduler(Server):
 
     def tasks_per_core(self, address):
         if time() - self.worker_info[address].get('last-task', 0) > 2:
-            tasks_per_core = 2
+            tasks_per_core = 1
         else:
             duration = max(self.worker_info[address]['avg-task-duration'],
                            50e-6)
@@ -526,7 +526,7 @@ class Scheduler(Server):
             except KeyError:
                 latency = 0
             latency = max(latency, 10e-3)
-            tasks_per_core = max(2, latency // duration)
+            tasks_per_core = max(1, latency // duration)
             tasks_per_core = min(500, tasks_per_core)
         return tasks_per_core
 
