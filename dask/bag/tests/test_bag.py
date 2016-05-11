@@ -158,6 +158,15 @@ def test_pluck_with_default():
     assert b.pluck(0).name != b.pluck(0, None).name
 
 
+def test_unzip():
+    b = db.from_sequence(range(100)).map(lambda x: (x, x + 1, x + 2))
+    one, two, three = b.unzip(3)
+    assert list(one) == list(range(100))
+    assert list(three) == [i + 2 for i in range(100)]
+    assert one.name == b.unzip(3)[0].name
+    assert one.name != two.name
+
+
 def test_fold():
     c = b.fold(add)
     assert c.compute() == sum(L)
