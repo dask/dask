@@ -2571,7 +2571,8 @@ def test_workers_register_indirect_data(e, s, a, b):
     s.validate()
 
 
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)])
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)],
+        timeout=None)
 def test_work_stealing(e, s, a, b):
     [x] = yield e._scatter([1])
     futures = e.map(slowadd, range(50), [x] * 50)
@@ -2715,51 +2716,15 @@ def test_executor_replicate_sync(loop):
 
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
-def test_tasks_per_core(e, s, a):
-    assert 1 <= s.tasks_per_core(a.address) < 4
-    L = e.map(inc, range(100))  # very fast
-    yield _wait(L)
-    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
-
-    assert 2 <= s.tasks_per_core(a.address) < 10000
-
-    L = e.map(sleep, [0.1] * 10, pure=False)
-    yield _wait(L)
-
-    assert 0.0001 < s.worker_info[a.address]['avg-task-duration'] < 0.2
-
-    assert 1 <= s.tasks_per_core(a.address) < 25
-
-
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
-def test_task_load_adapts_quickly_after_delay(e, s, a):
-    future = e.submit(inc, 1)  # very fast
-    yield _wait(future)
-    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
-
-    yield gen.sleep(0.200)  # a sizable gap, compared to latency and task time
-
-    future = e.submit(slowinc, 1, delay=0.500)  # slowish
-    yield _wait(future)
-    assert 0.45 < s.worker_info[a.address]['avg-task-duration'] < 1
-
-    yield gen.sleep(0.200)  # a not-so-sizable gap, compared to task time
-
-    future = e.submit(inc, 2)  # fast but soon, defers to old average
-    yield _wait(future)
-    assert 0.2 < s.worker_info[a.address]['avg-task-duration'] < 1
-
-
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
 def test_task_load_adapts_quickly(e, s, a):
     future = e.submit(slowinc, 1, delay=0.2)  # slow
     yield _wait(future)
-    assert 0.15 < s.worker_info[a.address]['avg-task-duration'] < 0.4
+    assert 0.15 < s.task_duration['slowinc'] < 0.4
 
-    futures = e.map(inc, range(10))  # very fast
+    futures = e.map(slowinc, range(10), delay=0)  # very fast
     yield _wait(futures)
 
-    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+    assert 0 < s.task_duration['slowinc'] < 0.1
 
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
@@ -2767,8 +2732,6 @@ def test_even_load_after_fast_functions(e, s, a, b):
     x = e.submit(inc, 1, workers=a.address)  # very fast
     y = e.submit(inc, 2, workers=b.address)  # very fast
     yield _wait([x, y])
-    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
-    assert 0 < s.worker_info[b.address]['avg-task-duration'] < 0.1
 
     futures = e.map(inc, range(2, 11))
     yield _wait(futures)
@@ -2807,3 +2770,18 @@ def test_balanced_with_submit_and_resident_data(e, s, *workers):
     yield _wait(L)
     for w in workers:
         assert len(w.data) == 2
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_balanced_with_submit_and_resident_data(e, s, a, b):
+    slow1 = e.submit(slowinc, 1, delay=0.2, workers=a.address)  # learn slow
+    slow2 = e.submit(slowinc, 2, delay=0.2, workers=b.address)
+    yield _wait([slow1, slow2])
+    aa = e.map(inc, range(100), pure=False, workers=a.address)  # learn fast
+    bb = e.map(inc, range(100), pure=False, workers=b.address)
+    yield _wait(aa + bb)
+
+    cc = e.map(slowinc, range(10), delay=0.1)
+    while not all(c.done() for c in cc):
+        assert all(len(p) < 3 for p in s.processing.values())
+        yield gen.sleep(0.01)

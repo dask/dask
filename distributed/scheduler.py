@@ -102,8 +102,13 @@ class Scheduler(Server):
         What keys are wanted by each client..  The transpose of who_wants.
     * **nbytes:** ``{key: int}``:
         Number of bytes for a key as reported by workers holding that key.
-    * **processing:** ``{worker: {keys}}``:
-        Set of keys currently in execution on each worker
+    * **processing:** ``{worker: {key: cost}}``:
+        Set of keys currently in execution on each worker and their expected
+        duration
+    * **task_duration:** ``{key-prefix: time}``
+        Time we expect certain functions to take, e.g. ``{'sum': 0.25}``
+    * **occupancy:** ``{worker: time}``
+        Expected runtime for all tasks currently processing on a worker
     * **stacks:** ``{worker: [keys]}``:
         List of keys waiting to be sent to each worker
     * **released:** ``{keys}``
@@ -170,6 +175,8 @@ class Scheduler(Server):
         self.host_info = dict()
         self.aliases = dict()
         self.processing = dict()
+        self.occupancy = dict()
+        self.task_duration = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
         self.stacks = dict()
@@ -413,27 +420,50 @@ class Scheduler(Server):
                 for worker in topk(len(self.ready), self.idle, key=keyfunc):
                     self.ensure_occupied_ready_count(worker, count=1)
             else:
+                # Fill up empty cores
                 workers = list(self.idle)
-                tpc = math.ceil(mean(map(self.tasks_per_core, workers))) # tasks per core
-                free_slots = [tpc * self.ncores[w] - len(self.processing[w])
+                free_cores = [self.ncores[w] - len(self.processing[w])
                               for w in workers]
 
-                # Clean out workers that *are* actually full
-                workers2 = []
-                free_slots2 = []
-                for w, fs in zip(workers, free_slots):
+                workers2 = []  # Clean out workers that *are* actually full
+                free_cores2 = []
+                for w, fs in zip(workers, free_cores):
                     if fs > 0:
                         workers2.append(w)
-                        free_slots2.append(fs)
-                    else:
-                        self.idle.remove(w)
+                        free_cores2.append(fs)
 
                 if workers2:
-                    n = min(sum(free_slots2), len(self.ready))
-                    counts = divide_n_among_bins(n, free_slots2)
+                    n = min(sum(free_cores2), len(self.ready))
+                    counts = divide_n_among_bins(n, free_cores2)
                     for worker, count in zip(workers2, counts):
                         self.ensure_occupied_ready_count(worker, count=count)
 
+                # Fill up unsaturated cores by time
+                workers = list(self.idle)
+                latency = 5e-3
+                free_time = [latency * self.ncores[w] - self.occupancy[w]
+                              for w in workers]
+                workers2 = []  # Clean out workers that *are* actually full
+                free_time2 = []
+                for w, fs in zip(workers, free_time):
+                    if fs > 0:
+                        workers2.append(w)
+                        free_time2.append(fs)
+                total_free_time = sum(free_time2)
+                if workers2 and total_free_time > 0:
+                    tasks = []
+                    while self.ready and total_free_time > 0:
+                        task = self.ready.pop()
+                        total_free_time -= self.task_duration.get(key_split(task), 1)
+                        tasks.append(task)
+
+                    self.ready.extend(tasks[::-1])
+
+                    counts = divide_n_among_bins(len(tasks), free_time2)
+                    for worker, count in zip(workers2, counts):
+                        self.ensure_occupied_ready_count(worker, count=count)
+
+        # Work stealing
         if 0 < len(self.idle) < len(self.ncores) and not self.ready:
             n = sum(map(len, self.stacks)) * len(self.idle) / len(self.ncores)
 
@@ -468,7 +498,7 @@ class Scheduler(Server):
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
             try:
-                self.processing[worker].remove(key)
+                self.occupancy[worker] -= self.processing[worker].pop(key)
             except KeyError:
                 pass
 
@@ -515,21 +545,6 @@ class Scheduler(Server):
                 if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
-    def tasks_per_core(self, address):
-        if time() - self.worker_info[address].get('last-task', 0) > 2:
-            tasks_per_core = 1
-        else:
-            duration = max(self.worker_info[address]['avg-task-duration'],
-                           50e-6)
-            try:
-                latency = self.host_info[address.split(':')[0]]['latency']
-            except KeyError:
-                latency = 0
-            latency = max(latency, 10e-3)
-            tasks_per_core = max(1, latency // duration)
-            tasks_per_core = min(500, tasks_per_core)
-        return tasks_per_core
-
     def ensure_occupied(self, worker):
         self.ensure_occupied_stacks(worker)
         self.ensure_occupied_ready(worker)
@@ -542,17 +557,20 @@ class Scheduler(Server):
 
         We update the idle workers set appropriately.
         """
-        load = self.tasks_per_core(worker) * self.ncores[worker]
         stack = self.stacks[worker]
+        latency = 5e-3
 
         while (stack and
-               load * self.ncores[worker] > len(self.processing[worker])):
+               (self.ncores[worker] > len(self.processing[worker]) or
+                self.occupancy[worker] < latency * self.ncores[worker])):
             key = stack.pop()
             if key not in self.tasks:
                 continue
             if self.who_has.get(key):
                 continue
-            self.processing[worker].add(key)
+            duration = self.task_duration.get(key_split(key), latency*100)
+            self.processing[worker][key] = duration
+            self.occupancy[worker] += duration
             logger.debug("Send job to worker: %s, %s", worker, key)
             try:
                 self.send_task_to_worker(worker, key)
@@ -560,9 +578,10 @@ class Scheduler(Server):
                 self.remove_worker(worker)
                 return
 
-        self._check_idle(worker, load)
+        self._check_idle(worker)
 
     def ensure_occupied_ready_count(self, worker, count):
+        latency = 5e-3
         for i in range(count):
             try:
                 key = self.ready.pop()
@@ -572,7 +591,9 @@ class Scheduler(Server):
                 continue
             if self.who_has.get(key):
                 continue
-            self.processing[worker].add(key)
+            duration = self.task_duration.get(key_split(key), latency*100)
+            self.processing[worker][key] = duration
+            self.occupancy[worker] += duration
             logger.debug("Send job to worker: %s, %s", worker, key)
             try:
                 self.send_task_to_worker(worker, key)
@@ -583,16 +604,19 @@ class Scheduler(Server):
         self._check_idle(worker)
 
     def ensure_occupied_ready(self, worker):
-        load = self.tasks_per_core(worker) * self.ncores[worker]
+        latency = 5e-3
 
         while (self.ready and
-               load * self.ncores[worker] > len(self.processing[worker])):
+               (self.ncores[worker] > len(self.processing[worker]) or
+                self.occupancy[worker] < latency * self.ncores[worker])):
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
             if self.who_has.get(key):
                 continue
-            self.processing[worker].add(key)
+            duration = self.task_duration.get(key_split(key), latency*100)
+            self.processing[worker][key] = duration
+            self.occupancy[worker] += duration
             logger.debug("Send job to worker: %s, %s", worker, key)
             try:
                 self.send_task_to_worker(worker, key)
@@ -600,12 +624,11 @@ class Scheduler(Server):
                 self.remove_worker(worker)
                 return
 
-        self._check_idle(worker, load)
+        self._check_idle(worker)
 
-    def _check_idle(self, worker, load=None):
-        if load is None:
-            load = self.tasks_per_core(worker) * self.ncores[worker]
-        if load * self.ncores[worker] > len(self.processing[worker]):
+    def _check_idle(self, worker, latency=5e-3):
+        if (len(self.processing[worker]) < self.ncores[worker] or
+            self.occupancy[worker] < latency * self.ncores[worker]):
             self.idle.add(worker)
         elif worker in self.idle:
             self.idle.remove(worker)
@@ -644,7 +667,7 @@ class Scheduler(Server):
         Scheduler.mark_failed
         """
         if worker in self.processing and key in self.processing[worker]:
-            self.processing[worker].remove(key)
+            self.occupancy[worker] -= self.processing[worker].pop(key)
             self.exceptions[key] = exception
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
@@ -688,8 +711,9 @@ class Scheduler(Server):
 
             # Update average task duration for worker
             info = self.worker_info[worker]
+            ks = key_split(key)
             gap = (transfer_start or compute_start) - info.get('last-task', 0)
-            old_duration = info.get('avg-task-duration', 0)
+            old_duration = self.task_duration.get(ks, 0)
             new_duration = compute_stop - compute_start
             if (not old_duration or
                 gap > max(10e-3, info.get('latency', 0), old_duration)):
@@ -698,7 +722,7 @@ class Scheduler(Server):
                 avg_duration = (0.5 * old_duration
                               + 0.5 * new_duration)
 
-            info['avg-task-duration'] = avg_duration
+            self.task_duration[ks] = avg_duration
             info['last-task'] = compute_stop
             for plugin in self.plugins[:]:
                 try:
@@ -754,7 +778,7 @@ class Scheduler(Server):
         missing = keys
         if key and worker:
             try:
-                self.processing[worker].remove(key)
+                self.occupancy[worker] -= self.processing[worker].pop(key)
             except KeyError:
                 logger.info("Tried to remove %s from %s, but it wasn't there",
                              key, worker)
@@ -805,99 +829,103 @@ class Scheduler(Server):
         --------
         Scheduler.recover_missing
         """
-        address = self.coerce_address(address)
-        logger.debug("Remove worker %s", address)
-        if address not in self.processing:
-            return
-        with ignoring(AttributeError):
-            self.worker_streams[address].stream.close()
+        with log_errors():
+            address = self.coerce_address(address)
+            logger.debug("Remove worker %s", address)
+            if address not in self.processing:
+                return
+            with ignoring(AttributeError):
+                self.worker_streams[address].stream.close()
 
-        host, port = address.split(':')
+            host, port = address.split(':')
 
-        self.host_info[host]['cores'] -= self.ncores[address]
-        self.host_info[host]['ports'].remove(port)
+            self.host_info[host]['cores'] -= self.ncores[address]
+            self.host_info[host]['ports'].remove(port)
 
-        if not self.host_info[host]['ports']:
-            del self.host_info[host]
-        else:
-            self._restart_heartbeat(host)
+            if not self.host_info[host]['ports']:
+                del self.host_info[host]
+            else:
+                self._restart_heartbeat(host)
 
-        del self.worker_streams[address]
-        del self.ncores[address]
-        del self.aliases[self.worker_info[address]['name']]
-        del self.worker_info[address]
-        if address in self.idle:
-            self.idle.remove(address)
+            del self.worker_streams[address]
+            del self.ncores[address]
+            del self.aliases[self.worker_info[address]['name']]
+            del self.worker_info[address]
+            if address in self.idle:
+                self.idle.remove(address)
 
-        in_flight = set(self.stacks.pop(address))
-        in_flight |= self.processing.pop(address)
-        in_flight = {k for k in in_flight if k in self.tasks}
-        missing = set()
+            in_flight = set(self.stacks.pop(address))
+            in_flight |= set(self.processing.pop(address))
+            del self.occupancy[address]
+            in_flight = {k for k in in_flight if k in self.tasks}
+            missing = set()
 
-        for key in self.has_what.pop(address):
-            s = self.who_has[key]
-            s.remove(address)
-            if not s:
-                self.who_has.pop(key)
-                self.report({'op': 'lost-data', 'key': key})
-                missing.add(key)
+            for key in self.has_what.pop(address):
+                s = self.who_has[key]
+                s.remove(address)
+                if not s:
+                    self.who_has.pop(key)
+                    self.report({'op': 'lost-data', 'key': key})
+                    missing.add(key)
 
-        for key in missing:
-            self.recover_missing(key)
-        for key in in_flight:
-            self.released.add(key)
-            self.ensure_in_play(key)
+            for key in missing:
+                self.recover_missing(key)
+            for key in in_flight:
+                self.released.add(key)
+                self.ensure_in_play(key)
 
-        if not self.stacks:
-            logger.critical("Lost all workers")
+            if not self.stacks:
+                logger.critical("Lost all workers")
 
-        self.ensure_idle_ready()
+            self.ensure_idle_ready()
 
-        return 'OK'
+            return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    name=None, coerce_address=True, **info):
-        if coerce_address:
-            address = self.coerce_address(address)
-        name = name or address
-        if name in self.aliases:
-            return 'name taken, %s' % name
+        with log_errors():
+            if coerce_address:
+                address = self.coerce_address(address)
+            name = name or address
+            if name in self.aliases:
+                return 'name taken, %s' % name
 
-        if coerce_address:
-            host, port = self.coerce_address(address).split(':')
-            if host not in self.host_info:
-                self.host_info[host] = {'ports': set(), 'cores': 0}
+            if coerce_address:
+                host, port = self.coerce_address(address).split(':')
+                if host not in self.host_info:
+                    self.host_info[host] = {'ports': set(), 'cores': 0}
 
-            self.host_info[host]['ports'].add(port)
-            self.host_info[host]['cores'] += ncores
-            self.loop.add_callback(self.heartbeat, host)
-            self._restart_heartbeat(host)
+                self.host_info[host]['ports'].add(port)
+                self.host_info[host]['cores'] += ncores
+                self.loop.add_callback(self.heartbeat, host)
+                self._restart_heartbeat(host)
 
-        self.ncores[address] = ncores
+            self.ncores[address] = ncores
 
-        self.aliases[name] = address
+            self.aliases[name] = address
 
-        info['name'] = name
-        self.worker_info[address] = info
+            info['name'] = name
+            self.worker_info[address] = info
 
-        if address not in self.processing:
-            self.has_what[address] = set()
-            self.processing[address] = set()
-            self.stacks[address] = []
+            if address not in self.processing:
+                self.has_what[address] = set()
+                self.processing[address] = dict()
+                self.occupancy[address] = 0
+                self.stacks[address] = []
 
-        for key in keys:
-            self.mark_key_in_memory(key, [address])
+            for key in keys:
+                self.mark_key_in_memory(key, [address])
 
-        self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
-        self._worker_coroutines.append(self.worker_stream(address))
+            self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
+            self._worker_coroutines.append(self.worker_stream(address))
 
-        if self.ncores[address] > len(self.processing[address]):
-            self.idle.add(address)
+            if self.ncores[address] > len(self.processing[address]):
+                self.idle.add(address)
 
-        self.ensure_occupied(address)
+            self.ensure_occupied(address)
 
-        logger.info("Register %s", str(address))
-        return 'OK'
+            logger.info("Register %s", str(address))
+            return 'OK'
 
     def ensure_in_play(self, key):
         """ Ensure that a key is on track to enter memory in the future
