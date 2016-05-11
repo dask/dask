@@ -57,7 +57,7 @@ from __future__ import absolute_import, division, print_function
 
 from bisect import bisect_left, bisect_right
 
-from toolz import merge_sorted, unique, partial
+from toolz import merge_sorted, unique, partial, first
 import toolz
 import numpy as np
 import pandas as pd
@@ -298,6 +298,25 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                      name, dummy, divisions)
 
 
+def single_partition_join(left, right, **kwargs):
+    meta = pd.merge(left._pd, right._pd, **kwargs)
+    name = 'merge-' + tokenize(left, right, **kwargs)
+    if left.npartitions == 1:
+        left_key = first(left._keys())
+        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                kwargs))
+                   for i, right_key in enumerate(right._keys()))
+        divisions = right.divisions
+    elif right.npartitions == 1:
+        right_key = first(right._keys())
+        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                kwargs))
+                   for i, left_key in enumerate(left._keys()))
+        divisions = left.divisions
+    return DataFrame(toolz.merge(dsk, left.dask, right.dask), name,
+                     meta, divisions)
+
+
 def _pdconcat(dfs, axis=0, join='outer'):
     """ Concatenate caring empty Series """
 
@@ -377,45 +396,20 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                         right_on=right_on, left_index=left_index,
                         right_index=right_index, suffixes=suffixes)
 
-    keywords = dict(how=how, right_on=right_on, left_on=left_on,
-            left_index=left_index, right_index=right_index, suffixes=suffixes)
-
     # Transform pandas objects into dask.dataframe objects
     if isinstance(left, (pd.Series, pd.DataFrame)):
-        if right.known_divisions and right_index or how in ('outer', 'left'):
-            if right_index and left_on:  # change to join on index
-                left = left.set_index(left[left_on])
-                left_on = False
-                left_index = True
-            left = from_pandas(left, npartitions=1)  # turn into DataFrame
-        else:
-            meta = pd.merge(left, right._pd, **keywords)
-            left_key = tokenize(left)
-            name = 'merge-' + tokenize(left_key, right, keywords)
-            dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
-                                     keywords))
-                       for i, right_key in enumerate(right._keys()))
-            dsk[left_key] = left
-            return DataFrame(toolz.merge(dsk, right.dask), name,
-                             meta, right.divisions)
+        if right_index and left_on:  # change to join on index
+            left = left.set_index(left[left_on])
+            left_on = False
+            left_index = True
+        left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
     if isinstance(right, (pd.Series, pd.DataFrame)):
-        if left.known_divisions and left_index or how in ('outer', 'right'):
-            if left_index and right_on:  # change to join on index
-                right = right.set_index(right[right_on])
-                right_on = False
-                right_index = True
-            right = from_pandas(right, npartitions=1)  # turn into DataFrame
-        else:
-            meta = pd.merge(left._pd, right, **keywords)
-            right_key = tokenize(right)
-            name = 'merge-' + tokenize(right_key, left, keywords)
-            dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
-                                    keywords))
-                       for i, left_key in enumerate(left._keys()))
-            dsk[right_key] = right
-            return DataFrame(toolz.merge(dsk, left.dask), name,
-                             meta, left.divisions)
+        if left_index and right_on:  # change to join on index
+            right = right.set_index(right[right_on])
+            right_on = False
+            right_index = True
+        right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
     # Both sides are now dd.DataFrame or dd.Series objects
 
@@ -423,7 +417,12 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
-    else:                           # Do hash join
+    elif (left.npartitions == 1 and how in ('inner', 'right') or
+          right.npartitions == 1 and how in ('inner', 'left')):
+        return single_partition_join(left, right, how=how, right_on=right_on,
+                left_on=left_on, left_index=left_index,
+                right_index=right_index, suffixes=suffixes)
+    else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes)
