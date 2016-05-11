@@ -1344,6 +1344,24 @@ def test_query():
         assert eq(q, df.query('x**2 > y'))
 
 
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
+                    reason="eval inplace not supported")
+def test_eval():
+    p = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    d = dd.from_pandas(p, npartitions=2)
+    with ignoring(ImportError):
+        assert eq(p.eval('x + y'), d.eval('x + y'))
+        assert eq(p.eval('z = x + y', inplace=False),
+                  d.eval('z = x + y', inplace=False))
+        with pytest.raises(NotImplementedError):
+            d.eval('z = x + y', inplace=True)
+
+        if p.eval('z = x + y', inplace=None) is None:
+            with pytest.raises(NotImplementedError):
+                d.eval('z = x + y', inplace=None)
+
+
+
 def test_deterministic_arithmetic_names():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
