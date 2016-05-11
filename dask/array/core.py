@@ -2062,7 +2062,7 @@ def asarray(array):
     """
     if not isinstance(array, Array):
         name = 'asarray-' + tokenize(array)
-        if not hasattr(array, 'shape'):
+        if isinstance(getattr(array, 'shape', None), Iterable):
             array = np.asarray(array)
         array = from_array(array, chunks=array.shape, name=name)
     return array
@@ -2103,7 +2103,7 @@ def is_scalar_for_elemwise(arg):
     True
     """
     return (np.isscalar(arg)
-            or not hasattr(arg, 'shape')
+            or not isinstance(getattr(arg, 'shape', None), Iterable)
             or isinstance(arg, np.dtype)
             or (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
@@ -2156,6 +2156,7 @@ def elemwise(op, *args, **kwargs):
             (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
 
     shapes = [getattr(arg, 'shape', ()) for arg in args]
+    shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
