@@ -63,7 +63,8 @@ import numpy as np
 import pandas as pd
 
 from ..base import tokenize
-from .core import (_Frame, Scalar, DataFrame,
+from ..compatibility import apply
+from .core import (_Frame, Scalar, DataFrame, map_partitions,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle
@@ -376,20 +377,45 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                         right_on=right_on, left_index=left_index,
                         right_index=right_index, suffixes=suffixes)
 
+    keywords = dict(how=how, right_on=right_on, left_on=left_on,
+            left_index=left_index, right_index=right_index, suffixes=suffixes)
+
     # Transform pandas objects into dask.dataframe objects
     if isinstance(left, (pd.Series, pd.DataFrame)):
-        if right_index and left_on:  # change to join on index
-            left = left.set_index(left[left_on])
-            left_on = False
-            left_index = True
-        left = from_pandas(left, npartitions=1)  # turn into DataFrame
+        if right.known_divisions and right_index or how in ('outer', 'left'):
+            if right_index and left_on:  # change to join on index
+                left = left.set_index(left[left_on])
+                left_on = False
+                left_index = True
+            left = from_pandas(left, npartitions=1)  # turn into DataFrame
+        else:
+            meta = pd.merge(left, right._pd, **keywords)
+            left_key = tokenize(left)
+            name = 'merge-' + tokenize(left_key, right, keywords)
+            dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                     keywords))
+                       for i, right_key in enumerate(right._keys()))
+            dsk[left_key] = left
+            return DataFrame(toolz.merge(dsk, right.dask), name,
+                             meta, right.divisions)
 
     if isinstance(right, (pd.Series, pd.DataFrame)):
-        if left_index and right_on:  # change to join on index
-            right = right.set_index(right[right_on])
-            right_on = False
-            right_index = True
-        right = from_pandas(right, npartitions=1)  # turn into DataFrame
+        if left.known_divisions and left_index or how in ('outer', 'right'):
+            if left_index and right_on:  # change to join on index
+                right = right.set_index(right[right_on])
+                right_on = False
+                right_index = True
+            right = from_pandas(right, npartitions=1)  # turn into DataFrame
+        else:
+            meta = pd.merge(left._pd, right, **keywords)
+            right_key = tokenize(right)
+            name = 'merge-' + tokenize(right_key, left, keywords)
+            dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                    keywords))
+                       for i, left_key in enumerate(left._keys()))
+            dsk[right_key] = right
+            return DataFrame(toolz.merge(dsk, left.dask), name,
+                             meta, left.divisions)
 
     # Both sides are now dd.DataFrame or dd.Series objects
 
