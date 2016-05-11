@@ -59,7 +59,7 @@ def test_update_state(loop):
             compute_start=10, compute_stop=11)
     s.ensure_occupied(alice)
 
-    assert s.processing[alice] == {'y'}
+    assert set(s.processing[alice]) == {'y'}
     assert not s.ready
     assert s.who_wants == {'y': {'client'}}
     assert s.wants_what == {'client': {'y'}}
@@ -150,7 +150,7 @@ def test_update_state_respects_data_in_memory(loop):
 
     assert s.released == set()
     assert s.waiting == {'z': {'x'}}
-    assert s.processing[alice] == {'x'}  # x was released, need to recompute
+    assert set(s.processing[alice]) == {'x'}  # x was released need to recompute
     assert s.waiting_data == {'x': {'z'}, 'y': {'z'}, 'z': set()}
     assert s.who_wants == {'y': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
@@ -192,7 +192,7 @@ def test_update_state_supports_recomputing_released_results(loop):
     assert s.waiting_data == {'x': {'y'}, 'y': set(), 'z': set()}
     assert s.who_wants == {'z': {'client'}, 'y': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
-    assert s.processing[alice] == {'x'}
+    assert set(s.processing[alice]) == {'x'}
 
     s.stop()
 
@@ -202,7 +202,7 @@ def test_decide_worker_with_many_independent_leaves():
                 {('x', i): i for i in range(100)})
     dependencies, dependents = get_deps(dsk)
     stacks = {alice: [], bob: []}
-    processing = {alice: set(), bob: set()}
+    processing = {alice: dict(), bob: dict()}
     who_has = merge({('x', i * 2): {alice} for i in range(50)},
                     {('x', i * 2 + 1): {bob} for i in range(50)})
     nbytes = {k: 0 for k in who_has}
@@ -222,7 +222,7 @@ def test_decide_worker_with_restrictions():
     dependencies = {'x': set()}
     alice, bob, charlie = 'alice:8000', 'bob:8000', 'charlie:8000'
     stacks = {alice: [], bob: [], charlie: []}
-    processing = {alice: set(), bob: set(), charlie: set()}
+    processing = {alice: dict(), bob: dict(), charlie: dict()}
     who_has = {}
     restrictions = {'x': {'alice', 'charlie'}}
     nbytes = {}
@@ -248,7 +248,7 @@ def test_decide_worker_with_loose_restrictions():
     dependencies = {'x': set()}
     alice, bob, charlie = 'alice:8000', 'bob:8000', 'charlie:8000'
     stacks = {alice: [1, 2, 3], bob: [], charlie: [1]}
-    processing = {alice: set(), bob: set(), charlie: set()}
+    processing = {alice: dict(), bob: dict(), charlie: dict()}
     who_has = {}
     nbytes = {}
     restrictions = {'x': {'alice', 'charlie'}}
@@ -286,7 +286,7 @@ def test_validate_state():
     waiting_data = {'x': {'y'}}
     who_has = dict()
     stacks = {alice: [], bob: []}
-    processing = {alice: set(), bob: set()}
+    processing = {alice: dict(), bob: dict()}
     finished_results = set()
     released = set()
     in_play = {'x', 'y'}
@@ -322,10 +322,10 @@ def test_validate_state():
     with pytest.raises(Exception):
         validate_state(**locals())
 
-    processing[alice].add('y')
+    processing[alice]['y'] = 1
     validate_state(**locals())
 
-    processing[alice].pop()
+    del processing[alice]['y']
     with pytest.raises(Exception):
         validate_state(**locals())
 

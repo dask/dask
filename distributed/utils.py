@@ -483,6 +483,8 @@ def divide_n_among_bins(n, bins):
     [3, 6, 3]
     >>> divide_n_among_bins(11, [1, 2, 1])
     [2, 6, 3]
+    >>> divide_n_among_bins(11, [.1, .2, .1])
+    [2, 6, 3]
     """
     total = sum(bins)
     acc = 0.0
