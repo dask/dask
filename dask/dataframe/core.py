@@ -945,7 +945,7 @@ class Series(_Frame):
     def dtype(self):
         """ Return data type """
         if self._known_dtype:
-            return self.dtype
+            return self._pd.dtype
         else:
             self._pd, self._known_dtype = self._build_pd(self.head())
             return self._pd.dtype
