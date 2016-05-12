@@ -22,9 +22,11 @@ def test_resource_monitor_plot(s, a, b):
     workers_buffer = [{},
                       {'10.10.20.86': {'cpu': 15.9, 'memory-percent': 63.0}},
                       {'10.10.20.86': {'cpu': 14.9, 'memory-percent': 64.0,
-                                       'network-send': 2**16},
+                                       'network-send': 2**16,
+                                       'network-recv': 2**15},
                        '10.10.20.87': {'cpu': 13.9, 'memory-percent': 64.0,
-                                       'network-send': 2**17}}]
+                                       'network-send': 2**17,
+                                       'network-recv': 2**16}}]
 
     source, plot = resource_profile_plot()
     resource_profile_update(source, workers_buffer, times_buffer)
@@ -41,15 +43,18 @@ def test_resource_monitor_plot(s, a, b):
 
     assert len(source.data['network-send']) == 2
     assert source.data['network-send'][1] == ['null', 'null', 2**17]
+    assert len(source.data['network-recv']) == 2
+    assert source.data['network-recv'][1] == ['null', 'null', 2**16]
 
 
 def test_resource_append():
-    lists = {'time': [], 'cpu': [], 'memory-percent': [], 'network-send': []}
+    lists = {'time': [], 'cpu': [], 'memory-percent': [],
+             'network-send': [], 'network-recv': []}
     msg = {'10.10.20.86': {'cpu': 10, 'memory-percent': 50, 'time': 2000,
-                           'network-send': 2**16},
+                           'network-send': 2**16, 'network-recv': 2**15},
            '10.10.20.87': {'cpu': 30, 'memory-percent': 70, 'time': 1000,
-                           'network-send': 2**17}}
+                           'network-send': 2**17, 'network-recv': 2**16}}
 
     resource_append(lists, msg)
     assert lists == {'time': [1500000], 'cpu': [0.2], 'memory-percent': [0.6],
-                     'network-send': [0.1875]}
+                     'network-send': [0.1875], 'network-recv': [0.09375]}
