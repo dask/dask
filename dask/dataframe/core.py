@@ -1523,6 +1523,14 @@ class DataFrame(_Frame):
                                  dummy, self.divisions)
 
     @derived_from(pd.DataFrame)
+    def eval(self, expr, inplace=None, **kwargs):
+        if '=' in expr and inplace in (True, None):
+            raise NotImplementedError("Inplace eval not supported."
+            " Please use inplace=False")
+        meta = self._pd.eval(expr, inplace=inplace, **kwargs)
+        return self.map_partitions(_eval, meta, expr, inplace=inplace, **kwargs)
+
+    @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
         # for cloudpickle
         def f(df, how=how, subset=subset):
@@ -2702,3 +2710,7 @@ def set_sorted_index(df, index, drop=True, **kwargs):
 
 def _set_sorted_index(df, idx, drop):
     return df.set_index(idx, drop=drop)
+
+
+def _eval(df, expr, **kwargs):
+    return df.eval(expr, **kwargs)
