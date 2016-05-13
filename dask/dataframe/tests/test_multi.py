@@ -526,3 +526,33 @@ def test_melt():
             pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
     list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
             pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
+
+
+def test_cheap_inner_merge_with_pandas_object():
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                     index=[10, 20, 30, 40, 50, 60])
+    da = dd.from_pandas(a, npartitions=3)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
+
+    dc = da.merge(b, on='x', how='inner')
+    assert all('shuffle' not in k[0] for k in dc.dask)
+
+    list_eq(da.merge(b, on='x', how='inner'),
+             a.merge(b, on='x', how='inner'))
+
+
+def test_cheap_single_partition_merge():
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                     index=[10, 20, 30, 40, 50, 60])
+    aa = dd.from_pandas(a, npartitions=3)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
+    bb = dd.from_pandas(b, npartitions=1, sort=False)
+
+    cc = aa.merge(bb, on='x', how='inner')
+    assert all('shuffle' not in k[0] for k in cc.dask)
+    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+
+    list_eq(aa.merge(bb, on='x', how='inner'),
+            a.merge(b, on='x', how='inner'))
