@@ -334,7 +334,7 @@ class DelayedLeaf(Delayed):
             try:
                 name = obj.__name__ + tokenize(obj, pure=pure)
             except AttributeError:
-                name = type(obj).__name__ + tokenize(obj, pure=pure)
+                name = '%s-%s' % (type(obj).__name__, tokenize(obj, pure=pure))
         object.__setattr__(self, '_dasks', [{name: obj}])
         object.__setattr__(self, 'pure', pure)
 
