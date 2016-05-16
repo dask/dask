@@ -403,15 +403,18 @@ class Worker(Server):
                               'key': k,
                               'keys': list(v)})
 
-            results = yield All([self.compute_one(data, report=report, **msg)
-                                 for msg in good])
-
-            if results and num_transferred:
-                results[0]['transfer_start'] = transfer_start
-                results[0]['transfer_stop'] = transfer_end
-
-            for msg in results:
-                bstream.send(msg)
+            if good:
+                futures = [self.compute_one(data, report=report, **msg)
+                                         for msg in good]
+                wait_iterator = gen.WaitIterator(*futures)
+                result = yield wait_iterator.next()
+                if num_transferred:
+                    result['transfer_start'] = transfer_start
+                    result['transfer_stop'] = transfer_end
+                bstream.send(result)
+                while not wait_iterator.done():
+                    msg = yield wait_iterator.next()
+                    bstream.send(msg)
 
     @gen.coroutine
     def compute_one(self, data, key=None, function=None, args=None, kwargs=None,

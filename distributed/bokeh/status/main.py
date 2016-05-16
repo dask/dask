@@ -127,6 +127,11 @@ def task_stream_update():
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
 
 
-vbox = vplot(worker_table, task_table, progress_plot, resource_plot,
-        task_stream_plot)
+vbox = vplot(
+           resource_plot,
+           progress_plot,
+           task_stream_plot,
+           worker_table,
+           task_table,
+         )
 doc.add_root(vbox)
