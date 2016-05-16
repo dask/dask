@@ -158,7 +158,7 @@ def worker_table_update(source, d):
 def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
     data = {'start': [], 'duration': [],
             'key': [], 'name': [], 'color': [],
-            'worker': [], 'y': [], 'worker_thread': []}
+            'worker': [], 'y': [], 'worker_thread': [], 'alpha': []}
 
     source = ColumnDataSource(data)
     if follow_interval:
@@ -170,9 +170,9 @@ def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=['xwheel_zoom', 'xpan', 'reset', 'resize', 'box_zoom'],
                  responsive=True, x_range=x_range, **kwargs)
-    fig.rect(x='start', width='duration',
-             y='y', height=0.9,
-             fill_color='color', line_color='gray', alpha=0.5, source=source)
+    fig.rect(x='start', y='y', width='duration', height=0.9,
+             fill_color='color', line_color='gray', alpha='alpha',
+             source=source)
     if x_range:
         fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'
@@ -219,6 +219,7 @@ def task_stream_append(lists, msg, workers, palette=Spectral11):
     lists['key'].append(key)
     lists['name'].append(name)
     lists['color'].append(color)
+    lists['alpha'].append(1)
     lists['worker'].append(msg['worker'])
 
     worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
@@ -236,6 +237,7 @@ def task_stream_append(lists, msg, workers, palette=Spectral11):
         lists['name'].append('transfer-to-' + name)
         lists['worker'].append(msg['worker'])
         lists['color'].append('red')
+        lists['alpha'].append('0.8')
         lists['worker_thread'].append(worker_thread)
         lists['y'].append(workers[worker_thread])
 

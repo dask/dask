@@ -58,7 +58,7 @@ def test_task_stream_append():
              'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
 
     lists = {name: [] for name in
-            'start duration key name color worker worker_thread y'.split()}
+            'start duration key name color worker worker_thread y alpha'.split()}
     workers = {'127.0.0.1:9999-5855': 0}
 
     for msg in msgs:
