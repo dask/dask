@@ -28,7 +28,8 @@ except ImportError:  # pragma: no cover
     nancumsum = npcompat.nancumsum
     nancumprod = npcompat.nancumprod
 
-inc = lambda x: x + 1
+def inc(x):
+    return x + 1
 
 
 def same_keys(a, b):
@@ -2016,3 +2017,11 @@ def test_astype_gh1151():
     a = np.arange(5).astype(np.int32)
     b = da.from_array(a, (1,))
     assert_eq(a.astype(np.int16), b.astype(np.int16))
+
+
+def test_elemwise_name():
+    assert (da.ones(5, chunks=2) + 1).name.startswith('add-')
+
+
+def test_map_blocks_name():
+    assert da.ones(5, chunks=2).map_blocks(inc).name.startswith('inc-')

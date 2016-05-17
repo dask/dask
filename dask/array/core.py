@@ -509,7 +509,7 @@ def map_blocks(func, *args, **kwargs):
                 "   or:   da.map_blocks(function, x, y, z)" %
                 type(func).__name__)
     name = kwargs.pop('name', None)
-    name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
+    name = name or '%s-%s' % (funcname(func), tokenize(func, args, **kwargs))
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
@@ -530,7 +530,8 @@ def map_blocks(func, *args, **kwargs):
 
     if args:
         dsk = top(partial_by_order, name, out_ind, *argindsstr,
-                numblocks=numblocks, function=func, other=args, **kwargs)
+                numblocks=numblocks, function=func, other=args,
+                **kwargs)
     else:
         dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks,
                 **kwargs)
@@ -1695,6 +1696,7 @@ def atop(func, out_ind, *args, **kwargs):
     top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None)      # May be None at this point
+    token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
 
     chunkss, arrays = unify_chunks(*args)
@@ -1704,8 +1706,8 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype,
-                                              **kwargs)
+        out = '%s-%s' % (token or funcname(func),
+                         tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, _ in arginds]
@@ -2182,12 +2184,14 @@ def elemwise(op, *args, **kwargs):
         except AttributeError:
             dt = None
 
-    name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
+    name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
+                                                  tokenize(op, dt, *args))
 
     if other:
         return atop(partial_by_order, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                dtype=dt, name=name, function=op, other=other)
+                dtype=dt, name=name, function=op, other=other,
+                token=funcname(op))
     else:
         return atop(op, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
