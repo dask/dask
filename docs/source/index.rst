@@ -74,5 +74,6 @@ Contents
    resilience
    journey
    protocol
+   work-stealing
    plugins
    related-work

@@ -2852,3 +2852,75 @@ def test_scheduler_saturates_cores_random(e, s, a, b):
             if s.tasks:
                 assert all(len(p) >= 20 for p in s.processing.values())
             yield gen.sleep(0.01)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_dont_steal_expensive_data_fast_computation(e, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = e.submit(np.arange, 1000000, workers=a.address)
+    yield _wait([x])
+    future = e.submit(np.sum, [1], workers=a.address)  # learn that sum is fast
+    yield _wait([future])
+
+    cheap = [e.submit(np.sum, x, pure=False, workers=a.address,
+                      allow_other_workers=True) for i in range(10)]
+    yield _wait(cheap)
+    assert len(b.data) == 0
+    assert len(a.data) == 12
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_steal_cheap_data_slow_computation(e, s, a, b):
+    x = e.submit(slowinc, 100, delay=0.1)  # learn that slowinc is slow
+    yield _wait([x])
+
+    futures = e.map(slowinc, range(10), delay=0.01, workers=a.address,
+                    allow_other_workers=True)
+    yield _wait(futures)
+    assert abs(len(a.data) - len(b.data)) < 3
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_steal_expensive_data_slow_computation(e, s, a, b):
+    np = pytest.importorskip('numpy')
+
+    x = e.submit(slowinc, 100, delay=0.1, workers=a.address)
+    yield _wait([x])  # learn that slowinc is slow
+
+    x = e.submit(np.arange, 1000000, workers=a.address)  # put expensive data
+    yield _wait([x])
+
+    slow = [e.submit(slowinc, x, delay=0.1, pure=False) for i in range(4)]
+    yield _wait([slow])
+
+    assert b.data  # not empty
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_worksteal_many_thieves(e, s, *workers):
+    x = e.submit(slowinc, -1, delay=0.1)
+    yield x._result()
+
+    xs = e.map(slowinc, [x] * 100, pure=False, delay=0.01)
+
+    yield _wait(xs)
+
+    for w, keys in s.has_what.items():
+        assert 2 < len(keys) < 50
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_dont_steal_unknown_functions(e, s, a, b):
+    futures = e.map(inc, [1, 2], workers=a.address, allow_other_workers=True)
+    yield _wait(futures)
+    assert len(a.data) == 2
+    assert len(b.data) == 0
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_eventually_steal_unknown_functions(e, s, a, b):
+    futures = e.map(slowinc, range(10), delay=0.1,  workers=a.address,
+                    allow_other_workers=True)
+    yield _wait(futures)
+    assert len(a.data) >= 3
+    assert len(b.data) >= 3
