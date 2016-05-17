@@ -438,6 +438,13 @@ def slowinc(x, delay=0.02):
     return x + 1
 
 
+def randominc(x, scale=1):
+    from time import sleep
+    from random import random
+    sleep(random() * scale)
+    return x + 1
+
+
 def slowadd(x, y):
     from time import sleep
     sleep(0.02)
@@ -2785,3 +2792,39 @@ def test_balanced_with_submit_and_resident_data(e, s, a, b):
     while not all(c.done() for c in cc):
         assert all(len(p) < 3 for p in s.processing.values())
         yield gen.sleep(0.01)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 20)] * 2)
+def test_scheduler_saturates_cores(e, s, a, b):
+    for delay in [0, 0.01, 0.1]:
+        futures = e.map(slowinc, range(100), delay=delay)
+        futures = e.map(slowinc, futures, delay=delay / 10)
+        while not s.tasks or s.ready:
+            if s.tasks:
+                assert all(len(p) >= 20 for p in s.processing.values())
+            yield gen.sleep(0.01)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 20)] * 2)
+def test_scheduler_saturates_cores_stacks(e, s, a, b):
+    for delay in [0, 0.01, 0.1]:
+        x = e.map(slowinc, range(100), delay=delay, pure=False,
+                  workers=a.address)
+        y = e.map(slowinc, range(100), delay=delay, pure=False,
+                  workers=b.address)
+        while not s.tasks or any(s.stacks.values()):
+            if s.tasks:
+                for w, stack in s.stacks.items():
+                    if stack:
+                        assert len(s.processing[w]) >= s.ncores[w]
+            yield gen.sleep(0.01)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 20)] * 2)
+def test_scheduler_saturates_cores_random(e, s, a, b):
+    for delay in [0, 0.01, 0.1]:
+        futures = e.map(randominc, range(100), scale=0.1)
+        while not s.tasks or s.ready:
+            if s.tasks:
+                assert all(len(p) >= 20 for p in s.processing.values())
+            yield gen.sleep(0.01)
