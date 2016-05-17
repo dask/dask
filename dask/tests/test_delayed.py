@@ -298,3 +298,8 @@ def test_name_consitent_across_instances():
 def test_sensitive_to_partials():
     assert (delayed(partial(add, 10), pure=True)(2)._key !=
             delayed(partial(add, 20), pure=True)(2)._key)
+
+
+def test_value_name():
+    assert delayed(1)._key.startswith('int-')
+    assert delayed(1, pure=True)._key.startswith('int-')
