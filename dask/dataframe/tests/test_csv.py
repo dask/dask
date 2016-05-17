@@ -117,9 +117,19 @@ def test_enforce_dtypes():
               [b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40']]
     head = pd.read_csv(BytesIO(blocks[0][0]), header=0)
     dfs = read_csv_from_bytes(blocks, b'aa,bb\n', head, {},
-                              enforce_dtypes=True, collection=False)
+                              collection=False)
     dfs = compute(*dfs)
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
+
+
+def test_enforce_columns():
+    blocks = [[b'aa,bb\n1,1.0\n2.2.0', b'10,20\n30,40'],
+              [b'AA,bb\n1,1.0\n2.2.0', b'10,20\n30,40']]
+    head = pd.read_csv(BytesIO(blocks[0][0]), header=0)
+    with pytest.raises(ValueError):
+        dfs = read_csv_from_bytes(blocks, b'aa,bb\n', head, {},
+                                  collection=False, enforce=True)
+        compute(*dfs)
 
 
 def test_read_csv_files():
