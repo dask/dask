@@ -64,3 +64,6 @@ class SchedulerPlugin(object):
 
     def mark_key_in_memory(self, scheduler, key, **kwargs):
         pass
+
+    def lost_data(self, scheduler, key):
+        pass
