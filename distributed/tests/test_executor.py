@@ -1694,7 +1694,7 @@ def test_repr_sync(loop):
             assert e.scheduler.ip in s
             assert str(e.scheduler.port) in r
             assert str(3) in s  # nworkers
-            assert 'threads' in s
+            assert 'cores' in s
 
 
 @gen_cluster(executor=True)

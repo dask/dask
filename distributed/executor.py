@@ -257,7 +257,7 @@ class Executor(object):
     def __str__(self):
         if hasattr(self, '_loop_thread'):
             n = sync(self.loop, self.scheduler.ncores)
-            return '<Executor: scheduler=%s:%d workers=%d threads=%d>' % (
+            return '<Executor: scheduler=%s:%d processes=%d cores=%d>' % (
                     self.scheduler.ip, self.scheduler.port, len(n),
                     sum(n.values()))
         else:
