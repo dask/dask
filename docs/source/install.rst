@@ -7,9 +7,11 @@ source.
 Conda
 -----
 
-Install distributed from the dask channel using `conda <https://www.continuum.io/downloads>`_::
+To install the latest version of distributed from the
+`conda-forge <https://conda-forge.github.io/>`_ repository using
+`conda <https://www.continuum.io/downloads>`_::
 
-    conda install distributed -c dask
+    conda install distributed -c conda-forge
 
 Pip
 ---
