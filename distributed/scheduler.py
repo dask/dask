@@ -867,6 +867,12 @@ class Scheduler(Server):
                     self.who_has.pop(key)
                     self.report({'op': 'lost-data', 'key': key})
                     missing.add(key)
+                    for plugin in self.plugins:
+                        try:
+                            plugin.lost_data(self, key=key)
+                        except Exception as e:
+                            logger.exception(e)
+
 
             for key in missing:
                 self.recover_missing(key)

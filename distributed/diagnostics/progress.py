@@ -318,6 +318,14 @@ class AllProgress(SchedulerPlugin):
                 if not d[k]:
                     del d[k]
 
+    def lost_data(self, scheduler, key=None):
+        k = key_split(key)
+        if k in self.in_memory:
+            try:
+                self.in_memory[k].remove(key)
+            except KeyError:
+                pass
+
     def restart(self, scheduler):
         self.all.clear()
         self.in_memory.clear()

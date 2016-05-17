@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from operator import add
 import pytest
 import sys
+from time import time
 from toolz import valmap
 from tornado import gen
 from tornado.queues import Queue
@@ -174,3 +175,19 @@ def test_AllProgress(e, s, a, b):
     x = e.submit(div, 1, 2)
     yield _wait([x])
     p.validate()
+
+
+@gen_cluster(executor=True, Worker=Nanny)
+def test_AllProgress_lost_key(e, s, a, b, timeout=None):
+    p = AllProgress(s)
+    futures = e.map(inc, range(5))
+    yield _wait(futures)
+    assert len(p.in_memory['inc']) == 5
+
+    yield a._close()
+    yield b._close()
+
+    start = time()
+    while len(p.in_memory['inc']) > 0:
+        yield gen.sleep(0.1)
+        assert time() < start + 2
