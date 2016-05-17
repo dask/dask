@@ -4,8 +4,7 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
-*   Update version number in __init__.py, setup.py,
-    and conda.recipe/meta.yaml (if present).  Commit.
+*   Update version number in __init__.py, setup.py. Commit.
 
 *   Tag commit
 
@@ -22,3 +21,5 @@ Release per project:
 *   Update anaconda recipe.
 
     This should happen automatically within a day or two.
+
+*   Update conda recipe feedstock on `conda-forge <https://conda-forge.github.io/>`_.
