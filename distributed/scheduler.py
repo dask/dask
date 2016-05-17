@@ -176,7 +176,7 @@ class Scheduler(Server):
         self.aliases = dict()
         self.processing = dict()
         self.occupancy = dict()
-        self.task_duration = dict()
+        self.task_duration = {prefix: 0.00001 for prefix in fast_task_prefixes}
         self.restrictions = dict()
         self.loose_restrictions = set()
         self.stacks = dict()
@@ -1982,3 +1982,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
 
 _round_robin = [0]
+
+
+fast_task_prefixes = {'sum', 'max', 'min', 'len', 'rechunk-split'}
