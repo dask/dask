@@ -16,7 +16,8 @@ from ..bytes.compression import seekable_files, files as cfiles
 delayed = delayed(pure=True)
 
 
-def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
+def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
+                   write_header=True):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -34,7 +35,7 @@ def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
         dask.dataframe.csv.read_csv_from_bytes
     """
     bio = BytesIO()
-    if not b.startswith(header.rstrip()):
+    if write_header and not b.startswith(header.rstrip()):
         bio.write(header)
     bio.write(b)
     bio.seek(0)
@@ -96,9 +97,14 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
     func = delayed(bytes_read_csv)
-    dfs = [func(b, header, kwargs, dtypes, columns)
-              for blocks in block_lists
-              for b in blocks]
+    dfs = []
+    for blocks in block_lists:
+        if not blocks:
+            continue
+        df = func(blocks[0], header, kwargs, dtypes, columns, write_header=False)
+        dfs.append(df)
+        for b in blocks[1:]:
+            dfs.append(func(b, header, kwargs, dtypes, columns))
 
     if collection:
         return from_delayed(dfs, head)
