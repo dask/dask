@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from dask.dataframe.core import (DataFrame, Series,
+from dask.dataframe.core import (DataFrame, Series, Index,
                                  aca, map_partitions, no_default)
 from dask.utils import derived_from
 
@@ -68,6 +68,36 @@ def _max(g):
 def _count(g):
     return g.count()
 
+def _var_chunk(df, index):
+    if isinstance(df, pd.Series):
+        df = df.to_frame()
+    x = df.groupby(index).sum()
+    x2 = (df**2).rename(columns=lambda c: c + '-x2')
+    x2 = (pd.concat([df, x2], axis=1)
+            .groupby(index)
+            [[c + '-x2' for c in x.columns]]
+            .sum())
+    n = (df.groupby(index).count()
+           .rename(columns=lambda c: c + '-count'))
+
+    result = pd.concat([x, x2, n], axis=1)
+    return result
+
+def _var_agg(g, ddof):
+    g = g.groupby(level=0).sum()
+    nc = len(g.columns)
+    x = g[g.columns[:nc//3]]
+    x2 = g[g.columns[nc//3:2*nc//3]].rename(columns=lambda c: c[:-3])
+    n = g[g.columns[-nc//3:]].rename(columns=lambda c: c[:-6])
+
+    result = x2 - x**2 / n
+    div = (n - ddof)
+    div[div < 0] = 0
+    result /= div
+    result[(n - ddof) == 0] = np.nan
+    assert isinstance(result, pd.DataFrame)
+    return result
+
 ###############################################################
 # nunique
 ###############################################################
@@ -107,6 +137,11 @@ class _GroupBy(object):
         self.obj = df
 
         # grouping key passed via groupby method
+        if (isinstance(index, (DataFrame, Series, Index)) and
+            isinstance(df, DataFrame) and
+            index._name.startswith(df._name) and
+            index._name[len(df._name) + 1:] in df.columns):
+            index = index._name[len(df._name) + 1:]
         self.index = index
 
         # slicing key applied to _GroupBy instance
@@ -199,6 +234,30 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self):
         return self.sum() / self.count()
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def var(self, ddof=1):
+        from functools import partial
+        meta = self.obj._pd
+        if isinstance(meta, pd.Series):
+            meta = meta.to_frame()
+        meta = meta.groupby(self.index).var(ddof=1)
+        result = aca([self.obj, self.index], _var_chunk,
+                     partial(_var_agg, ddof=ddof), meta,
+                     token=self._token_prefix + 'var')
+
+        if isinstance(self.obj, Series):
+            result = result[result.columns[0]]
+        if self._slice:
+            result = result[self._slice]
+
+        return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def std(self, ddof=1):
+        v = self.var(ddof)
+        result = map_partitions(np.sqrt, v, v)
+        return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def get_group(self, key):
