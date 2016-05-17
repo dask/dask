@@ -1538,12 +1538,18 @@ def redict_collection(c, dsk):
 
 
 def futures_of(o):
-    if isinstance(o, WrappedKey):
-        return [o]
-    if isinstance(o, (tuple, set, list)):
-        return [f for item in o for f in futures_of(item)]
-    if isinstance(o, dict):
-        return [f for v in o.values() for f in futures_of(v)]
-    if hasattr(o, 'dask'):
-        return futures_of(o.dask)
-    return []
+    """ Future objects in a collection """
+    stack = [o]
+    futures = set()
+    while stack:
+        x = stack.pop()
+        if type(x) in (tuple, set, list):
+            stack.extend(x)
+        if type(x) is dict:
+            stack.extend(x.values())
+        if type(x) is Future:
+            futures.add(x)
+        if hasattr(x, 'dask'):
+            stack.extend(x.dask.values())
+
+    return list(futures)
