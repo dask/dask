@@ -2209,13 +2209,14 @@ def test_wait_on_collections(e, s, a, b):
     assert all(f.key in a.data or f.key in b.data for f in L)
 
 
-def test_futures_of():
-    x, y, z = map(WrappedKey, 'xyz')
+@gen_cluster(executor=True)
+def test_futures_of(e, s, a, b):
+    x, y, z = e.map(inc, [1, 2, 3])
 
-    assert futures_of(0) == []
-    assert futures_of(x) == [x]
-    assert futures_of([x, y, z]) == [x, y, z]
-    assert futures_of([x, [y], [[z]]]) == [x, y, z]
+    assert set(futures_of(0)) == set()
+    assert set(futures_of(x)) == {x}
+    assert set(futures_of([x, y, z])) == {x, y, z}
+    assert set(futures_of([x, [y], [[z]]])) == {x, y, z}
 
     import dask.bag as db
     b = db.Bag({('b', i): f for i, f in enumerate([x, y, z])}, 'b', 3)

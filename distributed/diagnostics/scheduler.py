@@ -5,20 +5,21 @@ import os
 
 from toolz import countby, concat, dissoc
 
-from ..utils import key_split
+from ..utils import key_split, log_errors
 
 
 def tasks(s):
     """ Task and worker status of scheduler """
     processing = sum(map(len, s.processing.values()))
 
-    return {'processing': processing,
-            'total': len(s.tasks),
-            'in-memory': len(s.who_has),
-            'ready': len(s.ready)
-                   + sum(map(len, s.stacks.values())),
-            'waiting': len(s.waiting),
-            'failed': len(s.exceptions_blame)}
+    with log_errors():
+        return {'processing': processing,
+                'total': len(s.tasks),
+                'in-memory': len(s.who_has),
+                'ready': len(s.ready)
+                       + sum(map(len, s.stacks.values())),
+                'waiting': len(s.waiting),
+                'failed': len(s.exceptions_blame)}
 
 
 def workers(s):

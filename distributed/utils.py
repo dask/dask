@@ -176,10 +176,10 @@ def key_split(s):
     >>> key_split('x-abcdefab')  # ignores hex
     'x'
     """
-    if isinstance(s, bytes):
-        return key_split(s.decode())
-    if isinstance(s, tuple):
-        return key_split(s[0])
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
     try:
         words = s.split('-')
         result = words[0].lstrip("'(\"")
