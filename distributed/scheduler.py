@@ -835,7 +835,9 @@ class Scheduler(Server):
             if address not in self.processing:
                 return
             with ignoring(AttributeError):
-                self.worker_streams[address].stream.close()
+                stream = self.worker_streams[address].stream
+                if not stream.closed():
+                    stream.close()
 
             host, port = address.split(':')
 
@@ -1377,7 +1379,8 @@ class Scheduler(Server):
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
-            stream.close()
+            if not stream.closed():
+                stream.close()
             self.remove_worker(address=ident)
 
     @gen.coroutine
