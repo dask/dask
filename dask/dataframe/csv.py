@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from functools import partial
 from io import BytesIO
 from warnings import warn
 
@@ -16,7 +17,8 @@ from ..bytes.compression import seekable_files, files as cfiles
 delayed = delayed(pure=True)
 
 
-def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
+def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
+                   write_header=True, enforce=False):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -34,7 +36,7 @@ def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
         dask.dataframe.csv.read_csv_from_bytes
     """
     bio = BytesIO()
-    if not b.startswith(header.rstrip()):
+    if write_header and not b.startswith(header.rstrip()):
         bio.write(header)
     bio.write(b)
     bio.seek(0)
@@ -42,7 +44,7 @@ def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None):
     if dtypes:
         coerce_dtypes(df, dtypes)
 
-    if columns and (list(df.columns) != list(columns)):
+    if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
     return df
 
@@ -68,7 +70,7 @@ def coerce_dtypes(df, dtypes):
 
 
 def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
-        enforce_dtypes=True):
+                        enforce=False):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -95,10 +97,15 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     """
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
-    func = delayed(bytes_read_csv)
-    dfs = [func(b, header, kwargs, dtypes, columns)
-              for blocks in block_lists
-              for b in blocks]
+    func = partial(delayed(bytes_read_csv), enforce=enforce)
+    dfs = []
+    for blocks in block_lists:
+        if not blocks:
+            continue
+        df = func(blocks[0], header, kwargs, dtypes, columns, write_header=False)
+        dfs.append(df)
+        for b in blocks[1:]:
+            dfs.append(func(b, header, kwargs, dtypes, columns))
 
     if collection:
         return from_delayed(dfs, head)
@@ -108,7 +115,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
 
 def read_csv(filename, blocksize=2**25, chunkbytes=None,
         collection=True, lineterminator='\n', compression=None,
-        enforce_dtypes=True, sample=10000, **kwargs):
+        sample=10000, enforce=False, **kwargs):
     """ Read CSV files into a Dask.DataFrame
 
     This parallelizes the ``pandas.read_csv`` file in the following ways:
@@ -184,7 +191,6 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     head = pd.read_csv(BytesIO(sample), **kwargs)
 
     df = read_csv_from_bytes(values, header, head, kwargs,
-            collection=collection, enforce_dtypes=enforce_dtypes)
-
+                             collection=collection, enforce=enforce)
 
     return df
