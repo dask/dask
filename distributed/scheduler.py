@@ -1440,8 +1440,10 @@ class Scheduler(Server):
                                        io_loop=self.loop)
         except gen.TimeoutError:
             logger.warn("Heartbeat failed for %s", host)
+            return
         except Exception as e:
             logger.exception(e)
+            return
 
         end = default_timer()
         end_time = time()
