@@ -227,6 +227,12 @@ def test_key_names_include_function_names():
         return x + 1
     assert delayed(myfunc)(1).key.startswith('myfunc')
 
+def test_deterministic_tokenize_function():
+    def myfunc(x):
+        return x+1
+    dask1 = delayed(myfunc)(1).dask
+    dask2 = delayed(myfunc)(1).dask
+    assert list(dask1.keys())[0] == list(dask2.keys())[0]
 
 def test_key_names_include_type_names():
     assert delayed(1).key.startswith('int')
