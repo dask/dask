@@ -203,7 +203,7 @@ class _GroupBy(object):
 
         token = self._token_prefix + token
 
-        if isinstance(self.index, list):
+        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
             levels = list(range(len(self.index)))
         else:
             levels = 0
