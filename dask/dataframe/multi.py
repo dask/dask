@@ -57,13 +57,14 @@ from __future__ import absolute_import, division, print_function
 
 from bisect import bisect_left, bisect_right
 
-from toolz import merge_sorted, unique, partial
+from toolz import merge_sorted, unique, partial, first
 import toolz
 import numpy as np
 import pandas as pd
 
 from ..base import tokenize
-from .core import (_Frame, Scalar, DataFrame,
+from ..compatibility import apply
+from .core import (_Frame, Scalar, DataFrame, map_partitions,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle
@@ -297,6 +298,25 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                      name, dummy, divisions)
 
 
+def single_partition_join(left, right, **kwargs):
+    meta = pd.merge(left._pd, right._pd, **kwargs)
+    name = 'merge-' + tokenize(left, right, **kwargs)
+    if left.npartitions == 1:
+        left_key = first(left._keys())
+        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                kwargs))
+                   for i, right_key in enumerate(right._keys()))
+        divisions = right.divisions
+    elif right.npartitions == 1:
+        right_key = first(right._keys())
+        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
+                                kwargs))
+                   for i, left_key in enumerate(left._keys()))
+        divisions = left.divisions
+    return DataFrame(toolz.merge(dsk, left.dask, right.dask), name,
+                     meta, divisions)
+
+
 def _pdconcat(dfs, axis=0, join='outer'):
     """ Concatenate caring empty Series """
 
@@ -397,7 +417,12 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
-    else:                           # Do hash join
+    elif (left.npartitions == 1 and how in ('inner', 'right') or
+          right.npartitions == 1 and how in ('inner', 'left')):
+        return single_partition_join(left, right, how=how, right_on=right_on,
+                left_on=left_on, left_index=left_index,
+                right_index=right_index, suffixes=suffixes)
+    else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes)

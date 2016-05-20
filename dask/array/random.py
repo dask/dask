@@ -44,8 +44,13 @@ class RandomState(object):
         self._numpy_state.seed(seed)
 
     def _wrap(self, func, *args, **kwargs):
+        """ Wrap numpy random function to produce dask.array random function
+
+        extra_chunks should be a chunks tuple to append to the end of chunks
+        """
         size = kwargs.pop('size')
         chunks = kwargs.pop('chunks')
+        extra_chunks = kwargs.pop('extra_chunks', ())
 
         if not isinstance(size, (tuple, list)):
             size = (size,)
@@ -62,12 +67,13 @@ class RandomState(object):
         seeds = different_seeds(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = 'da.random.{0}-{1}'.format(func.__name__, token)
-        keys = product([name], *[range(len(bd)) for bd in chunks])
+        keys = product([name], *([range(len(bd)) for bd in chunks]
+                               + [[0]] * len(extra_chunks)))
         vals = ((_apply_random, func.__name__, seed, size, args, kwargs)
                 for seed, size in zip(seeds, sizes))
         dsk = dict(zip(keys, vals))
 
-        return Array(dsk, name, chunks, dtype=dtype)
+        return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
     def beta(self, a, b, size=None, chunks=None):
@@ -144,7 +150,11 @@ class RandomState(object):
         return self._wrap(np.random.RandomState.logseries, p,
                          size=size, chunks=chunks)
 
-    # multinomial
+    @doc_wraps(np.random.RandomState.multinomial)
+    def multinomial(self, n, pvals, size=None, chunks=None):
+        return self._wrap(np.random.RandomState.multinomial, n, pvals,
+                          size=size, chunks=chunks,
+                          extra_chunks=((len(pvals),),))
 
     @doc_wraps(np.random.RandomState.negative_binomial)
     def negative_binomial(self, n, p, size=None, chunks=None):
@@ -295,6 +305,7 @@ laplace = _state.laplace
 logistic = _state.logistic
 lognormal = _state.lognormal
 logseries = _state.logseries
+multinomial = _state.multinomial
 negative_binomial = _state.negative_binomial
 noncentral_chisquare = _state.noncentral_chisquare
 noncentral_f = _state.noncentral_f
@@ -305,6 +316,8 @@ power = _state.power
 rayleigh = _state.rayleigh
 random_sample = _state.random_sample
 random = random_sample
+randint = _state.randint
+random_integers = _state.random_integers
 triangular = _state.triangular
 uniform = _state.uniform
 vonmises = _state.vonmises

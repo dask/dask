@@ -6,10 +6,10 @@ import dask
 
 extras_require = {
   'array': ['numpy', 'toolz >= 0.7.2'],
-  'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.2'],
-  'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz >= 0.7.2',
-                'partd >= 0.3.2', 'cloudpickle >= 0.2.1'],
-  'distributed': ['distributed'],
+  'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.3'],
+  'dataframe': ['numpy', 'pandas >= 0.18.0', 'toolz >= 0.7.2',
+                'partd >= 0.3.3', 'cloudpickle >= 0.2.1'],
+  'distributed': ['distributed >= 1.9'],
   'imperative': ['toolz >= 0.7.2'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))

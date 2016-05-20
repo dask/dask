@@ -66,6 +66,14 @@ def test_attributes():
     assert a.imag.compute() == 1
 
 
+def test_attr_optimize():
+    # Check that attribute access is inlined
+    a = delayed([1, 2, 3])
+    o = a.index(1)
+    dsk = o._optimize(o.dask, o._keys())
+    assert getattr not in set(v[0] for v in dsk.values())
+
+
 def test_value_errors():
     a = delayed([1, 2, 3])
     # Immutable
@@ -290,3 +298,8 @@ def test_name_consitent_across_instances():
 def test_sensitive_to_partials():
     assert (delayed(partial(add, 10), pure=True)(2)._key !=
             delayed(partial(add, 20), pure=True)(2)._key)
+
+
+def test_value_name():
+    assert delayed(1)._key.startswith('int-')
+    assert delayed(1, pure=True)._key.startswith('int-')

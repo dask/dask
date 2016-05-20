@@ -58,10 +58,10 @@ from __future__ import absolute_import, division, print_function
 
 from operator import add
 
-from .core import get_deps
+from .core import get_dependencies, reverse_dict, get_deps
 
 
-def order(dsk):
+def order(dsk, dependencies=None):
     """ Order nodes in dask graph
 
     The ordering will be a toposort but will also have other convenient
@@ -74,7 +74,10 @@ def order(dsk):
     >>> order(dsk)
     {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
-    dependencies, dependents = get_deps(dsk)
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
     return dfs(dependencies, dependents, key=maxes.get)

@@ -64,7 +64,7 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def inline_singleton_lists(dsk):
+def inline_singleton_lists(dsk, dependencies=None):
     """ Inline lists that are only used once
 
     >>> d = {'b': (list, 'a'),
@@ -74,8 +74,8 @@ def inline_singleton_lists(dsk):
 
     Pairs nicely with lazify afterwards
     """
-
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
@@ -85,9 +85,9 @@ def inline_singleton_lists(dsk):
 
 def optimize(dsk, keys, **kwargs):
     """ Optimize a dask from a dask.bag """
-    dsk2 = cull(dsk, keys)
-    dsk3 = fuse(dsk2, keys)
-    dsk4 = inline_singleton_lists(dsk3)
+    dsk2, dependencies = cull(dsk, keys)
+    dsk3, dependencies = fuse(dsk2, keys, dependencies)
+    dsk4 = inline_singleton_lists(dsk3, dependencies)
     dsk5 = lazify(dsk4)
     return dsk5
 
@@ -464,6 +464,24 @@ class Bag(Base):
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
+
+    def unzip(self, n):
+        """Transform a bag of tuples to ``n`` bags of their elements.
+
+        Example
+        -------
+        >>> b = from_sequence([(i, i + 1, i + 2) for i in range(10)])
+        >>> first, second, third = b.unzip(3)
+        >>> isinstance(first, Bag)
+        True
+        >>> first.compute()
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+        Note that this is equivalent to:
+
+        >>> first, second, third = (b.pluck(i) for i in range(3))
+        """
+        return tuple(self.pluck(i) for i in range(n))
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=str, compression='infer',

@@ -68,8 +68,9 @@ def get(dsk, keys, optimizations=[], num_workers=None,
                                           func_loads=func_loads)
 
     # Optimize Dask
-    dsk2 = fuse(dsk, keys)
-    dsk3 = pipe(dsk2, partial(cull, keys=keys), *optimizations)
+    dsk2, dependencies = cull(dsk, keys)
+    dsk3, dependencies = fuse(dsk2, keys, dependencies)
+    dsk4 = pipe(dsk3, *optimizations)
 
     try:
         # Run

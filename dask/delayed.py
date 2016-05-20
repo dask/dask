@@ -12,6 +12,8 @@ from .utils import concrete, funcname
 from . import base
 from .compatibility import apply
 from . import threaded
+from .optimize import inline_functions
+from .core import flatten
 
 __all__ = ['compute', 'do', 'Delayed', 'delayed']
 
@@ -256,9 +258,12 @@ class Delayed(base.Base):
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', '_dasks')
-    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
+
+    @staticmethod
+    def _optimize(dsk, keys, **kwargs):
+        return inline_functions(dsk, list(flatten(keys)), [getattr])
 
     def __init__(self, name, dasks):
         object.__setattr__(self, '_key', name)
@@ -329,7 +334,7 @@ class DelayedLeaf(Delayed):
             try:
                 name = obj.__name__ + tokenize(obj, pure=pure)
             except AttributeError:
-                name = type(obj).__name__ + tokenize(obj, pure=pure)
+                name = '%s-%s' % (type(obj).__name__, tokenize(obj, pure=pure))
         object.__setattr__(self, '_dasks', [{name: obj}])
         object.__setattr__(self, 'pure', pure)
 

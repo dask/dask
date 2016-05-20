@@ -28,7 +28,8 @@ except ImportError:  # pragma: no cover
     nancumsum = npcompat.nancumsum
     nancumprod = npcompat.nancumprod
 
-inc = lambda x: x + 1
+def inc(x):
+    return x + 1
 
 
 def same_keys(a, b):
@@ -207,27 +208,27 @@ def test_stack():
 
     assert s.shape == (3, 4, 6)
     assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
-    assert s.dask[(s.name, 0, 1, 0)] == (getarray, ('A', 1, 0),
+    assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
                                           (None, colon, colon))
-    assert s.dask[(s.name, 2, 1, 0)] == (getarray, ('C', 1, 0),
+    assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
                                           (None, colon, colon))
     assert same_keys(s, stack([a, b, c], axis=0))
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
-    assert s2.dask[(s2.name, 0, 1, 0)] == (getarray, ('B', 0, 0),
+    assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
                                             (colon, None, colon))
-    assert s2.dask[(s2.name, 1, 1, 0)] == (getarray, ('B', 1, 0),
+    assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
                                             (colon, None, colon))
     assert same_keys(s2, stack([a, b, c], axis=1))
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
-    assert s2.dask[(s2.name, 0, 1, 0)] == (getarray, ('A', 0, 1),
+    assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
                                             (colon, colon, None))
-    assert s2.dask[(s2.name, 1, 1, 2)] == (getarray, ('C', 1, 1),
+    assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
                                             (colon, colon, None))
     assert same_keys(s2, stack([a, b, c], axis=2))
 
@@ -370,9 +371,8 @@ def test_binops():
                                      for i in range(3)))
 
     result = elemwise(pow, a, 2, name='c')
-    assert result.dask[('c', 0)][1] == ('a', 0)
-    f = result.dask[('c', 0)][0]
-    assert f(10) == 100
+    assert "'a', 0" in str(result.dask[('c', 0)])
+    assert "2" in str(result.dask[('c', 0)])
 
 
 def test_isnull():
@@ -413,16 +413,7 @@ def test_elemwise_on_scalars():
 
 
 def test_partial_by_order():
-    f = partial_by_order(add, [(1, 20)])
-    assert f(5) == 25
-    assert f.__name__ == 'add(20)'
-
-    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
-    assert f(3) == 28
-    assert f.__name__ == '<lambda>(...)'
-
-    assert raises(ValueError, lambda: partial_by_order(add, 1))
-    assert raises(ValueError, lambda: partial_by_order(add, [1]))
+    assert partial_by_order(5, function=add, other=[(1, 20)]) == 25
 
 
 def test_elemwise_with_ndarrays():
@@ -1991,6 +1982,15 @@ def test_atop_names():
     assert y.name.startswith('add')
 
 
+def test_atop_kwargs():
+    def f(a, b=0):
+        return a + b
+
+    x = da.ones(5, chunks=(2,))
+    y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
+    assert_eq(y, np.ones(5) + 10)
+
+
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
@@ -2006,3 +2006,22 @@ def test_A_property():
 def test_copy():
     x = da.ones(5, chunks=(2,))
     assert x.copy() is x
+
+
+def test_npartitions():
+    assert da.ones(5, chunks=(2,)).npartitions == 3
+    assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6
+
+
+def test_astype_gh1151():
+    a = np.arange(5).astype(np.int32)
+    b = da.from_array(a, (1,))
+    assert_eq(a.astype(np.int16), b.astype(np.int16))
+
+
+def test_elemwise_name():
+    assert (da.ones(5, chunks=2) + 1).name.startswith('add-')
+
+
+def test_map_blocks_name():
+    assert da.ones(5, chunks=2).map_blocks(inc).name.startswith('inc-')

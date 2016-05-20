@@ -217,6 +217,16 @@ class _Frame(Base):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
+    def __repr__(self):
+        name = self._name if len(self._name) < 10 else self._name[:7] + '...'
+        if self.known_divisions:
+            div_text = ', divisions=%s' % repr_long_list(self.divisions)
+        else:
+            div_text = ''
+
+        return ("dd.%s<%s, npartitions=%s%s>" %
+                (self.__class__.__name__, name, self.npartitions, div_text))
+
     @property
     def index(self):
         """Return dask Index instance"""
@@ -935,16 +945,17 @@ class Series(_Frame):
     def dtype(self):
         """ Return data type """
         if self._known_dtype:
-            return self.dtype
+            return self._pd.dtype
         else:
             self._pd, self._known_dtype = self._build_pd(self.head())
             return self._pd.dtype
 
     def __getattr__(self, key):
         if key == 'cat':
-            head = self.head()
-            if isinstance(head.dtype, pd.core.dtypes.CategoricalDtype):
-                return head.cat
+            # If unknown dtype, need to infer from head.
+            if not self._known_dtype:
+                self.dtype
+            return self._pd.cat
         raise AttributeError("'Series' object has no attribute %r" % key)
 
     @property
@@ -956,11 +967,6 @@ class Series(_Frame):
     @property
     def nbytes(self):
         return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes')
-
-    def __repr__(self):
-        return ("dd.%s<%s, divisions=%s>" %
-                (self.__class__.__name__, self._name,
-                 repr_long_list(self.divisions)))
 
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
@@ -1391,10 +1397,6 @@ class DataFrame(_Frame):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
                       list(self.columns)))
 
-    def __repr__(self):
-        return ("dd.DataFrame<%s, divisions=%s>" %
-                (self._name, repr_long_list(self.divisions)))
-
     @property
     def ndim(self):
         """ Return dimensionality """
@@ -1409,10 +1411,34 @@ class DataFrame(_Frame):
             self._pd, self._known_dtype = self._build_pd(self.head())
             return self._pd.dtypes
 
-    @derived_from(pd.DataFrame)
-    def set_index(self, other, drop=True, **kwargs):
-        from .shuffle import set_index
-        return set_index(self, other, drop=drop, **kwargs)
+    def set_index(self, other, drop=True, sorted=False, **kwargs):
+        """ Set the DataFrame index 9row labels) using an existing column
+
+        This operation in dask.dataframe is expensive.  If the input column is
+        sorted then we accomplish the set_index in a single full read of that
+        column.  However, if the input column is not sorted then this operation
+        triggers a full shuffle, which can take a while and only works on a
+        single machine (not distributed).
+
+        Parameters
+        ----------
+        other: Series or label
+        drop: boolean, default True
+            Delete columns to be used as the new index
+        sorted: boolean, default False
+            Set to True if the new index column is already sorted
+
+        Examples
+        --------
+        >>> df.set_index('x')  # doctest: +SKIP
+        >>> df.set_index(d.x)  # doctest: +SKIP
+        >>> df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        """
+        if sorted:
+            return set_sorted_index(self, other, drop=drop, **kwargs)
+        else:
+            from .shuffle import set_index
+            return set_index(self, other, drop=drop, **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index
@@ -1495,6 +1521,14 @@ class DataFrame(_Frame):
         dummy = self._pd.query(expr, **kwargs)
         return self._constructor(merge(dsk, self.dask), name,
                                  dummy, self.divisions)
+
+    @derived_from(pd.DataFrame)
+    def eval(self, expr, inplace=None, **kwargs):
+        if '=' in expr and inplace in (True, None):
+            raise NotImplementedError("Inplace eval not supported."
+            " Please use inplace=False")
+        meta = self._pd.eval(expr, inplace=inplace, **kwargs)
+        return self.map_partitions(_eval, meta, expr, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
@@ -1841,16 +1875,18 @@ def elemwise(op, *args, **kwargs):
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
-    if other:
-        op2 = partial_by_order(op, other)
-    else:
-        op2 = op
 
     # adjust the key length of Scalar
     keys = [d._keys() *  n if isinstance(d, Scalar)
             else d._keys() for d in dasks]
 
-    dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
+    if other:
+        dsk = dict(((_name, i),
+                   (apply, partial_by_order, list(frs),
+                     {'function': op, 'other': other}))
+                   for i, frs in enumerate(zip(*keys)))
+    else:
+        dsk = dict(((_name, i), (op,) + frs) for i, frs in enumerate(zip(*keys)))
     dsk = merge(dsk, *[d.dask for d in dasks])
 
     if columns is no_default:
@@ -2060,9 +2096,9 @@ def map_partitions(func, metadata, *args, **kwargs):
     metadata = _extract_pd(metadata)
 
     assert callable(func)
-    token = kwargs.pop('token', 'map-partitions')
+    token = kwargs.pop('token', None)
     token_key = tokenize(token or func, metadata, kwargs, *args)
-    name = '{0}-{1}'.format(token, token_key)
+    name = '{0}-{1}'.format(token or 'map-partitions', token_key)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
@@ -2645,3 +2681,36 @@ def try_loc(df, ind):
         return df.loc[ind]
     except KeyError:
         return df.head(0)
+
+
+def set_sorted_index(df, index, drop=True, **kwargs):
+    if not isinstance(index, Series):
+        index2 = df[index]
+        meta = df._pd.set_index(index, drop=drop)
+    else:
+        index2 = index
+        meta = df._pd.set_index(index._pd, drop=drop)
+
+    mins = index2.map_partitions(pd.Series.min)
+    maxes = index2.map_partitions(pd.Series.max)
+    mins, maxes = compute(mins, maxes, **kwargs)
+
+    if (sorted(mins) != list(mins) or
+        sorted(maxes) != list(maxes) or
+        any(a >= b for a, b in zip(mins, maxes))):
+        raise ValueError("Column not properly sorted", mins, maxes)
+
+    divisions = tuple(mins) + (list(maxes)[-1],)
+
+    result = map_partitions(_set_sorted_index, meta, df, index, drop=drop)
+    result.divisions = divisions
+
+    return result
+
+
+def _set_sorted_index(df, idx, drop):
+    return df.set_index(idx, drop=drop)
+
+
+def _eval(df, expr, **kwargs):
+    return df.eval(expr, **kwargs)

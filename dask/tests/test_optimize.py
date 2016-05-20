@@ -18,27 +18,27 @@ def double(x):
 def test_cull():
     # 'out' depends on 'x' and 'y', but not 'z'
     d = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x'), 'out': (add, 'y', 10)}
-    culled = cull(d, 'out')
+    culled, dependencies = cull(d, 'out')
     assert culled == {'x': 1, 'y': (inc, 'x'), 'out': (add, 'y', 10)}
+    assert dependencies == {'x': [], 'y': ['x'], 'out': ['y']}
+
     assert cull(d, 'out') == cull(d, ['out'])
-    assert cull(d, ['out', 'z']) == d
+    assert cull(d, ['out', 'z'])[0] == d
     assert cull(d, [['out'], ['z']]) == cull(d, ['out', 'z'])
     assert raises(KeyError, lambda: cull(d, 'badkey'))
 
 
 def test_fuse():
-    assert fuse({
-        'w': (inc, 'x'),
-        'x': (inc, 'y'),
-        'y': (inc, 'z'),
-        'z': (add, 'a', 'b'),
-        'a': 1,
-        'b': 2,
-    }) == {
-        'w': (inc, (inc, (inc, (add, 'a', 'b')))),
-        'a': 1,
-        'b': 2,
-    }
+    dsk, dependencies = fuse({'w': (inc, 'x'),
+                              'x': (inc, 'y'),
+                              'y': (inc, 'z'),
+                              'z': (add, 'a', 'b'),
+                              'a': 1,
+                              'b': 2})
+    assert dsk == {'w': (inc, (inc, (inc, (add, 'a', 'b')))),
+                   'a': 1,
+                   'b': 2}
+    assert dependencies == {'a': set(), 'b': set(), 'w': set(['a', 'b'])}
     assert fuse({
         'NEW': (inc, 'y'),
         'w': (inc, 'x'),
@@ -47,13 +47,16 @@ def test_fuse():
         'z': (add, 'a', 'b'),
         'a': 1,
         'b': 2,
-    }) == {
+    }) == ({
         'NEW': (inc, 'y'),
         'w': (inc, (inc, 'y')),
         'y': (inc, (add, 'a', 'b')),
         'a': 1,
         'b': 2,
-    }
+    },
+    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
+     'w': set(['y']), 'NEW': set(['y'])})
+
     assert fuse({
         'v': (inc, 'y'),
         'u': (inc, 'w'),
@@ -65,13 +68,15 @@ def test_fuse():
         'b': (inc, 'd'),
         'c': 1,
         'd': 2,
-    }) == {
+    }) == ({
         'u': (inc, (inc, (inc, 'y'))),
         'v': (inc, 'y'),
         'y': (inc, (add, 'a', 'b')),
         'a': (inc, 1),
         'b': (inc, 2),
-    }
+    },
+    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
+     'v': set(['y']), 'u': set(['y'])})
     assert fuse({
         'a': (inc, 'x'),
         'b': (inc, 'x'),
@@ -79,39 +84,43 @@ def test_fuse():
         'd': (inc, 'c'),
         'x': (inc, 'y'),
         'y': 0,
-    }) == {
+    }) == ({
         'a': (inc, 'x'),
         'b': (inc, 'x'),
         'd': (inc, (inc, 'x')),
         'x': (inc, 0),
-    }
+    },
+    {'x': set(), 'd': set(['x']), 'a': set(['x']), 'b': set(['x'])})
     assert fuse({
         'a': 1,
         'b': (inc, 'a'),
         'c': (add, 'b', 'b')
-    }) == {
+    }) == ({
         'b': (inc, 1),
         'c': (add, 'b', 'b')
-    }
+        }, {'b': set(), 'c': set(['b'])})
 
 
 def test_fuse_keys():
     assert (fuse({'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}, keys=['b'])
-            == {'b': (inc, 1), 'c': (inc, 'b')})
-    assert fuse({
+            == ({'b': (inc, 1), 'c': (inc, 'b')},
+                {'b': set(), 'c': set(['b'])}))
+    dsk, dependencies = fuse({
         'w': (inc, 'x'),
         'x': (inc, 'y'),
         'y': (inc, 'z'),
         'z': (add, 'a', 'b'),
         'a': 1,
         'b': 2,
-    }, keys=['x', 'z']) == {
-        'w': (inc, 'x'),
-        'x': (inc, (inc, 'z')),
-        'z': (add, 'a', 'b'),
-        'a': 1,
-        'b': 2,
-    }
+    }, keys=['x', 'z'])
+
+    assert dsk == {'w': (inc, 'x'),
+                   'x': (inc, (inc, 'z')),
+                   'z': (add, 'a', 'b'),
+                   'a': 1,
+                   'b': 2 }
+    assert dependencies == {'a': set(), 'b': set(), 'z': set(['a', 'b']),
+                            'x': set(['z']), 'w': set(['x'])}
 
 
 def test_inline():
@@ -341,7 +350,7 @@ def test_fuse_getitem():
     dsk = {'x': (load, 'store', 'part', ['a', 'b']),
            'y': (getitem, 'x', 'a')}
     dsk2 = fuse_getitem(dsk, load, 3)
-    dsk2 = cull(dsk2, 'y')
+    dsk2, dependencies = cull(dsk2, 'y')
     assert dsk2 == {'y': (load, 'store', 'part', 'a')}
 
 
@@ -352,5 +361,5 @@ def test_fuse_selections():
            'y': (getitem, 'x', 'a')}
     merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
     dsk2 = fuse_selections(dsk, getitem, load, merge)
-    dsk2 = cull(dsk2, 'y')
+    dsk2, dependencies = cull(dsk2, 'y')
     assert dsk2 == {'y': (load, 'store', 'part', 'a')}

@@ -12,7 +12,7 @@ class Callback(object):
 
     >>> def start(dsk):
     ...     pass
-    >>> def start_state(dask, state):
+    >>> def start_state(dsk, state):
     ...     pass
     >>> def pretask(key, dsk, state):
     ...     pass
@@ -82,7 +82,7 @@ def unpack_callbacks(cbs):
     if cbs:
         return [[i for i in f if i] for f in zip(*cbs)]
     else:
-        return [(), (), (), ()]
+        return [(), (), (), (), ()]
 
 
 def normalize_callback(cb):

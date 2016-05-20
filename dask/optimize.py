@@ -22,49 +22,80 @@ def cull(dsk, keys):
     Examples
     --------
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> cull(d, 'out')  # doctest: +SKIP
+    >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
+    >>> dsk  # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
+    >>> dependencies  # doctest: +SKIP
+    {'x': set(), 'out': set(['x'])}
+
+    Returns
+    -------
+    dsk: culled dask graph
+    dependencies: Dict mapping {key: [deps]}.  Useful side effect to accelerate
+        other optimizations, notably fuse.
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    nxt = set(flatten(keys))
-    seen = nxt
-    while nxt:
-        cur = nxt
-        nxt = set()
-        for item in cur:
-            for dep in get_dependencies(dsk, item):
-                if dep not in seen:
-                    nxt.add(dep)
-        seen.update(nxt)
-    return dict((k, v) for k, v in dsk.items() if k in seen)
+    out = dict()
+    seen = set()
+    dependencies = dict()
+    stack = list(set(flatten(keys)))
+    while stack:
+        key = stack.pop()
+        out[key] = dsk[key]
+        deps = get_dependencies(dsk, key, as_list=True)  # fuse needs lists
+        dependencies[key] = deps
+        unseen = [d for d in deps if d not in seen]
+        stack.extend(unseen)
+        seen.update(unseen)
+    return out, dependencies
 
 
-def fuse(dsk, keys=None):
-    """ Return new dask with linear sequence of tasks fused together.
+def fuse(dsk, keys=None, dependencies=None):
+    """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
+    Supply ``dependencies`` from output of ``cull`` if available to avoid
+    recomputing dependencies.
 
-    This may be used as an optimization step.
+    Parameters
+    ----------
+    dsk: dict
+    keys: list
+    dependencies: dict, optional
+        {key: [list-of-keys]}.  Must be a list to provide count of each key
+        This optional input often comes from ``cull``
 
     Examples
     --------
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
-    >>> fuse(d)  # doctest: +SKIP
+    >>> dsk, dependencies = fuse(d)
+    >>> dsk # doctest: +SKIP
     {'c': (inc, (inc, 1))}
-    >>> fuse(d, keys=['b'])  # doctest: +SKIP
+    >>> dsk, dependencies = fuse(d, keys=['b'])
+    >>> dsk  # doctest: +SKIP
     {'b': (inc, 1), 'c': (inc, 'b')}
+
+    Returns
+    -------
+    dsk: output graph with keys fused
+    dependencies: dict mapping dependencies after fusion.  Useful side effect
+        to accelerate other downstream optimizations.
     """
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
             keys = [keys]
         keys = set(flatten(keys))
 
+    if dependencies is None:
+        dependencies = dict((key, get_dependencies(dsk, key, as_list=True))
+                            for key in dsk)
+
     # locate all members of linear chains
     child2parent = {}
     unfusible = set()
     for parent in dsk:
-        deps = get_dependencies(dsk, parent, as_list=True)
+        deps = dependencies[parent]
         has_many_children = len(deps) > 1
         for child in deps:
             if keys is not None and child in keys:
@@ -94,6 +125,8 @@ def fuse(dsk, keys=None):
             chain.append(child)
         chains.append(chain)
 
+    dependencies = dict((k, set(v)) for k, v in dependencies.items())
+
     # create a new dask with fused chains
     rv = {}
     fused = set()
@@ -102,6 +135,8 @@ def fuse(dsk, keys=None):
         val = dsk[child]
         while chain:
             parent = chain.pop()
+            dependencies[parent].update(dependencies.pop(child))
+            dependencies[parent].remove(child)
             val = subs(dsk[parent], child, val)
             fused.add(child)
             child = parent
@@ -111,10 +146,10 @@ def fuse(dsk, keys=None):
     for key, val in dsk.items():
         if key not in fused:
             rv[key] = val
-    return rv
+    return rv, dependencies
 
 
-def inline(dsk, keys=None, inline_constants=True):
+def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     """ Return new dask with the given keys inlined with their values.
 
     Inlines all constants if ``inline_constants`` keyword is True.
@@ -140,13 +175,17 @@ def inline(dsk, keys=None, inline_constants=True):
     if inline_constants:
         keys.update(k for k, v in dsk.items() if not istask(v))
 
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
-    replaceorder = toposort(dict((k, dsk[k]) for k in keys if k in dsk))
+    replaceorder = toposort(dict((k, dsk[k]) for k in keys if k in dsk),
+                            dependencies=dependencies)
     keysubs = {}
     for key in replaceorder:
         val = dsk[key]
-        for dep in keys & get_dependencies(dsk, key):
+        for dep in keys & dependencies[key]:
             if dep in keysubs:
                 replace = keysubs[dep]
             else:
@@ -159,13 +198,14 @@ def inline(dsk, keys=None, inline_constants=True):
     for key, val in dsk.items():
         if key in keys:
             continue
-        for item in keys & get_dependencies(dsk, key):
+        for item in keys & dependencies[key]:
             val = subs(val, item, keysubs[item])
         rv[key] = val
     return rv
 
 
-def inline_functions(dsk, output, fast_functions=None, inline_constants=False):
+def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
+        dependencies=None):
     """ Inline cheap functions into larger operations
 
     Examples
@@ -194,7 +234,8 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False):
 
     fast_functions = set(fast_functions)
 
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    if dependencies is None:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
@@ -203,7 +244,8 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False):
               and dependents[k]
               and k not in output]
     if keys:
-        return inline(dsk, keys, inline_constants=inline_constants)
+        return inline(dsk, keys, inline_constants=inline_constants,
+                dependencies=dependencies)
     else:
         return dsk
 
@@ -515,7 +557,7 @@ def fuse_selections(dsk, head1, head2, merge):
     ...        'y': (getitem, 'x', 'a')}
     >>> merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
     >>> dsk2 = fuse_selections(dsk, getitem, load, merge)
-    >>> cull(dsk2, 'y')
+    >>> cull(dsk2, 'y')[0]
     {'y': (<function load at ...>, 'store', 'part', 'a')}
     """
     dsk2 = dict()
@@ -548,7 +590,7 @@ def fuse_getitem(dsk, func, place):
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
     ...        'y': (getitem, 'x', 'a')}
     >>> dsk2 = fuse_getitem(dsk, load, 3)  # columns in arg place 3
-    >>> cull(dsk2, 'y')
+    >>> cull(dsk2, 'y')[0]
     {'y': (<function load at ...>, 'store', 'part', 'a')}
     """
     return fuse_selections(dsk, getitem, func,

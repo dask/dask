@@ -20,87 +20,62 @@ def optimize(dsk, keys, **kwargs):
     """
     keys = list(flatten(keys))
     fast_functions = kwargs.get('fast_functions',
-                             set([getarray, getitem, np.transpose]))
-    dsk2 = cull(dsk, keys)
-    dsk3 = remove_full_slices(dsk2, keys)
-    dsk4 = fuse(dsk3, keys)
-    dsk5 = valmap(rewrite_rules.rewrite, dsk4)
-    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions)
+                             set([getarray, np.transpose]))
+    dsk2, dependencies = cull(dsk, keys)
+    dsk4, dependencies = fuse(dsk2, keys, dependencies)
+    dsk5 = optimize_slices(dsk4)
+    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions,
+            dependencies=dependencies)
     return dsk6
 
 
-def is_full_slice(task):
+def optimize_slices(dsk):
+    """ Optimize slices
+
+    1.  Fuse repeated slices, like x[5:][2:6] -> x[7:11]
+    2.  Remove full slices, like         x[:] -> x
+
+    See also:
+        fuse_slice_dict
     """
-
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(None, None, None), slice(None, None, None))))
-    True
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(5, 20, 1), slice(None, None, None))))
-    False
-    """
-    return (isinstance(task, tuple) and
-            (task[0] in (getitem, getarray)) and
-            (task[2] == slice(None, None, None) or
-             isinstance(task[2], tuple) and
-             all(ind == slice(None, None, None) for ind in task[2])))
-
-
-def remove_full_slices(dsk, keys):
-    """ Remove full slices from dask
-
-    See Also:
-        dask.optimize.inline
-
-    Examples
-    --------
-
-    >>> dsk = {'a': (range, 5),
-    ...        'b': (getitem, 'a', (slice(None, None, None),)),
-    ...        'c': (getitem, 'b', (slice(None, None, None),)),
-    ...        'd': (getitem, 'c', (slice(None, 5, None),)),
-    ...        'e': (getitem, 'd', (slice(None, None, None),))}
-
-    >>> remove_full_slices(dsk)  # doctest: +SKIP
-    {'a': (range, 5),
-     'e': (getitem, 'a', (slice(None, 5, None),))}
-    """
-    keys = set(keys)
-    full_slice_keys = set(k for k, task in dsk.items()
-                            if is_full_slice(task))
-    dsk2 = dict((k, task[1] if k in full_slice_keys and k not in keys else task)
-                 for k, task in dsk.items())
-    dsk3 = dealias(dsk2, keys)
-    return dsk3
-
-
-a, b, x = '~a', '~b', '~x'
-
-
-def fuse_slice_dict(match, getter=getarray):
-    # Making new dimensions?  Need two getitems
-    # TODO: well, we could still optimize the non-None axes
-    try:
-        c = fuse_slice(match[a], match[b])
-        return (getter, match[x], c)
-    except NotImplementedError:
-        return (getitem, (getter, match[x], match[a]),
-                         match[b])
-
-
-rewrite_rules = RuleSet(
-        RewriteRule((getitem, (getitem, x, a), b),
-                    partial(fuse_slice_dict, getter=getitem),
-                    (a, b, x)),
-        RewriteRule((getarray, (getitem, x, a), b),
-                    fuse_slice_dict,
-                    (a, b, x)),
-        RewriteRule((getarray, (getarray, x, a), b),
-                    fuse_slice_dict,
-                    (a, b, x)),
-        RewriteRule((getitem, (getarray, x, a), b),
-                    fuse_slice_dict,
-                    (a, b, x)))
+    dsk = dsk.copy()
+    for k, v in dsk.items():
+        if type(v) is tuple:
+            if v[0] is getitem or v[0] is getarray:
+                try:
+                    func, a, a_index = v
+                except ValueError:  # has four elements, includes a lock
+                    continue
+                while type(a) is tuple and (a[0] is getitem or a[0] is getarray):
+                    try:
+                        _, b, b_index = a
+                    except ValueError:  # has four elements, includes a lock
+                        break
+                    if (type(a_index) is tuple) != (type(b_index) is tuple):
+                        break
+                    if ((type(a_index) is tuple) and
+                        (len(a_index) != len(b_index)) and
+                        any(i is None for i in b_index + a_index)):
+                        break
+                    try:
+                        c_index = fuse_slice(b_index, a_index)
+                    except NotImplementedError:
+                        break
+                    (a, a_index) = (b, c_index)
+                if (type(a_index) is slice and
+                    not a_index.start and
+                    a_index.stop is None and
+                    a_index.step is None):
+                    dsk[k] = a
+                elif type(a_index) is tuple and all(type(s) is slice and
+                                                    not s.start and
+                                                    s.stop is None and
+                                                    s.step is None
+                                                    for s in a_index):
+                    dsk[k] = a
+                else:
+                    dsk[k] = (func, a, a_index)
+    return dsk
 
 
 def normalize_slice(s):
