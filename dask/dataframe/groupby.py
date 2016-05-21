@@ -9,6 +9,7 @@ from dask.dataframe.core import (DataFrame, Series, Index,
                                  aca, map_partitions, no_default)
 from dask.utils import derived_from
 
+
 def _maybe_slice(grouped, columns):
     """
     Slice columns if grouped is pd.DataFrameGroupBy
@@ -18,15 +19,18 @@ def _maybe_slice(grouped, columns):
             return grouped[columns]
     return grouped
 
+
 def _groupby_apply_level0(df, key, func):
     grouped = df.groupby(level=0)
     grouped = _maybe_slice(grouped, key)
     return grouped.apply(func)
 
+
 def _groupby_apply_index(df, ind, key, func):
     grouped = df.groupby(ind)
     grouped = _maybe_slice(grouped, key)
     return grouped.apply(func)
+
 
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
@@ -56,32 +60,36 @@ def _apply_chunk(df, index, func, columns):
     else:
         return func(df.groupby(index)[columns])
 
+
 def _sum(g):
     return g.sum()
+
 
 def _min(g):
     return g.min()
 
+
 def _max(g):
     return g.max()
 
+
 def _count(g):
     return g.count()
+
 
 def _var_chunk(df, index):
     if isinstance(df, pd.Series):
         df = df.to_frame()
     x = df.groupby(index).sum()
     x2 = (df**2).rename(columns=lambda c: c + '-x2')
-    x2 = (pd.concat([df, x2], axis=1)
-            .groupby(index)
-            [[c + '-x2' for c in x.columns]]
-            .sum())
+    cols = [c + '-x2' for c in x.columns]
+    x2 = pd.concat([df, x2], axis=1).groupby(index)[cols].sum()
     n = (df.groupby(index).count()
            .rename(columns=lambda c: c + '-count'))
 
     result = pd.concat([x, x2, n], axis=1)
     return result
+
 
 def _var_agg(g, ddof):
     g = g.groupby(level=0).sum()
@@ -98,6 +106,7 @@ def _var_agg(g, ddof):
     assert isinstance(result, pd.DataFrame)
     return result
 
+
 ###############################################################
 # nunique
 ###############################################################
@@ -108,6 +117,7 @@ def _nunique_df_chunk(df, index):
     grouped = (df.groupby(index).apply(pd.DataFrame.drop_duplicates))
     grouped.index = grouped.index.get_level_values(level=0)
     return grouped
+
 
 def _nunique_series_chunk(df, index):
     assert isinstance(df, pd.Series)
@@ -138,9 +148,9 @@ class _GroupBy(object):
 
         # grouping key passed via groupby method
         if (isinstance(index, (DataFrame, Series, Index)) and
-            isinstance(df, DataFrame) and
-            index._name.startswith(df._name) and
-            index._name[len(df._name) + 1:] in df.columns):
+                isinstance(df, DataFrame) and
+                index._name.startswith(df._name) and
+                index._name[len(df._name) + 1:] in df.columns):
             index = index._name[len(df._name) + 1:]
         self.index = index
 
@@ -175,7 +185,7 @@ class _GroupBy(object):
         """
         if isinstance(df, DataFrame) and isinstance(index, Series):
             if (index.name is not None and
-                index._name == df._name + '.' + index.name):
+                    index._name == df._name + '.' + index.name):
                 return True
         return False
 
@@ -203,7 +213,7 @@ class _GroupBy(object):
 
         token = self._token_prefix + token
 
-        if isinstance(self.index, list):
+        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
             levels = list(range(len(self.index)))
         else:
             levels = 0
