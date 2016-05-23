@@ -48,8 +48,6 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
                           services={('http', http_port): HTTPScheduler})
-    if center:
-        loop.run_sync(scheduler.sync_center)
     scheduler.start(port)
 
     if _bokeh:
