@@ -385,10 +385,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     specific ``get`` method that walks through the dask array with parallel
     workers, avoiding repeat computation and minimizing memory use.
 
-    This function evaluates the entire graph, regardless of the given output
-    keys.  You may want to cull your graph ahead of time with
-    ``dask.optimize.cull``.
-
     Parameters
     ----------
 
