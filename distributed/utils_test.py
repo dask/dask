@@ -99,9 +99,6 @@ def run_scheduler(q, center_port=None, **kwargs):
     center = ('127.0.0.1', center_port) if center_port else None
     scheduler = Scheduler(center=center, **kwargs)
     scheduler.listen(0)
-
-    if center_port:
-        loop.run_sync(scheduler.sync_center)
     done = scheduler.start(0)
 
     q.put(scheduler.port)
