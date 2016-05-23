@@ -976,6 +976,27 @@ def test_queue_scatter(loop):
             assert ee.gather(a) == 0
 
 
+def test_queue_scatter_gather_maxsize(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            from distributed.compatibility import Queue
+            q = Queue(maxsize=3)
+            out = e.scatter(q, maxsize=10)
+            assert out.maxsize == 10
+            local = e.gather(q)
+            assert not local.maxsize
+
+            q = Queue()
+            out = e.scatter(q)
+            assert not out.maxsize
+            local = e.gather(out, maxsize=10)
+            assert local.maxsize == 10
+
+            q = Queue(maxsize=3)
+            out = e.scatter(q)
+            assert not out.maxsize
+
+
 def test_queue_gather(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
@@ -2001,8 +2022,10 @@ def test_map_queue(e, s, a, b):
     q_1 = Queue(maxsize=2)
     q_2 = e.map(inc, q_1)
     assert isqueue(q_2)
-    q_3 = e.map(double, q_2)
+    assert not q_2.maxsize
+    q_3 = e.map(double, q_2, maxsize=3)
     assert isqueue(q_3)
+    assert q_3.maxsize == 3
     q_4 = yield e._gather(q_3)
     assert isqueue(q_4)
 

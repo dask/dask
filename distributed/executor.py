@@ -567,7 +567,8 @@ class Executor(object):
 
         if (all(map(isqueue, iterables)) or
             all(isinstance(i, Iterator) for i in iterables)):
-            q_out = pyQueue()
+            maxsize = kwargs.pop('maxsize', 0)
+            q_out = pyQueue(maxsize=maxsize)
             t = Thread(target=self._threaded_map, args=(q_out, func, iterables),
                                                   kwargs=kwargs)
             t.daemon = True
@@ -696,7 +697,7 @@ class Executor(object):
             for item in results:
                 qout.put(item)
 
-    def gather(self, futures, errors='raise'):
+    def gather(self, futures, errors='raise', maxsize=0):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -725,7 +726,7 @@ class Executor(object):
         Executor.scatter: Send data out to cluster
         """
         if isqueue(futures):
-            qout = pyQueue()
+            qout = pyQueue(maxsize=maxsize)
             t = Thread(target=self._threaded_gather, args=(futures, qout),
                         kwargs={'errors': errors})
             t.daemon = True
@@ -792,7 +793,7 @@ class Executor(object):
             for future in futures:
                 qout.put(future)
 
-    def scatter(self, data, workers=None, broadcast=False):
+    def scatter(self, data, workers=None, broadcast=False, maxsize=0):
         """ Scatter data into distributed memory
 
         Parameters
@@ -805,6 +806,8 @@ class Executor(object):
         broadcast: bool (defaults to False)
             Whether to send each data element to all workers.
             By default we round-robin based on number of cores.
+        maxsize: int (optional)
+            Maximum size of queue if using queues, 0 implies infinite
 
         Returns
         -------
@@ -840,7 +843,7 @@ class Executor(object):
         """
         if isqueue(data) or isinstance(data, Iterator):
             logger.debug("Starting thread for streaming data")
-            qout = pyQueue()
+            qout = pyQueue(maxsize=maxsize)
 
             t = Thread(target=self._threaded_scatter,
                        args=(data, qout),
