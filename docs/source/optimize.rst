@@ -2,7 +2,7 @@ Optimization
 ============
 
 Performance can be significantly improved in different contexts by making
-small optimizations on the dask graph before calling the scheduler. 
+small optimizations on the dask graph before calling the scheduler.
 
 The
 ``dask.optimize`` module contains several functions to transform graphs in a
@@ -19,7 +19,7 @@ In general, there are two goals when doing graph optimizations:
 
 Simplifying computation can be done on a graph level by removing unnecessary
 tasks (``cull``), or on a task level by replacing expensive operations with
-cheaper ones (``RewriteRule``). 
+cheaper ones (``RewriteRule``).
 
 Parallelism can be improved by reducing
 inter-task communication, whether by fusing many tasks into one (``fuse``), or
@@ -38,43 +38,44 @@ Suppose you had a custom dask graph for doing a word counting task:
     >>> from __future__ import print_function
 
     >>> def print_and_return(string):
-            print(string)
-            return string
+    ...     print(string)
+    ...     return string
 
-    >>> format_str = 'word list has {0} occurrences of {1}, out of {2} words'
+    >>> def format_str(count, val, nwords):
+    ...     return ('word list has {0} occurrences of {1}, '
+    ...             'out of {2} words').format(count, val, nwords)
 
     >>> dsk = {'words': 'apple orange apple pear orange pear pear',
-               'nwords': (len, (str.split, 'words')),
-               'val1': 'orange',
-               'val2': 'apple',
-               'val3': 'pear',
-               'count1': (str.count, 'words', 'val1'),
-               'count2': (str.count, 'words', 'val2'),
-               'count3': (str.count, 'words', 'val3'),
-               'out1': (format_str.format, 'count1', 'val1', 'nwords'),
-               'out2': (format_str.format, 'count2', 'val2', 'nwords'),
-               'out3': (format_str.format, 'count3', 'val3', 'nwords'),
-               'print1': (print_and_return, 'out1'),
-               'print2': (print_and_return, 'out2'),
-               'print3': (print_and_return, 'out3')}
+    ...        'nwords': (len, (str.split, 'words')),
+    ...        'val1': 'orange',
+    ...        'val2': 'apple',
+    ...        'val3': 'pear',
+    ...        'count1': (str.count, 'words', 'val1'),
+    ...        'count2': (str.count, 'words', 'val2'),
+    ...        'count3': (str.count, 'words', 'val3'),
+    ...        'out1': (format_str, 'count1', 'val1', 'nwords'),
+    ...        'out2': (format_str, 'count2', 'val2', 'nwords'),
+    ...        'out3': (format_str, 'count3', 'val3', 'nwords'),
+    ...        'print1': (print_and_return, 'out1'),
+    ...        'print2': (print_and_return, 'out2'),
+    ...        'print3': (print_and_return, 'out3')}
 
 .. image:: images/optimize_dask1.png
    :width: 65 %
-   :alt: The original dask
+   :alt: The original dask graph
 
 Here we're counting the occurence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
 results, printing the output, then returning the output string.
 
-To perform the computation, we pass the dask and the desired output keys to a
-scheduler ``get`` function:
+To perform the computation, we pass the dask graph and the desired output keys
+to a scheduler ``get`` function:
 
 .. code-block:: python
 
-    >>> from dask.multiprocessing import get
+    >>> from dask.threaded import get
 
     >>> results = get(dsk, ['print1', 'print2'])
-    word list has 3 occurrences of pear, out of 7 words
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
@@ -82,34 +83,30 @@ scheduler ``get`` function:
     ('word list has 2 occurrences of orange, out of 7 words',
      'word list has 2 occurrences of apple, out of 7 words')
 
-As can be seen above, the schedulers computed the whole graph before returning
-just a few of the outputs. This is because the schedulers will always compute
-all tasks, even if we only requested a few of the output keys. 
-
-To make this task run more efficiently, before passing the dask to ``get``, 
-remove the unnecessary tasks from the graph. To do this, use the ``cull`` 
-function:
+As can be seen above, the scheduler computed only the requested outputs
+(``'print3'`` was never computed). This is because the scheduler internally
+calls ``cull``, which removes the unnecessary tasks from the graph. Even though
+this is done internally in the scheduler, it can be beneficial to call it at
+the start of a series of optimizations to reduce the amount of work done in
+later steps:
 
 .. code-block:: python
 
     >>> from dask.optimize import cull
-    >>> dsk1 = cull(dsk, ['print1', 'print2'])
-    >>> results = get(dsk1, ['print1', 'print2'])
-    word list has 2 occurrences of apple, out of 7 words
-    word list has 2 occurrences of orange, out of 7 words
+    >>> dsk1, dependencies = cull(dsk, ['print1', 'print2'])
 
 .. image:: images/optimize_dask2.png
    :width: 60 %
    :alt: After culling
 
 Looking at the task graph above, there are multiple accesses to constants such
-as ``'val1'`` or ``'val2'`` in the dask. These can be inlined into the tasks to
-improve efficiency using the ``inline`` function. For example:
+as ``'val1'`` or ``'val2'`` in the dask graph. These can be inlined into the
+tasks to improve efficiency using the ``inline`` function. For example:
 
 .. code-block:: python
 
     >>> from dask.optimize import inline
-    >>> dsk2 = inline(dsk1)
+    >>> dsk2 = inline(dsk1, dependencies=dependencies)
     >>> results = get(dsk2, ['print1', 'print2'])
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -128,7 +125,7 @@ can be used:
 .. code-block:: python
 
     >>> from dask.optimize import inline_functions
-    >>> dsk3 = inline_functions(dsk2, [len, str.split])
+    >>> dsk3 = inline_functions(dsk2, [len, str.split], dependencies=dependencies)
     >>> results = get(dsk3, ['print1', 'print2'])
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -145,7 +142,7 @@ One option is just to merge these linear chains into one big task using the
 .. code-block:: python
 
     >>> from dask.optimize import fuse
-    >>> dsk4 = fuse(dsk3)
+    >>> dsk4, dependencies = fuse(dsk3)
     >>> results = get(dsk4, ['print1', 'print2'])
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -160,11 +157,12 @@ Putting it all together:
 .. code-block:: python
 
     >>> def optimize_and_get(dsk, keys):
-            dsk1 = cull(dsk, keys)
-            dsk2 = inline(dsk1)
-            dsk3 = inline_functions(dsk2, [len, str.split])
-            dsk4 = fuse(dsk2)
-            return get(dsk4, keys)
+    ...     dsk1, deps = cull(dsk, keys)
+    ...     dsk2 = inline(dsk1, dependencies=deps)
+    ...     dsk3 = inline_functions(dsk2, [len, str.split], dependencies=deps)
+    ...     dsk4, deps = fuse(dsk2)
+    ...     return get(dsk4, keys)
+
     >>> optimize_and_get(dsk, ['print1', 'print2'])
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -172,15 +170,14 @@ Putting it all together:
 
 In summary, the above operations accomplish the following:
 
-1. Removed tasks unncessary for the desired output using ``cull``
-2. Inlined constants using ``inline``
-3. Inlined cheap computations using ``inline_functions``, improving parallelism, and
+1. Removed tasks unncessary for the desired output using ``cull``.
+2. Inlined constants using ``inline``.
+3. Inlined cheap computations using ``inline_functions``, improving parallelism.
 4. Fused linear tasks together to ensure they run on the same worker using ``fuse``.
 
-As stated previously, these optimizations
-are already performed automatically in the dask collections. Users not working
-with custom graphs or computations should rarely need to directly
-interact with them.
+As stated previously, these optimizations are already performed automatically
+in the dask collections. Users not working with custom graphs or computations
+should rarely need to directly interact with them.
 
 These are just a few of the optimizations provided in ``dask.optimize``. For
 more information, see the API below.
