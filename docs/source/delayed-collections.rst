@@ -32,7 +32,7 @@ back to the custom format.
    dfs = df.to_delayed()
    writes = [delayed(save)(df, fn) for df, fn in zip(dfs, filenames)]
 
-   dd.compute(writes)
+   dd.compute(*writes)
 
 Data science is often complex, ``dask.delayed`` provides a release valve for
 users to manage this complexity on their own, and solve the last mile problem
