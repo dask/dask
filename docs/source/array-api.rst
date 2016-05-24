@@ -217,9 +217,21 @@ Create and Store Arrays
    to_hdf5
    to_npy_stack
 
+Internal functions
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.core
+
+.. autosummary::
+   map_blocks
+   atop
+   top
+
 
 Other functions
 ~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array
 
 .. autofunction:: from_array
 .. autofunction:: from_delayed
@@ -432,6 +444,12 @@ Other functions
 .. autofunction:: wald
 .. autofunction:: weibull
 .. autofunction:: zipf
+
+.. currentmodule:: dask.array.core
+
+.. autofunction:: map_blocks
+.. autofunction:: atop
+.. autofunction:: top
 
 .. currentmodule:: dask.array
 
