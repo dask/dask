@@ -68,8 +68,11 @@ def resource_append(lists, msg):
     L = list(msg.values())
     if not L:
         return
-    for k in ['cpu', 'memory-percent']:
-        lists[k].append(mean(pluck(k, L)) / 100)
+    try:
+        for k in ['cpu', 'memory-percent']:
+            lists[k].append(mean(pluck(k, L)) / 100)
+    except KeyError:  # initial messages sometimes lack resource data
+        return        # this is safe to skip
 
     lists['time'].append(mean(pluck('time', L)) * 1000)
     if len(lists['time']) >= 2:
