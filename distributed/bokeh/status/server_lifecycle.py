@@ -3,11 +3,12 @@ from __future__ import print_function, division, absolute_import
 
 from collections import deque
 import json
+import logging
 import os
 from time import time
 
 from tornado import gen
-from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import AsyncHTTPClient, HTTPError
 from tornado.iostream import StreamClosedError
 from tornado.ioloop import IOLoop
 
@@ -16,6 +17,10 @@ from distributed.diagnostics.progress_stream import progress_stream
 from distributed.bokeh.worker_monitor import resource_append
 import distributed.bokeh
 from distributed.utils import log_errors
+
+
+logger = logging.getLogger(__name__)
+
 
 client = AsyncHTTPClient()
 
@@ -33,33 +38,38 @@ else:
 @gen.coroutine
 def http_get(route):
     """ Get data from JSON route, store in messages deques """
-    with log_errors():
-        try:
-            response = yield client.fetch(
-                    'http://%(host)s:%(http-port)d/' % options
-                     + route + '.json')
-        except ConnectionRefusedError:
-            import sys; sys.exit(0)
-        msg = json.loads(response.body.decode())
-        messages[route]['deque'].append(msg)
-        messages[route]['times'].append(time())
+    try:
+        response = yield client.fetch(
+                'http://%(host)s:%(http-port)d/' % options
+                 + route + '.json')
+    except ConnectionRefusedError:
+        import sys; sys.exit(0)
+    except HTTPError:
+        logger.warn("http route %s failed", route)
+        return
+    msg = json.loads(response.body.decode())
+    messages[route]['deque'].append(msg)
+    messages[route]['times'].append(time())
 
 
 last_index = [0]
 @gen.coroutine
 def workers():
     """ Get data from JSON route, store in messages deques """
-    with log_errors():
+    try:
         response = yield client.fetch(
                 'http://%(host)s:%(http-port)d/workers.json' % options)
-        msg = json.loads(response.body.decode())
-        if msg:
-            messages['workers']['deque'].append(msg)
-            messages['workers']['times'].append(time())
-            resource_append(messages['workers']['plot-data'], msg)
-            index = messages['workers']['index']
-            index.append(last_index[0] + 1)
-            last_index[0] += 1
+    except HTTPError:
+        logger.warn("workers http route failed")
+        return
+    msg = json.loads(response.body.decode())
+    if msg:
+        messages['workers']['deque'].append(msg)
+        messages['workers']['times'].append(time())
+        resource_append(messages['workers']['plot-data'], msg)
+        index = messages['workers']['index']
+        index.append(last_index[0] + 1)
+        last_index[0] += 1
 
 
 @gen.coroutine
