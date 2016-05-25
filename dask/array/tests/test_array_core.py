@@ -2035,4 +2035,4 @@ def test_from_array_names():
     d = da.from_array(x, chunks=2)
 
     names = countby(key_split, d.dask)
-    assert set(names.values()) == {1, 5}
+    assert set(names.values()) == set([1, 5])
