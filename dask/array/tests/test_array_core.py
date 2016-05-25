@@ -9,7 +9,7 @@ import shutil
 from tempfile import mkdtemp
 import time
 
-from toolz import merge
+from toolz import merge, countby
 from toolz.curried import identity
 
 import dask
@@ -2025,3 +2025,14 @@ def test_elemwise_name():
 
 def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith('inc-')
+
+
+def test_from_array_names():
+    pytest.importorskip('distributed')
+    from distributed.utils import key_split
+
+    x = np.ones(10)
+    d = da.from_array(x, chunks=2)
+
+    names = countby(key_split, d.dask)
+    assert set(names.values()) == {1, 5}

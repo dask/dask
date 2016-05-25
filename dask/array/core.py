@@ -1498,14 +1498,14 @@ def from_array(x, chunks, name=None, lock=False):
         raise ValueError("Input array has %d dimensions but the supplied "
                 "chunks has only %d dimensions" % (len(x.shape), len(chunks)))
     token = tokenize(x, chunks)
+    original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
-    dsk = getem(name + '-original', chunks, out_name=name)
+    dsk = getem(original_name, chunks, out_name=name)
     if lock is True:
         lock = Lock()
     if lock:
         dsk = dict((k, v + (lock,)) for k, v in dsk.items())
-    return Array(merge({name + '-original': x}, dsk),
-                 name, chunks, dtype=x.dtype)
+    return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
 def from_imperative(*args, **kwargs):
