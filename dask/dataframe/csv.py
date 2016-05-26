@@ -115,7 +115,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
 
 def read_csv(filename, blocksize=2**25, chunkbytes=None,
         collection=True, lineterminator='\n', compression=None,
-        sample=10000, enforce=False, **kwargs):
+        sample=10000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
 
     This parallelizes the ``pandas.read_csv`` file in the following ways:
@@ -177,7 +177,9 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     b_lineterminator = lineterminator.encode()
     sample, values = read_bytes(filename, delimiter=b_lineterminator,
                                           blocksize=blocksize,
-                                          sample=sample, compression=compression)
+                                          sample=sample,
+                                          compression=compression,
+                                          **(storage_options or {}))
     if not isinstance(values[0], (tuple, list)):
         values = [values]
 
