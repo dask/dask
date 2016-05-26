@@ -21,7 +21,8 @@ Set up a fake cluster on your local computer::
    $ dworker 127.0.0.1:8786
 
 Or if you can ssh into your own computer (or others) then use the ``dcluster``
-command, providing hostnames or IP addresses::
+command, providing hostnames or IP addresses (`paramiko` library must 
+be installed. See SSH :doc:`setup <setup>`)::
 
    $ dcluster 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 

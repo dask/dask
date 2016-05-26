@@ -39,9 +39,12 @@ SGE/SLURM/Torque or Yarn/Mesos.
 Using SSH
 ---------
 
+For this functionality, `paramiko` library must be installed (e.g. by 
+running `pip install paramiko`).
+
 The convenience script ``dcluster`` opens several SSH connections to your
-target computers and initializes the network accordingly.  You can give it a
-list of hostnames or IP addresses::
+target computers and initializes the network accordingly. You can 
+give it a list of hostnames or IP addresses::
 
    $ dcluster 192.168.0.1 192.168.0.2 192.168.0.3 192.168.0.4
 
