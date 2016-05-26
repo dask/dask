@@ -812,7 +812,6 @@ class Scheduler(Server):
 
         if key in self.processing[worker]:
             self.mark_key_in_memory(key, [worker], type=type)
-            self.maybe_idle.add(worker)
 
             for plugin in self.plugins[:]:
                 try:

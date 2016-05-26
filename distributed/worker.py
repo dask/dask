@@ -433,6 +433,7 @@ class Worker(Server):
                 emsg['key'] = key
                 raise Return(emsg)
 
+            self.active.add(key)
             # Fill args with data
             args2 = pack_data(args, data)
             kwargs2 = pack_data(kwargs, data)

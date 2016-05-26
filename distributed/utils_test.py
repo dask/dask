@@ -62,6 +62,25 @@ def double(x):
     return x * 2
 
 
+def slowinc(x, delay=0.02):
+    from time import sleep
+    sleep(delay)
+    return x + 1
+
+
+def randominc(x, scale=1):
+    from time import sleep
+    from random import random
+    sleep(random() * scale)
+    return x + 1
+
+
+def slowadd(x, y):
+    from time import sleep
+    sleep(0.02)
+    return x + y
+
+
 def run_center(q):
     from distributed import Center
     from tornado.ioloop import IOLoop, PeriodicCallback

@@ -17,7 +17,9 @@ from distributed.center import Center
 from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message
-from distributed.utils_test import loop, _test_cluster, inc, gen_cluster, slow
+from distributed.utils import ignoring
+from distributed.utils_test import (loop, _test_cluster, inc, gen_cluster,
+        slow, slowinc, throws)
 
 
 
@@ -381,3 +383,17 @@ def test_compute_stream(s, a, b):
         assert msg['key'][0] == 'x'
 
     yield write(stream, {'op': 'close'})
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)])
+def test_active_holds_tasks(e, s, w):
+    future = e.submit(slowinc, 1, delay=0.2)
+    yield gen.sleep(0.1)
+    assert future.key in w.active
+    yield future._result()
+    assert future.key not in w.active
+
+    future = e.submit(throws, 1)
+    with ignoring(Exception):
+        yield _wait([future])
+    assert not w.active

@@ -26,7 +26,7 @@ from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text
-from distributed.utils_test import (cluster, slow,
+from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
         _test_scheduler, loop, inc, dec, div, throws,
         gen_cluster, gen_test, double, deep)
 
@@ -430,25 +430,6 @@ def test_recompute_released_key(e, s, a, b):
     assert x.key in e.futures
     result2 = yield x._result()
     assert result1 == result2
-
-
-def slowinc(x, delay=0.02):
-    from time import sleep
-    sleep(delay)
-    return x + 1
-
-
-def randominc(x, scale=1):
-    from time import sleep
-    from random import random
-    sleep(random() * scale)
-    return x + 1
-
-
-def slowadd(x, y):
-    from time import sleep
-    sleep(0.02)
-    return x + y
 
 
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
