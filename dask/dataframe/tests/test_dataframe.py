@@ -1733,3 +1733,10 @@ def test_methods_tokenize_differently():
     df = dd.from_pandas(df, npartitions=1)
     assert (df.x.map_partitions(pd.Series.min)._name !=
             df.x.map_partitions(pd.Series.max)._name)
+
+
+def test_sorted_index_single_partition():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    eq(ddf.set_index('x', sorted=True),
+        df.set_index('x'))

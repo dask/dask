@@ -43,8 +43,6 @@ def _concat(args, **kwargs):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if len(args) == 1:
-        return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
         args2 = [arg for arg in args if len(arg)]
         if not args2:
@@ -73,7 +71,7 @@ class Scalar(Base):
 
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
+    _finalize = staticmethod(first)
 
     def __init__(self, dsk, _name, name=None, divisions=None):
         self.dask = dsk
