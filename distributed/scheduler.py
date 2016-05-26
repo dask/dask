@@ -13,7 +13,7 @@ try:
     from cytoolz import frequencies, topk
 except ImportError:
     from toolz import frequencies, topk
-from toolz import memoize, valmap, first, second, keymap, unique
+from toolz import memoize, valmap, first, second, keymap, unique, concat
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -107,6 +107,8 @@ class Scheduler(Server):
     * **processing:** ``{worker: {key: cost}}``:
         Set of keys currently in execution on each worker and their expected
         duration
+    * **rprocessing:** ``{key: {worker}}``:
+        Set of workers currently executing a particular task
     * **task_duration:** ``{key-prefix: time}``
         Time we expect certain functions to take, e.g. ``{'sum': 0.25}``
     * **occupancy:** ``{worker: time}``
@@ -177,6 +179,7 @@ class Scheduler(Server):
         self.host_info = dict()
         self.aliases = dict()
         self.processing = dict()
+        self.rprocessing = defaultdict(set)
         self.occupancy = dict()
         self.task_duration = {prefix: 0.00001 for prefix in fast_task_prefixes}
         self.restrictions = dict()
@@ -254,11 +257,16 @@ class Scheduler(Server):
     def address_tuple(self):
         return (self.ip, self.port)
 
-    def add_keys(self, stream=None, address=None, keys=()):
+    def add_keys(self, stream=None, address=None, keys=(), nbytes=None):
         address = coerce_to_address(address)
+        if nbytes:
+            self.nbytes.update(nbytes)
         self.has_what[address].update(keys)
         for key in keys:
             self.who_has[key].add(address)
+        for key in keys:
+            if key not in self.nbytes:
+                self.delete_data(keys=[key])
         return 'OK'
 
     def identity(self, stream):
@@ -443,6 +451,8 @@ class Scheduler(Server):
                 stack = self.stacks[victim]
                 while n > 0 and stack:
                     key = stack.popleft()
+                    if key not in self.tasks:
+                        continue
                     if self.should_steal(key):
                         self.stacks[thief].append(key)
                         n -= 1
@@ -549,14 +559,12 @@ class Scheduler(Server):
         """ Mark that a key now lives in distributed memory """
         logger.debug("Mark %s in memory", key)
         if workers is None:
-            workers = self.who_has[key]
+            workers = self.who_has.get(key, ())
         for worker in workers:
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
-            try:
-                self.occupancy[worker] -= self.processing[worker].pop(key)
-            except KeyError:
-                pass
+            if key in self.processing[worker]:
+                self.mark_not_processing(key, worker)
 
         deps = self.dependents.get(key, [])
         if len(deps) > 1:
@@ -605,6 +613,28 @@ class Scheduler(Server):
         self.ensure_occupied_stacks(worker)
         self.ensure_occupied_ready(worker)
 
+    def mark_processing(self, key, worker, latency=5e-5):
+        """ Mark that a key is running on a worker """
+        if (key not in self.tasks or  # doesn't exist
+            key in self.waiting or    # not ready
+            key in self.nbytes or
+            self.who_has.get(key)):   # already stored
+            return False
+        duration = self.task_duration.get(key_split(key), latency*100)
+        self.processing[worker][key] = duration
+        self.rprocessing[key].add(worker)
+        self.occupancy[worker] += duration
+        logger.debug("Send job to worker: %s, %s", worker, key)
+        return True
+
+    def mark_not_processing(self, key, worker):
+        """ Mark that a key is done running on a worker """
+        self.occupancy[worker] -= self.processing[worker].pop(key)
+        s = self.rprocessing[key]
+        s.remove(worker)
+        if not s:
+            del self.rprocessing[key]
+
     def ensure_occupied_stacks(self, worker):
         """ Send tasks to worker while it has tasks and free cores
 
@@ -620,19 +650,13 @@ class Scheduler(Server):
                (self.ncores[worker] > len(self.processing[worker]) or
                 self.occupancy[worker] < latency * self.ncores[worker])):
             key = stack.pop()
-            if key not in self.tasks:
-                continue
-            if self.who_has.get(key):
-                continue
-            duration = self.task_duration.get(key_split(key), latency*100)
-            self.processing[worker][key] = duration
-            self.occupancy[worker] += duration
-            logger.debug("Send job to worker: %s, %s", worker, key)
-            try:
-                self.send_task_to_worker(worker, key)
-            except StreamClosedError:
-                self.remove_worker(worker)
-                return
+
+            if self.mark_processing(key, worker, latency):
+                try:
+                    self.send_task_to_worker(worker, key)
+                except StreamClosedError:
+                    self.remove_worker(worker)
+                    return
 
         if stack:
             self.saturated.add(worker)
@@ -650,19 +674,13 @@ class Scheduler(Server):
                 key = self.ready.pop()
             except KeyError:
                 break
-            if key not in self.tasks:
-                continue
-            if self.who_has.get(key):
-                continue
-            duration = self.task_duration.get(key_split(key), latency*100)
-            self.processing[worker][key] = duration
-            self.occupancy[worker] += duration
-            logger.debug("Send job to worker: %s, %s", worker, key)
-            try:
-                self.send_task_to_worker(worker, key)
-            except StreamClosedError:
-                self.remove_worker(worker)
-                return
+
+            if self.mark_processing(key, worker, latency):
+                try:
+                    self.send_task_to_worker(worker, key)
+                except StreamClosedError:
+                    self.remove_worker(worker)
+                    return
 
         self._check_idle(worker)
 
@@ -673,19 +691,13 @@ class Scheduler(Server):
                (self.ncores[worker] > len(self.processing[worker]) or
                 self.occupancy[worker] < latency * self.ncores[worker])):
             key = self.ready.pop()
-            if key not in self.tasks:
-                continue
-            if self.who_has.get(key):
-                continue
-            duration = self.task_duration.get(key_split(key), latency*100)
-            self.processing[worker][key] = duration
-            self.occupancy[worker] += duration
-            logger.debug("Send job to worker: %s, %s", worker, key)
-            try:
-                self.send_task_to_worker(worker, key)
-            except StreamClosedError:
-                self.remove_worker(worker)
-                return
+
+            if self.mark_processing(key, worker, latency):
+                try:
+                    self.send_task_to_worker(worker, key)
+                except StreamClosedError:
+                    self.remove_worker(worker)
+                    return
 
         self._check_idle(worker)
 
@@ -743,7 +755,7 @@ class Scheduler(Server):
         Scheduler.mark_failed
         """
         if worker in self.processing and key in self.processing[worker]:
-            self.occupancy[worker] -= self.processing[worker].pop(key)
+            self.mark_not_processing(key, worker)
             self.exceptions[key] = exception
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
@@ -780,26 +792,28 @@ class Scheduler(Server):
             transfer_stop=None, **kwargs):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
-        if worker in self.processing and key in self.processing[worker]:
-            self.nbytes[key] = nbytes
+        self.nbytes[key] = nbytes
+
+        # Update average task duration for worker
+        info = self.worker_info[worker]
+        ks = key_split(key)
+        gap = (transfer_start or compute_start) - info.get('last-task', 0)
+        old_duration = self.task_duration.get(ks, 0)
+        new_duration = compute_stop - compute_start
+        if (not old_duration or
+            gap > max(10e-3, info.get('latency', 0), old_duration)):
+            avg_duration = new_duration
+        else:
+            avg_duration = (0.5 * old_duration
+                          + 0.5 * new_duration)
+
+        self.task_duration[ks] = avg_duration
+        info['last-task'] = compute_stop
+
+        if key in self.processing[worker]:
             self.mark_key_in_memory(key, [worker], type=type)
             self.maybe_idle.add(worker)
 
-            # Update average task duration for worker
-            info = self.worker_info[worker]
-            ks = key_split(key)
-            gap = (transfer_start or compute_start) - info.get('last-task', 0)
-            old_duration = self.task_duration.get(ks, 0)
-            new_duration = compute_stop - compute_start
-            if (not old_duration or
-                gap > max(10e-3, info.get('latency', 0), old_duration)):
-                avg_duration = new_duration
-            else:
-                avg_duration = (0.5 * old_duration
-                              + 0.5 * new_duration)
-
-            self.task_duration[ks] = avg_duration
-            info['last-task'] = compute_stop
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_finished(self, key=key, worker=worker,
@@ -813,10 +827,8 @@ class Scheduler(Server):
 
                 except Exception as e:
                     logger.exception(e)
-        else:
-            logger.debug("Key not found in processing, %s, %s, %s",
-                         key, worker, self.processing[worker])
-            self.maybe_idle.add(worker)
+
+        self.maybe_idle.add(worker)
 
     def recover_missing(self, key):
         """ Recover a recently lost piece of data
@@ -825,10 +837,12 @@ class Scheduler(Server):
         """
         if key in self.released:
             return
-        if key in self.who_has:
+        if self.who_has.get(key):
             return
         if key not in self.tasks:
             logger.warn("Lost irrecoverable data %s", key)
+            return
+        if key in self.waiting:
             return
 
         self.released.add(key)
@@ -837,7 +851,7 @@ class Scheduler(Server):
         for dep in self.dependents[key]:
             if dep in self.released:
                 continue
-            if dep in self.who_has:
+            if self.who_has.get(key):
                 continue
             if dep in self.waiting:
                 self.waiting[dep].add(key)
@@ -853,11 +867,9 @@ class Scheduler(Server):
         """
         missing = keys
         if key and worker:
-            try:
-                self.occupancy[worker] -= self.processing[worker].pop(key)
-            except KeyError:
-                logger.info("Tried to remove %s from %s, but it wasn't there",
-                             key, worker)
+            if key not in self.processing[worker]:
+                return
+            self.mark_not_processing(key, worker)
 
         missing = set(missing)
         logger.debug("Recovering missing data: %s", missing)
@@ -866,6 +878,7 @@ class Scheduler(Server):
                 workers = self.who_has.pop(k)
                 for worker in workers:
                     self.has_what[worker].remove(k)
+                del self.nbytes[k]
             self.recover_missing(k)
 
         if worker:
@@ -934,8 +947,13 @@ class Scheduler(Server):
             if address in self.saturated:
                 self.saturated.remove(address)
 
-            in_flight = set(self.stacks.pop(address))
-            in_flight |= set(self.processing.pop(address))
+            in_flight = set(self.processing.pop(address))
+            for k in in_flight:
+                s = self.rprocessing[k]
+                s.remove(address)
+                if not s:
+                    del self.rprocessing[k]
+            in_flight |= set(self.stacks.pop(address))
             del self.occupancy[address]
             in_flight = {k for k in in_flight if k in self.tasks}
             missing = set()
@@ -945,6 +963,7 @@ class Scheduler(Server):
                 s.remove(address)
                 if not s:
                     self.who_has.pop(key)
+                    del self.nbytes[key]
                     self.report({'op': 'lost-data', 'key': key})
                     missing.add(key)
                     for plugin in self.plugins:
@@ -968,7 +987,7 @@ class Scheduler(Server):
             return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                   name=None, coerce_address=True, **info):
+                   name=None, coerce_address=True, nbytes=None, **info):
         with log_errors():
             if coerce_address:
                 address = self.coerce_address(address)
@@ -999,6 +1018,8 @@ class Scheduler(Server):
                 self.occupancy[address] = 0
                 self.stacks[address] = deque()
 
+            if nbytes:
+                self.nbytes.update(nbytes)
             for key in keys:
                 self.mark_key_in_memory(key, [address])
 
@@ -1195,7 +1216,7 @@ class Scheduler(Server):
         while stack:
             key = stack.pop()
 
-            if key not in self.tasks and key not in self.who_has:
+            if key not in self.tasks and not self.who_has.get(key):
                 return
             assert not self.dependents[key] and key not in self.who_wants
 
@@ -1225,8 +1246,10 @@ class Scheduler(Server):
                     del self.waiting[key]
                 if key in self.waiting_data:
                     del self.waiting_data[key]
+                for w in self.rprocessing.pop(key, ()):
+                    self.occupancy[w] -= self.processing[w].pop(key)
 
-            if key in self.who_has:
+            if self.who_has.get(key):
                 self.delete_data(keys=[key])
 
             if key in self.nbytes:
@@ -1397,7 +1420,7 @@ class Scheduler(Server):
 
         deps = self.dependencies[key]
         if deps:
-            msg['who_has'] = {dep: tuple(self.who_has[dep]) for dep in deps}
+            msg['who_has'] = {dep: tuple(self.who_has.get(dep, ())) for dep in deps}
 
         task = self.tasks[key]
         if type(task) is dict:
@@ -1429,31 +1452,32 @@ class Scheduler(Server):
         logger.info("Starting worker compute stream, %s", ident)
 
         try:
-            while True:
-                msgs = yield read(stream)
-                if not isinstance(msgs, list):
-                    msgs = [msgs]
+            with log_errors():
+                while True:
+                    msgs = yield read(stream)
+                    if not isinstance(msgs, list):
+                        msgs = [msgs]
 
-                for msg in msgs:
-                    logger.debug("Compute response from worker %s, %s",
-                                 ident, msg)
+                    for msg in msgs:
+                        logger.debug("Compute response from worker %s, %s",
+                                     ident, msg)
 
-                    if msg == 'OK':  # from close
-                        break
+                        if msg == 'OK':  # from close
+                            break
 
-                    self.correct_time_delay(ip, msg)
+                        self.correct_time_delay(ip, msg)
 
-                    if msg['status'] == 'OK':
-                        self.mark_task_finished(worker=ident, **msg)
-                    elif msg['status'] == 'error':
-                        self.mark_task_erred(worker=ident, **msg)
-                    elif msg['status'] == 'missing-data':
-                        self.mark_missing_data(worker=ident, **msg)
-                    else:
-                        logger.warn("Unknown message type, %s, %s", msg['status'],
-                                msg)
+                        if msg['status'] == 'OK':
+                            self.mark_task_finished(worker=ident, **msg)
+                        elif msg['status'] == 'error':
+                            self.mark_task_erred(worker=ident, **msg)
+                        elif msg['status'] == 'missing-data':
+                            self.mark_missing_data(worker=ident, **msg)
+                        else:
+                            logger.warn("Unknown message type, %s, %s", msg['status'],
+                                    msg)
 
-                self.ensure_idle_ready()
+                    self.ensure_idle_ready()
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
@@ -1493,10 +1517,12 @@ class Scheduler(Server):
             self.released.add(key)
 
         for key in keys:
-            if key in self.who_has:
+            if self.who_has.get(key):
                 for worker in self.who_has.pop(key):
                     self.has_what[worker].remove(key)
                     self.deleted_keys[worker].add(key)
+                if key in self.nbytes:
+                    del self.nbytes[key]
                 trigger_plugins(key)
             elif key in self.ready:  # O(n), though infrequent
                 self.ready.remove(key)
@@ -1505,6 +1531,8 @@ class Scheduler(Server):
             if key in self.waiting_data:
                 del self.waiting_data[key]
 
+            if key in self.nbytes:
+                del self.nbytes[key]
 
     @gen.coroutine
     def heartbeat(self, host):
@@ -1570,7 +1598,7 @@ class Scheduler(Server):
     def gather(self, stream=None, keys=None):
         """ Collect data in from workers """
         keys = list(keys)
-        who_has = {key: self.who_has[key] for key in keys}
+        who_has = {key: self.who_has.get(key, ()) for key in keys}
 
         try:
             data = yield gather_from_workers(who_has, deserialize=False,
@@ -1744,7 +1772,7 @@ class Scheduler(Server):
                 raise Return({'status': 'missing-data',
                               'keys': list(keys - set(self.who_has))})
 
-            workers_by_key = {k: self.who_has[k] & workers for k in keys}
+            workers_by_key = {k: self.who_has.get(k, set()) & workers for k in keys}
             keys_by_worker = {w: set() for w in workers}
             for k, v in workers_by_key.items():
                 for vv in v:
@@ -2017,6 +2045,9 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
                     vv in waiting or
                     vv in in_stacks or
                     vv in in_processing), 'dependent not in play2'
+
+    for v in concat(processing.values()):
+        assert v in dependencies
 
     @memoize
     def check_key(key):

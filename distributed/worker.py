@@ -164,7 +164,7 @@ class Worker(Server):
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port),
                         keys=list(self.data), services=self.service_ports,
-                        name=self.name)
+                        name=self.name, nbytes=valmap(sizeof, self.data))
                 break
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with scheduler.  Waiting")
