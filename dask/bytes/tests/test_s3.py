@@ -215,3 +215,10 @@ def test_modification_time_open_files():
         c = open_files('compress/test/accounts.*', s3=s3)
 
     assert [aa._key for aa in a] != [cc._key for cc in c]
+
+
+def test_read_csv_passes_through_options():
+    dd = pytest.importorskip('dask.dataframe')
+    with s3_context('csv', {'a.csv': b'a,b\n1,2\n3,4'}) as s3:
+        df = dd.read_csv('s3://csv/*.csv', storage_options={'s3': s3})
+        assert df.a.sum().compute() == 1 + 3
