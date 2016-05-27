@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def read_text(fn, keyname=None, encoding='utf-8', errors='strict',
         lineterminator='\n', executor=None, fs=None, lazy=True,
-        collection=True, blocksize=2**27, compression=None):
+        collection=True, blocksize=2**27, compression=None, **kwargs):
     warn("distributed.s3.read_text(...) Moved to "
          "dask.bag.read_text('s3://...')")
     if keyname is not None:
@@ -25,7 +25,7 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict',
     import dask.bag as db
     result = db.read_text('s3://' + fn, encoding=encoding, errors=errors,
             linedelimiter=lineterminator, collection=collection,
-            blocksize=blocksize, compression=compression, s3=fs)
+            blocksize=blocksize, compression=compression, s3=fs, **kwargs)
     executor = default_executor(executor)
     ensure_default_get(executor)
     if not lazy:
@@ -36,13 +36,14 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict',
     return result
 
 
-def read_csv(path, executor=None, fs=None, lazy=True, collection=True, lineterminator='\n', blocksize=2**27, **kwargs):
+def read_csv(path, executor=None, fs=None, lazy=True, collection=True,
+        lineterminator='\n', blocksize=2**27, storage_options=None, **kwargs):
     warn("distributed.s3.read_csv(...) Moved to "
          "dask.dataframe.read_csv('s3://...')")
     import dask.dataframe as dd
     result = dd.read_csv('s3://' + path, collection=collection,
             lineterminator=lineterminator, blocksize=blocksize,
-            **kwargs)
+            storage_options=storage_options, **kwargs)
     executor = default_executor(executor)
     ensure_default_get(executor)
     if not lazy:
