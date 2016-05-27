@@ -12,6 +12,7 @@ from tornado.httpclient import AsyncHTTPClient, HTTPError
 from tornado.iostream import StreamClosedError
 from tornado.ioloop import IOLoop
 
+from distributed.compatibility import ConnectionRefusedError
 from distributed.core import read
 from distributed.diagnostics.progress_stream import progress_stream
 from distributed.bokeh.worker_monitor import resource_append

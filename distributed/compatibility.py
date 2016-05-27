@@ -10,6 +10,7 @@ if sys.version_info[0] == 2:
     unicode = unicode
     PY2 = True
     PY3 = False
+    ConnectionRefusedError = OSError
 
     import gzip
     def gzip_decompress(b):
@@ -42,6 +43,7 @@ if sys.version_info[0] == 3:
     unicode = str
     from gzip import decompress as gzip_decompress
     from gzip import compress as gzip_compress
+    ConnectionRefusedError = ConnectionRefusedError
 
     def isqueue(o):
         return isinstance(o, Queue)
