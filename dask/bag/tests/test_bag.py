@@ -852,3 +852,26 @@ def test_accumulate():
 
     b = db.from_sequence([1, 2, 3], npartitions=1)
     assert b.accumulate(add).compute() == [1, 3, 6]
+
+
+def test_shuffle_tasks():
+    from dask.bag.core import shuffle_task
+    b = db.from_sequence(range(160), npartitions=4)
+    out = shuffle_task(b.map(lambda x: x % 10), max_branch=4)
+    partitions = dask.get(out.dask, out._keys())
+
+    for a in partitions:
+        for b in partitions:
+            if a is not b:
+                assert not set(a) & set(b)
+
+
+    b = db.from_sequence(range(1000), npartitions=100)
+    out = shuffle_task(b.map(lambda x: x % 123))
+    assert len(out.dask) < 100**2
+    partitions = dask.get(out.dask, out._keys())
+
+    for a in partitions:
+        for b in partitions:
+            if a is not b:
+                assert not set(a) & set(b)

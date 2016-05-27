@@ -4,6 +4,7 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 import itertools
 import math
+from operator import getitem
 import os
 import uuid
 from warnings import warn
@@ -1447,3 +1448,90 @@ def _reduce(binop, sequence, initial=no_default):
         return reduce(binop, sequence, initial)
     else:
         return reduce(binop, sequence)
+
+
+def make_group(k, stage):
+    def h(x):
+        return x[0] // k ** stage % k
+    return h
+
+
+def digit(n, k, base):
+    """
+
+    >>> digit(1234, 0, 10)
+    4
+    >>> digit(1234, 1, 10)
+    3
+    >>> digit(1234, 2, 10)
+    2
+    >>> digit(1234, 3, 10)
+    1
+    """
+    return n // base**k  % base
+
+
+def insert(tup, loc, val):
+    """
+
+    >>> insert(('a', 'b', 'c'), 0, 'x')
+    ('x', 'b', 'c')
+    """
+    L = list(tup)
+    L[loc] = val
+    return tuple(L)
+
+
+def shuffle_task(b, n_out_partitions=None, hash=hash, max_branch=32,
+                 name='shuffle', token=None):
+    if n_out_partitions is None:
+        n_out_partitions = b.npartitions
+    n = b.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    name = 'x'
+
+    groups = []
+    splits = []
+    joins = []
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages))
+              for i in range(n)]
+
+    b2 = b.map(lambda x: (hash(x), x))
+
+    token = token or tokenize(b, hash, max_branch, name, n_out_partitions)
+
+    start = dict(((name + '-join-' + token, 0, inp), (b2.name, i))
+                 for i, inp in enumerate(inputs))
+
+    for stage in range(1, stages + 1):
+        group = dict(((name + '-group-' + token, stage, inp),
+                      (groupby,
+                        (make_group, k, stage - 1),
+                        (name + '-join-' + token, stage - 1, inp)))
+                 for inp in inputs)
+        split = dict(((name + '-split-' + token, stage, i, inp),
+                      (dict.get, (name + '-group-' + token, stage, inp), i, {}))
+                     for i in range(k)
+                     for inp in inputs)
+
+        join = dict(((name + '-join-' + token, stage, inp),
+                     (list, (toolz.concat,
+                        [(name + '-split-' + token, stage, inp[stage-1],
+                          insert(inp, stage - 1, j)) for j in range(k)])))
+                     for inp in inputs)
+        groups.append(group)
+        splits.append(split)
+        joins.append(join)
+
+    end = dict(((name + '-' + token, i), (list, (pluck, 1, j)))
+               for i, j in enumerate(join))
+
+    dsk = merge(b2.dask, start, end, *(groups + splits + joins))
+    return Bag(dsk, name + '-' + token, n_out_partitions)
