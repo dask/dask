@@ -459,7 +459,7 @@ class Worker(Server):
                     "args:     %s\n"
                     "kwargs:   %s\n",
                     str(funcname(function))[:1000], str(args)[:1000],
-                    str(kwargs)[:1000], exc_info=True)
+                    str(kwargs)[:1000])
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
                          result)
