@@ -60,6 +60,7 @@ def test_update_state(loop):
     s.ensure_occupied(alice)
 
     assert set(s.processing[alice]) == {'y'}
+    assert set(s.rprocessing['y']) == {alice}
     assert not s.ready
     assert s.who_wants == {'y': {'client'}}
     assert s.wants_what == {'client': {'y'}}
@@ -151,6 +152,7 @@ def test_update_state_respects_data_in_memory(loop):
     assert s.released == set()
     assert s.waiting == {'z': {'x'}}
     assert set(s.processing[alice]) == {'x'}  # x was released need to recompute
+    assert set(s.rprocessing['x']) == {alice}  # x was released need to recompute
     assert s.waiting_data == {'x': {'z'}, 'y': {'z'}, 'z': set()}
     assert s.who_wants == {'y': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}

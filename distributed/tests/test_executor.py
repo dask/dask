@@ -26,7 +26,7 @@ from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text
-from distributed.utils_test import (cluster, slow,
+from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
         _test_scheduler, loop, inc, dec, div, throws,
         gen_cluster, gen_test, double, deep)
 
@@ -430,25 +430,6 @@ def test_recompute_released_key(e, s, a, b):
     assert x.key in e.futures
     result2 = yield x._result()
     assert result1 == result2
-
-
-def slowinc(x, delay=0.02):
-    from time import sleep
-    sleep(delay)
-    return x + 1
-
-
-def randominc(x, scale=1):
-    from time import sleep
-    from random import random
-    sleep(random() * scale)
-    return x + 1
-
-
-def slowadd(x, y):
-    from time import sleep
-    sleep(0.02)
-    return x + y
 
 
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
@@ -896,8 +877,8 @@ def test_pragmatic_move_small_data_to_large_data(e, s, a, b):
 
     yield _wait(results)
 
-    for l, r in zip(lists, results):
-        assert s.who_has[l.key] == s.who_has[r.key]
+    assert sum(s.who_has[l.key] == s.who_has[r.key]
+               for l, r in zip(lists, results)) >= 8
 
 
 @gen_cluster(executor=True)
@@ -1926,6 +1907,7 @@ def test__cancel(e, s, a, b):
         assert time() < start + 5
 
     assert not s.tasks
+    assert not s.who_has
     s.validate()
 
 
@@ -1972,6 +1954,7 @@ def test__cancel_collection(e, s, a, b):
     yield e._cancel([x])
     assert all(f.cancelled() for f in L)
     assert not s.tasks
+    assert not s.who_has
 
 
 def test_cancel(loop):
@@ -2924,3 +2907,46 @@ def test_eventually_steal_unknown_functions(e, s, a, b):
     yield _wait(futures)
     assert len(a.data) >= 3
     assert len(b.data) >= 3
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 4, timeout=None)
+def test_cancel_stress(e, s, *workers):
+    da = pytest.importorskip('dask.array')
+    x = da.random.random((40, 40), chunks=(1, 1))
+    x = e.persist(x)
+    yield _wait([x])
+    y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()
+    for i in range(5):
+        f = e.compute(y)
+        while len(s.waiting) > (len(y.dask) - len(x.dask)) / 2:
+            yield gen.sleep(0.01)
+        yield e._cancel(f)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 4)
+def test_cancel_clears_processing(e, s, *workers):
+    da = pytest.importorskip('dask.array')
+    x = e.submit(slowinc, 1, delay=0.2)
+    while not s.tasks:
+        yield gen.sleep(0.01)
+
+    yield e._cancel(x)
+
+    start = time()
+    while any(v for v in s.processing.values()):
+        assert time() < start + 0.2
+        yield gen.sleep(0.01)
+    s.validate()
+
+def test_cancel_stress_sync(loop):
+    da = pytest.importorskip('dask.array')
+    x = da.random.random((40, 40), chunks=(1, 1))
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = e.persist(x)
+            y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()
+            wait(x)
+            for i in range(5):
+                f = e.compute(y)
+                sleep(1)
+                e.cancel(f)

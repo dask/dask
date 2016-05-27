@@ -15,6 +15,7 @@ from threading import Thread
 from dask import istask
 from toolz import memoize, valmap
 from tornado import gen
+from tornado.iostream import StreamClosedError
 
 from .compatibility import Queue, PY3
 
@@ -203,7 +204,7 @@ def key_split(s):
 def log_errors(pdb=False):
     try:
         yield
-    except gen.Return:
+    except (StreamClosedError, gen.Return):
         raise
     except Exception as e:
         logger.exception(e)

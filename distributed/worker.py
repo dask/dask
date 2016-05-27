@@ -164,7 +164,7 @@ class Worker(Server):
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port),
                         keys=list(self.data), services=self.service_ports,
-                        name=self.name)
+                        name=self.name, nbytes=valmap(sizeof, self.data))
                 break
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with scheduler.  Waiting")
@@ -433,6 +433,7 @@ class Worker(Server):
                 emsg['key'] = key
                 raise Return(emsg)
 
+            self.active.add(key)
             # Fill args with data
             args2 = pack_data(args, data)
             kwargs2 = pack_data(kwargs, data)
@@ -458,7 +459,7 @@ class Worker(Server):
                     "args:     %s\n"
                     "kwargs:   %s\n",
                     str(funcname(function))[:1000], str(args)[:1000],
-                    str(kwargs)[:1000], exc_info=True)
+                    str(kwargs)[:1000])
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
                          result)

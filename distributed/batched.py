@@ -38,7 +38,6 @@ class BatchedSend(object):
         self.loop = loop or IOLoop.current()
         self.interval = interval / 1000.
         self.last_transmission = 0
-        self.next_send = None
         self.buffer = []
         self.stream = None
         self.last_send = gen.sleep(0)
@@ -59,7 +58,7 @@ class BatchedSend(object):
             yield self.last_send
             self.buffer, payload = [], self.buffer
             self.last_transmission = now
-            self.next_send = write(self.stream, payload)
+            self.last_send = write(self.stream, payload)
         except Exception as e:
             logger.exception(e)
 
@@ -95,9 +94,10 @@ class BatchedSend(object):
 
             self.buffer.append(msg)
             self.loop.add_callback(self.send_next, wait=False)
+        except StreamClosedError:
+            raise
         except Exception as e:
             logger.exception(e)
-            raise
 
     @gen.coroutine
     def close(self, ignore_closed=False):
