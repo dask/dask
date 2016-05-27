@@ -95,9 +95,10 @@ class BatchedSend(object):
 
             self.buffer.append(msg)
             self.loop.add_callback(self.send_next, wait=False)
+        except StreamClosedError:
+            raise
         except Exception as e:
             logger.exception(e)
-            raise
 
     @gen.coroutine
     def close(self, ignore_closed=False):
