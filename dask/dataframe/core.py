@@ -1091,9 +1091,10 @@ class Series(_Frame):
         uniques : Series
         """
         # unique returns np.ndarray, it must be wrapped
-        chunk = lambda x: pd.Series(pd.Series.unique(x), name=self.name)
+        name = self.name
+        chunk = lambda x: pd.Series(pd.Series.unique(x), name=name)
         return aca(self, chunk=chunk, aggregate=chunk,
-                   columns=self.name, token='unique')
+                   columns=name, token='unique')
 
     @derived_from(pd.Series)
     def nunique(self):
@@ -2226,7 +2227,8 @@ def quantile(df, q):
         if issubclass(return_type, Index):
             return_type = Series
     else:
-        merge_type = lambda v: df._partition_type(v).item()
+        typ = df._partition_type
+        merge_type = lambda v: typ(v).item()
         return_type = df._constructor_sliced
         q = [q]
 
