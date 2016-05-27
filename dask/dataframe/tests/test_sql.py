@@ -19,7 +19,8 @@ Edith,4,53
 Francis,5,30
 Garreth,6,20
 """
-df = pd.read_csv(io.StringIO(data))
+
+df = pd.read_csv(io.StringIO(data), index_col='number')
 
 @pytest.yield_fixture
 def pg():
@@ -27,14 +28,15 @@ def pg():
     import tempfile
     f, fname = tempfile.mkstemp(suffix='.db', prefix='tmp')
     uri = 'postgresql://localhost:5432/postgres'
-    df.to_sql('test', uri, index=False, if_exists='replace')
+    df.to_sql('test', uri, index=True, if_exists='replace')
     yield uri
 
 
 def test_simple(pg):
     # single chunk
-    data = read_sql_table('test', pg).compute()
+    data = read_sql_table('test', pg, index_col='number').compute()
     assert (data.name == df.name).all()
+    assert data.index.name == 'number'
     assert (data.columns == df.columns).all()
 
 
@@ -42,6 +44,6 @@ def test_partitions(pg):
     data = read_sql_table('test', pg, columns=list(df.columns), npartitions=2,
                           index_col='number').compute()
     assert (data.name == df.name).all()
-    data = read_sql_table('test', pg, columns=list(df.columns), npartitions=6,
+    data = read_sql_table('test', pg, columns=['name'], npartitions=6,
                           index_col="number").compute()
     assert (data.name == df.name).all()
