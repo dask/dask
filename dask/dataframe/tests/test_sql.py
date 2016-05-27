@@ -5,11 +5,12 @@ import pytest
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 pytest.importorskip('sqlalchemy')
+pytest.importorskip('psycopg2')
 
 from dask.dataframe.sql import read_sql_table
 
 data = """
-Name,Number,Age
+name,number,age
 Alice,0,33
 Bob,1,40
 Chris,2,22
@@ -21,27 +22,26 @@ Garreth,6,20
 df = pd.read_csv(io.StringIO(data))
 
 @pytest.yield_fixture
-def sqlite():
-    # writable local S3 system
+def pg():
+    # Make database in local PGSQL
     import tempfile
     f, fname = tempfile.mkstemp(suffix='.db', prefix='tmp')
-    uri = "sqlite:///" + fname
-    df.to_sql('test', uri, index=False)
+    uri = 'postgresql://localhost:5432/postgres'
+    df.to_sql('test', uri, index=False, if_exists='replace')
     yield uri
 
 
-def test_simple(sqlite):
+def test_simple(pg):
     # single chunk
-    data = read_sql_table('test', sqlite)
-    assert (data.Name.compute() == df.Name).all()
+    data = read_sql_table('test', pg).compute()
+    assert (data.name == df.name).all()
     assert (data.columns == df.columns).all()
 
 
-def test_partitions(sqlite):
-    data = read_sql_table('test', sqlite, npartitions=2, index_col='Number')
-    assert (data.Name.compute() == df.Name).all()
-    data = read_sql_table('test', sqlite, npartitions=6, index_col="Number")
-    assert (data.Name.compute() == df.Name).all()
-    with pytest.raises(ValueError):
-        data = read_sql_table('test', sqlite, npartitions=len(df) + 1)
-
+def test_partitions(pg):
+    data = read_sql_table('test', pg, columns=list(df.columns), npartitions=2,
+                          index_col='number').compute()
+    assert (data.name == df.name).all()
+    data = read_sql_table('test', pg, columns=list(df.columns), npartitions=6,
+                          index_col="number").compute()
+    assert (data.name == df.name).all()
