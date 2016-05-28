@@ -1482,10 +1482,8 @@ def insert(tup, loc, val):
     return tuple(L)
 
 
-def shuffle_task(b, n_out_partitions=None, hash=hash, max_branch=32,
+def shuffle_task(b, grouper, hash=hash, max_branch=32,
                  name='shuffle', token=None):
-    if n_out_partitions is None:
-        n_out_partitions = b.npartitions
     n = b.npartitions
 
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
@@ -1503,9 +1501,9 @@ def shuffle_task(b, n_out_partitions=None, hash=hash, max_branch=32,
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(n)]
 
-    b2 = b.map(lambda x: (hash(x), x))
+    b2 = b.map(lambda x: (hash(grouper(x)), x))
 
-    token = token or tokenize(b, hash, max_branch, name, n_out_partitions)
+    token = token or tokenize(b, hash, max_branch, name)
 
     start = dict(((name + '-join-' + token, 0, inp), (b2.name, i))
                  for i, inp in enumerate(inputs))
@@ -1534,4 +1532,4 @@ def shuffle_task(b, n_out_partitions=None, hash=hash, max_branch=32,
                for i, j in enumerate(join))
 
     dsk = merge(b2.dask, start, end, *(groups + splits + joins))
-    return Bag(dsk, name + '-' + token, n_out_partitions)
+    return Bag(dsk, name + '-' + token, n)
