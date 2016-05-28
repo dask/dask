@@ -879,53 +879,51 @@ class Bag(Base):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None, blocksize=2**20):
+    def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
+                max_branch=None):
         """ Group collection by key function
 
-        Note that this requires full dataset read, serialization and shuffle.
+        This requires a full dataset read, serialization and shuffle.
         This is expensive.  If possible you should use ``foldby``.
 
+        Parameters
+        ----------
+        grouper: function
+            Function on which to group elements
+        method: str
+            Either 'disk' for an on-disk shuffle or 'tasks' to use the task
+            scheduling framework.  Use 'disk' if you are on a single machine
+            and 'tasks' if you are on a distributed cluster.
+        npartitions: int
+            If using the disk-based shuffle, the number of output partitions
+        blocksize: int
+            If using the disk-based shuffle, the size of shuffle blocks
+        max_branch: int
+            If using the task-based shuffle, the amount of splitting each
+            partition undergoes.  Increase this for fewer copies but more
+            scheduler overhead.
+
+        Examples
+        --------
         >>> b = from_sequence(range(10))
-        >>> dict(b.groupby(lambda x: x % 2 == 0))  # doctest: +SKIP
+        >>> iseven = lambda x: x % 2 == 0
+        >>> dict(b.groupby(iseven))  # doctest: +SKIP
         {True: [0, 2, 4, 6, 8], False: [1, 3, 5, 7, 9]}
 
         See Also
         --------
         Bag.foldby
         """
-        if npartitions is None:
-            npartitions = self.npartitions
-        token = tokenize(self, grouper, npartitions, blocksize)
-
-        import partd
-        p = ('partd-' + token,)
-        try:
-            dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
-        except AttributeError:
-            dsk1 = {p: (partd.Python, partd.File())}
-
-        # Partition data on disk
-        name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
-        dsk2 = dict(((name, i), (partition, grouper, (self.name, i),
-                                 npartitions, p, blocksize))
-                    for i in range(self.npartitions))
-
-        # Barrier
-        barrier_token = 'groupby-barrier-' + token
-
-        def barrier(args):
-            return 0
-
-        dsk3 = {barrier_token: (barrier, list(dsk2))}
-
-        # Collect groups
-        name = 'groupby-collect-' + token
-        dsk4 = dict(((name, i),
-                     (collect, grouper, i, p, barrier_token))
-                    for i in range(npartitions))
-
-        return type(self)(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name,
-                          npartitions)
+        if method is None:
+            method = 'disk'
+        if method == 'disk':
+            return groupby_disk(self, grouper, npartitions=npartitions,
+                                blocksize=blocksize)
+        elif method == 'tasks':
+            return groupby_tasks(self, grouper, max_branch=max_branch)
+        else:
+            raise NotImplementedError(
+                    "Shuffle method must be 'disk' or 'tasks'")
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -1482,8 +1480,9 @@ def insert(tup, loc, val):
     return tuple(L)
 
 
-def shuffle_task(b, grouper, hash=hash, max_branch=32,
+def groupby_tasks(b, grouper, hash=hash, max_branch=32,
                  name='shuffle', token=None):
+    max_branch = max_branch or 32
     n = b.npartitions
 
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
@@ -1491,8 +1490,6 @@ def shuffle_task(b, grouper, hash=hash, max_branch=32,
         k = int(math.ceil(n ** (1 / stages)))
     else:
         k = n
-
-    name = 'x'
 
     groups = []
     splits = []
@@ -1533,3 +1530,39 @@ def shuffle_task(b, grouper, hash=hash, max_branch=32,
 
     dsk = merge(b2.dask, start, end, *(groups + splits + joins))
     return Bag(dsk, name + '-' + token, n)
+
+
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
+    if npartitions is None:
+        npartitions = b.npartitions
+    token = tokenize(b, grouper, npartitions, blocksize)
+
+    import partd
+    p = ('partd-' + token,)
+    try:
+        dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+    except AttributeError:
+        dsk1 = {p: (partd.Python, partd.File())}
+
+    # Partition data on disk
+    name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
+    dsk2 = dict(((name, i), (partition, grouper, (b.name, i),
+                             npartitions, p, blocksize))
+                for i in range(b.npartitions))
+
+    # Barrier
+    barrier_token = 'groupby-barrier-' + token
+
+    def barrier(args):
+        return 0
+
+    dsk3 = {barrier_token: (barrier, list(dsk2))}
+
+    # Collect groups
+    name = 'groupby-collect-' + token
+    dsk4 = dict(((name, i),
+                 (collect, grouper, i, p, barrier_token))
+                for i in range(npartitions))
+
+    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name,
+                         npartitions)

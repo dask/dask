@@ -854,10 +854,9 @@ def test_accumulate():
     assert b.accumulate(add).compute() == [1, 3, 6]
 
 
-def test_shuffle_tasks():
-    from dask.bag.core import shuffle_task
+def test_groupby_tasks():
     b = db.from_sequence(range(160), npartitions=4)
-    out = shuffle_task(b, lambda x: x % 10, max_branch=4)
+    out = b.groupby(lambda x: x % 10, max_branch=4, method='tasks')
     partitions = dask.get(out.dask, out._keys())
 
     for a in partitions:
@@ -867,7 +866,7 @@ def test_shuffle_tasks():
 
 
     b = db.from_sequence(range(1000), npartitions=100)
-    out = shuffle_task(b, lambda x: x % 123)
+    out = b.groupby(lambda x: x % 123, method='tasks')
     assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out._keys())
 
