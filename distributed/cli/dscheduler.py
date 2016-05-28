@@ -67,7 +67,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
                      '--check-unused-sessions=50',
                      '--unused-session-lifetime=1',
                      '--port', str(bokeh_port)] +
-                     sum([['--host', host] for host in hosts], []))
+                     sum([['--host', h] for h in hosts], []))
             if show:
                 args.append('--show')
 
