@@ -8,7 +8,7 @@ import os
 import io
 from warnings import warn
 
-from dask.delayed import Delayed, delayed
+from dask.delayed import delayed
 from dask.base import tokenize
 import dask.bytes.core
 from toolz import merge
@@ -81,11 +81,8 @@ def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [[h.decode() for h in d['hosts']] for d in blocks]
-    names = ['read-binary-hdfs3-%s-%s' % (path, tokenize(offset, length, delimiter, not_zero))
-            for fn, offset, length in zip(filenames, offsets, lengths)]
 
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), path)
-    restrictions = dict(zip(names, workers))
 
     if sample is True:
         sample = 10000
@@ -95,15 +92,19 @@ def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
     else:
         sample = b''
 
+    f = delayed(read_block_from_hdfs, pure=True)
+    values = [f(fn, offset, length, hdfs.host, hdfs.port, delimiter)
+              for fn, offset, length in zip(filenames, offsets, lengths)]
+
+    restrictions = {v.key: w for v, w in zip(values, workers)}
+
     executor._send_to_scheduler({'op': 'update-graph',
                                  'tasks': {},
                                  'dependencies': [],
                                  'keys': [],
                                  'restrictions': restrictions,
-                                 'loose_restrictions': names,
+                                 'loose_restrictions': list(restrictions),
                                  'client': executor.id})
-    values = [Delayed(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
-              for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
 
     return sample, values
 
