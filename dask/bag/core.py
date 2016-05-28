@@ -6,6 +6,7 @@ import itertools
 import math
 from operator import getitem
 import os
+import types
 import uuid
 from warnings import warn
 from distutils.version import LooseVersion
@@ -30,6 +31,7 @@ except:
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, unicode, urlopen
+from ..context import _globals
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
@@ -915,7 +917,12 @@ class Bag(Base):
         Bag.foldby
         """
         if method is None:
-            method = 'disk'
+            get = _globals.get('get')
+            if (isinstance(get, types.MethodType) and
+                'distributed' in get.__func__.__module__):
+                method = 'tasks'
+            else:
+                method = 'disk'
         if method == 'disk':
             return groupby_disk(self, grouper, npartitions=npartitions,
                                 blocksize=blocksize)
