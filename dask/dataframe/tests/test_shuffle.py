@@ -96,7 +96,6 @@ def test_partitioning_index():
 
 
 def test_set_partition_tasks():
-    from dask.dataframe.shuffle import set_partition_tasks
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100)},
                        index=np.random.random(100))
@@ -104,6 +103,21 @@ def test_set_partition_tasks():
     ddf = dd.from_pandas(df, npartitions=4)
 
     divisions = [0, .25, .50, .75, 1.0]
-    ddf2 = set_partition_tasks(ddf, 'x', divisions)
-    eq(df.set_index('x'), ddf2)
-    import pdb; pdb.set_trace()
+    eq(df.set_index('x'),
+       ddf.set_index('x', method='tasks'))
+
+
+def test_shuffle_pre_partition():
+    from dask.dataframe.shuffle import shuffle_pre_partition
+    df = pd.DataFrame({'x': np.random.random(10),
+                       'y': np.random.random(10)},
+                       index=np.random.random(10))
+    divisions = df.x.quantile([0, 0.2, 0.4, 0.6, 0.8, 1.0]).tolist()
+
+    result = shuffle_pre_partition(df, 'x', divisions, True)
+    for x, part in result.reset_index()[['x', 'partitions']].values.tolist():
+        part = int(part)
+        if x == divisions[-1]:
+            assert part == len(divisions) - 2
+        else:
+            assert divisions[part] <= x < divisions[part + 1]
