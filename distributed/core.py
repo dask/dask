@@ -317,7 +317,7 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
         assert not ip and not port
         if PY3 and isinstance(addr, bytes):
             addr = addr.decode()
-        ip, port = addr.split(':')
+        ip, port = addr.rsplit(':', 1)
         port = int(port)
     if PY3 and isinstance(ip, bytes):
         ip = ip.decode()
@@ -379,7 +379,7 @@ class rpc(object):
             if PY3 and isinstance(addr, bytes):
                 addr = addr.decode()
             assert not ip and not port
-            ip, port = addr.split(':')
+            ip, port = addr.rsplit(':', 1)
             port = int(port)
         if PY3 and isinstance(ip, bytes):
             ip = ip.decode()
@@ -449,7 +449,7 @@ def coerce_to_address(o, out=str):
     if PY3 and isinstance(o, bytes):
         o = o.decode()
     if isinstance(o, (unicode, str)):
-        ip, port = o.split(':')
+        ip, port = o.rsplit(':', 1)
         port = int(port)
         o = (ip, port)
     if isinstance(o, list):

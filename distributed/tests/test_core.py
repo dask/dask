@@ -164,6 +164,8 @@ def test_coerce_to_rpc():
     assert (r.ip, r.port) == ('127.0.0.1', 8000)
     r = coerce_to_rpc('127.0.0.1:8000')
     assert (r.ip, r.port) == ('127.0.0.1', 8000)
+    r = coerce_to_rpc('foo:bar:8000')
+    assert (r.ip, r.port) == ('foo:bar', 8000)
 
 
 def stream_div(stream=None, x=None, y=None):

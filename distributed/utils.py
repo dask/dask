@@ -227,7 +227,7 @@ def ensure_ip(hostname):
     '127.0.0.1:5000'
     """
     if ':' in hostname:
-        host, port = hostname.split(':')
+        host, port = hostname.rsplit(':', 1)
         return ':'.join([ensure_ip(host), port])
     if PY3 and isinstance(hostname, bytes):
         hostname = hostname.decode()
