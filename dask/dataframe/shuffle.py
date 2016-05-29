@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+import math
 import uuid
 
 import numpy as np
@@ -10,7 +11,7 @@ from toolz import merge
 
 from ..optimize import cull
 from ..base import tokenize
-from .core import DataFrame, Series, _Frame
+from .core import DataFrame, Series, _Frame, map_partitions
 from dask.dataframe.categorical import (strip_categories, _categorize,
                                         get_categories)
 from .utils import shard_df_on_index
@@ -300,3 +301,111 @@ def collect(group, p, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
     res = p.get(group)
     return res if len(res) > 0 else meta
+
+
+def shuffle_pre_partition(df, index, divisions):
+    parts = pd.Series(divisions).searchsorted(df[index]) - 1
+    return df.assign(partitions=parts).set_index('partitions')
+
+
+def shuffle_group(df, stage, k):
+    index = df.index // k ** stage % k
+    inds = set(index.drop_duplicates())
+    df = df.set_index(index)
+
+    result = {i: df.loc[i] if i in inds else df.head(0) for i in range(k)}
+
+    return result
+
+
+def shuffle_post(df, index):
+    return df.set_index(index, drop=True)
+
+
+def set_partition_tasks(df, index, divisions, max_branch=32, token=None):
+    max_branch = max_branch or 32
+    n = df.npartitions
+    assert len(divisions) == n + 1
+    name = 'shuffle'
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    groups = []
+    splits = []
+    joins = []
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages))
+              for i in range(n)]
+
+    meta = shuffle_pre_partition(df._pd, index, divisions)
+    df2 = map_partitions(shuffle_pre_partition, meta, df, index, divisions)
+
+    token = token or tokenize(df, index, divisions, max_branch)
+
+    start = dict(((name + '-join-' + token, 0, inp), (df2._name, i))
+                 for i, inp in enumerate(inputs))
+
+    for stage in range(1, stages + 1):
+        group = dict(((name + '-group-' + token, stage, inp),
+                      (shuffle_group,
+                        (name + '-join-' + token, stage - 1, inp),
+                        stage - 1, k))
+                     for inp in inputs)
+        split = dict(((name + '-split-' + token, stage, i, inp),
+                      (dict.get, (name + '-group-' + token, stage, inp), i, {}))
+                     for i in range(k)
+                     for inp in inputs)
+
+        join = dict(((name + '-join-' + token, stage, inp),
+                     (pd.concat,
+                        [(name + '-split-' + token, stage, inp[stage-1],
+                          insert(inp, stage - 1, j)) for j in range(k)]))
+                     for inp in inputs)
+        groups.append(group)
+        splits.append(split)
+        joins.append(join)
+
+    end = dict(((name + '-' + token, i),
+                (shuffle_post, (name + '-join-' + token, stage, inp), index))
+                for i, inp in enumerate(inputs))
+
+    dsk = merge(df2.dask, start, end, *(groups + splits + joins))
+
+    meta = df._pd.set_index(index)
+    return DataFrame(dsk, name + '-' + token, meta, divisions)
+
+
+def make_group(k, stage):
+    def h(x):
+        return x[0] // k ** stage % k
+    return h
+
+
+def digit(n, k, base):
+    """
+
+    >>> digit(1234, 0, 10)
+    4
+    >>> digit(1234, 1, 10)
+    3
+    >>> digit(1234, 2, 10)
+    2
+    >>> digit(1234, 3, 10)
+    1
+    """
+    return n // base**k  % base
+
+
+def insert(tup, loc, val):
+    """
+
+    >>> insert(('a', 'b', 'c'), 0, 'x')
+    ('x', 'b', 'c')
+    """
+    L = list(tup)
+    L[loc] = val
+    return tuple(L)

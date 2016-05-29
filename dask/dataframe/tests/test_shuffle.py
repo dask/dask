@@ -5,6 +5,7 @@ import numpy as np
 import dask.dataframe as dd
 from dask.dataframe.shuffle import shuffle, hash_series, partitioning_index
 from dask.async import get_sync
+from dask.dataframe.utils import eq
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
                               index=[0, 1, 3]),
@@ -92,3 +93,17 @@ def test_partitioning_index():
     res = partitioning_index(df2.index, 4)
     exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
     np.testing.assert_equal(res, exp)
+
+
+def test_set_partition_tasks():
+    from dask.dataframe.shuffle import set_partition_tasks
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100)},
+                       index=np.random.random(100))
+
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    divisions = [0, .25, .50, .75, 1.0]
+    ddf2 = set_partition_tasks(ddf, 'x', divisions)
+    eq(df.set_index('x'), ddf2)
+    import pdb; pdb.set_trace()
