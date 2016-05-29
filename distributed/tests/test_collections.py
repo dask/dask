@@ -9,6 +9,7 @@ pytest.importorskip('pandas')
 
 import dask
 import dask.dataframe as dd
+import dask.bag as db
 from distributed import Executor
 from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
@@ -288,3 +289,11 @@ def test__futures_to_collection(e, s, a, b):
 
     assert type(b) == type(c)
     assert b.dask == b.dask
+
+
+@gen_cluster(executor=True)
+def test_bag_groupby_tasks_default(e, s, a, b):
+    with dask.set_options(get=e.get):
+        b = db.range(100, npartitions=10)
+        b2 = b.groupby(lambda x: x % 13)
+        assert not any('partd' in k[0] for k in b2.dask)
