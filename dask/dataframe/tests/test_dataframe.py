@@ -1653,31 +1653,39 @@ def test_dataframe_itertuples():
 
 
 def test_from_delayed():
-    from dask import do
-    dfs = [do(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
-    df = dd.from_delayed(dfs, columns=['A', 'B', 'C', 'D'])
+    from dask import delayed
+    dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
+    df = dd.from_delayed(dfs, metadata=['A', 'B', 'C', 'D'])
 
     assert (df.compute().columns == df.columns).all()
     assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
-    s = dd.from_delayed(ss, columns='A')
+    s = dd.from_delayed(ss, metadata='A')
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
+    
+    s = dd.from_delayed(ss)
+    assert s._known_dtype
+    assert s.compute().name == s.name
 
     df = dd.from_delayed(dfs, tm.makeTimeDataFrame(1))
     assert df._known_dtype
     assert list(df.columns) == ['A', 'B', 'C', 'D']
 
+    df = dd.from_delayed(dfs)
+    assert df._known_dtype
+    assert list(df.columns) == ['A', 'B', 'C', 'D']
+
 
 def test_to_delayed():
-    from dask.delayed import Value
+    from dask.delayed import Delayed
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     a, b = ddf.to_delayed()
-    assert isinstance(a, Value)
-    assert isinstance(b, Value)
+    assert isinstance(a, Delayed)
+    assert isinstance(b, Delayed)
 
     assert eq(a.compute(), df.iloc[:2])
 
