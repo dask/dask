@@ -25,8 +25,6 @@ df = pd.read_csv(io.StringIO(data), index_col='number')
 @pytest.yield_fixture
 def pg():
     # Make database in local PGSQL
-    import tempfile
-    f, fname = tempfile.mkstemp(suffix='.db', prefix='tmp')
     uri = 'postgresql://localhost:5432/postgres'
     df.to_sql('test', uri, index=True, if_exists='replace')
     yield uri
