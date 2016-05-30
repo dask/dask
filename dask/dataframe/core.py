@@ -559,8 +559,8 @@ class _Frame(Base):
 
         Returns a list of values, one value per partition.
         """
-        from ..delayed import Value
-        return [Value(k, [self.dask]) for k in self._keys()]
+        from ..delayed import Delayed
+        return [Delayed(k, [self.dask]) for k in self._keys()]
 
     @classmethod
     def _get_unary_operator(cls, op):

@@ -645,16 +645,24 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None,
     Parameters
     ----------
     dfs: list of Values
-        An iterable of dask.delayed.Value objects, such as come from dask.do
-        These comprise the individual partitions of the resulting dataframe
-    metadata: list or string of column names or empty dataframe
-    divisions: list or None
+        An iterable of ``dask.delayed.Delayed`` objects, such as come from
+        ``dask.delayed`` These comprise the individual partitions of the
+        resulting dataframe.
+    metadata: str, list of column names, or empty dataframe, optional
+        Metadata for the underlying pandas object. Can be either column name
+        (if Series), list of column names, or pandas object with the same
+        columns/dtypes. If not provided, will be computed from the first
+        partition.
+    divisions: list, optional
+        Partition boundaries along the index.
+    prefix, str, optional
+        Prefix to prepend to the keys.
     """
     if columns is not None:
         warn("Deprecation warning: Use metadata argument, not columns")
         metadata = columns
-    from dask.delayed import Value
-    if isinstance(dfs, Value):
+    from dask.delayed import Delayed
+    if isinstance(dfs, Delayed):
         dfs = [dfs]
     dsk = merge(df.dask for df in dfs)
 
@@ -665,8 +673,10 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None,
 
     if divisions is None:
         divisions = [None] * (len(dfs) + 1)
+    if metadata is None:
+        metadata = dfs[0].compute()
 
-    if isinstance(metadata, str):
+    if isinstance(metadata, (str, pd.Series)):
         return Series(merge(dsk, dsk2), name, metadata, divisions)
     else:
         return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
