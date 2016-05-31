@@ -50,11 +50,13 @@
 
 [Scott Sanderson](https://github.com/ssanderson)
 
-[Stephan Hoyer](http://stephanhoyer.com)
-
 [Sigurd Spieckermann](https://github.com/sisp)
 
 [sinhrks](https://github.com/sinhrks)
+
+[Skipper Seabold](https://github.com/jseabold)
+
+[Stephan Hoyer](http://stephanhoyer.com)
 
 [Stuart Owen](http://stuartowen.com/)
 
