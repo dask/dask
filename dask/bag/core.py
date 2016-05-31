@@ -1154,14 +1154,14 @@ def from_url(urls):
     1
 
     >>> a.take(8)  # doctest: +SKIP
-    ('Dask\n',
-     '====\n',
-     '\n',
-     '|Build Status| |Coverage| |Doc Status| |Gitter|\n',
-     '\n',
-     'Dask provides multi-core execution on larger-than-memory datasets using blocked\n',
-     'algorithms and task scheduling.  It maps high-level NumPy and list operations\n',
-     'on large datasets on to graphs of many operations on small in-memory datasets.\n')
+    ('Dask\\n',
+     '====\\n',
+     '\\n',
+     '|Build Status| |Coverage| |Doc Status| |Gitter|\\n',
+     '\\n',
+     'Dask provides multi-core execution on larger-than-memory datasets using blocked\\n',
+     'algorithms and task scheduling.  It maps high-level NumPy and list operations\\n',
+     'on large datasets on to graphs of many operations on small in-memory datasets.\\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
     >>> b.npartitions  # doctest: +SKIP
