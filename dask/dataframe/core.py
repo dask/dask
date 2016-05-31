@@ -1394,7 +1394,7 @@ class DataFrame(_Frame):
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(self.columns)))
+                      list(filter(pd.compat.isidentifier, self.columns))))
 
     @property
     def ndim(self):

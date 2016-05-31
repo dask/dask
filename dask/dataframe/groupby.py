@@ -371,7 +371,7 @@ class DataFrameGroupBy(_GroupBy):
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(self.obj.columns)))
+                      list(filter(pd.compat.isidentifier, self.obj.columns))))
 
     def __getattr__(self, key):
         try:
