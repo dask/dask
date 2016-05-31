@@ -85,9 +85,9 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         return sample, values
 
 
-def read_block_from_s3(filename, offset, length, s3_params={}, delimiter=None,
-                       compression=None):
-    s3 = S3FileSystem(**s3_params)
+def read_block_from_s3(filename, offset, length, s3_params=None,
+                       delimiter=None, compression=None):
+    s3 = S3FileSystem(**(s3_params or {}))
     with s3.open(filename, 'rb') as f:
         if compression:
             f = compress_files[compression](f)
