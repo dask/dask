@@ -109,6 +109,9 @@ def test_attributes():
     assert 'foo' not in dir(d)
     assert raises(AttributeError, lambda: d.foo)
 
+    df = dd.from_pandas(pd.DataFrame({'a b c': [1, 2, 3]}), npartitions=2)
+    assert 'a b c' not in dir(df)
+
 
 def test_column_names():
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b']))
