@@ -1153,7 +1153,7 @@ def from_url(urls):
     >>> a.npartitions  # doctest: +SKIP
     1
 
-    >> a.take(8)  # doctest: +SKIP
+    >>> a.take(8)  # doctest: +SKIP
     ('Dask\n',
      '====\n',
      '\n',

@@ -43,9 +43,14 @@ Create Bags
 -----------
 
 .. autosummary::
-   concat
    from_sequence
+   from_delayed
    read_text
+   from_castra
+   from_url
+   range
+   concat
+   zip
 
 Turn Bags into other things
 ---------------------------
@@ -64,5 +69,10 @@ Other functions
 ---------------
 
 .. autofunction:: from_sequence
+.. autofunction:: from_delayed
 .. autofunction:: read_text
+.. autofunction:: from_castra
+.. autofunction:: from_url
+.. autofunction:: range
 .. autofunction:: concat
+.. autofunction:: zip
