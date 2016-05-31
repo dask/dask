@@ -1411,7 +1411,7 @@ class DataFrame(_Frame):
             return self._pd.dtypes
 
     def set_index(self, other, drop=True, sorted=False, **kwargs):
-        """ Set the DataFrame index 9row labels) using an existing column
+        """ Set the DataFrame index (row labels) using an existing column
 
         This operation in dask.dataframe is expensive.  If the input column is
         sorted then we accomplish the set_index in a single full read of that
