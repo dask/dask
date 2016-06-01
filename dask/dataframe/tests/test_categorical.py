@@ -34,11 +34,21 @@ def test_categorical_set_index():
     with dask.set_options(get=get_sync):
         b = a.set_index('y')
         df2 = df.set_index('y')
-        assert list(b.index.compute()), list(df2.index)
+        d1, d2 = b.get_division(0), b.get_division(1)
+        assert list(d1.index.compute()) == ['a']
+        assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
         b = a.set_index(a.y)
         df2 = df.set_index(df.y)
-        assert list(b.index.compute()), list(df2.index)
+        d1, d2 = b.get_division(0), b.get_division(1)
+        assert list(d1.index.compute()) == ['a']
+        assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
+
+        b = a.set_partition('y', ['a', 'b', 'c'])
+        df2 = df.set_index(df.y)
+        d1, d2 = b.get_division(0), b.get_division(1)
+        assert list(d1.index.compute()) == ['a']
+        assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
 
 def test_dataframe_categoricals():

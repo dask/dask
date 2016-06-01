@@ -121,7 +121,7 @@ def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
         dsk = merge(df.dask, dsk1, dsk2, dsk3)
         if isinstance(index, _Frame):
             dsk.update(index.dask)
-        p, barrier_token, categories = df._get(dsk, [p, barrier_token, catname], **kwargs)
+        p, barrier_token, categories = df._get(dsk, [p, barrier_token, catname2], **kwargs)
         dsk4 = {catname2: categories}
     else:
         dsk4 = {}
@@ -156,9 +156,9 @@ def barrier(args):
 def _set_partition(df, index, divisions, p, drop=True):
     """ Shard partition and dump into partd """
     df = df.set_index(index, drop=drop)
-    df = strip_categories(df)
     divisions = list(divisions)
     shards = shard_df_on_index(df, divisions[1:-1])
+    shards = list(map(strip_categories, shards))
     p.append(dict(enumerate(shards)))
 
 
