@@ -1410,6 +1410,14 @@ class DataFrame(_Frame):
             self._pd, self._known_dtype = self._build_pd(self.head())
             return self._pd.dtypes
 
+    @derived_from(pd.DataFrame)
+    def notnull(self):
+        return self.map_partitions(pd.DataFrame.notnull)
+
+    @derived_from(pd.DataFrame)
+    def isnull(self):
+        return self.map_partitions(pd.DataFrame.isnull)
+
     def set_index(self, other, drop=True, sorted=False, **kwargs):
         """ Set the DataFrame index (row labels) using an existing column
 

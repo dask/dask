@@ -1244,6 +1244,8 @@ def test_embarrassingly_parallel_operations():
 
     assert eq(a.x.notnull(), df.x.notnull())
     assert eq(a.x.isnull(), df.x.isnull())
+    assert eq(a.notnull(), df.notnull())
+    assert eq(a.isnull(), df.isnull())
 
     assert len(a.sample(0.5).compute()) < len(df)
 
