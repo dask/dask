@@ -11,15 +11,15 @@ from warnings import warn
 from ..utils import ignoring
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
-        remove, compose, curry)
+                   remove, compose, curry, first, second)
 from toolz.compatibility import iteritems, zip
 import toolz
 try:
     from cytoolz import (frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby, topk)
+                         count, pluck, groupby, topk, accumulate)
 except:
     from toolz import (frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby, topk)
+                       count, pluck, groupby, topk, accumulate)
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, unicode, urlopen
@@ -997,6 +997,47 @@ class Bag(Base):
                                  )))
                    for i in range(npartitions))
         return Bag(merge(self.dask, dsk), name, npartitions)
+
+    def accumulate(self, binop, initial=no_default):
+        """Repeatedly apply binary function to a sequence, accumulating results
+
+        Examples
+        --------
+        >>> from operator import add
+        >>> b = from_sequence([1, 2, 3, 4, 5], npartitions=2)
+        >>> b.accumulate(add).compute()
+        [1, 3, 6, 10, 15]
+
+        Accumulate also takes an optional argument that will be used as the
+        first value.
+
+        >>> b.accumulate(add, -1)
+        [-1, 0, 2, 5, 9, 15]
+        """
+        token = tokenize(self, binop, initial)
+        binop_name = funcname(binop)
+        a = '%s-part-%s' % (binop_name, token)
+        b = '%s-first-%s' % (binop_name, token)
+        c = '%s-second-%s' % (binop_name, token)
+        dsk = {(a, 0): (accumulate_part, binop, (self.name, 0), initial, True),
+               (b, 0): (first, (a, 0)),
+               (c, 0): (second, (a, 0))}
+        for i in range(1, self.npartitions):
+            dsk[(a, i)] = (accumulate_part, binop, (self.name, i),
+                           (c, i - 1))
+            dsk[(b, i)] = (first, (a, i))
+            dsk[(c, i)] = (second, (a, i))
+        return Bag(merge(self.dask, dsk), b, self.npartitions)
+
+
+def accumulate_part(binop, seq, initial, is_first=False):
+    if initial == no_default:
+        res = list(accumulate(binop, seq))
+    else:
+        res = list(accumulate(binop, seq, initial=initial))
+    if is_first:
+        return res, res[-1] if res else [], initial
+    return res[1:], res[-1]
 
 
 normalize_token.register(Item, lambda a: a.key)
