@@ -83,7 +83,7 @@ def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
     elif np.isscalar(index):
         metadata = df._pd.set_index(index, drop=drop)
     else:
-         raise ValueError('index must be Series or scalar, {0} given'.format(type(index)))
+        raise ValueError('index must be Series or scalar, {0} given'.format(type(index)))
 
     token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
@@ -153,9 +153,14 @@ def barrier(args):
     list(args)
     return 0
 
+
 def _set_partition(df, index, divisions, p, drop=True):
     """ Shard partition and dump into partd """
     df = df.set_index(index, drop=drop)
+    if is_categorical_dtype(df.index):
+        # the divisions need to be codes not categories
+        categories = df.index.categories.tolist()
+        divisions = [categories.index(d) for d in divisions]
     df = strip_categories(df)
     divisions = list(divisions)
     shards = shard_df_on_index(df, divisions[1:-1])

@@ -27,7 +27,7 @@ def test_categorize():
 
 
 def test_categorical_set_index():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
+    df = pd.DataFrame({'x': [1, 2, 2, 4], 'y': ['a', 'b', 'b', 'c']})
     df['y'] = df.y.astype('category')
     a = dd.from_pandas(df, npartitions=2)
 
@@ -36,9 +36,13 @@ def test_categorical_set_index():
         df2 = df.set_index('y')
         assert list(b.index.compute()), list(df2.index)
 
+
         b = a.set_index(a.y)
         df2 = df.set_index(df.y)
         assert list(b.index.compute()), list(df2.index)
+
+        c = a.set_index(a.x)
+        assert len(b.get_division(0)) == len(c.get_division(0))
 
 
 def test_dataframe_categoricals():
