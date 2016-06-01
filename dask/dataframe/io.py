@@ -237,7 +237,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
                  columns, categories, lock))
                for i in range(0, int(ceil(len(x) / chunksize))))
 
-    result = DataFrame(dsk, new_name, columns, divisions)
+    meta = dataframe_from_ctable(x, slice(0, 0), columns, categories, lock)
+    result = DataFrame(dsk, new_name, meta, divisions)
 
     if index:
         assert index in x.names
