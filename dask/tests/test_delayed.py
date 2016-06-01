@@ -21,7 +21,7 @@ def test_to_task_dasks():
     a = delayed(1, name='a')
     b = delayed(2, name='b')
     task, dasks = to_task_dasks([a, b, 3])
-    assert task == ['a', 'b', 3]
+    assert task == (list, ['a', 'b', 3])
     assert len(dasks) == 2
     assert a.dask in dasks
     assert b.dask in dasks
@@ -132,6 +132,8 @@ def test_literates():
     b = a + 1
     lit = (a, b, 3)
     assert delayed(lit).compute() == (1, 2, 3)
+    lit = [a, b, 3]
+    assert delayed(lit).compute() == [1, 2, 3]
     lit = set((a, b, 3))
     assert delayed(lit).compute() == set((1, 2, 3))
     lit = {a: 'a', b: 'b', 3: 'c'}
