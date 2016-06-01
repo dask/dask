@@ -7,19 +7,25 @@ import math
 import os
 import uuid
 from warnings import warn
+from distutils.version import LooseVersion
 
 from ..utils import ignoring
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
-                   remove, compose, curry, first, second)
+                   remove, compose, curry, first, second, accumulate)
 from toolz.compatibility import iteritems, zip
 import toolz
+_implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
 try:
+    import cytoolz
     from cytoolz import (frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby, topk, accumulate)
+                         count, pluck, groupby, topk)
+    if LooseVersion(cytoolz.__version__) > '0.7.3':
+        from cytoolz import accumulate
+        _implement_accumulate = True
 except:
     from toolz import (frequencies, merge_with, join, reduceby,
-                       count, pluck, groupby, topk, accumulate)
+                       count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, unicode, urlopen
@@ -999,32 +1005,35 @@ class Bag(Base):
         return Bag(merge(self.dask, dsk), name, npartitions)
 
     def accumulate(self, binop, initial=no_default):
-        """Repeatedly apply binary function to a sequence, accumulating results
+        """Repeatedly apply binary function to a sequence, accumulating results.
 
         Examples
         --------
         >>> from operator import add
         >>> b = from_sequence([1, 2, 3, 4, 5], npartitions=2)
-        >>> b.accumulate(add).compute()
+        >>> b.accumulate(add).compute()  # doctest: +SKIP
         [1, 3, 6, 10, 15]
 
         Accumulate also takes an optional argument that will be used as the
         first value.
 
-        >>> b.accumulate(add, -1)
+        >>> b.accumulate(add, -1)  # doctest: +SKIP
         [-1, 0, 2, 5, 9, 15]
         """
+        if not _implement_accumulate:
+            raise NotImplementedError("accumulate requires `toolz` > 0.7.4"
+                                      " or `cytoolz` > 0.7.3.")
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
         a = '%s-part-%s' % (binop_name, token)
         b = '%s-first-%s' % (binop_name, token)
         c = '%s-second-%s' % (binop_name, token)
         dsk = {(a, 0): (accumulate_part, binop, (self.name, 0), initial, True),
-               (b, 0): (first, (a, 0)),
-               (c, 0): (second, (a, 0))}
+            (b, 0): (first, (a, 0)),
+            (c, 0): (second, (a, 0))}
         for i in range(1, self.npartitions):
             dsk[(a, i)] = (accumulate_part, binop, (self.name, i),
-                           (c, i - 1))
+                        (c, i - 1))
             dsk[(b, i)] = (first, (a, i))
             dsk[(c, i)] = (second, (a, i))
         return Bag(merge(self.dask, dsk), b, self.npartitions)

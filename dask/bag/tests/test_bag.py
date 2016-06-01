@@ -838,7 +838,7 @@ def test_repartition():
     except NotImplementedError as e:
         assert '100' in str(e)
 
-
+@pytest.mark.skipif('not db.core._implement_accumulate')
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
     dsk = dict((('test', i), p) for (i, p) in enumerate(parts))
