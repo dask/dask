@@ -490,9 +490,6 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         divisions = [None] * (len(dsk) + 1)
         return DataFrame(dsk, name, empty, divisions)
 
-    if lock is True:
-        lock = Lock()
-
     keys, stops = get_keys_and_stops(path, key, stop)
     if (start != 0 or stop is not None) and len(keys) > 1:
         raise NotImplementedError(read_hdf_error_msg)
@@ -550,6 +547,9 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
     """
+    if lock is True:
+        lock = Lock()
+
     key = key if key.startswith('/')  else '/' + key
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
