@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
 import bisect
 from collections import Iterator
 from datetime import datetime
@@ -1757,7 +1758,9 @@ class DataFrame(_Frame):
         return map_partitions(pd.DataFrame.astype, empty, self, dtype=dtype)
 
     def info(self):
-        import sys
+        """
+        Concise summary of a Dask DataFrame.
+        """
         lines = list()
         lines.append(str(type(self)))
         lines.append('Data columns (total %d columns):' % len(self.columns))
