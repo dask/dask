@@ -10,6 +10,7 @@ from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
+from pandas.formats.format import _put_lines
 
 from toolz import merge, partial, first, partition, unique
 import pandas as pd
@@ -1755,6 +1756,19 @@ class DataFrame(_Frame):
         empty = self._pd.astype(dtype)
         return map_partitions(pd.DataFrame.astype, empty, self, dtype=dtype)
 
+    def info(self):
+        import sys
+        lines = list()
+        lines.append(str(type(self)))
+        lines.append('Data columns (total %d columns):' % len(self.columns))
+        dtypes = self.dtypes
+        template = "%s    %s"
+        for i, col in enumerate(self.columns):
+            dtype = dtypes.iloc[i]
+            lines.append(template % (col, dtype))
+
+        _put_lines(sys.stdout, lines)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
@@ -1952,7 +1966,7 @@ def reduction(x, chunk, aggregate, token=None):
     token = token or 'reduction'
     a = '{0}--chunk-{1}'.format(token, token_key)
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
-                for i in range(x.npartitions))
+               for i in range(x.npartitions))
 
     b = '{0}--aggregation-{1}'.format(token, token_key)
     dsk2 = {(b, 0): (aggregate, (remove_empties,
