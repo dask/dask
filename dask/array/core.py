@@ -251,15 +251,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     dasks.  We arrange the pattern with which those blocks interact with sets
     of matching indices.  E.g.
 
-        top(func, 'z', 'i', 'x', 'i', 'y', 'i')
+        ``top(func, 'z', 'i', 'x', 'i', 'y', 'i')``
 
     yield an embarassingly parallel communication pattern and is read as
 
-        z_i = func(x_i, y_i)
+        $$ z_i = func(x_i, y_i) $$
 
     More complex patterns may emerge, including multiple indices
 
-        top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
+        ``top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')``
 
         $$ z_{ij} = func(x_{ij}, y_{ji}) $$
 
@@ -3318,12 +3318,14 @@ def to_npy_stack(dirname, x, axis=0):
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 
+    ```bash
     $ tree data/
     data/
     |-- 0.npy
     |-- 1.npy
     |-- 2.npy
     |-- info
+    ```
 
     The ``.npy`` files store numpy arrays for ``x[0:2], x[2:4], and x[4:5]``
     respectively, as is specified by the chunk size along the zeroth axis.  The

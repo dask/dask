@@ -21,12 +21,12 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
         The starting value of the sequence.
     stop : scalar
         The last value of the sequence.
+    num : int, optional
+        Number of samples to include in the returned dask array, including the
+        endpoints.
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
-    num : int, optional
-        Number of samples to in the returned dask array, including the
-        endpoints.
 
     Returns
     -------
@@ -80,10 +80,7 @@ def arange(*args, **kwargs):
         The last value of the sequence.
     chunks :  int
         The number of samples on each block. Note that the last block will have
-        fewer samples if `num % chunks != 0`.
-    num : int, optional
-        Number of samples to in the returned dask array, including the
-        endpoints.
+        fewer samples if ``len(array) % chunks != 0``.
 
     Returns
     -------

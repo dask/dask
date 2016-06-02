@@ -320,11 +320,11 @@ class Bag(Base):
         >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
         [0, 10, 20, 30, 40]
 
-        Keyword arguments are passed through to `func`. These can be either
-        `dask.bag.Item`s, or normal python objects.
+        Keyword arguments are passed through to ``func``. These can be either
+        ``dask.bag.Item``, or normal python objects.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(1, 101), npartitions=10)
         >>> def div(num, den=1):
@@ -338,7 +338,7 @@ class Bag(Base):
         >>> b.map(div, den=hi).take(5)
         (0.01, 0.02, 0.03, 0.04, 0.05)
 
-        Using an `Item`:
+        Using an ``Item``:
 
         >>> b.map(div, den=b.max()).take(5)
         (0.01, 0.02, 0.03, 0.04, 0.05)
@@ -406,11 +406,11 @@ class Bag(Base):
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
 
-        Keyword arguments are passed through to `func`. These can be either
-        `dask.bag.Item`s, or normal python objects.
+        Keyword arguments are passed through to ``func``. These can be either
+        ``dask.bag.Item``, or normal python objects.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(1, 101), npartitions=10)
         >>> def div(nums, den=1):
@@ -424,7 +424,7 @@ class Bag(Base):
         >>> b.map_partitions(div, den=hi).take(5)
         (0.01, 0.02, 0.03, 0.04, 0.05)
 
-        Using an `Item`:
+        Using an ``Item``:
 
         >>> b.map_partitions(div, den=b.max()).take(5)
         (0.01, 0.02, 0.03, 0.04, 0.05)
@@ -468,8 +468,8 @@ class Bag(Base):
     def unzip(self, n):
         """Transform a bag of tuples to ``n`` bags of their elements.
 
-        Example
-        -------
+        Examples
+        --------
         >>> b = from_sequence([(i, i + 1, i + 2) for i in range(10)])
         >>> first, second, third = b.unzip(3)
         >>> isinstance(first, Bag)
@@ -884,7 +884,6 @@ class Bag(Base):
 
         See Also
         --------
-
         Bag.foldby
         """
         if npartitions is None:
@@ -1379,7 +1378,7 @@ def bag_zip(*bags):
     When what you really wanted was more along the lines of:
     >>> list(fizzbuzzz) # doctest: +SKIP
     [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
-     (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
+    (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
     """
     npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)

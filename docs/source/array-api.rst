@@ -339,7 +339,6 @@ Other functions
 .. autofunction:: prod
 .. autofunction:: rad2deg
 .. autofunction:: radians
-.. autofunction:: random
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk

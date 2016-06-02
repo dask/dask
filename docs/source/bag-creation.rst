@@ -107,7 +107,7 @@ To DataFrames
 You can convert a dask bag into a :doc:`dask dataframe<dataframe>` and use
 those storage solutions.
 
-.. autofunction:: dask.bag.core.Bag.to_dataframe
+.. automethod:: dask.bag.core.Bag.to_dataframe
 
 
 To Delayed Values
@@ -116,4 +116,4 @@ To Delayed Values
 You can convert a dask bag into a list of :doc:`dask delayed values<delayed>`
 and custom storage solutions from there.
 
-.. autofunction:: dask.bag.core.Bag.to_delayed
+.. automethod:: dask.bag.core.Bag.to_delayed
