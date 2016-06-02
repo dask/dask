@@ -193,6 +193,19 @@ def test_progressbar_done(loop):
             assert p.bar.bar_style == 'danger'
 
 
+def test_progressbar_cancel(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            import time
+            L = [e.submit(lambda: time.sleep(0.3), i) for i in range(5)]
+            p = ProgressWidget(L)
+            sync(loop, p.listen)
+            L[-1].cancel()
+            wait(L[:-1])
+            assert p.status == 'error'
+            assert p.bar.value == 0  # no tasks finish before cancel is called
+
+
 @gen_cluster()
 def test_multibar_complete(s, a, b):
     s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),

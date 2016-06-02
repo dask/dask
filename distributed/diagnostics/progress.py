@@ -132,6 +132,11 @@ class Progress(SchedulerPlugin):
         if key in self.all_keys:
             self.stop(exception=exception, key=key)
 
+    def forget(self, scheduler, key, **kwargs):
+        logger.debug("A task was cancelled (%s), stopping progress", key)
+        if key in self.all_keys:
+            self.stop(exception=True)
+
     def restart(self, scheduler):
         self.stop()
 
@@ -229,6 +234,12 @@ class MultiProgress(Progress):
         if (self.func(key) in self.all_keys and
             key in self.all_keys[self.func(key)]):
             self.stop(exception=exception, key=key)
+
+    def forget(self, scheduler, key, **kwargs):
+        logger.debug("A task was cancelled (%s), stopping progress", key)
+        if (self.func(key) in self.all_keys and
+            key in self.all_keys[self.func(key)]):
+            self.stop(exception=True)
 
     def start(self):
         self.status = 'running'

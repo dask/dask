@@ -1189,6 +1189,7 @@ class Scheduler(Server):
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
         keys = set(keys)
+
         if keys:
             logger.debug("Release keys: %s", keys)
             keys2 = {k for k in keys if not self.waiting_data.get(k)}
