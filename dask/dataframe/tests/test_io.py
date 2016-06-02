@@ -269,6 +269,7 @@ def test_from_bcolz():
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
+    assert d._known_dtype
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
