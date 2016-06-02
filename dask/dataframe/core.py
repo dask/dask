@@ -1761,6 +1761,7 @@ class DataFrame(_Frame):
         """
         Concise summary of a Dask DataFrame.
         """
+        from pandas.formats.format import _put_lines
         lines = list()
         lines.append(str(type(self)))
         lines.append('Data columns (total %d columns):' % len(self.columns))
@@ -1770,7 +1771,7 @@ class DataFrame(_Frame):
             dtype = dtypes.iloc[i]
             lines.append(template % (col, dtype))
 
-        _put_lines(sys.stdout, lines)
+        sys.stdout.write('\n'.join(lines))
 
 
 # bind operators
