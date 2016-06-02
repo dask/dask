@@ -58,8 +58,8 @@ Changing state
     Real-time equivalent of dependents
 
 
-Example
--------
+Examples
+--------
 
 >>> import pprint
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}

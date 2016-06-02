@@ -87,8 +87,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
     split_every : dict
         Maximum reduction block sizes in each dimension.
 
-    Example
-    -------
+    Examples
+    --------
     Reduce across axis 0 and 2, merging a maximum of 1 block in the 0th
     dimension, and 3 blocks in the 2nd dimension:
 

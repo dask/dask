@@ -203,7 +203,6 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
 
     Parameters
     ----------
-
     data: Array
     q: int
         Size of the desired subspace (the actual size will be bigger,
@@ -212,16 +211,14 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
 
-    Algorithm Citation
-    ------------------
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
-
+    References
+    ----------
+    N. Halko, P. G. Martinsson, and J. A. Tropp.
+    Finding structure with randomness: Probabilistic algorithms for
+    constructing approximate matrix decompositions.
+    SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+    pp. 217-288, June 2011
+    http://arxiv.org/abs/0909.4061
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
@@ -245,7 +242,6 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
 
     Parameters
     ----------
-
     a: Array
         Input array
     k: int
@@ -255,16 +251,6 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
 
-    Algorithm Citation
-    ------------------
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
-
     Examples
     --------
 
@@ -272,10 +258,18 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
 
     Returns
     -------
-
     u:  Array, unitary / orthogonal
     s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
+
+    References
+    ----------
+    N. Halko, P. G. Martinsson, and J. A. Tropp.
+    Finding structure with randomness: Probabilistic algorithms for
+    constructing approximate matrix decompositions.
+    SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+    pp. 217-288, June 2011
+    http://arxiv.org/abs/0909.4061
     """
     comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
     a_compressed = comp.dot(a)

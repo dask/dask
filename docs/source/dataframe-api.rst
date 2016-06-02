@@ -138,9 +138,10 @@ Series Methods
 Other functions
 ~~~~~~~~~~~~~~~
 
+.. currentmodule:: dask.dataframe
+
 .. autofunction:: compute
 .. autofunction:: map_partitions
-.. autofunction:: quantile
 
 .. currentmodule:: dask.dataframe.multi
 
@@ -154,18 +155,19 @@ Other functions
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
 
+.. currentmodule:: dask.dataframe.rolling
 
-.. autofunction:: rolling.rolling_apply
-.. autofunction:: rolling.rolling_chunk
-.. autofunction:: rolling.rolling_count
-.. autofunction:: rolling.rolling_kurt
-.. autofunction:: rolling.rolling_max
-.. autofunction:: rolling.rolling_mean
-.. autofunction:: rolling.rolling_median
-.. autofunction:: rolling.rolling_min
-.. autofunction:: rolling.rolling_quantile
-.. autofunction:: rolling.rolling_skew
-.. autofunction:: rolling.rolling_std
-.. autofunction:: rolling.rolling_sum
-.. autofunction:: rolling.rolling_var
-.. autofunction:: rolling.rolling_window
+.. autofunction:: rolling_apply
+.. autofunction:: rolling_chunk
+.. autofunction:: rolling_count
+.. autofunction:: rolling_kurt
+.. autofunction:: rolling_max
+.. autofunction:: rolling_mean
+.. autofunction:: rolling_median
+.. autofunction:: rolling_min
+.. autofunction:: rolling_quantile
+.. autofunction:: rolling_skew
+.. autofunction:: rolling_std
+.. autofunction:: rolling_sum
+.. autofunction:: rolling_var
+.. autofunction:: rolling_window
