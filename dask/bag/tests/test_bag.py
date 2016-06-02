@@ -837,3 +837,18 @@ def test_repartition():
         b.repartition(100)
     except NotImplementedError as e:
         assert '100' in str(e)
+
+@pytest.mark.skipif('not db.core._implement_accumulate')
+def test_accumulate():
+    parts = [[1, 2, 3], [4, 5], [], [6, 7]]
+    dsk = dict((('test', i), p) for (i, p) in enumerate(parts))
+    b = db.Bag(dsk, 'test', len(parts))
+    r = b.accumulate(add)
+    assert r.name == b.accumulate(add).name
+    assert r.name != b.accumulate(add, -1).name
+    assert r.compute() == [1, 3, 6, 10, 15, 21, 28]
+    assert b.accumulate(add, -1).compute() == [-1, 0, 2, 5, 9, 14, 20, 27]
+    assert b.accumulate(add).map(inc).compute() == [2, 4, 7, 11, 16, 22, 29]
+
+    b = db.from_sequence([1, 2, 3], npartitions=1)
+    assert b.accumulate(add).compute() == [1, 3, 6]
