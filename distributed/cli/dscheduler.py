@@ -50,6 +50,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
                           services={('http', http_port): HTTPScheduler})
     scheduler.start(port)
 
+    bokeh_proc = None
     if _bokeh:
         try:
             import bokeh
@@ -97,7 +98,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
     loop.start()
     loop.close()
     scheduler.stop()
-    bokeh_proc.terminate()
+    if bokeh_proc:
+        bokeh_proc.terminate()
 
     logger.info("End scheduler at %s:%d", ip, port)
 
