@@ -19,7 +19,7 @@ from ..bytes.compression import seekable_files, files as cfiles
 delayed = delayed(pure=True)
 
 MEMORY_FRACTION = 10
-BLOCK_SIZE = psutil.virtual_memory().total/MEMORY_FRACTION
+BLOCK_SIZE = int(round(psutil.virtual_memory().total/MEMORY_FRACTION))
 
 def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
                    write_header=True, enforce=False):
