@@ -1760,7 +1760,6 @@ class DataFrame(_Frame):
         """
         Concise summary of a Dask DataFrame.
         """
-        from pandas.formats.format import _put_lines
         lines = list()
         lines.append(str(type(self)))
         lines.append('Data columns (total %d columns):' % len(self.columns))
