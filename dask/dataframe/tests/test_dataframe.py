@@ -613,7 +613,6 @@ def test_empty_quantile():
 
 
 def test_dataframe_quantile():
-
     # column X is for test column order and result division
     df = pd.DataFrame({'A': np.arange(20),
                        'X': np.arange(20, 40),
@@ -1670,7 +1669,7 @@ def test_from_delayed():
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
-    
+
     s = dd.from_delayed(ss)
     assert s._known_dtype
     assert s.compute().name == s.name
@@ -1753,3 +1752,14 @@ def test_sorted_index_single_partition():
     ddf = dd.from_pandas(df, npartitions=1)
     eq(ddf.set_index('x', sorted=True),
         df.set_index('x'))
+
+
+def test_info(capsys):
+    df = pd.DataFrame({'long_column_name': [1, 2, 3, 4], 'short_name': [1, 0, 1, 0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.info()
+    out, err = capsys.readouterr()
+    assert out == ("<class 'dask.dataframe.core.DataFrame'>\n"
+                  "Data columns (total 2 columns):\n"
+                  "long_column_name    int64\n"
+                  "short_name          int64\n")
