@@ -10,6 +10,7 @@ from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
+from pandas.formats.printing import pprint_thing
 
 from toolz import merge, partial, first, partition, unique
 import pandas as pd
@@ -1763,10 +1764,11 @@ class DataFrame(_Frame):
         lines.append(str(type(self)))
         lines.append('Data columns (total %d columns):' % len(self.columns))
         dtypes = self.dtypes
-        template = "%s    %s"
+        space = max([len(pprint_thing(k)) for k in self.columns]) + 4
+        template = "%s%s"
         for i, col in enumerate(self.columns):
             dtype = dtypes.iloc[i]
-            lines.append(template % (col, dtype))
+            lines.append(template % (('%s' % col)[:space].ljust(space), dtype))
 
         print('\n'.join(lines))
 

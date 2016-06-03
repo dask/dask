@@ -1755,11 +1755,11 @@ def test_sorted_index_single_partition():
 
 
 def test_info(capsys):
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
+    df = pd.DataFrame({'long_column_name': [1, 2, 3, 4], 'short_name': [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=1)
     ddf.info()
     out, err = capsys.readouterr()
     assert out == ("<class 'dask.dataframe.core.DataFrame'>\n"
                   "Data columns (total 2 columns):\n"
-                  "x    int64\n"
-                  "y    int64\n")
+                  "long_column_name    int64\n"
+                  "short_name          int64\n")
