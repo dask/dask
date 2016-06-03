@@ -106,6 +106,9 @@ def test_set_partition_tasks():
     eq(df.set_index('x'),
        ddf.set_index('x', method='tasks'))
 
+    eq(df.set_index(df.x),
+       ddf.set_index(ddf.x, method='tasks'))
+
 
 def test_shuffle_pre_partition():
     from dask.dataframe.shuffle import shuffle_pre_partition

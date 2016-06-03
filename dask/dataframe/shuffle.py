@@ -246,8 +246,12 @@ def collect(group, p, meta, barrier_token):
 
 
 def shuffle_pre_partition(df, index, divisions, drop):
-    parts = pd.Series(divisions).searchsorted(df[index], side='right') - 1
-    parts[(df[index] == divisions[-1]).values] = len(divisions) - 2
+    if np.isscalar(index):
+        ind = df[index]
+    else:
+        ind = df.loc[index]
+    parts = pd.Series(divisions).searchsorted(ind, side='right') - 1
+    parts[(ind == divisions[-1]).values] = len(divisions) - 2
     result = df.assign(partitions=parts).set_index('partitions', drop=drop)
     return result
 
@@ -268,9 +272,6 @@ def shuffle_post(df, index):
 
 def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
                         token=None):
-    if not np.isscalar(index):
-        raise NotImplemented()
-
     max_branch = max_branch or 32
     n = df.npartitions
     assert len(divisions) == n + 1
@@ -289,7 +290,8 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(n)]
 
-    meta = shuffle_pre_partition(df._pd, index, divisions, drop)
+    meta = shuffle_pre_partition(df._pd, index if np.isscalar(index) else
+            index._pd, divisions, drop)
     df2 = map_partitions(shuffle_pre_partition, meta, df, index, divisions,
             drop)
 
@@ -318,13 +320,20 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
         splits.append(split)
         joins.append(join)
 
-    end = dict(((name + '-' + token, i),
-                (shuffle_post, (name + '-join-' + token, stage, inp), index))
-                for i, inp in enumerate(inputs))
+    if np.isscalar(index):
+        end = dict(((name + '-' + token, i),
+                    (shuffle_post, (name + '-join-' + token, stage, inp), index))
+                    for i, inp in enumerate(inputs))
+    else:
+        end = dict(((name + '-' + token, i),
+                    (shuffle_post, (name + '-join-' + token, stage, inp),
+                                   index_key))
+                    for i, (inp, index_key) in enumerate(zip(inputs,
+                        index._keys())))
 
     dsk = merge(df2.dask, start, end, *(groups + splits + joins))
 
-    meta = df._pd.set_index(index)
+    meta = df._pd.set_index(index if np.isscalar(index) else index._pd)
     return DataFrame(dsk, name + '-' + token, meta, divisions)
 
 
