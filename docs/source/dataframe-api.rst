@@ -135,6 +135,22 @@ Series Methods
    :members:
    :inherited-members:
 
+.. currentmodule:: dask.dataframe.groupby
+
+DataFrameGroupBy
+~~~~~~~~~~~~~~~~
+
+.. autoclass:: DataFrameGroupBy
+   :members:
+   :inherited-members:
+
+SeriesGroupBy
+~~~~~~~~~~~~~
+
+.. autoclass:: SeriesGroupBy
+   :members:
+   :inherited-members:
+
 Other functions
 ~~~~~~~~~~~~~~~
 
