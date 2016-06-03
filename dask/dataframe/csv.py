@@ -7,7 +7,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 
-import psutil as ps
+import psutil
 
 from ..delayed import delayed
 from .io import from_delayed
@@ -18,12 +18,8 @@ from ..bytes.compression import seekable_files, files as cfiles
 
 delayed = delayed(pure=True)
 
-def GetUserMemory():
-    Memory = ps.virtual_memory().total
-    return Memory
-
 MEMORY_FRACTION = 10
-BLOCK_SIZE = GetUserMemory()/MEMORY_FRACTION
+BLOCK_SIZE = psutil.virtual_memory().total/MEMORY_FRACTION
 
 def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
                    write_header=True, enforce=False):
