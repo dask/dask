@@ -189,6 +189,30 @@ def test_tokenize_ordered_dict():
         assert tokenize(a) != tokenize(c)
 
 
+@pytest.mark.skipif('not db')
+def test_compute_no_opt():
+    # Bag does `fuse` by default. Test that with `optimize_graph=False` that
+    # doesn't get called. We check this by using a callback to track the keys
+    # that are computed.
+    from dask.callbacks import Callback
+    b = db.from_sequence(range(100), npartitions=4)
+    add1 = tz.partial(add, 1)
+    mul2 = tz.partial(mul, 2)
+    o = b.map(add1).map(mul2)
+    # Check that with the kwarg, the optimization doesn't happen
+    keys = []
+    with Callback(pretask=lambda key, *args: keys.append(key)):
+        o.compute(get=dask.get, optimize_graph=False)
+    assert len([k for k in keys if 'mul' in k[0]]) == 4
+    assert len([k for k in keys if 'add' in k[0]]) == 4
+    # Check that without the kwarg, the optimization does happen
+    keys = []
+    with Callback(pretask=lambda key, *args: keys.append(key)):
+        o.compute(get=dask.get)
+    assert len([k for k in keys if 'mul' in k[0]]) == 4
+    assert len([k for k in keys if 'add' in k[0]]) == 0
+
+
 @pytest.mark.skipif('not da')
 def test_compute_array():
     arr = np.arange(100).reshape((10, 10))
