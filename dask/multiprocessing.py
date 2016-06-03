@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import curry, pipe, partial
+from toolz import curry
 from .optimize import fuse, cull
 import multiprocessing
 from .async import get_async # TODO: get better get
@@ -31,27 +31,26 @@ def _process_get_id():
     return multiprocessing.current_process().ident
 
 
-def get(dsk, keys, optimizations=[], num_workers=None,
-        func_loads=None, func_dumps=None, **kwargs):
+def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
+        optimize_graph=True, **kwargs):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
     ----------
-
-    dsk: dict
+    dsk : dict
         dask graph
-    keys: object or list
+    keys : object or list
         Desired results from graph
-    optimizations: list of functions
-        optimizations to perform on graph before execution
-    num_workers: int
+    num_workers : int
         Number of worker processes (defaults to number of cores)
-    func_dumps: function
+    func_dumps : function
         Function to use for function serialization
         (defaults to cloudpickle.dumps)
-    func_loads: function
+    func_loads : function
         Function to use for function deserialization
         (defaults to cloudpickle.loads)
+    optimize_graph : bool
+        If True [default], `fuse` is applied to the graph before computation.
     """
     pool = _globals['pool']
     if pool is None:
@@ -69,8 +68,10 @@ def get(dsk, keys, optimizations=[], num_workers=None,
 
     # Optimize Dask
     dsk2, dependencies = cull(dsk, keys)
-    dsk3, dependencies = fuse(dsk2, keys, dependencies)
-    dsk4 = pipe(dsk3, *optimizations)
+    if optimize_graph:
+        dsk3, dependencies = fuse(dsk2, keys, dependencies)
+    else:
+        dsk3 = dsk2
 
     try:
         # Run

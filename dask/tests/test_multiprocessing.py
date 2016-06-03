@@ -72,6 +72,16 @@ def test_dumps_loads():
     with set_options(func_dumps=pickle.dumps, func_loads=pickle.loads):
         assert get({'x': 1, 'y': (add, 'x', 2)}, 'y') == 3
 
+
 def test_fuse_doesnt_clobber_intermediates():
     d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 10, 'y')}
     assert get(d, ['y', 'z']) == (2, 12)
+
+
+def test_optimize_graph_false():
+    from dask.callbacks import Callback
+    d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 10, 'y')}
+    keys = []
+    with Callback(pretask=lambda key, *args: keys.append(key)):
+        get(d, 'z', optimize_graph=False)
+    assert len(keys) == 2
