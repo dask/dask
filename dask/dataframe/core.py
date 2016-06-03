@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import sys
 import bisect
 from collections import Iterator
 from datetime import datetime
@@ -1769,7 +1768,7 @@ class DataFrame(_Frame):
             dtype = dtypes.iloc[i]
             lines.append(template % (col, dtype))
 
-        sys.stdout.write('\n'.join(lines))
+        print('\n'.join(lines))
 
 
 # bind operators

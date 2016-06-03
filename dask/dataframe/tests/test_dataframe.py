@@ -1759,6 +1759,7 @@ def test_info(capsys):
     ddf = dd.from_pandas(df, npartitions=1)
     ddf.info()
     out, err = capsys.readouterr()
-    assert out == "<class 'dask.dataframe.core.DataFrame'>" + '\n' + \
-                  "Data columns (total 2 columns):" + '\n' + \
-                  "x    int64" + '\n' + "y    int64"
+    assert out == ("<class 'dask.dataframe.core.DataFrame'>\n"
+                  "Data columns (total 2 columns):\n"
+                  "x    int64\n"
+                  "y    int64\n")
