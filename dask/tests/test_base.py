@@ -7,15 +7,24 @@ import pytest
 from operator import add, mul
 import sys
 
-pytest.importorskip('toolz')
-from toolz import compose, partial, curry
-
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
-        visualize)
+                       visualize)
 from dask.utils import raises, tmpfile, ignoring
-
 from dask.compatibility import unicode
+
+
+def import_or_none(path):
+    with ignoring():
+        return pytest.importorskip(path)
+    return None
+
+tz = pytest.importorskip('toolz')
+da = import_or_none('dask.array')
+db = import_or_none('dask.bag')
+dd = import_or_none('dask.dataframe')
+np = import_or_none('numpy')
+pd = import_or_none('pandas')
 
 
 def test_normalize_function():
@@ -28,30 +37,29 @@ def test_normalize_function():
 
     assert normalize_function(f2)
 
-    f = lambda a: a
-    assert normalize_function(f)
+    assert normalize_function(lambda a: a)
 
-    assert (normalize_function(partial(f2, b=2)) ==
-            normalize_function(partial(f2, b=2)))
+    assert (normalize_function(tz.partial(f2, b=2)) ==
+            normalize_function(tz.partial(f2, b=2)))
 
-    assert (normalize_function(partial(f2, b=2)) !=
-            normalize_function(partial(f2, b=3)))
+    assert (normalize_function(tz.partial(f2, b=2)) !=
+            normalize_function(tz.partial(f2, b=3)))
 
-    assert (normalize_function(partial(f1, b=2)) !=
-            normalize_function(partial(f2, b=2)))
+    assert (normalize_function(tz.partial(f1, b=2)) !=
+            normalize_function(tz.partial(f2, b=2)))
 
-    assert (normalize_function(compose(f2, f3)) ==
-            normalize_function(compose(f2, f3)))
+    assert (normalize_function(tz.compose(f2, f3)) ==
+            normalize_function(tz.compose(f2, f3)))
 
-    assert (normalize_function(compose(f2, f3)) !=
-            normalize_function(compose(f2, f1)))
+    assert (normalize_function(tz.compose(f2, f3)) !=
+            normalize_function(tz.compose(f2, f1)))
 
-    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
-    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
-    assert (normalize_function(curry(f2, b=1)) ==
-            normalize_function(curry(f2, b=1)))
-    assert (normalize_function(curry(f2, b=1)) !=
-            normalize_function(curry(f2, b=2)))
+    assert normalize_function(tz.curry(f2)) == normalize_function(tz.curry(f2))
+    assert normalize_function(tz.curry(f2)) != normalize_function(tz.curry(f1))
+    assert (normalize_function(tz.curry(f2, b=1)) ==
+            normalize_function(tz.curry(f2, b=1)))
+    assert (normalize_function(tz.curry(f2, b=1)) !=
+            normalize_function(tz.curry(f2, b=2)))
 
 
 def test_tokenize():
@@ -59,36 +67,36 @@ def test_tokenize():
     assert isinstance(tokenize(a), (str, bytes))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_array_consistent_on_values():
-    np = pytest.importorskip('numpy')
     assert tokenize(np.random.RandomState(1234).random_sample(1000)) == \
            tokenize(np.random.RandomState(1234).random_sample(1000))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_array_supports_uneven_sizes():
-    np = pytest.importorskip('numpy')
     tokenize(np.random.random(7).astype(dtype='i2'))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_discontiguous_numpy_array():
-    np = pytest.importorskip('numpy')
     tokenize(np.random.random(8)[::2])
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_datetime():
-    np = pytest.importorskip('numpy')
     tokenize(np.array(['2000-01-01T12:00:00'], dtype='M8[ns]'))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_scalar():
-    np = pytest.importorskip('numpy')
     assert tokenize(np.array(1.0, dtype='f8')) == tokenize(np.array(1.0, dtype='f8'))
     assert (tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0])
          == tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_array_on_object_dtype():
-    np = pytest.importorskip('numpy')
     assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \
            tokenize(np.array(['a', 'aa', 'aaa'], dtype=object))
     assert tokenize(np.array(['a', None, 'aaa'], dtype=object)) == \
@@ -96,13 +104,12 @@ def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
     if sys.version_info[0] == 2:
-        assert tokenize(np.array([unicode("Rebeca Alón",encoding="utf-8")], dtype=object)) == \
-               tokenize(np.array([unicode("Rebeca Alón",encoding="utf-8")], dtype=object))
+        assert tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) == \
+               tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object))
 
 
-
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_memmap():
-    np = pytest.importorskip('numpy')
     with tmpfile('.npy') as fn:
         x = np.arange(5)
         np.save(fn, x)
@@ -121,6 +128,7 @@ def test_normalize_base():
         assert normalize_token(i) is i
 
 
+@pytest.mark.skipif('not pd')
 def test_tokenize_pandas():
     a = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
     b = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
@@ -154,6 +162,7 @@ def test_tokenize_same_repr():
     assert tokenize(Foo(1)) != tokenize(Foo(2))
 
 
+@pytest.mark.skipif('not np')
 def test_tokenize_sequences():
     assert tokenize([1]) != tokenize([2])
     assert tokenize([1]) != tokenize((1,))
@@ -180,10 +189,7 @@ def test_tokenize_ordered_dict():
         assert tokenize(a) != tokenize(c)
 
 
-da = pytest.importorskip('dask.array')
-import numpy as np
-
-
+@pytest.mark.skipif('not da')
 def test_compute_array():
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))
@@ -194,21 +200,18 @@ def test_compute_array():
     assert np.allclose(out2, arr + 2)
 
 
-dd = pytest.importorskip('dask.dataframe')
-import pandas as pd
-from pandas.util.testing import assert_series_equal
-
-
+@pytest.mark.skipif('not dd')
 def test_compute_dataframe():
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    assert_series_equal(out1, df.a + 1)
-    assert_series_equal(out2, df.a + df.b)
+    pd.util.testing.assert_series_equal(out1, df.a + 1)
+    pd.util.testing.assert_series_equal(out2, df.a + df.b)
 
 
+@pytest.mark.skipif('not dd or not da')
 def test_compute_array_dataframe():
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5)) + 1
@@ -216,12 +219,10 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    assert_series_equal(df_out, df.a + 2)
+    pd.util.testing.assert_series_equal(df_out, df.a + 2)
 
 
-db = pytest.importorskip('dask.bag')
-
-
+@pytest.mark.skipif('not da or not db')
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
@@ -233,6 +234,7 @@ def test_compute_array_bag():
     assert bb == [1, 2, 3]
 
 
+@pytest.mark.skipif('not da')
 def test_compute_with_literal():
     x = da.arange(5, chunks=2)
     y = 10
@@ -244,6 +246,7 @@ def test_compute_with_literal():
     assert compute(5) == (5,)
 
 
+@pytest.mark.skipif('not da')
 def test_visualize():
     pytest.importorskip('graphviz')
     try:
