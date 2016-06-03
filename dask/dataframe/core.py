@@ -11,7 +11,6 @@ from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
-from pandas.formats.format import _put_lines
 
 from toolz import merge, partial, first, partition, unique
 import pandas as pd
