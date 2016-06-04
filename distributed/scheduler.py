@@ -826,7 +826,8 @@ class Scheduler(Server):
 
                 except Exception as e:
                     logger.exception(e)
-
+        else:
+            self.released.add(key)
         self.maybe_idle.add(worker)
 
     def recover_missing(self, key):
@@ -1528,6 +1529,9 @@ class Scheduler(Server):
                 self.ready.remove(key)
                 trigger_plugins(key)
 
+            for worker in list(self.rprocessing.get(key, ())):
+                self.mark_not_processing(key, worker)
+
             if key in self.waiting_data:
                 del self.waiting_data[key]
 
@@ -2048,6 +2052,10 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
     for v in concat(processing.values()):
         assert v in dependencies
+
+    for key in who_has:
+        assert key in waiting_data or key in who_wants
+
 
     @memoize
     def check_key(key):
