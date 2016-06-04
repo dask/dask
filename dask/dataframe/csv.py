@@ -97,15 +97,17 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     """
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
-    func = partial(delayed(bytes_read_csv), enforce=enforce)
+    func = delayed(bytes_read_csv)
     dfs = []
     for blocks in block_lists:
         if not blocks:
             continue
-        df = func(blocks[0], header, kwargs, dtypes, columns, write_header=False)
+        df = func(blocks[0], header, kwargs, dtypes, columns,
+                  write_header=False, enforce=enforce)
         dfs.append(df)
         for b in blocks[1:]:
-            dfs.append(func(b, header, kwargs, dtypes, columns))
+            dfs.append(func(b, header, kwargs, dtypes, columns,
+                            enforce=enforce))
 
     if collection:
         return from_delayed(dfs, head)

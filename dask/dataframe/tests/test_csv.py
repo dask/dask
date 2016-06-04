@@ -143,6 +143,13 @@ def test_read_csv_files():
         eq(df, expected2, check_dtype=False)
 
 
+def test_read_csv_sensitive_to_enforce():
+    with filetexts(files, mode='b'):
+        a = read_csv('2014-01-*.csv', enforce=True)
+        b = read_csv('2014-01-*.csv', enforce=False)
+        assert a._name != b._name
+
+
 from dask.bytes.compression import compress, files as cfiles, seekable_files
 fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
 
