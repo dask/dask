@@ -455,13 +455,8 @@ class _Frame(Base):
         >>> df.loc["b":"d"]  # doctest: +SKIP"""
         return IndexCallable(self._loc)
 
-    @property
-    def iloc(self):
-        """ Not implemented """
-
-        # not implemented because of performance concerns.
-        # see https://github.com/dask/dask/pull/507
-        raise NotImplementedError("Dask Dataframe does not support iloc")
+    # NOTE: `iloc` is not implemented because of performance concerns.
+    # see https://github.com/dask/dask/pull/507
 
     def repartition(self, divisions=None, npartitions=None, force=False):
         """ Repartition dataframe along new divisions
