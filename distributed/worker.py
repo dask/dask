@@ -611,21 +611,29 @@ class Worker(Server):
             d.update({'cpu': psutil.cpu_percent(),
                       'memory': mem.total,
                       'memory-percent': mem.percent})
+
+            net_io = psutil.net_io_counters()
             try:
-                net_io = psutil.net_io_counters()
                 d['network-send'] = net_io.bytes_sent - self._last_net_io.bytes_sent
                 d['network-recv'] = net_io.bytes_recv - self._last_net_io.bytes_recv
             except AttributeError:
                 pass
             self._last_net_io = net_io
 
+
             try:
                 disk_io = psutil.disk_io_counters()
-                d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
-                d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
-            except AttributeError:
+                try:
+                    d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
+                    d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
+                    self._last_disk_io = disk_io
+                except AttributeError:
+                    pass
+                self._last_disk_io = disk_io
+            except RuntimeError:
+                # This happens when there is no physical disk in worker
                 pass
-            self._last_disk_io = disk_io
+
         except ImportError:
             pass
         return d
