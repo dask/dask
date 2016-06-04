@@ -290,8 +290,11 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(n)]
 
-    meta = shuffle_pre_partition(df._pd, index if np.isscalar(index) else
-            index._pd, divisions, drop)
+    if np.isscalar(index):
+        meta = shuffle_pre_partition(df._pd, index, divisions, drop)
+    else:
+        meta = df._pd.copy()
+        meta.index = index._pd
     df2 = map_partitions(shuffle_pre_partition, meta, df, index, divisions,
             drop)
 
