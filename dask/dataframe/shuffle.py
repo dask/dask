@@ -11,7 +11,7 @@ from toolz import merge
 
 from ..optimize import cull
 from ..base import tokenize
-from .core import DataFrame, Series, _Frame, map_partitions
+from .core import DataFrame, Series, _Frame, map_partitions, _concat
 from dask.dataframe.categorical import (strip_categories, _categorize,
                                         get_categories)
 from .utils import shard_df_on_index
@@ -324,6 +324,8 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(n)]
 
+    sinputs = set(inputs)
+
     if np.isscalar(index):
         meta = shuffle_pre_partition_scalar(df._pd, index, divisions, drop)
         meta = meta.drop(index, axis=1)
@@ -346,15 +348,17 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
                         (name + '-join-' + token, stage - 1, inp),
                         stage - 1, k))
                      for inp in inputs)
+
         split = dict(((name + '-split-' + token, stage, i, inp),
                       (dict.get, (name + '-group-' + token, stage, inp), i, {}))
                      for i in range(k)
                      for inp in inputs)
 
         join = dict(((name + '-join-' + token, stage, inp),
-                     (pd.concat,
+                     (_concat,
                         [(name + '-split-' + token, stage, inp[stage-1],
-                          insert(inp, stage - 1, j)) for j in range(k)]))
+                          insert(inp, stage - 1, j)) for j in range(k)
+                          if insert(inp, stage - 1, j) in sinputs]))
                      for inp in inputs)
         groups.append(group)
         splits.append(split)
@@ -362,12 +366,12 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
 
     if np.isscalar(index):
         end = dict(((name + '-' + token, i),
-                    (shuffle_post_scalar, (name + '-join-' + token, stage, inp),
+                    (shuffle_post_scalar, (name + '-join-' + token, stages, inp),
                                           index))
                     for i, inp in enumerate(inputs))
     else:
         end = dict(((name + '-' + token, i),
-                    (shuffle_post_series, (name + '-join-' + token, stage, inp),
+                    (shuffle_post_series, (name + '-join-' + token, stages, inp),
                                           index.name))
                     for i, inp in enumerate(inputs))
 

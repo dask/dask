@@ -1504,6 +1504,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32,
 
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(n)]
+    sinputs = set(inputs)
 
     b2 = b.map(lambda x: (hash(grouper(x)), x))
 
@@ -1526,7 +1527,8 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32,
         join = dict(((name + '-join-' + token, stage, inp),
                      (list, (toolz.concat,
                         [(name + '-split-' + token, stage, inp[stage-1],
-                          insert(inp, stage - 1, j)) for j in range(k)])))
+                          insert(inp, stage - 1, j)) for j in range(k)
+                          if insert(inp, stage - 1, j) in sinputs])))
                      for inp in inputs)
         groups.append(group)
         splits.append(split)

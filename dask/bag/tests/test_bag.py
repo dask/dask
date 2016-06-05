@@ -874,3 +874,13 @@ def test_groupby_tasks():
         for b in partitions:
             if a is not b:
                 assert not set(a) & set(b)
+
+
+    b = db.from_sequence(range(10000), npartitions=345)
+    out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
+    partitions = dask.get(out.dask, out._keys())
+
+    for a in partitions:
+        for b in partitions:
+            if a is not b:
+                assert not set(a) & set(b)

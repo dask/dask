@@ -1,5 +1,6 @@
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 import numpy as np
 
 import dask.dataframe as dd
@@ -95,12 +96,13 @@ def test_partitioning_index():
     np.testing.assert_equal(res, exp)
 
 
-def test_set_partition_tasks():
+@pytest.mark.parametrize('npartitions', [1, 4, 7, 23])
+def test_set_partition_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
-                       'y': np.random.random(100)},
+                       'y': np.random.random(100) // 0.2},
                        index=np.random.random(100))
 
-    ddf = dd.from_pandas(df, npartitions=4)
+    ddf = dd.from_pandas(df, npartitions=npartitions)
 
     divisions = [0, .25, .50, .75, 1.0]
 
@@ -121,6 +123,15 @@ def test_set_partition_tasks():
 
     # eq(df.set_index(df.index),
     #    ddf.set_index(ddf.index, method='tasks'))
+
+
+def test_set_partition_tasks():
+    df = dd.demo.make_timeseries('2000', '2004',
+            {'value': float, 'name': str, 'id': int},
+            freq='2H', partition_freq='1M', seed=1)
+
+    df2 = df.set_index('name', method='tasks')
+    df2.value.sum().compute(get=get_sync)
 
 
 def test_shuffle_pre_partition():
