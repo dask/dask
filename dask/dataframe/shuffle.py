@@ -249,7 +249,7 @@ def shuffle_pre_partition(df, index, divisions, drop):
     if np.isscalar(index):
         ind = df[index]
     else:
-        ind = df.loc[index]
+        ind = index
     parts = pd.Series(divisions).searchsorted(ind, side='right') - 1
     parts[(ind == divisions[-1]).values] = len(divisions) - 2
     result = df.assign(partitions=parts).set_index('partitions', drop=drop)
@@ -262,11 +262,18 @@ def shuffle_group(df, stage, k):
     df = df.set_index(index)
 
     result = {i: df.loc[i] if i in inds else df.head(0) for i in range(k)}
+    if isinstance(df, pd.DataFrame):
+        result = {k: pd.DataFrame(v).transpose()
+                     if isinstance(v, pd.Series) else v
+                  for k, v in result.items()}
+    assert all(list(df.columns) == ['x', 'y'] for df in result.values())
 
     return result
 
 
 def shuffle_post(df, index):
+    result = df.set_index(index, drop=True)
+    assert list(result.columns) == ['y']
     return df.set_index(index, drop=True)
 
 
