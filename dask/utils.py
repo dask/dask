@@ -74,6 +74,21 @@ def tmpfile(extension='', dir=None):
 
 
 @contextmanager
+def tmpdir(dir=None):
+    dirname = tempfile.mkdtemp(dir=dir)
+
+    try:
+        yield dirname
+    finally:
+        if os.path.exists(dirname):
+            if os.path.isdir(dirname):
+                shutil.rmtree(dirname)
+            else:
+                with ignoring(OSError):
+                    os.remove(dirname)
+
+
+@contextmanager
 def filetext(text, extension='', open=open, mode='w'):
     with tmpfile(extension=extension) as filename:
         f = open(filename, mode=mode)
