@@ -103,13 +103,24 @@ def test_set_partition_tasks():
     ddf = dd.from_pandas(df, npartitions=4)
 
     divisions = [0, .25, .50, .75, 1.0]
-    result = ddf.set_index('x', method='tasks')
-    assert list(result.columns) == ['y']
-    eq(df.set_index('x'),
-       result)
 
-    # eq(df.set_index(df.x),
-    #    ddf.set_index(ddf.x, method='tasks'))
+    eq(df.set_index('x'),
+       ddf.set_index('x', method='tasks'))
+
+    eq(df.set_index('y'),
+       ddf.set_index('y', method='tasks'))
+
+    eq(df.set_index(df.x),
+       ddf.set_index(ddf.x, method='tasks'))
+
+    eq(df.set_index(df.x + df.y),
+       ddf.set_index(ddf.x + ddf.y, method='tasks'))
+
+    eq(df.set_index(df.x + 1),
+       ddf.set_index(ddf.x + 1, method='tasks'))
+
+    # eq(df.set_index(df.index),
+    #    ddf.set_index(ddf.index, method='tasks'))
 
 
 def test_shuffle_pre_partition():
@@ -121,7 +132,7 @@ def test_shuffle_pre_partition():
 
     for ind in ['x', df.x]:
         result = shuffle_pre_partition(df, ind, divisions, True)
-        assert list(result.columns) == ['x', 'y']
+        assert list(result.columns)[:2] == ['x', 'y']
         assert result.index.name == 'partitions'
         for x, part in result.reset_index()[['x', 'partitions']].values.tolist():
             part = int(part)
