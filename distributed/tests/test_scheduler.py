@@ -340,6 +340,8 @@ def test_validate_state():
         validate_state(**locals())
 
     waiting_data.pop('x')
+    who_has.pop('x')
+    released.add('x')
     validate_state(**locals())
 
 
@@ -532,9 +534,6 @@ def test_add_worker(s, a, b):
     s.add_worker(address=w.address, keys=list(w.data),
                  ncores=w.ncores, services=s.services, coerce_address=False)
 
-    for k in w.data:
-        assert w.address in s.who_has[k]
-
     s.validate()
 
     assert w.ip in s.host_info
@@ -601,9 +600,7 @@ def test_scheduler_as_center():
     yield [w._start(0) for w in [a, b, c]]
 
     assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
-    assert s.who_has == {'x': {a.address},
-                         'y': {a.address, b.address},
-                         'z': {b.address}}
+    assert not s.who_has
 
     s.update_graph(tasks={'a': dumps_task((inc, 1))},
                    keys=['a'],
@@ -625,7 +622,9 @@ def test_scheduler_as_center():
 
 @gen_cluster()
 def test_delete_data(s, a, b):
-    yield s.scatter(data=valmap(dumps, {'x': 1, 'y': 2, 'z': 3}))
+    yield s.scatter(data=valmap(dumps, {'x': 1, 'y': 2, 'z': 3}),
+                    client='client')
+    assert set(s.who_has) == {'x', 'y', 'z'}
     assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
     assert merge(a.data, b.data) == {'x': 1, 'y': 2, 'z': 3}
 

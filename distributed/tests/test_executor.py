@@ -864,6 +864,18 @@ def test_nbytes_determines_worker(e, s, a, b):
 
 
 @gen_cluster(executor=True)
+def test_if_intermediates_clear_on_error(e, s, a, b):
+    x = delayed(div)(1, 0)
+    y = delayed(div)(1, 2)
+    z = delayed(add)(x, y)
+    f = e.compute(z)
+    with pytest.raises(ZeroDivisionError):
+        yield f._result()
+    s.validate()
+    assert not s.who_has
+
+
+@gen_cluster(executor=True)
 def test_pragmatic_move_small_data_to_large_data(e, s, a, b):
     lists = e.map(lambda n: list(range(n)), [10] * 10, pure=False)
     sums = e.map(sum, lists)
@@ -2585,8 +2597,10 @@ def test_workers_register_indirect_data(e, s, a, b):
     s.validate()
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)],
-        timeout=None)
+        timeout=20)
 def test_work_stealing(e, s, a, b):
     [x] = yield e._scatter([1])
     futures = e.map(slowadd, range(50), [x] * 50)

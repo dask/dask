@@ -563,6 +563,8 @@ class Scheduler(Server):
         for worker in workers:
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
+            if key not in self.who_wants and key not in self.waiting_data:
+                self.delete_data(keys=[key])
             if key in self.processing[worker]:
                 self.mark_not_processing(key, worker)
 
@@ -732,6 +734,9 @@ class Scheduler(Server):
         who_has = {k: [self.coerce_address(vv) for vv in v]
                    for k, v in who_has.items()}
         logger.debug("Update data %s", who_has)
+        if client:
+            self.client_wants_keys(keys=list(who_has), client=client)
+
         for key, workers in who_has.items():
             self.mark_key_in_memory(key, workers)
 
@@ -743,8 +748,6 @@ class Scheduler(Server):
             if key not in self.dependencies:
                 self.dependencies[key] = set()
 
-        if client:
-            self.client_wants_keys(keys=list(who_has), client=client)
 
     def mark_task_erred(self, key=None, worker=None,
                         exception=None, traceback=None, **kwargs):
@@ -826,7 +829,8 @@ class Scheduler(Server):
 
                 except Exception as e:
                     logger.exception(e)
-
+        else:
+            self.released.add(key)
         self.maybe_idle.add(worker)
 
     def recover_missing(self, key):
@@ -921,7 +925,7 @@ class Scheduler(Server):
             address = self.coerce_address(address)
             logger.debug("Remove worker %s", address)
             if address not in self.processing:
-                return
+                return 'already-removed'
             with ignoring(AttributeError):
                 stream = self.worker_streams[address].stream
                 if not stream.closed():
@@ -1528,6 +1532,9 @@ class Scheduler(Server):
                 self.ready.remove(key)
                 trigger_plugins(key)
 
+            for worker in list(self.rprocessing.get(key, ())):
+                self.mark_not_processing(key, worker)
+
             if key in self.waiting_data:
                 del self.waiting_data[key]
 
@@ -1582,8 +1589,7 @@ class Scheduler(Server):
                                                          report=False,
                                                          serialize=False)
 
-        self.update_data(who_has=who_has, nbytes=nbytes)
-        self.client_wants_keys(keys=keys, client=client)
+        self.update_data(who_has=who_has, nbytes=nbytes, client=client)
 
         if broadcast:
             if broadcast == True:
@@ -1613,45 +1619,46 @@ class Scheduler(Server):
     @gen.coroutine
     def restart(self):
         """ Restart all workers.  Reset local state """
-        logger.debug("Send shutdown signal to workers")
+        with log_errors():
+            logger.debug("Send shutdown signal to workers")
 
-        for q in self.scheduler_queues + self.report_queues:
-            clear_queue(q)
+            for q in self.scheduler_queues + self.report_queues:
+                clear_queue(q)
 
-        nannies = {addr: d['services']['nanny']
-                   for addr, d in self.worker_info.items()}
+            nannies = {addr: d['services']['nanny']
+                       for addr, d in self.worker_info.items()}
 
-        for addr in nannies:
-            self.remove_worker(address=addr)
+            for addr in nannies:
+                self.remove_worker(address=addr)
 
-        for client, keys in self.wants_what.items():
-            self.client_releases_keys(keys=keys, client=client)
+            for client, keys in self.wants_what.items():
+                self.client_releases_keys(keys=keys, client=client)
 
-        logger.debug("Send kill signal to nannies: %s", nannies)
-        nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
-                   for worker_address, n_port in nannies.items()]
-        yield All([nanny.kill() for nanny in nannies])
-        logger.debug("Received done signal from nannies")
+            logger.debug("Send kill signal to nannies: %s", nannies)
+            nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
+                       for worker_address, n_port in nannies.items()]
+            yield All([nanny.kill() for nanny in nannies])
+            logger.debug("Received done signal from nannies")
 
-        while self.ncores:
-            yield gen.sleep(0.01)
+            while self.ncores:
+                yield gen.sleep(0.01)
 
-        logger.debug("Workers all removed.  Sending startup signal")
+            logger.debug("Workers all removed.  Sending startup signal")
 
-        # All quiet
-        resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
-        assert all(resp == 'OK' for resp in resps)
+            # All quiet
+            resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
+            assert all(resp == 'OK' for resp in resps)
 
-        self.start()
+            self.start()
 
-        logger.debug("All workers reporting in")
+            logger.debug("All workers reporting in")
 
-        self.report({'op': 'restart'})
-        for plugin in self.plugins[:]:
-            try:
-                plugin.restart(self)
-            except Exception as e:
-                logger.exception(e)
+            self.report({'op': 'restart'})
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.restart(self)
+                except Exception as e:
+                    logger.exception(e)
 
     def validate(self, allow_overlap=False, allow_bad_stacks=True):
         validate_state(self.dependencies, self.dependents, self.waiting,
@@ -2048,6 +2055,10 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
     for v in concat(processing.values()):
         assert v in dependencies
+
+    for key in who_has:
+        assert key in waiting_data or key in who_wants
+
 
     @memoize
     def check_key(key):

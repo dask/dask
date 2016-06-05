@@ -10,7 +10,7 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from .core import Server, rpc, write
-from .utils import get_ip, ignoring
+from .utils import get_ip, ignoring, log_errors
 
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class Nanny(Server):
             try:
                 result = yield gen.with_timeout(timedelta(seconds=timeout),
                             self.center.unregister(address=self.worker_address))
-                if result != 'OK':
+                if result not in ('OK', 'already-removed'):
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address_tuple,
                             self.worker_address)
@@ -85,9 +85,9 @@ class Nanny(Server):
             self.process.terminate()
             self.process.join(timeout=timeout)
             self.process = None
+            self.cleanup()
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
-            self.cleanup()
         raise gen.Return('OK')
 
     @gen.coroutine
