@@ -556,3 +556,22 @@ def test_cheap_single_partition_merge():
 
     list_eq(aa.merge(bb, on='x', how='inner'),
             a.merge(b, on='x', how='inner'))
+
+
+def test_merge_maintains_columns():
+    df1 = pd.DataFrame({'A': [1, 2, 3],
+                        'B': list('abc'),
+                        'C': 'foo',
+                        'D': 1.0},
+                       columns=list('DCBA'))
+
+    df2 = pd.DataFrame({'G': [4, 5],
+                        'H': 6.0,
+                        'I': 'bar',
+                        'B': list('ab')},
+                       columns=list('GHIB'))
+
+    ddf = dd.from_pandas(df1, npartitions=3)
+
+    merged = dd.merge(ddf, df2, on='B').compute()
+    assert tuple(merged.columns) == ('D', 'C', 'A', 'G', 'H', 'I', 'B')
