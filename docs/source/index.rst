@@ -200,6 +200,7 @@ help make debugging and profiling graph execution easier.
 * :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
+* :doc:`bytes`
 * :doc:`cite`
 * :doc:`glossary`
 
@@ -212,6 +213,7 @@ help make debugging and profiling graph execution easier.
    faq.rst
    spark.rst
    caching.rst
+   bytes.rst
    cite.rst
    glossary.rst
 
