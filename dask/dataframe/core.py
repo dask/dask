@@ -577,6 +577,24 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
+    def rolling(self, window, min_periods=None, win_type=None):
+        from dask.dataframe.rolling import Rolling
+
+        if not isinstance(window, int):
+            raise TypeError('window must be an integer')
+        if window < 0:
+            raise ValueError('window must be positive')
+
+        if min_periods is not None:
+            if not isinstance(min_periods, int):
+                raise TypeError('min_periods must be an integer')
+            if min_periods < 0:
+                raise ValueError('min_periods must be positive')
+
+        return Rolling(self, {'window': window,
+                              'min_periods': min_periods,
+                              'win_type': win_type})
+
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
@@ -1039,6 +1057,10 @@ class Series(_Frame):
         return SeriesGroupBy(self, index, **kwargs)
 
     @derived_from(pd.Series)
+    def rolling(self, window, min_periods=None, win_type=None):
+        return super(Series, self).rolling(window, min_periods, win_type)
+
+    @derived_from(pd.Series)
     def sum(self, axis=None, skipna=True):
         return super(Series, self).sum(axis=axis, skipna=skipna)
 
@@ -1479,6 +1501,10 @@ class DataFrame(_Frame):
     def groupby(self, key, **kwargs):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, key, **kwargs)
+
+    @derived_from(pd.DataFrame)
+    def rolling(self, window, min_periods=None, win_type=None):
+        return super(DataFrame, self).rolling(window, min_periods, win_type)
 
     def categorize(self, columns=None, **kwargs):
         from dask.dataframe.categorical import categorize

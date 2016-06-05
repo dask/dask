@@ -57,3 +57,78 @@ rolling_kurt = wrap_rolling(pd.rolling_kurt)
 rolling_quantile = wrap_rolling(pd.rolling_quantile)
 rolling_apply = wrap_rolling(pd.rolling_apply)
 rolling_window = wrap_rolling(pd.rolling_window)
+
+def call_pandas_rolling_method_single(this_partition, rolling_kwargs,
+        method_name, method_args, method_kwargs):
+    # used for the start of the df/series
+    if this_partition.shape[0] < rolling_kwargs['window']:
+        raise NotImplementedError("Window larger than partition size")
+
+    method = getattr(this_partition.rolling(**rolling_kwargs), method_name)
+    return method(*method_args, **method_kwargs)
+
+def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
+        rolling_kwargs, method_name, method_args, method_kwargs):
+    # used for everything except for the start
+
+    window = rolling_kwargs['window']
+    if prev_partition.shape[0] < window:
+        raise NotImplementedError("Window larger than partition size")
+
+    if window > 1:
+        extra = window - 1
+        combined = pd.concat([prev_partition.iloc[-extra:], this_partition])
+
+        method = getattr(combined.rolling(window), method_name)
+        applied = method(*method_args, **method_kwargs)
+        return applied.iloc[extra:]
+    else:
+        method = getattr(this_partition.rolling(window), method_name)
+        return method(*method_args, **method_kwargs)
+
+def wrap_rolling_method(name):
+    def inner(self, *args, **kwargs):
+        return self._call_method(name, *args, **kwargs)
+    return inner
+
+class Rolling(object):
+    # What you get when you do ddf.rolling(...) or similar
+
+    def __init__(self, obj, kwargs):
+        self.obj = obj # dataframe or series
+        self.rolling_kwargs = kwargs
+
+    def _call_method(self, method_name, *args, **kwargs):
+        args = list(args) # make sure dask does not mistake this for a task
+
+        old_name = self.obj._name
+        new_name = 'rolling-' + tokenize(
+            self.obj, self.rolling_kwargs, method_name, args, kwargs)
+
+        dsk = {(new_name, 0): (
+            call_pandas_rolling_method_single, (old_name, 0),
+            self.rolling_kwargs, method_name, args, kwargs)}
+        for i in range(1, self.obj.npartitions + 1):
+            dsk[new_name, i] = (
+                call_pandas_rolling_method_with_neighbor,
+                (old_name, i-1), (old_name, i),
+                self.rolling_kwargs, method_name, args, kwargs)
+
+        return self.obj._constructor(
+            merge(self.obj.dask, dsk),
+            new_name,
+            self.obj,
+            self.obj.divisions)
+
+    count = wrap_rolling_method('count')
+    sum = wrap_rolling_method('sum')
+    mean = wrap_rolling_method('mean')
+    median = wrap_rolling_method('median')
+    min = wrap_rolling_method('min')
+    max = wrap_rolling_method('max')
+    std = wrap_rolling_method('std')
+    var = wrap_rolling_method('var')
+    skew = wrap_rolling_method('skew')
+    kurt = wrap_rolling_method('kurt')
+    quantile = wrap_rolling_method('quantile')
+    apply = wrap_rolling_method('apply')
