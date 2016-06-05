@@ -90,6 +90,38 @@ def unique(divisions):
     raise NotImplementedError()
 
 
+_simple_fake_mapping = {
+    'b': True,   # boolean
+    'i': -1,   # signed int
+    'u': 1,   # unsigned int
+    'f': 1.0,   # float
+    'c': complex(1, 0),   # complex
+    'S': b'foo',   # bytestring
+    'U': u'foo',   # unicode string
+    'V': np.void0,   # void
+}
+
+
+def nonempty_sample_df(empty):
+    """ Create a dataframe from the given empty dataframe that contains one
+    row of fake data (generated from the empty dataframe's dtypes).
+    """
+    fake_values = {}
+    for key, dtype in empty.dtypes.iteritems():
+        if dtype.kind in _simple_fake_mapping:
+            fake = _simple_fake_mapping[dtype.kind]
+        elif dtype.name == 'category':
+            fake = empty[key].cat.categories[0]
+        elif dtype.name == 'object':
+            fake = 'foo'
+        else:
+            raise TypeError("Can't handle dtype: {}".format(dtype))
+        fake_values[key] = fake
+
+    nonempty = empty.append(fake_values, ignore_index=True)
+    return nonempty
+
+
 ###############################################################
 # Testing
 ###############################################################
