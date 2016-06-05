@@ -275,15 +275,21 @@ def shuffle_pre_partition_series(df, index, divisions, drop):
 
 
 def shuffle_group(df, stage, k):
-    index = df.index // k ** stage % k
+    if pd.__version__ >= '0.17':
+        index = df.index // k ** stage % k
+    else:
+        values = df.index.values // k ** stage % k
+        index = df.index.copy()
+        index.values[:] = values
     inds = set(index.drop_duplicates())
     df = df.set_index(index)
 
-    result = {i: df.loc[i] if i in inds else df.head(0) for i in range(k)}
+    result = dict(((i, df.loc[i] if i in inds else df.head(0))
+                  for i in range(k)))
     if isinstance(df, pd.DataFrame):
-        result = {k: pd.DataFrame(v).transpose()
-                     if isinstance(v, pd.Series) else v
-                  for k, v in result.items()}
+        result = dict((k, pd.DataFrame(v).transpose()
+                           if isinstance(v, pd.Series) else v)
+                        for k, v in result.items())
 
     return result
 
@@ -369,12 +375,6 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
 
     meta = df._pd.set_index(index if np.isscalar(index) else index._pd)
     return DataFrame(dsk, name + '-' + token, meta, divisions)
-
-
-def make_group(k, stage):
-    def h(x):
-        return x[0] // k ** stage % k
-    return h
 
 
 def digit(n, k, base):
