@@ -400,23 +400,39 @@ def _link(token, result):
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, get=get_sync, dask_kwargs=None,
-           **kwargs):
+           name_function=str, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
 
+    # if path_or_buf is string, format using i and name
+    if isinstance(path_or_buf, str):
+        if path_or_buf.count('*') + key.count('*') > 1:
+            raise ValueError("A maximum of one asterisk is accepted in file path and dataset key")
+
+        fmt_obj = lambda path_or_buf, i_name: path_or_buf.replace('*', i_name)
+    else:
+        if key.count('*') > 1:
+            raise ValueError("A maximum of one asterisk is accepted in dataset key")
+
+        fmt_obj = lambda path_or_buf, _: path_or_buf
+
     dsk = dict()
+    i_name = name_function(0)
     dsk[(name, 0)] = (_link, None,
                       (apply, pd_to_hdf,
-                          (tuple, [(df._name, 0), path_or_buf, key]),
+                          (tuple, [(df._name, 0), fmt_obj(path_or_buf, i_name),
+                              key.replace('*', i_name)]),
                           merge(kwargs,
                             {'mode':  mode, 'format': 'table', 'append': append,
                              'complevel': complevel, 'complib': complib,
                              'fletcher32': fletcher32})))
     for i in range(1, df.npartitions):
+        i_name = name_function(i)
         dsk[(name, i)] = (_link, (name, i - 1),
                           (apply, pd_to_hdf,
-                           (tuple, [(df._name, i), path_or_buf, key]),
+                           (tuple, [(df._name, i), fmt_obj(path_or_buf, i_name),
+                               key.replace('*', i_name)]),
                            merge(kwargs,
                              {'mode': 'a', 'format': 'table', 'append': True,
                               'complevel': complevel, 'complib': complib,
