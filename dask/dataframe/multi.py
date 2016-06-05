@@ -203,8 +203,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._pd
-    right_empty = rhs._pd
+    left_empty = lhs._pd_nonempty
+    right_empty = rhs._pd_nonempty
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
 
@@ -270,7 +270,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # dummy result
-    dummy = pd.merge(lhs._pd, rhs._pd, how, None,
+    dummy = pd.merge(lhs._pd_nonempty, rhs._pd_nonempty, how, None,
                      left_on=left_on, right_on=right_on,
                      left_index=left_index, right_index=right_index,
                      suffixes=suffixes)
@@ -299,7 +299,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
 
 
 def single_partition_join(left, right, **kwargs):
-    meta = pd.merge(left._pd, right._pd, **kwargs)
+    meta = pd.merge(left._pd_nonempty, right._pd_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
         left_key = first(left._keys())
@@ -623,4 +623,3 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
                                 value_vars=value_vars,
                                 var_name=var_name, value_name=value_name,
                                 col_level=col_level, token='melt')
-

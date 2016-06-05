@@ -574,4 +574,4 @@ def test_merge_maintains_columns():
     ddf = dd.from_pandas(df1, npartitions=3)
 
     merged = dd.merge(ddf, df2, on='B').compute()
-    assert tuple(merged.columns) == ('D', 'C', 'A', 'G', 'H', 'I', 'B')
+    assert tuple(merged.columns) == ('D', 'C', 'B', 'A', 'G', 'H', 'I')

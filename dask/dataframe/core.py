@@ -30,6 +30,7 @@ from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds, funcname)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
+from .utils import nonempty_sample_df
 
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
@@ -1372,6 +1373,11 @@ class DataFrame(_Frame):
     @property
     def _constructor(self):
         return DataFrame
+
+    @property
+    def _pd_nonempty(self):
+        """ A Pandas dataframe with the same metadata but fake data."""
+        return nonempty_sample_df(self._pd)
 
     @property
     def columns(self):
