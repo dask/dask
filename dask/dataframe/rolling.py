@@ -86,13 +86,11 @@ def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
         method = getattr(this_partition.rolling(window), method_name)
         return method(*method_args, **method_kwargs)
 
-def wrap_rolling_method(name):
-    def inner(self, *args, **kwargs):
-        return self._call_method(name, *args, **kwargs)
-    return inner
-
 class Rolling(object):
     # What you get when you do ddf.rolling(...) or similar
+    """Provides rolling window calculcations.
+
+    """
 
     def __init__(self, obj, kwargs):
         self.obj = obj # dataframe or series
@@ -120,15 +118,38 @@ class Rolling(object):
             self.obj,
             self.obj.divisions)
 
-    count = wrap_rolling_method('count')
-    sum = wrap_rolling_method('sum')
-    mean = wrap_rolling_method('mean')
-    median = wrap_rolling_method('median')
-    min = wrap_rolling_method('min')
-    max = wrap_rolling_method('max')
-    std = wrap_rolling_method('std')
-    var = wrap_rolling_method('var')
-    skew = wrap_rolling_method('skew')
-    kurt = wrap_rolling_method('kurt')
-    quantile = wrap_rolling_method('quantile')
-    apply = wrap_rolling_method('apply')
+    def count(self, *args, **kwargs):
+        return self._call_method('count', *args, **kwargs)
+
+    def sum(self, *args, **kwargs):
+        return self._call_method('sum', *args, **kwargs)
+
+    def mean(self, *args, **kwargs):
+        return self._call_method('mean', *args, **kwargs)
+
+    def median(self, *args, **kwargs):
+        return self._call_method('median', *args, **kwargs)
+
+    def min(self, *args, **kwargs):
+        return self._call_method('min', *args, **kwargs)
+
+    def max(self, *args, **kwargs):
+        return self._call_method('max', *args, **kwargs)
+
+    def std(self, *args, **kwargs):
+        return self._call_method('std', *args, **kwargs)
+
+    def var(self, *args, **kwargs):
+        return self._call_method('var', *args, **kwargs)
+
+    def skew(self, *args, **kwargs):
+        return self._call_method('skew', *args, **kwargs)
+
+    def kurt(self, *args, **kwargs):
+        return self._call_method('kurt', *args, **kwargs)
+
+    def quantile(self, *args, **kwargs):
+        return self._call_method('quantile', *args, **kwargs)
+
+    def apply(self, *args, **kwargs):
+        return self._call_method('apply', *args, **kwargs)

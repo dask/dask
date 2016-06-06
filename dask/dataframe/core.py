@@ -578,6 +578,22 @@ class _Frame(Base):
         raise NotImplementedError
 
     def rolling(self, window, min_periods=None, win_type=None):
+        """Provides rolling transformations.
+
+        Parameters
+        ----------
+
+        window: int
+            Size of the moving window. This window must be smaller
+            than the size of the previous partition.
+        min_periods: int, default None
+            Minimum number of observations in window required to have
+            a value (otherwise result is NA).
+        win_type: string, default None
+            Provide a window type. (Identical to pandas.)
+
+        The center, freq, and axis arguments are not supported.
+        """
         from dask.dataframe.rolling import Rolling
 
         if not isinstance(window, int):
@@ -1057,10 +1073,6 @@ class Series(_Frame):
         return SeriesGroupBy(self, index, **kwargs)
 
     @derived_from(pd.Series)
-    def rolling(self, window, min_periods=None, win_type=None):
-        return super(Series, self).rolling(window, min_periods, win_type)
-
-    @derived_from(pd.Series)
     def sum(self, axis=None, skipna=True):
         return super(Series, self).sum(axis=axis, skipna=skipna)
 
@@ -1501,10 +1513,6 @@ class DataFrame(_Frame):
     def groupby(self, key, **kwargs):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, key, **kwargs)
-
-    @derived_from(pd.DataFrame)
-    def rolling(self, window, min_periods=None, win_type=None):
-        return super(DataFrame, self).rolling(window, min_periods, win_type)
 
     def categorize(self, columns=None, **kwargs):
         from dask.dataframe.categorical import categorize

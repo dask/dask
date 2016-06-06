@@ -17,7 +17,7 @@ def eq(p, d):
 def mad(x):
     return np.fabs(x - x.mean()).mean()
 
-def rolling_tests(p, d):
+def rolling_functions_tests(p, d):
     # Old-fashioned rolling API
     eq(pd.rolling_count(p, 3), dd.rolling_count(d, 3))
     eq(pd.rolling_sum(p, 3), dd.rolling_sum(d, 3))
@@ -39,6 +39,7 @@ def rolling_tests(p, d):
     # Test with kwargs
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
 
+def rolling_tests(p, d):
     # New rolling API
     eq(p.rolling(3).count(), d.rolling(3).count())
     eq(p.rolling(3).sum(), d.rolling(3).sum())
@@ -61,10 +62,23 @@ def rolling_tests(p, d):
     # Test with kwargs
     eq(p.rolling(3, min_periods=2).sum(), d.rolling(3, min_periods=2).sum())
 
+def test_rolling_functions_series():
+    ts = pd.Series(np.random.randn(25).cumsum())
+    dts = dd.from_pandas(ts, 3)
+    rolling_functions_tests(ts, dts)
+
+
 def test_rolling_series():
     ts = pd.Series(np.random.randn(25).cumsum())
     dts = dd.from_pandas(ts, 3)
     rolling_tests(ts, dts)
+
+
+def test_rolling_funtions_dataframe():
+    df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
+                       'b': np.random.randn(25).cumsum()})
+    ddf = dd.from_pandas(df, 3)
+    rolling_functions_tests(df, ddf)
 
 
 def test_rolling_dataframe():
@@ -74,7 +88,7 @@ def test_rolling_dataframe():
     rolling_tests(df, ddf)
 
 
-def test_raises():
+def test_rolling_functions_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randn(25).cumsum()})
     ddf = dd.from_pandas(df, 3)
@@ -84,8 +98,22 @@ def test_raises():
     assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
 
 
-def test_rolling_names():
+def test_rolling_raises():
+    df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
+                       'b': np.random.randn(25).cumsum()})
+    ddf = dd.from_pandas(df, 3)
+    assert raises(TypeError, lambda: ddf.rolling(1.5))
+    assert raises(ValueError, lambda: ddf.rolling(-1))
+    assert raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
+
+def test_rolling_functions_names():
     df = pd.DataFrame({'a': [1, 2, 3],
                        'b': [4, 5, 6]})
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(dd.rolling_sum(a, 2).dask) == sorted(dd.rolling_sum(a, 2).dask)
+
+def test_rolling_names():
+    df = pd.DataFrame({'a': [1, 2, 3],
+                       'b': [4, 5, 6]})
+    a = dd.from_pandas(df, npartitions=2)
+    assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
