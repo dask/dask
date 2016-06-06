@@ -26,7 +26,7 @@ class Base(object):
         """
         Render the computation of this object's task graph using graphviz.
 
-        Requires `graphviz` to be installed.
+        Requires ``graphviz`` to be installed.
 
         Parameters
         ----------
@@ -38,9 +38,9 @@ class Base(object):
             Format in which to write output file.  Default is 'png'.
         optimize_graph : bool, optional
             If True, the graph is optimized before rendering.  Otherwise,
-            the graph is displayed as is.
+            the graph is displayed as is. Default is False.
         **kwargs
-           Additional keyword arguments to forward to `to_graphviz`.
+           Additional keyword arguments to forward to ``to_graphviz``.
 
         Returns
         -------
@@ -188,7 +188,7 @@ def visualize(*args, **kwargs):
     """
     Visualize several dask graphs at once.
 
-    Requires `graphviz` to be installed. All options that are not the dask
+    Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
@@ -203,9 +203,9 @@ def visualize(*args, **kwargs):
         Format in which to write output file.  Default is 'png'.
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
-        the graph is displayed as is.
+        the graph is displayed as is. Default is False.
     **kwargs
-       Additional keyword arguments to forward to `to_graphviz`.
+       Additional keyword arguments to forward to ``to_graphviz``.
 
     Returns
     -------
