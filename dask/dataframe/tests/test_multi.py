@@ -5,9 +5,9 @@ from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
         hash_join, concat_indexed_dataframes)
 import pandas.util.testing as tm
 from dask.async import get_sync
+from dask.dataframe.utils import eq
 
 import pytest
-from test_dataframe import eq
 
 
 def test_align_partitions():
