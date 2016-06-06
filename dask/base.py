@@ -23,6 +23,42 @@ class Base(object):
 
     def visualize(self, filename='mydask', format=None, optimize_graph=False,
                   **kwargs):
+        """
+        Render the computation of this object's task graph using graphviz.
+
+        Requires `graphviz` to be installed.
+
+        Parameters
+        ----------
+        filename : str or None, optional
+            The name (without an extension) of the file to write to disk.  If
+            `filename` is None, no file will be written, and we communicate
+            with dot using only pipes.
+        format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+            Format in which to write output file.  Default is 'png'.
+        optimize_graph : bool, optional
+            Graph optimization is collection dependent. Some combination of
+            `cull` and `fuse` is used. `cull` will remove any tasks from the
+            graph which are not required to compute the keys for this
+            collection. Fuse will linearize the graph and remove intermediate
+            dependencies, placing the function calls with the desired keys.
+            Other non-informative function calls may be removed. The
+            `_optimize` method of each collection may be consulted.
+        **kwargs
+           Additional keyword arguments to forward to `to_graphviz`.
+
+        Returns
+        -------
+        result : IPython.diplay.Image, IPython.display.SVG, or None
+            See dask.dot.dot_graph for more information.
+
+        See also
+        --------
+        dask.optimize.cull
+        dask.optimize.fuze
+        dask.base.visualize
+        dask.dot.dot_graph
+        """
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
 
