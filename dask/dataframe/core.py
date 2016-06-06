@@ -27,7 +27,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds)
+                     pseudorandom, derived_from, different_seeds, funcname)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 
@@ -404,7 +404,7 @@ class _Frame(Base):
                               self._pd, self, ind, token='loc-series')
 
     def _loc_element(self, ind):
-        name = 'loc-element-%s-%s' % (str(ind), self._name)
+        name = 'loc-%s' % tokenize(ind, self)
         part = _partition_of_index_value(self.divisions, ind)
         if ind < self.divisions[0] or ind > self.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(ind))
@@ -413,7 +413,7 @@ class _Frame(Base):
         return self._constructor(merge(self.dask, dsk), name, self, [ind, ind])
 
     def _loc_slice(self, ind):
-        name = 'loc-slice-%s-%s' % (str(ind), self._name)
+        name = 'loc-%s' % tokenize(ind, self)
         assert ind.step in (None, 1)
         if ind.start:
             start = _partition_of_index_value(self.divisions, ind.start)
@@ -568,7 +568,7 @@ class _Frame(Base):
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def _aca_agg(self, token, func, aggfunc=None):
+    def _aca_agg(self, token, func, aggfunc=None, **kwargs):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
@@ -610,50 +610,53 @@ class _Frame(Base):
     def sum(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.sum(axis=1, skipna=skipna)
-            name = '{0}sum(axis=1)'.format(self._token_prefix)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_sum, None, self,
+                                  token=self._token_prefix + 'sum',
+                                  axis=axis, skipna=skipna)
         else:
-            return self._aca_agg(token='sum', func=lambda x: x.sum(skipna=skipna))
+            return self._aca_agg(token='sum', func=_sum,
+                                 skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.max(axis=1, skipna=skipna)
-            name = '{0}max(axis=1)'.format(self._token_prefix)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_max, None, self,
+                                  token=self._token_prefix + 'max',
+                                  skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='max', func=lambda x: x.max(skipna=skipna))
+            return self._aca_agg(token='max', func=_max,
+                                 skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def min(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.min(axis=1, skipna=skipna)
-            name = '{0}min(axis=1)'.format(self._token_prefix)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_min, None, self,
+                                  token=self._token_prefix + 'min',
+                                  skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='min', func=lambda x: x.min(skipna=skipna))
+            return self._aca_agg(token='min', func=_min,
+                                 skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.count(axis=1)
-            name = '{0}count(axis=1)'.format(self._token_prefix)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_count, None, self,
+                                  token=self._token_prefix + 'count',
+                                  axis=axis)
         else:
-            return self._aca_agg(token='count', func=lambda x: x.count(),
+            return self._aca_agg(token='count', func=_count,
                                  aggfunc=lambda x: x.sum())
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.mean(axis=1, skipna=skipna)
-            name = '{0}mean(axis=1)'.format(self._token_prefix)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_mean, None, self,
+                                  token=self._token_prefix + 'mean',
+                                  axis=axis, skipna=skipna)
         else:
             num = self._get_numeric_data()
             s = num.sum(skipna=skipna)
@@ -664,16 +667,16 @@ class _Frame(Base):
                     return s / n
                 except ZeroDivisionError:
                     return np.nan
-            name = '{0}mean-{1}'.format(self._token_prefix, tokenize(s))
+            name = self._token_prefix + 'mean-%s' % tokenize(self, axis, skipna)
             return map_partitions(f, None, s, n, token=name)
 
     @derived_from(pd.DataFrame)
     def var(self, axis=None, skipna=True, ddof=1):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.var(axis=1, skipna=skipna, ddof=ddof)
-            name = '{0}var(axis=1, ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_var, None, self,
+                                  token=self._token_prefix + 'var',
+                                  axis=axis, skipna=skipna, ddof=ddof)
         else:
             num = self._get_numeric_data()
             x = 1.0 * num.sum(skipna=skipna)
@@ -688,19 +691,20 @@ class _Frame(Base):
                     return result
                 except ZeroDivisionError:
                     return np.nan
-            name = '{0}var(ddof={1})'.format(self._token_prefix, ddof)
+            name = self._token_prefix + 'var-%s' % tokenize(self, axis, skipna, ddof)
             return map_partitions(f, None, x2, x, n, token=name)
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1):
         axis = self._validate_axis(axis)
         if axis == 1:
-            f = lambda x: x.std(axis=1, skipna=skipna, ddof=ddof)
-            name = '{0}std(axis=1, ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(f, None, self, token=name)
+            return map_partitions(_std, None, self,
+                                  token=self._token_prefix + 'std',
+                                  axis=axis, skipna=skipna, ddof=ddof)
         else:
             v = self.var(skipna=skipna, ddof=ddof)
-            name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
+            name = self._token_prefix + 'std-finish--%s' % tokenize(self, axis,
+                                                            skipna, ddof)
             return map_partitions(np.sqrt, None, v, token=name)
 
     def quantile(self, q=0.5, axis=0):
@@ -1027,7 +1031,7 @@ class Series(_Frame):
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
-            name = 'series-index-%s[%s]' % (self._name, key._name)
+            name = 'index-%s' % tokenize(self, key)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -1053,14 +1057,15 @@ class Series(_Frame):
         # convert to numeric axis
         return {None: 0, 'index': 0}.get(axis, axis)
 
-    def _aca_agg(self, token, func, aggfunc=None):
+    def _aca_agg(self, token, func, aggfunc=None, **kwargs):
         """ Wrapper for aggregations """
         if aggfunc is None:
             aggfunc = func
 
         return aca([self], chunk=func,
-                   aggregate=lambda x: aggfunc(pd.Series(x)),
-                   columns=return_scalar, token=self._token_prefix + token)
+                   aggregate=lambda x, **kwargs: aggfunc(pd.Series(x), **kwargs),
+                   columns=return_scalar, token=self._token_prefix + token,
+                   **kwargs)
 
     @derived_from(pd.Series)
     def groupby(self, index, **kwargs):
@@ -1312,11 +1317,11 @@ class Index(Series):
     @derived_from(pd.Index)
     def max(self):
         # it doesn't support axis and skipna kwds
-        return self._aca_agg(token='max', func=lambda x: x.max())
+        return self._aca_agg(token='max', func=_max)
 
     @derived_from(pd.Index)
     def min(self):
-        return self._aca_agg(token='min', func=lambda x: x.min())
+        return self._aca_agg(token='min', func=_max)
 
     def count(self):
         f = lambda x: pd.notnull(x).sum()
@@ -1379,12 +1384,10 @@ class DataFrame(_Frame):
         self._name = renamed._name
 
     def __getitem__(self, key):
-
+        name = 'getitem-%s' % tokenize(self, key)
         if np.isscalar(key):
             # error is raised from pandas
             dummy = self._pd[_extract_pd(key)]
-
-            name = '{0}.{1}'.format(self._name, key)
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                         for i in range(self.npartitions))
             return self._constructor_sliced(merge(self.dask, dsk), name,
@@ -1394,7 +1397,6 @@ class DataFrame(_Frame):
             # error is raised from pandas
             dummy = self._pd[_extract_pd(key)]
 
-            name = '%s[%s]' % (self._name, str(key))
             dsk = dict(((name, i), (operator.getitem,
                                     (self._name, i), (list, key)))
                         for i in range(self.npartitions))
@@ -1406,7 +1408,6 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            name = 'series-slice-%s[%s]' % (self._name, key._name)
             dsk = dict(((name, i), (self._partition_type._getitem_array,
                                      (self._name, i),
                                      (key._name, i)))
@@ -1544,7 +1545,7 @@ class DataFrame(_Frame):
         The original docstring follows below:\n
         """ + pd.DataFrame.query.__doc__
 
-        name = '%s.query(%s)' % (self._name, expr)
+        name = 'query-%s' % tokenize(self, expr)
         if kwargs:
             name = name + '--' + tokenize(kwargs)
             dsk = dict(((name, i), (apply, pd.DataFrame.query,
@@ -1621,16 +1622,19 @@ class DataFrame(_Frame):
         # convert to numeric axis
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
 
-    def _aca_agg(self, token, func, aggfunc=None):
+    def _aca_agg(self, token, func, aggfunc=None, **kwargs):
         """ Wrapper for aggregations """
         if aggfunc is None:
             aggfunc = func
 
+        def aggregate(x, **kwargs):
+            return x.groupby(level=0).apply(aggfunc, **kwargs)
+
         # groupby.aggregation doesn't support skipna,
         # using gropuby.apply(aggfunc) is a workaround to handle each group as df
-        return aca([self], chunk=func,
-                   aggregate=lambda x: x.groupby(level=0).apply(aggfunc),
-                   columns=None, token=self._token_prefix + token)
+        return aca([self], chunk=func, aggregate=aggregate,
+                   columns=None, token=self._token_prefix + token,
+                   **kwargs)
 
     @derived_from(pd.DataFrame)
     def drop(self, labels, axis=0):
@@ -2014,7 +2018,8 @@ def _maybe_from_pandas(dfs):
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None,
-                       columns=no_default, token=None):
+                       columns=no_default, token=None, chunk_kwargs=None,
+                       aggregate_kwargs=None, **kwargs):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -2036,6 +2041,13 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 
     >>> apply_concat_apply([a, b], chunk=chunk, aggregate=agg)  # doctest: +SKIP
     """
+    if chunk_kwargs is None:
+        chunk_kwargs = dict()
+    if aggregate_kwargs is None:
+        aggregate_kwargs = dict()
+    chunk_kwargs.update(kwargs)
+    aggregate_kwargs.update(kwargs)
+
     if not isinstance(args, (tuple, list)):
         args = [args]
 
@@ -2046,19 +2058,22 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     token = token or 'apply-concat-apply'
 
     a = '{0}--first-{1}'.format(token, token_key)
-    if len(args) == 1 and isinstance(args[0], _Frame):
+    if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
         dsk = dict(((a, i), (chunk, key))
                    for i, key in enumerate(args[0]._keys()))
     else:
         dsk = dict(((a, i), (apply, chunk, [(x._name, i)
                                             if isinstance(x, _Frame)
-                                            else x for x in args]))
+                                            else x for x in args],
+                                    kwargs))
                for i in range(args[0].npartitions))
 
     b = '{0}--second-{1}'.format(token, token_key)
-    dsk2 = {(b, 0): (aggregate,
-                      (_concat,
-                        (list, [(a, i) for i in range(args[0].npartitions)])))}
+    conc = (_concat,(list, [(a, i) for i in range(args[0].npartitions)]))
+    if not aggregate_kwargs:
+        dsk2 = {(b, 0): (aggregate, conc)}
+    else:
+        dsk2 = {(b, 0): (apply, aggregate, [conc], aggregate_kwargs)}
 
     if columns is no_default:
         return_type = type(args[0])
@@ -2149,8 +2164,8 @@ def map_partitions(func, metadata, *args, **kwargs):
 
     assert callable(func)
     token = kwargs.pop('token', None)
-    token_key = tokenize(token or func, metadata, kwargs, *args)
-    name = '{0}-{1}'.format(token or 'map-partitions', token_key)
+    name = token or funcname(func)
+    name = '{0}-{1}'.format(name, tokenize(metadata, *args, **kwargs))
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
@@ -2768,3 +2783,31 @@ def _set_sorted_index(df, idx, drop):
 
 def _eval(df, expr, **kwargs):
     return df.eval(expr, **kwargs)
+
+
+def _sum(x, **kwargs):
+    return x.sum(**kwargs)
+
+
+def _min(x, **kwargs):
+    return x.min(**kwargs)
+
+
+def _max(x, **kwargs):
+    return x.max(**kwargs)
+
+
+def _count(x, **kwargs):
+    return x.count(**kwargs)
+
+
+def _mean(x, **kwargs):
+    return x.mean(**kwargs)
+
+
+def _var(x, **kwargs):
+    return x.var(**kwargs)
+
+
+def _std(x, **kwargs):
+    return x.std(**kwargs)

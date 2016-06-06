@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+import sys
 
 import numpy as np
 import pandas as pd
@@ -161,8 +162,10 @@ def _maybe_sort(a):
 
 
 def eq(a, b, check_names=True, **kwargs):
-    test_divisions(a)
-    test_divisions(b)
+    assert_divisions(a)
+    assert_divisions(b)
+    assert_sane_keynames(a)
+    assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names)
     b = _check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
@@ -200,7 +203,7 @@ def assert_dask_graph(dask, label):
         raise AssertionError(msg.format(label))
 
 
-def test_divisions(ddf):
+def assert_divisions(ddf):
     if not hasattr(ddf, 'divisions'):
         return
     if not hasattr(ddf, 'index'):
@@ -217,3 +220,16 @@ def test_divisions(ddf):
     if len(results[-1]):
         assert results[-1].index.min() >= ddf.divisions[-2]
         assert results[-1].index.max() <= ddf.divisions[-1]
+
+
+def assert_sane_keynames(ddf):
+    if not hasattr(ddf, 'dask'):
+        return
+    for k in ddf.dask.keys():
+        while isinstance(k, tuple):
+            k = k[0]
+        assert isinstance(k, (str, bytes))
+        assert len(k) < 100
+        assert ' ' not in k
+        if sys.version_info[0] >= 3:
+            assert k.split('-')[0].isidentifier() or len(k) in (32, 40)
