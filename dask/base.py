@@ -37,13 +37,8 @@ class Base(object):
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
             Format in which to write output file.  Default is 'png'.
         optimize_graph : bool, optional
-            Graph optimization is collection dependent. Some combination of
-            `cull` and `fuse` is used. `cull` will remove any tasks from the
-            graph which are not required to compute the keys for this
-            collection. Fuse will linearize the graph and remove intermediate
-            dependencies, placing the function calls with the desired keys.
-            Other non-informative function calls may be removed. The
-            `_optimize` method of each collection may be consulted.
+            If True, the graph is optimized before rendering.  Otherwise,
+            the graph is displayed as is.
         **kwargs
            Additional keyword arguments to forward to `to_graphviz`.
 
@@ -54,10 +49,14 @@ class Base(object):
 
         See also
         --------
-        dask.optimize.cull
-        dask.optimize.fuze
         dask.base.visualize
         dask.dot.dot_graph
+
+        Notes
+        -----
+        For more information on optimization see here:
+
+        http://dask.pydata.org/en/latest/optimize.html
         """
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
