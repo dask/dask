@@ -952,7 +952,7 @@ class Executor(object):
 
         d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
         dsk2 = str_graph({k: v[0] for k, v in d.items()})
-        dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
+        dsk3 = {k: v for k, v in dsk2.items() if k is not v}
 
         if restrictions:
             restrictions = keymap(tokey, restrictions)

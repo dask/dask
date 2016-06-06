@@ -313,3 +313,27 @@ def test_dataframe_set_index_sync(loop):
                 df2 = e.persist(df2)
 
                 df2.head()
+
+
+def test_loc_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            df = pd.util.testing.makeTimeDataFrame()
+            ddf = dd.from_pandas(df, npartitions=10)
+            ddf.loc['2000-01-17':'2000-01-24'].compute(get=e.get)
+
+
+def test_rolling_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            df = pd.util.testing.makeTimeDataFrame()
+            ddf = dd.from_pandas(df, npartitions=10)
+            dd.rolling_mean(ddf.A, 2).compute(get=e.get)
+
+
+@gen_cluster(executor=True)
+def test_loc(e, s, a, b):
+    df = pd.util.testing.makeTimeDataFrame()
+    ddf = dd.from_pandas(df, npartitions=10)
+    future = e.compute(ddf.loc['2000-01-17':'2000-01-24'])
+    yield future._result()
