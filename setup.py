@@ -14,6 +14,12 @@ extras_require = {
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
+packages = ['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.bytes',
+            'dask.dataframe', 'dask.dataframe.tseries', 'dask.diagnostics']
+
+tests = [p + '.tests' for p in packages]
+
+
 setup(name='dask',
       version=dask.__version__,
       description='Minimal task scheduling abstraction',
@@ -22,8 +28,7 @@ setup(name='dask',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
       keywords='task-scheduling parallelism',
-      packages=['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.bytes',
-                'dask.dataframe', 'dask.dataframe.tseries', 'dask.diagnostics'],
+      packages=packages + tests,
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
       extras_require=extras_require,
