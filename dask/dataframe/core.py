@@ -597,15 +597,15 @@ class _Frame(Base):
         from dask.dataframe.rolling import Rolling
 
         if not isinstance(window, int):
-            raise TypeError('window must be an integer')
+            raise ValueError('window must be an integer')
         if window < 0:
-            raise ValueError('window must be positive')
+            raise ValueError('window must be >= 0')
 
         if min_periods is not None:
             if not isinstance(min_periods, int):
-                raise TypeError('min_periods must be an integer')
+                raise ValueError('min_periods must be an integer')
             if min_periods < 0:
-                raise ValueError('min_periods must be positive')
+                raise ValueError('min_periods must be >= 0')
 
         return Rolling(self, {'window': window,
                               'min_periods': min_periods,

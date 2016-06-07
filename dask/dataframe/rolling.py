@@ -103,6 +103,8 @@ class Rolling(object):
         new_name = 'rolling-' + tokenize(
             self.obj, self.rolling_kwargs, method_name, args, kwargs)
 
+        # For all but the first chunk, we'll pass the whole previous chunk
+        # in so we can use it to pre-feed our window
         dsk = {(new_name, 0): (
             call_pandas_rolling_method_single, (old_name, 0),
             self.rolling_kwargs, method_name, args, kwargs)}
@@ -112,10 +114,14 @@ class Rolling(object):
                 (old_name, i-1), (old_name, i),
                 self.rolling_kwargs, method_name, args, kwargs)
 
+        # Do the pandas operation to get the appropriate thing for metadata
+        pd_rolling = self.obj._pd.rolling(**self.rolling_kwargs)
+        metadata = getattr(pd_rolling, method_name)(*args, **kwargs)
+
         return self.obj._constructor(
             merge(self.obj.dask, dsk),
             new_name,
-            self.obj,
+            metadata,
             self.obj.divisions)
 
     def count(self, *args, **kwargs):

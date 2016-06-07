@@ -73,14 +73,16 @@ def test_rolling_functions_series():
 @pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
                     reason="rolling object not supported")
 def test_rolling_series():
-    ts = pd.Series(np.random.randn(25).cumsum())
-    dts = dd.from_pandas(ts, 3)
-    rolling_tests(ts, dts)
+    for ts in [
+            pd.Series(np.random.randn(25).cumsum()),
+            pd.Series(np.random.randint(100, size=(25,)))]:
+        dts = dd.from_pandas(ts, 3)
+        rolling_tests(ts, dts)
 
 
 def test_rolling_funtions_dataframe():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randn(25).cumsum()})
+                       'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
     rolling_functions_tests(df, ddf)
 
@@ -89,14 +91,14 @@ def test_rolling_funtions_dataframe():
                     reason="rolling object not supported")
 def test_rolling_dataframe():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randn(25).cumsum()})
+                       'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
     rolling_tests(df, ddf)
 
 
 def test_rolling_functions_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randn(25).cumsum()})
+                       'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
     assert raises(TypeError, lambda: dd.rolling_mean(ddf, 1.5))
     assert raises(ValueError, lambda: dd.rolling_mean(ddf, -1))
@@ -107,10 +109,12 @@ def test_rolling_functions_raises():
                     reason="rolling object not supported")
 def test_rolling_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randn(25).cumsum()})
+                       'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
-    assert raises(TypeError, lambda: ddf.rolling(1.5))
+    assert raises(ValueError, lambda: ddf.rolling(1.5))
     assert raises(ValueError, lambda: ddf.rolling(-1))
+    assert raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
+    assert raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
     assert raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
 
 
