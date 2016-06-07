@@ -15,7 +15,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
 
-from dask.utils import filetext, filetexts, tmpfile
+from dask.utils import filetext, filetexts, tmpfile, tmpdir
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
@@ -698,6 +698,55 @@ def test_to_hdf():
     a = dd.from_pandas(df, 1)
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out[:])
+
+    # saving to multiple datasets
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        tm.assert_frame_equal(df, out.compute())
+
+    # saving to multiple files
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out.compute())
+
+    # saving to multiple datasets with custom name_function
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i +  1))
+        out = dd.read_hdf(fn, '/data_*')
+        tm.assert_frame_equal(df, out.compute())
+
+        out = pd.read_hdf(fn, '/data_a')
+        tm.assert_frame_equal(out, df.iloc[:2])
+        out = pd.read_hdf(fn, '/data_aa')
+        tm.assert_frame_equal(out, df.iloc[2:])
+
+    # saving to multiple files with custom name_function
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', name_function=lambda i: 'a' * (i +  1))
+        out = dd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out.compute())
+
+        out = pd.read_hdf(os.path.join(dn, 'data_a.h5'), '/data')
+        tm.assert_frame_equal(out, df.iloc[:2])
+        out = pd.read_hdf(os.path.join(dn, 'data_aa.h5'), '/data')
+        tm.assert_frame_equal(out, df.iloc[2:])
+
+    # saving to different datasets in multiple files with custom name_function
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        with pytest.raises(ValueError):
+            fn = os.path.join(dn, 'data_*.h5')
+            a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i +  1))
 
 
 def test_read_hdf():
