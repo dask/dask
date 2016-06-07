@@ -88,7 +88,7 @@ def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
 
 class Rolling(object):
     # What you get when you do ddf.rolling(...) or similar
-    """Provides rolling window calculcations.
+    """Provides rolling window calculations.
 
     """
 

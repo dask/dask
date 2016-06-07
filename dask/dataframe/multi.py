@@ -247,7 +247,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
-    embarassingly parallel join partition-by-partition
+    embarrassingly parallel join partition-by-partition
 
     >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
@@ -513,7 +513,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     >>> b                                               # doctest: +SKIP
     dd.DataFrame<y, divisions=(2, 3, 6)>
     >>> dd.concat([a, b])                               # doctest: +SKIP
-    ValueError: All inputs have known divisions which cannnot be concatenated
+    ValueError: All inputs have known divisions which cannot be concatenated
     in order. Specify interleave_partitions=True to ignore order
 
     Specify interleave_partitions=True to ignore the division order.
@@ -569,7 +569,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                 if interleave_partitions:
                     return concat_indexed_dataframes(dfs, join=join)
 
-                raise ValueError('All inputs have known divisions which cannnot '
+                raise ValueError('All inputs have known divisions which cannot '
                                  'be concatenated in order. Specify '
                                  'interleave_partitions=True to ignore order')
 

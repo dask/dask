@@ -1235,7 +1235,7 @@ class Series(_Frame):
             If list is given, the result is a DataFrame which columns is
             specified list. Otherwise, the result is a Series which name is
             given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beggining of data. This
+            tries to infer the result type using its beginning of data. This
             inference may take some time and lead to unexpected result.
         args: tuple
             Positional arguments to pass to function in addition to the array/series
@@ -1740,7 +1740,7 @@ class DataFrame(_Frame):
             If list is given, the result is a DataFrame which columns is
             specified list. Otherwise, the result is a Series which name is
             given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beggining of data. This
+            tries to infer the result type using its beginning of data. This
             inference may take some time and lead to unexpected result
         args : tuple
             Positional arguments to pass to function in addition to the array/series
@@ -2114,7 +2114,7 @@ def _get_return_type(arg, metadata):
 
 def _extract_pd(x):
     """
-    Extract intenal cache data (``_pd``) from dd.DataFrame / dd.Series
+    Extract internal cache data (``_pd``) from dd.DataFrame / dd.Series
     """
     if isinstance(x, _Frame):
         return x._pd
@@ -2439,7 +2439,7 @@ def pd_split(df, p, random_state=None):
 def _take_last(a, skipna=True):
     """
     take last row (Series) of DataFrame / last value of Seriese
-    considerning NaN.
+    considering NaN.
 
     Parameters
     ----------
@@ -2597,7 +2597,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             tmp.append((out1, i))
             i += 1
         if len(tmp) == 0:
-            # dumy slice to return empty DataFrame or Series,
+            # dummy slice to return empty DataFrame or Series,
             # which retain original data attributes (columns / name)
             d[(out2, j - 1)] = (_loc, (name, 0), a[0], a[0], False)
         elif len(tmp) == 1:
