@@ -884,3 +884,15 @@ def test_groupby_tasks():
         for b in partitions:
             if a is not b:
                 assert not set(a) & set(b)
+
+
+def test_groupby_tasks_names():
+    b = db.from_sequence(range(160), npartitions=4)
+    func = lambda x: x % 10
+    func2 = lambda x: x % 20
+    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) ==
+            set(b.groupby(func, max_branch=4, method='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
+            set(b.groupby(func, max_branch=2, method='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
+            set(b.groupby(func2, max_branch=4, method='tasks').dask))
