@@ -10,6 +10,21 @@ import toolz
 
 from dask.async import get_sync
 
+# Pandas <0.17 doesn't have the datetime64+tz extension dtype
+if pd.__version__ > '0.17.0':
+    is_datetime64tz_dtype = pd.core.common.is_datetime64tz_dtype
+else:
+    def is_datetime64tz_dtype(x):
+        return False
+
+# Pandas <0.18 doesn't have the `is_extension_type` function
+if pd.__version__ > '0.18.0':
+    is_extension_type = pd.core.common.is_extension_type
+else:
+    def is_extension_type(x):
+        return False
+
+
 
 def shard_df_on_index(df, divisions):
     """ Shard a DataFrame by ranges on its index
@@ -113,7 +128,7 @@ def nonempty_sample_df(empty):
     for key, dtype in empty.dtypes.iteritems():
         if dtype.kind in _simple_fake_mapping:
             entry = _simple_fake_mapping[dtype.kind]
-        elif pd.core.common.is_datetime64tz_dtype(dtype):
+        elif is_datetime64tz_dtype(dtype):
             entry = pd.to_datetime(datetime.datetime.now(), utc=True)
         elif pd.core.common.is_categorical_dtype(dtype):
             accessor = empty[key].cat
@@ -121,10 +136,10 @@ def nonempty_sample_df(empty):
             cat = pd.Categorical([example], categories=accessor.categories,
                                  ordered=accessor.ordered)
             entry = pd.Series(cat, name=key)
+        elif is_extension_type(dtype):
+            raise TypeError("Can't handle extension dtype: {}".format(dtype))
         elif dtype.name == 'object':
             entry = 'foo'
-        elif pd.core.common.is_extension_dtype(dtype):
-            raise TypeError("Can't handle extension dtype: {}".format(dtype))
         else:
             raise TypeError("Can't handle dtype: {}".format(dtype))
 
