@@ -44,11 +44,13 @@ def optimize_slices(dsk):
             if v[0] is getitem or v[0] is getarray:
                 try:
                     func, a, a_index = v
+                    use_getarray = func is getarray
                 except ValueError:  # has four elements, includes a lock
                     continue
                 while type(a) is tuple and (a[0] is getitem or a[0] is getarray):
                     try:
-                        _, b, b_index = a
+                        f2, b, b_index = a
+                        use_getarray |= f2 is getarray
                     except ValueError:  # has four elements, includes a lock
                         break
                     if (type(a_index) is tuple) != (type(b_index) is tuple):
@@ -62,7 +64,9 @@ def optimize_slices(dsk):
                     except NotImplementedError:
                         break
                     (a, a_index) = (b, c_index)
-                if (type(a_index) is slice and
+                if use_getarray:
+                    dsk[k] = (getarray, a, a_index)
+                elif (type(a_index) is slice and
                     not a_index.start and
                     a_index.stop is None and
                     a_index.step is None):
@@ -74,7 +78,7 @@ def optimize_slices(dsk):
                                                     for s in a_index):
                     dsk[k] = a
                 else:
-                    dsk[k] = (func, a, a_index)
+                    dsk[k] = (getitem, a, a_index)
     return dsk
 
 
