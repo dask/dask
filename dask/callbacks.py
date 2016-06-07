@@ -25,7 +25,7 @@ class Callback(object):
 
     >>> cb = Callback(pretask=pretask, finish=finish)  # doctest: +SKIP
 
-    And use it either as a context mangager over a compute/get call
+    And use it either as a context manager over a compute/get call
 
     >>> with cb:  # doctest: +SKIP
     ...     x.compute()  # doctest: +SKIP

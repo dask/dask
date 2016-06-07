@@ -13,7 +13,7 @@ class GetFunctionTestCase(unittest.TestCase):
     """
     The GetFunctionTestCase class can be imported and used to test foreign
     implementations of the `get` function specification. It aims to enforce all
-    known expecctations of `get` functions.
+    known expectations of `get` functions.
 
     To use the class, inherit from it and override the `get` function. For
     example:
