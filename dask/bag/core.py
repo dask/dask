@@ -36,7 +36,7 @@ from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (infer_compression, open, system_encoding,
-                     takes_multiple_arguments, funcname)
+                     takes_multiple_arguments, funcname, digit, insert)
 
 no_default = '__no__default__'
 
@@ -1461,34 +1461,7 @@ def make_group(k, stage):
     return h
 
 
-def digit(n, k, base):
-    """
-
-    >>> digit(1234, 0, 10)
-    4
-    >>> digit(1234, 1, 10)
-    3
-    >>> digit(1234, 2, 10)
-    2
-    >>> digit(1234, 3, 10)
-    1
-    """
-    return n // base**k  % base
-
-
-def insert(tup, loc, val):
-    """
-
-    >>> insert(('a', 'b', 'c'), 0, 'x')
-    ('x', 'b', 'c')
-    """
-    L = list(tup)
-    L[loc] = val
-    return tuple(L)
-
-
-def groupby_tasks(b, grouper, hash=hash, max_branch=32,
-                 name='shuffle', token=None):
+def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
@@ -1508,25 +1481,25 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32,
 
     b2 = b.map(lambda x: (hash(grouper(x)), x))
 
-    token = token or tokenize(b, hash, max_branch, name)
+    token = tokenize(b, grouper, hash, max_branch)
 
-    start = dict(((name + '-join-' + token, 0, inp), (b2.name, i))
+    start = dict((('shuffle-join-' + token, 0, inp), (b2.name, i))
                  for i, inp in enumerate(inputs))
 
     for stage in range(1, stages + 1):
-        group = dict(((name + '-group-' + token, stage, inp),
+        group = dict((('shuffle-group-' + token, stage, inp),
                       (groupby,
                         (make_group, k, stage - 1),
-                        (name + '-join-' + token, stage - 1, inp)))
+                        ('shuffle-join-' + token, stage - 1, inp)))
                  for inp in inputs)
-        split = dict(((name + '-split-' + token, stage, i, inp),
-                      (dict.get, (name + '-group-' + token, stage, inp), i, {}))
+        split = dict((('shuffle-split-' + token, stage, i, inp),
+                      (dict.get, ('shuffle-group-' + token, stage, inp), i, {}))
                      for i in range(k)
                      for inp in inputs)
 
-        join = dict(((name + '-join-' + token, stage, inp),
+        join = dict((('shuffle-join-' + token, stage, inp),
                      (list, (toolz.concat,
-                        [(name + '-split-' + token, stage, inp[stage-1],
+                        [('shuffle-split-' + token, stage, inp[stage-1],
                           insert(inp, stage - 1, j)) for j in range(k)
                           if insert(inp, stage - 1, j) in sinputs])))
                      for inp in inputs)
@@ -1534,11 +1507,11 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32,
         splits.append(split)
         joins.append(join)
 
-    end = dict(((name + '-' + token, i), (list, (pluck, 1, j)))
+    end = dict((('shuffle-' + token, i), (list, (pluck, 1, j)))
                for i, j in enumerate(join))
 
     dsk = merge(b2.dask, start, end, *(groups + splits + joins))
-    return Bag(dsk, name + '-' + token, n)
+    return type(b)(dsk, 'shuffle-' + token, n)
 
 
 def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):

@@ -584,3 +584,29 @@ def ensure_bytes(s):
         return s.encode()
     raise TypeError(
             "Object %s is neither a bytes object nor has an encode method" % s)
+
+
+def digit(n, k, base):
+    """
+
+    >>> digit(1234, 0, 10)
+    4
+    >>> digit(1234, 1, 10)
+    3
+    >>> digit(1234, 2, 10)
+    2
+    >>> digit(1234, 3, 10)
+    1
+    """
+    return n // base**k  % base
+
+
+def insert(tup, loc, val):
+    """
+
+    >>> insert(('a', 'b', 'c'), 0, 'x')
+    ('x', 'b', 'c')
+    """
+    L = list(tup)
+    L[loc] = val
+    return tuple(L)

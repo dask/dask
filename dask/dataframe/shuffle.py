@@ -15,6 +15,7 @@ from .core import DataFrame, Series, _Frame, map_partitions, _concat
 from dask.dataframe.categorical import (strip_categories, _categorize,
                                         get_categories)
 from .utils import shard_df_on_index
+from ..utils import digit, insert
 
 
 def set_index(df, index, npartitions=None, method=None, compute=True,
@@ -55,7 +56,7 @@ def new_categories(categories, index):
 
 
 def set_partition(df, index, divisions, method=None, compute=False, drop=True,
-        max_branch=32, **kwargs):
+                  max_branch=32, **kwargs):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -72,6 +73,14 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
         Values to form new divisions between partitions
     drop: bool, default True
         Whether to delete columns to be used as the new index
+    method: str (optional)
+        Either 'disk' for an on-disk shuffle or 'tasks' to use the task
+        scheduling framework.  Use 'disk' if you are on a single machine
+        and 'tasks' if you are on a distributed cluster.
+    max_branch: int (optional)
+        If using the task-based shuffle, the amount of splitting each
+        partition undergoes.  Increase this for fewer copies but more
+        scheduler overhead.
 
     See Also
     --------
@@ -304,12 +313,10 @@ def shuffle_post_series(df, index_name):
     return df
 
 
-def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
-                        token=None):
+def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
     max_branch = max_branch or 32
     n = df.npartitions
     assert len(divisions) == n + 1
-    name = 'shuffle'
 
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
     if stages > 1:
@@ -337,26 +344,26 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
         df2 = map_partitions(shuffle_pre_partition_series, meta, df, index,
                              divisions, drop)
 
-    token = token or tokenize(df, index, divisions, max_branch)
+    token = tokenize(df, index, divisions, max_branch, drop)
 
-    start = dict(((name + '-join-' + token, 0, inp), (df2._name, i))
+    start = dict((('shuffle-join-' + token, 0, inp), (df2._name, i))
                  for i, inp in enumerate(inputs))
 
     for stage in range(1, stages + 1):
-        group = dict(((name + '-group-' + token, stage, inp),
+        group = dict((('shuffle-group-' + token, stage, inp),
                       (shuffle_group,
-                        (name + '-join-' + token, stage - 1, inp),
+                        ('shuffle-join-' + token, stage - 1, inp),
                         stage - 1, k))
                      for inp in inputs)
 
-        split = dict(((name + '-split-' + token, stage, i, inp),
-                      (dict.get, (name + '-group-' + token, stage, inp), i, {}))
+        split = dict((('shuffle-split-' + token, stage, i, inp),
+                      (dict.get, ('shuffle-group-' + token, stage, inp), i, {}))
                      for i in range(k)
                      for inp in inputs)
 
-        join = dict(((name + '-join-' + token, stage, inp),
+        join = dict((('shuffle-join-' + token, stage, inp),
                      (_concat,
-                        [(name + '-split-' + token, stage, inp[stage-1],
+                        [('shuffle-split-' + token, stage, inp[stage-1],
                           insert(inp, stage - 1, j)) for j in range(k)
                           if insert(inp, stage - 1, j) in sinputs]))
                      for inp in inputs)
@@ -365,46 +372,20 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True,
         joins.append(join)
 
     if np.isscalar(index):
-        end = dict(((name + '-' + token, i),
-                    (shuffle_post_scalar, (name + '-join-' + token, stages, inp),
+        end = dict((('shuffle-' + token, i),
+                    (shuffle_post_scalar, ('shuffle-join-' + token, stages, inp),
                                           index))
                     for i, inp in enumerate(inputs))
     else:
-        end = dict(((name + '-' + token, i),
-                    (shuffle_post_series, (name + '-join-' + token, stages, inp),
+        end = dict((('shuffle-' + token, i),
+                    (shuffle_post_series, ('shuffle-join-' + token, stages, inp),
                                           index.name))
                     for i, inp in enumerate(inputs))
 
     dsk = merge(df2.dask, start, end, *(groups + splits + joins))
 
     meta = df._pd.set_index(index if np.isscalar(index) else index._pd)
-    return DataFrame(dsk, name + '-' + token, meta, divisions)
-
-
-def digit(n, k, base):
-    """
-
-    >>> digit(1234, 0, 10)
-    4
-    >>> digit(1234, 1, 10)
-    3
-    >>> digit(1234, 2, 10)
-    2
-    >>> digit(1234, 3, 10)
-    1
-    """
-    return n // base**k  % base
-
-
-def insert(tup, loc, val):
-    """
-
-    >>> insert(('a', 'b', 'c'), 0, 'x')
-    ('x', 'b', 'c')
-    """
-    L = list(tup)
-    L[loc] = val
-    return tuple(L)
+    return DataFrame(dsk, 'shuffle-' + token, meta, divisions)
 
 
 def set_partition_disk(df, index, divisions, compute=False, drop=True, **kwargs):

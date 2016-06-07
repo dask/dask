@@ -124,6 +124,24 @@ def test_set_partition_tasks(npartitions):
     # eq(df.set_index(df.index),
     #    ddf.set_index(ddf.index, method='tasks'))
 
+def test_set_partition_tasks_names():
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                       index=np.random.random(100))
+
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    divisions = [0, .25, .50, .75, 1.0]
+
+    assert (set(ddf.set_index('x', method='tasks').dask) ==
+            set(ddf.set_index('x', method='tasks').dask))
+    assert (set(ddf.set_index('x', method='tasks').dask) !=
+            set(ddf.set_index('y', method='tasks').dask))
+    assert (set(ddf.set_index('x', max_branch=4, method='tasks').dask) !=
+            set(ddf.set_index('x', max_branch=3, method='tasks').dask))
+    assert (set(ddf.set_index('x', drop=True, method='tasks').dask) !=
+            set(ddf.set_index('x', drop=False, method='tasks').dask))
+
 
 def test_set_partition_tasks():
     df = dd.demo.make_timeseries('2000', '2004',
