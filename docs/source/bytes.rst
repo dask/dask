@@ -16,12 +16,13 @@ users.*
 
 These functions are extensible in their output formats (bytes, file objects),
 their input locations (file system, S3, HDFS), line delimiters, and compression
+formats.
 
 These functions provide data as ``dask.delayed`` objects.  These objects either
 point to blocks of bytes (``read_bytes``) or open file objects (``open_files``,
-``open_text_files``).  They can handle different compressions by prepending
-protocols like ``s3://`` or ``hdfs://``.  They handle compressions listed in the
-``dask.bytes.compression`` module.
+``open_text_files``).  They can handle different compression formats by
+prepending protocols like ``s3://`` or ``hdfs://``.  They handle compression
+formats listed in the ``dask.bytes.compression`` module.
 
 These functions are not used for all data sources.  Some data sources like HDF5
 are quite particular and receive custom treatment.
@@ -33,9 +34,9 @@ Delimiters
 The ``read_bytes`` function takes a path (or globstring of paths) and produces
 a sample of the first file and a list of delayed objects for each of the other
 files.  If passed a delimiter such as ``delimiter=b'\n'`` it will ensure that
-the blocks of bytes start and end on this delimiter.  This allows other
-functions, like ``pd.read_csv`` to operate on these futures with expected
-behavior.
+the blocks of bytes start directly after a delimiter and end directly before a
+delimiter.  This allows other functions, like ``pd.read_csv``, to operate on
+these delayed values with expected behavior.
 
 These delimiters are useful both for typical line-based formats (log files,
 CSV, JSON) as well as other delimited formats like Avro, which may separate
