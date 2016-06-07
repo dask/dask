@@ -217,24 +217,6 @@ def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
     return result
 
 
-def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
-               executor=None, hdfs=None, lazy=True, collection=True):
-    warn("hdfs.read_text moved to dask.bag.read_text('hdfs://...')")
-    import dask.bag as db
-    result = db.read_text('hdfs://' + path, encoding=encoding, errors=errors,
-            linedelimiter=lineterminator, hdfs=hdfs, collection=collection)
-
-    executor = default_executor(executor)
-    ensure_default_get(executor)
-    if not lazy:
-        if collection:
-            result = executor.persist(result)
-        else:
-            result = executor.compute(result)
-
-    return result
-
-
 def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
         **kwargs):
     warn("hdfs.read_csv moved to dask.dataframe.read_csv('hdfs://...')")
