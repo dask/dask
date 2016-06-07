@@ -299,7 +299,7 @@ class _GroupBy(object):
             If list is given, the result is a DataFrame which columns is
             specified list. Otherwise, the result is a Series which name is
             given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beggining of data. This
+            tries to infer the result type using its beginning of data. This
             inference may take some time and lead to unexpected result
 
         Returns

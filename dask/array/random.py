@@ -20,8 +20,8 @@ class RandomState(object):
     """
     Mersenne Twister pseudo-random number generator
 
-    This object contains state to deterministicly generate pseudo-random
-    numbers from a variety of probabilitiy distributions.  It is identical to
+    This object contains state to deterministically generate pseudo-random
+    numbers from a variety of probability distributions.  It is identical to
     ``np.random.RandomState`` except that all functions also take a ``chunks=``
     keyword argument.
 
