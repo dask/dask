@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+import datetime
 import sys
 
 import numpy as np
@@ -99,6 +100,8 @@ _simple_fake_mapping = {
     'S': b'foo',   # bytestring
     'U': u'foo',   # unicode string
     'V': np.void0,   # void
+    'M': np.datetime64('1970-01-01'),
+    'm': np.timedelta64(1, 'D'),
 }
 
 
@@ -106,19 +109,29 @@ def nonempty_sample_df(empty):
     """ Create a dataframe from the given empty dataframe that contains one
     row of fake data (generated from the empty dataframe's dtypes).
     """
-    fake_values = {}
+    nonempty = empty.copy()
     for key, dtype in empty.dtypes.iteritems():
         if dtype.kind in _simple_fake_mapping:
-            fake = _simple_fake_mapping[dtype.kind]
-        elif dtype.name == 'category':
-            fake = empty[key].cat.categories[0]
+            entry = _simple_fake_mapping[dtype.kind]
+        elif pd.core.common.is_datetime64tz_dtype(dtype):
+            entry = pd.to_datetime(datetime.datetime.now(), utc=True)
+        elif pd.core.common.is_categorical_dtype(dtype):
+            accessor = empty[key].cat
+            example = accessor.categories[0]
+            cat = pd.Categorical([example], categories=accessor.categories,
+                                 ordered=accessor.ordered)
+            entry = pd.Series(cat, name=key)
         elif dtype.name == 'object':
-            fake = 'foo'
+            entry = 'foo'
+        elif pd.core.common.is_extension_dtype(dtype):
+            raise TypeError("Can't handle extension dtype: {}".format(dtype))
         else:
             raise TypeError("Can't handle dtype: {}".format(dtype))
-        fake_values[key] = fake
 
-    nonempty = empty.append(fake_values, ignore_index=True)
+        if not isinstance(entry, pd.Series):
+            entry = pd.Series([entry], name=key)
+        nonempty[key] = entry
+
     return nonempty
 
 
