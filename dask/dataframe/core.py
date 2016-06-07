@@ -712,7 +712,7 @@ class _Frame(Base):
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         axis : {0, 1, 'index', 'columns'} (default 0)
-            0 or 'index' for row-wise, 1 or 'columns' for column-wis
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise
         """
         axis = self._validate_axis(axis)
         name = 'quantiles-concat--' + tokenize(self, q, axis)
