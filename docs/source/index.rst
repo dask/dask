@@ -200,8 +200,8 @@ help make debugging and profiling graph execution easier.
 * :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
+* :doc:`bytes`
 * :doc:`cite`
-* :doc:`glossary`
 
 .. toctree::
    :maxdepth: 1
@@ -212,8 +212,8 @@ help make debugging and profiling graph execution easier.
    faq.rst
    spark.rst
    caching.rst
+   bytes.rst
    cite.rst
-   glossary.rst
 
 **Contact**
 
