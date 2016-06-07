@@ -1,10 +1,12 @@
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 import numpy as np
 
 import dask.dataframe as dd
 from dask.dataframe.shuffle import shuffle, hash_series, partitioning_index
 from dask.async import get_sync
+from dask.dataframe.utils import eq
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
                               index=[0, 1, 3]),
@@ -92,3 +94,78 @@ def test_partitioning_index():
     res = partitioning_index(df2.index, 4)
     exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
     np.testing.assert_equal(res, exp)
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 7, 23])
+def test_set_partition_tasks(npartitions):
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                       index=np.random.random(100))
+
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+
+    divisions = [0, .25, .50, .75, 1.0]
+
+    eq(df.set_index('x'),
+       ddf.set_index('x', method='tasks'))
+
+    eq(df.set_index('y'),
+       ddf.set_index('y', method='tasks'))
+
+    eq(df.set_index(df.x),
+       ddf.set_index(ddf.x, method='tasks'))
+
+    eq(df.set_index(df.x + df.y),
+       ddf.set_index(ddf.x + ddf.y, method='tasks'))
+
+    eq(df.set_index(df.x + 1),
+       ddf.set_index(ddf.x + 1, method='tasks'))
+
+    # eq(df.set_index(df.index),
+    #    ddf.set_index(ddf.index, method='tasks'))
+
+def test_set_partition_tasks_names():
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                       index=np.random.random(100))
+
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    divisions = [0, .25, .50, .75, 1.0]
+
+    assert (set(ddf.set_index('x', method='tasks').dask) ==
+            set(ddf.set_index('x', method='tasks').dask))
+    assert (set(ddf.set_index('x', method='tasks').dask) !=
+            set(ddf.set_index('y', method='tasks').dask))
+    assert (set(ddf.set_index('x', max_branch=4, method='tasks').dask) !=
+            set(ddf.set_index('x', max_branch=3, method='tasks').dask))
+    assert (set(ddf.set_index('x', drop=True, method='tasks').dask) !=
+            set(ddf.set_index('x', drop=False, method='tasks').dask))
+
+
+def test_set_partition_tasks():
+    df = dd.demo.make_timeseries('2000', '2004',
+            {'value': float, 'name': str, 'id': int},
+            freq='2H', partition_freq='1M', seed=1)
+
+    df2 = df.set_index('name', method='tasks')
+    df2.value.sum().compute(get=get_sync)
+
+
+def test_shuffle_pre_partition():
+    from dask.dataframe.shuffle import shuffle_pre_partition
+    df = pd.DataFrame({'x': np.random.random(10),
+                       'y': np.random.random(10)},
+                       index=np.random.random(10))
+    divisions = df.x.quantile([0, 0.2, 0.4, 0.6, 0.8, 1.0]).tolist()
+
+    for ind in ['x', df.x]:
+        result = shuffle_pre_partition(df, ind, divisions, True)
+        assert list(result.columns)[:2] == ['x', 'y']
+        assert result.index.name == 'partitions'
+        for x, part in result.reset_index()[['x', 'partitions']].values.tolist():
+            part = int(part)
+            if x == divisions[-1]:
+                assert part == len(divisions) - 2
+            else:
+                assert divisions[part] <= x < divisions[part + 1]

@@ -4,7 +4,9 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 import itertools
 import math
+from operator import getitem
 import os
+import types
 import uuid
 from warnings import warn
 from distutils.version import LooseVersion
@@ -29,11 +31,12 @@ except:
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, unicode, urlopen
+from ..context import _globals
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (infer_compression, open, system_encoding,
-                     takes_multiple_arguments, funcname)
+                     takes_multiple_arguments, funcname, digit, insert)
 
 no_default = '__no__default__'
 
@@ -878,53 +881,56 @@ class Bag(Base):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None, blocksize=2**20):
+    def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
+                max_branch=None):
         """ Group collection by key function
 
-        Note that this requires full dataset read, serialization and shuffle.
+        This requires a full dataset read, serialization and shuffle.
         This is expensive.  If possible you should use ``foldby``.
 
+        Parameters
+        ----------
+        grouper: function
+            Function on which to group elements
+        method: str
+            Either 'disk' for an on-disk shuffle or 'tasks' to use the task
+            scheduling framework.  Use 'disk' if you are on a single machine
+            and 'tasks' if you are on a distributed cluster.
+        npartitions: int
+            If using the disk-based shuffle, the number of output partitions
+        blocksize: int
+            If using the disk-based shuffle, the size of shuffle blocks
+        max_branch: int
+            If using the task-based shuffle, the amount of splitting each
+            partition undergoes.  Increase this for fewer copies but more
+            scheduler overhead.
+
+        Examples
+        --------
         >>> b = from_sequence(range(10))
-        >>> dict(b.groupby(lambda x: x % 2 == 0))  # doctest: +SKIP
+        >>> iseven = lambda x: x % 2 == 0
+        >>> dict(b.groupby(iseven))  # doctest: +SKIP
         {True: [0, 2, 4, 6, 8], False: [1, 3, 5, 7, 9]}
 
         See Also
         --------
         Bag.foldby
         """
-        if npartitions is None:
-            npartitions = self.npartitions
-        token = tokenize(self, grouper, npartitions, blocksize)
-
-        import partd
-        p = ('partd-' + token,)
-        try:
-            dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
-        except AttributeError:
-            dsk1 = {p: (partd.Python, partd.File())}
-
-        # Partition data on disk
-        name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
-        dsk2 = dict(((name, i), (partition, grouper, (self.name, i),
-                                 npartitions, p, blocksize))
-                    for i in range(self.npartitions))
-
-        # Barrier
-        barrier_token = 'groupby-barrier-' + token
-
-        def barrier(args):
-            return 0
-
-        dsk3 = {barrier_token: (barrier, list(dsk2))}
-
-        # Collect groups
-        name = 'groupby-collect-' + token
-        dsk4 = dict(((name, i),
-                     (collect, grouper, i, p, barrier_token))
-                    for i in range(npartitions))
-
-        return type(self)(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name,
-                          npartitions)
+        if method is None:
+            get = _globals.get('get')
+            if (isinstance(get, types.MethodType) and
+                'distributed' in get.__func__.__module__):
+                method = 'tasks'
+            else:
+                method = 'disk'
+        if method == 'disk':
+            return groupby_disk(self, grouper, npartitions=npartitions,
+                                blocksize=blocksize)
+        elif method == 'tasks':
+            return groupby_tasks(self, grouper, max_branch=max_branch)
+        else:
+            raise NotImplementedError(
+                    "Shuffle method must be 'disk' or 'tasks'")
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -1447,3 +1453,98 @@ def _reduce(binop, sequence, initial=no_default):
         return reduce(binop, sequence, initial)
     else:
         return reduce(binop, sequence)
+
+
+def make_group(k, stage):
+    def h(x):
+        return x[0] // k ** stage % k
+    return h
+
+
+def groupby_tasks(b, grouper, hash=hash, max_branch=32):
+    max_branch = max_branch or 32
+    n = b.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    groups = []
+    splits = []
+    joins = []
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages))
+              for i in range(n)]
+    sinputs = set(inputs)
+
+    b2 = b.map(lambda x: (hash(grouper(x)), x))
+
+    token = tokenize(b, grouper, hash, max_branch)
+
+    start = dict((('shuffle-join-' + token, 0, inp), (b2.name, i))
+                 for i, inp in enumerate(inputs))
+
+    for stage in range(1, stages + 1):
+        group = dict((('shuffle-group-' + token, stage, inp),
+                      (groupby,
+                        (make_group, k, stage - 1),
+                        ('shuffle-join-' + token, stage - 1, inp)))
+                 for inp in inputs)
+        split = dict((('shuffle-split-' + token, stage, i, inp),
+                      (dict.get, ('shuffle-group-' + token, stage, inp), i, {}))
+                     for i in range(k)
+                     for inp in inputs)
+
+        join = dict((('shuffle-join-' + token, stage, inp),
+                     (list, (toolz.concat,
+                        [('shuffle-split-' + token, stage, inp[stage-1],
+                          insert(inp, stage - 1, j)) for j in range(k)
+                          if insert(inp, stage - 1, j) in sinputs])))
+                     for inp in inputs)
+        groups.append(group)
+        splits.append(split)
+        joins.append(join)
+
+    end = dict((('shuffle-' + token, i), (list, (pluck, 1, j)))
+               for i, j in enumerate(join))
+
+    dsk = merge(b2.dask, start, end, *(groups + splits + joins))
+    return type(b)(dsk, 'shuffle-' + token, n)
+
+
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
+    if npartitions is None:
+        npartitions = b.npartitions
+    token = tokenize(b, grouper, npartitions, blocksize)
+
+    import partd
+    p = ('partd-' + token,)
+    try:
+        dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+    except AttributeError:
+        dsk1 = {p: (partd.Python, partd.File())}
+
+    # Partition data on disk
+    name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
+    dsk2 = dict(((name, i), (partition, grouper, (b.name, i),
+                             npartitions, p, blocksize))
+                for i in range(b.npartitions))
+
+    # Barrier
+    barrier_token = 'groupby-barrier-' + token
+
+    def barrier(args):
+        return 0
+
+    dsk3 = {barrier_token: (barrier, list(dsk2))}
+
+    # Collect groups
+    name = 'groupby-collect-' + token
+    dsk4 = dict(((name, i),
+                 (collect, grouper, i, p, barrier_token))
+                for i in range(npartitions))
+
+    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name,
+                         npartitions)

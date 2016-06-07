@@ -2275,7 +2275,8 @@ def quantile(df, q):
     # currently, only Series has quantile method
     if isinstance(q, (list, tuple, np.ndarray)):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
-        merge_type = lambda v: pd.Series(v, index=q, name=df.name)
+        df_name = df.name
+        merge_type = lambda v: pd.Series(v, index=q, name=df_name)
         return_type = df._constructor
         if issubclass(return_type, Index):
             return_type = Series
