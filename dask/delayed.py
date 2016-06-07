@@ -123,7 +123,8 @@ def delayed(obj, name=None, pure=False):
     obj : object
         The function or object to wrap
     name : string or hashable, optional
-        The key to use in the underlying graph. Defaults to hashing content.
+        The key to use in the underlying graph for the wrapped object. Defaults
+        to hashing content.
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
@@ -176,13 +177,37 @@ def delayed(obj, name=None, pure=False):
     >>> out1.key == out2.key
     True
 
+    The key name of the result of calling a delayed object is determined by
+    hashing the arguments by default. To explicitly set the name, you can use
+    the ``dask_key_name`` keyword when calling the function:
+
+    >>> add(1, 2)    # doctest: +SKIP
+    Delayed('add-3dce7c56edd1ac2614add714086e950f')
+    >>> add(1, 2, dask_key_name='three')
+    Delayed('three')
+
+    Note that objects with the same key name are assumed to have the same
+    result. If you set the names explicitly you should make sure your key names
+    are different for different results.
+
+    >>> add(1, 2, dask_key_name='three')
+    >>> add(2, 1, dask_key_name='three')
+    >>> add(2, 2, dask_key_name='four')
+
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
     >>> a = delayed([1, 2, 3])
-    >>> type(a) == Delayed
+    >>> isinstance(a, Delayed)
     True
     >>> a.compute()
     [1, 2, 3]
+
+    The key name of a delayed object is hashed by default. To explicitly set
+    the name, you can use the ``name`` keyword:
+
+    >>> a = delayed([1, 2, 3], name='mylist')
+    >>> a
+    Delayed('mylist')
 
     Delayed results act as a proxy to the underlying object. Many operators
     are supported:
@@ -209,6 +234,13 @@ def delayed(obj, name=None, pure=False):
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True
+
+    As with function calls, method calls also support the ``dask_key_name``
+    keyword:
+
+    >>> a.count(2, dask_key_name="count_2")
+    Delayed("count_2")
+
     """
     if isinstance(obj, Delayed):
         return obj
@@ -315,7 +347,11 @@ class Delayed(base.Base):
 
     def __call__(self, *args, **kwargs):
         pure = kwargs.pop('pure', False)
-        return delayed(apply, pure=pure)(self, args, kwargs)
+        name = kwargs.pop('dask_key_name', None)
+        func = delayed(apply, pure=pure)
+        if name is not None:
+            return func(self, args, kwargs, dask_key_name=name)
+        return func(self, args, kwargs)
 
     def __bool__(self):
         raise TypeError("Truth of Delayed objects is not supported")
