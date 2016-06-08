@@ -23,7 +23,7 @@ running.  It can update these in constant time relative to the number of total
 and available tasks.  These indexed structures make the dask async scheduler
 scalable to very many tasks on a single machine.
 
-.. image:: images/async-embarassing.gif
+.. image:: images/async-embarrassing.gif
    :width: 50 %
    :align: right
    :alt: Embarassingly parallel dask flow

@@ -253,7 +253,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
         ``top(func, 'z', 'i', 'x', 'i', 'y', 'i')``
 
-    yield an embarassingly parallel communication pattern and is read as
+    yield an embarrassingly parallel communication pattern and is read as
 
         $$ z_i = func(x_i, y_i) $$
 
@@ -269,7 +269,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Examples
     --------
 
-    Simple embarassing map operation
+    Simple embarrassing map operation
 
     >>> inc = lambda x: x + 1
     >>> top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)})  # doctest: +SKIP
@@ -1651,7 +1651,7 @@ def atop(func, out_ind, *args, **kwargs):
     Examples
     --------
 
-    2D embarassingly parallel operation from two arrays, x, and y.
+    2D embarrassingly parallel operation from two arrays, x, and y.
 
     >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij')  # z = x + y  # doctest: +SKIP
 

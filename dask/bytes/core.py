@@ -26,7 +26,7 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
     like ``'2015-*-*.csv'``.
 
-    The path may be preceeded by a protocol, like ``s3://`` or ``hdfs://`` if
+    The path may be preceded by a protocol, like ``s3://`` or ``hdfs://`` if
     those libraries are installed.
 
     This cleanly breaks data by a delimiter if given, so that block boundaries
