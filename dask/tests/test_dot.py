@@ -138,9 +138,9 @@ def test_dot_graph_defaults():
 
 def test_filenames_and_formats():
     # Test with a variety of user provided args
-    filenames = ['mydaskpdf', 'mydask.pdf', 'mydask.pdf', 'mydaskpdf']
-    formats = ['svg', None, 'svg', None]
-    targets = ['mydaskpdf.svg', 'mydask.pdf', 'mydask.pdf.svg', 'mydaskpdf.png']
+    filenames = ['mydaskpdf', 'mydask.pdf', 'mydask.pdf', 'mydaskpdf', 'mydask.pdf.svg']
+    formats = ['svg', None, 'svg', None, None]
+    targets = ['mydaskpdf.svg', 'mydask.pdf', 'mydask.pdf.svg', 'mydaskpdf.png', 'mydask.pdf.svg']
 
     result_types = {
         'png': Image,

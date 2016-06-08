@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import re
+import os
 from functools import partial
 
 from graphviz import Digraph
@@ -211,8 +212,8 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
 
     fmts = ['.png', '.pdf', '.dot', '.svg', '.jpeg', '.jpg']
     if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
-        format = filename.lower().split('.')[-1]
-        filename = filename.rsplit('.')[0]
+        filename, format = os.path.splitext(filename)
+        format = format[1:].lower()
 
     if format is None:
         format = 'png'
