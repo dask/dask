@@ -19,9 +19,10 @@ import io
 import shutil
 import os
 import partd
-from tempfile import mkdtemp
 
 from collections import Iterator
+
+from dask.utils import tmpdir
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -632,11 +633,10 @@ def test_to_dataframe():
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
-    dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-        assert c.npartitions == b.npartitions
-        try:
+        with tmpdir() as dir:
+            c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
+            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
@@ -646,18 +646,14 @@ def test_to_textfiles():
                 text = text.decode()
             assert 'xyz' in text
             f.close()
-        finally:
-            if os.path.exists(dir):
-                shutil.rmtree(dir)
 
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
-    dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-        assert c.npartitions == b.npartitions
-        try:
+        with tmpdir() as dir:
+            c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
+            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
@@ -667,9 +663,6 @@ def test_to_textfiles_encoding():
                 text = text.decode('gb18030')
             assert u'天气' in text
             f.close()
-        finally:
-            if os.path.exists(dir):
-                shutil.rmtree(dir)
 
 
 def test_to_textfiles_inputs():
