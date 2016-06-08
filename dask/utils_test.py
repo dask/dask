@@ -75,6 +75,18 @@ class GetFunctionTestCase(unittest.TestCase):
         assert self.get(d, ['x', 'y']) == (1, 2)
         assert self.get(d, 'z') == 3
 
+    def test_get_with_list_top_level(self):
+        d = {'a': [1, 2, 3],
+             'b': 'a',
+             'c': [1, (inc, 1)],
+             'd': [(sum, 'a')],
+             'e': ['a', 'b']}
+        assert self.get(d, 'a') == [1, 2, 3]
+        assert self.get(d, 'b') == [1, 2, 3]
+        assert self.get(d, 'c') == [1, 2]
+        assert self.get(d, 'd') == [6]
+        assert self.get(d, 'e') == [[1, 2, 3], [1, 2, 3]]
+
     def test_get_with_nested_list(self):
         d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
 

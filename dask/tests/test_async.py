@@ -54,6 +54,18 @@ def test_start_state_with_independent_but_runnable_tasks():
     assert start_state_from_dask({'x': (inc, 1)})['ready'] == ['x']
 
 
+def test_start_state_with_tasks_no_deps():
+    dsk = {'a': [1, (inc, 2)],
+           'b': [1, 2, 3, 4],
+           'c': (inc, 3)}
+    state = start_state_from_dask(dsk)
+    assert list(state['cache'].keys()) == ['b']
+    assert 'a' in state['ready'] and 'c' in state['ready']
+    deps = dict((k, set()) for k in 'abc')
+    assert state['dependencies'] == deps
+    assert state['dependents'] == deps
+
+
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     sortkey = order(dsk).get
@@ -84,6 +96,20 @@ def test_finish_task():
           'waiting': {},
           'waiting_data': {'y': set(['w']),
                            'z': set(['w'])}}
+
+
+def test_has_tasks():
+    dsk = {'a': [1, 2, 3],
+           'b': 'a',
+           'c': [1, (inc, 1)],
+           'd': [(sum, 'a')],
+           'e': ['a', 'b']}
+    assert not has_tasks(dsk, dsk['a'])
+    assert has_tasks(dsk, dsk['b'])
+    assert has_tasks(dsk, dsk['c'])
+    assert has_tasks(dsk, dsk['d'])
+    assert has_tasks(dsk, dsk['e'])
+
 
 class TestGetAsync(GetFunctionTestCase):
     get = staticmethod(get_sync)
