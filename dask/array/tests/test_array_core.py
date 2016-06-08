@@ -938,10 +938,7 @@ def test_store_locks():
 
 
 def test_to_hdf5():
-    try:
-        import h5py
-    except ImportError:
-        return
+    h5py = pytest.importorskip('h5py')
     x = da.ones((4, 4), chunks=(2, 2))
     y = da.ones(4, chunks=2, dtype='i4')
 
@@ -1295,6 +1292,17 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
+def test_from_array_slicing_results_in_ndarray():
+    x = np.matrix(np.arange(100).reshape((10, 10)))
+    dx = da.from_array(x, chunks=(5, 5))
+    s1 = dx[0:5]
+    assert type(dx[0:5].compute()) == np.ndarray
+    s2 = s1[0:3]
+    assert type(s2.compute()) == np.ndarray
+    s3 = s2[:, 0]
+    assert type(s3.compute()) == np.ndarray
+
+
 def test_from_func():
     x = np.arange(10)
     f = lambda n: n * x
@@ -1549,10 +1557,7 @@ def test_long_slice():
 
 
 def test_h5py_newaxis():
-    try:
-        import h5py
-    except ImportError:
-        return
+    h5py = pytest.importorskip('h5py')
 
     with tmpfile('h5') as fn:
         with h5py.File(fn) as f:

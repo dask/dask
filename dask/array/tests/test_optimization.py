@@ -16,14 +16,14 @@ def test_fuse_getitem():
 
              ((getitem, (getarray, 'x', (slice(1000, 2000), slice(100, 200))),
                         (slice(15, 20), slice(50, 60))),
-              (getitem, 'x', (slice(1015, 1020), slice(150, 160)))),
+              (getarray, 'x', (slice(1015, 1020), slice(150, 160)))),
 
              ((getarray, (getarray, 'x', slice(1000, 2000)), 10),
               (getarray, 'x', 1010)),
 
              ((getitem, (getarray, 'x', (slice(1000, 2000), 10)),
                         (slice(15, 20),)),
-              (getitem, 'x', (slice(1015, 1020), 10))),
+              (getarray, 'x', (slice(1015, 1020), 10))),
 
              ((getarray, (getarray, 'x', (10, slice(1000, 2000))),
                         (slice(15, 20),)),
@@ -73,9 +73,9 @@ def test_optimize_slicing():
     assert result == expected
 
     # protect output keys
-    expected = {'c': (range, 10),
+    expected = {'c': (getarray, (range, 10), (slice(0, None, None),)),
                 'd': (getarray, 'c', (slice(0, 5, None),)),
-                'e': 'd'}
+                'e': (getarray, 'd', (slice(None, None, None),))}
     result = optimize_slices(fuse(dsk, ['c', 'd', 'e'])[0])
 
     assert result == expected

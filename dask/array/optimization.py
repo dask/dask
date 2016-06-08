@@ -3,12 +3,10 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 
 import numpy as np
-from toolz import valmap, partial
 
 from .core import getarray
 from ..core import flatten
-from ..optimize import cull, fuse, dealias, inline_functions
-from ..rewrite import RuleSet, RewriteRule
+from ..optimize import cull, fuse, inline_functions
 
 
 def optimize(dsk, keys, **kwargs):
@@ -20,12 +18,12 @@ def optimize(dsk, keys, **kwargs):
     """
     keys = list(flatten(keys))
     fast_functions = kwargs.get('fast_functions',
-                             set([getarray, np.transpose]))
+                                set([getarray, np.transpose]))
     dsk2, dependencies = cull(dsk, keys)
     dsk4, dependencies = fuse(dsk2, keys, dependencies)
     dsk5 = optimize_slices(dsk4)
     dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions,
-            dependencies=dependencies)
+                            dependencies=dependencies)
     return dsk6
 
 
@@ -38,34 +36,39 @@ def optimize_slices(dsk):
     See also:
         fuse_slice_dict
     """
+    getters = (getarray, getitem)
     dsk = dsk.copy()
     for k, v in dsk.items():
         if type(v) is tuple:
-            if v[0] is getitem or v[0] is getarray:
+            if v[0] in getters:
                 try:
                     func, a, a_index = v
+                    use_getarray = func is getarray
                 except ValueError:  # has four elements, includes a lock
                     continue
-                while type(a) is tuple and (a[0] is getitem or a[0] is getarray):
+                while type(a) is tuple and a[0] in getters:
                     try:
-                        _, b, b_index = a
+                        f2, b, b_index = a
+                        use_getarray |= f2 is getarray
                     except ValueError:  # has four elements, includes a lock
                         break
                     if (type(a_index) is tuple) != (type(b_index) is tuple):
                         break
                     if ((type(a_index) is tuple) and
-                        (len(a_index) != len(b_index)) and
-                        any(i is None for i in b_index + a_index)):
+                            (len(a_index) != len(b_index)) and
+                            any(i is None for i in b_index + a_index)):
                         break
                     try:
                         c_index = fuse_slice(b_index, a_index)
                     except NotImplementedError:
                         break
                     (a, a_index) = (b, c_index)
-                if (type(a_index) is slice and
-                    not a_index.start and
-                    a_index.stop is None and
-                    a_index.step is None):
+                if use_getarray:
+                    dsk[k] = (getarray, a, a_index)
+                elif (type(a_index) is slice and
+                      not a_index.start and
+                      a_index.stop is None and
+                      a_index.step is None):
                     dsk[k] = a
                 elif type(a_index) is tuple and all(type(s) is slice and
                                                     not s.start and
@@ -74,7 +77,7 @@ def optimize_slices(dsk):
                                                     for s in a_index):
                     dsk[k] = a
                 else:
-                    dsk[k] = (func, a, a_index)
+                    dsk[k] = (getitem, a, a_index)
     return dsk
 
 
@@ -167,7 +170,7 @@ def fuse_slice(a, b):
     if isinstance(a, tuple) and isinstance(b, tuple):
 
         if (any(isinstance(item, list) for item in a) and
-            any(isinstance(item, list) for item in b)):
+                any(isinstance(item, list) for item in b)):
             raise NotImplementedError("Can't handle multiple list indexing")
 
         j = 0
