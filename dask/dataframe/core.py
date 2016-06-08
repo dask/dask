@@ -589,7 +589,7 @@ class _Frame(Base):
         axis: int, default 0
             Provide the axis to apply the function. (Identical to pandas.)
 
-        The center, freq, and axis arguments are not supported.
+        The center argument and deprecated freq argument are not supported.
         """
         from dask.dataframe.rolling import Rolling
 
