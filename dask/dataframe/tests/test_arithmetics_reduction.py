@@ -612,6 +612,7 @@ def test_reductions():
         assert eq(dds.var(skipna=False, ddof=0), pds.var(skipna=False, ddof=0))
         assert eq(dds.mean(skipna=False), pds.mean(skipna=False))
 
+
     assert_dask_graph(ddf1.b.sum(), 'series-sum')
     assert_dask_graph(ddf1.b.min(), 'series-min')
     assert_dask_graph(ddf1.b.max(), 'series-max')
@@ -623,6 +624,9 @@ def test_reductions():
     assert_dask_graph(ddf1.b.mean(), 'series-mean')
     # nunique is performed using drop-duplicates
     assert_dask_graph(ddf1.b.nunique(), 'drop-duplicates')
+
+    eq(ddf1.index.min(), pdf1.index.min())
+    eq(ddf1.index.max(), pdf1.index.max())
 
 
 def test_reduction_series_invalid_axis():

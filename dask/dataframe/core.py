@@ -1321,7 +1321,7 @@ class Index(Series):
 
     @derived_from(pd.Index)
     def min(self):
-        return self._aca_agg(token='min', func=_max)
+        return self._aca_agg(token='min', func=_min)
 
     def count(self):
         f = lambda x: pd.notnull(x).sum()
