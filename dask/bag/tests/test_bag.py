@@ -889,3 +889,10 @@ def test_groupby_tasks_names():
             set(b.groupby(func, max_branch=2, method='tasks').dask))
     assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
             set(b.groupby(func2, max_branch=4, method='tasks').dask))
+
+
+def test_to_textfiles_empty_partitions():
+    with tmpdir() as d:
+        b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
+        b.to_textfiles(os.path.join(d, '*.txt'))
+        assert len(os.listdir(d)) == 5
