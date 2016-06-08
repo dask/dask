@@ -146,6 +146,14 @@ def test_literates():
     assert delayed(lit)['a'].compute() == 1
 
 
+def test_literates_keys():
+    a = delayed(1)
+    b = a + 1
+    lit = (a, b, 3)
+    assert delayed(lit).key != delayed(lit).key
+    assert delayed(lit, pure=True).key == delayed(lit, pure=True).key
+
+
 def test_lists_are_concrete():
     a = delayed(1)
     b = delayed(2)
@@ -186,8 +194,13 @@ def test_kwargs():
     ten = dmysum(1, 2, c=[delayed(3), 0], four=dmysum(2, 2))
     assert ten.compute() == 10
     dmysum = delayed(mysum, pure=True)
-    ten = dmysum(1, 2, c=[delayed(3), 0], four=dmysum(2, 2))
+    c = [delayed(3), 0]
+    ten = dmysum(1, 2, c=c, four=dmysum(2, 2))
     assert ten.compute() == 10
+    assert dmysum(1, 2, c=c, four=dmysum(2, 2)).key == ten.key
+    assert dmysum(1, 2, c=c, four=dmysum(2, 3)).key != ten.key
+    assert dmysum(1, 2, c=c, four=4).key != ten.key
+    assert dmysum(1, 2, c=c, four=4).key != dmysum(2, 2, c=c, four=4).key
 
 
 def test_array_delayed():

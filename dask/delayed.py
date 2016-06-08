@@ -106,7 +106,7 @@ def tokenize(*args, **kwargs):
         unique identifier is always used.
     """
     if kwargs.pop('pure', False):
-        return base.tokenize(*args)
+        return base.tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
 
@@ -250,7 +250,8 @@ def delayed(obj, name=None, pure=False):
     if not dasks:
         return DelayedLeaf(obj, pure=pure, name=name)
     else:
-        name = name or '%s-%s' % (type(obj).__name__, tokenize(task))
+        if not name:
+            name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
         dasks.append({name: task})
         return Delayed(name, dasks)
 
