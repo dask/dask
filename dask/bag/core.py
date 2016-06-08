@@ -1094,7 +1094,11 @@ def write(data, filename, compression, encoding):
 
     # Check presence of endlines
     data = iter(data)
-    firstline = next(data)
+    try:
+        firstline = next(data)
+    except StopIteration:
+        f.close()
+        return
     if not (firstline.endswith(os.linesep) or firstline.endswith('\n')):
         sep = os.linesep if firstline.endswith(os.linesep) else '\n'
         firstline = firstline + sep
