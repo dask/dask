@@ -572,7 +572,7 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
-    def rolling(self, window, min_periods=None, win_type=None):
+    def rolling(self, window, min_periods=None, win_type=None, axis=0):
         """Provides rolling transformations.
 
         Parameters
@@ -586,6 +586,8 @@ class _Frame(Base):
             a value (otherwise result is NA).
         win_type: string, default None
             Provide a window type. (Identical to pandas.)
+        axis: int, default 0
+            Provide the axis to apply the function. (Identical to pandas.)
 
         The center, freq, and axis arguments are not supported.
         """
@@ -604,6 +606,7 @@ class _Frame(Base):
 
         return Rolling(self, {'window': window,
                               'min_periods': min_periods,
+                              'axis': axis,
                               'win_type': win_type})
 
     @derived_from(pd.DataFrame)

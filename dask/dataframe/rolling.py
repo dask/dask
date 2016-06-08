@@ -96,6 +96,9 @@ class Rolling(object):
         self.obj = obj # dataframe or series
         self.rolling_kwargs = kwargs
 
+        # Allow pandas to raise if appropriate
+        obj._pd.rolling(**kwargs)
+
     def _call_method(self, method_name, *args, **kwargs):
         args = list(args) # make sure dask does not mistake this for a task
 
@@ -108,11 +111,19 @@ class Rolling(object):
         dsk = {(new_name, 0): (
             call_pandas_rolling_method_single, (old_name, 0),
             self.rolling_kwargs, method_name, args, kwargs)}
-        for i in range(1, self.obj.npartitions + 1):
-            dsk[new_name, i] = (
-                call_pandas_rolling_method_with_neighbor,
-                (old_name, i-1), (old_name, i),
-                self.rolling_kwargs, method_name, args, kwargs)
+        if self.rolling_kwargs['axis'] in [0, 'rows']:
+            # roll in the partition direction (will need to access neighbor)
+            for i in range(1, self.obj.npartitions + 1):
+                dsk[new_name, i] = (
+                    call_pandas_rolling_method_with_neighbor,
+                    (old_name, i-1), (old_name, i),
+                    self.rolling_kwargs, method_name, args, kwargs)
+        else:
+            # no communication needed between partitions for columns
+            for i in range(1, self.obj.npartitions + 1):
+                dsk[new_name, i] = (
+                    call_pandas_rolling_method_single, (old_name, i),
+                    self.rolling_kwargs, method_name, args, kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata
         pd_rolling = self.obj._pd.rolling(**self.rolling_kwargs)

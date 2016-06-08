@@ -41,7 +41,7 @@ def rolling_functions_tests(p, d):
     # Test with kwargs
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
 
-def rolling_tests(p, d):
+def basic_rolling_tests(p, d): # Works for series or df
     # New rolling API
     eq(p.rolling(3).count(), d.rolling(3).count())
     eq(p.rolling(3).sum(), d.rolling(3).sum())
@@ -77,7 +77,7 @@ def test_rolling_series():
             pd.Series(np.random.randn(25).cumsum()),
             pd.Series(np.random.randint(100, size=(25,)))]:
         dts = dd.from_pandas(ts, 3)
-        rolling_tests(ts, dts)
+        basic_rolling_tests(ts, dts)
 
 
 def test_rolling_funtions_dataframe():
@@ -93,7 +93,7 @@ def test_rolling_dataframe():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
-    rolling_tests(df, ddf)
+    basic_rolling_tests(df, ddf)
 
 
 def test_rolling_functions_raises():
@@ -115,6 +115,8 @@ def test_rolling_raises():
     assert raises(ValueError, lambda: ddf.rolling(-1))
     assert raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
     assert raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
+    assert raises(ValueError, lambda: ddf.rolling(3, axis=10))
+    assert raises(ValueError, lambda: ddf.rolling(3, axis='coulombs'))
     assert raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
 
 
@@ -131,3 +133,22 @@ def test_rolling_names():
                        'b': [4, 5, 6]})
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
+
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
+                    reason="rolling object not supported")
+def test_rolling_axis():
+    df = pd.DataFrame(np.random.randn(20, 16))
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
+    eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
+    eq(df.rolling(3, min_periods=1, axis=1).mean(),
+        ddf.rolling(3, min_periods=1, axis=1).mean())
+    eq(df.rolling(3, axis='columns').mean(),
+        ddf.rolling(3, axis='columns').mean())
+    eq(df.rolling(3, axis='rows').mean(),
+        ddf.rolling(3, axis='rows').mean())
+
+    s = df[3]
+    ds = ddf[3]
+    eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
