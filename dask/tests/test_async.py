@@ -7,7 +7,7 @@ import dask
 import pytest
 
 from dask.async import *
-from dask.utils_test import GetFunctionTestCase
+from dask.utils_test import GetFunctionTestMixin
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -103,15 +103,17 @@ def test_has_tasks():
            'b': 'a',
            'c': [1, (inc, 1)],
            'd': [(sum, 'a')],
-           'e': ['a', 'b']}
+           'e': ['a', 'b'],
+           'f': [['a', 'b'], 2, 3]}
     assert not has_tasks(dsk, dsk['a'])
     assert has_tasks(dsk, dsk['b'])
     assert has_tasks(dsk, dsk['c'])
     assert has_tasks(dsk, dsk['d'])
     assert has_tasks(dsk, dsk['e'])
+    assert has_tasks(dsk, dsk['f'])
 
 
-class TestGetAsync(GetFunctionTestCase):
+class TestGetAsync(GetFunctionTestMixin):
     get = staticmethod(get_sync)
 
     def test_get_sync_num_workers(self):

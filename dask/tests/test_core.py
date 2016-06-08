@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 from dask.utils import raises
-from dask.utils_test import GetFunctionTestCase
+from dask.utils_test import GetFunctionTestMixin
 from dask import core
 from dask.core import (istask, get_dependencies, flatten, subs,
                        preorder_traversal, quote, _deps)
@@ -41,21 +41,21 @@ def test_preorder_traversal():
     assert list(preorder_traversal(t)) == [add, sum, list, 1, 2, 3]
 
 
-class TestGet(GetFunctionTestCase):
+class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
 
 
-def test_GetFunctionTestCase_class():
-    class CustomTestGetFail(GetFunctionTestCase):
+def test_GetFunctionTestMixin_class():
+    class TestCustomGetFail(GetFunctionTestMixin):
         get = staticmethod(lambda x, y: 1)
 
-    custom_testget = CustomTestGetFail()
+    custom_testget = TestCustomGetFail()
     raises(AssertionError, custom_testget.test_get)
 
-    class CustomTestGetPass(GetFunctionTestCase):
+    class TestCustomGetPass(GetFunctionTestMixin):
         get = staticmethod(core.get)
 
-    custom_testget = CustomTestGetPass()
+    custom_testget = TestCustomGetPass()
     custom_testget.test_get()
 
 

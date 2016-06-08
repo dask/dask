@@ -149,13 +149,8 @@ def has_tasks(dsk, x):
         pass
     if isinstance(x, list):
         for i in x:
-            if istask(i):
+            if has_tasks(dsk, i):
                 return True
-            try:
-                if i in dsk:
-                    return True
-            except:
-                pass
     return False
 
 

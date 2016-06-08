@@ -1,35 +1,33 @@
 from __future__ import absolute_import, division, print_function
 
 from .core import get
-import unittest
+
 
 def inc(x):
     return x + 1
 
+
 def add(x, y):
     return x + y
 
-class GetFunctionTestCase(unittest.TestCase):
+
+class GetFunctionTestMixin(object):
     """
     The GetFunctionTestCase class can be imported and used to test foreign
     implementations of the `get` function specification. It aims to enforce all
-    known expecctations of `get` functions.
+    known expectations of `get` functions.
 
     To use the class, inherit from it and override the `get` function. For
     example:
 
-    > from dask.utils_test import GetFunctionTestCase
-    > class CustomGetTestCase(GetFunctionTestCase):
+    > from dask.utils_test import GetFunctionTestMixin
+    > class TestCustomGet(GetFunctionTestMixin):
          get = staticmethod(myget)
 
     Note that the foreign `myget` function has to be explicitly decorated as a
     staticmethod.
     """
     get = staticmethod(get)
-
-    def runTest(self):
-        """This method is needed for compatibility with PY2 unittest.TestCase"""
-        pass
 
     def test_get(self):
         d = {':x': 1,
@@ -80,12 +78,14 @@ class GetFunctionTestCase(unittest.TestCase):
              'b': 'a',
              'c': [1, (inc, 1)],
              'd': [(sum, 'a')],
-             'e': ['a', 'b']}
+             'e': ['a', 'b'],
+             'f': [[[(sum, 'a'), 'c'], (sum, 'b')], 2]}
         assert self.get(d, 'a') == [1, 2, 3]
         assert self.get(d, 'b') == [1, 2, 3]
         assert self.get(d, 'c') == [1, 2]
         assert self.get(d, 'd') == [6]
         assert self.get(d, 'e') == [[1, 2, 3], [1, 2, 3]]
+        assert self.get(d, 'f') == [[[6, [1, 2]], 6], 2]
 
     def test_get_with_nested_list(self):
         d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
