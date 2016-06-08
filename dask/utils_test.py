@@ -49,7 +49,7 @@ class GetFunctionTestMixin(object):
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'
             msg += "Obtained '{}' instead.".format(result)
-            self.assertTrue(False, msg=msg.format(self.get.__name__))
+            assert False, msg.format(self.get.__name__)
 
     def test_nested_badkey(self):
         d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
@@ -61,7 +61,7 @@ class GetFunctionTestMixin(object):
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'
             msg += "Obtained '{}' instead.".format(result)
-            self.assertTrue(False, msg=msg.format(self.get.__name__))
+            assert False, msg.format(self.get.__name__)
 
     def test_data_not_in_dict_is_ok(self):
         d = {'x': 1, 'y': (add, 'x', 10)}
@@ -122,6 +122,6 @@ class GetFunctionTestMixin(object):
                 assert str(e).startswith('Found no accessible jobs in dask')
         else:
             msg = 'dask with infinite cycle should have raised an exception.'
-            self.assertTrue(False, msg=msg)
+            assert False, msg
 
         assert self.get(d, 'x4999') == 4999

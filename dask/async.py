@@ -118,7 +118,8 @@ from operator import add
 import sys
 import traceback
 
-from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
+from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
+                   has_tasks)
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
@@ -130,28 +131,6 @@ def inc(x):
 
 
 DEBUG = False
-
-
-def has_tasks(dsk, x):
-    """Whether ``x`` has anything to compute.
-
-    Returns True if:
-    - ``x`` is a task
-    - ``x`` is a key in ``dsk``
-    - ``x`` is a list that contains any tasks or keys
-    """
-    if istask(x):
-        return True
-    try:
-        if x in dsk:
-            return True
-    except:
-        pass
-    if isinstance(x, list):
-        for i in x:
-            if has_tasks(dsk, i):
-                return True
-    return False
 
 
 def start_state_from_dask(dsk, cache=None, sortkey=None):

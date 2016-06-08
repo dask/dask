@@ -42,6 +42,28 @@ def istask(x):
     return type(x) is tuple and x and callable(x[0])
 
 
+def has_tasks(dsk, x):
+    """Whether ``x`` has anything to compute.
+
+    Returns True if:
+    - ``x`` is a task
+    - ``x`` is a key in ``dsk``
+    - ``x`` is a list that contains any tasks or keys
+    """
+    if istask(x):
+        return True
+    try:
+        if x in dsk:
+            return True
+    except:
+        pass
+    if isinstance(x, list):
+        for i in x:
+            if has_tasks(dsk, i):
+                return True
+    return False
+
+
 def preorder_traversal(task):
     """A generator to preorder-traverse a task."""
 
@@ -57,9 +79,9 @@ def preorder_traversal(task):
             yield item
 
 
-def _get_task(d, task, maxdepth=1000):
-    # non-recursive.  DAG property is checked upon reaching maxdepth.
-    _iter = lambda *args: iter(args)
+def _get_nonrecursive(d, x, maxdepth=1000):
+    # Non-recursive. DAG property is checked upon reaching maxdepth.
+    _list = lambda *args: list(args)
 
     # We construct a nested heirarchy of tuples to mimic the execution stack
     # of frames that Python would maintain for a recursive implementation.
@@ -70,7 +92,7 @@ def _get_task(d, task, maxdepth=1000):
     #       Arguments are stored in reverse order, and elements are popped
     #       as they are evaluated.
     #    3) The calculated results of the arguments from (2).
-    stack = [(task[0], list(task[:0:-1]), [])]
+    stack = [(lambda x: x, [x], [])]
     while True:
         func, args, results = stack[-1]
         if not args:
@@ -81,7 +103,7 @@ def _get_task(d, task, maxdepth=1000):
             stack[-1][2].append(val)
             continue
         elif maxdepth and len(stack) > maxdepth:
-            cycle = getcycle(d, list(task[1:]))
+            cycle = getcycle(d, x)
             if cycle:
                 cycle = '->'.join(cycle)
                 raise RuntimeError('Cycle detected in Dask: %s' % cycle)
@@ -89,22 +111,32 @@ def _get_task(d, task, maxdepth=1000):
 
         key = args.pop()
         if isinstance(key, list):
-            # v = (get(d, k, concrete=False) for k in key)  # recursive
-            # Fake being lazy
-            stack.append((_iter, key[::-1], []))
+            stack.append((_list, list(key[::-1]), []))
             continue
         elif ishashable(key) and key in d:
-            v = d[key]
+            args.append(d[key])
+            continue
+        elif istask(key):
+            stack.append((key[0], list(key[:0:-1]), []))
         else:
-            v = key
-
-        if istask(v):
-            stack.append((v[0], list(v[:0:-1]), []))
-        else:
-            results.append(v)
+            results.append(key)
 
 
-def get(d, key, get=None, **kwargs):
+def _get_recursive(d, x):
+    # recursive, no cycle detection
+    if isinstance(x, list):
+        return [_get_recursive(d, k) for k in x]
+    elif ishashable(x) and x in d:
+        return _get_recursive(d, d[x])
+    elif istask(x):
+        func, args = x[0], x[1:]
+        args2 = [_get_recursive(d, k) for k in args]
+        return func(*args2)
+    else:
+        return x
+
+
+def get(d, x, recursive=False):
     """ Get value from Dask
 
     Examples
@@ -117,39 +149,13 @@ def get(d, key, get=None, **kwargs):
     1
     >>> get(d, 'y')
     2
-
-    See Also
-    --------
-    set
     """
-    get = get or _get
-    if isinstance(key, list):
-        v = tuple(get(d, k, get=get) for k in key)
-    elif istask(key):
-        v = key
-    elif ishashable(key):
-        v = d[key]
-    else:
-        message = '%s is neither a task or a dask key'
-        raise KeyError(message % key)
-
-    if istask(v):
-        if get is _get:
-            # use non-recursive method by default
-            return _get_task(d, v)
-        func, args = v[0], v[1:]
-
-        args2 = []
-        for arg in args:
-            if not istask(arg) and arg not in d:
-                args2.append(arg)
-            else:
-                args2.append(get(d, arg, get=get))
-        return func(*args2)
-    else:
-        return v
-
-_get = get
+    _get = _get_recursive if recursive else _get_nonrecursive
+    if isinstance(x, list):
+        return tuple(get(d, k) for k in x)
+    elif x in d:
+        return _get(d, x)
+    raise KeyError("{0} is not a key in the graph".format(x))
 
 
 def _deps(dsk, arg):
