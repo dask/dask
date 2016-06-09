@@ -2335,7 +2335,13 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def _sample_percentiles(num_fixed, num_random):
+def _sample_percentiles(num_old, num_new, total_length, chunk_length):
+    # *waves hands*
+    random_percentage = 1 / (1 + (3.0 * num_new / num_old)**0.5)
+    num_percentiles = num_new * (num_old + 22)**0.55 * chunk_length / total_length
+    num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
+    num_random = int(num_percentiles * random_percentage) + 2
+
     q_fixed = np.linspace(0, 100, num_fixed)
     q_random = np.random.rand(num_random) * 100
     q = np.concatenate([q_fixed, q_random])
@@ -2369,32 +2375,28 @@ def _repartition_quantiles(df, npartitions):
         return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
                        name, df.name, [None, None])
     else:
-        # new_divisions = [np.min(q), np.max(q)]
         new_divisions = [0.0, 1.0]
 
-    num_old = df.npartitions
-    num_new = npartitions
-
-    # *waves hands*
-    random_percentage = 1 / (1 + (2.0 * num_new / num_old)**0.5)
-    num_percentiles = num_new * (num_old + 22)**0.55 / num_old
-    num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
-    num_random = int(num_percentiles * random_percentage) + 2
-
-    name0 = 're-quantiles-0-' + token
-    qs_dsk = dict(((name0, i), (_sample_percentiles, num_fixed, num_random))
-                  for i, key in enumerate(df._keys()))
     name1 = 're-quantiles-1-' + token
-    val_dsk = dict(((name1, i), (_percentile, (getattr, key, 'values'), (name0, i)))
-                   for i, key in enumerate(df._keys()))
+    len_dsk = dict(((name1, i), (len, key)) for i, key in enumerate(df._keys()))
+
+    total_name = 're-quantiles-len-' + token
+    total_dsk = {total_name: (sum, sorted(len_dsk))}
+
     name2 = 're-quantiles-2-' + token
-    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
+    qs_dsk = dict(((name2, i), (_sample_percentiles, df.npartitions,
+                                npartitions, total_name, (name1, i)))
+                  for i, key in enumerate(df._keys()))
 
     name3 = 're-quantiles-3-' + token
-    merge_dsk = {(name3, 0): (merge_type, (merge_percentiles, qs, sorted(qs_dsk),
+    val_dsk = dict(((name3, i), (_percentile, (getattr, key, 'values'), (name2, i)))
+                   for i, key in enumerate(df._keys()))
+
+    name4 = 're-quantiles-4-' + token
+    merge_dsk = {(name4, 0): (merge_type, (merge_percentiles, qs, sorted(qs_dsk),
                                           sorted(val_dsk), sorted(len_dsk)))}
-    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk)
-    return return_type(dsk, name3, df.name, new_divisions)
+    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk, total_dsk)
+    return return_type(dsk, name4, df.name, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False):
