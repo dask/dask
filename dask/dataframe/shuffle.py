@@ -40,7 +40,8 @@ def set_index(df, index, npartitions=None, method=None, compute=True,
         index2 = index
 
     divisions = (index2
-                  .quantile(np.linspace(0, 1, npartitions + 1))
+                  #.quantile(np.linspace(0, 1, npartitions + 1))
+                  ._repartition_quantiles(npartitions)
                   .compute()).tolist()
 
     return set_partition(df, index, divisions, compute=compute,

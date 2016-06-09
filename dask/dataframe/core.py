@@ -1027,6 +1027,11 @@ class Series(_Frame):
         """
         return quantile(self, q)
 
+    def _repartition_quantiles(self, npartitions):
+        """ Approximate quantiles of Series used for repartitioning
+        """
+        return _repartition_quantiles(self, npartitions)
+
     @derived_from(pd.Series)
     def resample(self, rule, how=None, closed=None, label=None):
         from .tseries.resample import _resample
@@ -2327,6 +2332,68 @@ def quantile(df, q):
     merge_dsk = {(name3, 0): (merge_type, (merge_percentiles, qs, [qs] * df.npartitions,
                                           sorted(val_dsk), sorted(len_dsk)))}
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
+    return return_type(dsk, name3, df.name, new_divisions)
+
+
+def _sample_percentiles(num_fixed, num_random):
+    q_fixed = np.linspace(0, 100, num_fixed)
+    q_random = np.random.rand(num_random) * 100
+    q = np.concatenate([q_fixed, q_random])
+    q.sort()
+    return q
+
+
+def _repartition_quantiles(df, npartitions):
+    """ Approximate quantiles of Series used for repartitioning
+    """
+    assert isinstance(df, Series)
+    from dask.array.percentile import _percentile, merge_percentiles
+
+    q = np.linspace(0, 1, npartitions + 1)
+    # currently, only Series has quantile method
+    # Index.quantile(list-like) must be pd.Series, not pd.Index
+    df_name = df.name
+    merge_type = lambda v: pd.Series(v, index=q, name=df_name)
+    return_type = df._constructor
+    if issubclass(return_type, Index):
+        return_type = Series
+
+    # pandas uses quantile in [0, 1]
+    # numpy / everyone else uses [0, 100]
+    qs = np.asarray(q) * 100
+    token = tokenize(df, qs)
+
+    if len(qs) == 0:
+        name = 're-quantiles-' + token
+        empty_index = pd.Index([], dtype=float)
+        return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
+                       name, df.name, [None, None])
+    else:
+        # new_divisions = [np.min(q), np.max(q)]
+        new_divisions = [0.0, 1.0]
+
+    num_old = df.npartitions
+    num_new = npartitions
+
+    # *waves hands*
+    random_percentage = 1 / (1 + (2.0 * num_new / num_old)**0.5)
+    num_percentiles = num_new * (num_old + 22)**0.55 / num_old
+    num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
+    num_random = int(num_percentiles * random_percentage) + 2
+
+    name0 = 're-quantiles-0-' + token
+    qs_dsk = dict(((name0, i), (_sample_percentiles, num_fixed, num_random))
+                  for i, key in enumerate(df._keys()))
+    name1 = 're-quantiles-1-' + token
+    val_dsk = dict(((name1, i), (_percentile, (getattr, key, 'values'), (name0, i)))
+                   for i, key in enumerate(df._keys()))
+    name2 = 're-quantiles-2-' + token
+    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
+
+    name3 = 're-quantiles-3-' + token
+    merge_dsk = {(name3, 0): (merge_type, (merge_percentiles, qs, sorted(qs_dsk),
+                                          sorted(val_dsk), sorted(len_dsk)))}
+    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk)
     return return_type(dsk, name3, df.name, new_divisions)
 
 
