@@ -152,7 +152,7 @@ def to_textfiles(b, path, name_function=str, compression='infer',
     JSON text files by mapping ``json.dumps``on to the bag first, and 
     then calling ``to_textfiles``:
 
-    >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")
+    >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
 
     """
     if isinstance(path, (str, unicode)):
