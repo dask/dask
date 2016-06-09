@@ -1,7 +1,6 @@
 language: python
 sudo: false
 python:
-    - "2.6"
     - "2.7"
     - "3.3"
     - "3.4"
@@ -24,10 +23,8 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then conda install numpy=1.9.2 scipy pandas=0.16.2 pytables=3.2.0 h5py=2.5.0 bcolz=0.10.0 pytest coverage toolz scikit-learn cytoolz cloudpickle chest blosc cython psutil ipython; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.4' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then conda install numpy scipy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz cloudpickle chest blosc cython psutil ipython distributed; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
-  - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
+  - conda install numpy scipy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
+  - if [[ $TRAVIS_PYTHON_VERSION != '3.3' ]]; then conda install distributed cloudpickle bokeh; fi
   - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install backports.lzma; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
@@ -36,7 +33,7 @@ install:
   - if [[ $TRAVIS_PYTHON_VERSION < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
 
   # Install dask
-  - python setup.py install
+  - pip install -e .[complete]
 
 script:
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
