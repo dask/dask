@@ -2342,6 +2342,9 @@ def _sample_percentiles(num_old, num_new, total_length, chunk_length):
     num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
     num_random = int(num_percentiles * random_percentage) + 2
 
+    if num_fixed + num_random + 2 >= chunk_length:
+        return np.linspace(0, 100, chunk_length + 1)
+
     q_fixed = np.linspace(0, 100, num_fixed)
     q_random = np.random.rand(num_random) * 100
     q = np.concatenate([q_fixed, q_random])
