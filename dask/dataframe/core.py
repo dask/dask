@@ -100,7 +100,7 @@ class Scalar(Base):
     @classmethod
     def _get_unary_operator(cls, op):
         def f(self):
-            name = tokenize(self)
+            name = funcname(op) + '-' + tokenize(self)
             dsk = {(name, 0): (op, (self._name, 0))}
             return Scalar(merge(dsk, self.dask), name)
         return f
@@ -111,7 +111,7 @@ class Scalar(Base):
 
 
 def _scalar_binary(op, a, b, inv=False):
-    name = '{0}-{1}'.format(op.__name__, tokenize(a, b))
+    name = '{0}-{1}'.format(funcname(op), tokenize(a, b))
 
     dsk = a.dask
     if not isinstance(b, Base):
@@ -1920,7 +1920,7 @@ def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
     columns = kwargs.pop('columns', no_default)
 
-    _name = 'elemwise-' + tokenize(op, kwargs, *args)
+    _name = funcname(op) + '-' + tokenize(op, kwargs, *args)
 
     args = _maybe_from_pandas(args)
 

@@ -101,7 +101,7 @@ class Resampler(object):
     def _agg(self, how, columns=None, fill_value=np.nan):
         rule = self._rule
         kwargs = self._kwargs
-        name = tokenize(self.obj, rule, kwargs, how)
+        name = 'resample-' + tokenize(self.obj, rule, kwargs, how)
 
         # Create a grouper to determine closed and label conventions
         newdivs, outdivs = _resample_bin_and_out_divs(self.obj.divisions, rule,

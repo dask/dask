@@ -232,4 +232,4 @@ def assert_sane_keynames(ddf):
         assert len(k) < 100
         assert ' ' not in k
         if sys.version_info[0] >= 3:
-            assert k.split('-')[0].isidentifier() or len(k) in (32, 40)
+            assert k.split('-')[0].isidentifier()
