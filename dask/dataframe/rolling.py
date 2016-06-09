@@ -9,7 +9,7 @@ from ..base import tokenize
 
 
 def rolling_chunk(func, part1, part2, window, *args):
-    if part1.shape[0] < window:
+    if part1.shape[0] < window-1:
         raise NotImplementedError("Window larger than partition size")
     if window > 1:
         extra = window - 1
@@ -60,10 +60,7 @@ rolling_window = wrap_rolling(pd.rolling_window)
 
 def call_pandas_rolling_method_single(this_partition, rolling_kwargs,
         method_name, method_args, method_kwargs):
-    # used for the start of the df/series
-    if this_partition.shape[0] < rolling_kwargs['window']:
-        raise NotImplementedError("Window larger than partition size")
-
+    # used for the start of the df/series (or for rolling through columns)
     method = getattr(this_partition.rolling(**rolling_kwargs), method_name)
     return method(*method_args, **method_kwargs)
 
@@ -72,7 +69,7 @@ def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
     # used for everything except for the start
 
     window = rolling_kwargs['window']
-    if prev_partition.shape[0] < window:
+    if prev_partition.shape[0] < window-1:
         raise NotImplementedError("Window larger than partition size")
 
     if window > 1:
