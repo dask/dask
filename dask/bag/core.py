@@ -150,14 +150,13 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     **Compression**: Filenames with extensions corresponding to known
     compression algorithms (gz, bz2) will be compressed accordingly.
-    
-    **Bag Contents**: The bag calling ``to_textfiles`` _must_ be a bag of
-    text strings. For example, a bag of dictionaries could be written to 
-    JSON text files by mapping ``json.dumps``on to the bag first, and 
-    then calling ``to_textfiles``:
+
+    **Bag Contents**: The bag calling ``to_textfiles`` must be a bag of
+    text strings. For example, a bag of dictionaries could be written to
+    JSON text files by mapping ``json.dumps`` on to the bag first, and
+    then calling ``to_textfiles`` :
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
-
     """
     if isinstance(path, (str, unicode)):
         if name_function is None:
