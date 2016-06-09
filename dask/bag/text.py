@@ -14,16 +14,17 @@ from .core import from_delayed
 delayed = delayed(pure=True)
 
 
-def read_text(path, blocksize=None, compression='infer',
+def read_text(urlpath, blocksize=None, compression='infer',
               encoding=system_encoding, errors='strict',
-              linedelimiter=os.linesep, collection=True, **kwargs):
+              linedelimiter=os.linesep, collection=True,
+              storage_options=None):
     """ Read lines from text files
 
     Parameters
     ----------
-    path: string or list
-        Path to data.  Can include ``'*'`` or protocol like ``'s3://'``
-        Can also be a list of filenames
+    urlpath: string or list
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), globstring, or a list of beforementioned strings.
     blocksize: None or int
         Size to cut up larger files.  Streams by default.
     compression: string
@@ -33,9 +34,9 @@ def read_text(path, blocksize=None, compression='infer',
     linedelimiter: string
     collection: bool, optional
         Return dask.bag if True, or list of delayed values if false
-    **kwargs: dict
-        Extra parameters to hand to backend storage system.
-        Often used for authentication when using remote storage like S3 or HDFS
+    storage_options: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
 
     Examples
     --------
@@ -43,6 +44,8 @@ def read_text(path, blocksize=None, compression='infer',
     >>> b = read_text('myfiles.*.txt')  # doctest: +SKIP
     >>> b = read_text('myfiles.*.txt.gz')  # doctest: +SKIP
     >>> b = read_text('s3://bucket/myfiles.*.txt')  # doctest: +SKIP
+    >>> b = read_text('s3://key:secret@bucket/myfiles.*.txt')  # doctest: +SKIP
+    >>> b = read_text('hdfs://namenode.example.com/myfiles.*.txt')  # doctest: +SKIP
 
     Parallelize a large file by providing the number of uncompressed bytes to
     load into each partition.
@@ -57,14 +60,15 @@ def read_text(path, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
-    if isinstance(path, (tuple, list, set)):
+    if isinstance(urlpath, (tuple, list, set)):
         blocks = sum([read_text(fn, blocksize=blocksize,
                       compression=compression, encoding=encoding, errors=errors,
-                      linedelimiter=linedelimiter, collection=False, **kwargs)
-                     for fn in path], [])
+                      linedelimiter=linedelimiter, collection=False,
+                      storage_options=storage_options)
+                     for fn in urlpath], [])
     else:
         if compression == 'infer':
-            compression = infer_compression(path)
+            compression = infer_compression(urlpath)
 
         if blocksize and compression not in seekable_files:
             raise ValueError(
@@ -76,21 +80,21 @@ def read_text(path, blocksize=None, compression='infer',
                                       compression)
 
         elif blocksize is None:
-            files = open_text_files(path, encoding=encoding, errors=errors,
-                                          compression=compression, **kwargs)
+            files = open_text_files(urlpath, encoding=encoding, errors=errors,
+                                          compression=compression)
             blocks = [delayed(list)(file) for file in files]
 
         else:
-            _, blocks = read_bytes(path, delimiter=linedelimiter.encode(),
+            _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
                     blocksize=blocksize, sample=False, compression=compression,
-                    **kwargs)
+                    **(storage_options or {}))
             if isinstance(blocks[0], (tuple, list)):
                 blocks = list(concat(blocks))
             blocks = [delayed(decode)(b, encoding, errors)
                       for b in blocks]
 
     if not blocks:
-        raise ValueError("No files found", path)
+        raise ValueError("No files found", urlpath)
 
     if not collection:
         return blocks

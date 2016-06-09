@@ -15,36 +15,38 @@ from ..utils import system_encoding
 logger = logging.getLogger(__name__)
 
 
-def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
+def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
         sample=True, compression=None):
     """ See dask.bytes.core.read_bytes for docstring """
-    if '*' in fn:
-        filenames = list(map(os.path.abspath, sorted(glob(fn))))
+    if '*' in path:
+        filenames = list(map(os.path.abspath, sorted(glob(path))))
         sample, first = read_bytes(filenames[0], delimiter, not_zero,
-                                blocksize, sample=True, compression=compression)
+                                   blocksize, sample=True,
+                                   compression=compression)
         rest = [read_bytes(f, delimiter, not_zero, blocksize, sample=False,
-                           compression=compression)[1] for f in filenames[1:]]
+                           compression=compression)[1]
+                for f in filenames[1:]]
         return sample, [first] + rest
     else:
-        if not os.path.exists(fn):
-            raise FileNotFoundError(fn)
+        if not os.path.exists(path):
+            raise FileNotFoundError(path)
 
         if blocksize is None:
             offsets = [0]
         else:
-            size = getsize(fn, compression)
+            size = getsize(path, compression)
 
             offsets = list(range(0, size, blocksize))
             if not_zero:
                 offsets[0] = 1
 
-        token = tokenize(fn, delimiter, blocksize, not_zero, compression,
-                         os.path.getmtime(fn))
+        token = tokenize(path, delimiter, blocksize, not_zero, compression,
+                         os.path.getmtime(path))
 
-        logger.debug("Read %d blocks of binary bytes from %s", len(offsets), fn)
+        logger.debug("Read %d blocks of binary bytes from %s", len(offsets), path)
         f = delayed(read_block_from_file)
 
-        values = [f(fn, offset, blocksize, delimiter, compression,
+        values = [f(path, offset, blocksize, delimiter, compression,
                     dask_key_name='read-file-block-%s-%d' % (token, offset))
                   for offset in offsets]
 
@@ -53,13 +55,13 @@ def read_bytes(fn, delimiter=None, not_zero=False, blocksize=2**27,
                 nbytes = sample
             else:
                 nbytes = 10000
-            sample = read_block_from_file(fn, 0, nbytes, None, compression)
+            sample = read_block_from_file(path, 0, nbytes, None, compression)
 
         return sample, values
 
 
-def read_block_from_file(fn, offset, length, delimiter, compression):
-    with open(fn, 'rb') as f:
+def read_block_from_file(path, offset, length, delimiter, compression):
+    with open(path, 'rb') as f:
         if compression:
             f = SeekableFile(f)
             f = compress_files[compression](f)
@@ -78,9 +80,11 @@ def open_files(path):
     dask.bytes.core.open_files: User function
     """
     myopen = delayed(open)
-    filenames = sorted(glob(path))
-    return [myopen(fn, mode='rb', dask_key_name='open-%s' %
-                   tokenize(fn, os.path.getmtime(fn))) for fn in filenames]
+    filepaths = sorted(glob(path))
+    return [myopen(_path, mode='rb',
+                   dask_key_name='open-%s' % tokenize(_path,
+                                                      os.path.getmtime(_path)))
+            for _path in filepaths]
 
 
 from . import core
@@ -97,20 +101,23 @@ if sys.version_info[0] >= 3:
         dask.bytes.core.open_text_files: User function
         """
         myopen = delayed(open)
-        filenames = sorted(glob(path))
-        return [myopen(fn, encoding=encoding, errors=errors,
-                       dask_key_name='open-%s' %
-                       tokenize(fn, encoding, errors, os.path.getmtime(fn)))
-                for fn in filenames]
+        filepaths = sorted(glob(path))
+        return [myopen(_path, encoding=encoding, errors=errors,
+                       dask_key_name='open-%s'
+                                     % tokenize(_path,
+                                                encoding,
+                                                errors,
+                                                os.path.getmtime(_path)))
+                for _path in filepaths]
 
     core._open_text_files['file'] = open_text_files
 
 
-def getsize(fn, compression=None):
+def getsize(path, compression=None):
     if compression is None:
-        return os.path.getsize(fn)
+        return os.path.getsize(path)
     else:
-        with open(fn, 'rb') as f:
+        with open(path, 'rb') as f:
             f = SeekableFile(f)
             g = seekable_files[compression](f)
             g.seek(0, 2)
