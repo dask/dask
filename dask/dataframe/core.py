@@ -2335,7 +2335,7 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def _sample_percentiles(num_old, num_new, total_length, chunk_length):
+def _sample_percentiles(num_old, num_new, chunk_length):
     """Construct percentiles for a chunk for repartitioning.
 
     Adapt the number of total percentiles calculated based on the number
@@ -2349,10 +2349,8 @@ def _sample_percentiles(num_old, num_new, total_length, chunk_length):
         Number of partitions of the current object
     num_new: int
         Number of partitions of the new object
-    total_length: int
-        Total number of rows of the object
     chunk_length: int
-        Number of rows of a partition
+        Number of rows of the partition
 
     Returns
     -------
@@ -2380,11 +2378,10 @@ def _sample_percentiles(num_old, num_new, total_length, chunk_length):
 
     The more partitions there are, then the more total percentiles will get
     calculated across all partitions.  Squaring the number of partitions
-    approximately doubles the number of total percentiles calculates, so
-    num_total_percentiles ~ sqrt(num_partitions).  The number of percentiles
-    calculated on a single partition is proportional to the relative length
-    of the partition.  This should provide adequate resolution and allow the
-    number of partitions to scale.
+    approximately doubles the number of total percentiles calculated, so
+    num_total_percentiles ~ sqrt(num_partitions).  We assume each partition
+    is approximately the same length.  This should provide adequate resolution
+    and allow the number of partitions to scale.
 
     For numeric data, one could instead use T-Digest for floats and Q-Digest
     for ints to calculate approximate percentiles.  Our current method works
@@ -2393,7 +2390,7 @@ def _sample_percentiles(num_old, num_new, total_length, chunk_length):
     """
     # *waves hands*
     random_percentage = 1 / (1 + (4.0 * num_new / num_old)**0.5)
-    num_percentiles = num_new * (num_old + 22)**0.55 * chunk_length / total_length
+    num_percentiles = num_new * (num_old + 22)**0.55 / num_old
     num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
     num_random = int(num_percentiles * random_percentage) + 2
 
@@ -2438,12 +2435,9 @@ def _repartition_quantiles(df, npartitions):
     name1 = 're-quantiles-1-' + token
     len_dsk = dict(((name1, i), (len, key)) for i, key in enumerate(df._keys()))
 
-    total_name = 're-quantiles-len-' + token
-    total_dsk = {total_name: (sum, sorted(len_dsk))}
-
     name2 = 're-quantiles-2-' + token
     qs_dsk = dict(((name2, i), (_sample_percentiles, df.npartitions,
-                                npartitions, total_name, (name1, i)))
+                                npartitions, (name1, i)))
                   for i, key in enumerate(df._keys()))
 
     name3 = 're-quantiles-3-' + token
@@ -2453,7 +2447,7 @@ def _repartition_quantiles(df, npartitions):
     name4 = 're-quantiles-4-' + token
     merge_dsk = {(name4, 0): (merge_type, (merge_percentiles, qs, sorted(qs_dsk),
                                           sorted(val_dsk), sorted(len_dsk)))}
-    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk, total_dsk)
+    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk)
     return return_type(dsk, name4, df.name, new_divisions)
 
 
