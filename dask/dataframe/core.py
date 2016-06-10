@@ -604,10 +604,8 @@ class _Frame(Base):
             if min_periods < 0:
                 raise ValueError('min_periods must be >= 0')
 
-        return Rolling(self, {'window': window,
-                              'min_periods': min_periods,
-                              'axis': axis,
-                              'win_type': win_type})
+        return Rolling(self, window=window, min_periods=min_periods,
+                       axis=axis, win_type=win_type)
 
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True):
