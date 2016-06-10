@@ -242,7 +242,8 @@ class Executor(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address, start=True, loop=None, timeout=3):
+    def __init__(self, address, start=True, loop=None, timeout=3,
+                 set_as_default=False):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
@@ -250,6 +251,9 @@ class Executor(object):
         self.coroutines = []
         self.id = str(uuid.uuid1())
         self._start_arg = address
+        if set_as_default:
+            self._previous_get = _globals.get('get')
+            dask.set_options(get=self.get)
 
         if start:
             self.start(timeout=timeout)
@@ -426,8 +430,12 @@ class Executor(object):
             sync(self.loop, self.loop.stop)
             self.loop.close()
             self._loop_thread.join(timeout=timeout)
+        with ignoring(AttributeError):
+            dask.set_options(get=self._previous_get)
         if _global_executor[0] is self:
             _global_executor[0] = None
+        if self.get == _globals.get('get'):
+            del _globals['get']
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler

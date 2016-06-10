@@ -2116,18 +2116,19 @@ def test_map_differnet_lengths(e, s, a, b):
     assert len(e.map(add, [1, 2], [1, 2, 3])) == 2
 
 
-def test_Future_exception_sync(loop, capsys):
+def test_Future_exception_sync_2(loop, capsys):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             ensure_default_get(e)
             ensure_default_get(e)
             ensure_default_get(e)
             ensure_default_get(e)
+            assert _globals['get'] == e.get
 
     out, err = capsys.readouterr()
     assert len(out.strip().split('\n')) == 1
 
-    assert _globals['get'] == e.get
+    assert _globals.get('get') != e.get
 
 
 @gen_cluster(timeout=60, executor=True)
@@ -2964,3 +2965,19 @@ def test_cancel_stress_sync(loop):
                 f = e.compute(y)
                 sleep(1)
                 e.cancel(f)
+
+
+def test_default_get(loop):
+    with cluster() as (s, [a, b]):
+        pre_get = _globals.get('get')
+        with Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True) as e:
+            assert _globals['get'] == e.get
+        assert _globals['get'] is pre_get
+
+        e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=False)
+        assert _globals['get'] is pre_get
+
+        e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True)
+        assert _globals['get'] == e.get
+        e.shutdown()
+        assert _globals['get'] is pre_get
