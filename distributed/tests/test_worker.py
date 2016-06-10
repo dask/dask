@@ -36,7 +36,7 @@ def test_identity():
     w = Worker('127.0.0.1', 8019)
     ident = w.identity(None)
     assert ident['type'] == 'Worker'
-    assert ident['center'] == ('127.0.0.1', 8019)
+    assert ident['scheduler'] == ('127.0.0.1', 8019)
 
 
 def test_health():

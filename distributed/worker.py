@@ -47,8 +47,8 @@ class Worker(Server):
     1.  **Serve data** from a local dictionary
     2.  **Perform computation** on that data and on data from peers
 
-    Additionally workers keep a Center informed of their data and use that
-    Center to gather data from other workers when necessary to perform a
+    Additionally workers keep a scheduler informed of their data and use that
+    scheduler to gather data from other workers when necessary to perform a
     computation.
 
     You can start a worker with the ``dworker`` command line application::
@@ -67,8 +67,8 @@ class Worker(Server):
         Executor used to perform computation
     * **local_dir:** ``path``:
         Path on local machine to store temporary files
-    * **center:** ``rpc``:
-        Location of center or scheduler.  See ``.ip/.port`` attributes.
+    * **scheduler:** ``rpc``:
+        Location of scheduler.  See ``.ip/.port`` attributes.
     * **name:** ``string``:
         Alias
     * **services:** ``{str: Server}``:
@@ -78,28 +78,28 @@ class Worker(Server):
     Examples
     --------
 
-    Create centers and workers in Python:
+    Create schedulers and workers in Python:
 
-    >>> from distributed import Center, Worker
-    >>> c = Center('192.168.0.100', 8787)  # doctest: +SKIP
+    >>> from distributed import Scheduler, Worker
+    >>> c = Scheduler('192.168.0.100', 8787)  # doctest: +SKIP
     >>> w = Worker(c.ip, c.port)  # doctest: +SKIP
     >>> yield w._start(port=8788)  # doctest: +SKIP
 
     Or use the command line::
 
-       $ dcenter
-       Start center at 127.0.0.1:8787
+        $ dask-scheduler
+        Start scheduler at 127.0.0.1:8787
 
-       $ dworker 127.0.0.1:8787
-       Start worker at:            127.0.0.1:8788
-       Registered with center at:  127.0.0.1:8787
+        $ dask-worker 127.0.0.1:8787
+        Start worker at:               127.0.0.1:8788
+        Registered with scheduler at:  127.0.0.1:8787
 
     See Also
     --------
-    distributed.center.Center:
+    distributed.scheduler.Scheduler:
     """
 
-    def __init__(self, center_ip, center_port, ip=None, ncores=None,
+    def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, **kwargs):
         self.ip = ip or get_ip()
@@ -110,7 +110,7 @@ class Worker(Server):
         self.status = None
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
-        self.center = rpc(ip=center_ip, port=center_port)
+        self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.active = set()
         self.name = name
 
@@ -146,6 +146,10 @@ class Worker(Server):
 
         super(Worker, self).__init__(handlers, **kwargs)
 
+    @property
+    def center(self):
+        return self.scheduler
+
     @gen.coroutine
     def _start(self, port=0):
         self.listen(port)
@@ -158,10 +162,10 @@ class Worker(Server):
         for k, v in self.service_ports.items():
             logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
         logger.info('Waiting to connect to: %20s:%d',
-                    self.center.ip, self.center.port)
+                    self.scheduler.ip, self.scheduler.port)
         while True:
             try:
-                resp = yield self.center.register(
+                resp = yield self.scheduler.register(
                         ncores=self.ncores, address=(self.ip, self.port),
                         keys=list(self.data), services=self.service_ports,
                         name=self.name, nbytes=valmap(sizeof, self.data))
@@ -172,7 +176,7 @@ class Worker(Server):
         if resp != 'OK':
             raise ValueError(resp)
         logger.info('        Registered to: %20s:%d',
-                    self.center.ip, self.center.port)
+                    self.scheduler.ip, self.scheduler.port)
         self.status = 'running'
 
     def start(self, port=0):
@@ -180,15 +184,15 @@ class Worker(Server):
 
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id,
-                'center': (self.center.ip, self.center.port)}
+                'scheduler': (self.scheduler.ip, self.scheduler.port)}
 
     @gen.coroutine
     def _close(self, report=True, timeout=10):
         if report:
             yield gen.with_timeout(timedelta(seconds=timeout),
-                    self.center.unregister(address=(self.ip, self.port)),
+                    self.scheduler.unregister(address=(self.ip, self.port)),
                     io_loop=self.loop)
-        self.center.close_streams()
+        self.scheduler.close_streams()
         self.stop()
         self.executor.shutdown()
         if os.path.exists(self.local_dir):
@@ -264,7 +268,7 @@ class Worker(Server):
                     permissive=True, rpc=self.rpc, close=False)
             if remote:
                 self.data.update(remote)
-                yield self.center.add_keys(address=self.address, keys=list(remote))
+                yield self.scheduler.add_keys(address=self.address, keys=list(remote))
 
             data = merge(local, remote)
 
@@ -293,7 +297,7 @@ class Worker(Server):
                 other = yield gather_from_workers(who_has)
                 diagnostics['transfer_stop'] = time()
                 self.data.update(other)
-                yield self.center.add_keys(address=self.address,
+                yield self.scheduler.add_keys(address=self.address,
                                            keys=list(other))
                 data.update(other)
             except KeyError as e:
@@ -448,10 +452,10 @@ class Worker(Server):
             if result['status'] == 'OK':
                 self.data[key] = result.pop('result')
                 if report:
-                    response = yield self.center.add_keys(keys=[key],
+                    response = yield self.scheduler.add_keys(keys=[key],
                                             address=(self.ip, self.port))
                     if not response == 'OK':
-                        logger.warn('Could not report results to center: %s',
+                        logger.warn('Could not report results to scheduler: %s',
                                     str(response))
             else:
                 logger.warn(" Compute Failed\n"
@@ -499,10 +503,10 @@ class Worker(Server):
         if result['status'] == 'OK':
             self.data[key] = result.pop('result')
             if report:
-                response = yield self.center.add_keys(address=(self.ip, self.port),
+                response = yield self.scheduler.add_keys(address=(self.ip, self.port),
                                                       keys=[key])
                 if not response == 'OK':
-                    logger.warn('Could not report results to center: %s',
+                    logger.warn('Could not report results to scheduler: %s',
                                 str(response))
         else:
             logger.warn(" Compute Failed\n"
@@ -550,8 +554,9 @@ class Worker(Server):
             data = valmap(loads, data)
         self.data.update(data)
         if report:
-            response = yield self.center.add_keys(address=(self.ip, self.port),
-                                                  keys=list(data))
+            response = yield self.scheduler.add_keys(
+                                address=(self.ip, self.port),
+                                keys=list(data))
             assert response == 'OK'
         info = {'nbytes': {k: sizeof(v) for k, v in data.items()},
                 'status': 'OK'}
@@ -564,8 +569,8 @@ class Worker(Server):
                 del self.data[key]
         logger.info("Deleted %d keys", len(keys))
         if report:
-            logger.debug("Reporting loss of keys to center")
-            yield self.center.remove_keys(address=self.address,
+            logger.debug("Reporting loss of keys to scheduler")
+            yield self.scheduler.remove_keys(address=self.address,
                                           keys=list(keys))
         raise Return('OK')
 
