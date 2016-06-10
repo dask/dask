@@ -30,9 +30,12 @@ setup(name='distributed',
                         else ''),
       entry_points='''
         [console_scripts]
+        dask-ssh=distributed.cli.dask_ssh:go
+        dask-scheduler=distributed.cli.dask_scheduler:go
+        dask-worker=distributed.cli.dask_worker:go
         dcenter=distributed.cli.dcenter:go
+        dcluster=distributed.cli.dcluster:go
         dscheduler=distributed.cli.dscheduler:go
-        dcluster=distributed.cli.dcluster:start
         dworker=distributed.cli.dworker:go
       ''',
       zip_safe=False)

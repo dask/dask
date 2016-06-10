@@ -99,7 +99,7 @@ If only a hostname or IP is given then any worker on that machine will be
 considered valid.  Additionally, you can provide aliases to workers upon
 creation.::
 
-    $ dworker scheduler_address:8786 --name worker_1
+    $ dask-worker scheduler_address:8786 --name worker_1
 
 And then use this name when specifying workers instead.
 

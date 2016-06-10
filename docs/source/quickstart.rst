@@ -15,16 +15,16 @@ Setup Cluster
 
 Set up a fake cluster on your local computer::
 
-   $ dscheduler
-   $ dworker 127.0.0.1:8786
-   $ dworker 127.0.0.1:8786
-   $ dworker 127.0.0.1:8786
+   $ dask-scheduler
+   $ dask-worker 127.0.0.1:8786
+   $ dask-worker 127.0.0.1:8786
+   $ dask-worker 127.0.0.1:8786
 
-Or if you can ssh into your own computer (or others) then use the ``dcluster``
-command, providing hostnames or IP addresses (`paramiko` library must 
+Or if you can ssh into your own computer (or others) then use the ``dask-ssh``
+command, providing hostnames or IP addresses (`paramiko` library must
 be installed. See SSH :doc:`setup <setup>`)::
 
-   $ dcluster 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
+   $ dask-ssh 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
 See :doc:`setup <setup>` for advanced use or :doc:`EC2 quickstart <dec2>` for
 instructions on how to deploy on Amazon's Elastic Compute Cloud.

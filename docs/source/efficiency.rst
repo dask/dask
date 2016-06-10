@@ -82,9 +82,10 @@ By default a single ``Worker`` runs many computations in parallel using as many
 threads as your compute node has cores.  When using pure Python functions
 this may not be optimal and you may instead want to run several separate
 worker processes on each node, each using one thread.  When configuring your
-cluster you may want to use the options to the ``dworker`` executable as follows::
+cluster you may want to use the options to the ``dask-worker`` executable as
+follows::
 
-   $ dworker ip:port --nprocs 8 --nthreads 1
+   $ dask-worker ip:port --nprocs 8 --nthreads 1
 
 Note that if you're primarily using NumPy, Pandas, SciPy, Scikit Learn, Numba,
 or other C/Fortran/LLVM/Cython-accelerated libraries then this is not an issue

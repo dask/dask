@@ -55,10 +55,10 @@ class Scheduler(Server):
     as a typical distributed ``Server``).  It maintains a consistent and valid
     view of the world even when listening to several clients at once.
 
-    A Scheduler is typically started either with the ``dscheduler``
+    A Scheduler is typically started either with the ``dask-scheduler``
     executable::
 
-        $ dscheduler 127.0.0.1:8787  # address of center
+         $ dask-scheduler
 
     Or as part of when an Executor starts up and connects to a Center::
 
