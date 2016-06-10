@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 from dask.utils import raises
-from dask.utils_test import GetFunctionTestCase
+from dask.utils_test import GetFunctionTestMixin
 from dask import core
 from dask.core import (istask, get_dependencies, flatten, subs,
-                       preorder_traversal, quote, _deps)
+                       preorder_traversal, quote, _deps, has_tasks)
 
 
 def contains(a, b):
@@ -17,8 +17,10 @@ def contains(a, b):
     """
     return all(a.get(k) == v for k, v in b.items())
 
+
 def inc(x):
     return x + 1
+
 
 def add(x, y):
     return x + y
@@ -32,6 +34,21 @@ def test_istask():
     assert not istask(f(sum, 2))
 
 
+def test_has_tasks():
+    dsk = {'a': [1, 2, 3],
+           'b': 'a',
+           'c': [1, (inc, 1)],
+           'd': [(sum, 'a')],
+           'e': ['a', 'b'],
+           'f': [['a', 'b'], 2, 3]}
+    assert not has_tasks(dsk, dsk['a'])
+    assert has_tasks(dsk, dsk['b'])
+    assert has_tasks(dsk, dsk['c'])
+    assert has_tasks(dsk, dsk['d'])
+    assert has_tasks(dsk, dsk['e'])
+    assert has_tasks(dsk, dsk['f'])
+
+
 def test_preorder_traversal():
     t = (add, 1, 2)
     assert list(preorder_traversal(t)) == [add, 1, 2]
@@ -41,53 +58,30 @@ def test_preorder_traversal():
     assert list(preorder_traversal(t)) == [add, sum, list, 1, 2, 3]
 
 
-class TestGet(GetFunctionTestCase):
+class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
 
 
-def test_GetFunctionTestCase_class():
-    class CustomTestGetFail(GetFunctionTestCase):
+class TestRecursiveGet(GetFunctionTestMixin):
+    get = staticmethod(lambda d, k: core.get(d, k, recursive=True))
+
+    def test_get_stack_limit(self):
+        # will blow stack in recursive mode
+        pass
+
+
+def test_GetFunctionTestMixin_class():
+    class TestCustomGetFail(GetFunctionTestMixin):
         get = staticmethod(lambda x, y: 1)
 
-    custom_testget = CustomTestGetFail()
+    custom_testget = TestCustomGetFail()
     raises(AssertionError, custom_testget.test_get)
 
-    class CustomTestGetPass(GetFunctionTestCase):
+    class TestCustomGetPass(GetFunctionTestMixin):
         get = staticmethod(core.get)
 
-    custom_testget = CustomTestGetPass()
+    custom_testget = TestCustomGetPass()
     custom_testget.test_get()
-
-
-def test_memoized_get():
-    d = {':x': 1,
-         ':y': (inc, ':x'),
-         ':z': (add, ':x', ':y')}
-    try:
-        import toolz
-    except ImportError:
-        return
-    cache = dict()
-
-    getm = toolz.memoize(core.get, cache=cache,
-                         key=lambda args, kwargs: args[1:])
-
-    result = getm(d, ':z', get=getm)
-    assert result == 3
-
-    assert contains(cache, {(':x',): 1,
-                            (':y',): 2,
-                            (':z',): 3})
-
-
-def test_get_laziness():
-    def isconcrete(arg):
-        return isinstance(arg, list)
-
-    d = {'x': 1, 'y': 2, 'z': (isconcrete, ['x', 'y'])}
-
-    assert core.get(d, ['x', 'y']) == (1, 2)
-    assert core.get(d, 'z') == False
 
 
 def test_get_dependencies_nested():
