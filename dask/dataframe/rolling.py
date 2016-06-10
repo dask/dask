@@ -92,46 +92,57 @@ class Rolling(object):
 
     """
 
-    def __init__(self, obj, kwargs):
+    def __init__(self, obj, window=None, min_periods=None,
+                 win_type=None, axis=0):
         self.obj = obj # dataframe or series
-        self.rolling_kwargs = kwargs
+
+        self.window = window
+        self.min_periods = min_periods
+        self.win_type = win_type
+        self.axis = axis
 
         # Allow pandas to raise if appropriate
-        obj._pd.rolling(**kwargs)
+        obj._pd.rolling(**self._rolling_kwargs())
+
+    def _rolling_kwargs(self):
+        return {
+            'window': self.window,
+            'min_periods': self.min_periods,
+            'win_type': self.win_type,
+            'axis': self.axis}
 
     def _call_method(self, method_name, *args, **kwargs):
         args = list(args) # make sure dask does not mistake this for a task
 
         old_name = self.obj._name
         new_name = 'rolling-' + tokenize(
-            self.obj, self.rolling_kwargs, method_name, args, kwargs)
+            self.obj, self._rolling_kwargs(), method_name, args, kwargs)
 
         # For all but the first chunk, we'll pass the whole previous chunk
         # in so we can use it to pre-feed our window
         dsk = {(new_name, 0): (
             call_pandas_rolling_method_single, (old_name, 0),
-            self.rolling_kwargs, method_name, args, kwargs)}
-        if self.rolling_kwargs['axis'] in [0, 'rows']:
+            self._rolling_kwargs(), method_name, args, kwargs)}
+        if self.axis in [0, 'rows']:
             # roll in the partition direction (will need to access neighbor)
-            window = self.rolling_kwargs['window']
-            tail_name = 'tail-{}-{}'.format(window-1, old_name)
+            tail_name = 'tail-{}-{}'.format(self.window-1, old_name)
             for i in range(1, self.obj.npartitions + 1):
                 # Get just the needed values from the previous partition
-                dsk[tail_name, i-1] = (tail, (old_name, i-1), window-1)
+                dsk[tail_name, i-1] = (tail, (old_name, i-1), self.window-1)
 
                 dsk[new_name, i] = (
                     call_pandas_rolling_method_with_neighbor,
                     (tail_name, i-1), (old_name, i),
-                    self.rolling_kwargs, method_name, args, kwargs)
+                    self._rolling_kwargs(), method_name, args, kwargs)
         else:
             # no communication needed between partitions for columns
             for i in range(1, self.obj.npartitions + 1):
                 dsk[new_name, i] = (
                     call_pandas_rolling_method_single, (old_name, i),
-                    self.rolling_kwargs, method_name, args, kwargs)
+                    self._rolling_kwargs(), method_name, args, kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata
-        pd_rolling = self.obj._pd.rolling(**self.rolling_kwargs)
+        pd_rolling = self.obj._pd.rolling(**self._rolling_kwargs())
         metadata = getattr(pd_rolling, method_name)(*args, **kwargs)
 
         return self.obj._constructor(
@@ -175,3 +186,8 @@ class Rolling(object):
 
     def apply(self, *args, **kwargs):
         return self._call_method('apply', *args, **kwargs)
+
+    def __repr__(self):
+        return 'Rolling [{}]'.format(','.join(
+            '{}={}'.format(k, v)
+            for k, v in self._rolling_kwargs().items() if v is not None))

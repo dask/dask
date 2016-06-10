@@ -172,3 +172,10 @@ def test_rolling_partition_size():
         eq(obj.rolling(10).mean(), dobj.rolling(10).mean())
         eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
         raises(NotImplementedError, lambda: dobj.rolling(12).mean())
+
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
+                    reason="rolling object not supported")
+def test_rolling_repr():
+    ddf = dd.from_pandas(pd.DataFrame([10]*30), npartitions=3)
+    assert repr(ddf.rolling(4)) in ['Rolling [window=4,axis=0]',
+                                    'Rolling [axis=0,window=4]']
