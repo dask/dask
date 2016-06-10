@@ -83,6 +83,9 @@ def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
         method = getattr(this_partition.rolling(window), method_name)
         return method(*method_args, **method_kwargs)
 
+def tail(obj, n):
+    return obj.tail(n)
+
 class Rolling(object):
     # What you get when you do ddf.rolling(...) or similar
     """Provides rolling window calculations.
@@ -110,10 +113,15 @@ class Rolling(object):
             self.rolling_kwargs, method_name, args, kwargs)}
         if self.rolling_kwargs['axis'] in [0, 'rows']:
             # roll in the partition direction (will need to access neighbor)
+            window = self.rolling_kwargs['window']
+            tail_name = 'tail-{}-{}'.format(window-1, old_name)
             for i in range(1, self.obj.npartitions + 1):
+                # Get just the needed values from the previous partition
+                dsk[tail_name, i-1] = (tail, (old_name, i-1), window-1)
+
                 dsk[new_name, i] = (
                     call_pandas_rolling_method_with_neighbor,
-                    (old_name, i-1), (old_name, i),
+                    (tail_name, i-1), (old_name, i),
                     self.rolling_kwargs, method_name, args, kwargs)
         else:
             # no communication needed between partitions for columns
