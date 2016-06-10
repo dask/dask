@@ -1518,7 +1518,6 @@ class Scheduler(Server):
                     plugin.delete(self, key)
                 except Exception as e:
                     logger.exception(e)
-            self.released.add(key)
 
         for key in keys:
             if self.who_has.get(key):
@@ -1531,6 +1530,8 @@ class Scheduler(Server):
             elif key in self.ready:  # O(n), though infrequent
                 self.ready.remove(key)
                 trigger_plugins(key)
+
+            self.released.add(key)
 
             for worker in list(self.rprocessing.get(key, ())):
                 self.mark_not_processing(key, worker)
