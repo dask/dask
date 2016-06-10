@@ -62,7 +62,7 @@ def read_text(path, blocksize=None, compression='infer',
         blocks = sum([read_text(fn, blocksize=blocksize,
                       compression=compression, encoding=encoding, errors=errors,
                       linedelimiter=linedelimiter, collection=False,
-                      **storage_options)
+                      storage_options=storage_options)
                      for fn in path], [])
     else:
         if compression == 'infer':
