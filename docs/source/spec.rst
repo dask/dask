@@ -10,16 +10,17 @@ values.
 Definitions
 -----------
 
-A **dask graph** is a dictionary mapping data-keys to values or tasks:
+A **dask graph** is a dictionary mapping **keys** to **computations**:
 
 .. code-block:: python
 
    {'x': 1,
     'y': 2,
     'z': (add, 'x', 'y'),
-    'w': (sum, ['x', 'y', 'z'])}
+    'w': (sum, ['x', 'y', 'z']),
+    'v': [(sum, ['w', 'z']), 2]}
 
-A **key** is any hashable value that is not a task:
+A **key** is any hashable value that is not a **task**:
 
 .. code-block:: python
 
@@ -35,25 +36,27 @@ units of work meant to be run by a single worker. Example:
 
 We represent a task as a tuple such that the *first element is a callable
 function* (like ``add``), and the succeeding elements are *arguments* for that
-function.
+function. An *argument* may be any valid **computation**.
 
-An **argument** may be one of the following:
+A **computation** may be one of the following:
 
-1.  Any key present in the dask like ``'x'``
+1.  Any **key** present in the dask graph like ``'x'``
 2.  Any other value like ``1``, to be interpreted literally
-3.  Other tasks like ``(inc, 'x')``
-4.  List of arguments, like ``[1, 'x', (inc, 'x')]``
+3.  A **task** like ``(inc, 'x')`` (see below)
+4.  A list of **computations**, like ``[1, 'x', (inc, 'x')]``
 
-So all of the following are valid tasks:
+So all of the following are valid **computations**:
 
 .. code-block:: python
 
+   np.array([...])
    (add, 1, 2)
    (add, 'x', 2)
    (add, (inc, 'x'), 2)
    (sum, [1, 2])
    (sum, ['x', (inc, 'x')])
    (np.dot, np.array([...]), np.array([...]))
+   [(sum, ['x', 'y']), 'z']
 
 To encode keyword arguments, we recommend the use of ``functools.partial`` or
 ``toolz.curry``.
