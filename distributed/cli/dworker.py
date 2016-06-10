@@ -61,7 +61,7 @@ def main(center, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     services = {('http', http_port): HTTPWorker}
 
-    loop = IOLoop.current()
+    loop = IOLoop()
     t = Worker if no_nanny else Nanny
     if host is not None:
         ip = socket.gethostbyname(host)
