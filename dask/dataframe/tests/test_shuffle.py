@@ -96,7 +96,7 @@ def test_partitioning_index():
     np.testing.assert_equal(res, exp)
 
 
-@pytest.mark.parametrize('npartitions', [1, 4, 7, 23])
+@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
 def test_set_partition_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
@@ -143,7 +143,7 @@ def test_set_partition_tasks_names():
             set(ddf.set_index('x', drop=False, method='tasks').dask))
 
 
-def test_set_partition_tasks():
+def test_set_partition_tasks_2():
     df = dd.demo.make_timeseries('2000', '2004',
             {'value': float, 'name': str, 'id': int},
             freq='2H', partition_freq='1M', seed=1)
@@ -152,15 +152,28 @@ def test_set_partition_tasks():
     df2.value.sum().compute(get=get_sync)
 
 
+def test_set_partition_tasks_3():
+    npartitions = 5
+    df = pd.DataFrame(np.random.random((10, 2)), columns=['x', 'y'])
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    ddf2 = ddf.set_index('x', method='tasks', max_branch=2)
+    df2 = df.set_index('x')
+    eq(df2, ddf2)
+    assert ddf2.npartitions == ddf.npartitions
+
+
 def test_shuffle_pre_partition():
-    from dask.dataframe.shuffle import shuffle_pre_partition
+    from dask.dataframe.shuffle import (shuffle_pre_partition_scalar,
+                                        shuffle_pre_partition_series)
     df = pd.DataFrame({'x': np.random.random(10),
                        'y': np.random.random(10)},
                        index=np.random.random(10))
     divisions = df.x.quantile([0, 0.2, 0.4, 0.6, 0.8, 1.0]).tolist()
 
-    for ind in ['x', df.x]:
-        result = shuffle_pre_partition(df, ind, divisions, True)
+    for ind, pre in [('x', shuffle_pre_partition_scalar),
+                     (df.x, shuffle_pre_partition_series)]:
+        result = pre(df, ind, divisions, True)
         assert list(result.columns)[:2] == ['x', 'y']
         assert result.index.name == 'partitions'
         for x, part in result.reset_index()[['x', 'partitions']].values.tolist():
