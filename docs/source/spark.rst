@@ -16,12 +16,24 @@ tries to do this; we welcome any corrections.
 Summary
 -------
 
-Apache Spark is more mature and better integrates with HDFS.  It handles
-resiliency and was originally built to scale up to thousands of workers.
+Apache Spark is an all-inclusive framework combining distributed computing,
+SQL queries, machine learning, and more that runs on the JVM and is commonly
+co-deployed with other Big Data frameworks like Hadoop.  It was originally
+optimized for bulk data ingest and querying common in data engineering and
+business analytics but has since broadened out.  Spark is typically used on
+small to medium sized cluster but also runs well on a single machine.
 
-Dask is trivially installable, doesn't use the Java Virtual Machine (JVM),
-and was originally built to handle numeric workloads in a large single
-workstation very efficiently.
+Dask is a parallel programming library that combines with the Numeric Python
+ecosystem to provide parallel arrays, dataframes, machine learning, and custom
+algorithms.  It is based on Python and the foundational C/Fortran stack.  Dask
+was originally designed to complement other libraries with parallelism,
+particular for numeric computing and advanced analytics, but has since
+broadened out.  Dask is typically used on a single machine, but also runs well
+on a distributed cluster.
+
+Generally Dask is smaller and lighter weight than Spark.  This means that it
+has fewer features and instead is intended to be used in conjunction with other
+libraries, particularly those in the numeric Python ecosystem.
 
 
 User-Facing Differences
@@ -38,7 +50,8 @@ run in standalone mode on a single machine.
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a distributed_ cluster.
+disk.  That being said dask can run on a distributed_ cluster, making use of
+HDFS and other Big Data technologies.
 
 .. _distributed: http://distributed.readthedocs.io/
 
@@ -77,7 +90,7 @@ accustomed to native code execution.
 Dask has an advantage for Python users because it is itself a Python library,
 so serialization and debugging when things go wrong happens more smoothly.
 
-However, dask only benefits Python users while Spark is useful in a
+However, Dask only benefits Python users while Spark is useful in a
 variety of JVM languages (Scala, Java, Clojure) and also has limited support in
 Python and R.  New Spark projects like the DataFrame skip serialization and
 boxed execution issues by forgoing the Python process entirely and instead have
@@ -97,7 +110,9 @@ graph with arbitrary data dependencies.  This allows more general computations
 to be built by users within the dask framework.  This is probably the largest
 fundamental difference between the two projects.  Dask gives up high-level
 understanding to allow users to express more complex parallel algorithms.  This
-ended up being essential when writing complex projects like ``dask.array``.
+ended up being essential when writing complex projects like ``dask.array``,
+datetime algorithms in ``dask.dataframe`` or non-trivial algorithms in machine
+learning.handling in .
 
 
 Developer-Facing Differences
@@ -143,13 +158,18 @@ more familiar to those who enjoy Lisp and "code as data structures".
 Conclusion
 ----------
 
-If you have petabytes of JSON files, a simple workflow,  and a thousand node
-cluster then you should probably use Spark.  If you have 10s-1000s of gigabytes
-of binary or numeric data, complex algorithms, and a large multi-core
-workstation then you should probably use dask.
+Spark is mature and all-inclusive.  If you want a single project that does
+everything and you're already on Big Data hardware then Spark is a safe bet,
+especially if your use cases are typical ETL + SQL and you're already using
+Scala.
 
-If you have a terabyte or less of CSV or JSON data then you should forget both
-Spark and Dask and use Postgres_ or MongoDB_.
+Dask is lighter weight and is easier to integrate into existing code and hardware.
+If your problems vary beyond typical ETL + SQL and you want to add flexible
+parallelism to existing solutions then dask may be a good fit, especially if
+you are already using Python and associated libraries like NumPy and Pandas.
+
+If you are looking to manage a terabyte or less of tabular CSV or JSON data
+then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
 
 
 .. _Spark: https://spark.apache.org/
