@@ -182,3 +182,14 @@ def test_shuffle_pre_partition():
                 assert part == len(divisions) - 2
             else:
                 assert divisions[part] <= x < divisions[part + 1]
+
+
+@pytest.mark.parametrize('method', ['tasks', 'disk'])
+def test_shuffle_sort(method):
+    df = pd.DataFrame({'x': [1, 2, 3, 2, 1], 'y': [9, 8, 7, 1, 5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    df2 = df.set_index('x').sort_index()
+    ddf2 = ddf.set_index('x', method=method)
+
+    eq(ddf2.loc[2:3], df2.loc[2:3])

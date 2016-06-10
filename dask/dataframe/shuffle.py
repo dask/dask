@@ -378,7 +378,8 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
     dsk = merge(df2.dask, start, end, *(groups + splits + joins))
 
     meta = df._pd.set_index(index if np.isscalar(index) else index._pd)
-    return DataFrame(dsk, 'shuffle-' + token, meta, divisions)
+    result = DataFrame(dsk, 'shuffle-' + token, meta, divisions)
+    return result.map_partitions(pd.DataFrame.sort_index, result)
 
 
 def set_partition_disk(df, index, divisions, compute=False, drop=True, **kwargs):
@@ -457,4 +458,5 @@ def set_partition_disk(df, index, divisions, compute=False, drop=True, **kwargs)
     if compute:
         dsk, _ = cull(dsk, list(dsk4.keys()))
 
-    return DataFrame(dsk, name, metadata, divisions)
+    result = DataFrame(dsk, name, metadata, divisions)
+    return result.map_partitions(pd.DataFrame.sort_index, result)
