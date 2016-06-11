@@ -36,6 +36,14 @@ class Processing(RequestHandler):
         self.write(resp)
 
 
+class Stacks(RequestHandler):
+    """ Active tasks on each worker """
+    def get(self):
+        resp = {addr: [ensure_string(key_split(t)) for t in tasks]
+                for addr, tasks in self.server.stacks.items()}
+        self.write(resp)
+
+
 class Broadcast(RequestHandler):
     """ Send call to all workers, collate their responses """
     @gen.coroutine
@@ -93,6 +101,7 @@ def HTTPScheduler(scheduler):
         (r'/info.json', Info, {'server': scheduler}),
         (r'/resources.json', Resources, {'server': scheduler}),
         (r'/processing.json', Processing, {'server': scheduler}),
+        (r'/stacks.json', Stacks, {'server': scheduler}),
         (r'/proxy/([\w.-]+):(\d+)/(.+)', Proxy),
         (r'/broadcast/(.+)', Broadcast, {'server': scheduler}),
         (r'/tasks.json', Tasks, {'server': scheduler}),
