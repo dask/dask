@@ -2504,6 +2504,15 @@ def _process_val_weights(vals_and_weights, finalq):
     return rv
 
 
+def _weighted_percentiles(df, num_old, num_new, upsample=1.0, random_state=None):
+    from dask.array.percentile import _percentile
+    length = len(df)
+    qs = _sample_percentiles(num_old, num_new, length, upsample, random_state)
+    vals = _percentile(df.values, qs)
+    vals_and_weights = _prepare_percentile_merge(qs, vals, length)
+    return vals_and_weights
+
+
 def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
@@ -2525,32 +2534,21 @@ def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     seeds = different_seeds(df.npartitions, random_state)
 
     name1 = 're-quantiles-1-' + token
-    len_dsk = dict(((name1, i), (len, key)) for i, key in enumerate(df._keys()))
+    val_dsk = dict(((name1, i), (_weighted_percentiles, key, df.npartitions,
+                                 npartitions, upsample, seeds[i]))
+                   for i, key in enumerate(df._keys()))
 
     name2 = 're-quantiles-2-' + token
-    qs_dsk = dict(((name2, i), (_sample_percentiles, df.npartitions,
-                                npartitions, (name1, i), upsample, seeds[i]))
-                  for i, key in enumerate(df._keys()))
-
-    name3 = 're-quantiles-3-' + token
-    pct_dsk = dict(((name3, i), (_percentile, (getattr, key, 'values'), (name2, i)))
-                   for i, key in enumerate(df._keys()))
-
-    name4 = 're-quantiles-4-' + token
-    val_dsk = dict(((name4, i), (_prepare_percentile_merge,
-                                 (name2, i), (name3, i), (name1, i)))
-                   for i, key in enumerate(df._keys()))
-
-    name5 = 're-quantiles-5-' + token
-    merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name5)
+    merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name2)
 
     merged_key = max(merge_dsk or val_dsk)
 
-    name6 = 're-quantiles-6-' + token
-    last_dsk = {(name6, 0): (merge_type, (_process_val_weights, merged_key, qs))}
+    name3 = 're-quantiles-3-' + token
+    last_dsk = {(name3, 0): (merge_type, (_process_val_weights, merged_key, qs))}
 
-    dsk = merge(df.dask, qs_dsk, pct_dsk, val_dsk, len_dsk, merge_dsk, last_dsk)
-    return return_type(dsk, name6, df.name, new_divisions)
+    # dsk = merge(df.dask, qs_dsk, pct_dsk, val_dsk, len_dsk, merge_dsk, last_dsk)
+    dsk = merge(df.dask, val_dsk, merge_dsk, last_dsk)
+    return return_type(dsk, name3, df.name, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False):
