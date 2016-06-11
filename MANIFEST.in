@@ -1,10 +1,6 @@
 recursive-include distributed *.py
 recursive-include docs *.rst
 
-include bin/dworker
-include bin/dcenter
-include bin/dcluster
-include bin/dscheduler
 include setup.py
 include README.rst
 include LICENSE.txt

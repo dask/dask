@@ -17,10 +17,11 @@ from distributed.utils_test import loop
 
 def test_nanny_worker_ports(loop):
     try:
-        worker = Popen(['dworker', '127.0.0.1:8989', '--host', '127.0.0.1',
+        worker = Popen(['dask-worker', '127.0.0.1:8989', '--host', '127.0.0.1',
                         '--worker-port', '8788', '--nanny-port', '8789'],
                         stdout=PIPE, stderr=PIPE)
-        sched = Popen(['dscheduler', '--port', '8989'], stdout=PIPE, stderr=PIPE)
+        sched = Popen(['dask-scheduler', '--port', '8989'],
+                      stdout=PIPE, stderr=PIPE)
         with Executor('127.0.0.1:8989', loop=loop) as e:
             start = time()
             while True:

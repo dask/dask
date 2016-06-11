@@ -18,7 +18,7 @@ from distributed.utils import get_ip, ignoring
 
 def test_defaults():
     try:
-        proc = Popen(['dscheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['dask-scheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 
         response = requests.get('http://127.0.0.1:9786/info.json')
@@ -43,7 +43,7 @@ def test_no_bokeh():
     pytest.importorskip('bokeh')
 
     try:
-        proc = Popen(['dscheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['dask-scheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
         for i in range(3):
             line = proc.stderr.readline()
@@ -59,7 +59,7 @@ def test_bokeh():
     pytest.importorskip('bokeh')
 
     try:
-        proc = Popen(['dscheduler'], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['dask-scheduler'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 
         while True:
@@ -89,7 +89,7 @@ def test_bokeh_non_standard_ports():
     pytest.importorskip('bokeh')
 
     try:
-        proc = Popen(['dscheduler',
+        proc = Popen(['dask-scheduler',
                       '--port', '3448',
                       '--http-port', '4824',
                       '--bokeh-port', '4832'], stdout=PIPE, stderr=PIPE)
@@ -123,8 +123,8 @@ def test_bokeh_whitelist():
     pytest.importorskip('bokeh')
 
     try:
-        proc = Popen(['dscheduler', '--bokeh-whitelist', '127.0.0.2',
-                                    '--bokeh-whitelist', '127.0.0.3'],
+        proc = Popen(['dask-scheduler', '--bokeh-whitelist', '127.0.0.2',
+                                        '--bokeh-whitelist', '127.0.0.3'],
                      stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 

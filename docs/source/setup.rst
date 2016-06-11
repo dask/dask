@@ -8,26 +8,27 @@ A ``distributed`` network consists of one ``Scheduler`` node and several
 Using the Command Line
 ----------------------
 
-We launch the ``dscheduler`` executable in one process and the ``dworker``
-executable in several processes, possibly on different machines.
+We launch the ``dask-scheduler`` executable in one process and the
+``dask-worker`` executable in several processes, possibly on different
+machines.
 
-Launch ``dscheduler`` on one node::
+Launch ``dask-scheduler`` on one node::
 
-   $ dscheduler
+   $ dask-scheduler
    Start scheduler at 192.168.0.1:8786
 
-Then launch ``dworker`` on the rest of the nodes, providing the address to the
-node that hosts ``dscheduler``::
+Then launch ``dask-worker`` on the rest of the nodes, providing the address to the
+node that hosts ``dask-scheduler``::
 
-   $ dworker 192.168.0.1:8786
+   $ dask-worker 192.168.0.1:8786
    Start worker at:            192.168.0.2:12345
    Registered with center at:  192.168.0.1:8786
 
-   $ dworker 192.168.0.1:8786
+   $ dask-worker 192.168.0.1:8786
    Start worker at:            192.168.0.3:12346
    Registered with center at:  192.168.0.1:8786
 
-   $ dworker 192.168.0.1:8786
+   $ dask-worker 192.168.0.1:8786
    Start worker at:            192.168.0.4:12347
    Registered with center at:  192.168.0.1:8786
 
@@ -39,18 +40,18 @@ SGE/SLURM/Torque or Yarn/Mesos.
 Using SSH
 ---------
 
-For this functionality, `paramiko` library must be installed (e.g. by 
+For this functionality, `paramiko` library must be installed (e.g. by
 running `pip install paramiko`).
 
-The convenience script ``dcluster`` opens several SSH connections to your
-target computers and initializes the network accordingly. You can 
+The convenience script ``dask-ssh`` opens several SSH connections to your
+target computers and initializes the network accordingly. You can
 give it a list of hostnames or IP addresses::
 
-   $ dcluster 192.168.0.1 192.168.0.2 192.168.0.3 192.168.0.4
+   $ dask-ssh 192.168.0.1 192.168.0.2 192.168.0.3 192.168.0.4
 
 Or you can use normal UNIX grouping::
 
-   $ dcluster 192.168.0.{1,2,3,4}
+   $ dask-ssh 192.168.0.{1,2,3,4}
 
 Or you can specify a hostfile that includes a list of hosts::
 
@@ -60,7 +61,7 @@ Or you can specify a hostfile that includes a list of hosts::
    192.168.0.3
    192.168.0.4
 
-   $ dcluster --hostfile hostfile.txt
+   $ dask-ssh --hostfile hostfile.txt
 
 
 Using the Python API

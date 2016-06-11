@@ -10,9 +10,9 @@ import pytest
 @pytest.mark.avoid_travis
 def test_cluster(loop):
     with Cluster(scheduler_addr = '127.0.0.1',
-                 scheduler_port = 8787,
+                 scheduler_port = 8786,
                  worker_addrs = ['127.0.0.1', '127.0.0.1']) as c:
-        r = rpc(ip='127.0.0.1', port=8787)
+        r = rpc(ip='127.0.0.1', port=8786)
         result = []
         while len(result) != 2:
             result = loop.run_sync(r.ncores)
