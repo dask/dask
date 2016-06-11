@@ -2469,6 +2469,8 @@ def _merge_sorted(items):
 
 
 def _prepare_percentile_merge(qs, vals, length):
+    if length == 0:
+        return []
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
     return list(zip(vals, weights))
@@ -2491,7 +2493,9 @@ def _process_val_weights(vals_and_weights, finalq):
     else:
         left = np.searchsorted(q, desired_q, side='left')
         right = np.searchsorted(q, desired_q, side='right') - 1
-        np.minimum(left, len(vals) - 1, left)  # don't exceed max index
+        # stay inbounds
+        np.minimum(left, len(vals) - 1, left)
+        np.maximum(right, 0, right)
         lower = np.minimum(left, right)
         rv = vals[lower]
     return rv
@@ -2534,8 +2538,10 @@ def _repartition_quantiles(df, npartitions, upsample=1.0):
     name5 = 're-quantiles-5-' + token
     merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name5)
 
+    merged_key = max(merge_dsk or val_dsk)
+
     name6 = 're-quantiles-6-' + token
-    last_dsk = {(name6, 0): (merge_type, (_process_val_weights, max(merge_dsk), qs))}
+    last_dsk = {(name6, 0): (merge_type, (_process_val_weights, merged_key, qs))}
 
     dsk = merge(df.dask, qs_dsk, pct_dsk, val_dsk, len_dsk, merge_dsk, last_dsk)
     return return_type(dsk, name6, df.name, new_divisions)
