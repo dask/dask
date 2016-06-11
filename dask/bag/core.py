@@ -121,6 +121,8 @@ def to_textfiles(b, path, name_function=str, compression='infer',
 
     Use a globstring and a ``name_function=`` keyword argument.  The
     name_function function should expect an integer and produce a string.
+    Strings produced by name_function must preserve the order of their
+    respective partition indices.
 
     >>> from datetime import date, timedelta
     >>> def name(i):
@@ -156,12 +158,16 @@ def to_textfiles(b, path, name_function=str, compression='infer',
 
     """
     if isinstance(path, (str, unicode)):
-        if '*' in path:
-            paths = [path.replace('*', name_function(i))
-                     for i in range(b.npartitions)]
-        else:
-            paths = [os.path.join(path, '%s.part' % name_function(i))
-                     for i in range(b.npartitions)]
+        if not '*' in path:
+            path = os.path.join(path, '*.part')
+
+        formatted_names = [name_function(i) for i in range(b.npartitions)]
+        if formatted_names != sorted(formatted_names):
+            warn("In order to preserve order between partitions "
+                 "name_function must preserve the order of its input")
+
+        paths = [path.replace('*', name_function(i))
+                 for i in range(b.npartitions)]
     elif isinstance(path, (tuple, list, set)):
         assert len(path) == b.npartitions
         paths = path

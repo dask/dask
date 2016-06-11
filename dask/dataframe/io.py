@@ -406,7 +406,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
 
-    # if path_or_buf is string, format using i and name
+    # if path_or_buf is string, format using i_name
     if isinstance(path_or_buf, str):
         if path_or_buf.count('*') + key.count('*') > 1:
             raise ValueError("A maximum of one asterisk is accepted in file path and dataset key")
@@ -417,6 +417,14 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             raise ValueError("A maximum of one asterisk is accepted in dataset key")
 
         fmt_obj = lambda path_or_buf, _: path_or_buf
+
+    # we guarantee partition order is preserved when its saved and read
+    # so we enforce name_function to maintain the order of its input.
+    if '*' in key or (isinstance(path_or_buf, str) and '*' in path_or_buf):
+        formatted_names = [name_function(i) for i in range(df.npartitions)]
+        if formatted_names != sorted(formatted_names):
+            warn("In order to preserve order between partitions "
+                 "name_function must preserve the order of its input")
 
     dsk = dict()
     i_name = name_function(0)

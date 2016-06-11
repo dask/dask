@@ -10,7 +10,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, reify, partition, inline_singleton_lists, optimize,
         system_encoding, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, reduce
-from dask.utils import filetexts, tmpfile, raises, open
+from dask.utils import filetexts, tmpfile, tmpdir, raises, open
 from dask.async import get_sync
 import dask
 import dask.bag as db
@@ -19,10 +19,9 @@ import io
 import shutil
 import os
 import partd
+import sys
 
 from collections import Iterator
-
-from dask.utils import tmpdir
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -647,6 +646,22 @@ def test_to_textfiles():
             assert 'xyz' in text
             f.close()
 
+def test_to_textfiles_name_function_preserves_order():
+    seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
+    b = db.from_sequence(seq, npartitions=16)
+    with tmpdir() as dn:
+        b.to_textfiles(dn)
+
+        out = db.read_text(os.path.join(dn, "*"), encoding='ascii').map(str).map(str.strip).compute()
+        assert seq == out
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_to_textfiles_name_function_warn():
+    seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
+    a = db.from_sequence(seq, npartitions=16)
+    with tmpdir() as dn:
+        with pytest.warns(None):
+            a.to_textfiles(dn, name_function=str)
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
@@ -673,7 +688,7 @@ def test_to_textfiles_inputs():
             assert os.path.exists(a)
             assert os.path.exists(b)
 
-    with tmpfile() as dirname:
+    with tmpdir() as dirname:
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
