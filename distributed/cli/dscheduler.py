@@ -44,6 +44,9 @@ signal.signal(signal.SIGTERM, handle_signal)
 def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelist):
     given_host = host
     host = host or get_ip()
+    if ':' in host and port == 8786:
+        host, port = host.rsplit(':', 1)
+    port = int(port)
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,

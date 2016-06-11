@@ -29,6 +29,16 @@ def test_defaults():
         os.kill(proc.pid, signal.SIGINT)
 
 
+def test_hostport():
+    try:
+        proc = Popen(['dscheduler', '--no-bokeh', '--host', '127.0.0.1:8978'],
+                     stdout=PIPE, stderr=PIPE)
+        e = Executor('127.0.0.1:8978')
+    finally:
+        e.shutdown()
+        os.kill(proc.pid, signal.SIGINT)
+
+
 def test_no_bokeh():
     pytest.importorskip('bokeh')
 
