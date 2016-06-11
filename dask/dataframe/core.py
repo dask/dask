@@ -11,7 +11,7 @@ from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, partial, first, partition, unique
+from toolz import merge, partial, first, partition, unique, merge_sorted, take
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -1027,10 +1027,10 @@ class Series(_Frame):
         """
         return quantile(self, q)
 
-    def _repartition_quantiles(self, npartitions):
+    def _repartition_quantiles(self, npartitions, upsample=1.0):
         """ Approximate quantiles of Series used for repartitioning
         """
-        return _repartition_quantiles(self, npartitions)
+        return _repartition_quantiles(self, npartitions, upsample=upsample)
 
     @derived_from(pd.Series)
     def resample(self, rule, how=None, closed=None, label=None):
@@ -2335,7 +2335,7 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def _sample_percentiles(num_old, num_new, chunk_length):
+def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0):
     """Construct percentiles for a chunk for repartitioning.
 
     Adapt the number of total percentiles calculated based on the number
@@ -2351,6 +2351,8 @@ def _sample_percentiles(num_old, num_new, chunk_length):
         Number of partitions of the new object
     chunk_length: int
         Number of rows of the partition
+    upsample : float
+        Multiplicative factor to increase the number of samples
 
     Returns
     -------
@@ -2390,65 +2392,153 @@ def _sample_percentiles(num_old, num_new, chunk_length):
     """
     # *waves hands*
     random_percentage = 1 / (1 + (4.0 * num_new / num_old)**0.5)
-    num_percentiles = num_new * (num_old + 22)**0.55 / num_old
+    num_percentiles = upsample * num_new * (num_old + 22)**0.55 / num_old
     num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
     num_random = int(num_percentiles * random_percentage) + 2
 
-    if num_fixed + num_random + 2 >= chunk_length:
+    if num_fixed + num_random + 5 >= chunk_length:
         return np.linspace(0, 100, chunk_length + 1)
 
     q_fixed = np.linspace(0, 100, num_fixed)
     q_random = np.random.rand(num_random) * 100
-    q = np.concatenate([q_fixed, q_random])
-    q.sort()
-    return q
+    q_edges = [0.5 / num_fixed, 1 - 0.5 / num_fixed]
+    qs = np.concatenate([q_fixed, q_random, q_edges])
+    qs.sort()
+    return qs
 
 
-def _repartition_quantiles(df, npartitions):
+def tree_width(N, to_binary=False):
+    """Generate tree width suitable for ``merge_sorted`` given N inputs
+
+    In theory, this is designed so all tasks are of comparable effort.
+
+    """
+    if N < 32:
+        group_size = 2
+    else:
+        group_size = int(math.log(N))
+    num_groups = N // group_size
+    if to_binary or num_groups < 16:
+        return 2**int(math.log(float(N) / group_size, 2))
+    else:
+        return num_groups
+
+
+def tree_groups(N, num_groups):
+    """Split an integer N into evenly sized and spaced groups.
+
+    >>> tree_groups(16, 6)
+    [3, 2, 3, 3, 2, 3]
+
+    """
+    # Bresenham, you so smooth!
+    group_size = N // num_groups
+    dx = num_groups
+    dy = N - group_size * num_groups
+    D = 2*dy - dx
+    rv = []
+    for _ in range(num_groups):
+        if D < 0:
+            rv.append(group_size)
+        else:
+            rv.append(group_size + 1)
+            D -= 2*dx
+        D += 2*dy
+    return rv
+
+
+def create_merge_tree(func, keys, token):
+    level = 0
+    prev_width = len(keys)
+    prev_keys = iter(keys)
+    rv = {}
+    while prev_width > 1:
+        width = tree_width(prev_width)
+        groups = tree_groups(prev_width, width)
+        keys = [(token, level, i) for i in range(width)]
+        rv.update((key, (func, list(take(num, prev_keys))))
+                   for num, key in zip(groups, keys))
+        prev_width = width
+        prev_keys = iter(keys)
+        level += 1
+    return rv
+
+
+def _merge_sorted(items):
+    return list(merge_sorted(*items))
+
+
+def _prepare_percentile_merge(qs, vals, length):
+    diff = np.ediff1d(qs, 0.0, 0.0)
+    weights = 0.5 * length * (diff[1:] + diff[:-1])
+    return list(zip(vals, weights))
+
+
+def _process_val_weights(vals_and_weights, finalq):
+    """Calculate final percentiles given weighted vals"""
+    vals, weights = zip(*vals_and_weights)
+    vals = np.array(vals)
+    weights = np.array(weights)
+
+    # percentile-like, but scaled by weights
+    q = np.cumsum(weights)
+
+    # rescale finalq percentiles to match q
+    desired_q = finalq * q[-1]
+
+    if np.issubdtype(vals.dtype, np.number):
+        rv = np.interp(desired_q, q, vals)
+    else:
+        left = np.searchsorted(q, desired_q, side='left')
+        right = np.searchsorted(q, desired_q, side='right') - 1
+        np.minimum(left, len(vals) - 1, left)  # don't exceed max index
+        lower = np.minimum(left, right)
+        rv = vals[lower]
+    return rv
+
+
+def _repartition_quantiles(df, npartitions, upsample=1.0):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
-    from dask.array.percentile import _percentile, merge_percentiles
+    from dask.array.percentile import _percentile
 
-    q = np.linspace(0, 1, npartitions + 1)
+    qs = np.linspace(0, 1, npartitions + 1)
     # currently, only Series has quantile method
     # Index.quantile(list-like) must be pd.Series, not pd.Index
-    df_name = df.name
-    merge_type = lambda v: pd.Series(v, index=q, name=df_name)
+    merge_type = lambda v: pd.Series(v, index=qs, name=df.name)
     return_type = df._constructor
     if issubclass(return_type, Index):
         return_type = Series
 
-    # pandas uses quantile in [0, 1]
-    # numpy / everyone else uses [0, 100]
-    qs = np.asarray(q) * 100
+    new_divisions = [0.0, 1.0]
     token = tokenize(df, qs)
-
-    if len(qs) == 0:
-        name = 're-quantiles-' + token
-        empty_index = pd.Index([], dtype=float)
-        return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
-                       name, df.name, [None, None])
-    else:
-        new_divisions = [0.0, 1.0]
 
     name1 = 're-quantiles-1-' + token
     len_dsk = dict(((name1, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name2 = 're-quantiles-2-' + token
     qs_dsk = dict(((name2, i), (_sample_percentiles, df.npartitions,
-                                npartitions, (name1, i)))
+                                npartitions, (name1, i), upsample))
                   for i, key in enumerate(df._keys()))
 
     name3 = 're-quantiles-3-' + token
-    val_dsk = dict(((name3, i), (_percentile, (getattr, key, 'values'), (name2, i)))
+    pct_dsk = dict(((name3, i), (_percentile, (getattr, key, 'values'), (name2, i)))
                    for i, key in enumerate(df._keys()))
 
     name4 = 're-quantiles-4-' + token
-    merge_dsk = {(name4, 0): (merge_type, (merge_percentiles, qs, sorted(qs_dsk),
-                                          sorted(val_dsk), sorted(len_dsk)))}
-    dsk = merge(df.dask, qs_dsk, val_dsk, len_dsk, merge_dsk)
-    return return_type(dsk, name4, df.name, new_divisions)
+    val_dsk = dict(((name4, i), (_prepare_percentile_merge,
+                                 (name2, i), (name3, i), (name1, i)))
+                   for i, key in enumerate(df._keys()))
+
+    name5 = 're-quantiles-5-' + token
+    merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name5)
+
+    name6 = 're-quantiles-6-' + token
+    last_dsk = {(name6, 0): (merge_type, (_process_val_weights, max(merge_dsk), qs))}
+
+    dsk = merge(df.dask, qs_dsk, pct_dsk, val_dsk, len_dsk, merge_dsk, last_dsk)
+    return return_type(dsk, name6, df.name, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False):

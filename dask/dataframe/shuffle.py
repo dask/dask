@@ -19,7 +19,7 @@ from ..utils import digit, insert
 
 
 def set_index(df, index, npartitions=None, method=None, compute=True,
-              drop=True, **kwargs):
+              drop=True, upsample=1.0, **kwargs):
     """ Set DataFrame index to new column
 
     Sorts index and realigns Dataframe to new sorted order.
@@ -40,8 +40,7 @@ def set_index(df, index, npartitions=None, method=None, compute=True,
         index2 = index
 
     divisions = (index2
-                  #.quantile(np.linspace(0, 1, npartitions + 1))
-                  ._repartition_quantiles(npartitions)
+                  ._repartition_quantiles(npartitions, upsample=upsample)
                   .compute()).tolist()
 
     return set_partition(df, index, divisions, compute=compute,
