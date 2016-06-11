@@ -2981,3 +2981,56 @@ def test_default_get(loop):
         assert _globals['get'] == e.get
         e.shutdown()
         assert _globals['get'] is pre_get
+
+
+@gen_cluster(executor=True)
+def test_get_stacks_processing(e, s, a, b):
+    stacks = yield e.scheduler.stacks()
+    assert stacks == valmap(list, s.stacks)
+
+    processing = yield e.scheduler.processing()
+    assert processing == valmap(list, s.processing)
+
+    futures = e.map(slowinc, range(10), delay=0.1, workers=[a.address],
+                    allow_other_workers=True)
+
+    yield gen.sleep(0.2)
+
+    stacks = yield e.scheduler.stacks()
+    assert stacks == valmap(list, s.stacks)
+
+    processing = yield e.scheduler.processing()
+    assert processing == valmap(list, s.processing)
+
+
+def test_get_stacks_processing_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            stacks = e.stacks()
+            processing = e.processing()
+            assert len(stacks) == len(processing) == 2
+            assert not any(v for v in stacks.values())
+            assert not any(v for v in processing.values())
+
+            futures = e.map(slowinc, range(10), delay=0.1,
+                            workers=[('127.0.0.1', a['port'])],
+                            allow_other_workers=True)
+
+            sleep(0.2)
+
+            aa = '127.0.0.1:%d' % a['port']
+            bb = '127.0.0.1:%d' % b['port']
+            stacks = e.stacks()
+            processing = e.processing()
+
+            assert stacks[aa]
+            assert all(k.startswith('slowinc') for k in stacks[aa])
+            assert stacks[bb] == []
+
+            assert set(e.stacks(aa)) == {aa}
+            assert set(e.stacks([aa])) == {aa}
+
+            assert set(e.processing(aa)) == {aa}
+            assert set(e.processing([aa])) == {aa}
+
+            e.cancel(futures)

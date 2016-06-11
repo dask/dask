@@ -228,6 +228,8 @@ class Scheduler(Server):
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has,
+                         'stacks': self.get_stacks,
+                         'processing': self.get_processing,
                          'nbytes': self.get_nbytes,
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
@@ -1698,6 +1700,20 @@ class Scheduler(Server):
         except (OSError, IOError, StreamClosedError):
             if teardown:
                 teardown(self, state)
+
+    def get_stacks(self, stream=None, workers=None):
+        if workers is not None:
+            workers = set(map(self.coerce_address, workers))
+            return {w: list(self.stacks[w]) for w in workers}
+        else:
+            return valmap(list, self.stacks)
+
+    def get_processing(self, stream=None, workers=None):
+        if workers is not None:
+            workers = set(map(self.coerce_address, workers))
+            return {w: list(self.processing[w]) for w in workers}
+        else:
+            return valmap(list, self.processing)
 
     def get_who_has(self, stream=None, keys=None):
         if keys is not None:
