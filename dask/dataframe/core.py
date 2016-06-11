@@ -2335,7 +2335,7 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0):
+def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):
     """Construct percentiles for a chunk for repartitioning.
 
     Adapt the number of total percentiles calculated based on the number
@@ -2399,8 +2399,11 @@ def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0):
     if num_fixed + num_random + 5 >= chunk_length:
         return np.linspace(0, 100, chunk_length + 1)
 
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+
     q_fixed = np.linspace(0, 100, num_fixed)
-    q_random = np.random.rand(num_random) * 100
+    q_random = random_state.rand(num_random) * 100
     q_edges = [0.5 / num_fixed, 1 - 0.5 / num_fixed]
     qs = np.concatenate([q_fixed, q_random, q_edges])
     qs.sort()
@@ -2501,7 +2504,7 @@ def _process_val_weights(vals_and_weights, finalq):
     return rv
 
 
-def _repartition_quantiles(df, npartitions, upsample=1.0):
+def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
@@ -2517,13 +2520,16 @@ def _repartition_quantiles(df, npartitions, upsample=1.0):
 
     new_divisions = [0.0, 1.0]
     token = tokenize(df, qs)
+    if random_state is None:
+        random_state = hash(token) % np.iinfo(np.int32).max
+    seeds = different_seeds(df.npartitions, random_state)
 
     name1 = 're-quantiles-1-' + token
     len_dsk = dict(((name1, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name2 = 're-quantiles-2-' + token
     qs_dsk = dict(((name2, i), (_sample_percentiles, df.npartitions,
-                                npartitions, (name1, i), upsample))
+                                npartitions, (name1, i), upsample, seeds[i]))
                   for i, key in enumerate(df._keys()))
 
     name3 = 're-quantiles-3-' + token
