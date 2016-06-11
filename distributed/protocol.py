@@ -198,6 +198,17 @@ def dumps_big_byte_dict(d):
         loads_big_byte_dict
     """
     assert isinstance(d, dict) and all(isinstance(v, bytes) for v in d.values())
+    shards = {}
+    for k, v in list(d.items()):
+        if len(v) >= 2**31:
+            L = []
+            for i, j in enumerate(range(0, len(v), 2**30)):
+                key = '.shard-%d-%s' % (i, k)
+                d[key] = v[j: j + 2**30]
+                L.append(key)
+            del d[k]
+            shards[k] = L
+
     keys, values = zip(*d.items())
 
     compress = compressions[default_compression]['compress']
@@ -211,6 +222,8 @@ def dumps_big_byte_dict(d):
     header = {'encoding': 'big-byte-dict',
               'keys': keys,
               'compression': compression}
+    if shards:
+        header['shards'] = shards
 
     return [msgpack.dumps(header, use_bin_type=True)] + values2
 
@@ -225,4 +238,8 @@ def loads_big_byte_dict(header, *values):
 
     values2 = [compressions[c]['decompress'](v)
                for c, v in zip(header['compression'], values)]
-    return dict(zip(header['keys'], values2))
+    result = dict(zip(header['keys'], values2))
+
+    for k, keys in header.get('shards', {}).items():
+        result[k] = b''.join(result.pop(kk) for kk in keys)
+    return result

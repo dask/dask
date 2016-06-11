@@ -79,3 +79,15 @@ def test_maybe_compress_sample():
     fmt, compressed = maybe_compress(payload, 'lz4')
     assert fmt == None
     assert compressed == payload
+
+
+def test_large_messages():
+    psutil = pytest.importorskip('psutil')
+    pytest.importorskip('lz4')
+    if psutil.virtual_memory().total < 8e9:
+        return
+    msg = {'x': b'0' * (2**31 + 10)}
+
+    b = dumps(msg)
+    msg2 = loads(b)
+    assert msg == msg2
