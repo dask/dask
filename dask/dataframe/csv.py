@@ -116,7 +116,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
 
 
 def read_csv(filename, blocksize=2**25, chunkbytes=None,
-        collection=True, lineterminator='\n', compression=None,
+        collection=True, lineterminator=None, compression=None,
         sample=256000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
 
@@ -150,8 +150,10 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     **kwargs: dict
         Options to pass down to ``pandas.read_csv``
     """
-    if len(lineterminator) == 1:
+    if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
+    else:
+        lineterminator = '\n'
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
         blocksize=chunkbytes
