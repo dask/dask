@@ -63,6 +63,11 @@ def basic_rolling_tests(p, d): # Works for series or df
     eq(p.rolling(1).sum(), d.rolling(1).sum())
     # Test with kwargs
     eq(p.rolling(3, min_periods=2).sum(), d.rolling(3, min_periods=2).sum())
+    # Test with center
+    eq(p.rolling(3, center=True).max(), d.rolling(3, center=True).max())
+    eq(p.rolling(3, center=False).std(), d.rolling(3, center=False).std())
+    eq(p.rolling(6, center=True).var(), d.rolling(6, center=True).var())
+    eq(p.rolling(7, center=True).skew(), d.rolling(7, center=True).skew())
 
 
 def test_rolling_functions_series():
@@ -88,9 +93,22 @@ def test_rolling_funtions_dataframe():
 
 def test_rolling_dataframe():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randint(100, size=(25,))})
-    ddf = dd.from_pandas(df, 3)
-    basic_rolling_tests(df, ddf)
+                       'b': np.random.randint(100, size=(25,)),
+                       'c': np.random.randint(100, size=(25,)),
+                       'd': np.random.randint(100, size=(25,)),
+                       'e': np.random.randint(100, size=(25,))})
+    for n in [1, 2, 3]:
+        ddf = dd.from_pandas(df, n)
+
+        # Dataframe-specific tests (not shared with series)
+        eq(df.rolling(3, axis=1).max(), ddf.rolling(3, axis=1).max())
+        eq(df.rolling(3, axis='columns').mean(), ddf.rolling(3, axis='columns').mean())
+
+        eq(df.rolling(3, center=True, axis=1).max(), ddf.rolling(3, center=True, axis=1).max())
+        eq(df.rolling(3, center=False, axis=1).std(), ddf.rolling(3, center=False, axis=1).std())
+        eq(df.rolling(6, center=True, axis=1).var(), ddf.rolling(6, center=True, axis=1).var())
+        eq(df.rolling(7, center=True, axis='columns').skew(),
+           ddf.rolling(7, center=True, axis='columns').skew())
 
 
 def test_rolling_functions_raises():
@@ -170,5 +188,9 @@ def test_rolling_partition_size():
 
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10]*30), npartitions=3)
-    assert repr(ddf.rolling(4)) in ['Rolling [window=4,axis=0]',
-                                    'Rolling [axis=0,window=4]']
+    assert repr(ddf.rolling(4)) in ['Rolling [window=4,center=False,axis=0]',
+                                    'Rolling [window=4,axis=0,center=False]',
+                                    'Rolling [center=False,axis=0,window=4]',
+                                    'Rolling [center=False,window=4,axis=0]',
+                                    'Rolling [axis=0,window=4,center=False]',
+                                    'Rolling [axis=0,center=False,window=4]']

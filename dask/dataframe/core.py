@@ -579,25 +579,10 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
-    def rolling(self, window, min_periods=None, win_type=None, axis=0):
-        """Provides rolling transformations.
-
-        Parameters
-        ----------
-
-        window: int
-            Size of the moving window. This window must be smaller
-            than the size of the previous partition.
-        min_periods: int, default None
-            Minimum number of observations in window required to have
-            a value (otherwise result is NA).
-        win_type: string, default None
-            Provide a window type. (Identical to pandas.)
-        axis: int, default 0
-            Provide the axis to apply the function. (Identical to pandas.)
-
-        The center argument and deprecated freq argument are not supported.
-        """
+    def rolling(self, window, min_periods=None, freq=None, center=False,
+                win_type=None, axis=0):
+        # TODO: docstring. (Should soon be identical to pandas, except
+        # with a proviso about window too big for a partition.
         from dask.dataframe.rolling import Rolling
 
         if not isinstance(window, int):
@@ -612,7 +597,7 @@ class _Frame(Base):
                 raise ValueError('min_periods must be >= 0')
 
         return Rolling(self, window=window, min_periods=min_periods,
-                       axis=axis, win_type=win_type)
+                       freq=freq, center=center, win_type=win_type, axis=axis)
 
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True):
