@@ -625,3 +625,10 @@ def insert(tup, loc, val):
     L = list(tup)
     L[loc] = val
     return tuple(L)
+
+
+def memory_repr(num):
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f%s %s" % (num, '', x)
+        num /= 1024.0
