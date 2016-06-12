@@ -31,7 +31,7 @@ def test_simple(s, a, b):
 
 
 @gen_cluster()
-def test_processing(s, a, b):
+def test_processing_stacks(s, a, b):
     server = HTTPScheduler(s)
     server.listen(0)
     client = AsyncHTTPClient()
@@ -39,6 +39,11 @@ def test_processing(s, a, b):
     s.processing[a.address][('foo-1', 1)] = 1
 
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
+    response = json.loads(response.body.decode())
+    assert response == {a.address: ['foo'], b.address: []}
+
+    s.stacks[a.address].append(('foo-1', 2))
+    response = yield client.fetch('http://localhost:%d/stacks.json' % server.port)
     response = json.loads(response.body.decode())
     assert response == {a.address: ['foo'], b.address: []}
 
