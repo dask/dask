@@ -2388,7 +2388,6 @@ def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_sta
     For numeric data, one could instead use T-Digest for floats and Q-Digest
     for ints to calculate approximate percentiles.  Our current method works
     for any dtype.
-
     """
     # *waves hands*
     random_percentage = 1 / (1 + (4.0 * num_new / num_old)**0.5)
@@ -2414,7 +2413,6 @@ def tree_width(N, to_binary=False):
     """Generate tree width suitable for ``merge_sorted`` given N inputs
 
     In theory, this is designed so all tasks are of comparable effort.
-
     """
     if N < 32:
         group_size = 2
@@ -2432,7 +2430,6 @@ def tree_groups(N, num_groups):
 
     >>> tree_groups(16, 6)
     [3, 2, 3, 3, 2, 3]
-
     """
     # Bresenham, you so smooth!
     group_size = N // num_groups
@@ -2451,6 +2448,25 @@ def tree_groups(N, num_groups):
 
 
 def create_merge_tree(func, keys, token):
+    """Create a task tree that merges all the keys with a reduction function.
+
+    Parameters
+    ----------
+    func: callable
+        Reduction function that accepts a single list of values to reduce.
+    keys: iterable
+        Keys to reduce from the source dask graph.
+    token: object
+        Included in each key of the returned dict.
+
+    This creates a k-ary tree where k depends on the current level and is
+    greater the further away a node is from the root node.  This reduces the
+    total number of nodes (thereby reducing scheduler overhead), but still
+    has beneficial properties of trees.
+
+    For reasonable numbers of keys, N < 1e5, the total number of nodes in the
+    tree is approximately N**0.78.
+    """
     level = 0
     prev_width = len(keys)
     prev_keys = iter(keys)
@@ -2497,7 +2513,6 @@ def _process_val_weights(vals_and_weights, finalq):
         left = np.searchsorted(q, desired_q, side='left')
         right = np.searchsorted(q, desired_q, side='right') - 1
         # stay inbounds
-        np.minimum(left, len(vals) - 1, left)
         np.maximum(right, 0, right)
         lower = np.minimum(left, right)
         rv = vals[lower]
@@ -2528,7 +2543,7 @@ def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
         return_type = Series
 
     new_divisions = [0.0, 1.0]
-    token = tokenize(df, qs)
+    token = tokenize(df, qs, upsample)
     if random_state is None:
         random_state = hash(token) % np.iinfo(np.int32).max
     seeds = different_seeds(df.npartitions, random_state)
@@ -2546,7 +2561,6 @@ def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     name3 = 're-quantiles-3-' + token
     last_dsk = {(name3, 0): (merge_type, (_process_val_weights, merged_key, qs))}
 
-    # dsk = merge(df.dask, qs_dsk, pct_dsk, val_dsk, len_dsk, merge_dsk, last_dsk)
     dsk = merge(df.dask, val_dsk, merge_dsk, last_dsk)
     return return_type(dsk, name3, df.name, new_divisions)
 
