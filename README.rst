@@ -16,8 +16,8 @@ New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt
 .. _documentation: http://dask.pydata.org/en/latest/
 .. |Build Status| image:: https://travis-ci.org/dask/dask.svg
    :target: https://travis-ci.org/dask/dask
-.. |Coverage| image:: https://coveralls.io/repos/mrocklin/dask/badge.svg
-   :target: https://coveralls.io/r/mrocklin/dask
+.. |Coverage| image:: https://coveralls.io/repos/dask/dask/badge.svg
+   :target: https://coveralls.io/r/dask/dask
    :alt: Coverage status
 .. |Doc Status| image:: http://readthedocs.org/projects/dask/badge/?version=latest
    :target: https://readthedocs.io/projects/dask/?badge=latest
