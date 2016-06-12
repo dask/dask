@@ -27,7 +27,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds)
+                     pseudorandom, derived_from, different_seeds, memory_repr)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 
