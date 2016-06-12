@@ -391,12 +391,37 @@ class _Frame(Base):
         if isinstance(ind, Series):
             return self._loc_series(ind)
         if self.known_divisions:
+            ind = self._maybe_time_slice(ind, kind='loc')
             if isinstance(ind, slice):
                 return self._loc_slice(ind)
             else:
                 return self._loc_element(ind)
         else:
             return map_partitions(try_loc, self, self, ind)
+
+    def _maybe_time_slice(self, ind, kind):
+        index = self._pd.index
+
+        if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
+            return ind
+
+        if isinstance(ind, slice):
+            if isinstance(ind.start, pd.compat.string_types):
+                start = index._maybe_cast_slice_bound(ind.start, 'left', kind)
+            else:
+                start = ind.start
+
+            if isinstance(ind.stop, pd.compat.string_types):
+                stop = index._maybe_cast_slice_bound(ind.stop, 'right', kind)
+            else:
+                stop = ind.stop
+            return slice(start, stop)
+
+        elif isinstance(ind, pd.compat.string_types):
+            start = index._maybe_cast_slice_bound(ind, 'left', 'loc')
+            stop = index._maybe_cast_slice_bound(ind, 'right', 'loc')
+            return slice(start, stop)
+        return ind
 
     def _loc_series(self, ind):
         if not self.divisions == ind.divisions:
@@ -416,6 +441,7 @@ class _Frame(Base):
     def _loc_slice(self, ind):
         name = 'loc-%s' % tokenize(ind, self)
         assert ind.step in (None, 1)
+
         if ind.start:
             start = _partition_of_index_value(self.divisions, ind.start)
         else:
@@ -1393,12 +1419,19 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
         if np.isscalar(key):
+
+            if isinstance(self._pd.index, (pd.DatetimeIndex, pd.PeriodIndex)):
+                if key not in self._pd.columns:
+                    return self._loc(key)
+
             # error is raised from pandas
             dummy = self._pd[_extract_pd(key)]
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                         for i in range(self.npartitions))
             return self._constructor_sliced(merge(self.dask, dsk), name,
                                             dummy, self.divisions)
+        elif isinstance(key, slice):
+            return self._loc(key)
 
         if isinstance(key, list):
             # error is raised from pandas
