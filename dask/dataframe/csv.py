@@ -7,6 +7,8 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 
+import psutil
+
 from ..delayed import delayed
 from .io import from_delayed
 
@@ -16,6 +18,8 @@ from ..bytes.compression import seekable_files, files as cfiles
 
 delayed = delayed(pure=True)
 
+MEMORY_FRACTION = 10
+BLOCK_SIZE = int(round(psutil.virtual_memory().total/MEMORY_FRACTION))
 
 def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
                    write_header=True, enforce=False):
@@ -115,7 +119,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
         return dfs
 
 
-def read_csv(filename, blocksize=2**25, chunkbytes=None,
+def read_csv(filename, blocksize=BLOCK_SIZE, chunkbytes=None,
         collection=True, lineterminator='\n', compression=None,
         sample=256000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
