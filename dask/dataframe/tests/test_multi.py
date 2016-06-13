@@ -556,3 +556,19 @@ def test_cheap_single_partition_merge():
 
     list_eq(aa.merge(bb, on='x', how='inner'),
             a.merge(b, on='x', how='inner'))
+
+
+@pytest.mark.parametrize('lhs', [pd.DataFrame({'A': [1, 2, 3],
+                                               'B': list('abc'),
+                                               'C': 'foo',
+                                               'D': 1.0},
+                                              columns=list('DCBA'))])
+@pytest.mark.parametrize('rhs', [pd.DataFrame({'G': [4, 5],
+                                               'H': 6.0,
+                                               'I': 'bar',
+                                               'B': list('ab')},
+                                              columns=list('GHIB'))])
+def test_merge_maintains_columns(lhs, rhs):
+    ddf = dd.from_pandas(lhs, npartitions=1)
+    merged = dd.merge(ddf, rhs, on='B').compute()
+    assert tuple(merged.columns) == ('D', 'C', 'B', 'A', 'G', 'H', 'I')
