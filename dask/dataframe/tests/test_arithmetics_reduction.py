@@ -612,17 +612,21 @@ def test_reductions():
         assert eq(dds.var(skipna=False, ddof=0), pds.var(skipna=False, ddof=0))
         assert eq(dds.mean(skipna=False), pds.mean(skipna=False))
 
+
     assert_dask_graph(ddf1.b.sum(), 'series-sum')
     assert_dask_graph(ddf1.b.min(), 'series-min')
     assert_dask_graph(ddf1.b.max(), 'series-max')
     assert_dask_graph(ddf1.b.count(), 'series-count')
-    assert_dask_graph(ddf1.b.std(), 'series-std(ddof=1)')
-    assert_dask_graph(ddf1.b.var(), 'series-var(ddof=1)')
-    assert_dask_graph(ddf1.b.std(ddof=0), 'series-std(ddof=0)')
-    assert_dask_graph(ddf1.b.var(ddof=0), 'series-var(ddof=0)')
+    assert_dask_graph(ddf1.b.std(), 'series-std')
+    assert_dask_graph(ddf1.b.var(), 'series-var')
+    assert_dask_graph(ddf1.b.std(ddof=0), 'series-std')
+    assert_dask_graph(ddf1.b.var(ddof=0), 'series-var')
     assert_dask_graph(ddf1.b.mean(), 'series-mean')
     # nunique is performed using drop-duplicates
     assert_dask_graph(ddf1.b.nunique(), 'drop-duplicates')
+
+    eq(ddf1.index.min(), pdf1.index.min())
+    eq(ddf1.index.max(), pdf1.index.max())
 
 
 def test_reduction_series_invalid_axis():
@@ -747,13 +751,13 @@ def test_reductions_frame():
     assert_dask_graph(ddf1.mean(), 'dataframe-count')
 
     # axis=1
-    assert_dask_graph(ddf1.sum(axis=1), 'dataframe-sum(axis=1)')
-    assert_dask_graph(ddf1.min(axis=1), 'dataframe-min(axis=1)')
-    assert_dask_graph(ddf1.max(axis=1), 'dataframe-max(axis=1)')
-    assert_dask_graph(ddf1.count(axis=1), 'dataframe-count(axis=1)')
-    assert_dask_graph(ddf1.std(axis=1), 'dataframe-std(axis=1, ddof=1)')
-    assert_dask_graph(ddf1.var(axis=1), 'dataframe-var(axis=1, ddof=1)')
-    assert_dask_graph(ddf1.mean(axis=1), 'dataframe-mean(axis=1)')
+    assert_dask_graph(ddf1.sum(axis=1), 'dataframe-sum')
+    assert_dask_graph(ddf1.min(axis=1), 'dataframe-min')
+    assert_dask_graph(ddf1.max(axis=1), 'dataframe-max')
+    assert_dask_graph(ddf1.count(axis=1), 'dataframe-count')
+    assert_dask_graph(ddf1.std(axis=1), 'dataframe-std')
+    assert_dask_graph(ddf1.var(axis=1), 'dataframe-var')
+    assert_dask_graph(ddf1.mean(axis=1), 'dataframe-mean')
 
 
 def test_reductions_frame_dtypes():

@@ -6,7 +6,6 @@ import os
 import dask
 import pytest
 from threading import Lock
-import tempfile
 import shutil
 from time import sleep
 import threading
@@ -383,8 +382,7 @@ def test_consistent_dtypes_2():
 
 @pytest.mark.slow
 def test_compression_multiple_files():
-    tdir = tempfile.mkdtemp()
-    try:
+    with tmpdir() as tdir:
         f = gzip.open(os.path.join(tdir, 'a.csv.gz'), 'wb')
         f.write(text.encode())
         f.close()
@@ -396,8 +394,6 @@ def test_compression_multiple_files():
         df = dd.read_csv(os.path.join(tdir, '*.csv.gz'), compression='gzip')
 
         assert len(df.compute()) == (len(text.split('\n')) - 1) * 2
-    finally:
-        shutil.rmtree(tdir)
 
 
 def test_empty_csv_file():
@@ -904,8 +900,7 @@ def test_hdf_globbing():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
 
-    tdir = tempfile.mkdtemp()
-    try:
+    with tmpdir() as tdir:
         df.to_hdf(os.path.join(tdir, 'one.h5'), '/foo/data', format='table')
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/bar/data', format='table')
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/foo/data', format='table')
@@ -933,8 +928,6 @@ def test_hdf_globbing():
             res = dd.read_hdf(os.path.join(tdir, '*.h5'), '/*/data', chunksize=2)
             assert res.npartitions == 2 + 2 + 2
             tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
-    finally:
-        shutil.rmtree(tdir)
 
 
 def test_index_col():

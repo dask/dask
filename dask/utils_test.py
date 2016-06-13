@@ -1,15 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
 from .core import get
-import unittest
+
 
 def inc(x):
     return x + 1
 
+
 def add(x, y):
     return x + y
 
-class GetFunctionTestCase(unittest.TestCase):
+
+class GetFunctionTestMixin(object):
     """
     The GetFunctionTestCase class can be imported and used to test foreign
     implementations of the `get` function specification. It aims to enforce all
@@ -18,18 +20,14 @@ class GetFunctionTestCase(unittest.TestCase):
     To use the class, inherit from it and override the `get` function. For
     example:
 
-    > from dask.utils_test import GetFunctionTestCase
-    > class CustomGetTestCase(GetFunctionTestCase):
+    > from dask.utils_test import GetFunctionTestMixin
+    > class TestCustomGet(GetFunctionTestMixin):
          get = staticmethod(myget)
 
     Note that the foreign `myget` function has to be explicitly decorated as a
     staticmethod.
     """
     get = staticmethod(get)
-
-    def runTest(self):
-        """This method is needed for compatibility with PY2 unittest.TestCase"""
-        pass
 
     def test_get(self):
         d = {':x': 1,
@@ -51,7 +49,7 @@ class GetFunctionTestCase(unittest.TestCase):
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'
             msg += "Obtained '{}' instead.".format(result)
-            self.assertTrue(False, msg=msg.format(self.get.__name__))
+            assert False, msg.format(self.get.__name__)
 
     def test_nested_badkey(self):
         d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
@@ -63,7 +61,7 @@ class GetFunctionTestCase(unittest.TestCase):
         else:
             msg = 'Expected `{}` with badkey to raise KeyError.\n'
             msg += "Obtained '{}' instead.".format(result)
-            self.assertTrue(False, msg=msg.format(self.get.__name__))
+            assert False, msg.format(self.get.__name__)
 
     def test_data_not_in_dict_is_ok(self):
         d = {'x': 1, 'y': (add, 'x', 10)}
@@ -74,6 +72,20 @@ class GetFunctionTestCase(unittest.TestCase):
 
         assert self.get(d, ['x', 'y']) == (1, 2)
         assert self.get(d, 'z') == 3
+
+    def test_get_with_list_top_level(self):
+        d = {'a': [1, 2, 3],
+             'b': 'a',
+             'c': [1, (inc, 1)],
+             'd': [(sum, 'a')],
+             'e': ['a', 'b'],
+             'f': [[[(sum, 'a'), 'c'], (sum, 'b')], 2]}
+        assert self.get(d, 'a') == [1, 2, 3]
+        assert self.get(d, 'b') == [1, 2, 3]
+        assert self.get(d, 'c') == [1, 2]
+        assert self.get(d, 'd') == [6]
+        assert self.get(d, 'e') == [[1, 2, 3], [1, 2, 3]]
+        assert self.get(d, 'f') == [[[6, [1, 2]], 6], 2]
 
     def test_get_with_nested_list(self):
         d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
@@ -110,6 +122,6 @@ class GetFunctionTestCase(unittest.TestCase):
                 assert str(e).startswith('Found no accessible jobs in dask')
         else:
             msg = 'dask with infinite cycle should have raised an exception.'
-            self.assertTrue(False, msg=msg)
+            assert False, msg
 
         assert self.get(d, 'x4999') == 4999

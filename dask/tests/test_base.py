@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import tempfile
 import os
 import shutil
 import pytest
@@ -10,7 +9,7 @@ import sys
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize)
-from dask.utils import raises, tmpfile, ignoring
+from dask.utils import raises, tmpdir, tmpfile, ignoring
 from dask.compatibility import unicode
 
 
@@ -273,8 +272,7 @@ def test_compute_with_literal():
 @pytest.mark.skipif('not da')
 def test_visualize():
     pytest.importorskip('graphviz')
-    try:
-        d = tempfile.mkdtemp()
+    with tmpdir() as d:
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, 'mydask'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
@@ -285,5 +283,3 @@ def test_visualize():
         dsk = {'a': 1, 'b': (add, 'a', 2), 'c': (mul, 'a', 1)}
         visualize(x, dsk, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
-    finally:
-        shutil.rmtree(d)

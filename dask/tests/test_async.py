@@ -7,7 +7,7 @@ import dask
 import pytest
 
 from dask.async import *
-from dask.utils_test import GetFunctionTestCase
+from dask.utils_test import GetFunctionTestMixin
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -54,6 +54,18 @@ def test_start_state_with_independent_but_runnable_tasks():
     assert start_state_from_dask({'x': (inc, 1)})['ready'] == ['x']
 
 
+def test_start_state_with_tasks_no_deps():
+    dsk = {'a': [1, (inc, 2)],
+           'b': [1, 2, 3, 4],
+           'c': (inc, 3)}
+    state = start_state_from_dask(dsk)
+    assert list(state['cache'].keys()) == ['b']
+    assert 'a' in state['ready'] and 'c' in state['ready']
+    deps = dict((k, set()) for k in 'abc')
+    assert state['dependencies'] == deps
+    assert state['dependents'] == deps
+
+
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     sortkey = order(dsk).get
@@ -85,7 +97,8 @@ def test_finish_task():
           'waiting_data': {'y': set(['w']),
                            'z': set(['w'])}}
 
-class TestGetAsync(GetFunctionTestCase):
+
+class TestGetAsync(GetFunctionTestMixin):
     get = staticmethod(get_sync)
 
     def test_get_sync_num_workers(self):

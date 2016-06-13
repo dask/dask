@@ -576,11 +576,11 @@ def funcname(func, full=False):
         func = func.func
     try:
         if full:
-            return func.__qualname__
+            return func.__qualname__.strip('<>')
         else:
-            return func.__name__
+            return func.__name__.strip('<>')
     except:
-        return str(func)
+        return str(func).strip('<>')
 
 
 def ensure_bytes(s):

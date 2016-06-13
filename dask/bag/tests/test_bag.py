@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial, valmap)
+        partial, valmap, groupby, pluck)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, reify, partition, inline_singleton_lists, optimize,
@@ -19,9 +19,10 @@ import io
 import shutil
 import os
 import partd
-from tempfile import mkdtemp
 
 from collections import Iterator
+
+from dask.utils import tmpdir
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -632,11 +633,10 @@ def test_to_dataframe():
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
-    dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-        assert c.npartitions == b.npartitions
-        try:
+        with tmpdir() as dir:
+            c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
+            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
@@ -646,18 +646,14 @@ def test_to_textfiles():
                 text = text.decode()
             assert 'xyz' in text
             f.close()
-        finally:
-            if os.path.exists(dir):
-                shutil.rmtree(dir)
 
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
-    dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-        assert c.npartitions == b.npartitions
-        try:
+        with tmpdir() as dir:
+            c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
+            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
@@ -667,9 +663,6 @@ def test_to_textfiles_encoding():
                 text = text.decode('gb18030')
             assert u'天气' in text
             f.close()
-        finally:
-            if os.path.exists(dir):
-                shutil.rmtree(dir)
 
 
 def test_to_textfiles_inputs():
@@ -862,7 +855,7 @@ def test_groupby_tasks():
     for a in partitions:
         for b in partitions:
             if a is not b:
-                assert not set(a) & set(b)
+                assert not set(pluck(0, a)) & set(pluck(0, b))
 
 
     b = db.from_sequence(range(1000), npartitions=100)
@@ -873,7 +866,7 @@ def test_groupby_tasks():
     for a in partitions:
         for b in partitions:
             if a is not b:
-                assert not set(a) & set(b)
+                assert not set(pluck(0, a)) & set(pluck(0, b))
 
 
     b = db.from_sequence(range(10000), npartitions=345)
@@ -883,7 +876,7 @@ def test_groupby_tasks():
     for a in partitions:
         for b in partitions:
             if a is not b:
-                assert not set(a) & set(b)
+                assert not set(pluck(0, a)) & set(pluck(0, b))
 
 
 def test_groupby_tasks_names():
@@ -896,3 +889,27 @@ def test_groupby_tasks_names():
             set(b.groupby(func, max_branch=2, method='tasks').dask))
     assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
             set(b.groupby(func2, max_branch=4, method='tasks').dask))
+
+
+@pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
+                                                     (12345, 234, 1042)])
+def test_groupby_tasks_2(size, npartitions, groups):
+    func = lambda x: x % groups
+    b = db.range(size, npartitions=npartitions).groupby(func, method='tasks')
+    result = b.compute(get=dask.get)
+    assert dict(result) == groupby(func, range(size))
+
+
+def test_groupby_tasks_3():
+    func = lambda x: x % 10
+    b = db.range(20, npartitions=5).groupby(func, method='tasks', max_branch=2)
+    result = b.compute(get=dask.get)
+    assert dict(result) == groupby(func, range(20))
+    # assert b.npartitions == 5
+
+
+def test_to_textfiles_empty_partitions():
+    with tmpdir() as d:
+        b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
+        b.to_textfiles(os.path.join(d, '*.txt'))
+        assert len(os.listdir(d)) == 5

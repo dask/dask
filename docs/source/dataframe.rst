@@ -19,4 +19,4 @@ Other topics
    :maxdepth: 1
 
    dataframe-partitions.rst
-   groupby.rst
+   dataframe-groupby.rst

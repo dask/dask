@@ -148,10 +148,16 @@ class _GroupBy(object):
 
         # grouping key passed via groupby method
         if (isinstance(index, (DataFrame, Series, Index)) and
-                isinstance(df, DataFrame) and
-                index._name.startswith(df._name) and
-                index._name[len(df._name) + 1:] in df.columns):
-            index = index._name[len(df._name) + 1:]
+            isinstance(df, DataFrame)):
+
+            if (isinstance(index, Series) and index.name in df.columns and
+                index._name == df[index.name]._name):
+                index = index.name
+            elif (isinstance(index, DataFrame) and
+                set(index.columns).issubset(df.columns) and
+                index._name == df[index.columns]._name):
+                index = list(index.columns)
+
         self.index = index
 
         # slicing key applied to _GroupBy instance
@@ -183,10 +189,16 @@ class _GroupBy(object):
         """
         Return whether index is a Series sliced from df
         """
-        if isinstance(df, DataFrame) and isinstance(index, Series):
-            if (index.name is not None and
-                    index._name == df._name + '.' + index.name):
-                return True
+        if isinstance(df, Series):
+            return False
+        if (isinstance(index, Series) and index._name in df.columns and
+            index._name == df[index.name]._name):
+            return True
+        if (isinstance(index, DataFrame) and
+            set(index.columns).issubset(df.columns) and
+            index._name == df[index.columns]._name):
+            index = list(index.columns)
+            return True
         return False
 
     def _head(self):

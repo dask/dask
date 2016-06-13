@@ -4,7 +4,7 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
-*   Update version number in __init__.py, setup.py. Commit.
+*   Update version number in ``__init__.py``, ``setup.py``. Commit.
 
 *   Tag commit
 
@@ -16,7 +16,9 @@ Release per project:
 
 *  Upload to PyPI
 
-        python setup.py register sdist bdist upload
+        rm -rf dist
+        python setup.py register sdist bdist_wheel --universal
+        twine upload dist/*
 
 *   Update anaconda recipe.
 

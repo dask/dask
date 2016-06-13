@@ -119,7 +119,7 @@ import sys
 import traceback
 
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-                   _deps)
+                   has_tasks)
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
@@ -168,7 +168,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
         cache = dict()
     data_keys = set()
     for k, v in dsk.items():
-        if not (istask(v) or _deps(dsk, v)):
+        if not has_tasks(dsk, v):
             cache[k] = v
             data_keys.add(k)
 
