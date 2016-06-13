@@ -2496,7 +2496,7 @@ def _prepare_percentile_merge(qs, vals, length):
     >>> _prepare_percentile_merge(percentiles, values, length)
     [(2, 125.0), (3, 250.0), (5, 325.0), (8, 250.0), (13, 50.0)]
 
-    The weight of the first element, ``2``, is determed by the difference
+    The weight of the first element, ``2``, is determined by the difference
     between the first and second percentiles, and then scaled by length:
 
     >>> 0.5 * length * (percentiles[1] - percentiles[0])
