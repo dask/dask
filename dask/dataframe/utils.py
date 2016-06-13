@@ -100,7 +100,7 @@ def unique(divisions):
         return np.unique(divisions)
     if isinstance(divisions, pd.Categorical):
         return pd.Categorical.from_codes(np.unique(divisions.codes),
-                divisions.categories, divisions.ordered)
+            divisions.categories, divisions.ordered)
     if isinstance(divisions, (tuple, list, Iterator)):
         return tuple(toolz.unique(divisions))
     raise NotImplementedError()
@@ -114,7 +114,7 @@ _simple_fake_mapping = {
     'c': complex(1, 0),   # complex
     'S': b'foo',   # bytestring
     'U': u'foo',   # unicode string
-    'V': np.void0,   # void
+    'V': np.array([b' '], dtype=np.void)[0],  # void
     'M': np.datetime64('1970-01-01'),
     'm': np.timedelta64(1, 'D'),
 }
@@ -124,18 +124,19 @@ def nonempty_sample_df(empty):
     """ Create a dataframe from the given empty dataframe that contains one
     row of fake data (generated from the empty dataframe's dtypes).
     """
-    nonempty = empty.copy()
+    nonempty = {}
+    idx = pd.RangeIndex(start=0, stop=1, step=1)
     for key, dtype in empty.dtypes.iteritems():
-        if dtype.kind in _simple_fake_mapping:
-            entry = _simple_fake_mapping[dtype.kind]
-        elif is_datetime64tz_dtype(dtype):
-            entry = pd.to_datetime(datetime.datetime.now(), utc=True)
+        if is_datetime64tz_dtype(dtype):
+            entry = pd.Timestamp('1970-01-01', tz='America/New_York')
         elif pd.core.common.is_categorical_dtype(dtype):
             accessor = empty[key].cat
             example = accessor.categories[0]
             cat = pd.Categorical([example], categories=accessor.categories,
                                  ordered=accessor.ordered)
             entry = pd.Series(cat, name=key)
+        elif dtype.kind in _simple_fake_mapping:
+            entry = _simple_fake_mapping[dtype.kind]
         elif is_extension_type(dtype):
             raise TypeError("Can't handle extension dtype: {}".format(dtype))
         elif dtype.name == 'object':
@@ -144,10 +145,12 @@ def nonempty_sample_df(empty):
             raise TypeError("Can't handle dtype: {}".format(dtype))
 
         if not isinstance(entry, pd.Series):
-            entry = pd.Series([entry], name=key)
+            entry = pd.Series([entry], name=key, index=idx)
+
         nonempty[key] = entry
 
-    return nonempty
+    df = pd.DataFrame(nonempty)
+    return df
 
 
 ###############################################################
