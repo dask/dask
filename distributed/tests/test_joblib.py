@@ -8,6 +8,14 @@ from joblib import parallel_backend, Parallel, delayed
 
 import distributed.joblib
 from distributed.utils_test import inc, cluster, loop
+from time import sleep
+
+
+def slow_raise_value_error(condition, duration=0.05):
+    sleep(duration)
+    if condition:
+        raise ValueError("condition evaluated to True")
+
 
 def test_simple(loop):
     with cluster() as (s, [a, b]):
@@ -16,6 +24,10 @@ def test_simple(loop):
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
+
+            with pytest.raises(ValueError):
+                Parallel()(delayed(slow_raise_value_error)(i == 3)
+                    for i in range(10))
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
