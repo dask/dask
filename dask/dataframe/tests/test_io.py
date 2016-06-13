@@ -44,13 +44,13 @@ Edith,600
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=30, lineterminator='\n')
+        f = dd.read_csv(fn, chunkbytes=30, lineterminator=os.linesep)
         assert list(f.columns) == ['name', 'amount']
         assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, lineterminator='\n'))
+                  pd.read_csv(fn))
 
 
 def test_read_multiple_csv():
@@ -416,7 +416,7 @@ def test_from_pandas_dataframe():
     msg = 'Exactly one of npartitions and chunksize must be specified.'
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.from_pandas(df, npartitions=2, chunksize=2)
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with tm.assertRaisesRegexp((ValueError, AssertionError), msg):
         dd.from_pandas(df)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
