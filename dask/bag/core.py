@@ -36,7 +36,8 @@ from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (infer_compression, open, system_encoding,
-                     takes_multiple_arguments, funcname, digit, insert)
+                     takes_multiple_arguments, funcname, digit, insert,
+                     build_name_function)
 
 no_default = '__no__default__'
 
@@ -101,7 +102,7 @@ def optimize(dsk, keys, **kwargs):
     return dsk5
 
 
-def to_textfiles(b, path, name_function=str, compression='infer',
+def to_textfiles(b, path, name_function=None, compression='infer',
                  encoding=system_encoding, compute=True):
     """ Write bag to disk, one filename per partition, one line per element
 
@@ -158,6 +159,9 @@ def to_textfiles(b, path, name_function=str, compression='infer',
 
     """
     if isinstance(path, (str, unicode)):
+        if name_function is None:
+            name_function = build_name_function(b.npartitions - 1)
+
         if not '*' in path:
             path = os.path.join(path, '*.part')
 
@@ -507,7 +511,7 @@ class Bag(Base):
         return tuple(self.pluck(i) for i in range(n))
 
     @wraps(to_textfiles)
-    def to_textfiles(self, path, name_function=str, compression='infer',
+    def to_textfiles(self, path, name_function=None, compression='infer',
                      encoding=system_encoding, compute=True):
         return to_textfiles(self, path, name_function, compression, encoding, compute)
 

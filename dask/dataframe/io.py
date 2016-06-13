@@ -22,6 +22,7 @@ from ..async import get_sync
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 
+from ..utils import build_name_function
 
 lock = Lock()
 
@@ -401,7 +402,7 @@ def _link(token, result):
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, get=get_sync, dask_kwargs=None,
-           name_function=str, **kwargs):
+           name_function=None, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -417,6 +418,9 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             raise ValueError("A maximum of one asterisk is accepted in dataset key")
 
         fmt_obj = lambda path_or_buf, _: path_or_buf
+
+    if name_function is None:
+        name_function = build_name_function(df.npartitions - 1)
 
     # we guarantee partition order is preserved when its saved and read
     # so we enforce name_function to maintain the order of its input.
