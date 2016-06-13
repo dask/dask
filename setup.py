@@ -9,7 +9,7 @@ extras_require = {
   'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.3'],
   'dataframe': ['numpy', 'pandas >= 0.18.0', 'toolz >= 0.7.2',
                 'partd >= 0.3.3', 'cloudpickle >= 0.2.1'],
-  'distributed': ['distributed >= 1.9'],
+  'distributed': ['distributed >= 1.10'],
   'imperative': ['toolz >= 0.7.2'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
