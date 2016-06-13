@@ -286,9 +286,13 @@ def disconnect(ip, port):
 
 
 import pytest
-slow = pytest.mark.skipif(
-            not pytest.config.getoption("--runslow"),
-            reason="need --runslow option to run")
+try:
+    slow = pytest.mark.skipif(
+                not pytest.config.getoption("--runslow"),
+                reason="need --runslow option to run")
+except AttributeError:
+    def slow(*args):
+        pass
 
 
 from tornado import gen

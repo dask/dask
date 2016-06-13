@@ -865,7 +865,7 @@ def test_coerce_address():
     yield [w._close() for w in [a, b, c]]
 
 
-@pytest.mark.skipif(sys.platform.startswith('windows'),
+@pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="file descriptors not really a thing")
 def test_file_descriptors_dont_leak(loop):
     psutil = pytest.importorskip('psutil')
