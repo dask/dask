@@ -2390,7 +2390,7 @@ def _sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_sta
     for any dtype.
     """
     # *waves hands*
-    random_percentage = 1 / (1 + (4.0 * num_new / num_old)**0.5)
+    random_percentage = 1 / (1 + (4 * num_new / num_old)**0.5)
     num_percentiles = upsample * num_new * (num_old + 22)**0.55 / num_old
     num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
     num_random = int(num_percentiles * random_percentage) + 2
@@ -2420,7 +2420,7 @@ def tree_width(N, to_binary=False):
         group_size = int(math.log(N))
     num_groups = N // group_size
     if to_binary or num_groups < 16:
-        return 2**int(math.log(float(N) / group_size, 2))
+        return 2**int(math.log(N / group_size, 2))
     else:
         return num_groups
 
@@ -2488,6 +2488,27 @@ def _merge_sorted(items):
 
 
 def _prepare_percentile_merge(qs, vals, length):
+    """Weigh percentile values by length and the difference between percentiles
+
+    >>> percentiles = [0, 25, 50, 90, 100]
+    >>> values = [2, 3, 5, 8, 13]
+    >>> length = 10
+    >>> _prepare_percentile_merge(percentiles, values, length)
+    [(2, 125.0), (3, 250.0), (5, 325.0), (8, 250.0), (13, 50.0)]
+
+    The weight of the first element, ``2``, is determed by the difference
+    between the first and second percentiles, and then scaled by length:
+
+    >>> 0.5 * length * (percentiles[1] - percentiles[0])
+    125.0
+
+    The second weight uses the difference of percentiles on both sides, so
+    it will be twice the first weight if the percentiles are equally spaced:
+
+    >>> 0.5 * length * (percentiles[2] - percentiles[0])
+    250.0
+
+    """
     if length == 0:
         return []
     diff = np.ediff1d(qs, 0.0, 0.0)
