@@ -1398,7 +1398,6 @@ class DataFrame(_Frame):
 
             if isinstance(self._pd.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._pd.columns:
-                    print('xxx')
                     return self._loc(key)
 
             # error is raised from pandas
