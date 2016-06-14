@@ -15,7 +15,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
 
-from dask.utils import filetext, filetexts, tmpfile, tmpdir
+from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
@@ -706,7 +706,7 @@ def test_to_hdf():
         tm.assert_frame_equal(df, out[:])
 
 
-def test_to_hdf_multiple_datasets():
+def test_to_hdf_multiple_nodes():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
@@ -716,24 +716,17 @@ def test_to_hdf_multiple_datasets():
                             index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     b = dd.from_pandas(df16, 16)
 
-    # saving to multiple datasets making sure order is kept
-    with tmpfile('h5') as fn:
-        b.to_hdf(fn, '/data*')
-        out = dd.read_hdf(fn, '/data*')
-        eq(df16, out)
-
-    # saving to multiple datasets
+    # saving to multiple nodes
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
         eq(df, out)
 
-    # saving to multiple files
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data')
-        out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+    # saving to multiple nodes making sure order is kept
+    with tmpfile('h5') as fn:
+        b.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df16, out)
 
     # saving to multiple datasets with custom name_function
     with tmpfile('h5') as fn:
@@ -745,6 +738,38 @@ def test_to_hdf_multiple_datasets():
         tm.assert_frame_equal(out, df.iloc[:2])
         out = pd.read_hdf(fn, '/data_aa')
         tm.assert_frame_equal(out, df.iloc[2:])
+
+    # test multiple nodes with hdf object
+    with tmpfile('h5') as fn:
+        with pd.HDFStore(fn) as hdf:
+            b.to_hdf(hdf, '/data*')
+            out = dd.read_hdf(fn, '/data*')
+            eq(df16, out)
+
+
+def test_to_hdf_multiple_files():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    b = dd.from_pandas(df16, 16)
+
+    # saving to multiple files
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # saving to multiple files making sure order is kept
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        b.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df16, out)
 
     # saving to multiple files with custom name_function
     with tmpdir() as dn:
@@ -758,6 +783,169 @@ def test_to_hdf_multiple_datasets():
         out = pd.read_hdf(os.path.join(dn, 'data_aa.h5'), '/data')
         tm.assert_frame_equal(out, df.iloc[2:])
 
+    # test hdf object
+    with tmpfile('h5') as fn:
+        with pd.HDFStore(fn) as hdf:
+            a.to_hdf(hdf, '/data*')
+            out = dd.read_hdf(fn, '/data*')
+            eq(df, out)
+
+
+def test_to_hdf_modes_multiple_nodes():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    # appending a single partition to existing data
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # overwriting a file with a single partition
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='w')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+    # appending two partitions to existing data
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # overwriting a file with two partitions
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='w')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+    # overwriting a single partition, keeping other partitions
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data1')
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a', append=False)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+
+def test_to_hdf_modes_multiple_files():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    # appending a single partition to existing data
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data2'), '/data')
+        a.to_hdf(fn, '/data', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # appending two partitions to existing data
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data2'), '/data')
+        a.to_hdf(fn, '/data', mode='a')
+        out = dd.read_hdf(fn, '/data')
+        eq(df.append(df), out)
+
+    # overwriting a file with two partitions
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data1'), '/data')
+        a.to_hdf(fn, '/data', mode='w')
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # overwriting a single partition, keeping other partitions
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data1'), '/data')
+        a.to_hdf(fn, '/data', mode='a', append=False)
+        out = dd.read_hdf(fn, '/data')
+        eq(df.append(df), out)
+
+
+def test_to_hdf_link_optimizations():
+    """testing dask link levels is correct by calculating the depth of the dask graph"""
+    pytest.importorskip('tables')
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df16, 16)
+
+    # saving to multiple hdf files, no links are needed
+    # expected layers: from_pandas, to_hdf, list = depth of 3
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        d = a.to_hdf(fn, '/data', compute=False)
+        assert dependency_depth(d.dask) == 3
+
+    # saving to a single hdf file with multiple nodes
+    # all subsequent nodes depend on the first
+    # expected layers: from_pandas, first to_hdf(creates file+node), subsequent to_hdfs, list = 4
+    with tmpfile() as fn:
+        d = a.to_hdf(fn, '/data*', compute=False)
+        assert dependency_depth(d.dask) == 4
+
+    # saving to a single hdf file with a single node
+    # every node depends on the previous node
+    # expected layers: from_pandas, to_hdf times npartitions(15), list = 2 + npartitions = 17
+    with tmpfile() as fn:
+        d = a.to_hdf(fn, '/data', compute=False)
+        assert dependency_depth(d.dask) == 2 + a.npartitions
+
+
+@pytest.mark.slow
+def test_to_hdf_lock_delays():
+    pytest.importorskip('tables')
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df16, 16)
+
+    def delayed_nop(i):
+        sleep(0.1*(16-i[1]))
+        return i
+
+    # saving to multiple hdf nodes
+    # adding artifichial delays to make sure last tasks finish first
+    with tmpfile() as fn:
+        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df16, out)
+
+    # saving to multiple hdf files
+    # adding artifichial delays to make sure last tasks finish first
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df16, out)
+
+
+def test_to_hdf_exceptions():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 1)
+
     # triggering too many asterisks error
     with tmpdir() as dn:
         with pytest.raises(ValueError):
@@ -769,13 +957,6 @@ def test_to_hdf_multiple_datasets():
         with pd.HDFStore(fn) as hdf:
             with pytest.raises(ValueError):
                 a.to_hdf(hdf, '/data_*_*')
-
-    # test hdf object
-    with tmpfile('h5') as fn:
-        with pd.HDFStore(fn) as hdf:
-            a.to_hdf(hdf, '/data*')
-            out = dd.read_hdf(fn, '/data*')
-            eq(df, out)
 
 
 @pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
@@ -1194,11 +1375,10 @@ def test_to_hdf_kwargs():
     pytest.importorskip('tables')
     df = pd.DataFrame({'A': ['a', 'aaaa']})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_hdf('tst.h5', 'foo4', format='table', min_itemsize=4)
-
-    df2 = pd.read_hdf('tst.h5', 'foo4')
-
-    tm.assert_frame_equal(df, df2)
+    with tmpfile('h5') as fn:
+        ddf.to_hdf(fn, 'foo4', format='table', min_itemsize=4)
+        df2 = pd.read_hdf(fn, 'foo4')
+        tm.assert_frame_equal(df, df2)
 
 
 def test_read_csv_slash_r():

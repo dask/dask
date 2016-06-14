@@ -406,11 +406,14 @@ def _link(token, result):
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=get_sync, dask_kwargs=None,
+           complib=None, fletcher32=False, get=get_sync, dask_kwargs={},
            name_function=None, compute=True, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
+
+    single_file = True
+    single_node = True
 
     # if path_or_buf is string, format using i_name
     if isinstance(path_or_buf, str):
@@ -418,53 +421,65 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             raise ValueError("A maximum of one asterisk is accepted in file path and dataset key")
 
         fmt_obj = lambda path_or_buf, i_name: path_or_buf.replace('*', i_name)
+
+        if '*' in path_or_buf:
+            single_file = False
     else:
         if key.count('*') > 1:
             raise ValueError("A maximum of one asterisk is accepted in dataset key")
 
         fmt_obj = lambda path_or_buf, _: path_or_buf
 
+    if '*' in key:
+        single_node = False
+
     if name_function is None:
         name_function = build_name_function(df.npartitions - 1)
 
     # we guarantee partition order is preserved when its saved and read
     # so we enforce name_function to maintain the order of its input.
-    if '*' in key or (isinstance(path_or_buf, str) and '*' in path_or_buf):
+    if not (single_file and single_node):
         formatted_names = [name_function(i) for i in range(df.npartitions)]
         if formatted_names != sorted(formatted_names):
-            warn("In order to preserve order between partitions "
-                 "name_function must preserve the order of its input")
+            warn("To preserve order between partitions name_function "
+                 "must preserve the order of its input")
 
+    kwargs = merge(kwargs, {'format': 'table', 'complevel': complevel,
+                            'complib': complib, 'fletcher32': fletcher32,
+                            'mode': mode, 'append': append})
     dsk = dict()
+
     i_name = name_function(0)
-    dsk[(name, 0)] = (_link, None,
-                      (apply, pd_to_hdf,
-                          (tuple, [(df._name, 0), fmt_obj(path_or_buf, i_name),
-                              key.replace('*', i_name)]),
-                          merge(kwargs,
-                            {'mode':  mode, 'format': 'table', 'append': append,
-                             'complevel': complevel, 'complib': complib,
-                             'fletcher32': fletcher32})))
+    dsk[(name, 0)] = (apply, pd_to_hdf,
+                         [(df._name, 0), fmt_obj(path_or_buf, i_name),
+                             key.replace('*', i_name)], kwargs)
+
+    kwargs2 = kwargs.copy()
+    if single_file:
+        kwargs2['mode'] = 'a'
+    if single_node:
+        kwargs2['append'] = True
+
     for i in range(1, df.npartitions):
         i_name = name_function(i)
-        dsk[(name, i)] = (_link, (name, i - 1),
-                          (apply, pd_to_hdf,
-                           (tuple, [(df._name, i), fmt_obj(path_or_buf, i_name),
-                               key.replace('*', i_name)]),
-                           merge(kwargs,
-                             {'mode': 'a', 'format': 'table', 'append': True,
-                              'complevel': complevel, 'complib': complib,
-                              'fletcher32': fletcher32})))
-
-    dask_kwargs = dask_kwargs or {}
+        task = (apply, pd_to_hdf,
+                [(df._name, i), fmt_obj(path_or_buf, i_name),
+                    key.replace('*', i_name)], kwargs2)
+        if single_file:
+            link_dep = i - 1 if single_node else 0
+            task = (_link, (name, link_dep), task)
+        dsk[(name, i)] = task
 
     dsk = merge(df.dask, dsk)
-    key = (name, df.npartitions - 1)
+    if single_file and single_node:
+        keys = [(name, df.npartitions - 1)]
+    else:
+        keys = [(name, i) for i in range(df.npartitions)]
 
     if compute:
-        return DataFrame._get(dsk, key, get=get, **dask_kwargs)
+        return DataFrame._get(dsk, keys, get=get, **dask_kwargs)
     else:
-        return Delayed(key, [dsk])
+        return delayed([Delayed(key, [dsk]) for key in keys])
 
 
 dont_use_fixed_error_message = """
