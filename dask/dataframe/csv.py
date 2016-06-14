@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
+import csv
 from io import BytesIO
 from warnings import warn
 
@@ -40,7 +40,15 @@ def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
         bio.write(header)
     bio.write(b)
     bio.seek(0)
-    df = pd.read_csv(bio, **kwargs)
+
+    try:
+        df = pd.read_csv(bio, **kwargs)
+    except (csv.Error, pd.io.common.CParserError) as e:
+        raise ValueError(
+            "There was an error in parsing a CSV block. This may be due to "
+            "the line terminator appearing in a quoted value. Original error: "
+            "%s" % str(e))
+
     if dtypes:
         coerce_dtypes(df, dtypes)
 
@@ -135,6 +143,9 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
 
     See the docstring for ``pandas.read_csv`` for more information on available
     keyword arguments.
+
+    Note that this function may fail if a CSV file includes quoted strings that
+    contain the line terminator.
 
     Parameters
     ----------
