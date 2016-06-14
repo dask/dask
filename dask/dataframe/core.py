@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import bisect
 from collections import Iterator
-from datetime import datetime
 from distutils.version import LooseVersion
 import math
 import operator
@@ -30,6 +28,8 @@ from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds, funcname)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
+from .indexing import (_partition_of_index_value, _loc, _try_loc,
+                       _coerce_loc_index, _maybe_partial_time_string)
 from .utils import nonempty_sample_df
 
 no_default = '__no_default__'
@@ -161,7 +161,7 @@ class _Frame(Base):
 
     def __new__(cls, dsk, _name, metadata, divisions):
         if (np.isscalar(metadata) or metadata is None or
-            isinstance(metadata, (Series, pd.Series))):
+           isinstance(metadata, (Series, pd.Series))):
             return Series(dsk, _name, metadata, divisions)
         else:
             return DataFrame(dsk, _name, metadata, divisions)
@@ -391,12 +391,13 @@ class _Frame(Base):
         if isinstance(ind, Series):
             return self._loc_series(ind)
         if self.known_divisions:
+            ind = _maybe_partial_time_string(self._pd.index, ind, kind='loc')
             if isinstance(ind, slice):
                 return self._loc_slice(ind)
             else:
                 return self._loc_element(ind)
         else:
-            return map_partitions(try_loc, self, self, ind)
+            return map_partitions(_try_loc, self, self, ind)
 
     def _loc_series(self, ind):
         if not self.divisions == ind.divisions:
@@ -416,6 +417,7 @@ class _Frame(Base):
     def _loc_slice(self, ind):
         name = 'loc-%s' % tokenize(ind, self)
         assert ind.step in (None, 1)
+
         if ind.start:
             start = _partition_of_index_value(self.divisions, ind.start)
         else:
@@ -1393,12 +1395,19 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
         if np.isscalar(key):
+
+            if isinstance(self._pd.index, (pd.DatetimeIndex, pd.PeriodIndex)):
+                if key not in self._pd.columns:
+                    return self._loc(key)
+
             # error is raised from pandas
             dummy = self._pd[_extract_pd(key)]
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
-                        for i in range(self.npartitions))
+                       for i in range(self.npartitions))
             return self._constructor_sliced(merge(self.dask, dsk), name,
                                             dummy, self.divisions)
+        elif isinstance(key, slice):
+            return self._loc(key)
 
         if isinstance(key, list):
             # error is raised from pandas
@@ -1859,67 +1868,6 @@ def _assign(df, *pairs):
     return df.assign(**kwargs)
 
 
-def _partition_of_index_value(divisions, val):
-    """ In which partition does this value lie?
-
-    >>> _partition_of_index_value([0, 5, 10], 3)
-    0
-    >>> _partition_of_index_value([0, 5, 10], 8)
-    1
-    >>> _partition_of_index_value([0, 5, 10], 100)
-    1
-    >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
-    1
-    """
-    if divisions[0] is None:
-        raise ValueError(
-            "Can not use loc on DataFrame without known divisions")
-    val = _coerce_loc_index(divisions, val)
-    i = bisect.bisect_right(divisions, val)
-    return min(len(divisions) - 2, max(0, i - 1))
-
-
-def _loc(df, start, stop, include_right_boundary=True):
-    """
-
-    >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
-    >>> _loc(df, 2, None)
-        x
-    2  20
-    2  30
-    3  40
-    4  50
-    >>> _loc(df, 1, 3)
-        x
-    1  10
-    2  20
-    2  30
-    3  40
-    >>> _loc(df, 1, 3, include_right_boundary=False)
-        x
-    1  10
-    2  20
-    2  30
-    """
-    result = df.loc[start:stop]
-    if not include_right_boundary:
-        right_index = result.index.get_slice_bound(stop, 'left', 'loc')
-        result = result.iloc[:right_index]
-    return result
-
-
-def _coerce_loc_index(divisions, o):
-    """ Transform values to be comparable against divisions
-
-    This is particularly valuable to use with pandas datetimes
-    """
-    if divisions and isinstance(divisions[0], datetime):
-        return pd.Timestamp(o)
-    if divisions and isinstance(divisions[0], np.datetime64):
-        return np.datetime64(o).astype(divisions[0].dtype)
-    return o
-
-
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
     columns = kwargs.pop('columns', no_default)
@@ -1937,7 +1885,6 @@ def elemwise(op, *args, **kwargs):
 
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
-
 
     # adjust the key length of Scalar
     keys = [d._keys() *  n if isinstance(d, Scalar)
@@ -2012,7 +1959,7 @@ def reduction(x, chunk, aggregate, token=None):
 
     b = '{0}--aggregation-{1}'.format(token, token_key)
     dsk2 = {(b, 0): (aggregate, (remove_empties,
-                     [(a,i) for i in range(x.npartitions)]))}
+                     [(a, i) for i in range(x.npartitions)]))}
 
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
@@ -2076,7 +2023,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
                for i in range(args[0].npartitions))
 
     b = '{0}--second-{1}'.format(token, token_key)
-    conc = (_concat,(list, [(a, i) for i in range(args[0].npartitions)]))
+    conc = (_concat, (list, [(a, i) for i in range(args[0].npartitions)]))
     if not aggregate_kwargs:
         dsk2 = {(b, 0): (aggregate, conc)}
     else:
@@ -2732,7 +2679,6 @@ class DatetimeAccessor(Accessor):
         return getattr(obj.dt, attr)(*args)
 
 
-
 class StringAccessor(Accessor):
     """ Accessor object for string properties of the Series values.
 
@@ -2750,13 +2696,6 @@ class StringAccessor(Accessor):
     @staticmethod
     def call(obj, attr, *args):
         return getattr(obj.str, attr)(*args)
-
-
-def try_loc(df, ind):
-    try:
-        return df.loc[ind]
-    except KeyError:
-        return df.head(0)
 
 
 def set_sorted_index(df, index, drop=True, **kwargs):
