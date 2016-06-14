@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import csv
 from io import BytesIO
 from warnings import warn
 
@@ -40,15 +39,7 @@ def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
         bio.write(header)
     bio.write(b)
     bio.seek(0)
-
-    try:
-        df = pd.read_csv(bio, **kwargs)
-    except (csv.Error, pd.io.common.CParserError) as e:
-        raise ValueError(
-            "There was an error in parsing a CSV block. This may be due to "
-            "the line terminator appearing in a quoted value. Original error: "
-            "%s" % str(e))
-
+    df = pd.read_csv(bio, **kwargs)
     if dtypes:
         coerce_dtypes(df, dtypes)
 
