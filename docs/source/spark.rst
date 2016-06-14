@@ -181,4 +181,4 @@ then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
 .. _py4j: http://py4j.sourceforge.net/
 .. _Postgres: http://www.postgresql.org/
 .. _MongoDB: https://www.mongodb.org/
-.. _`complex algorithms`: http://matthewrocklin.com/blog/work/2015/06/26/Complex-Graphs/
+.. _`complex algorithms`: http://matthewrocklin.com/blog/work/2015/06/26/Complex-Graphs
