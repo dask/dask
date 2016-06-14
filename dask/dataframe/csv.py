@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
 from io import BytesIO
 from warnings import warn
 
@@ -135,6 +134,9 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
 
     See the docstring for ``pandas.read_csv`` for more information on available
     keyword arguments.
+
+    Note that this function may fail if a CSV file includes quoted strings that
+    contain the line terminator.
 
     Parameters
     ----------
