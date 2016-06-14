@@ -1,18 +1,13 @@
-from operator import getitem
-from distutils.version import LooseVersion
 
 import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
-import pytest
 
 import dask
-from dask.async import get_sync
-from dask.utils import raises, ignoring
+from dask.utils import raises
 import dask.dataframe as dd
 
-from dask.dataframe.core import (repartition_divisions, _loc,
-        _coerce_loc_index, aca, reduction, _concat, _Frame)
+from dask.dataframe.core import _coerce_loc_index
 from dask.dataframe.utils import eq
 
 
@@ -90,7 +85,8 @@ def test_getitem():
                       columns=list('ABC'))
     ddf = dd.from_pandas(df, 2)
     assert eq(ddf['A'], df['A'])
-    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A'])# check cache consistency
+    # check cache consistency
+    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A'])
 
     assert eq(ddf[['A', 'B']], df[['A', 'B']])
     tm.assert_frame_equal(ddf[['A', 'B']]._pd, ddf._pd[['A', 'B']])
@@ -216,7 +212,7 @@ def test_getitem_timestamp_str():
     assert eq(df['2011':'2015'], ddf['2011':'2015'])
 
 
-def test_loc_timestamp_str():
+def test_loc_period_str():
     # .loc with PeriodIndex doesn't support partial string indexing
     # https://github.com/pydata/pandas/issues/13429
     pass
