@@ -1109,3 +1109,7 @@ def test_from_pandas_small():
             df = pd.DataFrame({'x': [0] * i})
             ddf = dd.from_pandas(df, npartitions=5, sort=sort)
             eq(df, ddf)
+
+            s = pd.Series([0] * i, name='x')
+            ds = dd.from_pandas(s, npartitions=5, sort=sort)
+            eq(s, ds)
