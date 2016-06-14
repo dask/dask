@@ -18,6 +18,7 @@ from ..base import tokenize
 from ..compatibility import unicode, apply
 from .. import array as da
 from ..async import get_sync
+from ..delayed import Delayed, delayed
 
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
@@ -402,7 +403,7 @@ def _link(token, result):
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, get=get_sync, dask_kwargs=None,
-           name_function=None, **kwargs):
+           name_function=None, compute=True, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -453,8 +454,13 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
 
     dask_kwargs = dask_kwargs or {}
 
-    DataFrame._get(merge(df.dask, dsk), (name, df.npartitions - 1),
-                   get=get, **dask_kwargs)
+    dsk = merge(df.dask, dsk)
+    key = (name, df.npartitions - 1)
+
+    if compute:
+        return DataFrame._get(dsk, key, get=get, **dask_kwargs)
+    else:
+        return Delayed(key, [dsk])
 
 
 dont_use_fixed_error_message = """
@@ -624,10 +630,10 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         c, _ = DataFrame._get(dsk, keys, get=get)
         return c
     else:
-        return dsk, keys
+        return delayed([Delayed(key, [dsk]) for key in keys])
 
 
-def to_csv(df, filename, compression=None, get=None, **kwargs):
+def to_csv(df, filename, compression=None, get=None, compute=True, **kwargs):
     if compression:
         raise NotImplementedError("Writing compressed csv files not supported")
     name = 'to-csv-' + uuid.uuid1().hex
@@ -645,7 +651,12 @@ def to_csv(df, filename, compression=None, get=None, **kwargs):
                            (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
                              (df._name, i), filename, kwargs2))
 
-    DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=get)
+    dsk = merge(dsk, df.dask)
+    keys = [(name, df.npartitions - 1)]
+    if compute:
+        return DataFrame._get(dsk, keys, get=get)
+    else:
+        return delayed([Delayed(key, [dsk]) for key in keys])
 
 
 def to_bag(df, index=False):
