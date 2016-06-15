@@ -69,9 +69,20 @@ class Nanny(Server):
 
         if self.process is not None:
             try:
-                result = yield gen.with_timeout(timedelta(seconds=timeout),
-                            self.center.unregister(address=self.worker_address),
+                # Ask worker to close
+                worker = rpc(ip='127.0.0.1', port=self.worker_port)
+                result = yield gen.with_timeout(
+                            timedelta(seconds=min(1, timeout)),
+                            worker.terminate(report=False),
                             io_loop=self.loop)
+            except gen.TimeoutError:
+                logger.info("Worker non-responsive.  Terminating.")
+
+            try:
+                # Tell scheduler that worker is gone
+                result = yield gen.with_timeout(timedelta(seconds=timeout),
+                             self.center.unregister(address=self.worker_address),
+                             io_loop=self.loop)
                 if result not in ('OK', 'already-removed'):
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address_tuple,
@@ -83,6 +94,9 @@ class Nanny(Server):
                 logger.info("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
+            except Exception as e:
+                logger.exception(e)
+
             self.process.terminate()
             self.process.join(timeout=timeout)
             self.process = None

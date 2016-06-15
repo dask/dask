@@ -41,10 +41,9 @@ def test_identity():
 
 def test_health():
     w = Worker('127.0.0.1', 8019)
-    d = w.health()
+    d = w.host_health()
     assert isinstance(d, dict)
-    d = w.health()
-    assert 'time' in d
+    d = w.host_health()
     try:
         import psutil
     except ImportError:

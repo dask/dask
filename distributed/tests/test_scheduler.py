@@ -907,20 +907,15 @@ def test_update_graph_culls(s, a, b):
 @gen_cluster(ncores=[('127.0.0.1', 2), ('127.0.0.2', 2), ('127.0.0.1', 1)])
 def test_host_health(s, a, b, c):
     start = time()
-    while any('last-seen' not in v for v in s.host_info.values()):
-        yield gen.sleep(0.1)
-        assert time() < start + 5
 
     for w in [a, b, c]:
         assert w.ip in s.host_info
-        assert 0 < s.host_info[w.ip]['latency'] < 1
         assert 0 <= s.host_info[w.ip]['cpu'] <= 100
         assert 0 < s.host_info[w.ip]['memory']
         assert 0 < s.host_info[w.ip]['memory-percent'] < 100
 
         assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
-        assert s.host_info[w.ip]['heartbeat-port'] in s.host_info[w.ip]['ports']
-        assert -1 < s.host_info[w.ip]['time-delay'] < 1
+        assert -1 < s.worker_info[w.address]['time-delay'] < 1
 
     assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
     assert s.host_info['127.0.0.1']['cores'] == 3
@@ -933,18 +928,24 @@ def test_host_health(s, a, b, c):
     assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
     assert s.host_info['127.0.0.1']['cores'] == 1
     assert s.host_info['127.0.0.1']['ports'] == {str(c.port)}
-    assert s.host_info[c.ip]['heartbeat-port'] == str(c.port)
     assert s.host_info['127.0.0.2']['cores'] == 2
     assert s.host_info['127.0.0.2']['ports'] == {str(b.port)}
-    assert s.host_info[b.ip]['heartbeat-port'] == str(b.port)
 
     s.remove_worker(address=b.address)
 
     assert set(s.host_info) == {'127.0.0.1'}
     assert s.host_info['127.0.0.1']['cores'] == 1
     assert s.host_info['127.0.0.1']['ports'] == {str(c.port)}
-    assert s.host_info[c.ip]['heartbeat-port'] == str(c.port)
 
     s.remove_worker(address=c.address)
 
     assert not s.host_info
+
+
+def test_add_worker_is_idempotent(loop):
+    s = Scheduler(loop=loop)
+    s.start(0)
+    s.add_worker(address=alice, ncores=1, coerce_address=False)
+    ncores = s.ncores.copy()
+    s.add_worker(address=alice, coerce_address=False)
+    assert s.ncores == s.ncores

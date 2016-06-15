@@ -101,7 +101,7 @@ class Worker(Server):
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
-                 name=None, **kwargs):
+                 name=None, heartbeat_interval=1000, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
@@ -113,6 +113,9 @@ class Worker(Server):
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.active = set()
         self.name = name
+        self.heartbeat_interval = heartbeat_interval
+        self._last_disk_io = None
+        self._last_net_io = None
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
@@ -141,10 +144,26 @@ class Worker(Server):
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
                     'ping': pingpong,
-                    'health': self.health,
+                    'health': self.host_health,
                     'upload_file': self.upload_file}
 
         super(Worker, self).__init__(handlers, **kwargs)
+
+        self.heartbeat_callback = PeriodicCallback(self.heartbeat,
+                                                   self.heartbeat_interval,
+                                                   io_loop=self.loop)
+        self.loop.add_callback(self.heartbeat_callback.start)
+
+    @gen.coroutine
+    def heartbeat(self):
+        logger.debug("Heartbeat: %s" % self.address)
+        yield self.scheduler.register(address=self.address, name=self.name,
+                                ncores=self.ncores,
+                                now=time(),
+                                info=self.process_health(),
+                                host_info=self.host_health(),
+                                services=self.service_ports,
+                                **self.process_health())
 
     @property
     def center(self):
@@ -167,8 +186,12 @@ class Worker(Server):
             try:
                 resp = yield self.scheduler.register(
                         ncores=self.ncores, address=(self.ip, self.port),
-                        keys=list(self.data), services=self.service_ports,
-                        name=self.name, nbytes=valmap(sizeof, self.data))
+                        keys=list(self.data),
+                        name=self.name, nbytes=valmap(sizeof, self.data),
+                        now=time(),
+                        host_info=self.host_health(),
+                        services=self.service_ports,
+                        **self.process_health())
                 break
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with scheduler.  Waiting")
@@ -192,6 +215,7 @@ class Worker(Server):
             yield gen.with_timeout(timedelta(seconds=timeout),
                     self.scheduler.unregister(address=(self.ip, self.port)),
                     io_loop=self.loop)
+        self.heartbeat_callback.stop()
         self.scheduler.close_streams()
         self.stop()
         self.executor.shutdown()
@@ -341,7 +365,7 @@ class Worker(Server):
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
-            key, future._state), 1000); pc.start()
+            key, future._state), 1000, io_loop=self.loop); pc.start()
         try:
             yield future
         finally:
@@ -605,11 +629,14 @@ class Worker(Server):
                 return {'status': 'error', 'exception': dumps(e)}
         return {'status': 'OK', 'nbytes': len(data)}
 
-    def health(self, stream=None):
-        """ Information about worker """
+    def process_health(self, stream=None):
         d = {'active': len(self.active),
-             'stored': len(self.data),
-             'time': time()}
+             'stored': len(self.data)}
+        return d
+
+    def host_health(self, stream=None):
+        """ Information about worker """
+        d = {}
         try:
             import psutil
             mem = psutil.virtual_memory()
@@ -618,31 +645,31 @@ class Worker(Server):
                       'memory-percent': mem.percent})
 
             net_io = psutil.net_io_counters()
-            try:
+            if self._last_net_io:
                 d['network-send'] = net_io.bytes_sent - self._last_net_io.bytes_sent
                 d['network-recv'] = net_io.bytes_recv - self._last_net_io.bytes_recv
-            except AttributeError:
-                pass
+            else:
+                d['network-send'] = 0
+                d['network-recv'] = 0
             self._last_net_io = net_io
-
 
             try:
                 disk_io = psutil.disk_io_counters()
-                try:
-                    d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
-                    d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
-                    self._last_disk_io = disk_io
-                except AttributeError:
-                    pass
-                self._last_disk_io = disk_io
             except RuntimeError:
                 # This happens when there is no physical disk in worker
                 pass
+            else:
+                if self._last_disk_io:
+                    d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
+                    d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
+                else:
+                    d['disk-read'] = 0
+                    d['disk-write'] = 0
+                self._last_disk_io = disk_io
 
         except ImportError:
             pass
         return d
-
 
 
 job_counter = [0]

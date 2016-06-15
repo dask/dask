@@ -10,6 +10,7 @@ import socket
 from time import time, sleep
 import uuid
 
+from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
@@ -160,11 +161,12 @@ def run_nanny(q, center_port, **kwargs):
         try:
             loop.start()
         finally:
+            loop.run_sync(worker._close)
             loop.close(all_fds=True)
 
 
 @contextmanager
-def cluster(nworkers=2, nanny=False):
+def cluster(nworkers=2, nanny=False, worker_kwargs={}):
     if nanny:
         _run_worker = run_nanny
     else:
@@ -180,7 +182,8 @@ def cluster(nworkers=2, nanny=False):
         q = Queue()
         fn = '_test_worker-%s' % uuid.uuid1()
         proc = Process(target=_run_worker, args=(q, sport),
-                        kwargs={'ncores': 1, 'local_dir': fn})
+                        kwargs=merge({'ncores': 1, 'local_dir': fn},
+                                     worker_kwargs))
         workers.append({'proc': proc, 'queue': q, 'dir': fn})
 
     for worker in workers:
@@ -270,7 +273,9 @@ def cluster_center(nworkers=2, nanny=False):
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
-                proc.join(timeout=2)
+        for proc in [center] + [w['proc'] for w in workers]:
+            with ignoring(Exception):
+                proc.join(timeout=5)
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
 
