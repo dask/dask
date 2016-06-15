@@ -2,6 +2,7 @@ import gzip
 import pandas as pd
 import numpy as np
 import pandas.util.testing as tm
+import sys
 import os
 import dask
 import pytest
@@ -697,27 +698,39 @@ def test_to_hdf():
         out = pd.read_hdf(fn, '/data')
         tm.assert_frame_equal(df, out[:])
 
-    # saving to multiple datasets
+def test_to_hdf_multiple_datasets():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    b = dd.from_pandas(df16, 16)
+
+    # saving to multiple datasets making sure order is kept
+    with tmpfile('h5') as fn:
+        b.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df16, out)
+
+    # saving to multiple datasets
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
-        tm.assert_frame_equal(df, out.compute())
+        eq(df, out)
 
     # saving to multiple files
-    a = dd.from_pandas(df, 2)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
-        tm.assert_frame_equal(df, out.compute())
+        eq(df, out)
 
     # saving to multiple datasets with custom name_function
-    a = dd.from_pandas(df, 2)
     with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i +  1))
+        a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i + 1))
         out = dd.read_hdf(fn, '/data_*')
-        tm.assert_frame_equal(df, out.compute())
+        eq(df, out)
 
         out = pd.read_hdf(fn, '/data_a')
         tm.assert_frame_equal(out, df.iloc[:2])
@@ -725,12 +738,11 @@ def test_to_hdf():
         tm.assert_frame_equal(out, df.iloc[2:])
 
     # saving to multiple files with custom name_function
-    a = dd.from_pandas(df, 2)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data', name_function=lambda i: 'a' * (i +  1))
+        a.to_hdf(fn, '/data', name_function=lambda i: 'a' * (i + 1))
         out = dd.read_hdf(fn, '/data')
-        tm.assert_frame_equal(df, out.compute())
+        eq(df, out)
 
         out = pd.read_hdf(os.path.join(dn, 'data_a.h5'), '/data')
         tm.assert_frame_equal(out, df.iloc[:2])
@@ -738,11 +750,30 @@ def test_to_hdf():
         tm.assert_frame_equal(out, df.iloc[2:])
 
     # saving to different datasets in multiple files with custom name_function
-    a = dd.from_pandas(df, 2)
     with tmpdir() as dn:
         with pytest.raises(ValueError):
             fn = os.path.join(dn, 'data_*.h5')
             a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i +  1))
+
+    # test hdf object
+    with tmpfile('h5') as fn:
+        with pd.HDFStore(fn) as hdf:
+            a.to_hdf(hdf, '/data*')
+            out = dd.read_hdf(fn, '/data*')
+            eq(df, out)
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_to_hdf_warns():
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df16, 16)
+
+    # testing warning when breaking order
+    with tmpfile('h5') as fn:
+        with pytest.warns(None):
+            a.to_hdf(fn, '/data*', name_function=str)
 
 
 def test_read_hdf():
