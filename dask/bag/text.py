@@ -16,7 +16,7 @@ delayed = delayed(pure=True)
 
 def read_text(path, blocksize=None, compression='infer',
               encoding=system_encoding, errors='strict',
-              linedelimiter=os.linesep, collection=True, **kwargs):
+              linedelimiter=os.linesep, collection=True, storage_options=None):
     """ Read lines from text files
 
     Parameters
@@ -33,7 +33,7 @@ def read_text(path, blocksize=None, compression='infer',
     linedelimiter: string
     collection: bool, optional
         Return dask.bag if True, or list of delayed values if false
-    **kwargs: dict
+    storage_options: dict
         Extra parameters to hand to backend storage system.
         Often used for authentication when using remote storage like S3 or HDFS
 
@@ -57,10 +57,12 @@ def read_text(path, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
+    storage_options = storage_options or {}
     if isinstance(path, (tuple, list, set)):
         blocks = sum([read_text(fn, blocksize=blocksize,
                       compression=compression, encoding=encoding, errors=errors,
-                      linedelimiter=linedelimiter, collection=False, **kwargs)
+                      linedelimiter=linedelimiter, collection=False,
+                      storage_options=storage_options)
                      for fn in path], [])
     else:
         if compression == 'infer':
@@ -77,13 +79,14 @@ def read_text(path, blocksize=None, compression='infer',
 
         elif blocksize is None:
             files = open_text_files(path, encoding=encoding, errors=errors,
-                                          compression=compression, **kwargs)
+                                          compression=compression,
+                                          **storage_options)
             blocks = [delayed(list)(file) for file in files]
 
         else:
             _, blocks = read_bytes(path, delimiter=linedelimiter.encode(),
                     blocksize=blocksize, sample=False, compression=compression,
-                    **kwargs)
+                    **storage_options)
             if isinstance(blocks[0], (tuple, list)):
                 blocks = list(concat(blocks))
             blocks = [delayed(decode)(b, encoding, errors)
