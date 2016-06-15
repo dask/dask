@@ -59,6 +59,7 @@ Contents
    executor
    efficiency
    locality
+   memory
    joblib
    queues
    api
