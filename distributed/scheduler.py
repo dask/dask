@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 import logging
 import math
+import pickle
 import random
 import socket
 from time import time
@@ -35,6 +36,7 @@ from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
 logger = logging.getLogger(__name__)
 
 BANDWIDTH = 100e6
+ALLOWED_FAILURES = 3
 
 
 class Scheduler(Server):
@@ -127,6 +129,8 @@ class Scheduler(Server):
     * **loose_retrictions:** ``{key}``:
         Set of keys for which we are allow to violate restrictions (see above)
         if not valid workers are present.
+    * **suspicious_tasks:** ``{key: int}``
+        Number of times a task has been involved in a worker failure
     * **keyorder:** ``{key: tuple}``:
         A score per key that determines its priority
     * **scheduler_queues:** ``[Queues]``:
@@ -184,6 +188,7 @@ class Scheduler(Server):
         self.task_duration = {prefix: 0.00001 for prefix in fast_task_prefixes}
         self.restrictions = dict()
         self.loose_restrictions = set()
+        self.suspicious_tasks = defaultdict(lambda: 0)
         self.stacks = dict()
         self.waiting = dict()
         self.waiting_data = dict()
@@ -750,6 +755,17 @@ class Scheduler(Server):
             if key not in self.dependencies:
                 self.dependencies[key] = set()
 
+    def mark_task_killed_worker(self, key=None, worker=None):
+        """ Mark that is likely killing workers """
+        self.exceptions[key] = pickle.dumps(KilledWorker(key, worker))
+        self.tracebacks[key] = None
+        self.mark_failed(key, key)
+        for plugin in self.plugins[:]:
+            try:
+                plugin.task_erred(self, key=key, worker=worker,
+                        exception=exception, traceback=traceback, **kwargs)
+            except Exception as e:
+                logger.exception(e)
 
     def mark_task_erred(self, key=None, worker=None,
                         exception=None, traceback=None, **kwargs):
@@ -765,7 +781,6 @@ class Scheduler(Server):
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
             self.maybe_idle.add(worker)
-            # self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_erred(self, key=key, worker=worker,
@@ -953,11 +968,15 @@ class Scheduler(Server):
                 self.saturated.remove(address)
 
             in_flight = set(self.processing.pop(address))
-            for k in in_flight:
+            for k in list(in_flight):
+                self.suspicious_tasks[k] += 1
                 s = self.rprocessing[k]
                 s.remove(address)
                 if not s:
                     del self.rprocessing[k]
+                if self.suspicious_tasks[k] > ALLOWED_FAILURES:
+                    self.mark_task_killed_worker(key=k, worker=address)
+                    in_flight.remove(k)
             in_flight |= set(self.stacks.pop(address))
             del self.occupancy[address]
             in_flight = {k for k in in_flight if k in self.tasks}
@@ -1252,6 +1271,8 @@ class Scheduler(Server):
                     del self.waiting[key]
                 if key in self.waiting_data:
                     del self.waiting_data[key]
+                if key in self.suspicious_tasks:
+                    del self.suspicious_tasks[key]
                 for w in self.rprocessing.pop(key, ()):
                     self.occupancy[w] -= self.processing[w].pop(key)
 
@@ -2133,3 +2154,7 @@ _round_robin = [0]
 
 
 fast_task_prefixes = {'rechunk-split'}
+
+
+class KilledWorker(Exception):
+    pass

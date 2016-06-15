@@ -23,7 +23,7 @@ from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
         default_executor, _first_completed, ensure_default_get, futures_of)
-from distributed.scheduler import Scheduler
+from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
@@ -3001,6 +3001,18 @@ def test_get_stacks_processing(e, s, a, b):
 
     processing = yield e.scheduler.processing()
     assert processing == valmap(list, s.processing)
+
+
+@gen_cluster(executor=True, Worker=Nanny)
+def test_bad_tasks_fail(e, s, a, b):
+    f = e.submit(sys.exit, 1)
+    with pytest.raises(KilledWorker):
+        yield f._result()
+
+    start = time()
+    while len(s.ncores) < 2:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
 
 
 def test_get_stacks_processing_sync(loop):
