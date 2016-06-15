@@ -2558,7 +2558,8 @@ def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     qs = np.linspace(0, 1, npartitions + 1)
     # currently, only Series has quantile method
     # Index.quantile(list-like) must be pd.Series, not pd.Index
-    merge_type = lambda v: pd.Series(v, index=qs, name=df.name)
+    df_name = df.name
+    merge_type = lambda v: pd.Series(v, index=qs, name=df_name)
     return_type = df._constructor
     if issubclass(return_type, Index):
         return_type = Series
@@ -2583,7 +2584,7 @@ def _repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     last_dsk = {(name3, 0): (merge_type, (_process_val_weights, merged_key, qs))}
 
     dsk = merge(df.dask, val_dsk, merge_dsk, last_dsk)
-    return return_type(dsk, name3, df.name, new_divisions)
+    return return_type(dsk, name3, df_name, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False):
