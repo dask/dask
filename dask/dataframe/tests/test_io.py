@@ -698,6 +698,14 @@ def test_to_hdf():
         out = pd.read_hdf(fn, '/data')
         tm.assert_frame_equal(df, out[:])
 
+    # test compute = False
+    with tmpfile('h5') as fn:
+        r = a.to_hdf(fn, '/data', compute=False)
+        r.compute()
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out[:])
+
+
 def test_to_hdf_multiple_datasets():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
@@ -814,6 +822,13 @@ def test_to_csv():
             a.to_csv(fn)
             result = pd.read_csv(fn, index_col=0)
             tm.assert_frame_equal(result, df)
+
+    a = dd.from_pandas(df, npartitions)
+    with tmpfile('csv') as fn:
+        r = a.to_csv(fn, compute=False)
+        r.compute()
+        result = pd.read_csv(fn, index_col=0)
+        tm.assert_frame_equal(result, df)
 
 
 @pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")

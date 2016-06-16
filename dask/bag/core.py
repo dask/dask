@@ -38,6 +38,7 @@ from ..optimize import fuse, cull, inline
 from ..utils import (infer_compression, open, system_encoding,
                      takes_multiple_arguments, funcname, digit, insert,
                      build_name_function)
+from ..delayed import Delayed, delayed
 
 no_default = '__no__default__'
 
@@ -191,11 +192,13 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                             encoding))
                for i, path in enumerate(paths))
 
-    result = Bag(merge(b.dask, dsk), name, b.npartitions)
+    dsk = merge(b.dask, dsk)
     if compute:
+        result = Bag(dsk, name, b.npartitions)
         result.compute()
     else:
-        return result
+        keys = [(name, i) for i in range(b.npartitions)]
+        return delayed([Delayed(key, [dsk]) for key in keys])
 
 
 def finalize(results):

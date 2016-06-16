@@ -635,7 +635,6 @@ def test_to_textfiles():
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
@@ -668,7 +667,6 @@ def test_to_textfiles_encoding():
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-            assert c.npartitions == b.npartitions
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
