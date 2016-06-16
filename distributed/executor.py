@@ -297,12 +297,12 @@ class Executor(object):
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
         if self._start_arg is None:
-            from distributed.deploy import Local
+            from distributed.deploy import LocalCluster
             try:
-                self.cluster = Local(loop=self.loop, start=False)
+                self.cluster = LocalCluster(loop=self.loop, start=False)
             except OSError:
-                self.cluster = Local(scheduler_port=0, loop=self.loop,
-                                     start=False)
+                self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
+                                            start=False)
             self._start_arg = self.cluster.scheduler_address
 
         r = coerce_to_rpc(self._start_arg, timeout=timeout)

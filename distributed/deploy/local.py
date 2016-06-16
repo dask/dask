@@ -13,15 +13,43 @@ from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
 
 
-class Local(object):
-    def __init__(self, n_workers=None, cores_per_worker=None, processes=True, loop=None, start=True, scheduler_port=8786, **kwargs):
+class LocalCluster(object):
+    """ Create local Scheduler and Workers
+
+    This creates a "cluster" of a scheduler and workers running on the local
+    machine.
+
+    Parameters
+    ----------
+    n_workers: int
+        Number of workers to start
+    threads_per_worker: int
+        Number of threads per each worker
+    nanny: boolean
+        If true start the workers in separate processes managed by a nanny.
+        If False keep the workers in the main calling process
+    scheduler_port: int
+        Port of the scheduler.  8786 by default, use 0 to choose a random port
+
+    Examples
+    --------
+    >>> c = Local()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
+    >>> c  # doctest: +SKIP
+    LocalCluster("192.168.1.141:8786", workers=8, ncores=8)
+
+    >>> e = Executor(c)  # connect to local cluster  # doctest: +SKIP
+
+    >>> w = c.start_worker(ncores=2)  # add a new worker to the cluster  # doctest: +SKIP
+    >>> c.remove_worker(w)  # shut down the extra worker  # doctest: +SKIP
+    """
+    def __init__(self, n_workers=None, threads_per_worker=None, nanny=True, loop=None, start=True, scheduler_port=8786, **kwargs):
         if n_workers is None:
-            if processes:
+            if nanny:
                 n_workers = _ncores
-                cores_per_worker = 1
+                threads_per_worker = 1
             else:
                 n_workers = 1
-                cores_per_worker = _ncores
+                threads_per_worker = _ncores
 
         self.loop = loop or IOLoop()
         if start:
@@ -38,12 +66,11 @@ class Local(object):
         else:
             _start_worker = lambda *args, **kwargs: self.loop.add_callback(self._start_worker, *args, **kwargs)
         for i in range(n_workers):
-            _start_worker(separate_process=processes,
-                          ncores=cores_per_worker)
+            _start_worker(ncores=threads_per_worker, nanny=nanny)
         self.status = 'running'
 
     def __str__(self):
-        return "LocalCluster(%s, workers=%d, ncores=%d)" % (
+        return 'LocalCluster("%s", workers=%d, ncores=%d)' % (
                 self.scheduler_address,
                 len(self.workers),
                 sum(w.ncores for w in self.workers))
@@ -51,8 +78,8 @@ class Local(object):
     __repr__ = __str__
 
     @gen.coroutine
-    def _start_worker(self, port=0, separate_process=True, **kwargs):
-        if separate_process:
+    def _start_worker(self, port=0, nanny=True, **kwargs):
+        if nanny:
             W = Nanny
         else:
             W = Worker
@@ -61,9 +88,28 @@ class Local(object):
         self.workers.append(w)
         return w
 
-    def start_worker(self, port=0, separate_process=True, **kwargs):
-        return sync(self.loop, self._start_worker, port,
-                separate_process=separate_process, **kwargs)
+    def start_worker(self, port=0, ncores=0, **kwargs):
+        """ Add a new worker to the running cluster
+
+        Parameters
+        ----------
+        port: int (optional)
+            Port on which to serve the worker, defaults to 0 or random
+        ncores: int (optional)
+            Number of threads to use.  Defaults to number of logical cores
+        nanny: boolean
+            If true start worker in separate process managed by a nanny
+
+        Examples
+        --------
+        >>> c = LocalCluster()  # doctest: +SKIP
+        >>> c.start_worker(ncores=2)  # doctest: +SKIP
+
+        Returns
+        -------
+        The created Worker or Nanny object.  Can be discarded.
+        """
+        return sync(self.loop, self._start_worker, port, ncores=ncores, **kwargs)
 
     @gen.coroutine
     def _stop_worker(self, w):
@@ -71,6 +117,14 @@ class Local(object):
         self.workers.remove(w)
 
     def stop_worker(self, w):
+        """ Stop a running worker
+
+        Examples
+        --------
+        >>> c = LocalCluster()  # doctest: +SKIP
+        >>> w = c.start_worker(ncores=2)  # doctest: +SKIP
+        >>> c.stop_worker(w)  # doctest: +SKIP
+        """
         sync(self.loop, self._stop_worker, w)
 
     @gen.coroutine
@@ -82,6 +136,7 @@ class Local(object):
         self.workers.clear()
 
     def close(self):
+        """ Close the cluster """
         if self.status == 'closed':
             return
         self.status = 'closed'
