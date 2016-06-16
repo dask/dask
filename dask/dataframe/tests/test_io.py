@@ -1132,3 +1132,15 @@ def test_read_csv_singleton_dtype():
     with filetext(data, mode='wb') as fn:
         eq(pd.read_csv(fn, dtype=float),
            dd.read_csv(fn, dtype=float))
+
+
+def test_from_pandas_small():
+    for sort in [True, False]:
+        for i in [0, 2]:
+            df = pd.DataFrame({'x': [0] * i})
+            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
+            eq(df, ddf)
+
+            s = pd.Series([0] * i, name='x')
+            ds = dd.from_pandas(s, npartitions=5, sort=sort)
+            eq(s, ds)

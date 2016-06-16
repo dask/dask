@@ -159,16 +159,20 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     else:
         npartitions = int(ceil(nrows / chunksize))
 
+    name = name or ('from_pandas-' + tokenize(data, chunksize))
+
+    if not nrows:
+        return _Frame({(name, 0): data}, name, data, [None, None])
+
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
     if sort:
         divisions, locations = sorted_division_locations(data.index,
                                                          chunksize=chunksize)
     else:
-        divisions = [None] * (npartitions + 1)
         locations = list(range(0, nrows, chunksize)) + [len(data)]
+        divisions = [None] * len(locations)
 
-    name = name or ('from_pandas-' + tokenize(data, chunksize))
     dsk = dict(((name, i), data.iloc[start: stop])
                for i, (start, stop) in enumerate(zip(locations[:-1],
                    locations[1:])))
