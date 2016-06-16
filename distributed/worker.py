@@ -636,7 +636,7 @@ class Worker(Server):
 
     def host_health(self, stream=None):
         """ Information about worker """
-        d = {}
+        d = {'time': time()}
         try:
             import psutil
             mem = psutil.virtual_memory()

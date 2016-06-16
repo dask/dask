@@ -107,7 +107,7 @@ def run_center(q):
         loop.close(all_fds=True)
 
 
-def run_scheduler(q, center_port=None, **kwargs):
+def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -118,8 +118,7 @@ def run_scheduler(q, center_port=None, **kwargs):
 
     center = ('127.0.0.1', center_port) if center_port else None
     scheduler = Scheduler(center=center, **kwargs)
-    scheduler.listen(0)
-    done = scheduler.start(0)
+    done = scheduler.start(scheduler_port)
 
     q.put(scheduler.port)
     try:

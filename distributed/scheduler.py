@@ -361,7 +361,7 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
 
-        for w, bstream in self.worker_streams.items():
+        for w, bstream in list(self.worker_streams.items()):
             with ignoring(AttributeError):
                 yield bstream.close(ignore_closed=True)
 

@@ -11,6 +11,7 @@ from tornado import gen
 
 from .core import Server, rpc, write
 from .utils import get_ip, ignoring, log_errors
+from .worker import _ncores
 
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,12 @@ class Nanny(Server):
     them as necessary.
     """
     def __init__(self, center_ip, center_port, ip=None, worker_port=0,
-                ncores=None, loop=None, local_dir=None, services=None,
-                name=None, **kwargs):
+                 ncores=None, loop=None, local_dir=None, services=None,
+                 name=None, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self._given_worker_port = worker_port
-        self.ncores = ncores
+        self.ncores = ncores or _ncores
         self.local_dir = local_dir
         self.worker_dir = ''
         self.status = None
