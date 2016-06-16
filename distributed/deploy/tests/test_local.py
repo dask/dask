@@ -1,9 +1,9 @@
 from time import sleep, time
 import unittest
 
-from distributed.deploy import Local
+from distributed.deploy.local import Local
 from distributed import Executor, Worker, Nanny
-from distributed.utils_test import inc
+from distributed.utils_test import inc, loop
 
 from distributed.deploy.utils_test import ClusterTest
 
@@ -37,3 +37,29 @@ def test_procs():
 
 class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = Local
+
+
+def test_Executor_with_local():
+    with Local(1, scheduler_port=0) as c:
+        with Executor(c) as e:
+            assert len(e.ncores()) == len(c.workers)
+            assert c.scheduler_address in repr(e)
+
+
+def test_Executor_solo():
+    e = Executor()
+    e.shutdown()
+
+
+def test_defaults():
+    from distributed.worker import _ncores
+
+    with Local(scheduler_port=0) as c:
+        assert sum(w.ncores for w in c.workers) == _ncores
+        assert all(isinstance(w, Nanny) for w in c.workers)
+        assert all(w.ncores == 1 for w in c.workers)
+
+    with Local(processes=False, scheduler_port=0) as c:
+        assert sum(w.ncores for w in c.workers) == _ncores
+        assert all(isinstance(w, Worker) for w in c.workers)
+        assert len(c.workers) == 1

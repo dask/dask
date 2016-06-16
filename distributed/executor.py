@@ -242,7 +242,7 @@ class Executor(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address, start=True, loop=None, timeout=3,
+    def __init__(self, address=None, start=True, loop=None, timeout=3,
                  set_as_default=False):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -250,6 +250,9 @@ class Executor(object):
         self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
         self.id = str(uuid.uuid1())
+        if hasattr(address, 'scheduler_address'):
+            self.cluster = address
+            address = address.scheduler_address
         self._start_arg = address
         if set_as_default:
             self._previous_get = _globals.get('get')
@@ -291,6 +294,15 @@ class Executor(object):
 
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
+        if self._start_arg is None:
+            from distributed.deploy import Local
+            try:
+                self.cluster = Local(loop=self.loop, start=False)
+            except OSError:
+                self.cluster = Local(scheduler_port=0, loop=self.loop,
+                                     start=False)
+            self._start_arg = self.cluster.scheduler_address
+
         r = coerce_to_rpc(self._start_arg, timeout=timeout)
         try:
             ident = yield r.identity()

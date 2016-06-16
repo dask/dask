@@ -10,19 +10,31 @@ from ..utils import sync, ignoring, All
 from ..executor import Executor
 from ..nanny import Nanny
 from ..scheduler import Scheduler
-from ..worker import Worker
+from ..worker import Worker, _ncores
 
 
 class Local(object):
-    def __init__(self, n_workers=0, cores_per_worker=1, processes=True, loop=None, start=True, scheduler_port=8786, **kwargs):
+    def __init__(self, n_workers=None, cores_per_worker=None, processes=True, loop=None, start=True, scheduler_port=8786, **kwargs):
+        if n_workers is None:
+            if processes:
+                n_workers = _ncores
+                cores_per_worker = 1
+            else:
+                n_workers = 1
+                cores_per_worker = _ncores
+
         self.loop = loop or IOLoop()
         self.scheduler = Scheduler(loop=loop, **kwargs)
         self.scheduler.start(scheduler_port)
         self.workers = []
 
+        if start:
+            _start_worker = self.start_worker
+        else:
+            _start_worker = lambda *args, **kwargs: loop.add_callback(self._start_worker, *args, **kwargs)
         for i in range(n_workers):
-            self.start_worker(separate_process=processes,
-                              ncores=cores_per_worker)
+            _start_worker(separate_process=processes,
+                          ncores=cores_per_worker)
 
         if start:
             self._thread = Thread(target=self.loop.start)
