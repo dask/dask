@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import logging
 from threading import Thread
 
 from tornado.ioloop import IOLoop
@@ -42,7 +43,15 @@ class LocalCluster(object):
     >>> w = c.start_worker(ncores=2)  # add a new worker to the cluster  # doctest: +SKIP
     >>> c.remove_worker(w)  # shut down the extra worker  # doctest: +SKIP
     """
-    def __init__(self, n_workers=None, threads_per_worker=None, nanny=True, loop=None, start=True, scheduler_port=8786, **kwargs):
+    def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
+            loop=None, start=True, scheduler_port=8786,
+            silence_logs=logging.CRITICAL, **kwargs):
+        if silence_logs:
+            for l in ['distributed.scheduler',
+                      'distributed.worker',
+                      'distributed.core',
+                      'distributed.nanny']:
+                logging.getLogger(l).setLevel(silence_logs)
         if n_workers is None:
             if nanny:
                 n_workers = _ncores

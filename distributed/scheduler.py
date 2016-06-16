@@ -982,7 +982,7 @@ class Scheduler(Server):
                 self.ensure_in_play(key)
 
             if not self.stacks:
-                logger.critical("Lost all workers")
+                logger.info("Lost all workers")
 
             self.ensure_idle_ready()
 

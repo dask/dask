@@ -1,3 +1,5 @@
+
+from functools import partial
 from time import sleep, time
 import unittest
 
@@ -8,7 +10,7 @@ from distributed.utils_test import inc, loop
 from distributed.deploy.utils_test import ClusterTest
 
 def test_simple():
-    with LocalCluster(4, scheduler_port=0, nanny=False) as c:
+    with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False) as c:
         with Executor((c.scheduler.ip, c.scheduler.port)) as e:
             x = e.submit(inc, 1)
             x.result()
@@ -17,14 +19,16 @@ def test_simple():
 
 
 def test_procs():
-    with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3) as c:
+    with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3,
+            silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
         with Executor((c.scheduler.ip, c.scheduler.port)) as e:
             assert all(w.ncores == 3 for w in c.workers)
         repr(c)
 
-    with LocalCluster(2, scheduler_port=0, nanny=True, threads_per_worker=3) as c:
+    with LocalCluster(2, scheduler_port=0, nanny=True, threads_per_worker=3,
+            silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
         with Executor((c.scheduler.ip, c.scheduler.port)) as e:
@@ -36,11 +40,11 @@ def test_procs():
 
 
 class LocalTest(ClusterTest, unittest.TestCase):
-    Cluster = LocalCluster
+    Cluster = partial(LocalCluster, silence_logs=False)
 
 
 def test_Executor_with_local():
-    with LocalCluster(1, scheduler_port=0) as c:
+    with LocalCluster(1, scheduler_port=0, silence_logs=False) as c:
         with Executor(c) as e:
             assert len(e.ncores()) == len(c.workers)
             assert c.scheduler_address in repr(e)
@@ -54,27 +58,27 @@ def test_Executor_solo(loop):
 def test_defaults():
     from distributed.worker import _ncores
 
-    with LocalCluster(scheduler_port=0) as c:
+    with LocalCluster(scheduler_port=0, silence_logs=False) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Nanny) for w in c.workers)
         assert all(w.ncores == 1 for w in c.workers)
 
-    with LocalCluster(nanny=False, scheduler_port=0) as c:
+    with LocalCluster(nanny=False, scheduler_port=0, silence_logs=False) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Worker) for w in c.workers)
         assert len(c.workers) == 1
 
 
 def test_cleanup():
-    c = LocalCluster(2, scheduler_port=0)
+    c = LocalCluster(2, scheduler_port=0, silence_logs=False)
     port = c.scheduler.port
     c.close()
-    c2 = LocalCluster(2, scheduler_port=port)
+    c2 = LocalCluster(2, scheduler_port=port, silence_logs=False)
     c.close()
 
 
 def test_repeated():
-    with LocalCluster(scheduler_port=8448) as c:
+    with LocalCluster(scheduler_port=8448, silence_logs=False) as c:
         pass
-    with LocalCluster(scheduler_port=8448) as c:
+    with LocalCluster(scheduler_port=8448, silence_logs=False) as c:
         pass
