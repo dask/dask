@@ -51,7 +51,7 @@ def workers(s):
 
     result = {}
     for host, info in s.host_info.items():
-        info = dissoc(info, 'heartbeat', 'heartbeat-port')
+        # info = dissoc(info, 'heartbeat', 'heartbeat-port')
         info['processing'] = processing[host]
         result[host] = info
         info['ports'] = list(info['ports'])

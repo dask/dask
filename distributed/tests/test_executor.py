@@ -1556,7 +1556,7 @@ def test_badly_serialized_input(e, s, a, b):
     assert future.status == 'error'
 
 
-@pytest.mark.skip
+@pytest.mark.skipif('True', reason="")
 def test_badly_serialized_input_stderr(capsys, loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -2972,6 +2972,7 @@ def test_default_get(loop):
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=False)
         assert _globals['get'] is pre_get
+        e.shutdown()
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True)
         assert _globals['get'] == e.get

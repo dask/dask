@@ -95,7 +95,7 @@ class LocalCluster(object):
         w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop, **kwargs)
         yield w._start(port)
         self.workers.append(w)
-        return w
+        raise gen.Return(w)
 
     def start_worker(self, port=0, ncores=0, **kwargs):
         """ Add a new worker to the running cluster
@@ -142,7 +142,7 @@ class LocalCluster(object):
             yield All([w._close() for w in self.workers])
         with ignoring(gen.TimeoutError, StreamClosedError, OSError):
             yield self.scheduler.close(fast=True)
-        self.workers.clear()
+        del self.workers[:]
 
     def close(self):
         """ Close the cluster """
