@@ -98,12 +98,13 @@ class Nanny(Server):
             except Exception as e:
                 logger.exception(e)
 
-            self.process.terminate()
-            self.process.join(timeout=timeout)
-            self.process = None
-            self.cleanup()
-            logger.info("Nanny %s:%d kills worker process %s:%d",
-                        self.ip, self.port, self.ip, self.worker_port)
+            if self.process:
+                self.process.terminate()
+                self.process.join(timeout=timeout)
+                self.process = None
+                self.cleanup()
+                logger.info("Nanny %s:%d kills worker process %s:%d",
+                            self.ip, self.port, self.ip, self.worker_port)
         raise gen.Return('OK')
 
     @gen.coroutine
@@ -147,11 +148,11 @@ class Nanny(Server):
     def _watch(self, wait_seconds=0.10):
         """ Watch the local process, if it dies then spin up a new one """
         while True:
-            if self.status == 'closed':
+            if closing[0] or self.status == 'closed':
                 yield self._close()
                 break
-            if self.process and not self.process.is_alive():
-                logger.warn("Discovered failed worker.  Restarting")
+            elif self.process and not self.process.is_alive():
+                logger.warn("Discovered failed worker.  Restarting.  Status: %s", self.status)
                 self.cleanup()
                 yield self.center.unregister(address=self.worker_address)
                 yield self.instantiate()
@@ -162,10 +163,10 @@ class Nanny(Server):
     def _close(self, stream=None, timeout=5, report=None):
         """ Close the nanny process, stop listening """
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
+        self.status = 'closed'
         yield self._kill(timeout=timeout)
         self.center.close_streams()
         self.stop()
-        self.status = 'closed'
         raise gen.Return('OK')
 
     @property
@@ -232,3 +233,13 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
     loop.add_callback(start)  # pragma: no cover
     with ignoring(KeyboardInterrupt):
         loop.start()  # pragma: no cover
+
+
+import atexit
+
+closing = [False]
+
+def _closing():
+    closing[0] = True
+
+atexit.register(_closing)

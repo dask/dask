@@ -250,6 +250,7 @@ class Executor(object):
         self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
         self.id = str(uuid.uuid1())
+        self.status = None
         if hasattr(address, 'scheduler_address'):
             self.cluster = address
             address = address.scheduler_address
@@ -288,6 +289,7 @@ class Executor(object):
         self.loop.add_callback(pc.start)
         _global_executor[0] = self
         sync(self.loop, self._start, **kwargs)
+        self.status = 'running'
 
     def _send_to_scheduler(self, msg):
         self.loop.add_callback(self.scheduler_stream.send, msg)
@@ -332,6 +334,9 @@ class Executor(object):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.shutdown()
+
+    def __del__(self):
         self.shutdown()
 
     def _inc_ref(self, key):
@@ -418,6 +423,9 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
+        if self.status == 'closed':
+            raise Return()
+        self.status = 'closed'
         self._send_to_scheduler({'op': 'close-stream'})
         if _global_executor[0] is self:
             _global_executor[0] = None
@@ -432,6 +440,9 @@ class Executor(object):
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
+        if self.status == 'closed':
+            return
+        self.status = 'closed'
         with ignoring(AttributeError):
             self.loop.add_callback(self.scheduler_stream.send,
                                    {'op': 'close-stream'})
@@ -440,7 +451,7 @@ class Executor(object):
             self.scheduler.close_streams()
         if self._should_close_loop:
             sync(self.loop, self.loop.stop)
-            self.loop.close()
+            self.loop.close(all_fds=True)
             self._loop_thread.join(timeout=timeout)
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)

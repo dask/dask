@@ -3063,3 +3063,11 @@ def dont_test_scheduler_falldown(loop):
                 assert len(ee.ncores()) == 2
         finally:
             s2.close()
+
+
+def test_shutdown_idempotent(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            e.shutdown()
+            e.shutdown()
+            e.shutdown()
