@@ -207,7 +207,6 @@ class Scheduler(Server):
         self.exceptions_blame = dict()
 
         self.loop = loop or IOLoop.current()
-        self.io_loop = self.loop
 
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
@@ -246,11 +245,11 @@ class Scheduler(Server):
             else:
                 port = 0
 
-            self.services[k] = v(self)
+            self.services[k] = v(self, io_loop=self.loop)
             self.services[k].listen(port)
 
         super(Scheduler, self).__init__(handlers=self.handlers,
-                max_buffer_size=max_buffer_size, **kwargs)
+                max_buffer_size=max_buffer_size, io_loop=self.loop, **kwargs)
 
     def __del__(self):
         self.close_streams()
@@ -308,7 +307,7 @@ class Scheduler(Server):
         self._delete_periodic_callback.start()
 
         if start_queues:
-            self.handle_queues(self.scheduler_queues[0], None)
+            self.loop.add_callback(self.handle_queues, self.scheduler_queues[0], None)
 
         for cor in self.coroutines:
             if cor.done():
@@ -339,7 +338,7 @@ class Scheduler(Server):
             stream.stream.close()
 
     @gen.coroutine
-    def close(self, stream=None):
+    def close(self, stream=None, fast=False):
         """ Send cleanup signal to all coroutines then wait until finished
 
         See Also
@@ -347,7 +346,8 @@ class Scheduler(Server):
         Scheduler.cleanup
         """
         yield self.cleanup()
-        yield self.finished()
+        if not fast:
+            yield self.finished()
         self.close_streams()
         self.status = 'closed'
         self.stop()

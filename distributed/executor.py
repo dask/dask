@@ -315,7 +315,7 @@ class Executor(object):
             stream = yield connect(r.ip, r.port)
             yield write(stream, {'op': 'register-client',
                                  'client': self.id})
-            bstream = BatchedSend(interval=10)
+            bstream = BatchedSend(interval=10, loop=self.loop)
             bstream.start(stream)
             self.scheduler_stream = bstream
         else:

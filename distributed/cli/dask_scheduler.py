@@ -50,7 +50,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
-                          services={('http', http_port): HTTPScheduler})
+                          services={('http', http_port): HTTPScheduler},
+                          loop=loop)
     scheduler.start(port)
 
     bokeh_proc = None

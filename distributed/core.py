@@ -204,6 +204,9 @@ class Server(TCPServer):
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
                         result = yield gen.maybe_future(handler(stream, **msg))
+                    except StreamClosedError as e:
+                        logger.info("%s", e)
+                        result = error_message(e, status='uncaught-error')
                     except Exception as e:
                         logger.exception(e)
                         result = error_message(e, status='uncaught-error')
@@ -340,12 +343,6 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
     if kwargs.get('close'):
         stream.close()
     raise Return(response)
-
-
-def send_recv_sync(stream=None, ip=None, port=None, reply=True, **kwargs):
-    return IOLoop.current().run_sync(
-            lambda: send_recv(stream=stream, ip=ip, port=port, reply=reply,
-                              **kwargs))
 
 
 class rpc(object):

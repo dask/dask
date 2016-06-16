@@ -24,22 +24,23 @@ class Local(object):
                 cores_per_worker = _ncores
 
         self.loop = loop or IOLoop()
-        self.scheduler = Scheduler(loop=loop, **kwargs)
+        if start:
+            self._thread = Thread(target=self.loop.start)
+            self._thread.daemon = True
+            self._thread.start()
+
+        self.scheduler = Scheduler(loop=self.loop, **kwargs)
         self.scheduler.start(scheduler_port)
         self.workers = []
 
         if start:
             _start_worker = self.start_worker
         else:
-            _start_worker = lambda *args, **kwargs: loop.add_callback(self._start_worker, *args, **kwargs)
+            _start_worker = lambda *args, **kwargs: self.loop.add_callback(self._start_worker, *args, **kwargs)
         for i in range(n_workers):
             _start_worker(separate_process=processes,
                           ncores=cores_per_worker)
-
-        if start:
-            self._thread = Thread(target=self.loop.start)
-            self._thread.daemon = True
-            self._thread.start()
+        self.status = 'running'
 
     def __str__(self):
         return "LocalCluster(%s, workers=%d, ncores=%d)" % (
@@ -77,11 +78,23 @@ class Local(object):
         with ignoring(gen.TimeoutError, StreamClosedError, OSError):
             yield All([w._close() for w in self.workers])
         with ignoring(gen.TimeoutError, StreamClosedError, OSError):
-            yield self.scheduler.close()
+            yield self.scheduler.close(fast=True)
         self.workers.clear()
 
     def close(self):
-        sync(self.loop, self._close)
+        if self.status == 'closed':
+            return
+        self.status = 'closed'
+        if self.loop._running:
+            sync(self.loop, self._close)
+        if hasattr(self, '_thread'):
+            sync(self.loop, self.loop.stop)
+            self._thread.join(timeout=1)
+            self.loop.close()
+            del self._thread
+
+    def __del__(self):
+        self.close()
 
     def __enter__(self):
         return self

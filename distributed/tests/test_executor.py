@@ -1376,31 +1376,24 @@ def test_start_is_idempotent(loop):
             assert x.result() == 2
 
 
-def test_executor_with_scheduler(loop):
-    @gen.coroutine
-    def f(s, a, b):
-        assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
-        e = Executor(('127.0.0.1', s.port), start=False, loop=loop)
-        yield e._start()
+@gen_cluster(executor=True)
+def test_executor_with_scheduler(e, s, a, b):
+    assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
 
-        x = e.submit(inc, 1)
-        y = e.submit(inc, 2)
-        z = e.submit(add, x, y)
-        result = yield x._result()
-        assert result == 1 + 1
-        result = yield z._result()
-        assert result == 1 + 1 + 1 + 2
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y)
+    result = yield x._result()
+    assert result == 1 + 1
+    result = yield z._result()
+    assert result == 1 + 1 + 1 + 2
 
-        a, b, c = yield e._scatter([1, 2, 3])
-        aa, bb, xx = yield e._gather([a, b, x])
-        assert (aa, bb, xx) == (1, 2, 2)
+    a, b, c = yield e._scatter([1, 2, 3])
+    aa, bb, xx = yield e._gather([a, b, x])
+    assert (aa, bb, xx) == (1, 2, 2)
 
-        result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
-        assert result == 12
-
-        yield e._shutdown()
-
-    _test_scheduler(f)
+    result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
+    assert result == 12
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
@@ -1563,8 +1556,8 @@ def test_badly_serialized_input(e, s, a, b):
     assert future.status == 'error'
 
 
-@pytest.mark.xfail
-def test_badly_serialized_input_stderr(capsys):
+@pytest.mark.skip
+def test_badly_serialized_input_stderr(capsys, loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             o = BadlySerializedObject()

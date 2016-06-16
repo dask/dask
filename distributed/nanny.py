@@ -43,7 +43,7 @@ class Nanny(Server):
                     'terminate': self._close,
                     'monitor_resources': self.monitor_resources}
 
-        super(Nanny, self).__init__(handlers, **kwargs)
+        super(Nanny, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
     @gen.coroutine
     def _start(self, port=0):
@@ -78,6 +78,8 @@ class Nanny(Server):
                             io_loop=self.loop)
             except gen.TimeoutError:
                 logger.info("Worker non-responsive.  Terminating.")
+            except Exception as e:
+                logger.exception(e)
 
             try:
                 # Tell scheduler that worker is gone
@@ -217,7 +219,7 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
     loop.make_current()  # pragma: no cover
     worker = Worker(center_ip, center_port, ncores=ncores, ip=ip,
                     service_ports={'nanny': nanny_port}, local_dir=local_dir,
-                    services=services, name=name)  # pragma: no cover
+                    services=services, name=name, loop=loop)  # pragma: no cover
 
     @gen.coroutine  # pragma: no cover
     def start():
@@ -231,8 +233,11 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
             q.put({'port': worker.port, 'dir': worker.local_dir})  # pragma: no cover
 
     loop.add_callback(start)  # pragma: no cover
-    with ignoring(KeyboardInterrupt):
+    try:
         loop.start()  # pragma: no cover
+    finally:
+        loop.stop()
+        loop.close(all_fds=True)
 
 
 import atexit

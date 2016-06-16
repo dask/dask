@@ -26,10 +26,12 @@ class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         kwargs['pure'] = False
         future = self.executor.submit(func, *args, **kwargs)
         self.futures.add(future)
+        print("Hello!")
 
         @gen.coroutine
         def callback_wrapper():
             result = yield _wait([future])
+            print("World!")
             self.futures.remove(future)
             callback(result)  # gets called in separate thread
 

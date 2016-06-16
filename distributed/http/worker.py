@@ -55,7 +55,7 @@ class LocalFiles(RequestHandler):
         self.write({'files': os.listdir(self.server.local_dir)})
 
 
-def HTTPWorker(worker):
+def HTTPWorker(worker, **kwargs):
     application = MyApp(web.Application([
         (r'/info.json', Info, {'server': worker}),
         (r'/processing.json', Processing, {'server': worker}),
@@ -63,5 +63,5 @@ def HTTPWorker(worker):
         (r'/files.json', LocalFiles, {'server': worker}),
         (r'/nbytes.json', NBytes, {'server': worker}),
         (r'/nbytes-summary.json', NBytesSummary, {'server': worker})
-        ]))
+        ]), **kwargs)
     return application

@@ -46,8 +46,8 @@ def test_Executor_with_local():
             assert c.scheduler_address in repr(e)
 
 
-def test_Executor_solo():
-    e = Executor()
+def test_Executor_solo(loop):
+    e = Executor(loop=loop)
     e.shutdown()
 
 
@@ -63,3 +63,18 @@ def test_defaults():
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Worker) for w in c.workers)
         assert len(c.workers) == 1
+
+
+def test_cleanup():
+    c = Local(2, scheduler_port=0)
+    port = c.scheduler.port
+    c.close()
+    c2 = Local(2, scheduler_port=port)
+    c.close()
+
+
+def test_repeated():
+    with Local(scheduler_port=8448) as c:
+        pass
+    with Local(scheduler_port=8448) as c:
+        pass
