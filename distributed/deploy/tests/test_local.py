@@ -13,7 +13,8 @@ from distributed.utils_test import inc, loop
 from distributed.deploy.utils_test import ClusterTest
 
 def test_simple(loop):
-    with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False) as c:
+    with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False,
+            loop=loop) as c:
         with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             x = e.submit(inc, 1)
             x.result()
@@ -21,7 +22,7 @@ def test_simple(loop):
             assert any(w.data == {x.key: 2} for w in c.workers)
 
 
-@pytest.mark.skipif('sys.version_info[0] == 2', reason='')
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')
 def test_procs(loop):
     with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3,
             silence_logs=False) as c:
@@ -49,7 +50,7 @@ class LocalTest(ClusterTest, unittest.TestCase):
 
 
 def test_Executor_with_local(loop):
-    with LocalCluster(1, scheduler_port=0, silence_logs=False) as c:
+    with LocalCluster(1, scheduler_port=0, silence_logs=False, loop=loop) as c:
         with Executor(c, loop=loop) as e:
             assert len(e.ncores()) == len(c.workers)
             assert c.scheduler_address in repr(e)

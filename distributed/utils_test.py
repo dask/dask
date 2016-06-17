@@ -29,7 +29,8 @@ def current_loop():
     loop = IOLoop()
     loop.make_current()
     yield loop
-    sync(loop, loop.stop)
+    if loop._running:
+        sync(loop, loop.stop)
     for i in range(5):
         try:
             loop.close(all_fds=True)
@@ -44,7 +45,8 @@ def current_loop():
 def loop():
     loop = IOLoop()
     yield loop
-    sync(loop, loop.stop)
+    if loop._running:
+        sync(loop, loop.stop)
     for i in range(5):
         try:
             loop.close(all_fds=True)

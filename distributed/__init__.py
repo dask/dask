@@ -1,14 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
 from .center import Center
-from .core import connect, read, write
-from .worker import Worker
 from .client import scatter, gather, delete, clear, rpc
+from .core import connect, read, write
+from .deploy import LocalCluster
 from .diagnostics import progress
-from .utils import sync
+from .executor import (Executor, CompatibleExecutor, wait, as_completed,
+        default_executor)
 from .nanny import Nanny
-from .executor import Executor, CompatibleExecutor, wait, as_completed, default_executor
 from .scheduler import Scheduler
+from .utils import sync
+from .worker import Worker
 
 try:
     from .collections import futures_to_collection

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from threading import Thread
+from time import sleep
 
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
@@ -34,7 +35,7 @@ class LocalCluster(object):
 
     Examples
     --------
-    >>> c = Local()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
+    >>> c = LocalCluster()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
     >>> c  # doctest: +SKIP
     LocalCluster("192.168.1.141:8786", workers=8, ncores=8)
 
@@ -61,10 +62,12 @@ class LocalCluster(object):
                 threads_per_worker = _ncores
 
         self.loop = loop or IOLoop()
-        if start:
+        if not self.loop._running:
             self._thread = Thread(target=self.loop.start)
             self._thread.daemon = True
             self._thread.start()
+            while not self.loop._running:
+                sleep(0.001)
 
         self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1', **kwargs)
         self.scheduler.start(scheduler_port)
