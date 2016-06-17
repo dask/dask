@@ -504,3 +504,11 @@ def make_hdfs():
     finally:
         if hdfs.exists('/tmp/test'):
             hdfs.rm('/tmp/test')
+
+
+def raises(func, exc=Exception):
+    try:
+        func()
+        return False
+    except exc:
+        return True

@@ -8,7 +8,7 @@ import pytest
 
 from distributed.deploy.local import LocalCluster
 from distributed import Executor, Worker, Nanny
-from distributed.utils_test import inc, loop
+from distributed.utils_test import inc, loop, raises
 from distributed.utils import ignoring
 
 from distributed.deploy.utils_test import ClusterTest
@@ -114,6 +114,11 @@ def test_bokeh(loop):
                     break
             assert time() < start + 20
             sleep(0.01)
+
+    start = time()
+    while not raises(lambda: requests.get('http://127.0.0.1:%d/status/' % 4724)):
+        assert time() < start + 10
+        sleep(0.01)
 
 
 def test_start_diagnostics(loop):

@@ -183,6 +183,8 @@ class LocalCluster(object):
         with ignoring(gen.TimeoutError, StreamClosedError, OSError):
             yield self.scheduler.close(fast=True)
         del self.workers[:]
+        if self.diagnostics:
+            self.diagnostics.close()
 
     def close(self):
         """ Close the cluster """
