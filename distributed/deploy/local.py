@@ -66,7 +66,7 @@ class LocalCluster(object):
             self._thread.daemon = True
             self._thread.start()
 
-        self.scheduler = Scheduler(loop=self.loop, **kwargs)
+        self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1', **kwargs)
         self.scheduler.start(scheduler_port)
         self.workers = []
 

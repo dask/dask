@@ -3000,16 +3000,11 @@ def test_get_stacks_processing(e, s, a, b):
     assert processing == valmap(list, s.processing)
 
 
-@gen_cluster(executor=True, Worker=Nanny, timeout=20)
+@gen_cluster(executor=True, Worker=Nanny)
 def test_bad_tasks_fail(e, s, a, b):
     f = e.submit(sys.exit, 1)
     with pytest.raises(KilledWorker):
         yield f._result()
-
-    start = time()
-    while len(s.ncores) < 2:
-        yield gen.sleep(0.01)
-        assert time() < start + 20
 
 
 def test_get_stacks_processing_sync(loop):

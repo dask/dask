@@ -1,7 +1,10 @@
 
 from functools import partial
+import sys
 from time import sleep, time
 import unittest
+
+import pytest
 
 from distributed.deploy.local import LocalCluster
 from distributed import Executor, Worker, Nanny
@@ -9,21 +12,22 @@ from distributed.utils_test import inc, loop
 
 from distributed.deploy.utils_test import ClusterTest
 
-def test_simple():
+def test_simple(loop):
     with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False) as c:
-        with Executor((c.scheduler.ip, c.scheduler.port)) as e:
+        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             x = e.submit(inc, 1)
             x.result()
             assert x.key in c.scheduler.tasks
             assert any(w.data == {x.key: 2} for w in c.workers)
 
 
-def test_procs():
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='')
+def test_procs(loop):
     with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3,
             silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
-        with Executor((c.scheduler.ip, c.scheduler.port)) as e:
+        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             assert all(w.ncores == 3 for w in c.workers)
         repr(c)
 
@@ -31,7 +35,7 @@ def test_procs():
             silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
-        with Executor((c.scheduler.ip, c.scheduler.port)) as e:
+        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             assert all(v == 3 for v in e.ncores().values())
 
             c.start_worker(nanny=False)
@@ -39,13 +43,14 @@ def test_procs():
         repr(c)
 
 
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='')
 class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = partial(LocalCluster, silence_logs=False)
 
 
-def test_Executor_with_local():
+def test_Executor_with_local(loop):
     with LocalCluster(1, scheduler_port=0, silence_logs=False) as c:
-        with Executor(c) as e:
+        with Executor(c, loop=loop) as e:
             assert len(e.ncores()) == len(c.workers)
             assert c.scheduler_address in repr(e)
 
