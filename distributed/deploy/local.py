@@ -42,8 +42,14 @@ class LocalCluster(object):
 
     >>> e = Executor(c)  # connect to local cluster  # doctest: +SKIP
 
-    >>> w = c.start_worker(ncores=2)  # add a new worker to the cluster  # doctest: +SKIP
-    >>> c.remove_worker(w)  # shut down the extra worker  # doctest: +SKIP
+    Add a new worker to the cluster
+    >>> w = c.start_worker(ncores=2)  # doctest: +SKIP
+
+    Shut down the extra worker
+    >>> c.remove_worker(w)  # doctest: +SKIP
+
+    Start a diagnostic web server and open a new browser tab
+    >>> c.start_diagnostics_server(show=True)  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
@@ -150,6 +156,14 @@ class LocalCluster(object):
 
     def start_diagnostics_server(self, port=8787, show=False,
             silence=logging.CRITICAL):
+        """ Start Diagnostics Web Server
+
+        This starts a web application to show diagnostics of what is happening
+        on the cluster.  This application runs in a separate process and is
+        generally available at the following location:
+
+            http://localhost:8787/status/
+        """
         assert self.diagnostics is None
         if 'http' not in self.scheduler.services:
             self.scheduler.services['http'] = HTTPScheduler(self.scheduler,

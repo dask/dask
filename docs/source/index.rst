@@ -57,6 +57,7 @@ Contents
    :caption: Using Distributed
 
    executor
+   local-cluster
    efficiency
    locality
    memory

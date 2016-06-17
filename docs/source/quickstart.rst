@@ -10,37 +10,40 @@ Install
 
 See :doc:`installation <install>` document for more information.
 
-Setup Cluster
--------------
+Setup Dask.distributed the Hard Way
+--------------------------
 
-Set up a fake cluster on your local computer::
+Set up scheduler and worker processes on your local computer::
 
    $ dask-scheduler
+   Scheduler started at 127.0.0.1:8786
+
    $ dask-worker 127.0.0.1:8786
    $ dask-worker 127.0.0.1:8786
    $ dask-worker 127.0.0.1:8786
 
-Or if you can ssh into your own computer (or others) then use the ``dask-ssh``
-command, providing hostnames or IP addresses (`paramiko` library must
-be installed. See SSH :doc:`setup <setup>`)::
-
-   $ dask-ssh 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
-
-See :doc:`setup <setup>` for advanced use or :doc:`EC2 quickstart <dec2>` for
-instructions on how to deploy on Amazon's Elastic Compute Cloud.
-
-Launch Executor
----------------
-
-Launch an Executor to interact with the network.  Point to the center
-IP/port.::
-
-   $ ipython
+Launch an Executor and point it to the IP/port of the scheduler.
 
 .. code-block:: python
 
    >>> from distributed import Executor
    >>> executor = Executor('127.0.0.1:8786')
+
+See :doc:`setup <setup>` for advanced use.
+
+Setup Dask.distributed the Easy Way
+--------------------------
+
+If you create an executor without providing an address it will start up a local
+scheduler and worker for you.
+
+.. code-block:: python
+
+   >>> from distributed import Executor
+   >>> executor = Executor()
+   >>> executor
+   <Executor: scheduler="127.0.0.1:8786" processes=8 cores=8>
+
 
 Map and Submit Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~
