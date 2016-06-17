@@ -88,3 +88,28 @@ def test_repeated():
         pass
     with LocalCluster(scheduler_port=8448, silence_logs=False) as c:
         pass
+
+
+def test_http(loop):
+    from distributed.http import HTTPScheduler
+    import requests
+    with LocalCluster(scheduler_port=0, silence_logs=False,
+            services={('http', 3485): HTTPScheduler}, loop=loop) as c:
+        response = requests.get('http://127.0.0.1:3485/info.json')
+        assert response.ok
+
+
+def test_bokeh(loop):
+    from distributed.http import HTTPScheduler
+    import requests
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
+                      diagnostics_port=4724) as c:
+        start = time()
+        while True:
+            with ignoring(Exception):
+                response = requests.get('http://127.0.0.1:%d/status/' %
+                                        c.diagnostics.port)
+                if response.ok:
+                    break
+            assert time() < start + 5
+            sleep(0.01)

@@ -8,6 +8,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado import gen
 
+from ..http.scheduler import HTTPScheduler
 from ..utils import sync, ignoring, All
 from ..executor import Executor
 from ..nanny import Nanny
@@ -46,7 +47,8 @@ class LocalCluster(object):
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
-            silence_logs=logging.CRITICAL, **kwargs):
+            silence_logs=logging.CRITICAL,
+            diagnostics_port=None, **kwargs):
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',
@@ -68,6 +70,9 @@ class LocalCluster(object):
             self._thread.start()
             while not self.loop._running:
                 sleep(0.001)
+
+        if diagnostics_port and 'services' not in kwargs:  # bokeh needs http
+            kwargs['services'] = {('http', 0): HTTPScheduler}
 
         self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1', **kwargs)
         self.scheduler.start(scheduler_port)
