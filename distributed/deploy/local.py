@@ -47,8 +47,7 @@ class LocalCluster(object):
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
-            silence_logs=logging.CRITICAL,
-            diagnostics_port=None, **kwargs):
+            silence_logs=logging.CRITICAL, diagnostics_port=None, **kwargs):
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',

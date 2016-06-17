@@ -21,6 +21,7 @@ logger = logging.getLogger(__file__)
 class BokehWebInterface(object):
     def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
                  bokeh_port=8787, bokeh_whitelist=[], show=False):
+        self.port = bokeh_port
         ip = socket.gethostbyname(host)
 
         hosts = ['%s:%d' % (h, bokeh_port) for h in

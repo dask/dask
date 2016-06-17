@@ -9,6 +9,7 @@ import pytest
 from distributed.deploy.local import LocalCluster
 from distributed import Executor, Worker, Nanny
 from distributed.utils_test import inc, loop
+from distributed.utils import ignoring
 
 from distributed.deploy.utils_test import ClusterTest
 
@@ -103,7 +104,7 @@ def test_bokeh(loop):
     from distributed.http import HTTPScheduler
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=4724) as c:
+            diagnostics_port=4724, services={('http', 0): HTTPScheduler}) as c:
         start = time()
         while True:
             with ignoring(Exception):
