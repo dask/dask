@@ -77,7 +77,7 @@ def test_bokeh():
                 break
             except:
                 sleep(0.1)
-                assert time() < start + 5
+                assert time() < start + 20
 
     finally:
         with ignoring(Exception):
@@ -109,7 +109,7 @@ def test_bokeh_non_standard_ports():
                 break
             except:
                 sleep(0.1)
-                assert time() < start + 5
+                assert time() < start + 20
 
     finally:
         with ignoring(Exception):
@@ -143,7 +143,7 @@ def test_bokeh_whitelist():
                 break
             except:
                 sleep(0.1)
-                assert time() < start + 5
+                assert time() < start + 20
 
     finally:
         with ignoring(Exception):
