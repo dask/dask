@@ -20,7 +20,7 @@ logger = logging.getLogger(__file__)
 
 class BokehWebInterface(object):
     def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
-                 bokeh_port=8787, bokeh_whitelist=[], show=False):
+                 bokeh_port=8787, bokeh_whitelist=[], log_level='info', show=False):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
 
@@ -36,6 +36,9 @@ class BokehWebInterface(object):
                  sum([['--host', h] for h in hosts], []))
         if show:
             args.append('--show')
+
+        if log_level in ('debug', 'info', 'warning', 'error', 'critical'):
+            args.extend(['--log-level', log_level])
 
         bokeh_options = {'host': host,
                          'http-port': http_port,

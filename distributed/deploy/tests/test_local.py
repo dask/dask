@@ -112,5 +112,22 @@ def test_bokeh(loop):
                                         c.diagnostics.port)
                 if response.ok:
                     break
-            assert time() < start + 5
+            assert time() < start + 20
+            sleep(0.01)
+
+
+def test_start_diagnostics(loop):
+    from distributed.http import HTTPScheduler
+    import requests
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop) as c:
+        c.start_diagnostics_server(show=False, port=3748)
+
+        start = time()
+        while True:
+            with ignoring(Exception):
+                response = requests.get('http://127.0.0.1:%d/status/' %
+                                        c.diagnostics.port)
+                if response.ok:
+                    break
+            assert time() < start + 20
             sleep(0.01)

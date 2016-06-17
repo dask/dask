@@ -151,13 +151,16 @@ class LocalCluster(object):
     def start_diagnostics_server(self, port=8787, show=False,
             silence=logging.CRITICAL):
         assert self.diagnostics is None
+        if 'http' not in self.scheduler.services:
+            self.scheduler.services['http'] = HTTPScheduler(self.scheduler,
+                    io_loop=self.scheduler.loop)
+            self.scheduler.services['http'].listen(0)
         from distributed.bokeh.application import BokehWebInterface
-        if silence:
-            logging.getLogger('bokeh').setLevel(silence)
         self.diagnostics = BokehWebInterface(
                 tcp_port=self.scheduler.port,
                 http_port=self.scheduler.services['http'].port,
-                bokeh_port=port, show=show)
+                bokeh_port=port, show=show,
+                log_level=logging.getLevelName(silence).lower())
 
     @gen.coroutine
     def _close(self):
