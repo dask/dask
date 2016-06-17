@@ -992,7 +992,7 @@ class Scheduler(Server):
                    name=None, coerce_address=True, nbytes=None, now=None,
                    host_info=None, **info):
         with log_errors():
-            local_now = datetime.now()
+            local_now = time()
             now = now or time()
             info = info or {}
             host_info = host_info or {}

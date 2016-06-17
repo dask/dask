@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
-from datetime import datetime
 from operator import add
 import sys
 from time import time, sleep
@@ -897,7 +896,7 @@ def test_host_health(s, a, b, c):
         assert 0 < s.host_info[w.ip]['memory']
         assert 0 < s.host_info[w.ip]['memory-percent'] < 100
 
-        assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
+        assert isinstance(s.host_info[w.ip]['last-seen'], (int, float))
         assert -1 < s.worker_info[w.address]['time-delay'] < 1
 
     assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
