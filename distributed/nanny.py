@@ -84,8 +84,8 @@ class Nanny(Server):
             try:
                 # Tell scheduler that worker is gone
                 result = yield gen.with_timeout(timedelta(seconds=timeout),
-                             self.center.unregister(address=self.worker_address),
-                             io_loop=self.loop)
+                            self.center.unregister(address=self.worker_address),
+                            io_loop=self.loop)
                 if result not in ('OK', 'already-removed'):
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address_tuple,

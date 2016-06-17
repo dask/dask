@@ -25,8 +25,12 @@ class BokehWebInterface(object):
         ip = socket.gethostbyname(host)
 
         hosts = ['%s:%d' % (h, bokeh_port) for h in
-                 ['localhost', '127.0.0.1', ip, socket.gethostname(),
-                  host] + list(bokeh_whitelist)]
+                 ['localhost',
+                  '127.0.0.1',
+                  ip, socket.gethostbyname(ip),
+                  socket.gethostname(),
+                  socket.gethostbyname(socket.gethostname()),
+                  host] + list(map(str, bokeh_whitelist))]
 
         args = ([binname, 'serve'] + paths +
                 ['--log-level', 'warning',
@@ -61,7 +65,12 @@ class BokehWebInterface(object):
                     % (ip, bokeh_port))
 
     def close(self):
-        self.process.terminate()
+        if sys.version_info[0] >= 3:
+            if self.process.is_alive():
+                self.process.terminate()
+        else:
+            if self.process.returncode is None:
+                self.process.terminate()
 
     def __del__(self):
         self.close()

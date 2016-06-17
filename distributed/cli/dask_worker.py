@@ -1,12 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
+from datetime import timedelta
 import logging
 from sys import argv, exit
 import socket
 
 import click
-from distributed import Nanny, Worker, sync
-from distributed.utils import get_ip
+from distributed import Nanny, Worker, sync, rpc
+from distributed.utils import get_ip, All
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.cli.utils import check_python_3
@@ -14,6 +15,19 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 logger = logging.getLogger('distributed.dask_worker')
+
+
+import signal
+
+def handle_signal(sig, frame):
+    loop = IOLoop.instance()
+    if loop._running:
+        loop.add_callback(loop.stop)
+    else:
+        exit(1)
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
 
 
 @click.command()
@@ -76,23 +90,30 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     for nanny in nannies:
         nanny.start(nanny_port)
-    try:
-        loop.start()
-    except KeyboardInterrupt:
-        if not no_nanny:
-            @gen.coroutine
-            def stop():
-                results = yield [nanny._kill() for nanny in nannies]
-                raise gen.Return(results)
 
-            results = IOLoop().run_sync(stop)
+    loop.start()
+    logger.info("End worker")
+    loop.close()
 
-        for r, nanny in zip(results, nannies):
-            if r == b'OK':
-                logger.info("End nanny at %s:%d", nanny.ip, nanny.port)
-            else:
-                logger.error("Failed to cleanly kill worker %s:%d",
-                             nanny.ip, nanny.port)
+    loop2 = IOLoop()
+
+    @gen.coroutine
+    def f():
+        scheduler = rpc(ip=nannies[0].center.ip, port=nannies[0].center.port)
+        yield gen.with_timeout(timedelta(seconds=2),
+                All([scheduler.unregister(address=n.worker_address, close=True)
+                    for n in nannies if n.process]), io_loop=loop2)
+
+    loop2.run_sync(f)
+
+    for n in nannies:
+        n.process.terminate()
+
+    for n in nannies:
+        n.process.join(timeout=1)
+
+    for nanny in nannies:
+        nanny.stop()
 
 
 def go():

@@ -6,7 +6,10 @@ import logging
 from multiprocessing import Process, Queue
 import os
 import shutil
+import signal
 import socket
+from subprocess import Popen, PIPE
+import sys
 from time import time, sleep
 import uuid
 
@@ -512,3 +515,20 @@ def raises(func, exc=Exception):
         return False
     except exc:
         return True
+
+
+@contextmanager
+def popen(*args, **kwargs):
+    kwargs['stdout'] = PIPE
+    kwargs['stderr'] = PIPE
+    proc = Popen(*args, **kwargs)
+    try:
+        yield proc
+    finally:
+        os.kill(proc.pid, signal.SIGINT)
+        if sys.version_info[0] == 3:
+            proc.wait(5)
+        else:
+            proc.wait()
+        with ignoring(OSError):
+            proc.terminate()
