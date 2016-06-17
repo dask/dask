@@ -332,8 +332,9 @@ class Scheduler(Server):
             yield All(self.coroutines)
 
     def close_streams(self):
-        for r in self._rpcs.values():
-            r.close_streams()
+        with ignoring(AttributeError):
+            for r in self._rpcs.values():
+                r.close_streams()
         for stream in self.streams.values():
             stream.stream.close()
 
@@ -345,6 +346,8 @@ class Scheduler(Server):
         --------
         Scheduler.cleanup
         """
+        for service in self.services.values():
+            service.stop()
         yield self.cleanup()
         if not fast:
             yield self.finished()
