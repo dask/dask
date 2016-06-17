@@ -265,11 +265,11 @@ class Executor(object):
     def __str__(self):
         if hasattr(self, '_loop_thread'):
             n = sync(self.loop, self.scheduler.ncores)
-            return '<Executor: scheduler=%s:%d processes=%d cores=%d>' % (
+            return '<Executor: scheduler="%s:%d" processes=%d cores=%d>' % (
                     self.scheduler.ip, self.scheduler.port, len(n),
                     sum(n.values()))
         else:
-            return '<Executor: scheduler=%s:%d>' % (
+            return '<Executor: scheduler="%s:%d">' % (
                     self.scheduler.ip, self.scheduler.port)
 
     __repr__ = __str__
