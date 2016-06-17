@@ -86,6 +86,11 @@ class LocalCluster(object):
             _start_worker(ncores=threads_per_worker, nanny=nanny)
         self.status = 'running'
 
+        self.diagnostics = None
+        if diagnostics_port is not None:
+            self.start_diagnostics_server(diagnostics_port,
+                                          silence=silence_logs)
+
     def __str__(self):
         return 'LocalCluster("%s", workers=%d, ncores=%d)' % (
                 self.scheduler_address,
@@ -143,6 +148,17 @@ class LocalCluster(object):
         >>> c.stop_worker(w)  # doctest: +SKIP
         """
         sync(self.loop, self._stop_worker, w)
+
+    def start_diagnostics_server(self, port=8787, show=False,
+            silence=logging.CRITICAL):
+        assert self.diagnostics is None
+        from distributed.bokeh.application import BokehWebInterface
+        if silence:
+            logging.getLogger('bokeh').setLevel(silence)
+        self.diagnostics = BokehWebInterface(
+                tcp_port=self.scheduler.port,
+                http_port=self.scheduler.services['http'].port,
+                bokeh_port=port, show=show)
 
     @gen.coroutine
     def _close(self):
