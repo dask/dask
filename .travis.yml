@@ -1,10 +1,13 @@
 language: python
 sudo: false
-python:
-    - "2.7"
-    - "3.3"
-    - "3.4"
-    - "3.5"
+
+env:
+  matrix:
+    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.17.0
+    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.0
+    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.16.2
+    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0
+    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1
 
 addons:
     apt:
@@ -21,25 +24,25 @@ install:
   - conda update conda
 
   # Install dependencies
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - conda create -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install numpy scipy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
-  - if [[ $TRAVIS_PYTHON_VERSION != '3.3' ]]; then conda install distributed cloudpickle bokeh; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install backports.lzma; fi
+  - conda install numpy=$NUMPY scipy pandas=$PANDAS pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
+  - if [[ $PYTHON != '3.3' ]]; then conda install distributed cloudpickle bokeh; fi
+  - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
   - pip install blosc --upgrade
   - pip install graphviz moto
-  - if [[ $TRAVIS_PYTHON_VERSION < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
+  - if [[ $PYTHON < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
 
   # Install dask
   - pip install -e .[complete]
 
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
+    - if [[ $PYTHON == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
 
 after_success:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
+    - if [[ $PYTHON == '2.7' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
 
 notifications:
   email: false
