@@ -757,11 +757,17 @@ def test_to_hdf_multiple_datasets():
         out = pd.read_hdf(os.path.join(dn, 'data_aa.h5'), '/data')
         tm.assert_frame_equal(out, df.iloc[2:])
 
-    # saving to different datasets in multiple files with custom name_function
+    # triggering too many asterisks error
     with tmpdir() as dn:
         with pytest.raises(ValueError):
             fn = os.path.join(dn, 'data_*.h5')
-            a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i +  1))
+            a.to_hdf(fn, '/data_*')
+
+    # triggering too many asterisks error
+    with tmpfile() as fn:
+        with pd.HDFStore(fn) as hdf:
+            with pytest.raises(ValueError):
+                a.to_hdf(hdf, '/data_*_*')
 
     # test hdf object
     with tmpfile('h5') as fn:
@@ -772,7 +778,7 @@ def test_to_hdf_multiple_datasets():
 
 
 @pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
-def test_to_hdf_warns():
+def test_to_fmt_warns():
     df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
                             index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
@@ -782,6 +788,12 @@ def test_to_hdf_warns():
     with tmpfile('h5') as fn:
         with pytest.warns(None):
             a.to_hdf(fn, '/data*', name_function=str)
+
+    # testing warning when breaking order
+    with tmpdir() as dn:
+        with pytest.warns(None):
+            fn = os.path.join(dn, "data_*.csv")
+            a.to_csv(fn, name_function=str)
 
 
 def test_read_hdf():
@@ -814,21 +826,72 @@ def test_read_hdf():
 
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+                       'y': [1, 2, 3, 4]})
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
         with tmpfile('csv') as fn:
-            a.to_csv(fn)
-            result = pd.read_csv(fn, index_col=0)
-            tm.assert_frame_equal(result, df)
+            a.to_csv(fn, index=False)
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            eq(result, df)
 
-    a = dd.from_pandas(df, npartitions)
-    with tmpfile('csv') as fn:
-        r = a.to_csv(fn, compute=False)
-        r.compute()
-        result = pd.read_csv(fn, index_col=0)
-        tm.assert_frame_equal(result, df)
+        with tmpfile('csv') as fn:
+            r = a.to_csv(fn, index=False, compute=False)
+            r.compute()
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            eq(result, df)
+
+        with tmpdir() as dn:
+            fn = os.path.join(dn, 'data_*.csv')
+            a.to_csv(fn, index=False)
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            eq(result, df)
+
+
+def test_to_csv_multiple_files_cornercases():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        with pytest.raises(ValueError):
+            fn = os.path.join(dn, "data_*_*.csv")
+            a.to_csv(fn)
+
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]})
+    a = dd.from_pandas(df16, 16)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.csv')
+        a.to_csv(fn, index=False)
+        result = dd.read_csv(fn).compute().reset_index(drop=True)
+        eq(result, df16)
+
+    # test handling existing files when links are optimized out
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_1.csv')
+        a.to_csv(fn, index=False)
+        fn = os.path.join(dn, 'data_*.csv')
+        a.to_csv(fn, mode='w', index=False)
+        result = dd.read_csv(fn).compute().reset_index(drop=True)
+        eq(result, df)
+
+    # test handling existing files when links are optimized out
+    a = dd.from_pandas(df16, 16)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_01.csv')
+        a.to_csv(fn, index=False)
+        fn = os.path.join(dn, 'data_*.csv')
+        a.to_csv(fn, mode='w', index=False)
+        result = dd.read_csv(fn).compute().reset_index(drop=True)
+        eq(result, df16)
+
+    # test handling existing files when mode isn't 'w'
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.csv')
+        with pytest.raises(ValueError):
+            a.to_csv(fn, mode='a')
 
 
 @pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
