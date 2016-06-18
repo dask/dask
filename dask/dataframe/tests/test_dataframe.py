@@ -1639,8 +1639,8 @@ def test_sorted_index_single_partition():
         df.set_index('x'))
 
 
-def test_info_dataframe():
-    from StringIO import StringIO
+def test_dataframe_info_full():
+    from io import StringIO
 
     buf = StringIO()
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4))  # Force int index; No RangeIndex in dask
@@ -1649,8 +1649,10 @@ def test_info_dataframe():
 
     buf = StringIO()
     ddf = dd.from_pandas(df, npartitions=4)
-    ddf.info(buf=buf, memory_usage=True)
+    ddf.info(buf=buf, verbose=True, memory_usage=True)
     stdout_da = buf.getvalue()
     stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
 
     assert stdout_pd == stdout_da
+
+

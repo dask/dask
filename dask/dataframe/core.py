@@ -1804,37 +1804,43 @@ class DataFrame(_Frame):
         empty = self._pd.astype(dtype)
         return map_partitions(pd.DataFrame.astype, empty, self, dtype=dtype)
 
-    def info(self, buf=None, memory_usage=True):
+    def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame.
         """
 
-        lines = []
+        lines = [str(type(self))]
 
         if buf is None:
             import sys
             buf = sys.stdout
-
-        lines.append(str(type(self)))
-        lines.append(self.index.compute().summary())
 
         if len(self.columns) == 0:
             lines.append('Empty %s' % type(self).__name__)
             buf.write('\n'.join(lines))
             return
 
-        lines.append('Data columns (total {} columns):'.format(len(self.columns)))
-        template = "{0:<%d} {1} non-null {2}" % (self.columns.str.len().max() + 3)
-        lines.extend([template.format(*x) for x in zip(self.columns, self.count().compute(), self.dtypes)])
+        column_template = "{0:<%d} {1}" % (self.columns.str.len().max() + 5)
 
+        if verbose:
+            index, counts = da.compute(self.index, self.count())
+            lines.append(index.summary())
+            column_template = column_template.format('{0}', '{1} non-null {2}')
+            column_info = [column_template.format(*x) for x in zip(self.columns, counts, self.dtypes)]
+        else:
+            column_info = [column_template.format(*x) for x in zip(self.columns, self.dtypes)]
+
+        lines.append('Data columns (total {} columns):'.format(len(self.columns)))
+        lines.extend(column_info)
         dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems())]
         lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
 
         if memory_usage:
-            memory_int = self.map_partitions(lambda x: x.memory_usage()).compute().sum()
+            memory_int = self.map_partitions(pd.DataFrame.memory_usage).compute().sum()
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
         buf.write('\n'.join(lines))
+
 
 
 # bind operators
