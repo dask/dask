@@ -6,7 +6,7 @@ import pytest
 
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, different_seeds, file_size)
+                        Dispatch, tmpfile, different_seeds, file_size, memory_repr)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -120,3 +120,8 @@ def test_different_seeds():
     # Should be sorted
     smallseeds = different_seeds(10, 1234)
     assert smallseeds == sorted(smallseeds)
+
+
+def test_memory_repr():
+    for power, mem_repr in enumerate(['1.0 bytes', '1.0 KB', '1.0 MB', '1.0 GB']):
+        assert memory_repr(1024 ** power) == mem_repr
