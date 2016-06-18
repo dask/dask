@@ -1804,21 +1804,37 @@ class DataFrame(_Frame):
         empty = self._pd.astype(dtype)
         return map_partitions(pd.DataFrame.astype, empty, self, dtype=dtype)
 
-    def info(self):
+    def info(self, buf=None, memory_usage=True):
         """
         Concise summary of a Dask DataFrame.
         """
-        lines = list()
-        lines.append(str(type(self)))
-        lines.append('Data columns (total %d columns):' % len(self.columns))
-        dtypes = self.dtypes
-        space = max([len(k) for k in self.columns]) + 4
-        template = "%s%s"
-        for i, col in enumerate(self.columns):
-            dtype = dtypes.iloc[i]
-            lines.append(template % (('%s' % col)[:space].ljust(space), dtype))
 
-        print('\n'.join(lines))
+        lines = []
+
+        if buf is None:
+            import sys
+            buf = sys.stdout
+
+        lines.append(str(type(self)))
+        lines.append(self.index.compute().summary())
+
+        if len(self.columns) == 0:
+            lines.append('Empty %s' % type(self).__name__)
+            buf.write('\n'.join(lines))
+            return
+
+        lines.append('Data columns (total {} columns):'.format(len(self.columns)))
+        template = "{0:<%d} {1} non-null {2}" % (self.columns.str.len().max() + 3)
+        lines.extend([template.format(*x) for x in zip(self.columns, self.count().compute(), self.dtypes)])
+
+        dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems())]
+        lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
+
+        if memory_usage:
+            memory_int = self.map_partitions(lambda x: x.memory_usage()).compute().sum()
+            lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
+
+        buf.write('\n'.join(lines))
 
 
 # bind operators
