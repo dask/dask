@@ -630,5 +630,5 @@ def insert(tup, loc, val):
 def memory_repr(num):
     for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
         if num < 1024.0:
-            return "%3.1f%s %s" % (num, '', x)
+            return "%3.1f %s" % (num, x)
         num /= 1024.0
