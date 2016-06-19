@@ -163,11 +163,11 @@ def create_merge_tree(func, keys, token):
 def prepare_percentile_merge(qs, vals, length):
     """Weigh percentile values by length and the difference between percentiles
 
-    >>> percentiles = [0, 25, 50, 90, 100]
-    >>> values = [2, 3, 5, 8, 13]
+    >>> percentiles = np.array([0, 25, 50, 90, 100])
+    >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> prepare_percentile_merge(percentiles, values, length)
-    [(2, 125.0), (3, 250.0), (5, 325.0), (8, 250.0), (13, 50.0)]
+    ([2, 3, 5, 8, 13], [125.0, 250.0, 325.0, 250.0, 50.0])
 
     The weight of the first element, ``2``, is determined by the difference
     between the first and second percentiles, and then scaled by length:
