@@ -1837,7 +1837,7 @@ class DataFrame(_Frame):
         lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
 
         if memory_usage:
-            memory_int = self.map_partitions(pd.DataFrame.memory_usage).compute().sum()
+            memory_int = self.map_partitions(pd.DataFrame.memory_usage, index=True).compute().sum()
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
         put_lines(buf, lines)
