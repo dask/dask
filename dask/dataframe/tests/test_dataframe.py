@@ -1639,12 +1639,38 @@ def test_sorted_index_single_partition():
         df.set_index('x'))
 
 
-def test_info(capsys):
-    df = pd.DataFrame({'long_column_name': [1, 2, 3, 4], 'short_name': [1, 0, 1, 0]})
-    ddf = dd.from_pandas(df, npartitions=1)
-    ddf.info()
-    out, err = capsys.readouterr()
-    assert out == ("<class 'dask.dataframe.core.DataFrame'>\n"
-                  "Data columns (total 2 columns):\n"
-                  "long_column_name    int64\n"
-                  "short_name          int64\n")
+def test_dataframe_info():
+    from io import StringIO
+    from dask.compatibility import unicode
+
+    test_frames = [
+        pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4)),  # Force int index; No RangeIndex in dask
+        pd.DataFrame()
+    ]
+
+    for df in test_frames:
+        buf_pd, buf_da = StringIO(), StringIO()
+
+        ddf = dd.from_pandas(df, npartitions=4)
+        df.info(buf=buf_pd)
+        ddf.info(buf=buf_da, verbose=True, memory_usage=True)
+
+        stdout_pd = buf_pd.getvalue()
+        stdout_da = buf_da.getvalue()
+        stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
+
+        assert stdout_pd == stdout_da
+
+    buf = StringIO()
+    ddf = dd.from_pandas(pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4)), npartitions=4)
+
+    # Verbose=False
+    ddf.info(buf=buf, verbose=False)
+    assert buf.getvalue() == unicode(u"<class 'dask.dataframe.core.DataFrame'>\n"
+                                     u"Data columns (total 2 columns):\n"
+                                     u"x      int64\n"
+                                     u"y      int64\n"
+                                     u"dtypes: int64(2)")
+
+    # buf=None
+    assert ddf.info(buf=None) is None

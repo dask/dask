@@ -627,6 +627,7 @@ def insert(tup, loc, val):
     L[loc] = val
     return tuple(L)
 
+
 def build_name_function(max_int):
     """ Returns a function that receives a single integer
     and returns it as a string padded by enough zero characters
@@ -654,3 +655,16 @@ def build_name_function(max_int):
         return str(i).zfill(pad_length)
 
     return name_function
+
+
+def memory_repr(num):
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+def put_lines(buf, lines):
+    from .compatibility import unicode
+    if any(not isinstance(x, unicode) for x in lines):
+        lines = [unicode(x) for x in lines]
+    buf.write('\n'.join(lines))
