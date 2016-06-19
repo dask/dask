@@ -1030,8 +1030,8 @@ class Series(_Frame):
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """ Approximate quantiles of Series used for repartitioning
         """
-        from .partitionquantiles import repartition_quantiles
-        return repartition_quantiles(self, npartitions, upsample=upsample)
+        from .partitionquantiles import partition_quantiles
+        return partition_quantiles(self, npartitions, upsample=upsample)
 
     @derived_from(pd.Series)
     def resample(self, rule, how=None, closed=None, label=None):

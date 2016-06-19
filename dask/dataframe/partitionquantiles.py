@@ -80,7 +80,7 @@ def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_stat
 
     q_fixed = np.linspace(0, 100, num_fixed)
     q_random = random_state.rand(num_random) * 100
-    q_edges = [0.5 / num_fixed, 1 - 0.5 / num_fixed]
+    q_edges = [0.4 / num_fixed, 1 - 0.4 / num_fixed]
     qs = np.concatenate([q_fixed, q_random, q_edges])
     qs.sort()
     return qs
@@ -183,19 +183,24 @@ def prepare_percentile_merge(qs, vals, length):
 
     """
     if length == 0:
-        return []
+        return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return list(zip(vals, weights))
+    return vals.tolist(), weights.tolist()
 
 
 def _merge_sorted(items):
-    return list(merge_sorted(*items))
+    items = [x for x in items if x]
+    if not items:
+        return ()
+    elif len(items) == 1:
+        return items[0]
+    return tuple(zip(*merge_sorted(*[zip(x, y) for x, y in items])))
 
 
-def process_val_weights(vals_and_weights, finalq):
+def process_val_weights(vals_and_weights, finalq, dtype_info):
     """Calculate final percentiles given weighted vals"""
-    vals, weights = zip(*vals_and_weights)
+    vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)
 
@@ -205,7 +210,8 @@ def process_val_weights(vals_and_weights, finalq):
     # rescale finalq percentiles to match q
     desired_q = finalq * q[-1]
 
-    if np.issubdtype(vals.dtype, np.number):
+    dtype, info = dtype_info
+    if str(dtype) != 'category' and np.issubdtype(vals.dtype, np.number):
         rv = np.interp(desired_q, q, vals)
     else:
         left = np.searchsorted(q, desired_q, side='left')
@@ -214,6 +220,11 @@ def process_val_weights(vals_and_weights, finalq):
         np.maximum(right, 0, right)
         lower = np.minimum(left, right)
         rv = vals[lower]
+
+    if str(dtype) == 'category':
+        rv = pd.Categorical.from_codes(rv, info[0], info[1])
+    elif rv.dtype != dtype:
+        rv = rv.astype(dtype)
     return rv
 
 
@@ -221,12 +232,25 @@ def weighted_percentiles(df, num_old, num_new, upsample=1.0, random_state=None):
     from dask.array.percentile import _percentile
     length = len(df)
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
-    vals = _percentile(df.values, qs)
+    data = df.values
+    interpolation = 'linear'
+    if str(data.dtype) == 'category':
+        data = data.codes
+        interpolation = 'nearest'
+    vals = _percentile(data, qs, interpolation=interpolation)
     vals_and_weights = prepare_percentile_merge(qs, vals, length)
     return vals_and_weights
 
 
-def repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
+def dtype_info(df):
+    info = None
+    if str(df.dtype) == 'category':
+        data = df.values
+        info = (data.categories, data.ordered)
+    return df.dtype, info
+
+
+def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
@@ -247,10 +271,15 @@ def repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
         random_state = hash(token) % np.iinfo(np.int32).max
     seeds = different_seeds(df.npartitions, random_state)
 
+    df_keys = df._keys()
+
+    name0 = 're-quantiles-0-' + token
+    dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}
+
     name1 = 're-quantiles-1-' + token
     val_dsk = dict(((name1, i), (weighted_percentiles, key, df.npartitions,
                                  npartitions, upsample, seeds[i]))
-                   for i, key in enumerate(df._keys()))
+                   for i, key in enumerate(df_keys))
 
     name2 = 're-quantiles-2-' + token
     merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name2)
@@ -258,8 +287,8 @@ def repartition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     merged_key = max(merge_dsk or val_dsk)
 
     name3 = 're-quantiles-3-' + token
-    last_dsk = {(name3, 0): (merge_type, (process_val_weights, merged_key, qs))}
+    last_dsk = {(name3, 0): (merge_type, (process_val_weights, merged_key, qs, (name0, 0)))}
 
-    dsk = merge(df.dask, val_dsk, merge_dsk, last_dsk)
+    dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
     return return_type(dsk, name3, df_name, new_divisions)
 
