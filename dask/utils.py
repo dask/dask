@@ -664,7 +664,7 @@ def memory_repr(num):
         num /= 1024.0
 
 def put_lines(buf, lines):
-    text_type = {3: str, 2: unicode}.get(sys.version_info[0])
-    if any(not isinstance(x, text_type) for x in lines):
-        lines = [text_type(x) for x in lines]
+    from .compatibility import unicode
+    if any(not isinstance(x, unicode) for x in lines):
+        lines = [unicode(x) for x in lines]
     buf.write('\n'.join(lines))
