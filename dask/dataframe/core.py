@@ -25,7 +25,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds, funcname, memory_repr)
+                     pseudorandom, derived_from, different_seeds, funcname, memory_repr, put_lines)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from .indexing import (_partition_of_index_value, _loc, _try_loc,
@@ -1816,8 +1816,9 @@ class DataFrame(_Frame):
             buf = sys.stdout
 
         if len(self.columns) == 0:
+            lines.append('Index: 0 entries')
             lines.append('Empty %s' % type(self).__name__)
-            buf.write('\n'.join(lines))
+            put_lines(buf, lines)
             return
 
         column_template = "{0:<%d} {1}" % (self.columns.str.len().max() + 5)
@@ -1839,8 +1840,7 @@ class DataFrame(_Frame):
             memory_int = self.map_partitions(pd.DataFrame.memory_usage).compute().sum()
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
-        buf.write('\n'.join(lines))
-
+        put_lines(buf, lines)
 
 
 # bind operators

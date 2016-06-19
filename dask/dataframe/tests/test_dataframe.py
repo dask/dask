@@ -1639,20 +1639,36 @@ def test_sorted_index_single_partition():
         df.set_index('x'))
 
 
-def test_dataframe_info_full():
+def test_dataframe_info():
     from io import StringIO
 
-    buf = StringIO()
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4))  # Force int index; No RangeIndex in dask
-    df.info(buf=buf)
-    stdout_pd = buf.getvalue()
+    test_frames = [
+        pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4)),  # Force int index; No RangeIndex in dask
+        pd.DataFrame()
+    ]
 
+    for df in test_frames:
+        buf_pd, buf_da = StringIO(), StringIO()
+
+        ddf = dd.from_pandas(df, npartitions=4)
+        df.info(buf=buf_pd)
+        ddf.info(buf=buf_da, verbose=True, memory_usage=True)
+
+        stdout_pd = buf_pd.getvalue()
+        stdout_da = buf_da.getvalue()
+        stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
+
+        assert stdout_pd == stdout_da
+
+
+def test_info_default():
+    from io import StringIO
     buf = StringIO()
+    df =  pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4))
     ddf = dd.from_pandas(df, npartitions=4)
-    ddf.info(buf=buf, verbose=True, memory_usage=True)
-    stdout_da = buf.getvalue()
-    stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
-
-    assert stdout_pd == stdout_da
-
-
+    ddf.info(buf=buf)
+    assert buf.getvalue() == u"<class 'dask.dataframe.core.DataFrame'>\n" \
+                             u"Data columns (total 2 columns):\n" \
+                             u"x      int64\n" \
+                             u"y      int64\n" \
+                             u"dtypes: int64(2)"
