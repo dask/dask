@@ -81,7 +81,8 @@ def read_text(urlpath, blocksize=None, compression='infer',
 
         elif blocksize is None:
             files = open_text_files(urlpath, encoding=encoding, errors=errors,
-                                          compression=compression)
+                                    compression=compression,
+                                    **(storage_options or {}))
             blocks = [delayed(list)(file) for file in files]
 
         else:
