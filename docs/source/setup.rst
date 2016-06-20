@@ -108,8 +108,8 @@ and start one, possibly in a separate thread.
 Using Amazon EC2
 ----------------
 
-See the :doc:`EC2 quickstart <dec2>` for information on the ``dec2`` easy setup
-script to launch a canned cluster on EC2.
+See the :doc:`EC2 quickstart <ec2>` for information on the ``dask-ec2`` easy
+setup script to launch a canned cluster on EC2.
 
 
 Cleanup

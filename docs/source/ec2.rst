@@ -9,10 +9,10 @@ First, add your AWS credentials to ``~/.aws/credentials`` like this::
 
 For other ways to manage or troubleshoot credentials, see the `boto3 docs <https://boto3.readthedocs.io/en/latest/guide/quickstart.html>`_.
 
-Now, you can quickly deploy a scheduler and workers on EC2 using the ``dec2`` quickstart application::
+Now, you can quickly deploy a scheduler and workers on EC2 using the ``dask-ec2`` quickstart application::
 
-  pip install dec2
-  dec2 up --keyname YOUR-AWS-KEY --keypair ~/.ssh/YOUR-AWS-SSH-KEY.pem
+  pip install dask-ec2
+  dask-ec2 up --keyname YOUR-AWS-KEY --keypair ~/.ssh/YOUR-AWS-SSH-KEY.pem
 
 This provisions a cluster on Amazon's EC2 cloud service, installs Anaconda, and
 sets up a scheduler and workers.  In then prints out instructions on how to
@@ -21,11 +21,11 @@ connect to the cluster.
 Options
 -------
 
-The ``dec2`` startup script comes with the following options for creating a
+The ``dask-ec2`` startup script comes with the following options for creating a
 cluster::
 
-   $ dec2 up --help
-   Usage: dec2 up [OPTIONS]
+   $ dask-ec2 up --help
+   Usage: dask-ec2 up [OPTIONS]
 
    Options:
      --keyname TEXT                Keyname on EC2 console  [required]
@@ -36,7 +36,7 @@ cluster::
      --username TEXT               User to SSH to the AMI  [default: ubuntu]
      --type TEXT                   EC2 Instance Type  [default: m3.2xlarge]
      --count INTEGER               Number of nodes  [default: 4]
-     --security-group TEXT         Security Group Name  [default: dec2-default]
+     --security-group TEXT         Security Group Name  [default: dask-ec2-default]
      --volume-type TEXT            Root volume type  [default: gp2]
      --volume-size INTEGER         Root volume size (GB)  [default: 500]
      --file PATH                   File to save the metadata  [default: cluster.yaml]
@@ -48,10 +48,10 @@ cluster::
 Connect
 -------
 
-Connection instructions follow successful completion of the ``dec2 up``
+Connection instructions follow successful completion of the ``dask-ec2 up``
 command.  The involve the following::
 
-    dec2 ssh            # SSH into head node
+    dask-ec2 ssh        # SSH into head node
     ipython             # Start IPython console on head node
 
 .. code-block:: python
@@ -67,4 +67,4 @@ Destroy
 
 You can destroy your cluster from your local machine with the destroy command::
 
-   dec2 destroy
+   dask-ec2 destroy

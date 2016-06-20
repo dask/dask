@@ -48,7 +48,7 @@ Contents
    install
    quickstart
    setup
-   dec2
+   ec2
    web
    examples-overview
 
