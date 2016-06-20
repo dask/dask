@@ -6,7 +6,8 @@ import pytest
 
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, different_seeds, file_size)
+                        Dispatch, tmpfile, different_seeds, file_size,
+                        infer_storage_options)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -120,3 +121,32 @@ def test_different_seeds():
     # Should be sorted
     smallseeds = different_seeds(10, 1234)
     assert smallseeds == sorted(smallseeds)
+
+
+def test_infer_storage_options():
+    so = infer_storage_options('/mnt/datasets/test.csv')
+    assert so.pop('protocol') == 'file'
+    assert so.pop('path') == '/mnt/datasets/test.csv'
+    assert not so
+
+    assert infer_storage_options('./test.csv')['path'] == './test.csv'
+    assert infer_storage_options('../test.csv')['path'] == '../test.csv'
+
+    so = infer_storage_options(
+              'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1#fragm',
+              inherit_storage_options={'extra': 'value'})
+    assert so.pop('protocol') == 'hdfs'
+    assert so.pop('username') == 'username'
+    assert so.pop('password') == 'pwd'
+    assert so.pop('host') == 'node'
+    assert so.pop('port') == 123
+    assert so.pop('path') == '/mnt/datasets/test.csv'
+    assert so.pop('url_query') == 'q=1'
+    assert so.pop('url_fragment') == 'fragm'
+    assert so.pop('extra') == 'value'
+    assert not so
+
+    with pytest.raises(KeyError):
+        infer_storage_options('file:///bucket/file.csv', {'path': 'collide'})
+    with pytest.raises(KeyError):
+        infer_storage_options('hdfs:///bucket/file.csv', {'protocol': 'collide'})

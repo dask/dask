@@ -96,17 +96,18 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     """
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
-    func = delayed(bytes_read_csv)
+    delayed_bytes_read_csv = delayed(bytes_read_csv)
     dfs = []
     for blocks in block_lists:
         if not blocks:
             continue
-        df = func(blocks[0], header, kwargs, dtypes, columns,
-                  write_header=False, enforce=enforce)
+        df = delayed_bytes_read_csv(blocks[0], header, kwargs, dtypes,
+                                    columns, write_header=False,
+                                    enforce=enforce)
         dfs.append(df)
         for b in blocks[1:]:
-            dfs.append(func(b, header, kwargs, dtypes, columns,
-                            enforce=enforce))
+            dfs.append(delayed_bytes_read_csv(b, header, kwargs, dtypes,
+                                              columns, enforce=enforce))
 
     if collection:
         return from_delayed(dfs, head)
@@ -114,7 +115,7 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
         return dfs
 
 
-def read_csv(filename, blocksize=2**25, chunkbytes=None,
+def read_csv(urlpath, blocksize=2**25, chunkbytes=None,
         collection=True, lineterminator=None, compression=None,
         sample=256000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
@@ -129,6 +130,13 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
 
         >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks  # doctest: +SKIP
 
+    3.  You can read CSV files from external resources (e.g. S3, HDFS)
+        providing a URL:
+
+        >>> df = dd.read_csv('s3://bucket/myfiles.*.csv')  # doctest: +SKIP
+        >>> df = dd.read_csv('hdfs:///myfiles.*.csv')  # doctest: +SKIP
+        >>> df = dd.read_csv('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
+
     Internally dd.read_csv uses pandas.read_csv and so supports many of the
     same keyword arguments with the same performance guarantees.
 
@@ -141,14 +149,18 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
     Parameters
     ----------
 
-    filename: string
-        Filename or globstring for CSV files.  May include protocols like s3://
+    urlpath: string
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), or globstring for CSV files.
     blocksize: int or None
         Number of bytes by which to cut up larger files
     collection: boolean
         Return a dask.dataframe if True or list of dask.delayed objects if False
     sample: int
         Number of bytes to use when determining dtypes
+    storage_options: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
     **kwargs: dict
         Options to pass down to ``pandas.read_csv``
     """
@@ -181,11 +193,11 @@ def read_csv(filename, blocksize=2**25, chunkbytes=None,
                                   compression)
 
     b_lineterminator = lineterminator.encode()
-    sample, values = read_bytes(filename, delimiter=b_lineterminator,
-                                          blocksize=blocksize,
-                                          sample=sample,
-                                          compression=compression,
-                                          **(storage_options or {}))
+    sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
+                                         blocksize=blocksize,
+                                         sample=sample,
+                                         compression=compression,
+                                         **(storage_options or {}))
     if not isinstance(values[0], (tuple, list)):
         values = [values]
 
