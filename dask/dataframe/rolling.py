@@ -151,7 +151,8 @@ class Rolling(object):
                 next_partition = (head_name, 1)
                 dsk[next_partition] = (head, (old_name, 1), after)
             else:
-                #XXX what if there is one partition, is the after wrong?
+                # Either we are only looking backward or this was the
+                # only chunk.
                 next_partition = self.obj._pd
             dsk[new_name, 0] = (call_pandas_rolling_method_with_neighbors,
                 self.obj._pd, (old_name, 0), next_partition, 0, after,
