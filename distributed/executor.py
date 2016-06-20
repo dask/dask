@@ -70,6 +70,7 @@ class Future(WrappedKey):
         self.key = key
         self.executor = executor
         self.executor._inc_ref(key)
+        self._cleared = False
 
         if key not in executor.futures:
             executor.futures[key] = {'event': Event(), 'status': 'pending'}
@@ -181,8 +182,13 @@ class Future(WrappedKey):
         except KeyError:
             return None
 
+    def _del(self):
+        if not self._cleared:
+            self._cleared = True
+            self.executor._dec_ref(self.key)
+
     def __del__(self):
-        self.executor._dec_ref(self.key)
+        self._del()
 
     def __str__(self):
         if self.type:
@@ -528,6 +534,10 @@ class Executor(object):
         kwargs2, kwarg_dependencies = unpack_remotedata(kwargs, byte_keys=True)
         dependencies = arg_dependencies | kwarg_dependencies
 
+        bad_deps = {d for d in dependencies if d not in self.futures}
+        if bad_deps:
+            raise CancelledError(*bad_deps)
+
         task = {'function': dumps_function(func)}
         if args2:
             task['args'] = dumps(args2)
@@ -636,7 +646,12 @@ class Executor(object):
 
         d = {key: unpack_remotedata(task, byte_keys=True) for key, task in dsk.items()}
         dsk2 = str_graph({k: v[0] for k, v in d.items()})
+        d_futures = {k: v[1] for k, v in d.items()}
         dependencies = {k: set(map(tokey, v[1])) for k, v in d.items()}
+
+        bad_deps = {k for v in d_futures.values() for k in v if k not in self.futures}
+        if bad_deps:
+            raise CancelledError(*bad_deps)
 
         if isinstance(workers, str):
             workers = [workers]
@@ -676,10 +691,18 @@ class Executor(object):
         keys = [tokey(key) for key in keys]
         bad_data = dict()
 
+        @gen.coroutine
+        def wait(k):
+            yield self.futures[k]['event'].wait()
+            if self.futures[k]['status'] != 'finished':
+                raise Exception()
+
         while True:
             logger.debug("Waiting on futures to clear before gather")
-            yield All([self.futures[key]['event'].wait() for key in keys
-                                                    if key in self.futures])
+
+            with ignoring(Exception):
+                yield All([wait(key) for key in keys if key in self.futures])
+
             exceptions = set()
             bad_keys = set()
             for key in keys:
@@ -983,6 +1006,11 @@ class Executor(object):
 
         dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
+        for s in dependencies.values():
+            for v in s:
+                if v not in self.futures:
+                    raise CancelledError(v)
+
         for k, v in dsk3.items():
             dependencies[k] |= set(_deps(dsk3, v))
 
@@ -994,14 +1022,19 @@ class Executor(object):
                                  'client': self.id})
 
         packed = pack_data(keys, futures)
-        if raise_on_error:
+        try:
             result = yield self._gather(packed)
-        else:
-            try:
-                result = yield self._gather(packed)
-                result = 'OK', result
-            except Exception as e:
+        except Exception as e:
+            if raise_on_error:
+                raise
+            else:
                 result = 'error', e
+                raise gen.Return(result)
+        finally:
+            for f in futures.values():
+                f._del()
+        if not raise_on_error:
+            result = 'OK', result
         raise gen.Return(result)
 
     def get(self, dsk, keys, **kwargs):
@@ -1239,7 +1272,7 @@ class Executor(object):
     @gen.coroutine
     def _rebalance(self, futures=None, workers=None):
         yield _wait(futures)
-        keys = list({f.key for f in futures_of(futures)})
+        keys = list({f.key for f in self.futures_of(futures)})
         result = yield self.scheduler.rebalance(keys=keys, workers=workers)
         assert result['status'] == 'OK'
 
@@ -1265,7 +1298,7 @@ class Executor(object):
 
     @gen.coroutine
     def _replicate(self, futures, n=None, workers=None, branching_factor=2):
-        futures = futures_of(futures)
+        futures = self.futures_of(futures)
         yield _wait(futures)
         keys = {f.key for f in futures}
         yield self.scheduler.replicate(keys=list(keys), n=n, workers=workers,
@@ -1365,7 +1398,7 @@ class Executor(object):
         Executor.ncores
         """
         if futures is not None:
-            futures = futures_of(futures)
+            futures = self.futures_of(futures)
             keys = list({f.key for f in futures})
         else:
             keys = None
@@ -1491,6 +1524,9 @@ class Executor(object):
         """
         return sync(self.loop, self.scheduler.nbytes, keys=keys,
                     summary=summary)
+
+    def futures_of(self, futures):
+        return futures_of(futures, executor=self)
 
 
 class CompatibleExecutor(Executor):
@@ -1634,7 +1670,7 @@ def redict_collection(c, dsk):
         return cc
 
 
-def futures_of(o):
+def futures_of(o, executor=None):
     """ Future objects in a collection """
     stack = [o]
     futures = set()
@@ -1648,5 +1684,10 @@ def futures_of(o):
             futures.add(x)
         if hasattr(x, 'dask'):
             stack.extend(x.dask.values())
+
+    if executor is not None:
+        bad = {f for f in futures if f.cancelled()}
+        if bad:
+            raise CancelledError(bad)
 
     return list(futures)
