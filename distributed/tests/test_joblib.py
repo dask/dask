@@ -20,7 +20,7 @@ def slow_raise_value_error(condition, duration=0.05):
 def test_simple(loop):
     with cluster() as (s, [a, b]):
         with parallel_backend('distributed', loop=loop,
-                scheduler_host=('127.0.0.1', s['port'])):
+                scheduler_host=('127.0.0.1', s['port'])) as p:
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
@@ -32,6 +32,10 @@ def test_simple(loop):
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
 
+            from joblib.parallel import get_active_backend
+            ba, _ = get_active_backend()
+            ba.executor.shutdown()
+
 
 def random2():
     return random()
@@ -39,7 +43,11 @@ def random2():
 def test_dont_assume_function_purity(loop):
     with cluster() as (s, [a, b]):
         with parallel_backend('distributed', loop=loop,
-                scheduler_host=('127.0.0.1', s['port'])):
+                scheduler_host=('127.0.0.1', s['port'])) as p:
 
             x, y = Parallel()(delayed(random2)() for i in range(2))
             assert x != y
+
+            from joblib.parallel import get_active_backend
+            ba, _ = get_active_backend()
+            ba.executor.shutdown()

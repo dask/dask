@@ -131,19 +131,19 @@ def test_identity(loop):
 
 def test_ports(loop):
     port = 9876
-    server = Server({})
+    server = Server({}, io_loop=loop)
     server.listen(port)
     try:
         assert server.port == port
 
         with pytest.raises((OSError, socket.error)):
-            server2 = Server({})
+            server2 = Server({}, io_loop=loop)
             server2.listen(port)
     finally:
         server.stop()
 
     try:
-        server3 = Server({})
+        server3 = Server({}, io_loop=loop)
         server3.listen(0)
         assert isinstance(server3.port, int)
         assert server3.port > 1024

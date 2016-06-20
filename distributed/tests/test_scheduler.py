@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
-from datetime import datetime
 from operator import add
 import sys
 from time import time, sleep
@@ -46,9 +45,8 @@ def test_ready_add_worker(s, a, b):
                    dependencies={'x-%d' % i: set() for i in range(20)})
 
 
-def test_update_state(loop):
-    s = Scheduler()
-    s.start(0)
+@gen_cluster(ncores=[])
+def test_update_state(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
@@ -83,12 +81,9 @@ def test_update_state(loop):
 
     assert 'a' in s.ready or 'a' in s.processing[alice]
 
-    s.stop()
 
-
-def test_update_state_with_processing(loop):
-    s = Scheduler()
-    s.start(0)
+@gen_cluster(ncores=[])
+def test_update_state_with_processing(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')},
                    keys=['z'],
@@ -122,12 +117,9 @@ def test_update_state_with_processing(loop):
     assert s.who_wants == {'b': {'client'}, 'c': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'b', 'c', 'z'}}
 
-    s.stop()
 
-
-def test_update_state_respects_data_in_memory(loop):
-    s = Scheduler()
-    s.start(0)
+@gen_cluster(ncores=[])
+def test_update_state_respects_data_in_memory(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
@@ -157,12 +149,9 @@ def test_update_state_respects_data_in_memory(loop):
     assert s.who_wants == {'y': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
 
-    s.stop()
 
-
-def test_update_state_supports_recomputing_released_results(loop):
-    s = Scheduler()
-    s.start(0)
+@gen_cluster(ncores=[])
+def test_update_state_supports_recomputing_released_results(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')},
                    keys=['z'],
@@ -195,8 +184,6 @@ def test_update_state_supports_recomputing_released_results(loop):
     assert s.who_wants == {'z': {'client'}, 'y': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
     assert set(s.processing[alice]) == {'x'}
-
-    s.stop()
 
 
 def test_decide_worker_with_many_independent_leaves():
@@ -867,27 +854,22 @@ def test_coerce_address():
 
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="file descriptors not really a thing")
-def test_file_descriptors_dont_leak(loop):
+@gen_cluster(ncores=[])
+def test_file_descriptors_dont_leak(s):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
     before = proc.num_fds()
-    s = Scheduler()
-    s.start(0)
 
     w = Worker(s.ip, s.port)
-    @gen.coroutine
-    def f():
-        yield w._start(0)
-        yield w._close()
-    loop.run_sync(f)
+
+    yield w._start(0)
+    yield w._close()
 
     during = proc.num_fds()
-    s.stop()
-    s.close()
 
     start = time()
     while proc.num_fds() > before:
-        loop.run_sync(lambda: gen.sleep(0.01))
+        yield gen.sleep(0.01)
         assert time() < start + 5
 
 
@@ -914,7 +896,7 @@ def test_host_health(s, a, b, c):
         assert 0 < s.host_info[w.ip]['memory']
         assert 0 < s.host_info[w.ip]['memory-percent'] < 100
 
-        assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
+        assert isinstance(s.host_info[w.ip]['last-seen'], (int, float))
         assert -1 < s.worker_info[w.address]['time-delay'] < 1
 
     assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
@@ -942,10 +924,14 @@ def test_host_health(s, a, b, c):
     assert not s.host_info
 
 
-def test_add_worker_is_idempotent(loop):
-    s = Scheduler(loop=loop)
-    s.start(0)
+@gen_cluster(ncores=[])
+def test_add_worker_is_idempotent(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
     ncores = s.ncores.copy()
     s.add_worker(address=alice, coerce_address=False)
     assert s.ncores == s.ncores
+
+
+def test_io_loop(loop):
+    s = Scheduler(loop=loop)
+    assert s.io_loop is loop

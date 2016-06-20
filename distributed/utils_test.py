@@ -6,7 +6,10 @@ import logging
 from multiprocessing import Process, Queue
 import os
 import shutil
+import signal
 import socket
+from subprocess import Popen, PIPE
+import sys
 from time import time, sleep
 import uuid
 
@@ -24,16 +27,36 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.yield_fixture
-def loop():
+def current_loop():
     IOLoop.clear_instance()
     loop = IOLoop()
     loop.make_current()
     yield loop
-    sync(loop, loop.stop)
+    if loop._running:
+        sync(loop, loop.stop)
     for i in range(5):
-        with ignoring(Exception):
+        try:
             loop.close(all_fds=True)
-            break
+            return
+        except Exception as e:
+            f = e
+            print(f)
+    IOLoop.clear_instance()
+
+
+@pytest.yield_fixture
+def loop():
+    loop = IOLoop()
+    yield loop
+    if loop._running:
+        sync(loop, loop.stop)
+    for i in range(5):
+        try:
+            loop.close(all_fds=True)
+            return
+        except Exception as e:
+            f = e
+            print(f)
 
 
 def inc(x):
@@ -86,7 +109,7 @@ def run_center(q):
     from distributed import Center
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
-    IOLoop.clear_instance()
+    # IOLoop.clear_instance()
     loop = IOLoop(); loop.make_current()
     PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
@@ -107,7 +130,7 @@ def run_center(q):
         loop.close(all_fds=True)
 
 
-def run_scheduler(q, center_port=None, **kwargs):
+def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -117,9 +140,8 @@ def run_scheduler(q, center_port=None, **kwargs):
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
     center = ('127.0.0.1', center_port) if center_port else None
-    scheduler = Scheduler(center=center, **kwargs)
-    scheduler.listen(0)
-    done = scheduler.start(0)
+    scheduler = Scheduler(center=center, loop=loop, **kwargs)
+    done = scheduler.start(scheduler_port)
 
     q.put(scheduler.port)
     try:
@@ -137,7 +159,7 @@ def run_worker(q, center_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
-        worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
+        worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -155,7 +177,7 @@ def run_nanny(q, center_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
-        worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
+        worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -404,10 +426,10 @@ from .worker import Worker
 from .executor import Executor
 
 @gen.coroutine
-def start_cluster(ncores, Worker=Worker):
-    s = Scheduler(ip='127.0.0.1')
+def start_cluster(ncores, loop, Worker=Worker):
+    s = Scheduler(ip='127.0.0.1', loop=loop)
     done = s.start(0)
-    workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i)
+    workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop)
                 for i, (k, v) in enumerate(ncores)]
 
     yield [w._start() for w in workers]
@@ -451,7 +473,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
             loop = IOLoop()
             loop.make_current()
 
-            s, workers = loop.run_sync(lambda: start_cluster(ncores,
+            s, workers = loop.run_sync(lambda: start_cluster(ncores, loop,
                                                              Worker=Worker))
             args = [s] + workers
 
@@ -485,3 +507,28 @@ def make_hdfs():
     finally:
         if hdfs.exists('/tmp/test'):
             hdfs.rm('/tmp/test')
+
+
+def raises(func, exc=Exception):
+    try:
+        func()
+        return False
+    except exc:
+        return True
+
+
+@contextmanager
+def popen(*args, **kwargs):
+    kwargs['stdout'] = PIPE
+    kwargs['stderr'] = PIPE
+    proc = Popen(*args, **kwargs)
+    try:
+        yield proc
+    finally:
+        os.kill(proc.pid, signal.SIGINT)
+        if sys.version_info[0] == 3:
+            proc.wait(5)
+        else:
+            proc.wait()
+        with ignoring(OSError):
+            proc.terminate()

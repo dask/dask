@@ -1376,31 +1376,24 @@ def test_start_is_idempotent(loop):
             assert x.result() == 2
 
 
-def test_executor_with_scheduler(loop):
-    @gen.coroutine
-    def f(s, a, b):
-        assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
-        e = Executor(('127.0.0.1', s.port), start=False, loop=loop)
-        yield e._start()
+@gen_cluster(executor=True)
+def test_executor_with_scheduler(e, s, a, b):
+    assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
 
-        x = e.submit(inc, 1)
-        y = e.submit(inc, 2)
-        z = e.submit(add, x, y)
-        result = yield x._result()
-        assert result == 1 + 1
-        result = yield z._result()
-        assert result == 1 + 1 + 1 + 2
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y)
+    result = yield x._result()
+    assert result == 1 + 1
+    result = yield z._result()
+    assert result == 1 + 1 + 1 + 2
 
-        a, b, c = yield e._scatter([1, 2, 3])
-        aa, bb, xx = yield e._gather([a, b, x])
-        assert (aa, bb, xx) == (1, 2, 2)
+    a, b, c = yield e._scatter([1, 2, 3])
+    aa, bb, xx = yield e._gather([a, b, x])
+    assert (aa, bb, xx) == (1, 2, 2)
 
-        result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
-        assert result == 12
-
-        yield e._shutdown()
-
-    _test_scheduler(f)
+    result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
+    assert result == 12
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
@@ -1563,8 +1556,8 @@ def test_badly_serialized_input(e, s, a, b):
     assert future.status == 'error'
 
 
-@pytest.mark.xfail
-def test_badly_serialized_input_stderr(capsys):
+@pytest.mark.skipif('True', reason="")
+def test_badly_serialized_input_stderr(capsys, loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             o = BadlySerializedObject()
@@ -2979,6 +2972,7 @@ def test_default_get(loop):
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=False)
         assert _globals['get'] is pre_get
+        e.shutdown()
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True)
         assert _globals['get'] == e.get
@@ -3011,11 +3005,6 @@ def test_bad_tasks_fail(e, s, a, b):
     f = e.submit(sys.exit, 1)
     with pytest.raises(KilledWorker):
         yield f._result()
-
-    start = time()
-    while len(s.ncores) < 2:
-        yield gen.sleep(0.01)
-        assert time() < start + 5
 
 
 def test_get_stacks_processing_sync(loop):
@@ -3063,3 +3052,11 @@ def dont_test_scheduler_falldown(loop):
                 assert len(ee.ncores()) == 2
         finally:
             s2.close()
+
+
+def test_shutdown_idempotent(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            e.shutdown()
+            e.shutdown()
+            e.shutdown()

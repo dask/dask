@@ -96,7 +96,7 @@ class Workers(RequestHandler):
             self.write(workers(self.server))
 
 
-def HTTPScheduler(scheduler):
+def HTTPScheduler(scheduler, **kwargs):
     application = MyApp(web.Application([
         (r'/info.json', Info, {'server': scheduler}),
         (r'/resources.json', Resources, {'server': scheduler}),
@@ -108,5 +108,5 @@ def HTTPScheduler(scheduler):
         (r'/workers.json', Workers, {'server': scheduler}),
         (r'/memory-load.json', MemoryLoad, {'server': scheduler}),
         (r'/memory-load-by-key.json', MemoryLoadByKey, {'server': scheduler}),
-        ]))
+        ]), **kwargs)
     return application

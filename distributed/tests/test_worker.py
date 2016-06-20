@@ -15,11 +15,12 @@ from tornado.ioloop import TimeoutError
 from distributed.batched import BatchedStream
 from distributed.center import Center
 from distributed.core import rpc, dumps, loads, connect, read, write
+from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message
 from distributed.utils import ignoring
 from distributed.utils_test import (loop, _test_cluster, inc, gen_cluster,
-        slow, slowinc, throws)
+        slow, slowinc, throws, current_loop)
 
 
 
@@ -55,7 +56,7 @@ def test_health():
         assert 'network-send' in d
 
 
-def test_worker(loop):
+def test_worker(current_loop):
     @gen.coroutine
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
@@ -120,7 +121,7 @@ def test_worker(loop):
     _test_cluster(f)
 
 
-def test_compute_who_has(loop):
+def test_compute_who_has(current_loop):
     @gen.coroutine
     def f():
         c = Center(ip='127.0.0.1')
@@ -150,10 +151,10 @@ def test_compute_who_has(loop):
         yield [x._close(), y._close(), z._close()]
         zz.close_streams()
 
-    loop.run_sync(f, timeout=5)
+    current_loop.run_sync(f, timeout=5)
 
 
-def test_workers_update_center(loop):
+def test_workers_update_center(current_loop):
     @gen.coroutine
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
@@ -200,7 +201,7 @@ def dont_test_delete_data_with_missing_worker(loop):
     _test_cluster(f)
 
 
-def test_upload_file(loop):
+def test_upload_file(current_loop):
     @gen.coroutine
     def f(c, a, b):
         assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
@@ -233,7 +234,7 @@ def test_upload_file(loop):
     _test_cluster(f)
 
 
-def test_upload_egg(loop):
+def test_upload_egg(current_loop):
     @gen.coroutine
     def f(c, a, b):
         eggname = 'mytestegg-1.0.0-py3.4.egg'
@@ -269,7 +270,7 @@ def test_upload_egg(loop):
     _test_cluster(f)
 
 
-def test_broadcast(loop):
+def test_broadcast(current_loop):
     @gen.coroutine
     def f(c, a, b):
         cc = rpc(ip=c.ip, port=c.port)
@@ -281,7 +282,7 @@ def test_broadcast(loop):
     _test_cluster(f)
 
 
-def test_worker_with_port_zero(loop):
+def test_worker_with_port_zero(current_loop):
     @gen.coroutine
     def f():
         c = Center('127.0.0.1')
@@ -291,17 +292,17 @@ def test_worker_with_port_zero(loop):
         assert isinstance(w.port, int)
         assert w.port > 1024
 
-    loop.run_sync(f)
+    current_loop.run_sync(f)
 
-@pytest.mark.slow
-def test_worker_waits_for_center_to_come_up(loop):
+@slow
+def test_worker_waits_for_center_to_come_up(current_loop):
     @gen.coroutine
     def f():
         w = Worker('127.0.0.1', 8007, ip='127.0.0.1')
         yield w._start()
 
     try:
-        loop.run_sync(f, timeout=4)
+        current_loop.run_sync(f, timeout=4)
     except TimeoutError:
         pass
 
@@ -396,3 +397,11 @@ def test_active_holds_tasks(e, s, w):
     with ignoring(Exception):
         yield _wait([future])
     assert not w.active
+
+
+def test_io_loop(loop):
+    s = Scheduler(loop=loop)
+    s.listen(0)
+    assert s.io_loop is loop
+    w = Worker(s.ip, s.port, loop=loop)
+    assert w.io_loop is loop

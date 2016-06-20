@@ -207,7 +207,6 @@ class Scheduler(Server):
         self.exceptions_blame = dict()
 
         self.loop = loop or IOLoop.current()
-        self.io_loop = self.loop
 
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
@@ -246,11 +245,11 @@ class Scheduler(Server):
             else:
                 port = 0
 
-            self.services[k] = v(self)
+            self.services[k] = v(self, io_loop=self.loop)
             self.services[k].listen(port)
 
         super(Scheduler, self).__init__(handlers=self.handlers,
-                max_buffer_size=max_buffer_size, **kwargs)
+                max_buffer_size=max_buffer_size, io_loop=self.loop, **kwargs)
 
     def __del__(self):
         self.close_streams()
@@ -308,7 +307,7 @@ class Scheduler(Server):
         self._delete_periodic_callback.start()
 
         if start_queues:
-            self.handle_queues(self.scheduler_queues[0], None)
+            self.loop.add_callback(self.handle_queues, self.scheduler_queues[0], None)
 
         for cor in self.coroutines:
             if cor.done():
@@ -333,21 +332,25 @@ class Scheduler(Server):
             yield All(self.coroutines)
 
     def close_streams(self):
-        for r in self._rpcs.values():
-            r.close_streams()
+        with ignoring(AttributeError):
+            for r in self._rpcs.values():
+                r.close_streams()
         for stream in self.streams.values():
             stream.stream.close()
 
     @gen.coroutine
-    def close(self, stream=None):
+    def close(self, stream=None, fast=False):
         """ Send cleanup signal to all coroutines then wait until finished
 
         See Also
         --------
         Scheduler.cleanup
         """
+        for service in self.services.values():
+            service.stop()
         yield self.cleanup()
-        yield self.finished()
+        if not fast:
+            yield self.finished()
         self.close_streams()
         self.status = 'closed'
         self.stop()
@@ -361,7 +364,7 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
 
-        for w, bstream in self.worker_streams.items():
+        for w, bstream in list(self.worker_streams.items()):
             with ignoring(AttributeError):
                 yield bstream.close(ignore_closed=True)
 
@@ -982,7 +985,7 @@ class Scheduler(Server):
                 self.ensure_in_play(key)
 
             if not self.stacks:
-                logger.critical("Lost all workers")
+                logger.info("Lost all workers")
 
             self.ensure_idle_ready()
 
@@ -992,7 +995,7 @@ class Scheduler(Server):
                    name=None, coerce_address=True, nbytes=None, now=None,
                    host_info=None, **info):
         with log_errors():
-            local_now = datetime.now()
+            local_now = time()
             now = now or time()
             info = info or {}
             host_info = host_info or {}

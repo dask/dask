@@ -131,7 +131,7 @@ class Worker(Server):
             else:
                 port = 0
 
-            self.services[k] = v(self)
+            self.services[k] = v(self, io_loop=self.loop)
             self.services[k].listen(port)
             self.service_ports[k] = self.services[k].port
 
@@ -147,7 +147,7 @@ class Worker(Server):
                     'health': self.host_health,
                     'upload_file': self.upload_file}
 
-        super(Worker, self).__init__(handlers, **kwargs)
+        super(Worker, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
         self.heartbeat_callback = PeriodicCallback(self.heartbeat,
                                                    self.heartbeat_interval,
@@ -636,7 +636,7 @@ class Worker(Server):
 
     def host_health(self, stream=None):
         """ Information about worker """
-        d = {}
+        d = {'time': time()}
         try:
             import psutil
             mem = psutil.virtual_memory()

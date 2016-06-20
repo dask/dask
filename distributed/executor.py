@@ -242,7 +242,7 @@ class Executor(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address, start=True, loop=None, timeout=3,
+    def __init__(self, address=None, start=True, loop=None, timeout=3,
                  set_as_default=False):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -250,6 +250,10 @@ class Executor(object):
         self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
         self.id = str(uuid.uuid1())
+        self.status = None
+        if hasattr(address, 'scheduler_address'):
+            self.cluster = address
+            address = address.scheduler_address
         self._start_arg = address
         if set_as_default:
             self._previous_get = _globals.get('get')
@@ -261,11 +265,11 @@ class Executor(object):
     def __str__(self):
         if hasattr(self, '_loop_thread'):
             n = sync(self.loop, self.scheduler.ncores)
-            return '<Executor: scheduler=%s:%d processes=%d cores=%d>' % (
+            return '<Executor: scheduler="%s:%d" processes=%d cores=%d>' % (
                     self.scheduler.ip, self.scheduler.port, len(n),
                     sum(n.values()))
         else:
-            return '<Executor: scheduler=%s:%d>' % (
+            return '<Executor: scheduler="%s:%d">' % (
                     self.scheduler.ip, self.scheduler.port)
 
     __repr__ = __str__
@@ -285,12 +289,22 @@ class Executor(object):
         self.loop.add_callback(pc.start)
         _global_executor[0] = self
         sync(self.loop, self._start, **kwargs)
+        self.status = 'running'
 
     def _send_to_scheduler(self, msg):
         self.loop.add_callback(self.scheduler_stream.send, msg)
 
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
+        if self._start_arg is None:
+            from distributed.deploy import LocalCluster
+            try:
+                self.cluster = LocalCluster(loop=self.loop, start=False)
+            except OSError:
+                self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
+                                            start=False)
+            self._start_arg = self.cluster.scheduler_address
+
         r = coerce_to_rpc(self._start_arg, timeout=timeout)
         try:
             ident = yield r.identity()
@@ -301,7 +315,7 @@ class Executor(object):
             stream = yield connect(r.ip, r.port)
             yield write(stream, {'op': 'register-client',
                                  'client': self.id})
-            bstream = BatchedSend(interval=10)
+            bstream = BatchedSend(interval=10, loop=self.loop)
             bstream.start(stream)
             self.scheduler_stream = bstream
         else:
@@ -320,6 +334,9 @@ class Executor(object):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.shutdown()
+
+    def __del__(self):
         self.shutdown()
 
     def _inc_ref(self, key):
@@ -406,6 +423,9 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
+        if self.status == 'closed':
+            raise Return()
+        self.status = 'closed'
         self._send_to_scheduler({'op': 'close-stream'})
         if _global_executor[0] is self:
             _global_executor[0] = None
@@ -420,6 +440,9 @@ class Executor(object):
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
+        if self.status == 'closed':
+            return
+        self.status = 'closed'
         with ignoring(AttributeError):
             self.loop.add_callback(self.scheduler_stream.send,
                                    {'op': 'close-stream'})
@@ -428,7 +451,7 @@ class Executor(object):
             self.scheduler.close_streams()
         if self._should_close_loop:
             sync(self.loop, self.loop.stop)
-            self.loop.close()
+            self.loop.close(all_fds=True)
             self._loop_thread.join(timeout=timeout)
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)

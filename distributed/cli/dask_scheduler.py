@@ -50,49 +50,17 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
-                          services={('http', http_port): HTTPScheduler})
+                          services={('http', http_port): HTTPScheduler},
+                          loop=loop)
     scheduler.start(port)
 
     bokeh_proc = None
     if _bokeh:
         try:
-            import bokeh
-            import distributed.bokeh
-            hosts = ['%s:%d' % (h, bokeh_port) for h in
-                     ['localhost', '127.0.0.1', ip, socket.gethostname(),
-                      host] + list(bokeh_whitelist)]
-            dirname = os.path.dirname(distributed.__file__)
-            paths = [os.path.join(dirname, 'bokeh', name)
-                     for name in ['status', 'tasks']]
-            binname = 'bokeh.bat' if sys.platform.startswith('win') else 'bokeh'
-            binname = os.path.join(os.path.dirname(sys.argv[0]), binname)
-            args = ([binname, 'serve'] + paths +
-                    ['--log-level', 'warning',
-                     '--check-unused-sessions=50',
-                     '--unused-session-lifetime=1',
-                     '--port', str(bokeh_port)] +
-                     sum([['--host', h] for h in hosts], []))
-            if show:
-                args.append('--show')
-
-            bokeh_options = {'host': host if given_host else '127.0.0.1',
-                             'http-port': http_port,
-                             'tcp-port': port,
-                             'bokeh-port': bokeh_port}
-            with open('.dask-web-ui.json', 'w') as f:
-                json.dump(bokeh_options, f, indent=2)
-
-            if sys.version_info[0] >= 3:
-                from bokeh.command.bootstrap import main
-                ctx = multiprocessing.get_context('spawn')
-                bokeh_proc = ctx.Process(target=main, args=(args,))
-                bokeh_proc.daemon = True
-                bokeh_proc.start()
-            else:
-                bokeh_proc = subprocess.Popen(args)
-
-            logger.info(" Bokeh UI at:  http://%s:%d/status/"
-                        % (ip, bokeh_port))
+            from distributed.bokeh.application import BokehWebInterface
+            bokeh_proc = BokehWebInterface(host=host, http_port=http_port,
+                    tcp_port=port, bokeh_port=bokeh_port,
+                    bokeh_whitelist=bokeh_whitelist, show=show)
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")
         except Exception as e:
@@ -102,7 +70,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
     loop.close()
     scheduler.stop()
     if bokeh_proc:
-        bokeh_proc.terminate()
+        bokeh_proc.close()
 
     logger.info("End scheduler at %s:%d", ip, port)
 

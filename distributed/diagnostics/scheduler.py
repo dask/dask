@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import datetime
 import os
+from time import time
 
 from toolz import countby, concat, dissoc
 
@@ -47,16 +47,16 @@ def workers(s):
     processing = {host: countby(key_split, concat(s.processing[w] for w in addrs))
                   for host, addrs in hosts.items()}
 
-    now = datetime.now()
+    now = time()
 
     result = {}
     for host, info in s.host_info.items():
-        info = dissoc(info, 'heartbeat', 'heartbeat-port')
+        # info = dissoc(info, 'heartbeat', 'heartbeat-port')
         info['processing'] = processing[host]
         result[host] = info
         info['ports'] = list(info['ports'])
         if 'last-seen' in info:
-            info['last-seen'] = (now - info['last-seen']).total_seconds()
+            info['last-seen'] = (now - info['last-seen'])
 
     return result
 
