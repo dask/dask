@@ -84,8 +84,9 @@ def test_read_text_blocksize(e, s, a, b):
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_text_compression(e, s, a, b):
-    b = read_text('distributed-test/csv/gzip/*', compression='gzip',
-                  blocksize=None, anon=True)
+    import dask.bag as db
+    b = db.read_text('s3://distributed-test/csv/gzip/*', compression='gzip',
+                     blocksize=None, storage_options=dict(anon=True))
     result = yield e.compute(b)._result()
     assert result == [line + '\n' for k in sorted(csv_files)
                                   for line in csv_files[k].decode().split('\n')

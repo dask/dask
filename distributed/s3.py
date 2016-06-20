@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def read_text(fn, keyname=None, encoding='utf-8', errors='strict',
         lineterminator='\n', executor=None, fs=None, lazy=True,
-        collection=True, blocksize=2**27, compression=None, **kwargs):
+        collection=True, blocksize=2**27, compression=None, anon=None, **kwargs):
     warn("distributed.s3.read_text(...) Moved to "
          "dask.bag.read_text('s3://...')")
     if keyname is not None:
@@ -25,7 +25,8 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict',
     import dask.bag as db
     result = db.read_text('s3://' + fn, encoding=encoding, errors=errors,
             linedelimiter=lineterminator, collection=collection,
-            blocksize=blocksize, compression=compression, s3=fs, **kwargs)
+            blocksize=blocksize, compression=compression,
+            storage_options={'s3': fs, 'anon': anon}, **kwargs)
     executor = default_executor(executor)
     ensure_default_get(executor)
     if not lazy:
