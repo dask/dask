@@ -197,6 +197,7 @@ help make debugging and profiling graph execution easier.
 **Help & reference**
 
 * :doc:`support`
+* :doc:`develop`
 * :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
@@ -209,6 +210,7 @@ help make debugging and profiling graph execution easier.
    :caption: Help & reference
 
    support.rst
+   develop.rst
    faq.rst
    spark.rst
    caching.rst
