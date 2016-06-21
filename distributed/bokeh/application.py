@@ -66,7 +66,10 @@ class BokehWebInterface(object):
 
     def close(self):
         if sys.version_info[0] >= 3:
-            if self.process.is_alive():
+            try:
+                if self.process.is_alive():
+                    self.process.terminate()
+            except AssertionError:
                 self.process.terminate()
         else:
             if self.process.returncode is None:

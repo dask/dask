@@ -29,7 +29,8 @@ class bcolors:
 
 def async_ssh(cmd_dict):
     import paramiko
-    import paramiko.ssh_exception
+    from paramiko.buffered_pipe import PipeTimeout
+    from paramiko.ssh_exception import (SSHException, PasswordRequiredException)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -38,7 +39,7 @@ def async_ssh(cmd_dict):
         try:
             # Set paramiko logging to WARN or higher to squelch INFO messages.
             import logging
-            logger = paramiko.util.logging.getLogger()
+            logger = logging.getLogger('paramiko')
             logger.setLevel(logging.WARN)
 
             ssh.connect(hostname = cmd_dict['address'],
@@ -53,8 +54,8 @@ def async_ssh(cmd_dict):
             # Connection successful, break out of while loop
             break
 
-        except (paramiko.ssh_exception.SSHException,
-                paramiko.ssh_exception.PasswordRequiredException) as e:
+        except (SSHException,
+                PasswordRequiredException) as e:
 
             print('[ dask-ssh ] : ' + bcolors.FAIL +
                   'SSH connection error when connecting to {addr}:{port} to run \'{cmd}\''.format(addr = cmd_dict['address'],
@@ -112,7 +113,7 @@ def async_ssh(cmd_dict):
                                                                              output = line.rstrip()))
                 line = stdout.readline()
 
-        except paramiko.buffered_pipe.PipeTimeout:
+        except PipeTimeout:
             continue
         except socket.timeout:
             continue
@@ -125,7 +126,7 @@ def async_ssh(cmd_dict):
                                              bcolors.FAIL + '{output}'.format(output = line.rstrip()) + bcolors.ENDC)
                 line = stderr.readline()
 
-        except paramiko.buffered_pipe.PipeTimeout:
+        except PipeTimeout:
             continue
         except socket.timeout:
             continue
@@ -218,7 +219,7 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
 
 
 
-class Cluster(object):
+class SSHCluster(object):
     def __init__(self, scheduler_addr, scheduler_port, worker_addrs, nthreads = 0, nprocs = 1,
                  ssh_username = None, ssh_port = 22, ssh_private_key = None, logdir = None):
 
@@ -248,6 +249,10 @@ class Cluster(object):
         self.workers = []
         for i, addr in enumerate(worker_addrs):
             self.add_worker(addr)
+
+    @property
+    def scheduler_address(self):
+        return '%s:%d' % (self.scheduler_addr, self.scheduler_port)
 
     def monitor_remote_processes(self):
 

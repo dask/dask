@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from distributed.cluster import Cluster
+from distributed.deploy.ssh import SSHCluster
 import click
 import os
 
@@ -49,7 +49,7 @@ def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
         print(ctx.get_help())
         exit(1)
 
-    c = Cluster(scheduler, scheduler_port, hostnames, nthreads, nprocs,
+    c = SSHCluster(scheduler, scheduler_port, hostnames, nthreads, nprocs,
                 ssh_username, ssh_port, ssh_private_key, log_directory)
 
     import distributed
