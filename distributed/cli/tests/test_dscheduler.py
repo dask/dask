@@ -119,3 +119,14 @@ def test_bokeh_whitelist(loop):
                 print(f)
                 sleep(0.1)
                 assert time() < start + 20
+
+
+def test_multiple_workers(loop):
+    with popen(['dask-scheduler', '--no-bokeh']) as s:
+        with popen(['dask-worker', 'localhost:8786']) as a:
+            with popen(['dask-worker', 'localhost:8786']) as b:
+                with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+                    start = time()
+                    while len(e.ncores()) < 2:
+                        sleep(0.1)
+                        assert time() < start + 10
