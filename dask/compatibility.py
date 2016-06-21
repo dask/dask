@@ -31,6 +31,7 @@ if PY3:
     FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
+    zip = zip
     def apply(func, args, kwargs=None):
         if kwargs:
             return func(*args, **kwargs)
@@ -46,7 +47,7 @@ if PY3:
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
-    from itertools import izip_longest as zip_longest
+    from itertools import izip_longest as zip_longest, izip as zip
     from StringIO import StringIO
     from io import BytesIO, BufferedIOBase
     import bz2
