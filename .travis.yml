@@ -36,7 +36,7 @@ install:
   - if [[ $PYTHON < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
 
   # Install dask
-  - pip install -e .[complete]
+  - pip install --no-deps -e .[complete]
 
 script:
     - if [[ $PYTHON == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
