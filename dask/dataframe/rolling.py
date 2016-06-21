@@ -124,7 +124,7 @@ class Rolling(object):
             self.obj, self._rolling_kwargs(), method_name, args, kwargs)
 
         dsk = {}
-        if self.axis in [1, 'columns'] or self.window <= 1:
+        if self.axis in [1, 'columns'] or self.window <= 1 or self.obj.npartitions == 1:
             # This is the easy scenario, we're rolling over columns (or not 
             # really rolling at all, so each chunk is independent.
             for i in range(self.obj.npartitions):
@@ -147,7 +147,7 @@ class Rolling(object):
             tail_name = 'tail-{}-{}'.format(before, old_name)
 
             # First chunk, only look after (if necessary)
-            if after > 0 and self.obj.npartitions > 1:
+            if after > 0:
                 next_partition = (head_name, 1)
                 dsk[next_partition] = (head, (old_name, 1), after)
             else:

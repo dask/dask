@@ -90,25 +90,38 @@ def test_rolling_funtions_dataframe():
     ddf = dd.from_pandas(df, 3)
     rolling_functions_tests(df, ddf)
 
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
+                    reason="rolling object not supported")
+@pytest.mark.parametrize('npartitions', [1, 2, 3])
+@pytest.mark.parametrize('method,args', [
+    ('count', ()),
+    ('sum', ()),
+    ('mean', ()),
+    ('median', ()),
+    ('min', ()),
+    ('max', ()),
+    ('std', ()),
+    ('var', ()),
+    ('skew', ()),
+    ('kurt', ()),
+    ('quantile', (.38,)),
+    ('apply', (np.sum,)),
+])
+@pytest.mark.parametrize('window', [1, 2, 4, 5])
+@pytest.mark.parametrize('center', [True, False])
+@pytest.mark.parametrize('axis', [0, 1, 'rows', 'columns'])
+def test_rolling_dataframe(npartitions, method, args, window, center, axis):
+    N = 40
+    df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
+                       'b': np.random.randint(100, size=(N,)),
+                       'c': np.random.randint(100, size=(N,)),
+                       'd': np.random.randint(100, size=(N,)),
+                       'e': np.random.randint(100, size=(N,))})
+    ddf = dd.from_pandas(df, npartitions)
 
-def test_rolling_dataframe():
-    df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randint(100, size=(25,)),
-                       'c': np.random.randint(100, size=(25,)),
-                       'd': np.random.randint(100, size=(25,)),
-                       'e': np.random.randint(100, size=(25,))})
-    for n in [1, 2, 3]:
-        ddf = dd.from_pandas(df, n)
-
-        # Dataframe-specific tests (not shared with series)
-        eq(df.rolling(3, axis=1).max(), ddf.rolling(3, axis=1).max())
-        eq(df.rolling(3, axis='columns').mean(), ddf.rolling(3, axis='columns').mean())
-
-        eq(df.rolling(3, center=True, axis=1).max(), ddf.rolling(3, center=True, axis=1).max())
-        eq(df.rolling(3, center=False, axis=1).std(), ddf.rolling(3, center=False, axis=1).std())
-        eq(df.rolling(6, center=True, axis=1).var(), ddf.rolling(6, center=True, axis=1).var())
-        eq(df.rolling(7, center=True, axis='columns').skew(),
-           ddf.rolling(7, center=True, axis='columns').skew())
+    prolling =  df.rolling(window, center=center, axis=axis)
+    drolling = ddf.rolling(window, center=center, axis=axis)
+    eq(getattr(prolling, method)(*args), getattr(drolling, method)(*args))
 
 
 def test_rolling_functions_raises():
