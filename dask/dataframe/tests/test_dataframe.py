@@ -156,6 +156,20 @@ def test_set_index():
     assert eq(d4, full.set_index('b'))
 
 
+def test_set_index_interpolate():
+    df = pd.DataFrame({'x': [1, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
+    d = dd.from_pandas(df, 2)
+
+    d1 = d.set_index('x', npartitions=3)
+    assert d1.npartitions == 3
+    assert set(d1.divisions) == set([1, 2, 3])
+
+    d2 = d.set_index('y', npartitions=3)
+    assert d2.divisions[0] == 1.
+    assert 1. < d2.divisions[1] < d2.divisions[2] < 2.
+    assert d2.divisions[3] == 2.
+
+
 @pytest.mark.parametrize('drop', [True, False])
 def test_set_index_drop(drop):
 
