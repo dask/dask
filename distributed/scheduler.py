@@ -943,6 +943,8 @@ class Scheduler(Server):
             del self.ncores[address]
             del self.aliases[self.worker_info[address]['name']]
             del self.worker_info[address]
+            if address in self.maybe_idle:
+                self.maybe_idle.remove(address)
             if address in self.idle:
                 self.idle.remove(address)
             if address in self.saturated:

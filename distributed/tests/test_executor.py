@@ -1773,9 +1773,10 @@ def test_broken_worker_during_computation(e, s, a, b):
     for i in range(8):
         L = e.map(add, *zip(*partition_all(2, L)))
 
-    yield gen.sleep(0.3)
+    from random import random
+    yield gen.sleep(random() / 2)
     n.process.terminate()
-    yield gen.sleep(0.3)
+    yield gen.sleep(random() / 2)
     n.process.terminate()
 
     result = yield e._gather(L)
