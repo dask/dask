@@ -1,14 +1,11 @@
 distributed
 ===========
 
-Distributed is a lightweight library for distributed computing in Python.  It
-extends both the ``concurrent.futures`` and ``dask`` APIs to moderate sized
-clusters.  Distributed provides data-local computation by keeping data on
-worker nodes, running computations where data lives, and by managing complex
-data dependencies between tasks.
+Dask.distributed is a lightweight library for distributed computing in Python.
+It extends both the ``concurrent.futures`` and ``dask`` APIs to moderate sized
+clusters.
 
 See :doc:`the quickstart <quickstart>` to get started.
-
 
 Motivation
 ----------
@@ -37,6 +34,38 @@ In particular it meets the following needs:
 
 .. _`concurrent.futures`: https://www.python.org/dev/peps/pep-3148/
 .. _`dask`: http://dask.pydata.org/en/latest/
+
+Architecture
+------------
+
+Dask.distributed is a centrally managed, distributed, dynamic task scheduler.
+The central ``dask-scheduler`` process coordinates the actions of several
+``dask-worker`` processes spread across multiple machines and the concurrent
+requests of several clients.
+
+The scheduler is asynchronous and event driven, simultaneously responding to
+requests for computation from multiple clients and tracking the progress of
+multiple workers.  The event-driven and asynchronous nature makes it flexible
+to concurrently handle a variety of workloads coming from multiple users at the
+same time while also handling a fluid worker population with failures and
+additions.  Workers communicate amongst each other for bulk data transfer over
+sockets.
+
+Internally the scheduler tracks all work as a constantly changing directed
+acyclic graph of tasks.  A task is a Python function operating on Python
+objects, which can be the results of other tasks.  This graph of tasks grows as
+users submit more computations, fills out as workers complete tasks, and
+shrinks as users leave or become disinterested in previous results.
+
+Users interact by connecting a local Python session to the scheduler and
+submitting work, either by individual calls to the simple interface
+``e.submit(function, *args, **kwargs)`` or by using the large data collections
+and parallel algorithms of the parent ``dask`` library.  The collections in the
+``dask`` library like ``dask.array`` and ``dask.dataframe`` provide easy access
+to sophisticated algorithms and familiar APIs like NumPy and Pandas, while the
+simple ``e.submit`` interface provides users with custom control when they want
+to break out of canned "big data" abstractions and submit fully custom
+workloads.
 
 Contents
 --------
