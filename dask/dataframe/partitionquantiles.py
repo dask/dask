@@ -309,6 +309,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)
+    dtype, info = dtype_info
 
     # We want to create exactly `npartition` number of groups of `vals` that
     # are approximately the same weight and non-empty if possible.  We use a
@@ -322,14 +323,23 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     # We assume that all values are unique, which happens in the previous
     # step `merge_and_compress_summaries`.
 
-    if len(vals) <= npartitions + 1:
-        # The data is under-sampled.  Distribute the empty partitions.
-        duplicated_index = np.linspace(
-            0, len(vals) - 1, npartitions - len(vals) + 1, dtype=int
-        )
-        duplicated_vals = vals[duplicated_index]
-        rv = np.concatenate([vals, duplicated_vals])
-        rv.sort()
+    if len(vals) == npartitions + 1:
+        rv = vals
+    elif len(vals) < npartitions + 1:
+        # The data is under-sampled
+        if np.issubdtype(vals.dtype, np.number):
+            # Interpolate extra divisions
+            q_weights = np.cumsum(weights)
+            q_target = np.linspace(q_weights[0], q_weights[-1], npartitions + 1)
+            rv = np.interp(q_target, q_weights, vals)
+        else:
+            # Distribute the empty partitions
+            duplicated_index = np.linspace(
+                0, len(vals) - 1, npartitions - len(vals) + 1, dtype=int
+            )
+            duplicated_vals = vals[duplicated_index]
+            rv = np.concatenate([vals, duplicated_vals])
+            rv.sort()
     else:
         target_weight = weights.sum() / npartitions
         jumbo_mask = weights >= target_weight
@@ -353,7 +363,6 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = np.concatenate([trimmed, jumbo_vals])
         rv.sort()
 
-    dtype, info = dtype_info
     if str(dtype) == 'category':
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
     elif rv.dtype != dtype:
