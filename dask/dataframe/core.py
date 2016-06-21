@@ -1527,6 +1527,27 @@ class DataFrame(_Frame):
         return DataFrameGroupBy(self, key, **kwargs)
 
     def categorize(self, columns=None, **kwargs):
+        """
+        Convert columns of the DataFrame to catefory dtype
+
+        Parameters
+        ----------
+        columns : list, optional
+            A list of column names to convert to the category type. By
+            default any column with an object dtype is converted to a
+            categorical.
+        kwargs
+            Keyword arguments are passed on to compute.
+
+        Notes
+        -----
+        Whenever possible, dealing with categorical type variabless, is much
+        more performant, both in terms of memory and in spilling to disk.
+
+        See also
+        --------
+        dask.dataframes.categorical.categorize
+        """
         from dask.dataframe.categorical import categorize
         return categorize(self, columns, **kwargs)
 
