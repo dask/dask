@@ -200,7 +200,8 @@ docstrings with pytest as follows::
    py.test dask --doctest-modules
 
 
-Style ~~~~~
+Style
+~~~~~
 
 Dask adheres loosely to PEP8 with rule-breaking allowed.
 
