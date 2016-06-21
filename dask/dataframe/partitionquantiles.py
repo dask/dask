@@ -62,9 +62,10 @@ significantly, which could affect the optimal choice of percentiles.  For
 improved robustness, we use both evenly-distributed and random percentiles.
 If the number of partitions isn't changing, then the total number of
 percentiles across all partitions scales as ``npartitions**1.5``.  Although
-we do not yet have a compression operation (step 3 above), one could be
-added if needed, such as for extremely large ``npartitions`` or if we find
-we need to increase the sample size for each partition.
+we only have a simple compression operation (step 3 above) that combines
+weights of equal values, a more sophisticated one could be added if needed,
+such as for extremely large ``npartitions`` or if we find we need to
+increase the sample size for each partition.
 
 """
 from __future__ import absolute_import, division, print_function
@@ -149,9 +150,11 @@ def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_stat
 
     q_fixed = np.linspace(0, 100, num_fixed)
     q_random = random_state.rand(num_random) * 100
-    q_edges = [0.4 / num_fixed, 1 - 0.4 / num_fixed]
-    qs = np.concatenate([q_fixed, q_random, q_edges])
+    q_edges = [60 / (num_fixed - 1), 100 - 60 / (num_fixed - 1)]
+    qs = np.concatenate([q_fixed, q_random, q_edges, [0, 100]])
     qs.sort()
+    # Make the divisions between percentiles a little more even
+    qs = 0.5 * (qs[:-1] + qs[1:])
     return qs
 
 
@@ -231,13 +234,13 @@ def create_merge_tree(func, keys, token):
     return rv
 
 
-def prepare_percentile_merge(qs, vals, length):
+def percentiles_to_weights(qs, vals, length):
     """Weigh percentile values by length and the difference between percentiles
 
     >>> percentiles = np.array([0, 25, 50, 90, 100])
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
-    >>> prepare_percentile_merge(percentiles, values, length)
+    >>> percentiles_to_weights(percentiles, values, length)
     ([2, 3, 5, 8, 13], [125.0, 250.0, 325.0, 250.0, 50.0])
 
     The weight of the first element, ``2``, is determined by the difference
@@ -259,59 +262,102 @@ def prepare_percentile_merge(qs, vals, length):
     return vals.tolist(), weights.tolist()
 
 
-def _merge_sorted(items):
-    """Merge and sort items that are already sorted.
+def merge_and_compress_summaries(vals_and_weights):
+    """Merge and sort percentile summaries that are already sorted.
 
     Each item is a tuple like ``(vals, weights)`` where vals and weights
     are lists.  We sort both by vals.
+
+    Equal values will be combined, their weights summed together.
     """
-    items = [x for x in items if x]
-    if not items:
+    vals_and_weights = [x for x in vals_and_weights if x]
+    if not vals_and_weights:
         return ()
-    elif len(items) == 1:
-        return items[0]
-    return tuple(zip(*merge_sorted(*[zip(x, y) for x, y in items])))
+    it = merge_sorted(*[zip(x, y) for x, y in vals_and_weights])
+    vals = []
+    weights = []
+    vals_append = vals.append
+    weights_append = weights.append
+    val, weight = prev_val, prev_weight = next(it)
+    for val, weight in it:
+        if val == prev_val:
+            prev_weight += weight
+        else:
+            vals_append(prev_val)
+            weights_append(prev_weight)
+            prev_val, prev_weight = val, weight
+    if val == prev_val:
+        vals_append(prev_val)
+        weights_append(prev_weight)
+    return vals, weights
 
 
-def process_val_weights(vals_and_weights, finalq, dtype_info):
+def process_val_weights(vals_and_weights, npartitions, dtype_info):
     """Calculate final approximate percentiles given weighted vals
 
     ``vals_and_weights`` is assumed to be sorted.  We take a cumulative
     sum of the weights, which makes them percentile-like (their scale is
-    [0, N] instead of [0, 100]).  Next we find the divisions that are
-    closest to the desired quantiles, ``finalq``.
+    [0, N] instead of [0, 100]).  Next we find the divisions to create
+    partitions of approximately equal size.
 
     It is possible for adjacent values of the result to be the same.  Since
     these determine the divisions of the new partitions, some partitions
-    may be empty.
+    may be empty.  This can happen if we under-sample the data, or if there
+    aren't enough unique values in the column.  Increasing ``upsample``
+    keyword argument in ``df.set_index`` may help.
     """
     vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)
 
-    # percentile-like, but scaled by weights
-    q = np.cumsum(weights)
+    # We want to create exactly `npartition` number of groups of `vals` that
+    # are approximately the same weight and non-empty if possible.  We use a
+    # simple approach (more accurate algorithms exist):
+    # 1. Remove all the values with weights larger than the relative
+    #    percentile width from consideration (these are `jumbo`s)
+    # 2. Calculate percentiles with "interpolation=left" of percentile-like
+    #    weights of the remaining values.  These are guaranteed to be unique.
+    # 3. Concatenate the values from (1) and (2), sort, and return.
+    #
+    # We assume that all values are unique, which happens in the previous
+    # step `merge_and_compress_summaries`.
 
-    # rescale finalq percentiles to match q
-    desired_q = finalq * q[-1]
-
-    dtype, info = dtype_info
-    if str(dtype) != 'category' and np.issubdtype(vals.dtype, np.number):
-        rv = np.interp(desired_q, q, vals)
+    if len(vals) <= npartitions + 1:
+        # The data is under-sampled.  Distribute the empty partitions.
+        duplicated_index = np.linspace(
+            0, len(vals) - 1, npartitions - len(vals) + 1, dtype=int
+        )
+        duplicated_vals = vals[duplicated_index]
+        rv = np.concatenate([vals, duplicated_vals])
+        rv.sort()
     else:
-        left = np.searchsorted(q, desired_q, side='left')
-        right = np.searchsorted(q, desired_q, side='right') - 1
+        target_weight = weights.sum() / npartitions
+        jumbo_mask = weights >= target_weight
+        jumbo_vals = vals[jumbo_mask]
+
+        trimmed_vals = vals[~jumbo_mask]
+        trimmed_weights = weights[~jumbo_mask]
+        trimmed_npartitions = npartitions - len(jumbo_vals)
+
+        # percentile-like, but scaled by weights
+        q_weights = np.cumsum(trimmed_weights)
+        q_target = np.linspace(0, q_weights[-1], trimmed_npartitions + 1)
+
+        left = np.searchsorted(q_weights, q_target, side='left')
+        right = np.searchsorted(q_weights, q_target, side='right') - 1
         # stay inbounds
         np.maximum(right, 0, right)
         lower = np.minimum(left, right)
-        rv = vals[lower]
+        trimmed = trimmed_vals[lower]
 
+        rv = np.concatenate([trimmed, jumbo_vals])
+        rv.sort()
+
+    dtype, info = dtype_info
     if str(dtype) == 'category':
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
     elif rv.dtype != dtype:
         rv = rv.astype(dtype)
-    # Should we try to fudge the result to avoid duplicates?  After all,
-    # two smaller partitions is probably better than having an empty one.
     return rv
 
 
@@ -342,7 +388,7 @@ def percentiles_summary(df, num_old, num_new, upsample=1.0, random_state=None):
         data = data.codes
         interpolation = 'nearest'
     vals = _percentile(data, qs, interpolation=interpolation)
-    vals_and_weights = prepare_percentile_merge(qs, vals, length)
+    vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
 
 
@@ -386,12 +432,16 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
                    for i, key in enumerate(df_keys))
 
     name2 = 're-quantiles-2-' + token
-    merge_dsk = create_merge_tree(_merge_sorted, sorted(val_dsk), name2)
+    merge_dsk = create_merge_tree(merge_and_compress_summaries, sorted(val_dsk), name2)
+    if not merge_dsk:
+        # Compress the data even if we only have one partition
+        merge_dsk = {(name2, 0, 0): (merge_and_compress_summaries, [list(val_dsk)[0]])}
 
-    merged_key = max(merge_dsk or val_dsk)
+    merged_key = max(merge_dsk)
 
     name3 = 're-quantiles-3-' + token
-    last_dsk = {(name3, 0): (merge_type, (process_val_weights, merged_key, qs, (name0, 0)))}
+    last_dsk = {(name3, 0): (merge_type, (process_val_weights, merged_key,
+                                          npartitions, (name0, 0)))}
 
     dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
     return return_type(dsk, name3, df_name, new_divisions)
