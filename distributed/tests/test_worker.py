@@ -6,6 +6,8 @@ import os
 import shutil
 import sys
 import traceback
+import logging
+import re
 
 import pytest
 from toolz import pluck
@@ -17,7 +19,7 @@ from distributed.center import Center
 from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
-from distributed.worker import Worker, error_message
+from distributed.worker import Worker, error_message, logger
 from distributed.utils import ignoring
 from distributed.utils_test import (loop, _test_cluster, inc, gen_cluster,
         slow, slowinc, throws, current_loop)
@@ -54,6 +56,125 @@ def test_health():
         assert 'disk-write' in d
         assert 'network-recv' in d
         assert 'network-send' in d
+
+
+def test_worker_bad_args(current_loop):
+    @gen.coroutine
+    def f(c, a, b):
+        aa = rpc(ip=a.ip, port=a.port)
+        bb = rpc(ip=b.ip, port=b.port)
+
+        class NoReprObj(object):
+            """ This object cannot be properly represented as a string. """
+            def __str__(self):
+                raise ValueError("I have no str representation.")
+            def __repr__(self):
+                raise ValueError("I have no repr representation.")
+
+        response = yield aa.compute(key='x',
+                                    function=dumps(NoReprObj),
+                                    args=dumps(()),
+                                    who_has={})
+        assert not a.active
+        assert response['status'] == 'OK'
+        assert a.data['x']
+        assert c.who_has['x'] == {a.address}
+        assert isinstance(response['compute_start'], float)
+        assert isinstance(response['compute_stop'], float)
+        assert isinstance(response['thread'], Integral)
+
+        def bad_func(*args, **kwargs):
+            1 / 0
+
+        class MockLoggingHandler(logging.Handler):
+            """Mock logging handler to check for expected logs."""
+
+            def __init__(self, *args, **kwargs):
+                self.reset()
+                logging.Handler.__init__(self, *args, **kwargs)
+
+            def emit(self, record):
+                self.messages[record.levelname.lower()].append(record.getMessage())
+
+            def reset(self):
+                self.messages = {
+                    'debug': [],
+                    'info': [],
+                    'warning': [],
+                    'error': [],
+                    'critical': [],
+                }
+
+        hdlr = MockLoggingHandler()
+        old_level = logger.level
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(hdlr)
+        response = yield bb.compute(key='y',
+                                    function=dumps(bad_func),
+                                    args=dumps(['x']),
+                                    kwargs=dumps({'k': 'x'}),
+                                    who_has={'x': [a.address]})
+        assert not b.active
+        assert response['status'] == 'error'
+        # Make sure job died because of bad func and not because of bad
+        # argument.
+        assert isinstance(loads(response['exception']), ZeroDivisionError)
+        if sys.version_info[0] >= 3:
+            assert any('1 / 0' in line
+                      for line in pluck(3, traceback.extract_tb(
+                          loads(response['traceback'])))
+                      if line)
+        assert hdlr.messages['warning'][0] == " Compute Failed\n" \
+            "Function: bad_func\n" \
+            "args:     (< could not convert arg to str >)\n" \
+            "kwargs:   {'k': < could not convert arg to str >}\n"
+        assert re.match(r"^Send compute response to scheduler: y, " \
+            "\{.*'args': \(< could not convert arg to str >\), .*" \
+            "'kwargs': \{'k': < could not convert arg to str >\}.*\}",
+            hdlr.messages['debug'][0]) or \
+            re.match("^Send compute response to scheduler: y, " \
+            "\{.*'kwargs': \{'k': < could not convert arg to str >\}, .*" \
+            "'args': \(< could not convert arg to str >\).*\}",
+            hdlr.messages['debug'][0])
+        logger.setLevel(old_level)
+
+        # Now we check that both workers are still alive.
+
+        assert not a.active
+        response = yield aa.compute(key='z',
+                                    function=dumps(add),
+                                    args=dumps([1, 2]),
+                                    who_has={},
+                                    close=True)
+        assert not a.active
+        assert response['status'] == 'OK'
+        assert a.data['z'] == 3
+        assert c.who_has['z'] == {a.address}
+        assert isinstance(response['compute_start'], float)
+        assert isinstance(response['compute_stop'], float)
+        assert isinstance(response['thread'], Integral)
+
+        assert not b.active
+        response = yield bb.compute(key='w',
+                                    function=dumps(add),
+                                    args=dumps([1, 2]),
+                                    who_has={},
+                                    close=True)
+        assert not b.active
+        assert response['status'] == 'OK'
+        assert b.data['w'] == 3
+        assert c.who_has['w'] == {b.address}
+        assert isinstance(response['compute_start'], float)
+        assert isinstance(response['compute_stop'], float)
+        assert isinstance(response['thread'], Integral)
+
+        aa.close_streams()
+        yield a._close()
+
+        bb.close_streams()
+        yield b._close()
+
+    _test_cluster(f)
 
 
 def test_worker(current_loop):

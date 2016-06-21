@@ -486,8 +486,9 @@ class Worker(Server):
                     "Function: %s\n"
                     "args:     %s\n"
                     "kwargs:   %s\n",
-                    str(funcname(function))[:1000], str(args)[:1000],
-                    str(kwargs)[:1000])
+                    str(funcname(function))[:1000], 
+                    convert_args_to_str(args, max_len=1000),
+                    convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
                          result)
@@ -537,10 +538,12 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], str(args)[:1000],
-                str(kwargs)[:1000], exc_info=True)
+                str(funcname(function))[:1000], 
+                convert_args_to_str(args, max_len=1000),
+                convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
-        logger.debug("Send compute response to scheduler: %s, %s", key, msg)
+        logger.debug("Send compute response to scheduler: %s, %s", key,
+            get_msg_safe_str(msg))
         try:
             self.active.remove(key)
         except KeyError:
@@ -561,8 +564,9 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], str(args)[:1000],
-                str(kwargs)[:1000], exc_info=True)
+                str(funcname(function))[:1000], 
+                convert_args_to_str(args, max_len=1000),
+                convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
             response = error_message(e)
         else:
@@ -760,3 +764,61 @@ def apply_function(function, args, kwargs):
     msg['compute_stop'] = end
     msg['thread'] = current_thread().ident
     return msg
+
+
+def get_msg_safe_str(msg):
+    """ Make a worker msg, which contains args and kwargs, safe to cast to str:
+    allowing for some arguments to raise exceptions during conversion and
+    ignoring them.
+    """
+    class Repr(object):
+        def __init__(self, f, val):
+            self._f = f
+            self._val = val
+        def __repr__(self):
+            return self._f(self._val)
+    msg = msg.copy()
+    if "args" in msg:
+        msg["args"] = Repr(convert_args_to_str, msg["args"])
+    if "kwargs" in msg:
+        msg["kwargs"] = Repr(convert_kwargs_to_str, msg["kwargs"])
+    return msg
+
+
+def convert_args_to_str(args, max_len=None):
+    """ Convert args to a string, allowing for some arguments to raise
+    exceptions during conversion and ignoring them.
+    """
+    length = 0
+    strs = ["" for i in range(len(args))]
+    for i, arg in enumerate(args):
+        try:
+            sarg = repr(arg)
+        except:
+            sarg = "< could not convert arg to str >"
+        strs[i] = sarg
+        length += len(sarg) + 2
+        if max_len is not None and length > max_len:
+            return "({}".format(", ".join(strs[:i+1]))[:max_len]
+    else:
+        return "({})".format(", ".join(strs))
+
+
+def convert_kwargs_to_str(kwargs, max_len=None):
+    """ Convert kwargs to a string, allowing for some arguments to raise
+    exceptions during conversion and ignoring them.
+    """
+    length = 0
+    strs = ["" for i in range(len(kwargs))]
+    for i, (argname, arg) in enumerate(kwargs.items()):
+        try:
+            sarg = repr(arg)
+        except:
+            sarg = "< could not convert arg to str >"
+        skwarg = repr(argname) + ": " + sarg
+        strs[i] = skwarg
+        length += len(skwarg) + 2
+        if max_len is not None and length > max_len:
+            return "{{{}".format(", ".join(strs[:i+1]))[:max_len]
+    else:
+        return "{{{}}}".format(", ".join(strs))
