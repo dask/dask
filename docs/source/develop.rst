@@ -3,7 +3,7 @@ Development Guidelines
 
 Dask is a community maintained project.  We welcome contributions in the form
 of bug reports, documentation, code, design proposals, and more.
-This page provides resources to on how best to contribute.
+This page provides resources on how best to contribute.
 
 Where to ask for help
 ---------------------
@@ -75,10 +75,23 @@ Clone the main dask git repostory (or whatever repository you're working on.)::
 Install
 ~~~~~~~
 
+You may want to install larger dependencies like NumPy and Pandas using a
+binary package manager, like conda_.  You can skip this step if you already
+have these libraries, don't care to use them, or have sufficient build
+environment on your computer to compile them when installing with ``pip``::
+
+   conda install -y numpy pandas scipy bokeh cytoolz pytables h5py
+
+.. _conda: http://conda.pydata.org/docs/
+
 Install dask and dependencies::
 
    cd dask
    pip install -e .[complete]
+
+For development dask uses the following additional dependencies::
+
+   pip install pytest moto
 
 
 Run Tests
@@ -102,6 +115,7 @@ Python Versions
 ~~~~~~~~~~~~~~~
 
 Dask supports Python versions 2.7, 3.3, 3.4, and 3.5 in a single codebase.
+Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
 ~~~~
