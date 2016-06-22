@@ -4,6 +4,8 @@ from contextlib import contextmanager
 
 import pytest
 pytest.importorskip('s3fs')
+pytest.importorskip('boto3')
+pytest.importorskip('moto')
 
 import boto3
 import moto

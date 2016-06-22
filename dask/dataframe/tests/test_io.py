@@ -707,6 +707,7 @@ def test_to_hdf():
 
 
 def test_to_hdf_multiple_datasets():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
@@ -1189,6 +1190,7 @@ def test_read_csv_sep():
 
 
 def test_to_hdf_kwargs():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'A': ['a', 'aaaa']})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_hdf('tst.h5', 'foo4', format='table', min_itemsize=4)
