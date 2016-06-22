@@ -365,6 +365,8 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
 
     if str(dtype) == 'category':
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
+    elif 'datetime64' in str(dtype):
+        rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
         rv = rv.astype(dtype)
     return rv
@@ -390,6 +392,8 @@ def percentiles_summary(df, num_old, num_new, upsample=1.0, random_state=None):
     """
     from dask.array.percentile import _percentile
     length = len(df)
+    if length == 0:
+        return ()
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
     data = df.values
     interpolation = 'linear'
@@ -397,6 +401,8 @@ def percentiles_summary(df, num_old, num_new, upsample=1.0, random_state=None):
         data = data.codes
         interpolation = 'nearest'
     vals = _percentile(data, qs, interpolation=interpolation)
+    if interpolation == 'linear' and np.issubdtype(data.dtype, np.integer):
+        vals = np.round(vals).astype(data.dtype)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
 
