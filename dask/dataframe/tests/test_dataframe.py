@@ -1704,3 +1704,17 @@ def test_gh_1301():
        df.assign(y=df[1].astype(int)))
 
     assert ddf2.dtypes['y'] == np.dtype(int)
+
+
+def test_timeseries_sorted():
+    df = tm.makeTimeDataFrame()
+    ddf = dd.from_pandas(df.reset_index(), npartitions=2)
+    df.index.name = 'index'
+    eq(ddf.set_index('index', sorted=True, drop=True),
+       df)
+
+
+def test_build_pd():
+    s, known_dtype = dd.Series._build_pd(pd.NaT)
+    assert isinstance(s, pd.Series)
+    assert np.issubdtype(s.dtype, np.datetime64)
