@@ -90,8 +90,7 @@ def test_rolling_funtions_dataframe():
     ddf = dd.from_pandas(df, 3)
     rolling_functions_tests(df, ddf)
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 @pytest.mark.parametrize('npartitions', [1, 2, 3])
 @pytest.mark.parametrize('method,args', [
     ('count', ()),
