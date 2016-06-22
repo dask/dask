@@ -176,7 +176,6 @@ def test_set_index_interpolate_int():
     d = dd.from_pandas(df, 2)
     d1 = d.set_index('x', npartitions=10)
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
-    assert any(x % 10 != 0 for x in d1.divisions)
 
 
 def test_set_index_timezone():
@@ -199,7 +198,8 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    assert raises(TypeError, lambda: d2.divisions[0] == s2badtype[0])
+    with pytest.raises(TypeError):
+        d2.divisions[0] == s2badtype[0]
 
 
 @pytest.mark.parametrize('drop', [True, False])
