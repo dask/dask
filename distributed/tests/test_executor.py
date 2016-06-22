@@ -3106,3 +3106,28 @@ def test_get_returns_early(e, s, a, b):
         result = yield e._get({'x': (throws, 1),
                                x.key: (inc, 1)}, ['x', x.key])
     assert x.key in s.tasks
+
+
+@gen_cluster(Worker=Nanny, executor=True)
+def test_Executor_clears_references_after_restart(e, s, a, b):
+    x = e.submit(inc, 1)
+    assert x.key in e.refcount
+
+    yield e._restart()
+    assert x.key not in e.refcount
+
+    key = x.key
+    del x
+    import gc; gc.collect()
+
+    assert key not in e.refcount
+
+@gen_cluster(Worker=Nanny, executor=True)
+def test_forgotten_futures_dont_clean_up_new_futures(e, s, a, b):
+    x = e.submit(inc, 1)
+    yield e._restart()
+    y = e.submit(inc, 1)
+    del x
+    import gc; gc.collect()
+    yield gen.sleep(0.1)
+    yield y._result()

@@ -70,6 +70,7 @@ class Future(WrappedKey):
         self.key = key
         self.executor = executor
         self.executor._inc_ref(key)
+        self._generation = self.executor.generation
         self._cleared = False
 
         if key not in executor.futures:
@@ -183,7 +184,7 @@ class Future(WrappedKey):
             return None
 
     def _del(self):
-        if not self._cleared:
+        if not self._cleared and self.executor.generation == self._generation:
             self._cleared = True
             self.executor._dec_ref(self.key)
 
@@ -256,6 +257,7 @@ class Executor(object):
         self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
         self.id = str(uuid.uuid1())
+        self.generation = 0
         self.status = None
         if hasattr(address, 'scheduler_address'):
             self.cluster = address
@@ -1216,6 +1218,8 @@ class Executor(object):
         self._send_to_scheduler({'op': 'restart'})
         self._restart_event = Event()
         yield self._restart_event.wait()
+        self.generation += 1
+        self.refcount.clear()
 
         raise gen.Return(self)
 
