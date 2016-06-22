@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import pytest
 pytest.importorskip('numpy')
+pytest.importorskip('scipy')
 
 import numpy as np
 import scipy.linalg
@@ -429,4 +430,3 @@ def test_lstsq(nrow, ncol, chunk):
     assert rank == ncol - 1
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
-
