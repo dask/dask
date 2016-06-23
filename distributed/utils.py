@@ -319,7 +319,7 @@ def _maybe_complex(task):
             type(task) is dict and any(map(_maybe_complex, task.values())))
 
 
-def str_graph(dsk):
+def str_graph(dsk, extra_values=()):
     def convert(task):
         if type(task) is list:
             return [convert(v) for v in task]
@@ -328,7 +328,7 @@ def str_graph(dsk):
         if istask(task):
             return (task[0],) + tuple(map(convert, task[1:]))
         try:
-            if task in dsk:
+            if task in dsk or task in extra_values:
                 return tokey(task)
         except TypeError:
             pass

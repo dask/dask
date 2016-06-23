@@ -84,11 +84,6 @@ def test_pack_data():
     assert pack_data({'a': [b'x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
 
 
-def test_pack_data_with_key_mapping():
-    data = {tokey(('x', 1)): 1}
-    assert pack_data((('x', 1), 'y'), data) == (1, 'y')
-
-
 def test_gather_errors_voluminously(current_loop):
     with cluster_center() as (c, [a, b]):
         try:

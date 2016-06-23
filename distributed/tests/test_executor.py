@@ -2177,7 +2177,6 @@ def test__persist(e, s, a, b):
     assert yy._keys() == y._keys()
 
     g, h = e.compute([y, yy])
-    yield gen.sleep(1)
     gg, hh = yield e._gather([g, h])
     assert (gg == hh).all()
 
