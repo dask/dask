@@ -3,11 +3,11 @@ sudo: false
 
 env:
   matrix:
-    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.17.0
-    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.0
-    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.16.2
-    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0
-    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1
+    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true'
+    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
+    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false'
+    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false'
+    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
 
 addons:
     apt:
@@ -26,8 +26,9 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install numpy=$NUMPY scipy pandas=$PANDAS pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
-  - if [[ $PYTHON != '3.3' ]]; then conda install distributed cloudpickle bokeh; fi
+  - conda install numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
+  - if [[ $PYTHON != '3.3' ]]; then conda install pandas=$PANDAS distributed cloudpickle bokeh; fi
+  - if [[ $PYTHON == '3.3' ]]; then pip install pandas==$PANDAS; fi
   - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
@@ -39,10 +40,10 @@ install:
   - pip install --no-deps -e .[complete]
 
 script:
-    - if [[ $PYTHON == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
+    - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
 
 after_success:
-    - if [[ $PYTHON == '2.7' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
+    - if [[ $coverage == 'true' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
 
 notifications:
   email: false
