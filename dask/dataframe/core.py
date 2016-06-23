@@ -1175,7 +1175,8 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def astype(self, dtype):
-        return map_partitions(pd.Series.astype, self.name, self, dtype=dtype)
+        return map_partitions(pd.Series.astype, self._pd.astype(dtype),
+                              self, dtype=dtype)
 
     @derived_from(pd.Series)
     def dropna(self):

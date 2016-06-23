@@ -1662,3 +1662,13 @@ def test_info(capsys):
                   "Data columns (total 2 columns):\n"
                   "long_column_name    int64\n"
                   "short_name          int64\n")
+
+
+def test_gh_1301():
+    df = pd.DataFrame([['1', '2'], ['3', '4']])
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.assign(y=ddf[1].astype(int))
+    eq(ddf2,
+       df.assign(y=df[1].astype(int)))
+
+    assert ddf2.dtypes['y'] == np.dtype(int)
