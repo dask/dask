@@ -1,5 +1,4 @@
 from operator import getitem
-from distutils.version import LooseVersion
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -490,12 +489,7 @@ def test_drop_duplicates_subset():
                        'y': ['a', 'a', 'b', 'b', 'c', 'c']})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    if pd.__version__ < '0.17':
-        kwargs = [{'take_last': False}, {'take_last': True}]
-    else:
-        kwargs = [{'keep': 'first'}, {'keep': 'last'}]
-
-    for kwarg in kwargs:
+    for kwarg in [{'keep': 'first'}, {'keep': 'last'}]:
         assert eq(df.x.drop_duplicates(**kwarg),
                   ddf.x.drop_duplicates(**kwarg))
         for ss in [['x'], 'y', ['x', 'y']]:
@@ -1279,8 +1273,6 @@ def test_query():
         assert eq(q, df.query('x**2 > y'))
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="eval inplace not supported")
 def test_eval():
     p = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     d = dd.from_pandas(p, npartitions=2)
@@ -1520,8 +1512,6 @@ def test_index_time_properties():
     assert (i.index.month == a.index.month.compute()).all()
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
-                    reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),
@@ -1533,8 +1523,6 @@ def test_nlargest():
     eq(res, exp)
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
-                    reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest_multiple_columns():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),

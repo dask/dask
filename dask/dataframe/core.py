@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from datetime import datetime
-from distutils.version import LooseVersion
 import math
 import operator
 from operator import getitem, setitem
@@ -1152,10 +1151,7 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
-        if LooseVersion(pd.__version__) > '0.16.2':
-            agg = lambda s: s.groupby(level=0).sum().sort_values(ascending=False)
-        else:
-            agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
+        agg = lambda s: s.groupby(level=0).sum().sort_values(ascending=False)
         return aca(self, chunk=chunk, aggregate=agg, columns=self.name,
                    token='value-counts')
 
