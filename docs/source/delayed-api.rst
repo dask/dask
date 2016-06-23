@@ -5,5 +5,7 @@ API
 
 .. autosummary::
    delayed
+   compute
 
 .. autofunction:: delayed
+.. autofunction:: compute
