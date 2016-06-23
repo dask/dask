@@ -170,6 +170,38 @@ def test_set_index_interpolate():
     assert d2.divisions[3] == 2.
 
 
+def test_set_index_interpolate_int():
+    L = sorted(list(range(0, 200, 10))*2)
+    df = pd.DataFrame({'x': 2*L})
+    d = dd.from_pandas(df, 2)
+    d1 = d.set_index('x', npartitions=10)
+    assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
+
+
+def test_set_index_timezone():
+    s_naive = pd.Series(pd.date_range('20130101', periods=3))
+    s_aware = pd.Series(pd.date_range('20130101', periods=3, tz='US/Eastern'))
+    df = pd.DataFrame({'tz': s_aware, 'notz': s_naive})
+    d = dd.from_pandas(df, 2)
+
+    d1 = d.set_index('notz', npartitions=2)
+    s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
+    assert d1.divisions[0] == s_naive[0] == s1[0]
+    assert d1.divisions[2] == s_naive[2] == s1[2]
+
+    # We currently lose "freq".  Converting data with pandas-defined dtypes
+    # to numpy or pure Python can be lossy like this.
+    d2 = d.set_index('tz', npartitions=2)
+    s2 = pd.DatetimeIndex(s_aware.values, dtype=s_aware.dtype)
+    assert d2.divisions[0] == s2[0]
+    assert d2.divisions[2] == s2[2]
+    assert d2.divisions[0].tz == s2[0].tz
+    assert d2.divisions[0].tz is not None
+    s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
+    with pytest.raises(TypeError):
+        d2.divisions[0] == s2badtype[0]
+
+
 @pytest.mark.parametrize('drop', [True, False])
 def test_set_index_drop(drop):
 
