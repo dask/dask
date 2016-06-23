@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+from datetime import datetime
 from distutils.version import LooseVersion
 import math
 import operator
@@ -200,9 +201,13 @@ class _Frame(Base):
         else:
             if np.isscalar(metadata) or metadata is None:
                 _pd = cls._partition_type([], name=metadata)
+                known_dtype = False
+            elif isinstance(metadata, datetime):
+                _pd = cls._partition_type([metadata]).iloc[0:0]
+                known_dtype = True
             else:
                 _pd = cls._partition_type(columns=metadata)
-            known_dtype = False
+                known_dtype = False
         return _pd, known_dtype
 
     @property
