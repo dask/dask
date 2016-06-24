@@ -15,6 +15,7 @@ import pytest
 from toolz import (identity, isdistinct, first, concat, pluck, valmap,
         partition_all)
 from tornado import gen
+from tornado.ioloop import IOLoop
 
 from dask import delayed
 from dask.context import _globals
@@ -3130,3 +3131,30 @@ def test_forgotten_futures_dont_clean_up_new_futures(e, s, a, b):
     import gc; gc.collect()
     yield gen.sleep(0.1)
     yield y._result()
+
+
+def test_get_stops_work_after_error(loop):
+    loop2 = IOLoop()
+    s = Scheduler(loop=loop2)
+    s.start(0)
+    w = Worker(s.ip, s.port, loop=loop2)
+    w.start(0)
+
+    t = Thread(target=loop2.start)
+    t.daemon = True
+    t.start()
+
+    with Executor(s.address, loop=loop) as e:
+        with pytest.raises(Exception):
+            e.get({'x': (throws, 1), 'y': (sleep, 1)}, ['x', 'y'])
+
+        start = time()
+        while len(s.tasks):
+            sleep(0.1)
+            assert time() < start + 5
+
+    loop2.add_callback(loop2.stop)
+    while loop2._running:
+        sleep(0.01)
+    loop2.close(all_fds=True)
+    t.join()

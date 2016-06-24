@@ -69,7 +69,7 @@ class Future(WrappedKey):
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
-        self.executor._inc_ref(key)
+        self.executor._inc_ref(tokey(key))
         self._generation = self.executor.generation
         self._cleared = False
 
@@ -183,13 +183,13 @@ class Future(WrappedKey):
         except KeyError:
             return None
 
-    def _del(self):
+    def release(self):
         if not self._cleared and self.executor.generation == self._generation:
             self._cleared = True
             self.executor._dec_ref(tokey(self.key))
 
     def __del__(self):
-        self._del()
+        self.release()
 
     def __str__(self):
         if self.type:
@@ -1015,12 +1015,12 @@ class Executor(object):
                 raise gen.Return(result)
         finally:
             for f in futures.values():
-                f._del()
+                f.release()
         if not raise_on_error:
             result = 'OK', result
         raise gen.Return(result)
 
-    def get(self, dsk, keys, **kwargs):
+    def get(self, dsk, keys, restrictions=None, loose_restrictions=None):
         """ Compute dask graph
 
         Parameters
@@ -1042,13 +1042,18 @@ class Executor(object):
         --------
         Executor.compute: Compute asynchronous collections
         """
-        status, result = sync(self.loop, self._get, dsk, keys,
-                              raise_on_error=False, **kwargs)
+        futures = self._graph_to_futures(dsk, set(flatten([keys])),
+                restrictions, loose_restrictions)
 
-        if status == 'error':
-            raise result
-        else:
-            return result
+        try:
+            results = self.gather(futures)
+        except (KeyboardInterrupt, Exception) as e:
+            for f in futures.values():
+                f.release()
+            raise
+
+        results2 = pack_data(keys, results)
+        return results2
 
     def compute(self, args, sync=False):
         """ Compute dask collections on cluster
