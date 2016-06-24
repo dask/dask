@@ -29,7 +29,7 @@ install:
   - conda install numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
   - if [[ $PYTHON != '3.3' ]]; then conda install pandas=$PANDAS distributed cloudpickle bokeh; fi
   - if [[ $PYTHON == '3.3' ]]; then pip install cloudpickle pandas==$PANDAS; fi
-  - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma; fi
+  - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma mock; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
   - pip install blosc --upgrade
