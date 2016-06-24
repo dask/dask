@@ -165,7 +165,22 @@ def test_array_broadcasting():
     arr = np.arange(6).reshape((2,3))
     assert da.random.poisson(arr, chunks=3).compute().shape == (2,3)
     assert da.random.normal(arr, 2, chunks=3).compute().shape == (2,3)
-
+    # multiple arrays of the same shape work
+    assert da.random.normal(arr, arr+2, chunks=2).compute().shape == (2,3)
+    # also works if the same shape is given by the user
+    assert da.random.normal(arr, arr+2,
+                            chunks=2, size=(2,3)).compute().shape == (2,3)
+    # works with kwargs
+    assert da.random.gumbel(loc=arr, scale=arr+2,
+                            chunks=2, size=(2,3)).compute().shape == (2,3)
+    # raises when ambiguous
+    with pytest.raises(ValueError):
+        assert da.random.gumbel(loc=arr[:,:-1], scale=arr+2,
+                                chunks=2,)
+    # raises when does not match with user-given
+    with pytest.raises(ValueError):
+        assert da.random.gumbel(loc=arr, scale=arr+2, size=(3,4),
+                                chunks=2,)
 
 def test_multinomial():
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
