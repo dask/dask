@@ -161,6 +161,11 @@ def test_random_all():
     da.random.standard_normal(size=5, chunks=3).compute()
     da.random.standard_t(2, size=5, chunks=3).compute()
 
+def test_array_broadcasting():
+    arr = np.arange(6).reshape((2,3))
+    da.random.poisson(arr, chunks=3).compute()
+    da.random.normal(arr, 2, chunks=3).compute()
+
 
 def test_multinomial():
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:

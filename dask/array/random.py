@@ -108,12 +108,11 @@ class RandomState(object):
 
         vals = []
         for seed, size, slc in zip(seeds, sizes, slices):
-            arg = [ar[slc] if i in slcarg else ar for ar in args]
+            arg = [ar[slc] if i in slcarg else ar for i, ar in enumerate(args)]
             kwrg = {k: v[slc] if k in slckwarg else v for k, v in
                     kwargs.items()}
             vals.append((_apply_random, func.__name__, seed, size, arg, kwrg))
         dsk = dict(zip(keys, vals))
-
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
