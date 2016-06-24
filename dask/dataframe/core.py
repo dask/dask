@@ -1440,6 +1440,18 @@ class DataFrame(_Frame):
                                      self, self.divisions)
         raise NotImplementedError(key)
 
+    def __setitem__(self, key, value):
+        if isinstance(key, (tuple, list)):
+            df = self.assign(**{k: value[c]
+                                for k, c in zip(key, value.columns)})
+        else:
+            df = self.assign(**{key: value})
+
+        self.dask = df.dask
+        self._name = df._name
+        self._pd = df._pd
+        self._known_dtype = df._known_dtype
+
     def __getattr__(self, key):
         try:
             return self[key]

@@ -1706,3 +1706,27 @@ def test_build_pd():
     s, known_dtype = dd.Series._build_pd(pd.NaT)
     assert isinstance(s, pd.Series)
     assert np.issubdtype(s.dtype, np.datetime64)
+
+
+def test_column_assignment():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    from copy import copy
+    orig = copy(ddf)
+    ddf['z'] = ddf.x + ddf.y
+    df['z'] = df.x + df.y
+
+    eq(df, ddf)
+
+
+def test_columns_assignment():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    df2 = df.assign(y=df.x + 1, z=df.x - 1)
+    df[['a', 'b']] = df2[['y', 'z']]
+
+    ddf2 = ddf.assign(y=ddf.x + 1, z=ddf.x - 1)
+    ddf[['a', 'b']] = ddf2[['y', 'z']]
+
+    eq(df, ddf)
