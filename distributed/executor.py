@@ -69,23 +69,23 @@ class Future(WrappedKey):
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
-        self.executor._inc_ref(key)
+        self.executor._inc_ref(tokey(key))
         self._generation = self.executor.generation
         self._cleared = False
 
         if key not in executor.futures:
-            executor.futures[key] = {'event': Event(), 'status': 'pending'}
+            executor.futures[tokey(key)] = {'event': Event(), 'status': 'pending'}
 
     @property
     def status(self):
         try:
-            return self.executor.futures[self.key]['status']
+            return self.executor.futures[tokey(self.key)]['status']
         except KeyError:
             return 'cancelled'
 
     @property
     def event(self):
-        return self.executor.futures[self.key]['event']
+        return self.executor.futures[tokey(self.key)]['event']
 
     def done(self):
         """ Is the computation complete? """
@@ -104,7 +104,7 @@ class Future(WrappedKey):
     @gen.coroutine
     def _result(self, raiseit=True):
         try:
-            d = self.executor.futures[self.key]
+            d = self.executor.futures[tokey(self.key)]
         except KeyError:
             exception = CancelledError(self.key)
             if raiseit:
@@ -146,13 +146,13 @@ class Future(WrappedKey):
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
-        return self.key not in self.executor.futures
+        return tokey(self.key) not in self.executor.futures
 
     @gen.coroutine
     def _traceback(self):
         yield self.event.wait()
         if self.status == 'error':
-            raise Return(self.executor.futures[self.key]['traceback'])
+            raise Return(self.executor.futures[tokey(self.key)]['traceback'])
         else:
             raise Return(None)
 
@@ -179,17 +179,17 @@ class Future(WrappedKey):
     @property
     def type(self):
         try:
-            return self.executor.futures[self.key]['type']
+            return self.executor.futures[tokey(self.key)]['type']
         except KeyError:
             return None
 
-    def _del(self):
+    def release(self):
         if not self._cleared and self.executor.generation == self._generation:
             self._cleared = True
-            self.executor._dec_ref(self.key)
+            self.executor._dec_ref(tokey(self.key))
 
     def __del__(self):
-        self._del()
+        self.release()
 
     def __str__(self):
         if self.type:
@@ -515,9 +515,7 @@ class Executor(object):
             else:
                 key = funcname(func) + '-' + str(uuid.uuid4())
 
-        key = tokey(key)
-
-        if key in self.futures:
+        if tokey(key) in self.futures:
             return Future(key, self)
 
         if allow_other_workers and workers is None:
@@ -532,30 +530,17 @@ class Executor(object):
             restrictions = {}
             loose_restrictions = []
 
-        args2, arg_dependencies = unpack_remotedata(args, byte_keys=True)
-        kwargs2, kwarg_dependencies = unpack_remotedata(kwargs, byte_keys=True)
-        dependencies = arg_dependencies | kwarg_dependencies
+        if kwargs:
+            dsk = {key: (apply, func, list(args), kwargs)}
+        else:
+            dsk = {key: (func,) + tuple(args)}
 
-        bad_deps = {d for d in dependencies if d not in self.futures}
-        if bad_deps:
-            raise CancelledError(*bad_deps)
-
-        task = {'function': dumps_function(func)}
-        if args2:
-            task['args'] = dumps(args2)
-        if kwargs2:
-            task['kwargs'] = dumps(kwargs2)
+        futures = self._graph_to_futures(dsk, [key], restrictions,
+                loose_restrictions)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self._send_to_scheduler({'op': 'update-graph',
-                                 'tasks': {key: task},
-                                 'keys': [key],
-                                 'dependencies': {key: list(dependencies)},
-                                 'restrictions': valmap(list, restrictions),
-                                 'loose_restrictions': loose_restrictions,
-                                 'client': self.id})
 
-        return Future(key, self)
+        return futures[tokey(key)]
 
     def _threaded_map(self, q_out, func, qs_in, **kwargs):
         """ Internal function for mapping Queue """
@@ -637,23 +622,12 @@ class Executor(object):
             keys = [funcname(func) + '-' + uid + '-' + str(i)
                     for i in range(min(map(len, iterables)))]
 
-        keys = [tokey(key) for key in keys]
-
         if not kwargs:
             dsk = {key: (func,) + args
                    for key, args in zip(keys, zip(*iterables))}
         else:
             dsk = {key: (apply, func, (tuple, list(args)), kwargs)
                    for key, args in zip(keys, zip(*iterables))}
-
-        d = {key: unpack_remotedata(task, byte_keys=True) for key, task in dsk.items()}
-        dsk2 = str_graph({k: v[0] for k, v in d.items()})
-        d_futures = {k: v[1] for k, v in d.items()}
-        dependencies = {k: set(map(tokey, v[1])) for k, v in d.items()}
-
-        bad_deps = {k for v in d_futures.values() for k in v if k not in self.futures}
-        if bad_deps:
-            raise CancelledError(*bad_deps)
 
         if isinstance(workers, str):
             workers = [workers]
@@ -676,16 +650,11 @@ class Executor(object):
         else:
             loose_restrictions = set()
 
+        futures = self._graph_to_futures(dsk, keys, restrictions,
+                loose_restrictions)
         logger.debug("map(%s, ...)", funcname(func))
-        self._send_to_scheduler({'op': 'update-graph',
-                                 'tasks': valmap(dumps_task, dsk2),
-                                 'dependencies': valmap(list, dependencies),
-                                 'keys': keys,
-                                 'restrictions': valmap(list, restrictions),
-                                 'loose_restrictions': list(loose_restrictions),
-                                 'client': self.id})
 
-        return [Future(key, self) for key in keys]
+        return [futures[tokey(key)] for key in keys]
 
     @gen.coroutine
     def _gather(self, futures, errors='raise'):
@@ -987,24 +956,29 @@ class Executor(object):
         """
         return sync(self.loop, self._run, function, *args, **kwargs)
 
-    @gen.coroutine
-    def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
-        keyset = set(flatten([keys]))
-        flatkeys = list(map(tokey, flatten([keys])))
-        futures = {key: Future(key, self) for key in flatkeys}
+    def _graph_to_futures(self, dsk, keys, restrictions=None,
+                                loose_restrictions=None,
+                                allow_other_workers=True):
+        keyset = set(keys)
+        flatkeys = list(map(tokey, keys))
+        futures = {key: Future(key, self) for key in keyset}
 
         values = {k for k, v in dsk.items() if isinstance(v, Future)
                                             and k not in keyset}
         if values:
             dsk = dask.optimize.inline(dsk, keys=values)
 
-        d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
-        dsk2 = str_graph({k: v[0] for k, v in d.items()})
+        d = {k: unpack_remotedata(v) for k, v in dsk.items()}
+        extra_keys = set.union(*[v[1] for v in d.values()]) if d else set()
+        dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
         dsk3 = {k: v for k, v in dsk2.items() if k is not v}
 
         if restrictions:
             restrictions = keymap(tokey, restrictions)
             restrictions = valmap(list, restrictions)
+
+        if loose_restrictions is not None:
+            loose_restrictions = list(map(tokey, loose_restrictions))
 
         dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
@@ -1021,7 +995,14 @@ class Executor(object):
                                  'dependencies': valmap(list, dependencies),
                                  'keys': list(flatkeys),
                                  'restrictions': restrictions or {},
+                                 'loose_restrictions': loose_restrictions,
                                  'client': self.id})
+
+        return futures
+
+    @gen.coroutine
+    def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
+        futures = self._graph_to_futures(dsk, set(flatten([keys])), restrictions)
 
         packed = pack_data(keys, futures)
         try:
@@ -1034,12 +1015,12 @@ class Executor(object):
                 raise gen.Return(result)
         finally:
             for f in futures.values():
-                f._del()
+                f.release()
         if not raise_on_error:
             result = 'OK', result
         raise gen.Return(result)
 
-    def get(self, dsk, keys, **kwargs):
+    def get(self, dsk, keys, restrictions=None, loose_restrictions=None):
         """ Compute dask graph
 
         Parameters
@@ -1061,13 +1042,18 @@ class Executor(object):
         --------
         Executor.compute: Compute asynchronous collections
         """
-        status, result = sync(self.loop, self._get, dsk, keys,
-                              raise_on_error=False, **kwargs)
+        futures = self._graph_to_futures(dsk, set(flatten([keys])),
+                restrictions, loose_restrictions)
 
-        if status == 'error':
-            raise result
-        else:
-            return result
+        try:
+            results = self.gather(futures)
+        except (KeyboardInterrupt, Exception) as e:
+            for f in futures.values():
+                f.release()
+            raise
+
+        results2 = pack_data(keys, results)
+        return results2
 
     def compute(self, args, sync=False):
         """ Compute dask collections on cluster
@@ -1117,27 +1103,16 @@ class Executor(object):
         dsk = merge([opt(merge([v.dask for v in val]),
                          [v._keys() for v in val])
                     for opt, val in groups.items()])
-        names = [tokey('finalize-%s' % tokenize(v)) for v in variables]
+        names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
-        d = {k: unpack_remotedata(v, byte_keys=True) for k, v in merge(dsk, dsk2).items()}
-        dsk3 = str_graph({k: v[0] for k, v in d.items()})
-        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
-
-        for k, v in dsk3.items():
-            dependencies[k] |= set(_deps(dsk3, v))
-
-        self._send_to_scheduler({'op': 'update-graph',
-                                 'tasks': valmap(dumps_task, dsk3),
-                                 'dependencies': valmap(list, dependencies),
-                                 'keys': names,
-                                 'client': self.id})
+        futures_dict = self._graph_to_futures(merge(dsk2, dsk), names)
 
         i = 0
         futures = []
         for arg in args:
             if isinstance(arg, Base):
-                futures.append(Future(names[i], self))
+                futures.append(futures_dict[names[i]])
                 i += 1
             else:
                 futures.append(arg)
@@ -1190,22 +1165,12 @@ class Executor(object):
                          [v._keys() for v in val])
                     for opt, val in groups.items()])
 
-        d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
-        dsk2 = str_graph({k: v[0] for k, v in d.items()})
-        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
+        names = {k for c in collections for k in flatten(c._keys())}
 
-        for k, v in dsk2.items():
-            dependencies[k] |= set(_deps(dsk2, v))
+        futures = self._graph_to_futures(dsk, names)
 
-        names = list({tokey(k) for c in collections for k in flatten(c._keys())})
 
-        self._send_to_scheduler({'op': 'update-graph',
-                                 'tasks': valmap(dumps_task, dsk2),
-                                 'dependencies': valmap(list, dependencies),
-                                 'keys': names,
-                                 'client': self.id})
-
-        result = [redict_collection(c, {k: Future(tokey(k), self)
+        result = [redict_collection(c, {k: futures[k]
                                         for k in flatten(c._keys())})
                 for c in collections]
         if singleton:
