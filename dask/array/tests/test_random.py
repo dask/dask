@@ -163,8 +163,8 @@ def test_random_all():
 
 def test_array_broadcasting():
     arr = np.arange(6).reshape((2,3))
-    da.random.poisson(arr, chunks=3).compute()
-    da.random.normal(arr, 2, chunks=3).compute()
+    assert da.random.poisson(arr, chunks=3).compute().shape == (2,3)
+    assert da.random.normal(arr, 2, chunks=3).compute().shape == (2,3)
 
 
 def test_multinomial():
