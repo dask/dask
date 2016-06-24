@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from distutils.version import LooseVersion
+import warnings
 
 import pandas as pd
 import numpy as np
@@ -16,30 +16,20 @@ def getnanos(rule):
         return None
 
 
-if LooseVersion(pd.__version__) >= '0.18.0':
-    def _resample_apply(s, rule, how, resample_kwargs):
-        return getattr(s.resample(rule, **resample_kwargs), how)()
-
-    def _resample(obj, rule, how, **kwargs):
-        resampler = Resampler(obj, rule, **kwargs)
-        if how is not None:
-            raise FutureWarning(("how in .resample() is deprecated "
-                                 "the new syntax is .resample(...)"
-                                 ".{0}()").format(how))
-            return getattr(resampler, how)()
-        return resampler
-else:
-    def _resample_apply(s, rule, how, resample_kwargs):
-        return s.resample(rule, how=how, **resample_kwargs)
-
-    def _resample(obj, rule, how, **kwargs):
-        how = how or 'mean'
-        return getattr(Resampler(obj, rule, **kwargs), how)()
+def _resample(obj, rule, how, **kwargs):
+    resampler = Resampler(obj, rule, **kwargs)
+    if how is not None:
+        w = FutureWarning(("how in .resample() is deprecated "
+                           "the new syntax is .resample(...)"
+                           ".{0}()").format(how))
+        warnings.warn(w)
+        return getattr(resampler, how)()
+    return resampler
 
 
 def _resample_series(series, start, end, reindex_closed, rule,
                      resample_kwargs, how, fill_value):
-    out = _resample_apply(series, rule, how, resample_kwargs)
+    out = getattr(series.resample(rule, **resample_kwargs), how)()
     return out.reindex(pd.date_range(start, end, freq=rule,
                                      closed=reindex_closed),
                        fill_value=fill_value)

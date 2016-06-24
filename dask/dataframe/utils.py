@@ -1,29 +1,26 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
+
 from collections import Iterator
-import datetime
 import sys
 
 import numpy as np
 import pandas as pd
+import pandas.util.testing as tm
+from pandas.core.common import is_datetime64tz_dtype
 import toolz
 
 from dask.async import get_sync
 
-# Pandas <0.17 doesn't have the datetime64+tz extension dtype
-if pd.__version__ > '0.17.0':
-    is_datetime64tz_dtype = pd.core.common.is_datetime64tz_dtype
-else:
-    def is_datetime64tz_dtype(x):
-        return False
+PANDAS_VERSION = LooseVersion(pd.__version__)
 
-# Pandas <0.18 doesn't have the `is_extension_type` function
-if pd.__version__ > '0.18.0':
+# Pandas <0.18.1 doesn't have the `is_extension_type` function
+if PANDAS_VERSION > '0.18.0':
     is_extension_type = pd.core.common.is_extension_type
 else:
     def is_extension_type(x):
         return False
-
 
 
 def shard_df_on_index(df, divisions):
@@ -157,15 +154,6 @@ def nonempty_sample_df(empty):
 # Testing
 ###############################################################
 
-import pandas.util.testing as tm
-from distutils.version import LooseVersion
-PANDAS_VERSION = LooseVersion(pd.__version__)
-
-if PANDAS_VERSION >= LooseVersion('0.17.0'):
-    PANDAS_0170 = True
-else:
-    PANDAS_0170 = False
-
 
 def _check_dask(dsk, check_names=True):
     import dask.dataframe as dd
@@ -209,16 +197,10 @@ def _check_dask(dsk, check_names=True):
 def _maybe_sort(a):
     # sort by value, then index
     try:
-        if PANDAS_0170:
-            if isinstance(a, pd.DataFrame):
-                a = a.sort_values(by=a.columns.tolist())
-            else:
-                a = a.sort_values()
+        if isinstance(a, pd.DataFrame):
+            a = a.sort_values(by=a.columns.tolist())
         else:
-            if isinstance(a, pd.DataFrame):
-                a = a.sort(columns=a.columns.tolist())
-            else:
-                a = a.order()
+            a = a.sort_values()
     except (TypeError, IndexError, ValueError):
         pass
     return a.sort_index()

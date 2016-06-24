@@ -280,11 +280,7 @@ def shuffle_pre_partition_series(df, index, divisions, drop):
 
 def shuffle_group(df, stage, k):
     df['.old-index'] = df.index
-    if pd.__version__ >= '0.17':
-        index = df.index // k ** stage % k
-    else:
-        values = df.index.values // k ** stage % k
-        index = pd.Index(values)
+    index = df.index // k ** stage % k
     inds = set(index.drop_duplicates())
     df = df.set_index(index)
 

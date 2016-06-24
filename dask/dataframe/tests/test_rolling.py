@@ -1,7 +1,5 @@
-from distutils.version import LooseVersion
 import pandas as pd
 import pandas.util.testing as tm
-import pytest
 import numpy as np
 
 import dask.dataframe as dd
@@ -18,6 +16,7 @@ def eq(p, d):
 
 def mad(x):
     return np.fabs(x - x.mean()).mean()
+
 
 def rolling_functions_tests(p, d):
     # Old-fashioned rolling API
@@ -40,6 +39,7 @@ def rolling_functions_tests(p, d):
     eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
     # Test with kwargs
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
+
 
 def basic_rolling_tests(p, d): # Works for series or df
     # New rolling API
@@ -64,14 +64,13 @@ def basic_rolling_tests(p, d): # Works for series or df
     # Test with kwargs
     eq(p.rolling(3, min_periods=2).sum(), d.rolling(3, min_periods=2).sum())
 
+
 def test_rolling_functions_series():
     ts = pd.Series(np.random.randn(25).cumsum())
     dts = dd.from_pandas(ts, 3)
     rolling_functions_tests(ts, dts)
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
 def test_rolling_series():
     for ts in [
             pd.Series(np.random.randn(25).cumsum()),
@@ -87,8 +86,6 @@ def test_rolling_funtions_dataframe():
     rolling_functions_tests(df, ddf)
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
 def test_rolling_dataframe():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randint(100, size=(25,))})
@@ -105,8 +102,7 @@ def test_rolling_functions_raises():
     assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, freq=2))
     assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 def test_rolling_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randint(100, size=(25,))})
@@ -126,16 +122,14 @@ def test_rolling_functions_names():
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(dd.rolling_sum(a, 2).dask) == sorted(dd.rolling_sum(a, 2).dask)
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 def test_rolling_names():
     df = pd.DataFrame({'a': [1, 2, 3],
                        'b': [4, 5, 6]})
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 def test_rolling_axis():
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
@@ -153,6 +147,7 @@ def test_rolling_axis():
     ds = ddf[3]
     eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
 
+
 def test_rolling_function_partition_size():
     df = pd.DataFrame(np.random.randn(50, 2))
     ddf = dd.from_pandas(df, npartitions=5)
@@ -162,8 +157,7 @@ def test_rolling_function_partition_size():
         eq(pd.rolling_mean(obj, 11), dd.rolling_mean(dobj, 11))
         raises(NotImplementedError, lambda: dd.rolling_mean(dobj, 12))
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 def test_rolling_partition_size():
     df = pd.DataFrame(np.random.randn(50, 2))
     ddf = dd.from_pandas(df, npartitions=5)
@@ -173,8 +167,7 @@ def test_rolling_partition_size():
         eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
         raises(NotImplementedError, lambda: dobj.rolling(12).mean())
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.18.0',
-                    reason="rolling object not supported")
+
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10]*30), npartitions=3)
     assert repr(ddf.rolling(4)) in ['Rolling [window=4,axis=0]',

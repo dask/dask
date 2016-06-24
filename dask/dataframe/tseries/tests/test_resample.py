@@ -1,8 +1,6 @@
 from itertools import product
-from distutils.version import LooseVersion
 
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 from dask.utils import raises
@@ -10,12 +8,8 @@ from dask.dataframe.utils import eq
 import dask.dataframe as dd
 
 
-if LooseVersion(pd.__version__) >= '0.18.0':
-    def resample(df, freq, how='mean', **kwargs):
-        return getattr(df.resample(freq, **kwargs), how)()
-else:
-    def resample(df, freq, how='mean', **kwargs):
-        return df.resample(freq, how=how, **kwargs)
+def resample(df, freq, how='mean', **kwargs):
+    return getattr(df.resample(freq, **kwargs), how)()
 
 
 @pytest.mark.parametrize(['method', 'npartitions', 'freq', 'closed', 'label'],
