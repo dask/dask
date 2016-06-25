@@ -349,6 +349,17 @@ def test_random_sample_size():
     assert 10 < len(list(a.random_sample(0.1, 42))) < 300
 
 
+def test_random_sample_prob_range():
+    """
+    Specifying probabilities outside the range [0, 1] raises ValueError.
+    """
+    a = db.from_sequence(range(50), npartitions=5)
+    with pytest.raises(ValueError):
+        a.random_sample(-1)
+    with pytest.raises(ValueError):
+        a.random_sample(1.1)
+
+
 def test_random_sample_repeated_computation():
     """
     Repeated computation of a defined random sampling operation

@@ -418,9 +418,10 @@ class Bag(Base):
         return lambda _: random_state.random() < prob
 
     def random_sample(self, prob, random_state=None):
-        """ Return elements from bag with probability of prob
+        """ Return elements from bag with probability of ``prob``.
 
-        All elements are considered independently without replacement.
+        ``prob`` must be a number in the interval `[0, 1]`. All elements are
+        considered independently without replacement.
 
         Providing an integer seed for ``random_state`` will result in
         deterministic sampling. Given the same seed it will return the same
@@ -433,6 +434,8 @@ class Bag(Base):
         >>> list(b.random_sample(0.5, 42))
         [1, 3]
         """
+        if not 0 <= prob <= 1:
+            raise ValueError('prob must be a number in the interval [0, 1]')
         import numpy as np
         if random_state is None:
             random_state = np.random.randint(np.iinfo(np.int32).max)
