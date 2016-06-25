@@ -4,7 +4,8 @@ from itertools import product
 
 import numpy as np
 
-from .core import normalize_chunks, Array, slices_from_chunks
+from .core import (normalize_chunks, Array, slices_from_chunks,
+                   broadcast_shapes, broadcast_to)
 from ..base import tokenize
 from ..utils import different_seeds, ignoring
 
@@ -59,44 +60,47 @@ class RandomState(object):
                       if isinstance(ar, (Array, np.ndarray))}
         args_shapes.union({ar.shape for ar in kwargs.values() \
                           if isinstance(ar, (Array, np.ndarray))})
-        # if size is None and just unique shapes from args, use that and slice
-        # the arrays.
-        if size is None:
-            if len(args_shapes) == 1:
-                size = list(args_shapes)[0]
-        # if more than one shape in args and no size, fail
-            else:
-                raise ValueError('Size not given and could not be '
-                                 'unambiguously determined from other'
-                                 ' arguments')
-        # by default slices only when arg.shape==size
+
+        shapes = list(args_shapes)
+        if size is not None:
+            shapes += [size]
+        # broadcast to the final size(shape)
+        size = broadcast_shapes(*shapes)
+
+        def _broadcast_any(ar, shape):
+            if isinstance(ar, Array):
+                return broadcast_to(ar, shape)
+            if isinstance(ar, np.ndarray):
+                return np.broadcast_to(ar, shape)
 
         chunks = normalize_chunks(chunks, size)
         slices = slices_from_chunks(chunks)
 
-        # Figure out which args and kwargs to slice, get tiny versions as well
+        # Broadcast all arguments, get tiny versions as well
         small_args = []
-        slcarg = []
-        for i, ar in enumerate(args):
-            if isinstance(ar, (np.ndarray, Array)) and ar.shape == size:
-                slcarg.append(i)
+        new_args = []
+        for ar in args:
+            if isinstance(ar, (np.ndarray, Array)):
+                new_args.append(_broadcast_any(ar, size))
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
             else:
+                new_args.append(ar)
                 small_args.append(ar)
 
-        slckwarg = []
         small_kwargs = {}
+        new_kwargs = {}
         for key, ar in kwargs.items():
-            if isinstance(ar, (np.ndarray, Array)) and ar.shape == size:
-                slckwarg.append(key)
-                val = ar[tuple(0 for _ in ar.shape)]
+            if isinstance(ar, (np.ndarray, Array)):
+                kwargs[key] = _broadcast_any(ar, size)
+                small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
             else:
-                val = ar
-            small_kwargs[key] = val
+                kwargs[key] = ar
+                small_kwargs[key] = ar
 
         # Get dtype
         small_kwargs['size'] = (0,)
-        dtype = func(np.random.RandomState(), *small_args, **small_kwargs).dtype
+        dtype = func(np.random.RandomState(), *small_args,
+                     **small_kwargs).dtype
 
         # Build graph
         sizes = list(product(*chunks))
@@ -108,9 +112,10 @@ class RandomState(object):
 
         vals = []
         for seed, size, slc in zip(seeds, sizes, slices):
-            arg = [ar[slc] if i in slcarg else ar for i, ar in enumerate(args)]
-            kwrg = {k: v[slc] if k in slckwarg else v for k, v in
-                    kwargs.items()}
+            arg = [ar[slc] if isinstance(ar, (np.ndarray, Array)) else ar for ar
+                   in new_args]
+            kwrg = {k: v[slc] if isinstance(v, (np.ndarray, Array)) else v for
+                    k, v in new_kwargs.items()}
             vals.append((_apply_random, func.__name__, seed, size, arg, kwrg))
         dsk = dict(zip(keys, vals))
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
