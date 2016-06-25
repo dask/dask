@@ -5,14 +5,8 @@ import numpy as np
 
 import dask.dataframe as dd
 from dask.async import get_sync
+from dask.dataframe.utils import eq
 from dask.utils import raises, ignoring
-
-
-def eq(p, d, check_less_precise=False):
-    if isinstance(d, dd.DataFrame):
-        tm.assert_frame_equal(p, d.compute(get=get_sync), check_less_precise=check_less_precise)
-    else:
-        tm.assert_series_equal(p, d.compute(get=get_sync), check_less_precise=check_less_precise)
 
 
 def mad(x):
