@@ -194,7 +194,7 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'dask.tex', u'dask Documentation',
-   u'Matthew Rocklin', 'manual'),
+   u'Dask Development Team', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -224,7 +224,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'dask', u'dask Documentation',
-     [u'Matthew Rocklin'], 1)
+     [u'Dask Development Team'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -238,7 +238,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'dask', u'dask Documentation',
-   u'Matthew Rocklin', 'dask', 'One line description of project.',
+   u'Dask Development Team', 'dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -256,7 +256,7 @@ texinfo_documents = [
 
 # Bibliographic Dublin Core info.
 epub_title = u'dask'
-epub_author = u'Matthew Rocklin'
+epub_author = u'Dask Development Team'
 epub_publisher = u'Continuum Analytics'
 epub_copyright = u'2015, Continuum Analytics'
 
