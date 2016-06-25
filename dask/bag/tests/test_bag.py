@@ -339,6 +339,16 @@ def test_map_partitions_with_kwargs():
         factor=2).sum().compute() == 2.0
 
 
+def test_random_sample_size():
+    """
+    Number of randomly sampled elements are in the expected range.
+    """
+    a = db.from_sequence(range(1000), npartitions=5)
+    # we expect a size of approx. 100, but leave large margins to avoid
+    # random failures
+    assert 10 < len(list(a.random_sample(0.1, 42))) < 300
+
+
 def test_random_sample_repeated_computation():
     """
     Repeated computation of a defined random sampling operation
