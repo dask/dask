@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 import numpy as np
 import pandas as pd
 
@@ -8,6 +9,7 @@ import dask.dataframe as dd
 from dask.dataframe.utils import eq, assert_dask_graph
 
 
+@pytest.mark.slow
 def test_arithmetics():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                                   index=[0, 1, 3]),
@@ -109,6 +111,7 @@ def test_arithmetics():
                                 allow_comparison_ops=False)
 
 
+@pytest.mark.slow
 def test_arithmetics_different_index():
     # index are different, but overwraps
     pdf1 = pd.DataFrame({'a': [1, 2, 3, 4, 5], 'b': [3, 5, 2, 5, 7]},

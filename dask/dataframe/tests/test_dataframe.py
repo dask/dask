@@ -1035,6 +1035,7 @@ def test_set_partition_2():
     assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
 
 
+@pytest.mark.slow
 def test_repartition():
     def _check_split_data(orig, d):
         """Check data is split properly"""
@@ -1461,6 +1462,7 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+@pytest.mark.slow
 def test_cov_corr_stable():
     df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])
     ddf = dd.from_pandas(df, npartitions=50)
