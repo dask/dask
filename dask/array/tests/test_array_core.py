@@ -937,6 +937,15 @@ def test_store_locks():
             assert False
 
 
+@pytest.mark.xfail(reason="can't lock with multiprocessing")
+def test_store_multiprocessing_lock():
+    d = da.ones((10, 10), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(10, 10))
+    a.store(at, get=dask.multiprocessing.get, num_workers=10)
+
+
 def test_to_hdf5():
     h5py = pytest.importorskip('h5py')
     x = da.ones((4, 4), chunks=(2, 2))

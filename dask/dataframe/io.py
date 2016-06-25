@@ -7,11 +7,13 @@ from math import ceil
 from operator import getitem
 import os
 from threading import Lock
+import multiprocessing
 import uuid
 from warnings import warn
 
 import pandas as pd
 import numpy as np
+import dask
 from toolz import merge
 
 from ..base import tokenize
@@ -19,6 +21,7 @@ from ..compatibility import unicode, apply
 from .. import array as da
 from ..async import get_sync
 from ..delayed import Delayed, delayed
+import dask.multiprocessing
 
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
@@ -404,10 +407,24 @@ def _link(token, result):
     return None
 
 
+def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
+    """ A wrapper function around pd_to_hdf that enables locking"""
+
+    if lock:
+        lock.acquire()
+    try:
+        pd_to_hdf(*args, **kwargs)
+    finally:
+        if lock:
+            lock.release()
+
+    return None
+
+
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=get_sync, dask_kwargs={},
-           name_function=None, compute=True, **kwargs):
+           complib=None, fletcher32=False, get=None, dask_kwargs={},
+           name_function=None, compute=True, lock=None, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -444,14 +461,28 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             warn("To preserve order between partitions name_function "
                  "must preserve the order of its input")
 
-    kwargs = merge(kwargs, {'format': 'table', 'complevel': complevel,
-                            'complib': complib, 'fletcher32': fletcher32,
-                            'mode': mode, 'append': append})
+    # handle lock default based on wether we're writing to a single entity
+    if lock is None:
+        if not single_node or not single_file:
+            lock = True
+        else:
+            lock = False
+
+    if lock is True:
+        _actual_get = get if get else dask.get
+        if _actual_get == dask.multiprocessing.get:
+            lock = multiprocessing.Manager().Lock()
+        else:
+            lock = Lock()
+
+    kwargs.update({'format': 'table', 'complevel': complevel,
+                   'complib': complib, 'fletcher32': fletcher32,
+                   'mode': mode, 'append': append})
     dsk = dict()
 
     i_name = name_function(0)
-    dsk[(name, 0)] = (apply, pd_to_hdf,
-                         [(df._name, 0), fmt_obj(path_or_buf, i_name),
+    dsk[(name, 0)] = (_pd_to_hdf, pd_to_hdf, lock,
+                      [(df._name, 0), fmt_obj(path_or_buf, i_name),
                              key.replace('*', i_name)], kwargs)
 
     kwargs2 = kwargs.copy()
@@ -462,7 +493,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
 
     for i in range(1, df.npartitions):
         i_name = name_function(i)
-        task = (apply, pd_to_hdf,
+        task = (_pd_to_hdf, pd_to_hdf, lock,
                 [(df._name, i), fmt_obj(path_or_buf, i_name),
                     key.replace('*', i_name)], kwargs2)
         if single_file:

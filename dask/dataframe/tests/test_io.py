@@ -918,12 +918,14 @@ def test_to_hdf_lock_delays():
                             index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
+    # adding artifichial delays to make sure last tasks finish first
+    # that's a way to simulate last tasks finishing last
     def delayed_nop(i):
-        sleep(0.1*(16-i[1]))
+        if i[1] < 10:
+            sleep(0.1*(10-i[1]))
         return i
 
     # saving to multiple hdf nodes
-    # adding artifichial delays to make sure last tasks finish first
     with tmpfile() as fn:
         a = a.apply(delayed_nop, axis=1, columns=a.columns)
         a.to_hdf(fn, '/data*')
@@ -957,6 +959,87 @@ def test_to_hdf_exceptions():
         with pd.HDFStore(fn) as hdf:
             with pytest.raises(ValueError):
                 a.to_hdf(hdf, '/data_*_*')
+
+
+def test_to_hdf_sync():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=get_sync)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=get_sync)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=get_sync)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+
+def test_to_hdf_thread():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=dask.threaded.get)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=dask.threaded.get)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=dask.threaded.get)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+
+def test_to_hdf_process():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=dask.multiprocessing.get)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
 
 
 @pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")

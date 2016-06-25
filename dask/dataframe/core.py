@@ -542,7 +542,7 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
-               complib=None, fletcher32=False, get=get_sync, **kwargs):
+               complib=None, fletcher32=False, get=None, **kwargs):
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, get=get, **kwargs)
