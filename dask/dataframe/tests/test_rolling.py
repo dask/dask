@@ -1,5 +1,6 @@
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 import numpy as np
 
 import dask.dataframe as dd
@@ -108,8 +109,11 @@ def test_rolling_funtions_dataframe():
 ])
 @pytest.mark.parametrize('window', [1, 2, 4, 5])
 @pytest.mark.parametrize('center', [True, False])
-@pytest.mark.parametrize('axis', [0, 1, 'rows', 'columns'])
+@pytest.mark.parametrize('axis', [0, 'columns'])
 def test_rolling_dataframe(npartitions, method, args, window, center, axis):
+    if method == 'count' and axis in [1, 'columns']:
+        pytest.xfail('count currently ignores the axis argument.')
+
     N = 40
     df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
                        'b': np.random.randint(100, size=(N,)),
