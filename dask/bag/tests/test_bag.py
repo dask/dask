@@ -339,6 +339,36 @@ def test_map_partitions_with_kwargs():
         factor=2).sum().compute() == 2.0
 
 
+def test_random_sample_repeated_computation():
+    """
+    Repeated computation of a defined random sampling operation
+    generates identical results.
+    """
+    a = db.from_sequence(range(50), npartitions=5)
+    b = a.random_sample(0.2)
+    assert list(b) == list(b)  # computation happens here
+
+
+def test_random_sample_different_definitions():
+    """
+    Repeatedly defining a random sampling operation yields different results
+    upon computation if no random seed is specified.
+    """
+    a = db.from_sequence(range(50), npartitions=5)
+    assert list(a.random_sample(0.5)) != list(a.random_sample(0.5))
+    assert a.random_sample(0.5).name != a.random_sample(0.5).name
+
+
+def test_random_sample_random_state():
+    """
+    Sampling with fixed random seed generates identical results.
+    """
+    a = db.from_sequence(range(50), npartitions=5)
+    b = a.random_sample(0.5, 1234)
+    c = a.random_sample(0.5, 1234)
+    assert list(b) == list(c)
+
+
 def test_lazify_task():
     task = (sum, (reify, (map, inc, [1, 2, 3])))
     assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))
