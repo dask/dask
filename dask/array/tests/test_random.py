@@ -161,6 +161,8 @@ def test_random_all():
     da.random.standard_normal(size=5, chunks=3).compute()
     da.random.standard_t(2, size=5, chunks=3).compute()
 
+@pytest.mark.skipif(not hasattr(np,'broadcast_to'),
+                    reason='requires numpy 1.10 method "broadcast_to"' )
 def test_array_broadcasting():
     arr = np.arange(6).reshape((2,3))
     assert da.random.poisson(arr, chunks=3).compute().shape == (2,3)

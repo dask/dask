@@ -56,10 +56,10 @@ class RandomState(object):
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args \
-                      if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union({ar.shape for ar in kwargs.values() \
-                          if isinstance(ar, (Array, np.ndarray))})
+        args_shapes = {ar.shape for ar in args
+                       if isinstance(ar, (Array, np.ndarray))}
+        args_shapes.union({ar.shape for ar in kwargs.values()
+                           if isinstance(ar, (Array, np.ndarray))})
 
         shapes = list(args_shapes)
         if size is not None:
@@ -131,7 +131,7 @@ class RandomState(object):
                 else:
                     if isinstance(ar, Array):
                         arg.append((lookup[i], ) + block)
-                    else: # np.ndarray
+                    else:   # np.ndarray
                         arg.append((getitem, lookup[i], slc))
             kwrg = {}
             for k, ar in kwargs.items():
@@ -140,8 +140,8 @@ class RandomState(object):
                 else:
                     if isinstance(ar, Array):
                         kwrg[k] = (lookup[k], ) + block
-                    else: # np.ndarray
-                        kwrg[k]= (getitem, lookup[k], slc)
+                    else:   # np.ndarray
+                        kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, func.__name__, seed, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
