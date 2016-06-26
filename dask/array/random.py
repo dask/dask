@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from itertools import product
+from operator import getitem
 
 import numpy as np
 
@@ -15,7 +16,6 @@ def doc_wraps(func):
         func2.__doc__ = func.__doc__.replace('>>>', '>>').replace('...', '..')
         return func2
     return _
-
 
 class RandomState(object):
     """
@@ -66,35 +66,47 @@ class RandomState(object):
             shapes += [size]
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
-
-        def _broadcast_any(ar, shape):
-            if isinstance(ar, Array):
-                return broadcast_to(ar, shape)
-            if isinstance(ar, np.ndarray):
-                return np.broadcast_to(ar, shape)
-
         chunks = normalize_chunks(chunks, size)
         slices = slices_from_chunks(chunks)
 
+        def _broadcast_any(ar, shape, chunks):
+            if isinstance(ar, Array):
+                return broadcast_to(ar, shape).rechunk(chunks)
+            if isinstance(ar, np.ndarray):
+                return np.broadcast_to(ar, shape)
+
         # Broadcast all arguments, get tiny versions as well
+        # Start adding the relevant bits to the graph
+        dsk = {}
+        lookup = {}
         small_args = []
-        new_args = []
-        for ar in args:
+        for i, ar in enumerate(args):
             if isinstance(ar, (np.ndarray, Array)):
-                new_args.append(_broadcast_any(ar, size))
+                res = _broadcast_any(ar, size, chunks)
+                if isinstance(res, Array):
+                    dsk.update(res.dask)
+                    lookup[i] = res.name
+                elif isinstance(res, np.ndarray):
+                    name = 'array-{}'.format(tokenize(res))
+                    lookup[i] = name
+                    dsk[name] = res
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
             else:
-                new_args.append(ar)
                 small_args.append(ar)
 
         small_kwargs = {}
-        new_kwargs = {}
         for key, ar in kwargs.items():
             if isinstance(ar, (np.ndarray, Array)):
-                kwargs[key] = _broadcast_any(ar, size)
+                res = _broadcast_any(ar, size, chunks)
+                if isinstance(res, Array):
+                    dsk.update(res.dask)
+                    lookup[key] = res.name
+                elif isinstance(res, np.ndarray):
+                    name = 'array-{}'.format(tokenize(res))
+                    lookup[key] = name
+                    dsk[name] = res
                 small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
             else:
-                kwargs[key] = ar
                 small_kwargs[key] = ar
 
         # Get dtype
@@ -102,22 +114,36 @@ class RandomState(object):
         dtype = func(np.random.RandomState(), *small_args,
                      **small_kwargs).dtype
 
-        # Build graph
         sizes = list(product(*chunks))
         seeds = different_seeds(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = 'da.random.{0}-{1}'.format(func.__name__, token)
+
         keys = product([name], *([range(len(bd)) for bd in chunks]
                                + [[0]] * len(extra_chunks)))
-
+        blocks = product(*[range(len(bd)) for bd in chunks])
         vals = []
-        for seed, size, slc in zip(seeds, sizes, slices):
-            arg = [ar[slc] if isinstance(ar, (np.ndarray, Array)) else ar for ar
-                   in new_args]
-            kwrg = {k: v[slc] if isinstance(v, (np.ndarray, Array)) else v for
-                    k, v in new_kwargs.items()}
+        for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
+            arg = []
+            for i, ar in enumerate(args):
+                if i not in lookup:
+                    arg.append(ar)
+                else:
+                    if isinstance(ar, Array):
+                        arg.append((lookup[i], ) + block)
+                    else: # np.ndarray
+                        arg.append((getitem, lookup[i], slc))
+            kwrg = {}
+            for k, ar in kwargs.items():
+                if k not in lookup:
+                    kwrg[k] = ar
+                else:
+                    if isinstance(ar, Array):
+                        kwrg[k] = (lookup[k], ) + block
+                    else: # np.ndarray
+                        kwrg[k]= (getitem, lookup[k], slc)
             vals.append((_apply_random, func.__name__, seed, size, arg, kwrg))
-        dsk = dict(zip(keys, vals))
+        dsk.update(dict(zip(keys, vals)))
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
