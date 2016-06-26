@@ -73,7 +73,7 @@ class RandomState(object):
             if isinstance(ar, Array):
                 return broadcast_to(ar, shape).rechunk(chunks)
             if isinstance(ar, np.ndarray):
-                return np.broadcast_to(ar, shape)
+                return np.ascontiguousarray(np.broadcast_to(ar, shape))
 
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph

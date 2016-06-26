@@ -165,12 +165,13 @@ def test_random_all():
                     reason='requires numpy 1.10 method "broadcast_to"' )
 def test_array_broadcasting():
     arr = np.arange(6).reshape((2,3))
+    daones = da.ones((2,3,4), chunks=3)
     assert da.random.poisson(arr, chunks=3).compute().shape == (2,3)
     assert da.random.normal(arr, 2, chunks=3).compute().shape == (2,3)
-    assert da.random.normal(np.ones((1,4)), np.ones((3,1)),
-                            chunks=3).compute().shape == (3,4)
-    assert da.random.normal(np.ones((1,4)), np.ones((3,1)), size=(2, 3,4),
+    assert da.random.normal(np.ones((1,4)), daones,
                             chunks=3).compute().shape == (2,3,4)
+    assert da.random.normal(scale=np.ones((1,4)), loc=daones, size=(2,2,3,4),
+                            chunks=3).compute().shape == (2,2,3,4)
     with pytest.raises(ValueError):
         da.random.normal(arr, np.ones((3,1)), size=(2,3,4), chunks=3)
 
