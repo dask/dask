@@ -110,6 +110,10 @@ Operations that aren't supported include:
 - Iteration. (``for i in a: ...``)
 - Use as a predicate (``if a: ...``)
 
-The last two in particular mean that ``Delayed`` objects cannot be used for
-control flow, meaning that no ``Delayed`` can appear in a loop or if statement.
+The last two points in particular mean that ``Delayed`` objects cannot be used for 
+control flow, meaning that no ``Delayed`` can appear in a loop or if statement. 
+In other words you can't iterate over a ``Delayed`` object, or use it as part of
+a condition in an if statement, but ``Delayed`` object can be used in a body of a loop 
+or if statement (i.e. the example above is fine, but if ``data`` was a ``Delayed`` 
+object it wouldn't be).
 Even with this limitation, many workflows can easily be parallelized.
