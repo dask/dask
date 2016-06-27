@@ -91,7 +91,7 @@ Install dask and dependencies::
 
 For development dask uses the following additional dependencies::
 
-   pip install pytest moto
+   pip install pytest moto mock
 
 
 Run Tests

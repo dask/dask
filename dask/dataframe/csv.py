@@ -3,6 +3,11 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 from warnings import warn
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 import numpy as np
 import pandas as pd
 
@@ -115,7 +120,22 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
         return dfs
 
 
-def read_csv(urlpath, blocksize=2**25, chunkbytes=None,
+def auto_blocksize(total_memory, cpu_count):
+    memory_factor = 10
+    blocksize = int(total_memory // cpu_count / memory_factor)
+    return min(blocksize, int(64e6))
+
+
+# guess blocksize if psutil is installed or use acceptable default one if not
+if psutil is not None:
+    TOTAL_MEM = psutil.virtual_memory().total
+    CPU_COUNT = psutil.cpu_count()
+    AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
+else:
+    AUTO_BLOCKSIZE = 2**25
+
+
+def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
         collection=True, lineterminator=None, compression=None,
         sample=256000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
@@ -153,7 +173,9 @@ def read_csv(urlpath, blocksize=2**25, chunkbytes=None,
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), or globstring for CSV files.
     blocksize: int or None
-        Number of bytes by which to cut up larger files
+        Number of bytes by which to cut up larger files. Default value is
+        computed based on available physical memory and the number of cores.
+        If ``None``, use a single block for each file.
     collection: boolean
         Return a dask.dataframe if True or list of dask.delayed objects if False
     sample: int

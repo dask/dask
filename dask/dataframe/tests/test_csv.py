@@ -10,10 +10,13 @@ from toolz import partition_all, valmap, partial
 
 from dask import compute
 from dask.async import get_sync
-from dask.dataframe.csv import read_csv_from_bytes, bytes_read_csv, read_csv
+import dask.dataframe.csv
+from dask.dataframe.csv import (read_csv_from_bytes, bytes_read_csv, read_csv,
+                                auto_blocksize)
 from dask.dataframe.utils import eq
+from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext
-
+from dask.compatibility import mock
 
 compute = partial(compute, get=get_sync)
 
@@ -213,3 +216,29 @@ def test_header_None():
         df = read_csv('.tmp.*.csv', header=None)
         expected = pd.DataFrame({0: [1, 3], 1: [2, 4]})
         eq(df.compute().reset_index(drop=True), expected)
+
+
+def test_auto_blocksize():
+    assert isinstance(auto_blocksize(3000, 15), int)
+    assert auto_blocksize(3000, 3) == 100
+    assert auto_blocksize(5000, 2) == 250
+
+
+def test_auto_blocksize_max64mb():
+    blocksize = auto_blocksize(1000000000000, 3)
+    assert blocksize == int(64e6)
+    assert isinstance(blocksize, int)
+
+
+def test_auto_blocksize_csv(monkeypatch):
+    psutil = pytest.importorskip('psutil')
+    total_memory = psutil.virtual_memory().total
+    cpu_count = psutil.cpu_count()
+    mock_read_bytes = mock.Mock(wraps=read_bytes)
+    monkeypatch.setattr(dask.dataframe.csv, 'read_bytes', mock_read_bytes)
+
+    expected_block_size = auto_blocksize(total_memory, cpu_count)
+    with filetexts(files, mode='b'):
+        read_csv('2014-01-01.csv')
+        assert mock_read_bytes.called
+        assert mock_read_bytes.call_args[1]['blocksize'] == expected_block_size
