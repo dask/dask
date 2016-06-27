@@ -27,6 +27,7 @@ Top level user functions:
     Bag.pluck
     Bag.product
     Bag.reduction
+    Bag.random_sample
     Bag.remove
     Bag.repartition
     Bag.std

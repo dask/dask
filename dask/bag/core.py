@@ -8,6 +8,7 @@ from operator import getitem
 import os
 import types
 import uuid
+from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
@@ -37,7 +38,7 @@ from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (infer_compression, open, system_encoding,
                      takes_multiple_arguments, funcname, digit, insert,
-                     build_name_function)
+                     build_name_function, different_seeds)
 from ..delayed import Delayed, delayed
 
 no_default = '__no__default__'
@@ -410,6 +411,46 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
+    def _get_rs_predicate(self, seed, prob):
+        """ Return sampling filter predicate for the given seed.
+        """
+        random_state = Random(seed)
+        return lambda _: random_state.random() < prob
+
+    def random_sample(self, prob, random_state=None):
+        """ Return elements from bag with probability of ``prob``.
+
+        ``prob`` must be a number in the interval `[0, 1]`. All elements are
+        considered independently without replacement.
+
+        Providing an integer seed for ``random_state`` will result in
+        deterministic sampling. Given the same seed it will return the same
+        sample every time.
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> list(b.random_sample(0.5, 42))
+        [1, 3]
+        >>> list(b.random_sample(0.5, 42))
+        [1, 3]
+        """
+        if not 0 <= prob <= 1:
+            raise ValueError('prob must be a number in the interval [0, 1]')
+        import numpy as np
+        if random_state is None:
+            random_state = np.random.randint(np.iinfo(np.int32).max)
+
+        name = 'random-sample-{0}'.format(tokenize(self, prob, random_state))
+        # we need to generate a different random seed for each partition or
+        # otherwise we would be selecting the exact same positions at each
+        # partition
+        seeds = different_seeds(self.npartitions, random_state)
+
+        dsk = dict(((name, i), (reify, (filter,
+                   self._get_rs_predicate(seed, prob), (self.name, i))))
+                   for i, seed in zip(range(self.npartitions), seeds))
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+
     def remove(self, predicate):
         """ Remove elements in collection that match predicate
 
@@ -473,6 +514,7 @@ class Bag(Base):
                     if kwargs else (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
+
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
