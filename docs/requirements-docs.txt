@@ -1,4 +1,6 @@
 numpydoc
+sphinx
+sphinx_rtd_theme
 toolz
 cloudpickle
 pandas>=0.16.0
