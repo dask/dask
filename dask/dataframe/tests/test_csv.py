@@ -16,7 +16,6 @@ from dask.dataframe.csv import (read_csv_from_bytes, bytes_read_csv, read_csv,
 from dask.dataframe.utils import eq
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext
-from dask.compatibility import mock
 
 compute = partial(compute, get=get_sync)
 
@@ -232,6 +231,10 @@ def test_auto_blocksize_max64mb():
 
 def test_auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip('psutil')
+    try:
+        from unittest import mock
+    except ImportError:
+        mock = pytest.importorskip('mock')
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()
     mock_read_bytes = mock.Mock(wraps=read_bytes)
