@@ -3158,3 +3158,11 @@ def test_get_stops_work_after_error(loop):
         sleep(0.01)
     loop2.close(all_fds=True)
     t.join()
+
+
+def test_as_completed_list(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            seq = e.map(inc, iter(range(5)))
+            seq2 = list(as_completed(seq))
+            assert set(e.gather(seq2)) == {1, 2, 3, 4, 5}
