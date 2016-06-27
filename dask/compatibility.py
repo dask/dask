@@ -28,7 +28,6 @@ if PY3:
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
-    from unittest import mock
     FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
@@ -56,7 +55,6 @@ else:
     from urllib2 import urlopen
     from urlparse import urlparse
     from urllib import quote, unquote
-    import mock
     unicode = unicode
     long = long
     apply = apply
