@@ -1,17 +1,12 @@
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 import numpy as np
 
 import dask.dataframe as dd
 from dask.async import get_sync
+from dask.dataframe.utils import eq
 from dask.utils import raises, ignoring
-
-
-def eq(p, d):
-    if isinstance(d, dd.DataFrame):
-        tm.assert_frame_equal(p, d.compute(get=get_sync))
-    else:
-        tm.assert_series_equal(p, d.compute(get=get_sync))
 
 
 def mad(x):
@@ -28,8 +23,9 @@ def rolling_functions_tests(p, d):
     eq(pd.rolling_max(p, 3), dd.rolling_max(d, 3))
     eq(pd.rolling_std(p, 3), dd.rolling_std(d, 3))
     eq(pd.rolling_var(p, 3), dd.rolling_var(d, 3))
-    eq(pd.rolling_skew(p, 3), dd.rolling_skew(d, 3))
-    eq(pd.rolling_kurt(p, 3), dd.rolling_kurt(d, 3))
+    # see note around test_rolling_dataframe for logic concerning precision
+    eq(pd.rolling_skew(p, 3), dd.rolling_skew(d, 3), check_less_precise=True)
+    eq(pd.rolling_kurt(p, 3), dd.rolling_kurt(d, 3), check_less_precise=True)
     eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
     eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
     with ignoring(ImportError):
@@ -51,8 +47,9 @@ def basic_rolling_tests(p, d): # Works for series or df
     eq(p.rolling(3).max(), d.rolling(3).max())
     eq(p.rolling(3).std(), d.rolling(3).std())
     eq(p.rolling(3).var(), d.rolling(3).var())
-    eq(p.rolling(3).skew(), d.rolling(3).skew())
-    eq(p.rolling(3).kurt(), d.rolling(3).kurt())
+    # see note around test_rolling_dataframe for logic concerning precision
+    eq(p.rolling(3).skew(), d.rolling(3).skew(), check_less_precise=True)
+    eq(p.rolling(3).kurt(), d.rolling(3).kurt(), check_less_precise=True)
     eq(p.rolling(3).quantile(0.5), d.rolling(3).quantile(0.5))
     eq(p.rolling(3).apply(mad), d.rolling(3).apply(mad))
     with ignoring(ImportError):
@@ -63,6 +60,13 @@ def basic_rolling_tests(p, d): # Works for series or df
     eq(p.rolling(1).sum(), d.rolling(1).sum())
     # Test with kwargs
     eq(p.rolling(3, min_periods=2).sum(), d.rolling(3, min_periods=2).sum())
+    # Test with center
+    eq(p.rolling(3, center=True).max(), d.rolling(3, center=True).max())
+    eq(p.rolling(3, center=False).std(), d.rolling(3, center=False).std())
+    eq(p.rolling(6, center=True).var(), d.rolling(6, center=True).var())
+    # see note around test_rolling_dataframe for logic concerning precision
+    eq(p.rolling(7, center=True).skew(), d.rolling(7, center=True).skew(),
+                 check_less_precise=True)
 
 
 def test_rolling_functions_series():
@@ -86,11 +90,46 @@ def test_rolling_funtions_dataframe():
     rolling_functions_tests(df, ddf)
 
 
-def test_rolling_dataframe():
-    df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
-                       'b': np.random.randint(100, size=(25,))})
-    ddf = dd.from_pandas(df, 3)
-    basic_rolling_tests(df, ddf)
+@pytest.mark.parametrize('npartitions', [1, 2, 3])
+@pytest.mark.parametrize('method,args,check_less_precise', [
+    ('count', (), False),
+    ('sum', (), False),
+    ('mean', (), False),
+    ('median', (), False),
+    ('min', (), False),
+    ('max', (), False),
+    ('std', (), False),
+    ('var', (), False),
+    ('skew', (), True), # here and elsewhere, results for kurt and skew are
+    ('kurt', (), True), # checked with check_less_precise=True so that we are
+                        # only looking at 3ish decimal places for the equality check
+                        # rather than 5ish. I have encountered a case where a test
+                        # seems to have failed due to numerical problems with kurt.
+                        # So far, I am only weakening the check for kurt and skew,
+                        # as they involve third degree powers and higher
+    ('quantile', (.38,), False),
+    ('apply', (np.sum,), False),
+])
+@pytest.mark.parametrize('window', [1, 2, 4, 5])
+@pytest.mark.parametrize('center', [True, False])
+@pytest.mark.parametrize('axis', [0, 'columns'])
+def test_rolling_dataframe(npartitions, method, args, window, center, axis,
+                           check_less_precise):
+    if method == 'count' and axis in [1, 'columns']:
+        pytest.xfail('count currently ignores the axis argument.')
+
+    N = 40
+    df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
+                       'b': np.random.randint(100, size=(N,)),
+                       'c': np.random.randint(100, size=(N,)),
+                       'd': np.random.randint(100, size=(N,)),
+                       'e': np.random.randint(100, size=(N,))})
+    ddf = dd.from_pandas(df, npartitions)
+
+    prolling =  df.rolling(window, center=center, axis=axis)
+    drolling = ddf.rolling(window, center=center, axis=axis)
+    eq(getattr(prolling, method)(*args), getattr(drolling, method)(*args),
+       check_less_precise=check_less_precise)
 
 
 def test_rolling_functions_raises():
@@ -170,5 +209,9 @@ def test_rolling_partition_size():
 
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10]*30), npartitions=3)
-    assert repr(ddf.rolling(4)) in ['Rolling [window=4,axis=0]',
-                                    'Rolling [axis=0,window=4]']
+    assert repr(ddf.rolling(4)) in ['Rolling [window=4,center=False,axis=0]',
+                                    'Rolling [window=4,axis=0,center=False]',
+                                    'Rolling [center=False,axis=0,window=4]',
+                                    'Rolling [center=False,window=4,axis=0]',
+                                    'Rolling [axis=0,window=4,center=False]',
+                                    'Rolling [axis=0,center=False,window=4]']

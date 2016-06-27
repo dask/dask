@@ -58,33 +58,32 @@ rolling_quantile = wrap_rolling(pd.rolling_quantile)
 rolling_apply = wrap_rolling(pd.rolling_apply)
 rolling_window = wrap_rolling(pd.rolling_window)
 
+
 def call_pandas_rolling_method_single(this_partition, rolling_kwargs,
         method_name, method_args, method_kwargs):
     # used for the start of the df/series (or for rolling through columns)
     method = getattr(this_partition.rolling(**rolling_kwargs), method_name)
     return method(*method_args, **method_kwargs)
 
-def call_pandas_rolling_method_with_neighbor(prev_partition, this_partition,
+def call_pandas_rolling_method_with_neighbors(
+        prev_partition, this_partition, next_partition, before, after,
         rolling_kwargs, method_name, method_args, method_kwargs):
-    # used for everything except for the start
+    if prev_partition.shape[0] != before or next_partition.shape[0] != after:
+        raise NotImplementedError("Window requires larger inter-partition view than partition size")
 
-    window = rolling_kwargs['window']
-    if prev_partition.shape[0] < window-1:
-        raise NotImplementedError("Window larger than partition size")
-
-    if window > 1:
-        extra = window - 1
-        combined = pd.concat([prev_partition.iloc[-extra:], this_partition])
-
-        method = getattr(combined.rolling(window), method_name)
-        applied = method(*method_args, **method_kwargs)
-        return applied.iloc[extra:]
+    combined = pd.concat([prev_partition, this_partition, next_partition])
+    method = getattr(combined.rolling(**rolling_kwargs), method_name)
+    applied = method(*method_args, **method_kwargs)
+    if after:
+        return applied.iloc[before:-after]
     else:
-        method = getattr(this_partition.rolling(window), method_name)
-        return method(*method_args, **method_kwargs)
+        return applied.iloc[before:]
 
 def tail(obj, n):
     return obj.tail(n)
+
+def head(obj, n):
+    return obj.head(n)
 
 class Rolling(object):
     # What you get when you do ddf.rolling(...) or similar
@@ -92,12 +91,17 @@ class Rolling(object):
 
     """
 
-    def __init__(self, obj, window=None, min_periods=None,
-                 win_type=None, axis=0):
+    def __init__(self, obj, window=None, min_periods=None, freq=None,
+                 center=False, win_type=None, axis=0):
+        if freq is not None:
+            raise NotImplementedError(
+                'The deprecated freq argument is not supported.')
+
         self.obj = obj # dataframe or series
 
         self.window = window
         self.min_periods = min_periods
+        self.center = center
         self.win_type = win_type
         self.axis = axis
 
@@ -108,6 +112,7 @@ class Rolling(object):
         return {
             'window': self.window,
             'min_periods': self.min_periods,
+            'center': self.center,
             'win_type': self.win_type,
             'axis': self.axis}
 
@@ -118,27 +123,62 @@ class Rolling(object):
         new_name = 'rolling-' + tokenize(
             self.obj, self._rolling_kwargs(), method_name, args, kwargs)
 
-        # For all but the first chunk, we'll pass the whole previous chunk
-        # in so we can use it to pre-feed our window
-        dsk = {(new_name, 0): (
-            call_pandas_rolling_method_single, (old_name, 0),
-            self._rolling_kwargs(), method_name, args, kwargs)}
-        if self.axis in [0, 'rows']:
-            # roll in the partition direction (will need to access neighbor)
-            tail_name = 'tail-{}-{}'.format(self.window-1, old_name)
-            for i in range(1, self.obj.npartitions + 1):
-                # Get just the needed values from the previous partition
-                dsk[tail_name, i-1] = (tail, (old_name, i-1), self.window-1)
-
-                dsk[new_name, i] = (
-                    call_pandas_rolling_method_with_neighbor,
-                    (tail_name, i-1), (old_name, i),
-                    self._rolling_kwargs(), method_name, args, kwargs)
-        else:
-            # no communication needed between partitions for columns
-            for i in range(1, self.obj.npartitions + 1):
+        dsk = {}
+        if self.axis in [1, 'columns'] or self.window <= 1 or self.obj.npartitions == 1:
+            # This is the easy scenario, we're rolling over columns (or not 
+            # really rolling at all, so each chunk is independent.
+            for i in range(self.obj.npartitions):
                 dsk[new_name, i] = (
                     call_pandas_rolling_method_single, (old_name, i),
+                    self._rolling_kwargs(), method_name, args, kwargs)
+        else:
+            # This is a bit trickier, we need to feed in information from the
+            # neighbors to roll along rows.
+
+            # Figure out how many we need to look at before and after.
+            if self.center:
+                before = self.window // 2
+                after = self.window - before - 1
+            else:
+                before = self.window - 1
+                after = 0
+
+            head_name = 'head-{}-{}'.format(after, old_name)
+            tail_name = 'tail-{}-{}'.format(before, old_name)
+
+            # First chunk, only look after (if necessary)
+            if after > 0:
+                next_partition = (head_name, 1)
+                dsk[next_partition] = (head, (old_name, 1), after)
+            else:
+                # Either we are only looking backward or this was the
+                # only chunk.
+                next_partition = self.obj._pd
+            dsk[new_name, 0] = (call_pandas_rolling_method_with_neighbors,
+                self.obj._pd, (old_name, 0), next_partition, 0, after,
+                self._rolling_kwargs(), method_name, args, kwargs)
+
+            # All the middle chunks
+            for i in range(1, self.obj.npartitions-1):
+                # Get just the needed values from the previous partition
+                dsk[tail_name, i-1] = (tail, (old_name, i-1), before)
+                if after:
+                    next_partition = (head_name, i+1)
+                    dsk[next_partition] = (head, (old_name, i+1), after)
+
+                dsk[new_name, i] = (
+                    call_pandas_rolling_method_with_neighbors,
+                    (tail_name, i-1), (old_name, i), next_partition, before, after,
+                    self._rolling_kwargs(), method_name, args, kwargs)
+
+            # The last chunk
+            if self.obj.npartitions > 1: # if the first wasn't the only partition
+                end = self.obj.npartitions - 1
+                dsk[tail_name, end-1] = (tail, (old_name, end-1), before)
+
+                dsk[new_name, end] = (
+                    call_pandas_rolling_method_with_neighbors,
+                    (tail_name, end-1), (old_name, end), self.obj._pd, before, 0,
                     self._rolling_kwargs(), method_name, args, kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata

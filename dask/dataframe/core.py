@@ -579,24 +579,33 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
-    def rolling(self, window, min_periods=None, win_type=None, axis=0):
+    def rolling(self, window, min_periods=None, freq=None, center=False,
+                win_type=None, axis=0):
         """Provides rolling transformations.
 
         Parameters
         ----------
+        window : int
+           Size of the moving window. This is the number of observations used
+           for calculating the statistic. The window size must not be so large
+           as to span more than one adjacent partition.
+        min_periods : int, default None
+            Minimum number of observations in window required to have a value
+            (otherwise result is NA).
+        center : boolean, default False
+            Set the labels at the center of the window.
+        win_type : string, default None
+            Provide a window type. The recognized window types are identical
+            to pandas.
+        axis : int, default 0
 
-        window: int
-            Size of the moving window. This window must be smaller
-            than the size of the previous partition.
-        min_periods: int, default None
-            Minimum number of observations in window required to have
-            a value (otherwise result is NA).
-        win_type: string, default None
-            Provide a window type. (Identical to pandas.)
-        axis: int, default 0
-            Provide the axis to apply the function. (Identical to pandas.)
+        Returns
+        -------
+        a Rolling object on which to call a method to compute a statistic
 
-        The center argument and deprecated freq argument are not supported.
+        Notes
+        -----
+        The `freq` argument is not supported.
         """
         from dask.dataframe.rolling import Rolling
 
@@ -612,7 +621,7 @@ class _Frame(Base):
                 raise ValueError('min_periods must be >= 0')
 
         return Rolling(self, window=window, min_periods=min_periods,
-                       axis=axis, win_type=win_type)
+                       freq=freq, center=center, win_type=win_type, axis=axis)
 
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True):
