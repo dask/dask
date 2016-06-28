@@ -1593,6 +1593,7 @@ def as_completed(fs):
 
     This function does not return futures in the order in which they are input.
     """
+    fs = list(fs)
     if len(set(f.executor for f in fs)) == 1:
         loop = first(fs).executor.loop
     else:
