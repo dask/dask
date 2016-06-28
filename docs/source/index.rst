@@ -92,6 +92,7 @@ Contents
    memory
    joblib
    queues
+   submitting-applications
    api
 
 .. toctree::

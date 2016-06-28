@@ -25,6 +25,26 @@ import pytest
 
 logger = logging.getLogger(__name__)
 
+@pytest.fixture(scope='session')
+def valid_python_script(tmpdir_factory):
+    local_file = tmpdir_factory.mktemp('data').join('file.py')
+    local_file.write("print('hello world!')")
+    return local_file
+
+@pytest.fixture(scope='session')
+def executor_contract_script(tmpdir_factory):
+    local_file = tmpdir_factory.mktemp('data').join('distributed_script.py')
+    lines = ("from distributed import Executor", "e = Executor('127.0.0.1:8989')",
+     'print(e)')
+    local_file.write('\n'.join(lines))
+    return local_file
+
+@pytest.fixture(scope='session')
+def invalid_python_script(tmpdir_factory):
+    local_file = tmpdir_factory.mktemp('data').join('file.py')
+    local_file.write("a+1")
+    return local_file
+
 
 @pytest.yield_fixture
 def current_loop():
