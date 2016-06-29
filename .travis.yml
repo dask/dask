@@ -32,6 +32,7 @@ install:
   - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma mock; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
+  - pip install -e git://github.com/pydata/pandas.git@v0.17.0rc1#egg=pandas
   - pip install blosc --upgrade
   - pip install graphviz moto
   - if [[ $PYTHON < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
