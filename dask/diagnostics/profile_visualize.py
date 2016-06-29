@@ -178,11 +178,11 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         for f in figs[1:]:
             f.x_range = top.x_range
             f.title = None
-            f.min_border_top -= 30
+            f.min_border_top = 20
             f.plot_height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
-            f.min_border_bottom -= 30
+            f.min_border_bottom = 20
             f.plot_height -= 30
         for f in figs:
             f.min_border_left = 75
@@ -193,6 +193,10 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     if file_path and save:
         bp.save(p)
     return p
+
+
+_figure_keywords = bp.Figure.properties()
+_figure_keywords.add('tools')
 
 
 def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
@@ -221,7 +225,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _figure_keywords)
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
@@ -296,7 +300,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
                     tools="save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _figure_keywords)
     if results:
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
@@ -349,7 +353,7 @@ def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
                     tools="hover,save,reset,resize,wheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _figure_keywords)
 
     if results:
         starts, ends = list(zip(*results))[3:]
