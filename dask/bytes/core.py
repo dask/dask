@@ -15,8 +15,55 @@ delayed = delayed(pure=True)
 # Global registration dictionaries for backend storage functions
 # See docstrings to functions below for more information
 _read_bytes = dict()
+_write_bytes = dict()
 _open_files = dict()
 _open_text_files = dict()
+
+
+def write_bytes(values, urlpath, compression=None, **kwargs):
+    """For a list of values which evaluate to byte, produce delayed values
+    which, when executed, result in writing to files.
+
+    The path maybe a concrete directory, in which case it is interpreted
+    as a directory, or a template for numbered output.
+
+    The path may be preceded by a protocol, like ``s3://`` or ``hdfs://`` if
+    those libraries are installed.
+
+    Parameters
+    ----------
+    urlpath: string
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), which may be a template (include `{}`).
+    compression: string or None
+        String like 'gzip' or 'xz'.  Must support efficient random access.
+    **kwargs: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Examples
+    --------
+    >>> values = write_bytes('s3://bucket/part-{}.csv')  # doctest: +SKIP
+
+    Returns
+    -------
+    list of ``dask.Delayed`` objects
+    """
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
+    storage_options = infer_storage_options(urlpath,
+                                            inherit_storage_options=kwargs)
+    protocol = storage_options.pop('protocol')
+    ensure_protocol(protocol)
+    try:
+        write_bytes = _write_bytes[protocol]
+    except KeyError:
+        raise NotImplementedError("Unknown protocol for writing %s (%s)" %
+                                  (protocol, urlpath))
+
+    return write_bytes(values, storage_options.pop('path'),
+                       compression=compression, **storage_options)
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -70,7 +117,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     try:
         read_bytes = _read_bytes[protocol]
     except KeyError:
-        raise NotImplementedError("Unknown protocol %s (%s)" %
+        raise NotImplementedError("Unknown protocol for reading %s (%s)" %
                                   (protocol, urlpath))
 
     return read_bytes(storage_options.pop('path'), delimiter=delimiter,

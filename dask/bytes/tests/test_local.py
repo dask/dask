@@ -1,15 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
+import os
 from time import sleep, time
 
 import pytest
 from toolz import concat, valmap, partial
 
-from dask import compute, get
+from dask import compute, get, delayed
 from dask.bytes.local import read_bytes, open_files, getsize
-from dask.bytes.core import open_text_files
+from dask.bytes.core import open_text_files, write_bytes
 from dask.compatibility import FileNotFoundError
-from dask.utils import filetexts
+from dask.utils import filetexts, tmpdir
 from dask.bytes import compression
 
 compute = partial(compute, get=get)
@@ -220,3 +221,34 @@ def test_modification_time_open_files(open_files):
         c = open_files('.test.accounts.*')
 
     assert [aa._key for aa in a] != [cc._key for cc in c]
+
+
+def test_simple_write(tmpdir):
+    tmpdir = str(tmpdir)
+    make_bytes = lambda: b'000'
+    some_bytes = delayed(make_bytes)()
+    data = [some_bytes, some_bytes]
+    out = write_bytes(data, tmpdir)
+    assert len(out) == 2
+    compute(*out)
+    files = os.listdir(tmpdir)
+    assert len(files) == 2
+    assert 'bytes-0000' in files
+    d = open(os.path.join(tmpdir, files[0]), 'rb').read()
+    assert d == b'000'
+
+
+def test_compressed_write(tmpdir):
+    tmpdir = str(tmpdir)
+    make_bytes = lambda: b'000'
+    some_bytes = delayed(make_bytes)()
+    data = [some_bytes, some_bytes]
+    out = write_bytes(data, os.path.join(tmpdir, 'bytes-{:04d}.gz'),
+                      compression='gzip')
+    compute(*out)
+    files = os.listdir(tmpdir)
+    assert len(files) == 2
+    assert 'bytes-0000.gz' in files
+    import gzip
+    d = gzip.GzipFile(os.path.join(tmpdir, files[0])).read()
+    assert d == b'000'
