@@ -15,10 +15,8 @@ dfs = list(dsk.values())
 
 
 def test_column_optimizations_with_bcolz_and_rewrite():
-    try:
-        import bcolz
-    except ImportError:
-        return
+    bcolz = pytest.importorskip('bcolz')
+
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
     func = lambda x: x
     for cols in [None, 'abc', ['abc']]:
@@ -39,13 +37,11 @@ def test_column_optimizations_with_bcolz_and_rewrite():
 
 @pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_castra_column_store():
-    try:
-        from castra import Castra
-    except ImportError:
-        return
+    castra = pytest.importorskip('castra')
+
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
 
-    with Castra(template=df) as c:
+    with castra.Castra(template=df) as c:
         c.extend(df)
 
         df = c.to_dask()
@@ -54,8 +50,8 @@ def test_castra_column_store():
 
         dsk = dd.optimize(df2.dask, df2._keys())
 
-        assert dsk == {(df2._name, 0): (Castra.load_partition, c, '0--2',
+        assert dsk == {(df2._name, 0): (castra.Castra.load_partition, c, '0--2',
                                             (list, ['x']))}
         df3 = df.index
         dsk = dd.optimize(df3.dask, df3._keys())
-        assert dsk == {(df3._name, 0): (Castra.load_index, c, '0--2')}
+        assert dsk == {(df3._name, 0): (castra.Castra.load_index, c, '0--2')}
