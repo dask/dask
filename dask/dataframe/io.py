@@ -631,10 +631,9 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     dsk = merge(dsk, df.dask)
     keys = [(name, -1), (name, df.npartitions - 1)]
     if compute:
-        c, _ = DataFrame._get(dsk, keys, get=get)
-        return c
+        return DataFrame._get(dsk, keys, get=get)[0]
     else:
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return delayed([Delayed(key, [dsk]) for key in keys])[0]
 
 
 def to_csv(df, filename, name_function=None, compression=None, get=None, compute=True, **kwargs):

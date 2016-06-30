@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
+from distutils.version import LooseVersion
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial, valmap, groupby, pluck)
@@ -450,11 +451,13 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
     castra = pytest.importorskip('castra')
     pd = pytest.importorskip('pandas')
     dd = pytest.importorskip('dask.dataframe')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
     df = pd.DataFrame({'x': list(range(100)),
                        'y': [str(i) for i in range(100)]})
     a = dd.from_pandas(df, 10)
