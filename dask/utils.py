@@ -736,7 +736,6 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     return inferred_storage_options
 
 
-<<<<<<< 3a043c2237cb23de2d523cdf1cdcd8179b8795eb
 def dependency_depth(dsk):
     import toolz
 
