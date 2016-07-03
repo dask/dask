@@ -736,6 +736,7 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     return inferred_storage_options
 
 
+<<<<<<< 3a043c2237cb23de2d523cdf1cdcd8179b8795eb
 def dependency_depth(dsk):
     import toolz
 
@@ -757,3 +758,17 @@ def eq_strict(a, b):
     if type(a) is type(b):
         return a == b
     return False
+
+
+def memory_repr(num):
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+
+def put_lines(buf, lines):
+    from .compatibility import unicode
+    if any(not isinstance(x, unicode) for x in lines):
+        lines = [unicode(x) for x in lines]
+    buf.write('\n'.join(lines))
