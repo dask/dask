@@ -92,7 +92,10 @@ def inline_singleton_lists(dsk, dependencies=None):
 
     keys = [k for k, v in dsk.items()
             if istask(v) and v and v[0] is list and len(dependents[k]) == 1]
-    return inline(dsk, keys, inline_constants=False)
+    dsk = inline(dsk, keys, inline_constants=False)
+    for k in keys:
+        del dsk[k]
+    return dsk
 
 
 def optimize(dsk, keys, **kwargs):
