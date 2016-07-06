@@ -6,11 +6,11 @@ import uuid
 
 import numpy as np
 import pandas as pd
-from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
 from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat
+from .hashing import hash_pandas_object
 
 from ..base import tokenize
 from ..context import _globals
@@ -321,35 +321,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    if isinstance(df, (pd.Series, pd.Index)):
-        h = hash_series(df).astype('int64')
-    elif isinstance(df, pd.DataFrame):
-        cols = df.iteritems()
-        h = hash_series(next(cols)[1]).astype('int64')
-        for _, col in cols:
-            h = np.multiply(h, 3, h)
-            h = np.add(h, hash_series(col), h)
-    else:
-        raise TypeError("Unexpected type %s" % type(df))
-    return h % int(npartitions)
-
-
-def hash_series(s):
-    """Given a series, return a numpy array of deterministic integers."""
-    vals = s.values
-    dt = vals.dtype
-    if is_categorical_dtype(dt):
-        return vals.codes
-    elif np.issubdtype(dt, np.integer):
-        return vals
-    elif np.issubdtype(dt, np.floating):
-        return np.nan_to_num(vals).view('i' + str(dt.itemsize))
-    elif dt == np.bool:
-        return vals.view('int8')
-    elif np.issubdtype(dt, np.datetime64) or np.issubdtype(dt, np.timedelta64):
-        return vals.view('int64')
-    else:
-        return s.apply(hash).values
+    return hash_pandas_object(df) % int(npartitions)
 
 
 def barrier(args):

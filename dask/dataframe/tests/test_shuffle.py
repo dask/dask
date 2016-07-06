@@ -12,6 +12,7 @@ from dask.dataframe.shuffle import (shuffle, hash_series,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd)
+
 from dask.async import get_sync
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -108,9 +109,9 @@ df2 = pd.DataFrame({'i32': np.array([1, 2, 3] * 3, dtype='int32'),
                     'td': pd.Series(pd.timedelta_range('2000', periods=9))})
 
 
-def test_hash_series():
-    for name, s in df2.iteritems():
-        np.testing.assert_equal(hash_series(s), hash_series(s))
+#def test_hash_series():
+#    for name, s in df2.iteritems():
+#        np.testing.assert_equal(hash_series(s), hash_series(s))
 
 
 def test_partitioning_index():
