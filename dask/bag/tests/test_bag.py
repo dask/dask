@@ -536,7 +536,7 @@ def test_read_text_large_gzip():
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
-    boto = pytest.importorskip('s3fs')
+    s3fs = pytest.importorskip('s3fs')
 
     five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
                  u'16.99,1.01,Female,No,Sun,Dinner,2\n',
@@ -545,11 +545,11 @@ def test_from_s3():
                  u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test compressed data
-    e = db.read_text('s3://tip-data/t*.gz')
+    e = db.read_text('s3://tip-data/t*.gz', storage_options=dict(anon=True))
     assert e.take(5) == five_tips
 
     # test all keys in bucket
-    c = db.read_text('s3://tip-data/*')
+    c = db.read_text('s3://tip-data/*', storage_options=dict(anon=True))
     assert c.npartitions == 4
 
 
