@@ -306,7 +306,7 @@ def subs(task, key, val):
     """
     if not istask(task):
         try:
-            if task == key:
+            if type(task) is type(key) and task == key:
                 return val
         except Exception:
             pass
