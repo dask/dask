@@ -977,3 +977,9 @@ def test_to_textfiles_empty_partitions():
         b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
         b.to_textfiles(os.path.join(d, '*.txt'))
         assert len(os.listdir(d)) == 5
+
+
+def test_reduction_empty():
+    b = db.from_sequence(range(10), npartitions=100)
+    assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
+    assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
