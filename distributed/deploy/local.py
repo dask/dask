@@ -38,7 +38,7 @@ class LocalCluster(object):
     --------
     >>> c = LocalCluster()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
     >>> c  # doctest: +SKIP
-    LocalCluster("192.168.1.141:8786", workers=8, ncores=8)
+    LocalCluster("127.0.0.1:8786", workers=8, ncores=8)
 
     >>> e = Executor(c)  # connect to local cluster  # doctest: +SKIP
 

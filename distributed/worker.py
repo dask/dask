@@ -81,17 +81,17 @@ class Worker(Server):
     Create schedulers and workers in Python:
 
     >>> from distributed import Scheduler, Worker
-    >>> c = Scheduler('192.168.0.100', 8787)  # doctest: +SKIP
+    >>> c = Scheduler('192.168.0.100', 8786)  # doctest: +SKIP
     >>> w = Worker(c.ip, c.port)  # doctest: +SKIP
-    >>> yield w._start(port=8788)  # doctest: +SKIP
+    >>> yield w._start(port=8786)  # doctest: +SKIP
 
     Or use the command line::
 
         $ dask-scheduler
-        Start scheduler at 127.0.0.1:8787
+        Start scheduler at 127.0.0.1:8786
 
-        $ dask-worker 127.0.0.1:8787
-        Start worker at:               127.0.0.1:8788
+        $ dask-worker 127.0.0.1:8786
+        Start worker at:               127.0.0.1:8786
         Registered with scheduler at:  127.0.0.1:8787
 
     See Also
@@ -486,7 +486,7 @@ class Worker(Server):
                     "Function: %s\n"
                     "args:     %s\n"
                     "kwargs:   %s\n",
-                    str(funcname(function))[:1000], 
+                    str(funcname(function))[:1000],
                     convert_args_to_str(args, max_len=1000),
                     convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
@@ -538,7 +538,7 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], 
+                str(funcname(function))[:1000],
                 convert_args_to_str(args, max_len=1000),
                 convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
@@ -564,7 +564,7 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], 
+                str(funcname(function))[:1000],
                 convert_args_to_str(args, max_len=1000),
                 convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 

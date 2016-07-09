@@ -64,7 +64,7 @@ class Scheduler(Server):
 
     Or as part of when an Executor starts up and connects to a Center::
 
-        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e = Executor('127.0.0.1:8786')  # doctest: +SKIP
         >>> e.scheduler  # doctest: +SKIP
         Scheduler(...)
 

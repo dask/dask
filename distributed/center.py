@@ -45,15 +45,11 @@ class Center(Server):
 
     Examples
     --------
-    You can start a center with the ``dcenter`` command line application::
+    You can create one in Python:
 
-       $ dcenter
-       Start center at 127.0.0.1:8787
-
-    Of you can create one in Python:
-
+    >>> from distributed.center import Center
     >>> center = Center('192.168.0.123')  # doctest: +SKIP
-    >>> center.listen(8787)  # doctest: +SKIP
+    >>> center.listen(8786)  # doctest: +SKIP
 
     >>> center.has_what  # doctest: +SKIP
     {('alice', 8788):   {'x', 'y'}
