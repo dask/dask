@@ -28,7 +28,7 @@ def test_resource_monitor_plot(s, a, b):
                                        'network-send': 2**17,
                                        'network-recv': 2**16}}]
 
-    source, plot = resource_profile_plot()
+    source, _, _, _ = resource_profile_plot()
     resource_profile_update(source, workers_buffer, times_buffer)
 
     assert source.data['workers'] == ['10.10.20.86', '10.10.20.87']

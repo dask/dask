@@ -8,42 +8,58 @@ from toolz import pluck
 from ..utils import ignoring
 
 with ignoring(ImportError):
-    from bokeh.models import (ColumnDataSource, DataRange1d, Range1d,
-            NumeralTickFormatter, LinearAxis)
+    from bokeh.models import (
+        ColumnDataSource, DataRange1d, Range1d, NumeralTickFormatter, ToolbarBox,
+    )
     from bokeh.palettes import Spectral9
     from bokeh.plotting import figure
 
 
-def resource_profile_plot(width=600, height=300):
+def _format_resource_profile_plot(plot):
+    plot.legend[0].location = 'top_left'
+    plot.legend[0].orientation = 'horizontal'
+    plot.legend[0].legend_padding = 5
+    plot.legend[0].legend_margin = 5
+    plot.legend[0].label_height = 5
+    plot.toolbar.logo = None
+    plot.yaxis[0].ticker.num_minor_ticks = 2
+    plot.yaxis[0].ticker.desired_num_ticks = 2
+    return plot
+
+
+def resource_profile_plot(sizing_mode='fixed'):
     names = ['time', 'cpu', 'memory-percent', 'network-send', 'network-recv']
     source = ColumnDataSource({k: [] for k in names})
 
-    x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
+    plot_props = dict(
+        tools='xpan,xwheel_zoom,box_zoom,reset',
+        toolbar_location=None,  # Becaues we're making a joing toolbar
+        sizing_mode=sizing_mode,
+        x_axis_type='datetime',
+        x_range=DataRange1d(follow='end', follow_interval=30000, range_padding=0)
+    )
+    line_props = dict(x='time', line_width=2, line_alpha=0.8, source=source)
+
     y_range = Range1d(0, 1)
-    p = figure(width=width, height=height, x_axis_type='datetime',
-               responsive=True, tools='xpan,xwheel_zoom,box_zoom,resize,reset',
-               x_range=x_range, y_range=y_range)
-    p.line(x='time', y='memory-percent', line_width=2, line_alpha=0.8,
-           color=Spectral9[7], legend='Memory', source=source)
-    p.line(x='time', y='cpu', line_width=2, line_alpha=0.8,
-           color=Spectral9[0], legend='CPU', source=source)
-    p.legend[0].location = 'top_left'
-    p.yaxis[0].formatter = NumeralTickFormatter(format="0 %")
-    p.min_border_right = 10
-    p.extra_y_ranges = {"network": DataRange1d(bounds=(0, None))}
-    p.add_layout(LinearAxis(y_range_name="network",
-                            axis_label="Throughput (MB/s)"),
-                 'right')
-    p.yaxis.axis_label_text_font_size = "10pt"
 
-    p.line(x='time', y='network-send', line_width=2, line_alpha=0.8,
-           color=Spectral9[2], legend='Network Send', source=source,
-           y_range_name="network")
-    p.line(x='time', y='network-recv', line_width=2, line_alpha=0.8,
-           color=Spectral9[3], legend='Network Recv', source=source,
-           y_range_name="network")
+    p1 = figure(title="Resource usage (%)", y_range=y_range, **plot_props)
+    p1.line(y='memory-percent', color=Spectral9[7], legend='Memory', **line_props)
+    p1.line(y='cpu', color=Spectral9[0], legend='CPU', **line_props)
+    p1 = _format_resource_profile_plot(p1)
+    p1.yaxis.bounds = (0, 100)
+    p1.yaxis.formatter = NumeralTickFormatter(format="0 %")
 
-    return source, p
+    y_range = DataRange1d(start=0)
+    p2 = figure(title="Throughput (MB/s)", y_range=y_range, **plot_props)
+    p2.line(y='network-send', color=Spectral9[2], legend='Network Send', **line_props)
+    p2.line(y='network-recv', color=Spectral9[3], legend='Network Recv', **line_props)
+    p2 = _format_resource_profile_plot(p2)
+
+    all_tools = p1.toolbar.tools + p2.toolbar.tools
+    combo_toolbar = ToolbarBox(
+        tools=all_tools, sizing_mode=sizing_mode, logo=None, toolbar_location='right'
+    )
+    return source, p1, p2, combo_toolbar
 
 
 def resource_profile_update(source, worker_buffer, times_buffer):

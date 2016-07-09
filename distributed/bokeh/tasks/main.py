@@ -2,27 +2,15 @@
 
 from __future__ import print_function, division, absolute_import
 
-from bisect import bisect
 from toolz import valmap
+from bokeh.io import curdoc
 
-from bokeh.plotting import curdoc, vplot
-from distributed.bokeh.status_monitor import (task_stream_plot,
-        progress_plot)
-from distributed.utils import log_errors
+from distributed.bokeh.status_monitor import task_stream_plot
 import distributed.bokeh
 
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
-width = 800
-
-
-task_stream_source, task_stream_plot = task_stream_plot(height=600,
-        width=width, follow_interval=20000)
-task_stream_plot.min_border_top = 0
-task_stream_plot.min_border_bottom = 0
-task_stream_plot.min_border_left = 0
-task_stream_plot.min_border_right = 10
-task_stream_plot.xaxis.axis_label = None
+task_stream_source, task_stream_plot = task_stream_plot(sizing_mode='stretch_both')
 task_stream_index = [0]
 
 rectangles = messages['task-events']['rectangles']
