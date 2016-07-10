@@ -579,6 +579,17 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
+    def apply_concat_apply(self, func, aggfunc=None, func_kwargs=None,
+                           aggfunc_kwargs=None):
+        """ Apply a function to each partition, the concat, then apply again
+        """
+        token = '-{}-{}'.format('apply_concat_apply',
+                                tokenize(func, aggfunc, func_kwargs,
+                                         aggfunc_kwargs))
+        return self._aca_agg(token=token, func=func, aggfunc=aggfunc,
+                             chunk_kwargs=func_kwargs,
+                             aggregate_kwargs=aggfunc_kwargs)
+
     def rolling(self, window, min_periods=None, freq=None, center=False,
                 win_type=None, axis=0):
         """Provides rolling transformations.
@@ -1089,6 +1100,55 @@ class Series(_Frame):
                    aggregate=lambda x, **kwargs: aggfunc(pd.Series(x), **kwargs),
                    columns=return_scalar, token=self._token_prefix + token,
                    **kwargs)
+
+    def apply_concat_apply(self, func, aggfunc=None, func_kwargs=None,
+                           aggfunc_kwargs=None):
+        """ Apply a function to each partition, the concat, then apply again
+
+        Useful to perform easily parallelizable aggregations based on data from
+        the whole series, like minimum, maximum, mean, etc.
+
+        Parameters
+        ----------
+
+        func: function [partition-per-arg] -> partition
+            Function to operate on each partition
+        aggfunc: function concatenated-partition -> partition
+            Function to operate on the concatenated result of func. Defaults to
+            same as ``func`` if not specified.
+        func_kwargs: dict of keyword, value pairs
+            Keyword arguments to pass on to func
+        aggfunc_kwargs: dict of keyword, value pairs
+            Keyword arguments to pass on to aggfunc
+
+        Examples
+        --------
+
+        Count total number of rows in series:
+
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> df_pd = pd.DataFrame({'val': range(500)})
+        >>> df = dd.from_pandas(df_pd, npartitions=4)
+        >>> df['val'].apply_concat_apply(lambda x: x.count(),
+        ...                              aggfunc=lambda x: x.sum()).compute()
+        500
+
+        Same as before but with keyword arguments to add and multiply
+        intermediate results:
+
+        >>> def count_extra(series, extra=0):
+        ...     return series.count() + extra
+        >>> def sum_times(series, times=1):
+        ...     return series.sum() * times
+        >>> df['val'].apply_concat_apply(
+        ...     count_extra, aggfunc=sum_times, func_kwargs={'extra': 1},
+        ...     aggfunc_kwargs={'times': 10}).compute()
+        5040
+        """
+        return super(Series, self).apply_concat_apply(
+            func, aggfunc=aggfunc, func_kwargs=func_kwargs,
+            aggfunc_kwargs=aggfunc_kwargs)
 
     @derived_from(pd.Series)
     def groupby(self, index, **kwargs):
@@ -1703,6 +1763,58 @@ class DataFrame(_Frame):
                    columns=None, token=self._token_prefix + token,
                    **kwargs)
 
+    def apply_concat_apply(self, func, aggfunc=None, func_kwargs=None,
+                           aggfunc_kwargs=None):
+        """ Apply a function to each partition, the concat, then apply again
+
+        Useful to perform easily parallelizable aggregations based on data from
+        the whole dataframe, like minimum, maximum, mean, etc.
+
+        Parameters
+        ----------
+
+        func: function [partition-per-arg] -> partition
+            Function to operate on each partition
+        aggfunc: function concatenated-partition -> partition
+            Function to operate on the concatenated result of func. Defaults to
+            same as ``func`` if not specified.
+        func_kwargs: dict of keyword, value pairs
+            Keyword arguments to pass on to func
+        aggfunc_kwargs: dict of keyword, value pairs
+            Keyword arguments to pass on to aggfunc
+
+        Examples
+        --------
+
+        Minimum value of every column:
+
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> df_pd = pd.DataFrame({'v1': [1, 3, 5, 7], 'v2': [987, 78, 13, 99]})
+        >>> df = dd.from_pandas(df_pd, npartitions=2)
+        >>> df.apply_concat_apply(lambda x: x.min()).compute()
+        v1     1
+        v2    13
+        dtype: int64
+
+        Minimum of every partition, maximum of each partition minimum:
+
+        >>> df.apply_concat_apply(
+        ...     lambda x: x.min(),  aggfunc=lambda x: x.max()).compute()
+        v1     5
+        v2    78
+        dtype: int64
+
+        See Also
+        --------
+
+        dask.DataFrame.min
+        dask.DataFrame.max
+        """
+        return super(DataFrame, self).apply_concat_apply(
+            func, aggfunc=aggfunc, func_kwargs=func_kwargs,
+            aggfunc_kwargs=aggfunc_kwargs)
+
     @derived_from(pd.DataFrame)
     def drop(self, labels, axis=0):
         if axis != 1:
@@ -2070,7 +2182,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
         dsk = dict(((a, i), (apply, chunk, [(x._name, i)
                                             if isinstance(x, _Frame)
                                             else x for x in args],
-                                    kwargs))
+                                    chunk_kwargs))
                for i in range(args[0].npartitions))
 
     b = '{0}--second-{1}'.format(token, token_key)

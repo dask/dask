@@ -1335,6 +1335,39 @@ def test_deterministic_apply_concat_apply_names():
             sorted(aca(a.x, f, f, a.x.name).dask))
 
 
+def test_dataframe_apply_concat_apply():
+    df_pd = pd.DataFrame({'v1': [1, 3, 5, 7], 'v2': [987, 78, 13, 99]})
+    df = dd.from_pandas(df_pd, npartitions=2)
+    minimum = df.apply_concat_apply(lambda x: x.min()).compute()
+    expected = pd.Series({'v1': 1, 'v2': 13})
+    eq(minimum, expected)
+
+    min_max = df.apply_concat_apply(
+        lambda x: x.min(),  aggfunc=lambda x: x.max()).compute()
+    expected = pd.Series({'v1': 5, 'v2': 78})
+    eq(min_max, expected)
+
+
+def test_series_apply_concat_apply():
+    df_pd = pd.DataFrame({'val': range(500)})
+    df = dd.from_pandas(df_pd, npartitions=4)
+    count = df['val'].apply_concat_apply(lambda x: x.count(),
+                                         aggfunc=lambda x: x.sum()).compute()
+    assert count == len(df_pd)
+
+    # extra func_kwargs and aggfunc_kwargs
+    def count_extra(series, extra=0):
+        return series.count() + extra
+
+    def sum_times(series, times=1):
+        return series.sum() * times
+
+    count = df['val'].apply_concat_apply(
+        count_extra, aggfunc=sum_times, func_kwargs={'extra': 1},
+        aggfunc_kwargs={'times': 10}).compute()
+    assert count == (len(df_pd) + 4) * 10
+
+
 def test_gh_517():
     arr = np.random.randn(100, 2)
     df = pd.DataFrame(arr, columns=['a', 'b'])
