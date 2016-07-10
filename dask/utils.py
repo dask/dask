@@ -21,6 +21,7 @@ except ImportError: # fallback to Python 2.x
     from urlparse import urlsplit
 
 from .compatibility import long, getargspec, BZ2File, GzipFile, LZMAFile
+from .core import get_deps
 
 
 system_encoding = getdefaultencoding()
@@ -718,3 +719,19 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         inferred_storage_options.update(inherit_storage_options)
 
     return inferred_storage_options
+
+
+def dependency_depth(dsk):
+    import toolz
+
+    deps, _ = get_deps(dsk)
+
+    @toolz.memoize
+    def max_depth_by_deps(key):
+        if not deps[key]:
+            return 1
+
+        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
+        return d
+
+    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
