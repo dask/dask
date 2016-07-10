@@ -217,7 +217,7 @@ and API documentation.
 To build the documentation locally, first install requirements::
 
    cd docs/
-   pip install -r requirements_docs.txt
+   pip install -r requirements-docs.txt
 
 Then build documentation with ``make``::
 
