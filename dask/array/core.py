@@ -2668,15 +2668,36 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     Follows the signature of numpy.histogram exactly with the following
     exceptions:
 
-    - either the ``bins`` or ``range`` argument is required as computing
-      ``min`` and ``max`` over blocked arrays is an expensive operation
-      that must be performed explicitly.
+    - Either an iterable specifying the ``bins`` or the number of ``bins``
+      and a ``range`` argument is required as computing ``min`` and ``max``
+      over blocked arrays is an expensive operation that must be performed
+      explicitly.
 
     - ``weights`` must be a dask.array.Array with the same block structure
-       as ``a``.
+      as ``a``.
 
-    Original signature follows below.
-    """ + np.histogram.__doc__
+    Examples
+    --------
+    Using number of bins and range:
+
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> x = da.from_array(np.arange(10000), chunks=10)
+    >>> h, bins = da.histogram(x, bins=10, range=[0, 10000])
+    >>> bins
+    array([     0.,   1000.,   2000.,   3000.,   4000.,   5000.,   6000.,
+             7000.,   8000.,   9000.,  10000.])
+    >>> h.compute()
+    array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
+
+    Explicitly specifying the bins:
+
+    >>> h, bins = da.histogram(x, bins=np.array([0, 5000, 10000]))
+    >>> bins
+    array([    0,  5000, 10000])
+    >>> h.compute()
+    array([5000, 5000])
+    """
     if bins is None or (range is None and bins is None):
         raise ValueError('dask.array.histogram requires either bins '
                          'or bins and range to be defined.')
