@@ -406,7 +406,10 @@ def _link(token, result):
     """
     return None
 
-
+## it would be great to have to_bcolz function that could improve write performance (wrt to_hdf)
+#def to_bcolz(df, filename, **kwargs):
+#    ...
+    
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""
 
