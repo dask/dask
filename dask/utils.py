@@ -690,6 +690,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
+    if ':\\' in urlpath:
+        return {'protocol': 'file',
+                'path': urlpath}
+
     parsed_path = urlsplit(urlpath)
 
     inferred_storage_options = {
