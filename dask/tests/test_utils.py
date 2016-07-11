@@ -150,3 +150,8 @@ def test_infer_storage_options():
         infer_storage_options('file:///bucket/file.csv', {'path': 'collide'})
     with pytest.raises(KeyError):
         infer_storage_options('hdfs:///bucket/file.csv', {'protocol': 'collide'})
+
+
+def test_infer_storage_options_c():
+    so = infer_storage_options(r'c:\foo\bar')
+    assert so['protocol'] == 'file'
