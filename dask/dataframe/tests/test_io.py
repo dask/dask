@@ -6,6 +6,7 @@ import sys
 import os
 import dask
 import pytest
+from distutils.version import LooseVersion
 from threading import Lock
 import shutil
 from time import sleep
@@ -14,6 +15,7 @@ import threading
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
+from dask.delayed import Delayed
 
 from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
 from dask.async import get_sync
@@ -602,9 +604,11 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_to_castra():
     pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -630,16 +634,28 @@ def test_to_castra():
     finally:
         c.drop()
 
-    dsk, keys = a.to_castra(compute=False)
-    assert isinstance(dsk, dict)
-    assert isinstance(keys, list)
-    c, last = keys
-    assert last[1] == a.npartitions - 1
+    delayed = a.to_castra(compute=False)
+    assert isinstance(delayed, Delayed)
+    c = delayed.compute()
+    try:
+        tm.assert_frame_equal(c[:], df)
+    finally:
+        c.drop()
 
+    # make sure compute=False preserves the same interface
+    c1 = a.to_castra(compute=True)
+    c2 = a.to_castra(compute=False).compute()
+    try:
+        tm.assert_frame_equal(c1[:], c2[:])
+    finally:
+        c1.drop()
+        c2.drop()
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
     pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -659,13 +675,15 @@ def test_from_castra():
         del with_fn, c
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra_with_selection():
     """ Optimizations fuse getitems with load_partitions
 
     We used to use getitem for both column access and selections
     """
     pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -1160,7 +1178,7 @@ def test_to_csv_multiple_files_cornercases():
             a.to_csv(fn, mode='a')
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
+@pytest.mark.xfail(reason="to_csv does not support compression")
 def test_to_csv_gzip():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
