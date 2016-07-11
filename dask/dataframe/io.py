@@ -406,6 +406,7 @@ def _link(token, result):
     """
     return None
 
+## it would be great to have to_bcolz function that could improve write performance (wrt to_hdf)
 #def to_bcolz(df, filename, **kwargs):
 #    ...
     
