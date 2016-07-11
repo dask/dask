@@ -1,11 +1,11 @@
 tornado >= 4.2
-toolz
+toolz >= 0.7.4
 msgpack-python
 cloudpickle >= 0.2.1
 dask >= 0.10.0
 click
 boto3
-s3fs
+s3fs >= 0.0.6
 locket
 six
 tblib
