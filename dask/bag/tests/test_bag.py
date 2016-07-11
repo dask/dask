@@ -983,3 +983,7 @@ def test_reduction_empty():
     b = db.from_sequence(range(10), npartitions=100)
     assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
+
+
+def test_empty():
+    list(db.from_sequence([])) == []

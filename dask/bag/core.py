@@ -202,6 +202,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
 
 def finalize(results):
+    if not results:
+        return results
     if isinstance(results, Iterator):
         results = list(results)
     if isinstance(results[0], Iterable) and not isinstance(results[0], str):
