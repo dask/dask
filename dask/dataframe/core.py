@@ -540,9 +540,120 @@ class _Frame(Base):
         return self._constructor(merge(self.dask, dsk), name,
                                  self._pd, self.divisions)
 
-    @derived_from(pd.DataFrame)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
                complib=None, fletcher32=False, get=None, **kwargs):
+        """ Export frame to hdf file(s)
+
+        Export dataframe to one or multiple hdf5 files or nodes.
+
+	By providing a single asterisk in either the path_or_buf or key
+	parameters you direct dask to save each partition to a different file
+	or node (respectively). The asterisk will be replaced with a zero
+	padded partition number, as this is the default implementation of
+	name_function.
+
+	When writing to a single hdf node in a single hdf file, all hdf save
+	tasks are required to execute in a specific order, often becoming the
+	bottleneck of the entire execution graph. Saving to multiple nodes or
+	files removes that restriction (order is still preserved by enforcing
+	order on output, using name_function) and enables executing save tasks
+	in parallel.
+
+        Parameters
+        ----------
+        path_or_buf: HDFStore object or string
+	    Destination file(s). If string, can contain a single asterisk to
+	    save each partition to a different file. Only one asterisk is
+	    allowed in both path_or_buf and key parameters.
+        key: string
+	    A node / group path in file, can contain a single asterisk to save
+	    each partition to a different hdf node in a single file. Only one
+	    asterisk is allowed in both path_or_buf and key parameters.
+        mode: optional, {'a', 'w', 'r+'}, default 'a'
+
+          ``'a'``
+              Append: Add data to existing file(s) or create new.
+          ``'w'``
+              Write: overwrite any existing files with new ones.
+          ``'r+'``
+              Append to existing files, files must already exist.
+        append: optional, default False
+	    If False, overwrites existing node with the same name otherwise
+	    appends to it.
+        complevel: optional, 0-9, default 0
+            compression level, higher means better compression ratio and
+            possibly more CPU time. Depends on complib.
+        complib: {'zlib', 'bzip2', 'lzo', 'blosc', None}, default None
+	    If complevel > 0 compress using this compression library when
+	    possible
+        fletcher32: bool, default False
+	    If True and compression is used, additionally apply the fletcher32
+	    checksum.
+        get: callable, optional
+	    A scheduler `get` function to use. If not provided, the default is
+	    to check the global settings first, and then fall back to defaults
+	    for the collections.
+        dask_kwargs: dict, optional
+	    A dictionary of keyword arguments passed to the `get` function
+	    used.
+        name_function: callable, optional, default None
+	    A callable called for each partition that accepts a single int
+	    representing the partition number. name_function must return a
+	    string representation of a partition's index in a way that will
+	    preserve the partition's location after a string sort.
+
+	    If None, a default name_function is used. The default name_function
+	    will return a zero padded string of received int. See
+	    dask.utils.build_name_function for more info.
+        compute: bool, default True
+            If True, execute computation of resulting dask graph.
+            If False, return a Delayed object.
+        lock: bool, None or lock object, default None
+	    In to_hdf locks are needed for two reasons. First, to protect
+	    against writing to the same file from multiple processes or threads
+	    simultaneously.  Second, default libhdf5 is not thread safe, so we
+	    must additionally lock on it's usage. By default if lock is None
+	    lock will be determined optimally based on path_or_buf, key and the
+	    scheduler used. Manually setting this parameter is usually not
+	    required to improve performance.
+
+	    Alternatively, you can specify specific values:
+	    If False, no locking will occur. If True, default lock object will
+	    be created (multiprocessing.Manager.Lock on multiprocessing
+	    scheduler, Threading.Lock otherwise), This can be used to force
+	    using a lock in scenarios the default behavior will be to avoid
+	    locking. Else, value is assumed to implement the lock interface,
+	    and will be the lock object used.
+
+        See Also
+        --------
+            dask.DataFrame.read_hdf: reading hdf files
+            dask.Series.read_hdf: reading hdf files
+
+        Examples
+        --------
+        Saving data to a single file:
+
+        >>> df.to_hdf('output.hdf', '/data')            # doctest: +SKIP
+
+        Saving data to multiple nodes:
+
+        >>> with pd.HDFStore('output.hdf') as fh:
+        ...     df.to_hdf(fh, '/data*')
+        ...     fh.keys()                               # doctest: +SKIP
+        ['/data0', '/data1']
+
+        Or multiple files:
+
+        >>> df.to_hdf('output_*.hdf', '/data')          # doctest: +SKIP
+
+	Saving multiple files with the multiprocessing scheduler and manually
+	disabling locks:
+
+        >>> df.to_hdf('output_*.hdf', '/data',
+        ...   get=dask.multiprocessing.get, lock=False) # doctest: +SKIP
+        """
+
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, get=get, **kwargs)
