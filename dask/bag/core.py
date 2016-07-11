@@ -689,7 +689,7 @@ class Bag(Base):
             split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
-        dsk = dict(((a, i), (perpartition, (self.name, i)))
+        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
@@ -697,7 +697,9 @@ class Bag(Base):
         depth = 0
         while k > 1:
             c = fmt + str(depth)
-            dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
+            dsk2 = dict(((c, i), (empty_safe_aggregate,
+                                   aggregate,
+                                   [(b, j) for j in inds]))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -1617,3 +1619,16 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name,
                          npartitions)
+
+
+def empty_safe_apply(func, part):
+    part = list(part)
+    if part:
+        return func(part)
+    else:
+        return '--no-result--'
+
+
+def empty_safe_aggregate(func, parts):
+    parts2 = [p for p in parts if p != '--no-result--']
+    return empty_safe_apply(func, parts2)
