@@ -406,7 +406,9 @@ def _link(token, result):
     """
     return None
 
-
+#def to_bcolz(df, filename, **kwargs):
+#    ...
+    
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""
 
