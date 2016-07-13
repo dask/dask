@@ -17,7 +17,8 @@ from distributed.diagnostics.progress_stream import progress_quads
 from distributed.utils import log_errors
 import distributed.bokeh
 
-SIZING_MODE = 'stretch_both'
+SIZING_MODE = 'scale_width'
+WIDTH = 600
 
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
@@ -45,7 +46,7 @@ doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 
 
 resource_index = [0]
-resource_source, resource_plot, network_plot, combo_toolbar = resource_profile_plot(sizing_mode=SIZING_MODE)
+resource_source, resource_plot, network_plot, combo_toolbar = resource_profile_plot(sizing_mode=SIZING_MODE, width=WIDTH, height=80)
 def resource_update():
     with log_errors():
         index = messages['workers']['index']
@@ -66,7 +67,8 @@ def resource_update():
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
 
-progress_source, progress_plot = progress_plot()
+progress_source, progress_plot = progress_plot(sizing_mode=SIZING_MODE,
+        width=WIDTH, height=300)
 def progress_update():
     with log_errors():
         msg = messages['progress']
@@ -80,7 +82,8 @@ doc.add_periodic_callback(progress_update, 50)
 
 
 task_stream_index = [0]
-task_stream_source, task_stream_plot = task_stream_plot()
+task_stream_source, task_stream_plot = task_stream_plot(
+        sizing_mode=SIZING_MODE, width=WIDTH, height=300)
 def task_stream_update():
     with log_errors():
         index = messages['task-events']['index']

@@ -21,7 +21,7 @@
       }
       .header {
         width: 100%;
-        height: 10%;
+        height: 5%;
         position: relative;
       }
       .header h1 {
@@ -39,14 +39,14 @@
         max-width: 60%;
       }
       .header img {
-        height: 100px;
+        height: 50px;
         position: absolute;
         top: 0;
         right: 0;
         z-index: 1000;
       }
       .bk-root .bk-toolbar-box .bk-toolbar-right {
-        top: 28px;
+        top: 4px;
         right: 4px;
       }
     </style>
@@ -54,8 +54,15 @@
   <body>
     <div class="header">
       <img src="http://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg">
-      <h1>Dask - Status dashboard</h1>
-      <p>Welcome to the dask dashboard. Click <a href="/tasks">here</a> to see the tasks detail.</p>
+      <p>
+        Dask
+        --
+        <a href="https://dask.pydata.org/en/latest/">Documentation</a>
+        --
+        <a href="https://distributed.readthedocs.org/en/latest/">Scheduler Docs</a>
+        --
+        <a href="/tasks">Tasks view</a>
+      </p>
     </div>
     <div class="dashboard">
       {{ plot_div }}

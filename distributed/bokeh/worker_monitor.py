@@ -11,7 +11,7 @@ with ignoring(ImportError):
     from bokeh.models import (
         ColumnDataSource, DataRange1d, Range1d, NumeralTickFormatter, ToolbarBox,
     )
-    from bokeh.palettes import Spectral9
+    from bokeh.palettes import Spectral9, Viridis4
     from bokeh.plotting import figure
 
 
@@ -27,7 +27,7 @@ def _format_resource_profile_plot(plot):
     return plot
 
 
-def resource_profile_plot(sizing_mode='fixed'):
+def resource_profile_plot(sizing_mode='fixed', **kwargs):
     names = ['time', 'cpu', 'memory-percent', 'network-send', 'network-recv']
     source = ColumnDataSource({k: [] for k in names})
 
@@ -38,22 +38,31 @@ def resource_profile_plot(sizing_mode='fixed'):
         x_axis_type='datetime',
         x_range=DataRange1d(follow='end', follow_interval=30000, range_padding=0)
     )
+    plot_props.update(kwargs)
     line_props = dict(x='time', line_width=2, line_alpha=0.8, source=source)
 
     y_range = Range1d(0, 1)
 
-    p1 = figure(title="Resource usage (%)", y_range=y_range, **plot_props)
-    p1.line(y='memory-percent', color=Spectral9[7], legend='Memory', **line_props)
-    p1.line(y='cpu', color=Spectral9[0], legend='CPU', **line_props)
+    p1 = figure(title=None, y_range=y_range, **plot_props)
+    p1.line(y='memory-percent', color="#33a02c", legend='Memory', **line_props)
+    p1.line(y='cpu', color="#1f78b4", legend='CPU', **line_props)
     p1 = _format_resource_profile_plot(p1)
     p1.yaxis.bounds = (0, 100)
     p1.yaxis.formatter = NumeralTickFormatter(format="0 %")
+    p1.xaxis.visible = None
+    p1.min_border_bottom = 10
 
     y_range = DataRange1d(start=0)
-    p2 = figure(title="Throughput (MB/s)", y_range=y_range, **plot_props)
-    p2.line(y='network-send', color=Spectral9[2], legend='Network Send', **line_props)
-    p2.line(y='network-recv', color=Spectral9[3], legend='Network Recv', **line_props)
+    p2 = figure(title=None, y_range=y_range, **plot_props)
+    p2.line(y='network-send', color="#a6cee3", legend='Network Send', **line_props)
+    p2.line(y='network-recv', color="#b2df8a", legend='Network Recv', **line_props)
     p2 = _format_resource_profile_plot(p2)
+    p2.yaxis.axis_label = "MB/s"
+
+    from bokeh.models import DatetimeAxis
+    for r in list(p1.renderers):
+        if isinstance(r, DatetimeAxis):
+            p1.renderers.remove(r)
 
     all_tools = p1.toolbar.tools + p2.toolbar.tools
     combo_toolbar = ToolbarBox(

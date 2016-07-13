@@ -13,7 +13,7 @@ from ..executor import default_executor
 from ..scheduler import Scheduler
 
 try:
-    from bokeh.palettes import Spectral11, Spectral9
+    from bokeh.palettes import Spectral11, Spectral9, viridis
     from bokeh.models import ColumnDataSource, DataRange1d, HoverTool, Range1d
     from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import vplot, output_notebook, show, figure
@@ -169,15 +169,16 @@ def task_stream_plot(sizing_mode='scale_width', **kwargs):
         sizing_mode=sizing_mode, x_range=x_range, **kwargs
     )
     fig.rect(
-        x='start', y='y', width='duration', height=0.9,
-        fill_color='color', line_color='gray', alpha='alpha',
-        source=source
+        x='start', y='y', width='duration', height=0.8,
+        fill_color='color', line_color='color', line_alpha=0.6, alpha='alpha',
+        line_width=3, source=source
     )
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
     fig.ygrid.grid_line_alpha = 0.4
     fig.xgrid.grid_line_color = None
     fig.min_border_right = 35
+    fig.yaxis[0].ticker.num_minor_ticks = 0
 
     hover = HoverTool()
     fig.add_tools(hover)
@@ -197,6 +198,11 @@ def task_stream_plot(sizing_mode='scale_width', **kwargs):
     return source, fig
 
 
+
+import random
+task_stream_palette = list(viridis(25))
+random.shuffle(task_stream_palette)
+
 import itertools
 counter = itertools.count()
 @memoize
@@ -204,7 +210,7 @@ def incrementing_index(o):
     return next(counter)
 
 
-def task_stream_append(lists, msg, workers, palette=Spectral11):
+def task_stream_append(lists, msg, workers, palette=task_stream_palette):
     start, stop = msg['compute_start'], msg['compute_stop']
     lists['start'].append((start + stop) / 2 * 1000)
     lists['duration'].append(1000 * (stop - start))
