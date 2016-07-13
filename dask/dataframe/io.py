@@ -14,6 +14,7 @@ from warnings import warn
 import pandas as pd
 import numpy as np
 import dask
+import bcolz
 from toolz import merge
 
 from ..base import tokenize
@@ -406,9 +407,6 @@ def _link(token, result):
     """
     return None
 
-## it would be great to have to_bcolz function that could improve write performance (wrt to_hdf)
-#def to_bcolz(df, filename, **kwargs):
-#    ...
     
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""
@@ -423,6 +421,65 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
 
     return None
 
+
+def _pd_to_bcolz(pd_to_bcolz, lock, args, kwargs=None):
+    if lock:
+        lock.acquire()
+    try:    
+        if kwargs['mode']=='w':
+            pd_to_bcolz(args[0], rootdir=args[1], mode='w') # add expectedlen=outfile_Nrows
+        else: 
+            import_ct = bcolz.ctable(rootdir=args[1], mode='a')
+            temp_ct = bcolz.ctable.fromdataframe(args[0])
+            import_ct.append(temp_ct)
+    finally:
+        if lock:
+            lock.release()
+    
+    return None
+
+
+def to_bcolz(df, outfile):
+    name = 'to-bcolz-' + uuid.uuid1().hex
+    pd_to_bcolz = bcolz.ctable.fromdataframe 
+    
+    kwargs={'mode':'w'}
+    dask_kwargs={}
+    lock=False
+    compute=True
+    name_function=None
+    
+    fmt_obj = lambda outfile, _: outfile
+    if name_function is None: name_function = build_name_function(df.npartitions - 1)
+    i_name = name_function(0)
+
+
+    dsk = dict()
+    dsk[(name, 0)] = (_pd_to_bcolz, pd_to_bcolz, 
+                      lock,
+                      [(df._name, 0), fmt_obj(outfile, i_name)],
+                      kwargs)
+
+
+    kwargs2 = kwargs.copy()
+    kwargs2['mode'] = 'a'
+    for i in range(1, df.npartitions):
+        i_name = name_function(i)
+        task = (_pd_to_bcolz, pd_to_bcolz, lock,
+                [(df._name, i), fmt_obj(outfile, i_name)], kwargs2)
+    
+        link_dep = i - 1
+        task = (_link, (name, link_dep), task)
+        dsk[(name, i)] = task
+
+    dsk = merge(df.dask, dsk)
+    keys = [(name, df.npartitions - 1)]
+
+    if compute:
+        return DataFrame._get(dsk, keys, get=dask.get, **dask_kwargs)
+    else:
+        return delayed([Delayed(key, [dsk]) for key in keys])
+    
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
@@ -483,6 +540,10 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                    'mode': mode, 'append': append})
     dsk = dict()
 
+    kwargs.update({'format': 'table', 'complevel': complevel,
+                   'complib': complib, 'fletcher32': fletcher32,
+                   'mode': mode, 'append': append})
+
     i_name = name_function(0)
     dsk[(name, 0)] = (_pd_to_hdf, pd_to_hdf, lock,
                       [(df._name, 0), fmt_obj(path_or_buf, i_name),
@@ -493,7 +554,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
         kwargs2['mode'] = 'a'
     if single_node:
         kwargs2['append'] = True
-
+    
     for i in range(1, df.npartitions):
         i_name = name_function(i)
         task = (_pd_to_hdf, pd_to_hdf, lock,
@@ -503,7 +564,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             link_dep = i - 1 if single_node else 0
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
-
+    
+    print ('dsk = ', dsk)
     dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]
