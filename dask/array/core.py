@@ -2660,6 +2660,10 @@ def bincount(x, weights=None, minlength=None):
 
     return Array(dsk, name, chunks, dtype)
 
+@wraps(np.digitize)
+def digitize(a, bins, right=False):
+    func = partial(np.digitize, bins=bins, right=right)
+    return elemwise(func, a)
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """

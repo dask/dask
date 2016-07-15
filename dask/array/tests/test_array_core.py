@@ -1373,6 +1373,15 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
     else:
         assert False
 
+def test_digitize():
+    x = np.array([2, 4, 5, 6, 1])
+    d = da.from_array(x, chunks=2)
+    bins = np.array([1, 2, 3, 4, 5])
+    e = da.digitize(d, bins, right=False)
+    assert_eq(e, np.digitize(x, bins, right=False))
+
+    e = da.digitize(d, bins, right=True)
+    assert_eq(e, np.digitize(x, bins, right=True))
 
 def test_histogram():
     # Test for normal, flattened input
