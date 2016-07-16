@@ -1460,8 +1460,8 @@ class Scheduler(Server):
 
         Operates in place
         """
-        if 'time-delay' in self.host_info[worker]:
-            delay = self.host_info[worker]['time-delay']
+        if 'time-delay' in self.worker_info[worker]:
+            delay = self.worker_info[worker]['time-delay']
             for key in ['transfer_start', 'transfer_stop', 'time',
                         'compute_start', 'compute_stop']:
                 if key in msg:
@@ -1490,7 +1490,7 @@ class Scheduler(Server):
                         if msg == 'OK':  # from close
                             break
 
-                        self.correct_time_delay(ip, msg)
+                        self.correct_time_delay(ident, msg)
 
                         if msg['status'] == 'OK':
                             self.mark_task_finished(worker=ident, **msg)
