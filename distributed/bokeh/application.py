@@ -8,6 +8,7 @@ import sys
 
 import bokeh
 import distributed.bokeh
+from ..utils import ignoring
 
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
@@ -24,13 +25,18 @@ class BokehWebInterface(object):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
 
-        hosts = ['%s:%d' % (h, bokeh_port) for h in
-                 ['localhost',
-                  '127.0.0.1',
-                  ip, socket.gethostbyname(ip),
-                  socket.gethostname(),
-                  socket.gethostbyname(socket.gethostname()),
-                  host] + list(map(str, bokeh_whitelist))]
+        hosts = ['localhost',
+                 '127.0.0.1',
+                 ip,
+                 host] + list(map(str, bokeh_whitelist))
+        with ignoring(Exception):
+            hosts.append(socket.gethostbyname(ip))
+        with ignoring(Exception):
+            hosts.append(socket.gethostbyname(socket.gethostname()))
+
+        hosts = ['%s:%d' % (h, bokeh_port) for h in hosts]
+
+        hosts.append("*")
 
         args = ([binname, 'serve'] + paths +
                 ['--log-level', 'warning',
