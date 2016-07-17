@@ -90,13 +90,7 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
     shuffle
     partd
     """
-    if method is None:
-        get = _globals.get('get')
-        if (isinstance(get, types.MethodType) and
-            'distributed' in get.__func__.__module__):
-            method = 'tasks'
-        else:
-            method = 'disk'
+    method = method or shuffle_method()
 
     if method == 'disk':
         return set_partition_disk(df, index, divisions, compute=compute,
@@ -106,6 +100,15 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
                 max_branch=max_branch, drop=drop)
     else:
         raise NotImplementedError("Unknown method %s" % method)
+
+
+def shuffle_method():
+    get = _globals.get('get')
+    if (isinstance(get, types.MethodType) and
+        'distributed' in get.__func__.__module__):
+        return 'tasks'
+    else:
+        return 'disk'
 
 
 def barrier(args):

@@ -2319,7 +2319,9 @@ def map_partitions(func, metadata, *args, **kwargs):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
         values = (apply, func, (tuple, values), kwargs)
-        dsk[(name, i)] = (_rename, columns, values)
+        if columns is not None:
+            values = (_rename, columns, values)
+        dsk[(name, i)] = values
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
     return return_type(merge(dsk, *dasks), name, metadata, args[0].divisions)

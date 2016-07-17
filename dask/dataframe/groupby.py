@@ -335,8 +335,9 @@ class _GroupBy(object):
             dummy = columns
             columns = self._slice
 
-        if isinstance(self.index, Series):
-            if self.index._name == self.obj.index._name:
+        if not isinstance(self.index, (DataFrame, list, pd.Index)):
+            if (isinstance(self.index, Series) and
+                self.index._name == self.obj.index._name):
                 df = self.obj
             else:
                 df = self.obj.set_index(self.index, drop=False,
@@ -346,7 +347,10 @@ class _GroupBy(object):
                                   df, columns, func)
 
         else:
-            from .shuffle import shuffle
+            from .shuffle import shuffle_method, shuffle
+            if shuffle_method() == 'tasks':
+                raise NotImplementedError(
+                "Can only groupby-apply on single-column grouper")
             df = shuffle(self.obj, self.index, **self.kwargs)
             return map_partitions(_groupby_apply_index, dummy,
                                   df, self.index, columns, func)
