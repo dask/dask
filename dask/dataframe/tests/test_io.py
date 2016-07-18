@@ -1506,3 +1506,12 @@ def test_from_pandas_small():
             s = pd.Series([0] * i, name='x')
             ds = dd.from_pandas(s, npartitions=5, sort=sort)
             eq(s, ds)
+
+def test_to_bcolz():
+    n = 100
+    ddf = dd.from_pandas(pd.DataFrame(np.array([np.zeros(n), np.zeros(n)]).T,
+                         columns=['a', 'b']), npartitions=2)
+    ddf.to_bcolz('tmp.bcolz', compute=True)
+
+    eq(ddf.compute(), dd.from_bcolz('tmp.bcolz').compute(), check_names=True)
+    shutil.rmtree('tmp.bcolz')
