@@ -924,6 +924,18 @@ def test_to_csv_series():
             assert adata == sdata
 
 
+def test_to_csv_simple():
+    df0 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir = str(dir)
+        df.to_csv(dir)
+        assert os.listdir(dir)
+        result = dd.read_csv(dir+'/*').compute()
+    assert (result.x == df0.x).all()
+
+
 def test_read_csv_with_nrows():
     with filetext(text) as fn:
         f = dd.read_csv(fn, nrows=3)

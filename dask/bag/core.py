@@ -40,6 +40,8 @@ from ..utils import (infer_compression, open, system_encoding,
                      takes_multiple_arguments, funcname, digit, insert,
                      build_name_function, different_seeds)
 from ..delayed import Delayed, delayed
+from ..bytes.core import write_bytes
+
 
 no_default = '__no__default__'
 
@@ -159,46 +161,12 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    if isinstance(path, (str, unicode)):
-        if name_function is None:
-            name_function = build_name_function(b.npartitions - 1)
-
-        if not '*' in path:
-            path = os.path.join(path, '*.part')
-
-        formatted_names = [name_function(i) for i in range(b.npartitions)]
-        if formatted_names != sorted(formatted_names):
-            warn("In order to preserve order between partitions "
-                 "name_function must preserve the order of its input")
-
-        paths = [path.replace('*', name_function(i))
-                 for i in range(b.npartitions)]
-    elif isinstance(path, (tuple, list, set)):
-        assert len(path) == b.npartitions
-        paths = path
-    else:
-        raise ValueError("""Path should be either"
-1.  A list of paths -- ['foo.json', 'bar.json', ...]
-2.  A directory -- 'foo/
-3.  A path with a * in it -- 'foo.*.json'""")
-
-    def get_compression(path, compression=compression):
-        if compression == 'infer':
-            compression = infer_compression(path)
-        return compression
-
-    name = 'to-textfiles-' + uuid.uuid4().hex
-    dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
-                            encoding))
-               for i, path in enumerate(paths))
-
-    dsk = merge(b.dask, dsk)
+    b = b.map(lambda x: x.encode(encoding))
+    out = write_bytes(b, path, name_function, compression, lazy=not compute)
     if compute:
-        result = Bag(dsk, name, b.npartitions)
-        result.compute()
+        return from_sequence(out)
     else:
-        keys = [(name, i) for i in range(b.npartitions)]
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return from_delayed(out)
 
 
 def finalize(results):

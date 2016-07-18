@@ -1,14 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
 import io
+import os
 
 from toolz import merge
+from warnings import warn
 
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
-from ..compatibility import PY2
+from ..compatibility import PY2, unicode
 from ..delayed import delayed
-from ..utils import infer_storage_options, system_encoding
+from ..utils import (infer_storage_options, system_encoding,
+                     build_name_function, infer_compression)
 
 delayed = delayed(pure=True)
 
@@ -18,9 +21,11 @@ _read_bytes = dict()
 _write_bytes = dict()
 _open_files = dict()
 _open_text_files = dict()
+_write_files = dict()
 
 
-def write_bytes(values, urlpath, compression=None, **kwargs):
+def write_bytes(values, urlpath, name_function=None, compression=None,
+                lazy=False, **kwargs):
     """For a list of values which evaluate to byte, produce delayed values
     which, when executed, result in writing to files.
 
@@ -32,9 +37,14 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
 
     Parameters
     ----------
+    values: list of Values or dask collection
+        the data to be written
     urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), which may be a template (include `{}`).
+        Absolute or relative filepaths, URLs (may include protocols like
+        ``s3://``); may be globstring (include `*`).
+    name_function: function or None
+        If using a globstring, this provides the conversion from part number
+        to test to replace `*` with.
     compression: string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     **kwargs: dict
@@ -43,17 +53,38 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
 
     Examples
     --------
-    >>> values = write_bytes('s3://bucket/part-{}.csv')  # doctest: +SKIP
+    >>> values = write_bytes(vals, 's3://bucket/part-*.csv')  # doctest: +SKIP
 
     Returns
     -------
     list of ``dask.Delayed`` objects
     """
+    if hasattr(values, 'to_delayed'):
+        # bag, array or dataframe collection
+        # TODO: better as an isinstance ?
+        values = list(values.to_delayed())
+    if isinstance(urlpath, (tuple, list, set)):
+        storage_options = infer_storage_options(urlpath[0],
+                inherit_storage_options=kwargs)
+        del storage_options['path']
+        paths = [infer_storage_options(u, inherit_storage_options=kwargs)['path']
+                 for u in urlpath]
+    elif isinstance(urlpath, (str, unicode)):
+        storage_options = infer_storage_options(urlpath,
+                                            inherit_storage_options=kwargs)
+        path = storage_options.pop('path')
+        paths = _expand_paths(path, name_function, len(values))
+    else:
+        raise ValueError('URL spec must be string or sequence of strings')
+    if compression == 'infer':
+        if isinstance(urlpath, (tuple, list, set)):
+            compression = infer_compression(urlpath[0])
+        else:
+            compression = infer_compression(urlpath)
     if compression is not None and compression not in compress_files:
         raise ValueError("Compression type %s not supported" % compression)
 
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
+
     protocol = storage_options.pop('protocol')
     ensure_protocol(protocol)
     try:
@@ -62,8 +93,12 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    return write_bytes(values, storage_options.pop('path'),
-                       compression=compression, **storage_options)
+    out = write_bytes(values, paths, compression=compression, **storage_options)
+    if lazy:
+        return out
+    else:
+        import dask
+        return dask.compute(*out)
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -194,6 +229,107 @@ def open_files(urlpath, compression=None, **kwargs):
 
     return open_files_by(open_files_backend, storage_options.pop('path'),
                          compression=compression, **storage_options)
+
+
+def _expand_paths(path, name_function, num):
+    if isinstance(path, (str, unicode)):
+        if path.count('*') > 1:
+            raise ValueError("Output path spec must contain at most one '*'.")
+        if name_function is None:
+            name_function = build_name_function(num - 1)
+
+        if num > 1:
+            if not '*' in path:
+                path = os.path.join(path, '*.part')
+
+            formatted_names = [name_function(i) for i in range(num)]
+            if formatted_names != sorted(formatted_names):
+                warn("In order to preserve order between partitions "
+                     "name_function must preserve the order of its input")
+
+            paths = [path.replace('*', name_function(i))
+                     for i in range(num)]
+        else:
+            paths = [path]
+    elif isinstance(path, (tuple, list, set)):
+        assert len(path) == num
+        paths = path
+    else:
+        raise ValueError("""Path should be either"
+1.  A list of paths -- ['foo.json', 'bar.json', ...]
+2.  A directory -- 'foo/
+3.  A path with a * in it -- 'foo.*.json'""")
+    return paths
+
+
+def write_files(nfiles, urlpath, name_function=None, compression=None,
+                lazy=False, mode='wb', **kwargs):
+    """ Given path return dask.delayed file-like objects for writing
+
+    Parameters
+    ----------
+    values: list/set of values or collection
+        things that return bytes to be written into files
+    urlpath: string
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), or globstring pointing to data output.
+    name_function: function (None)
+        Way to convert each part into an identifier, if using a url globstring,
+        default: dask.utils.build_name_function
+    compression: string (None)
+        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    lazy: bool (True)
+        whether to perform the write immediately, or return values which write
+        upon evaluation
+    **kwargs: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Examples
+    --------
+    >>> files = write_files('2015-*.csv')  # doctest: +SKIP
+    >>> files = open_files('s3://bucket/2015-*.csv.gz', compression='gzip')  # doctest: +SKIP
+
+    Returns
+    -------
+    List of ``dask.delayed`` objects that compute to file-like objects
+    """
+    if compression == 'infer':
+        if isinstance(urlpath, (tuple, list, set)):
+            compression = infer_compression(urlpath[0])
+        else:
+            compression = infer_compression(urlpath)
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+
+    storage_options = infer_storage_options(urlpath,
+                                            inherit_storage_options=kwargs)
+    paths = _expand_paths(urlpath, name_function, nfiles)
+
+    protocol = storage_options.pop('protocol')
+    ensure_protocol(protocol)
+    try:
+        open_files_backend = _write_files[protocol]
+    except KeyError:
+        raise NotImplementedError("Unknown protocol %s (%s)" %
+                                  (protocol, urlpath))
+
+    # backend file is always binary
+    mode2 = mode.replace('t', '').replace('b', '') + 'b'
+    files = open_files_backend(paths, mode=mode2, **kwargs)
+    if 'b' not in mode:
+        # wrap for text mode
+        files = [delayed(lambda f: io.TextIOWrapper(f, write_through=True))(f)
+                 for f in files]
+
+    if compression:
+        files = [delayed(compress_files[compression])(f) for f in files]
+
+    if lazy:
+        return files
+    else:
+        from dask import compute
+        return compute(*files)
 
 
 def open_text_files(urlpath, encoding=system_encoding, errors='strict',
