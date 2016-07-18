@@ -2662,6 +2662,7 @@ def bincount(x, weights=None, minlength=None):
 
 @wraps(np.digitize)
 def digitize(a, bins, right=False):
+    bins = np.asarray(bins)
     func = partial(np.digitize, bins=bins, right=right)
     return elemwise(func, a)
 
