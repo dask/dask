@@ -1513,5 +1513,5 @@ def test_to_bcolz():
                          columns=['a', 'b']), npartitions=2)
     ddf.to_bcolz('tmp.bcolz', compute=True)
 
-    eq(ddf.compute(), dd.from_bcolz('tmp.bcolz').compute(), check_names=True)
+    tm.assert_frame_equal(ddf.compute(), dd.from_bcolz('tmp.bcolz', chunksize=50).compute())
     shutil.rmtree('tmp.bcolz')
