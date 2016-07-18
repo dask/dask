@@ -685,7 +685,6 @@ def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
         with tmpdir() as dir:
-            os.makedirs(dir, exist_ok=True)
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
@@ -734,20 +733,11 @@ def test_to_textfiles_inputs():
     B = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     with tmpfile() as a:
         with tmpfile() as b:
-            try:
-                os.makedirs(os.path.split(a)[0])
-                os.makedirs(os.path.split(b)[0])
-            except:
-                pass
             B.to_textfiles([a, b])
             assert os.path.exists(a)
             assert os.path.exists(b)
 
     with tmpdir() as dirname:
-        try:
-            os.makedirs(dirname, exist_ok=True)
-        except:
-            pass
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
