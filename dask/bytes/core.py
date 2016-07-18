@@ -319,7 +319,7 @@ def write_files(nfiles, urlpath, name_function=None, compression=None,
     files = open_files_backend(paths, mode=mode2, **kwargs)
     if 'b' not in mode:
         # wrap for text mode
-        files = [delayed(lambda f: io.TextIOWrapper(f, write_through=True))(f)
+        files = [delayed(lambda f: io.TextIOWrapper(f))(f)
                  for f in files]
 
     if compression:

@@ -734,14 +734,20 @@ def test_to_textfiles_inputs():
     B = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     with tmpfile() as a:
         with tmpfile() as b:
-            os.makedirs(os.path.split(a)[0], exist_ok=True)
-            os.makedirs(os.path.split(b)[0], exist_ok=True)
+            try:
+                os.makedirs(os.path.split(a)[0])
+                os.makedirs(os.path.split(b)[0])
+            except:
+                pass
             B.to_textfiles([a, b])
             assert os.path.exists(a)
             assert os.path.exists(b)
 
     with tmpdir() as dirname:
-        os.makedirs(dirname, exist_ok=True)
+        try:
+            os.makedirs(dirname, exist_ok=True)
+        except:
+            pass
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))

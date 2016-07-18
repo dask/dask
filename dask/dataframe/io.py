@@ -648,7 +648,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     def func(df, f):
         df.to_csv(f, **kwargs)
         # NB: write_files produces open files - need closing to force write.
-        f.close()
+        f.flush()
     values = [delayed(func)(df, f) for (df, f) in zip(df.to_delayed(), files)]
 
     if compute:
