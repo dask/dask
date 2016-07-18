@@ -14,7 +14,6 @@ from warnings import warn
 import pandas as pd
 import numpy as np
 import dask
-import bcolz
 from toolz import merge
 
 from ..base import tokenize
@@ -406,7 +405,6 @@ def _link(token, result):
     don't explicitly pass around a shared resource
     """
     return None
-
     
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""
@@ -422,52 +420,32 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     return None
 
 
-def _pd_to_bcolz(pd_to_bcolz, lock, args, kwargs=None):
-    if lock:
-        lock.acquire()
-    try:    
-        if kwargs['mode']=='w':
-            pd_to_bcolz(args[0], rootdir=args[1], mode='w') # add expectedlen=outfile_Nrows
-        else: 
-            import_ct = bcolz.ctable(rootdir=args[1], mode='a')
-            temp_ct = bcolz.ctable.fromdataframe(args[0])
-            import_ct.append(temp_ct)
-    finally:
-        if lock:
-            lock.release()
-    
+def _pd_to_bcolz(pd_to_bcolz, ctable, ddf_block, outfile, kwargs=None):
+
+    if kwargs['mode']=='w':
+        pd_to_bcolz(ddf_block, rootdir=outfile, mode='w') # if worth, add expectedlen=outfile_Nrows
+    else: 
+        ctable(rootdir=outfile, mode='a').append(pd_to_bcolz(ddf_block))
+
     return None
 
 
-def to_bcolz(df, outfile):
-    name = 'to-bcolz-' + uuid.uuid1().hex
-    pd_to_bcolz = bcolz.ctable.fromdataframe 
-    
-    kwargs={'mode':'w'}
-    dask_kwargs={}
-    lock=False
-    compute=True
-    name_function=None
-    
-    fmt_obj = lambda outfile, _: outfile
-    if name_function is None: name_function = build_name_function(df.npartitions - 1)
-    i_name = name_function(0)
+def to_bcolz(df, outfile, compute=True):
 
+    from bcolz import ctable
+    name = 'to-bcolz-' + uuid.uuid1().hex
+    pd_to_bcolz = ctable.fromdataframe 
 
     dsk = dict()
-    dsk[(name, 0)] = (_pd_to_bcolz, pd_to_bcolz, 
-                      lock,
-                      [(df._name, 0), fmt_obj(outfile, i_name)],
-                      kwargs)
+    dsk[(name, 0)] = (_pd_to_bcolz, pd_to_bcolz, ctable, 
+                      (df._name, 0), outfile, 
+                      {'mode':'w'})
 
-
-    kwargs2 = kwargs.copy()
-    kwargs2['mode'] = 'a'
     for i in range(1, df.npartitions):
-        i_name = name_function(i)
-        task = (_pd_to_bcolz, pd_to_bcolz, lock,
-                [(df._name, i), fmt_obj(outfile, i_name)], kwargs2)
-    
+        task = (_pd_to_bcolz, pd_to_bcolz, ctable, 
+                (df._name, i), outfile,
+                {'mode':'a'})
+
         link_dep = i - 1
         task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
@@ -476,7 +454,7 @@ def to_bcolz(df, outfile):
     keys = [(name, df.npartitions - 1)]
 
     if compute:
-        return DataFrame._get(dsk, keys, get=dask.get, **dask_kwargs)
+        return DataFrame._get(dsk, keys, get=dask.async.get_sync) # run serially to protect against potential memory blowup
     else:
         return delayed([Delayed(key, [dsk]) for key in keys])
     
@@ -565,7 +543,6 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
     
-    print ('dsk = ', dsk)
     dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]

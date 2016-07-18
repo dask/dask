@@ -11,7 +11,6 @@ import warnings
 
 from toolz import merge, partial, first, partition, unique
 import pandas as pd
-import bcolz
 from pandas.util.decorators import cache_readonly
 import numpy as np
 
@@ -548,9 +547,9 @@ class _Frame(Base):
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, get=get, **kwargs)
 
-    def to_bcolz(self, outfile):
+    def to_bcolz(self, outfile, compute=True):
         from .io import to_bcolz
-        return to_bcolz(self, outfile)
+        return to_bcolz(self, outfile, compute=True)
 
     @derived_from(pd.DataFrame)
     def to_csv(self, filename, get=get_sync, **kwargs):
