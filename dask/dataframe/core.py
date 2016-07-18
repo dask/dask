@@ -564,6 +564,13 @@ class _Frame(Base):
         from ..delayed import Delayed
         return [Delayed(k, [self.dask]) for k in self._keys()]
 
+    def to_bcolz(self, rootdir, expectedlen=None, compute=True, overwrite=True,
+                 get=get_sync):
+        """ Save dataframe to BColz table
+        """
+        from .io import to_bcolz
+        return to_bcolz(self, rootdir, expectedlen, compute, overwrite, get)
+
     @classmethod
     def _get_unary_operator(cls, op):
         return lambda self: elemwise(op, self)
