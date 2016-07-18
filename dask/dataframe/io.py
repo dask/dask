@@ -329,8 +329,8 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
-def to_bcolz(df, rootdir, expectedlen=None, compute=True, overwrite=True,
-             get=get_sync):
+def to_bcolz(df, rootdir, expectedlen=None, reset_index=True, compute=True,
+             overwrite=True, get=get_sync):
     """ Save dask DataFrame to BColz table
     Parameters
     ----------
@@ -354,7 +354,14 @@ def to_bcolz(df, rootdir, expectedlen=None, compute=True, overwrite=True,
     # dsk[(name, -1)] = (bcolz.fromiter, (), dtype, 0)  # Create empty table
 
     if expectedlen is None:
-        expectedlen = len(df)
+        # row_bytes = sum([d.itemsize for d in df.dtypes])
+        # if reset_index:
+        #     row_bytes += df.index.dtype.itemsize
+        # chunksize = np.ceil(1e7 / row_bytes).astype(int)
+        expectedlen = (lambda df, n: len(df)*n, (df._name, 0), df.npartitions)
+
+    if reset_index:
+        df = df.reset_index()
 
     dsk = dict()
     dsk[(name, -1)] = expectedlen
@@ -373,6 +380,7 @@ def to_bcolz(df, rootdir, expectedlen=None, compute=True, overwrite=True,
         return DataFrame._get(dsk, keys, get=get)
     else:
         return delayed([Delayed(key, [dsk]) for key in keys])
+
 
 def from_dask_array(x, columns=None):
     """ Convert dask Array to dask DataFrame
