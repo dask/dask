@@ -5,9 +5,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from dask.dataframe.core import (DataFrame, Series, Index,
-                                 aca, map_partitions, no_default)
-from dask.utils import derived_from
+from ..context import _globals
+from .core import (DataFrame, Series, Index, aca, map_partitions, no_default)
+from ..utils import derived_from
 
 
 def _maybe_slice(grouped, columns):
@@ -347,8 +347,8 @@ class _GroupBy(object):
                                   df, columns, func)
 
         else:
-            from .shuffle import shuffle_method, shuffle
-            if shuffle_method() == 'tasks':
+            from .shuffle import shuffle
+            if _globals.get('shuffle', None) == 'tasks':
                 raise NotImplementedError(
                 "Can only groupby-apply on single-column grouper")
             df = shuffle(self.obj, self.index, **self.kwargs)

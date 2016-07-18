@@ -90,7 +90,7 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
     shuffle
     partd
     """
-    method = method or shuffle_method()
+    method = method or _globals.get('shuffle', 'disk')
 
     if method == 'disk':
         return set_partition_disk(df, index, divisions, compute=compute,
@@ -102,18 +102,10 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
         raise NotImplementedError("Unknown method %s" % method)
 
 
-def shuffle_method():
-    get = _globals.get('get')
-    if (isinstance(get, types.MethodType) and
-        'distributed' in get.__func__.__module__):
-        return 'tasks'
-    else:
-        return 'disk'
-
-
 def barrier(args):
     list(args)
     return 0
+
 
 def _set_partition(df, index, divisions, p, drop=True):
     """ Shard partition and dump into partd """
