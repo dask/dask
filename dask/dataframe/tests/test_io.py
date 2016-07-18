@@ -1107,6 +1107,20 @@ def test_read_hdf():
         assert (sorted(dd.read_hdf(fn, '/data').dask) ==
                 sorted(dd.read_hdf(fn, '/data').dask))
 
+def test_read_hdf_multiple():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*')
+        r = dd.read_hdf(fn, '/data*')
+        eq(a, r)
+        assert a.npartitions == r.npartitions
+        assert a.divisions == r.divisions
+
 
 def test_read_hdf_start_stop_values():
     pytest.importorskip('tables')
