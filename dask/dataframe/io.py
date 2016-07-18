@@ -462,14 +462,18 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                  "must preserve the order of its input")
 
     # handle lock default based on wether we're writing to a single entity
+    _actual_get = get if get else dask.get
     if lock is None:
-        if not single_node or not single_file:
+        if not single_node:
+            lock = True
+        elif not single_file and not _actual_get is dask.multiprocessing.get:
+            # if we're writing to multiple files with the multiprocessing
+            # scheduler we don't need to lock
             lock = True
         else:
             lock = False
 
     if lock is True:
-        _actual_get = get if get else dask.get
         if _actual_get == dask.multiprocessing.get:
             lock = multiprocessing.Manager().Lock()
         else:
