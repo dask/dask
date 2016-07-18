@@ -20,6 +20,7 @@ from ..base import tokenize
 from ..compatibility import unicode, apply
 from .. import array as da
 from ..async import get_sync
+from ..context import _globals
 from ..delayed import Delayed, delayed
 import dask.multiprocessing
 
@@ -462,7 +463,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                  "must preserve the order of its input")
 
     # handle lock default based on wether we're writing to a single entity
-    _actual_get = get if get else dask.get
+    _actual_get = get or _globals.get('get') or get_sync
     if lock is None:
         if not single_node:
             lock = True
