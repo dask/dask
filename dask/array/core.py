@@ -2663,8 +2663,8 @@ def bincount(x, weights=None, minlength=None):
 @wraps(np.digitize)
 def digitize(a, bins, right=False):
     bins = np.asarray(bins)
-    func = partial(np.digitize, bins=bins, right=right)
-    return elemwise(func, a)
+    dtype = np.digitize([0], bins, right=False).dtype
+    return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
