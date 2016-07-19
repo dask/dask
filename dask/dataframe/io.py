@@ -462,8 +462,14 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             warn("To preserve order between partitions name_function "
                  "must preserve the order of its input")
 
-    # handle lock default based on wether we're writing to a single entity
-    _actual_get = get or _globals.get('get') or get_sync
+    # If user did not specify get as param or context and write is sequential
+    # default to the sequential scheduler
+    # otherwise let the _get method choose the scheduler
+    if get is None and not 'get' in _globals and single_node and single_file:
+        get = get_sync
+
+    # handle lock default based on whether we're writing to a single entity
+    _actual_get = get or _globals.get('get') or df._default_get
     if lock is None:
         if not single_node:
             lock = True
