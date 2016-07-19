@@ -36,7 +36,7 @@ def _fft_wrap(fft_func, dtype, out_chunk_fn):
 
     np_name = fft_func.__name__
     if fft_func.__doc__ is not None:
-      func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
     func.__name__ = np_name
     return func
 
