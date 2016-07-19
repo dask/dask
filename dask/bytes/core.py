@@ -41,34 +41,37 @@ def write_block_to_file(data, f, compression, encoding):
     """
     original = False
     f2 = f
+    f = SeekableFile(f)
     if compression:
         original = True
-        f = SeekableFile(f)
         f = compress_files[compression](f, mode='wb')
-    if encoding:
-        original = True
-        f = io.TextIOWrapper(f, encoding=encoding)
     try:
         if isinstance(data, (str, bytes)):
-            f.write(data)
+            if encoding:
+                f.write(data.encode(encoding=encoding))
+            else:
+                f.write(data)
         elif isinstance(data, io.IOBase):
             # file-like
             out = '1'
             while out:
                 out = data.read(64*2**10)
-                f.write(out)
+                if encoding:
+                    f.write(out.encode(encoding=encoding))
+                else:
+                    f.write(out)
         else:
             # iterable, e.g., bag contents
             start = False
             for d in data:
                 if start:
-                    if encoding:
-                        f.write("\n")
-                    else:
-                        f.write(b'\n')
+                    f.write(b'\n')
                 else:
                     start = True
-                f.write(d)
+                if encoding:
+                    f.write(d.encode(encoding=encoding))
+                else:
+                    f.write(d)
     finally:
         f.close()
         if original:

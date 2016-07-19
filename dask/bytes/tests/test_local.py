@@ -255,7 +255,6 @@ def test_compressed_write(tmpdir):
 
 def test_write_files(tmpdir):
     tmpdir = str(tmpdir)
-    os.makedirs(tmpdir, exist_ok=True)
     f = write_files([tmpdir+'/test1', tmpdir+'/test2'])
     assert len(f) == 2
     files = compute(*f)
