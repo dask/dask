@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 from glob import glob
+import io
 import logging
 import os
 import sys
+import time
 
 from .compression import files as compress_files, seekable_files
 from .utils import SeekableFile, read_block
@@ -15,33 +17,10 @@ from ..utils import system_encoding
 logger = logging.getLogger(__name__)
 
 
-def write_bytes(values, path, compression=None):
+def write_bytes(values, paths, compression=None, encoding=None):
     """ See dask.bytes.core.write_bytes for docstring """
-    nfiles = len(values)
-    if "{" not in path and "}" not in path:
-        try:
-            os.makedirs(path)
-        except Exception:  # exist_ok only available in py3
-            pass
-        if not os.path.exists(path) or not os.path.isdir(path):
-            raise ValueError("Path does not exist or is not a directory: %s",
-                             path)
-        path = os.path.join(path, "bytes-{:04d}")
-    paths = [path.format(i) for i in range(nfiles)]
-    out = [delayed(write_block_to_file)(d, f, compression) for (d, f) in
-           zip(values, paths)]
+    out = [delayed(open)(path, 'wb') for path in paths]
     return out
-
-
-def write_block_to_file(data, path, compression):
-    with open(path, 'wb') as f:
-        if compression:
-            f = SeekableFile(f)
-            f = compress_files[compression](f, mode='wb')
-        try:
-            f.write(data)
-        finally:
-            f.close()
 
 
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
@@ -116,10 +95,25 @@ def open_files(path):
             for _path in filepaths]
 
 
+def write_files(paths, mode='wb'):
+    """ Open many files for writing.  Return delayed objects.
+
+    See Also
+    --------
+    dask.bytes.core.write_files: User function
+    """
+    myopen = delayed(open)
+    files = [myopen(_path, mode=mode,
+                   dask_key_name='write-%s' % tokenize(_path, time.time()))
+             for _path in paths]
+    return files
+
+
 from . import core
 core._read_bytes['file'] = read_bytes
 core._open_files['file'] = open_files
 core._write_bytes['file'] = write_bytes
+core._write_files['file'] = write_bytes
 
 if sys.version_info[0] >= 3:
     def open_text_files(path, encoding=system_encoding, errors='strict'):

@@ -1,14 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
 import io
+import os
 
 from toolz import merge
+from warnings import warn
 
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
-from ..compatibility import PY2
+from ..compatibility import PY2, unicode
 from ..delayed import delayed
-from ..utils import infer_storage_options, system_encoding
+from ..utils import (infer_storage_options, system_encoding,
+                     build_name_function, infer_compression)
 
 delayed = delayed(pure=True)
 
@@ -18,9 +21,62 @@ _read_bytes = dict()
 _write_bytes = dict()
 _open_files = dict()
 _open_text_files = dict()
+_write_files = dict()
 
 
-def write_bytes(values, urlpath, compression=None, **kwargs):
+def write_block_to_file(data, f, compression, encoding):
+    """
+    Parameters
+    ----------
+    data : data to write
+        Either str/bytes, or iterable producing those, or something file-like
+        which can be read.
+    f : file-like
+        backend-dependent file-like object
+    compression : string
+        a key of `compress_files`
+    encoding : string (None)
+        if a string (e.g., 'ascii', 'utf8'), implies text mode, otherwise no
+        encoding and binary mode.
+    """
+    original = False
+    f2 = f
+    if compression:
+        original = True
+        f = SeekableFile(f)
+        f = compress_files[compression](f, mode='wb')
+    if encoding:
+        original = True
+        f = io.TextIOWrapper(f, encoding=encoding)
+    try:
+        if isinstance(data, (str, bytes)):
+            f.write(data)
+        elif isinstance(data, io.IOBase):
+            # file-like
+            out = '1'
+            while out:
+                out = data.read(64*2**10)
+                f.write(out)
+        else:
+            # iterable, e.g., bag contents
+            start = False
+            for d in data:
+                if start:
+                    if encoding:
+                        f.write("\n")
+                    else:
+                        f.write(b'\n')
+                else:
+                    start = True
+                f.write(d)
+    finally:
+        f.close()
+        if original:
+            f2.close()
+
+
+def write_bytes(values, urlpath, name_function=None, compression=None,
+                lazy=False, encoding=None, **kwargs):
     """For a list of values which evaluate to byte, produce delayed values
     which, when executed, result in writing to files.
 
@@ -32,9 +88,14 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
 
     Parameters
     ----------
+    values: list of Values or dask collection
+        the data to be written
     urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), which may be a template (include `{}`).
+        Absolute or relative filepaths, URLs (may include protocols like
+        ``s3://``); may be globstring (include `*`).
+    name_function: function or None
+        If using a globstring, this provides the conversion from part number
+        to test to replace `*` with.
     compression: string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     **kwargs: dict
@@ -43,17 +104,30 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
 
     Examples
     --------
-    >>> values = write_bytes('s3://bucket/part-{}.csv')  # doctest: +SKIP
+    >>> values = write_bytes(vals, 's3://bucket/part-*.csv')  # doctest: +SKIP
 
     Returns
     -------
     list of ``dask.Delayed`` objects
     """
+    if isinstance(urlpath, (tuple, list, set)):
+        storage_options = infer_storage_options(urlpath[0],
+                inherit_storage_options=kwargs)
+        del storage_options['path']
+        paths = [infer_storage_options(u, inherit_storage_options=kwargs)['path']
+                 for u in urlpath]
+    elif isinstance(urlpath, (str, unicode)):
+        storage_options = infer_storage_options(urlpath,
+                                            inherit_storage_options=kwargs)
+        path = storage_options.pop('path')
+        paths = _expand_paths(path, name_function, len(values))
+    else:
+        raise ValueError('URL spec must be string or sequence of strings')
+    if compression == 'infer':
+        compression = infer_compression(paths[0])
     if compression is not None and compression not in compress_files:
         raise ValueError("Compression type %s not supported" % compression)
 
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
     protocol = storage_options.pop('protocol')
     ensure_protocol(protocol)
     try:
@@ -62,8 +136,14 @@ def write_bytes(values, urlpath, compression=None, **kwargs):
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    return write_bytes(values, storage_options.pop('path'),
-                       compression=compression, **storage_options)
+    files = write_bytes(values, paths, **storage_options)
+    out = [delayed(write_block_to_file)(v, f, compression, encoding)
+           for (v, f) in zip(values, files)]
+    if lazy:
+        return out
+    else:
+        import dask
+        return dask.compute(*out)
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -194,6 +274,34 @@ def open_files(urlpath, compression=None, **kwargs):
 
     return open_files_by(open_files_backend, storage_options.pop('path'),
                          compression=compression, **storage_options)
+
+
+def _expand_paths(path, name_function, num):
+    if isinstance(path, (str, unicode)):
+        if path.count('*') > 1:
+            raise ValueError("Output path spec must contain at most one '*'.")
+        if name_function is None:
+            name_function = build_name_function(num - 1)
+
+        if not '*' in path:
+            path = os.path.join(path, '*.part')
+
+        formatted_names = [name_function(i) for i in range(num)]
+        if formatted_names != sorted(formatted_names):
+            warn("In order to preserve order between partitions "
+                 "name_function must preserve the order of its input")
+
+        paths = [path.replace('*', name_function(i))
+                 for i in range(num)]
+    elif isinstance(path, (tuple, list, set)):
+        assert len(path) == num
+        paths = path
+    else:
+        raise ValueError("""Path should be either"
+1.  A list of paths -- ['foo.json', 'bar.json', ...]
+2.  A directory -- 'foo/
+3.  A path with a * in it -- 'foo.*.json'""")
+    return paths
 
 
 def open_text_files(urlpath, encoding=system_encoding, errors='strict',
