@@ -17,7 +17,7 @@ import numpy as np
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, apply
+from ..compatibility import unicode, apply, PY2
 from .. import array as da
 from ..async import get_sync
 from ..delayed import Delayed, delayed
@@ -644,15 +644,20 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
            **kwargs):
 
     def func(df, **kwargs):
-        out = io.StringIO()
+        if PY2:
+            out = io.BytesIO()
+        else:
+            out = io.StringIO()
         df.to_csv(out, **kwargs)
         out.seek(0)
-        return out.getvalue()
+        if PY2:
+            return out.getvalue()
+        return out.getvalue().encode(encoding)
 
     encoding = kwargs.get('encoding', sys.getdefaultencoding())
     values = [delayed(func)(d, **kwargs) for d in df.to_delayed()]
     values = write_bytes(values, filename, name_function, compression,
-                         lazy=True, encoding=encoding)
+                         lazy=True, encoding=None)
 
     if compute:
         from dask import compute
