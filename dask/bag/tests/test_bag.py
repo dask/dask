@@ -718,6 +718,8 @@ def test_to_textfiles_name_function_warn():
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
             c.compute(get=dask.get)
