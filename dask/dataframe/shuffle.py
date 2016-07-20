@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 import math
+from operator import getitem
 import types
 import uuid
 
@@ -273,6 +274,12 @@ def shuffle_pre_partition_series(df, index, divisions, drop):
     return result
 
 
+def shuffle_group_2(df, col, stage, k):
+    c = df[col] // k ** stage % k
+    g = df.groupby(c)
+    return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
+
+
 def shuffle_group(df, stage, k):
     df['.old-index'] = df.index
     index = df.index // k ** stage % k
@@ -302,6 +309,59 @@ def shuffle_post_series(df, index_name):
     df = df.set_index('new_index', drop=True)
     df.index.name = index_name
     return df
+
+
+def rearrange_by_column(df, column, max_branch=32):
+    max_branch = max_branch or 32
+    n = df.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    groups = []
+    splits = []
+    joins = []
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages))
+              for i in range(k**stages)]
+
+    token = tokenize(df, column, max_branch)
+
+    start = dict((('shuffle-join-' + token, 0, inp),
+                  (df._name, i) if i < df.npartitions else df._pd)
+                 for i, inp in enumerate(inputs))
+
+    for stage in range(1, stages + 1):
+        group = dict((('shuffle-group-' + token, stage, inp),
+                      (shuffle_group_2,
+                        ('shuffle-join-' + token, stage - 1, inp),
+                        column, stage - 1, k))
+                     for inp in inputs)
+
+        split = dict((('shuffle-split-' + token, stage, i, inp),
+                      (getitem, ('shuffle-group-' + token, stage, inp), i))
+                     for i in range(k)
+                     for inp in inputs)
+
+        join = dict((('shuffle-join-' + token, stage, inp),
+                     (_concat,
+                        [('shuffle-split-' + token, stage, inp[stage-1],
+                          insert(inp, stage - 1, j)) for j in range(k)]))
+                     for inp in inputs)
+        groups.append(group)
+        splits.append(split)
+        joins.append(join)
+
+    end = dict((('shuffle-' + token, i),
+                ('shuffle-join-' + token, stages, inp))
+                for i, inp in enumerate(inputs))
+
+    dsk = merge(df.dask, start, end, *(groups + splits + joins))
+    result = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
+    return result
 
 
 def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):

@@ -4,7 +4,8 @@ import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.shuffle import shuffle, hash_series, partitioning_index
+from dask.dataframe.shuffle import (shuffle, hash_series, partitioning_index,
+        rearrange_by_column)
 from dask.async import get_sync
 from dask.dataframe.utils import eq
 
@@ -193,3 +194,19 @@ def test_shuffle_sort(method):
     ddf2 = ddf.set_index('x', method=method)
 
     eq(ddf2.loc[2:3], df2.loc[2:3])
+
+
+def test_rearrange():
+    df = pd.DataFrame({'x': range(10)})
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf2 = ddf.assign(y=ddf.x % 4)
+
+    result = rearrange_by_column(ddf2, 'y', max_branch=32)
+    assert result.npartitions == ddf.npartitions
+    assert set(ddf.dask).issubset(result.dask)
+
+    # Every value in exactly one partition
+    a = result.compute()
+    parts = get_sync(result.dask, result._keys())
+    for i in a.y.drop_duplicates():
+        assert sum(i in part.y for part in parts) == 1
