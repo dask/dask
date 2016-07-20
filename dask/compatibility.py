@@ -9,7 +9,11 @@ import types
 PY3 = sys.version_info[0] == 3
 PY2 = sys.version_info[0] == 2
 
-LZMA_AVAILABLE = True
+class LZMAFile:
+    def __init__(self, *args, **kwargs):
+        raise ValueError("xz files requires the lzma module. "
+                            "To use, install lzmaffi or backports.lzma.")
+LZMA_AVAILABLE = False
 
 if PY3:
     import builtins
@@ -20,11 +24,17 @@ if PY3:
     from gzip import (GzipFile, compress as gzip_compress,
             decompress as gzip_decompress)
     try:
-        from lzmaffi import (LZMAFile, compress as lzma_compress,
-                             decompress as lzma_decompress)
+        try:
+            from lzmaffi import (LZMAFile, compress as lzma_compress,
+                                 decompress as lzma_decompress)
+        except ImportError:
+            from lzma import (LZMAFile, compress as lzma_compress,
+                              decompress as lzma_decompress)
+        LZMA_AVAILABLE = True
     except ImportError:
-        from lzma import (LZMAFile, compress as lzma_compress,
-                          decompress as lzma_decompress)
+        # Fallback to top-level definition
+        pass
+
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
@@ -204,12 +214,10 @@ else:
             from backports.lzma import LZMAFile
             from backports.lzma import (LZMAFile, compress as lzma_compress,
                                         decompress as lzma_decompress)
+        LZMA_AVAILABLE = True
     except ImportError:
-        class LZMAFile:
-            def __init__(self, *args, **kwargs):
-                raise ValueError("xz files requires the lzma module. "
-                                 "To use, install lzmaffi or backports.lzma.")
-        LZMA_AVAILABLE = False
+        # Fallback to top-level definition
+        pass
 
 
 def getargspec(func):
