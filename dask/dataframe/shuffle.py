@@ -118,7 +118,7 @@ def _set_partition(df, index, divisions, p, drop=True):
     divisions = list(divisions)
     shards = shard_df_on_index(df, divisions[1:-1])
     shards = list(map(strip_categories, shards))
-    p.append(dict(enumerate(shards)))
+    p.append(dict(enumerate(shards)), fsync=True)
 
 
 def _set_collect(group, p, barrier_token, columns):
@@ -252,7 +252,7 @@ def partition(df, index, npartitions, p):
     groups = rng.groupby(partitioning_index(index, npartitions))
     d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
                                             if i in groups.groups)
-    p.append(d)
+    p.append(d, fsync=True)
 
 
 def collect(group, p, meta, barrier_token):
