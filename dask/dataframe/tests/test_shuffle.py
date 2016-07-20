@@ -164,27 +164,6 @@ def test_set_partition_tasks_3():
     assert ddf2.npartitions == ddf.npartitions
 
 
-def test_shuffle_pre_partition():
-    from dask.dataframe.shuffle import (shuffle_pre_partition_scalar,
-                                        shuffle_pre_partition_series)
-    df = pd.DataFrame({'x': np.random.random(10),
-                       'y': np.random.random(10)},
-                       index=np.random.random(10))
-    divisions = df.x.quantile([0, 0.2, 0.4, 0.6, 0.8, 1.0]).tolist()
-
-    for ind, pre in [('x', shuffle_pre_partition_scalar),
-                     (df.x, shuffle_pre_partition_series)]:
-        result = pre(df, ind, divisions, True)
-        assert list(result.columns)[:2] == ['x', 'y']
-        assert result.index.name == 'partitions'
-        for x, part in result.reset_index()[['x', 'partitions']].values.tolist():
-            part = int(part)
-            if x == divisions[-1]:
-                assert part == len(divisions) - 2
-            else:
-                assert divisions[part] <= x < divisions[part + 1]
-
-
 @pytest.mark.parametrize('method', ['tasks', 'disk'])
 def test_shuffle_sort(method):
     df = pd.DataFrame({'x': [1, 2, 3, 2, 1], 'y': [9, 8, 7, 1, 5]})
