@@ -127,8 +127,7 @@ def _set_collect(group, p, barrier_token, columns):
         # which has the same columns as original
         return pd.DataFrame(columns=columns)
 
-
-def shuffle(df, index, npartitions=None):
+def shuffle(df, index, method=None, npartitions=None, max_branch=32):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -143,8 +142,34 @@ def shuffle(df, index, npartitions=None):
     --------
     set_index
     set_partition
-    partd
+    shuffle_disk
+    shuffle_tasks
     """
+    method = method or _globals.get('shuffle', 'disk')
+    if method == 'disk':
+        return shuffle_disk(df, index, npartitions)
+    elif method == 'tasks':
+        if not isinstance(index, _Frame):
+            index = df[index]
+        return shuffle_tasks(df, index, max_branch)
+    raise NotImplementedError()
+
+
+def shuffle_tasks(df, index, max_branch=32):
+    """ Shuffle by creating many tasks """
+    assert isinstance(index, _Frame)
+    partitions = index.map_partitions(partitioning_index,
+                                      npartitions=df.npartitions,
+                                      columns=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch)
+    df4 = df3.drop('_partitions', axis=1)
+    df4.divisions = (None,) * (df.npartitions + 1)
+    return df4
+
+
+def shuffle_disk(df, index, npartitions=None):
+    """ Shuffle using local disk """
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
     if npartitions is None:

@@ -19,17 +19,19 @@ d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
 full = d.compute()
 
 
-def test_shuffle():
-    s = shuffle(d, d.b, npartitions=2)
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_shuffle(method):
+    s = shuffle(d, d.b, method=method)
     assert isinstance(s, dd.DataFrame)
-    assert s.npartitions == 2
+    assert s.npartitions == d.npartitions
 
     x = get_sync(s.dask, (s._name, 0))
     y = get_sync(s.dask, (s._name, 1))
 
     assert not (set(x.b) & set(y.b))  # disjoint
+    assert set(s.dask).issuperset(d.dask)
 
-    assert shuffle(d, d.b, npartitions=2)._name == shuffle(d, d.b, npartitions=2)._name
+    assert shuffle(d, d.b)._name == shuffle(d, d.b)._name
 
 
 def test_default_partitions():
@@ -52,7 +54,7 @@ def test_shuffle_from_one_partition_to_one_other():
     a = dd.from_pandas(df, 1)
 
     for i in [1, 2]:
-        b = shuffle(a, 'x', i)
+        b = shuffle(a, 'x', npartitions=i)
         assert len(a.compute(get=get_sync)) == len(b.compute(get=get_sync))
 
 
