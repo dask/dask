@@ -288,39 +288,10 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def shuffle_pre_partition_series(df, index, divisions, drop):
-    parts = pd.Series(divisions).searchsorted(index, side='right') - 1
-    parts[(index == divisions[-1]).values] = len(divisions) - 2
-    result = (df.assign(partitions=parts, new_index=index)
-                .set_index('partitions', drop=drop))
-    return result
-
-
-def shuffle_group_2(df, col, stage, k):
+def shuffle_group(df, col, stage, k):
     c = df[col] // k ** stage % k
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
-
-
-def shuffle_group(df, stage, k):
-    df['.old-index'] = df.index
-    index = df.index // k ** stage % k
-    inds = set(index.drop_duplicates())
-    df = df.set_index(index)
-
-    result = dict(((i, df.loc[i] if i in inds else df.head(0))
-                  for i in range(k)))
-    if isinstance(df, pd.DataFrame):
-        result = dict((k, pd.DataFrame(v).transpose()
-                           if isinstance(v, pd.Series) else v)
-                        for k, v in result.items())
-
-    for k in result:
-        part = result[k].set_index('.old-index')
-        part.index.name = 'partitions'
-        result[k] = part
-
-    return result
 
 
 def set_index_post_scalar(df, index_name, drop):
@@ -334,6 +305,14 @@ def set_index_post_series(df, index_name, drop):
 
 
 def rearrange_by_column(df, column, max_branch=32):
+    """ Order divisions of DataFrame so that all values within column align
+
+    This enacts a task-based shuffle
+
+    See also:
+        set_partitions_tasks
+        shuffle_tasks
+    """
     max_branch = max_branch or 32
     n = df.npartitions
 
@@ -358,7 +337,7 @@ def rearrange_by_column(df, column, max_branch=32):
 
     for stage in range(1, stages + 1):
         group = dict((('shuffle-group-' + token, stage, inp),
-                      (shuffle_group_2,
+                      (shuffle_group,
                         ('shuffle-join-' + token, stage - 1, inp),
                         column, stage - 1, k))
                      for inp in inputs)
@@ -387,6 +366,12 @@ def rearrange_by_column(df, column, max_branch=32):
 
 
 def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
+    """ Set partitions using task based scheme
+
+    See also:
+        set_partition
+        set_partition_disk
+    """
     assert len(divisions) == len(df.divisions)
     if np.isscalar(index):
         partitions = df[index].map_partitions(set_partitions_pre,

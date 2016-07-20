@@ -335,7 +335,7 @@ class _GroupBy(object):
             dummy = columns
             columns = self._slice
 
-        if not isinstance(self.index, (DataFrame, list, pd.Index)):
+        if isinstance(self.index, (DataFrame, list, pd.Index)):
             if (isinstance(self.index, Series) and
                 self.index._name == self.obj.index._name):
                 df = self.obj
