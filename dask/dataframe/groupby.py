@@ -7,6 +7,7 @@ import pandas as pd
 
 from ..context import _globals
 from .core import (DataFrame, Series, Index, aca, map_partitions, no_default)
+from .shuffle import shuffle
 from ..utils import derived_from
 
 
@@ -21,16 +22,11 @@ def _maybe_slice(grouped, columns):
     return grouped
 
 
-def _groupby_apply_level0(df, key, func):
-    grouped = df.groupby(level=0)
-    grouped = _maybe_slice(grouped, key)
-    return grouped.apply(func)
-
-
-def _groupby_apply_index(df, ind, key, func):
-    grouped = df.groupby(ind)
-    grouped = _maybe_slice(grouped, key)
-    return grouped.apply(func)
+def _groupby_slice_apply(df, grouper, key, func):
+    g = df.groupby(grouper)
+    if key:
+        g = g[key]
+    return g.apply(func)
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
@@ -143,7 +139,6 @@ class _GroupBy(object):
     kwargs: dict
         Other keywords passed to groupby
     """
-
     def __init__(self, df, index=None, slice=None, **kwargs):
         assert isinstance(df, (DataFrame, Series))
         self.obj = df
@@ -306,7 +301,6 @@ class _GroupBy(object):
 
         Parameters
         ----------
-
         func: function
             Function to apply
         columns: list, scalar or None
@@ -320,7 +314,6 @@ class _GroupBy(object):
         -------
         applied : Series or DataFrame depending on columns keyword
         """
-
         if columns is no_default:
             msg = ("columns is not specified, inferred from partial data. "
                    "Please provide columns if the result is unexpected.\n"
@@ -330,30 +323,40 @@ class _GroupBy(object):
             warnings.warn(msg)
 
             dummy = self._head().apply(func)
-            columns = dummy.columns if isinstance(dummy, pd.DataFrame) else dummy.name
         else:
             dummy = columns
-            columns = self._slice
 
-        if isinstance(self.index, (DataFrame, list, pd.Index)):
-            if (isinstance(self.index, Series) and
-                self.index._name == self.obj.index._name):
-                df = self.obj
-            else:
-                df = self.obj.set_index(self.index, drop=False,
-                                        **self.kwargs)
-
-            return map_partitions(_groupby_apply_level0, dummy,
-                                  df, columns, func)
-
+        df = self.obj
+        if isinstance(self.index, DataFrame):  # add index columns to dataframe
+            df2 = df.assign(**{'_index_' + c: self.index[c]
+                                for c in self.index.columns})
+            index = self.index
+        elif isinstance(self.index, Series):
+            df2 = df.assign(_index=self.index)
+            index = self.index
         else:
-            from .shuffle import shuffle
-            if _globals.get('shuffle', None) == 'tasks':
-                raise NotImplementedError(
-                "Can only groupby-apply on single-column grouper")
-            df = shuffle(self.obj, self.index, **self.kwargs)
-            return map_partitions(_groupby_apply_index, dummy,
-                                  df, self.index, columns, func)
+            df2 = df
+            index = df[self.index]
+
+        df3 = shuffle(df2, index, **self.kwargs) # shuffle dataframe and index
+
+        if isinstance(self.index, DataFrame):  # extract index from dataframe
+            cols = ['_index_' + c for c in self.index.columns]
+            index2 = df3[cols]
+            df4 = df3.drop(cols, axis=1)
+        elif isinstance(self.index, Series):
+            index2 = df3['_index']
+            index2.name = self.index.name
+            df4 = df3.drop('_index', axis=1)
+        else:
+            df4 = df3
+            index2 = self.index
+
+        # Perform embarrassingly parallel groupby-apply
+        df5 = map_partitions(_groupby_slice_apply, dummy, df4, index2,
+                             self._slice, func)
+
+        return df5
 
 
 class DataFrameGroupBy(_GroupBy):

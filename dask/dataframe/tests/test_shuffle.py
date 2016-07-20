@@ -91,8 +91,7 @@ def test_partitioning_index():
     np.testing.assert_equal(res, exp)
 
     res = partitioning_index(df2[['cat', 'bool', 'f32']], 2)
-    exp = np.array([1, 1, 0] * 3)
-    np.testing.assert_equal(res, exp)
+    assert ((0 <= res) & (res < 2)).all()
 
     res = partitioning_index(df2.index, 4)
     exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
@@ -124,8 +123,21 @@ def test_set_partition_tasks(npartitions):
     eq(df.set_index(df.x + 1),
        ddf.set_index(ddf.x + 1, method='tasks'))
 
-    # eq(df.set_index(df.index),
-    #    ddf.set_index(ddf.index, method='tasks'))
+    eq(df.set_index(df.index),
+       ddf.set_index(ddf.index, method='tasks'))
+
+
+def test_set_index_self_index():
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                       index=np.random.random(100))
+
+    a = dd.from_pandas(df, npartitions=4)
+    b = a.set_index(a.index)
+    assert a is b
+
+    eq(b, df.set_index(df.index))
+
 
 def test_set_partition_tasks_names():
     df = pd.DataFrame({'x': np.random.random(100),

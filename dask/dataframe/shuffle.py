@@ -30,6 +30,8 @@ def set_index(df, index, npartitions=None, method=None, compute=True,
     This shuffles and repartitions your data. If done in parallel the
     resulting order is non-deterministic.
     """
+    if (isinstance(index, Series) and index._name == df.index._name):
+        return df
     if isinstance(index, (DataFrame, tuple, list)):
         raise NotImplementedError(
             "Dask dataframe does not yet support multi-indexes.\n"

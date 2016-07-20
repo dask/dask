@@ -254,8 +254,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle(lhs, left_on, npartitions)
-    rhs2 = shuffle(rhs, right_on, npartitions)
+    lhs2 = shuffle(lhs, left_on, npartitions=npartitions)
+    rhs2 = shuffle(rhs, right_on, npartitions=npartitions)
 
     if isinstance(left_on, Index):
         left_on = None
