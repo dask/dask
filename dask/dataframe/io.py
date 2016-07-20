@@ -450,6 +450,12 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
     if '*' in key:
         single_node = False
 
+    if 'format' in kwargs:
+        warn("argument 'format' is ignored, only 'table' is supported.")
+
+    if mode not in ('a', 'w', 'r+'):
+        raise ValueError("Mode must be one of 'a', 'w' or 'r+'")
+
     if name_function is None:
         name_function = build_name_function(df.npartitions - 1)
 
