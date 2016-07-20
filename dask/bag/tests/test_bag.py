@@ -9,7 +9,7 @@ import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, reify, partition, inline_singleton_lists, optimize,
         system_encoding, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, reduce
+from dask.compatibility import BZ2File, GzipFile, reduce, PY2
 from dask.utils import filetexts, tmpfile, tmpdir, raises, open
 from dask.async import get_sync
 import dask
@@ -684,6 +684,8 @@ def test_to_dataframe():
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
             c.compute(get=dask.get)
