@@ -462,9 +462,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             warn("To preserve order between partitions name_function "
                  "must preserve the order of its input")
 
-    # If user did not specify get as param or context and write is sequential
-    # default to the sequential scheduler
-    # otherwise let the _get method choose the scheduler
+    # If user did not specify scheduler and write is sequential default to the 
+    # sequential scheduler. otherwise let the _get method choose the scheduler
     if get is None and not 'get' in _globals and single_node and single_file:
         get = get_sync
 
