@@ -110,6 +110,9 @@ def test_attributes():
 
     df = dd.from_pandas(pd.DataFrame({'a b c': [1, 2, 3]}), npartitions=2)
     assert 'a b c' not in dir(df)
+    df = dd.from_pandas(pd.DataFrame({'a': [1, 2], 5: [1, 2]}), npartitions=2)
+    assert 'a' in dir(df)
+    assert 5 not in dir(df)
 
 
 def test_column_names():
