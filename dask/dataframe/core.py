@@ -312,7 +312,7 @@ class _Frame(Base):
 
         >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
 
-        When tuple is passed as columns, the result will be Series.
+        When tuple is passed as columns, the result will be DataFrame.
 
         >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
         """
