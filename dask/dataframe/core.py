@@ -1579,8 +1579,12 @@ class DataFrame(_Frame):
             raise AttributeError(e)
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(filter(pd.compat.isidentifier, self.columns))))
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(c for c in self.columns if
+                 (isinstance(c, pd.compat.string_types) and
+                  pd.compat.isidentifier(c)))
+        return list(o)
 
     @property
     def ndim(self):
