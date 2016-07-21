@@ -243,7 +243,7 @@ def _pdmerge(left, right, how, left_on, right_on,
 
 
 def hash_join(lhs, left_on, rhs, right_on, how='inner',
-              npartitions=None, suffixes=('_x', '_y')):
+              npartitions=None, suffixes=('_x', '_y'), method=None):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -254,8 +254,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle(lhs, left_on, npartitions=npartitions)
-    rhs2 = shuffle(rhs, right_on, npartitions=npartitions)
+    lhs2 = shuffle(lhs, left_on, npartitions=npartitions, method=method)
+    rhs2 = shuffle(rhs, right_on, npartitions=npartitions, method=method)
 
     if isinstance(left_on, Index):
         left_on = None
@@ -379,7 +379,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None):
+          npartitions=None, method=None):
 
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
@@ -425,7 +425,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
-                         how, npartitions, suffixes)
+                         how, npartitions, suffixes, method=method)
 
 
 ###############################################################
