@@ -1840,7 +1840,7 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
-             lsuffix='', rsuffix='', npartitions=None):
+             lsuffix='', rsuffix='', npartitions=None, method=None):
 
         if not isinstance(other, (DataFrame, pd.DataFrame)):
             raise ValueError('other must be DataFrame')
@@ -1849,7 +1849,7 @@ class DataFrame(_Frame):
         return merge(self, other, how=how,
                      left_index=on is None, right_index=True,
                      left_on=on, suffixes=[lsuffix, rsuffix],
-                     npartitions=npartitions)
+                     npartitions=npartitions, method=method)
 
     @derived_from(pd.DataFrame)
     def append(self, other):
