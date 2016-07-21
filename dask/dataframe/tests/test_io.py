@@ -1270,10 +1270,10 @@ def test_to_bag():
                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(a, 2)
 
-    assert ddf.to_bag().compute(get=get_sync) == list(a.itertuples(False))
-    assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
-    assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
-    assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
+    assert ddf.to_bag().compute() == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute() == list(a.itertuples(True))
+    assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
+    assert ddf.x.to_bag().compute() == list(a.x)
 
 
 @pytest.mark.xfail(reason='we might want permissive behavior here')

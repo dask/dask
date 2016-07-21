@@ -751,16 +751,20 @@ def to_csv(df, filename, name_function=None, compression=None, get=None, compute
         return delayed([Delayed(key, [dsk]) for key in keys])
 
 
+def _df_to_bag(df, index=False):
+    if isinstance(df, pd.DataFrame):
+        return list(map(tuple, df.itertuples(index)))
+    elif isinstance(df, pd.Series):
+        return list(df.iteritems()) if index else list(df)
+
+
 def to_bag(df, index=False):
     from ..bag.core import Bag
-    if isinstance(df, DataFrame):
-        func = lambda df: list(df.itertuples(index))
-    elif isinstance(df, Series):
-        func = (lambda df: list(df.iteritems())) if index else list
-    else:
+    if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
     name = 'to_bag-' + tokenize(df, index)
-    dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
+    dsk = dict(((name, i), (_df_to_bag, block, index))
+               for (i, block) in enumerate(df._keys()))
     dsk.update(df._optimize(df.dask, df._keys()))
     return Bag(dsk, name, df.npartitions)
 
