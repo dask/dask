@@ -1370,9 +1370,9 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
 
-    def __new__(cls, dask, name, columns, divisions):
+    def __new__(cls, dsk, name, columns, divisions):
         result = object.__new__(cls)
-        result.dask = dask
+        result.dask = dsk
         result._name = name
 
         result._pd, result._known_dtype = cls._build_pd(columns)
@@ -2630,12 +2630,23 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
 def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
-    npartitions = min(npartitions, df.npartitions)
-    k = int(math.ceil(df.npartitions / npartitions))
-    divisions = df.divisions[::k]
-    if len(divisions) <= npartitions:
-        divisions = divisions + (df.divisions[-1],)
-    return df.repartition(divisions=divisions)
+    npartitions_ratio = df.npartitions / npartitions
+    new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
+                                    for new_partition_index in range(npartitions + 1)]
+    new_name = 'repartition-%d-%s' % (npartitions, tokenize(df))
+    dsk = {(new_name, new_partition_index):
+            (pd.concat,
+             [(df._name, old_partition_index)
+                for old_partition_index in range(
+                    new_partitions_boundaries[new_partition_index],
+                    new_partitions_boundaries[new_partition_index + 1])])
+            for new_partition_index in range(npartitions)}
+    return DataFrame(
+        dsk=merge(df.dask, dsk),
+        name=new_name,
+        columns=df.columns,
+        divisions=[df.divisions[new_partition_index]
+                    for new_partition_index in new_partitions_boundaries])
 
 
 def repartition(df, divisions=None, force=False):
