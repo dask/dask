@@ -741,7 +741,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.dot(b))
     residuals = b - a.dot(x)
-    residuals = (residuals ** 2).sum()
+    residuals = (residuals ** 2).sum(keepdims=True)
 
     token = tokenize(a, b)
 

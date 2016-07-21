@@ -804,7 +804,10 @@ def test_repr():
     assert str(d._dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
-
+    # Empty array
+    d = da.Array({}, 'd', ((), (3, 4)), dtype='i8')
+    assert str(d.shape) in repr(d)
+    assert str(d._dtype) in repr(d)
 
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
