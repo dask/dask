@@ -1,9 +1,23 @@
+from distutils.version import LooseVersion
 import difflib
 import os
 import numpy as np
 
 from .core import Array
 from ..async import get_sync
+
+if LooseVersion(np.__version__) >= '1.10.0':
+    allclose = np.allclose
+else:
+    def allclose(a, b, **kwargs):
+        if kwargs.pop('equal_nan', False):
+            a_nans = np.isnan(a)
+            b_nans = np.isnan(b)
+            if not (a_nans == b_nans).all():
+                return False
+            a = a[~a_nans]
+            b = b[~b_nans]
+        return np.allclose(a, b, **kwargs)
 
 
 def _not_empty(x):
@@ -45,7 +59,7 @@ def assert_eq(a, b, **kwargs):
         if _not_empty(a) and _not_empty(b):
             # Treat all empty arrays as equivalent
             assert a.shape == b.shape
-            assert np.allclose(a, b, **kwargs)
+            assert allclose(a, b, **kwargs)
         return
     except TypeError:
         pass
