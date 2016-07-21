@@ -599,3 +599,15 @@ def test_merge_maintains_columns(lhs, rhs):
     ddf = dd.from_pandas(lhs, npartitions=1)
     merged = dd.merge(ddf, rhs, on='B').compute()
     assert tuple(merged.columns) == ('D', 'C', 'B', 'A', 'G', 'H', 'I')
+
+
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_merge_index_without_divisions(method):
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[1, 2, 3, 4, 5])
+    b = pd.DataFrame({'y': [1, 2, 3, 4, 5]}, index=[5, 4, 3, 2, 1])
+
+    aa = dd.from_pandas(a, npartitions=3, sort=False)
+    bb = dd.from_pandas(b, npartitions=2)
+
+    eq(aa.join(bb, how='inner', method=method),
+       a.join(b, how='inner'))

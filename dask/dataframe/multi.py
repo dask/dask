@@ -413,7 +413,8 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 
     # Both sides are now dd.DataFrame or dd.Series objects
 
-    if left_index and right_index:  # Do indexed join
+    if (left_index and left.known_divisions and
+        right_index and right.known_divisions):  # Do indexed join
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
