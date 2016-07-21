@@ -85,6 +85,7 @@ class ProgressBar(Callback):
         # Start background thread
         self._running = True
         self._timer = threading.Thread(target=self._timer_func)
+        self._timer.daemon = True
         self._timer.start()
 
     def _pretask(self, key, dsk, state):
