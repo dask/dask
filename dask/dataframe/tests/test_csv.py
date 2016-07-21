@@ -32,7 +32,8 @@ files = {'2014-01-01.csv': (b'name,amount,id\n'
 
 header = files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
 
-expected = pd.concat([pd.read_csv(BytesIO(files[k])) for k in sorted(files)])
+expected = pd.concat([pd.read_csv(BytesIO(files[k])) for k in sorted(files)],
+                     ignore_index=True)
 
 
 def test_bytes_read_csv():
