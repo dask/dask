@@ -1116,10 +1116,14 @@ def test_read_hdf_multiple():
 
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*')
-        r = dd.read_hdf(fn, '/data*')
-        eq(a, r)
+        with pytest.raises(ValueError) as e:
+            r = dd.read_hdf(fn, '/data*', assume_partitioned=True)
+        assert 'entirety' in str(e)
+
+        r = dd.read_hdf(fn, '/data*', chunksize=None, assume_partitioned=True)
         assert a.npartitions == r.npartitions
         assert a.divisions == r.divisions
+        eq(a, r)
 
 
 def test_read_hdf_start_stop_values():
