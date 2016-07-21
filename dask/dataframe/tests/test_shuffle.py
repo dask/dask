@@ -38,6 +38,20 @@ def test_default_partitions():
     assert shuffle(d, d.b).npartitions == d.npartitions
 
 
+def test_shuffle_npatitions_task():
+    df = pd.DataFrame({'x': np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    s = shuffle(ddf, ddf.x, method='tasks', npartitions=17, max_branch=4)
+    sc = s.compute(get=get_sync)
+    assert s.npartitions == 17
+    assert set(s.dask).issuperset(set(ddf.dask))
+
+    assert len(sc) == len(df)
+    assert list(s.columns) == list(df.columns)
+    assert set(map(tuple, sc.values.tolist())) == \
+           set(map(tuple, df.values.tolist()))
+
+
 def test_index_with_non_series():
     tm.assert_frame_equal(shuffle(d, d.b).compute(),
                           shuffle(d, 'b').compute())

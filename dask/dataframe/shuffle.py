@@ -153,21 +153,39 @@ def shuffle(df, index, method=None, npartitions=None, max_branch=32):
     elif method == 'tasks':
         if not isinstance(index, _Frame):
             index = df[index]
-        return shuffle_tasks(df, index, max_branch)
+        return shuffle_tasks(df, index, max_branch, npartitions=npartitions)
     raise NotImplementedError()
 
 
-def shuffle_tasks(df, index, max_branch=32):
+def shuffle_tasks(df, index, max_branch=32, npartitions=None):
     """ Shuffle by creating many tasks """
     assert isinstance(index, _Frame)
+    if npartitions is not None and npartitions < df.npartitions:
+        raise ValueError("Must create as many or more partitions in shuffle")
     partitions = index.map_partitions(partitioning_index,
-                                      npartitions=df.npartitions,
+                                      npartitions=npartitions or df.npartitions,
                                       columns=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch)
-    df4 = df3.drop('_partitions', axis=1)
-    df4.divisions = (None,) * (df.npartitions + 1)
-    return df4
+    if npartitions is not None and npartitions != df.npartitions:
+        parts = partitioning_index(pd.Series(range(npartitions)),
+                                   df.npartitions)
+        token = tokenize(df3, npartitions)
+        dsk = {('repartition-group-' + token, i):
+               (shuffle_group_2, k, '_partitions')
+                for i, k in enumerate(df3._keys())}
+        for p in range(npartitions):
+            dsk[('repartition-get-' + token, p)] = \
+                (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
+
+        df4 = DataFrame(merge(df3.dask, dsk), 'repartition-get-' + token, df3,
+                        [None] * (npartitions + 1))
+    else:
+        df4 = df3
+        df4.divisions = (None,) * (df.npartitions + 1)
+
+    df5 = df4.drop('_partitions', axis=1)
+    return df5
 
 
 def shuffle_disk(df, index, npartitions=None):
@@ -290,8 +308,22 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def shuffle_group(df, col, stage, k):
-    c = df[col] // k ** stage % k
+def shuffle_group_2(df, col):
+    g = df.groupby(col)
+    return {i: g.get_group(i) for i in g.groups}, df.head(0)
+
+
+def shuffle_group_get(g_head, i):
+    g, head = g_head
+    if i in g:
+        return g[i]
+    else:
+        return head
+
+
+def shuffle_group(df, col, stage, k, npartitions):
+    ind = partitioning_index(df[col], npartitions)
+    c = ind // k ** stage % k
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
 
@@ -341,7 +373,7 @@ def rearrange_by_column(df, column, max_branch=32):
         group = dict((('shuffle-group-' + token, stage, inp),
                       (shuffle_group,
                         ('shuffle-join-' + token, stage - 1, inp),
-                        column, stage - 1, k))
+                        column, stage - 1, k, n))
                      for inp in inputs)
 
         split = dict((('shuffle-split-' + token, stage, i, inp),
