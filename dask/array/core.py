@@ -847,7 +847,7 @@ class Array(Base):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] for c in self.chunks))
+        chunksize = str(tuple(c[0] if c else 0 for c in self.chunks))
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self._dtype, chunksize))
@@ -3030,7 +3030,7 @@ def concatenate3(arrays):
     if not ndim:
         return arrays
     if not arrays:
-        return np.empty(())
+        return np.empty(0)
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 

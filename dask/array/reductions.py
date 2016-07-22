@@ -29,9 +29,9 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         axis = (axis,)
     axis = tuple(i if i >= 0 else x.ndim + i for i in axis)
 
-    if dtype and 'dtype' in getargspec(chunk).args:
+    if dtype is not None and 'dtype' in getargspec(chunk).args:
         chunk = partial(chunk, dtype=dtype)
-    if dtype and 'dtype' in getargspec(aggregate).args:
+    if dtype is not None and 'dtype' in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
 
     # Map chunk across all blocks
