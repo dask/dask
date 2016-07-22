@@ -3005,6 +3005,9 @@ def test_default_get(loop):
         e.shutdown()
         assert _globals['get'] is pre_get
 
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            assert _globals['get'] == e.get
+
 
 @gen_cluster(executor=True)
 def test_get_stacks_processing(e, s, a, b):

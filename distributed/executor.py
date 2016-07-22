@@ -250,7 +250,7 @@ class Executor(object):
     distributed.scheduler.Scheduler: Internal scheduler
     """
     def __init__(self, address=None, start=True, loop=None, timeout=3,
-                 set_as_default=False):
+                 set_as_default=True):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
