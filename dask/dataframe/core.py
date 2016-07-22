@@ -38,6 +38,13 @@ return_scalar = '__return_scalar__'
 pd.computation.expressions.set_use_numexpr(False)
 
 
+def _is_basic_index(index):
+    return (index.name is None and
+            isinstance(index, pd.RangeIndex) and
+            index._start == 0 and
+            index._step == 1)
+
+
 def _concat(args, **kwargs):
     """ Generic concat operation """
     if not args:
@@ -48,10 +55,14 @@ def _concat(args, **kwargs):
         args2 = [arg for arg in args if len(arg)]
         if not args2:
             return args[0]
+        if all(_is_basic_index(arg.index) for arg in args2):
+            return pd.concat(args2, ignore_index=True)
         return pd.concat(args2)
     if isinstance(args[0], (pd.Index)):
-        args = [arg for arg in args if len(arg)]
-        return args[0].append(args[1:])
+        args2 = [arg for arg in args if len(arg)]
+        if all(_is_basic_index(arg) for arg in args2):
+            return pd.RangeIndex(0, sum(map(len, args2)))
+        return args2[0].append(args2[1:])
     return args
 
 

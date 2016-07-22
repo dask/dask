@@ -755,15 +755,15 @@ def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None, None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    c = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    c = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60],
                                    'd': [70, 80, 90]}),
@@ -772,21 +772,21 @@ def test_concat2():
                                   index=[3, 4, 5])}
     d = dd.DataFrame(dsk, 'y', ['b', 'c', 'd'], [0, 3, 5])
 
-    cases = [[a, b], [a, c], [a, d]]
+    cases = [([a, b], True), ([a, c], True), ([a, d], False)]
     assert dd.concat([a]) is a
-    for case in cases:
+    for case, ignore in cases:
         result = dd.concat(case)
-        pdcase = [c.compute() for c in case]
+        pdcase = [i for c in case for i in c._get(c.dask, c._keys())]
 
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None, ) * (result.npartitions + 1)
-        assert eq(pd.concat(pdcase), result)
+        assert eq(pd.concat(pdcase, ignore_index=ignore), result)
         assert result.dask == dd.concat(case).dask
 
         result = dd.concat(case, join='inner')
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None, ) * (result.npartitions + 1)
-        assert eq(pd.concat(pdcase, join='inner'), result)
+        assert eq(pd.concat(pdcase, join='inner', ignore_index=ignore), result)
         assert result.dask == dd.concat(case, join='inner').dask
 
         msg = ('Unable to concatenate DataFrame with unknown division '
@@ -963,43 +963,47 @@ def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
 
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    ddf2 = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    ddf2 = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None, None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    ddf3 = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    ddf3 = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None, None])
 
-    assert eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
-    assert eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    def _append(a, b):
+        p1 = a.compute()
+        p2 = b.compute()
+        return p1.append(p2).reset_index(drop=True)
+
+    assert eq(ddf1.append(ddf2), _append(ddf1, ddf2))
+    assert eq(ddf2.append(ddf1), _append(ddf2, ddf1))
     # Series + DataFrame
-    assert eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-    assert eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
-
+    assert eq(ddf1.a.append(ddf2), _append(ddf1.a, ddf2))
+    assert eq(ddf2.a.append(ddf1), _append(ddf2.a, ddf1))
     # different columns
-    assert eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
-    assert eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    assert eq(ddf1.append(ddf3), _append(ddf1, ddf3))
+    assert eq(ddf3.append(ddf1), _append(ddf3, ddf1))
     # Series + DataFrame
-    assert eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-    assert eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+    assert eq(ddf1.a.append(ddf3), _append(ddf1.a, ddf3))
+    assert eq(ddf3.b.append(ddf1), _append(ddf3.b, ddf1))
 
     # Dask + pandas
-    assert eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
-    assert eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    assert eq(ddf1.append(ddf2.compute()), _append(ddf1, ddf2))
+    assert eq(ddf2.append(ddf1.compute()), _append(ddf2, ddf1))
     # Series + DataFrame
-    assert eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
-    assert eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+    assert eq(ddf1.a.append(ddf2.compute()), _append(ddf1.a, ddf2))
+    assert eq(ddf2.a.append(ddf1.compute()), _append(ddf2.a, ddf1))
 
     # different columns
-    assert eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
-    assert eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    assert eq(ddf1.append(ddf3.compute()), _append(ddf1, ddf3))
+    assert eq(ddf3.append(ddf1.compute()), _append(ddf3, ddf1))
     # Series + DataFrame
-    assert eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
-    assert eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
+    assert eq(ddf1.a.append(ddf3.compute()), _append(ddf1.a, ddf3))
+    assert eq(ddf3.b.append(ddf1.compute()), _append(ddf3.b, ddf1))
 
 
 def test_dataframe_series_are_pickleable():
