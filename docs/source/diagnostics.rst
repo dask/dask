@@ -212,7 +212,7 @@ stack of plots aligned along the x-axis:
 
 .. code-block:: python
 
-    >>> from dask import visualize
+    >>> from dask.diagnostics import visualize
     >>> visualize([prof, rprof, cprof])
 
 
