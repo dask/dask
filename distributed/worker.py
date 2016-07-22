@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
-from threading import current_thread
+from threading import current_thread, Thread
 from time import time
 from timeit import default_timer
 import shutil
@@ -116,6 +116,7 @@ class Worker(Server):
         self.heartbeat_interval = heartbeat_interval
         self._last_disk_io = None
         self._last_net_io = None
+        self._ipython_kernel = None
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
@@ -145,7 +146,9 @@ class Worker(Server):
                     'terminate': self.terminate,
                     'ping': pingpong,
                     'health': self.host_health,
-                    'upload_file': self.upload_file}
+                    'upload_file': self.upload_file,
+                    'start_ipython': self.start_ipython,
+                }
 
         super(Worker, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
@@ -604,6 +607,53 @@ class Worker(Server):
 
     def get_data(self, stream, keys=None):
         return {k: dumps(self.data[k]) for k in keys if k in self.data}
+
+    def _start_ipython(self):
+        from IPython import get_ipython
+        if get_ipython() is not None:
+            raise RuntimeError("Cannot start IPython, it's already running.")
+
+        from zmq.eventloop.ioloop import ZMQIOLoop
+        from ipykernel.kernelapp import IPKernelApp
+        # save the global IOLoop instance
+        # since IPython relies on it, but we are going to put it in a thread.
+        save_inst = IOLoop.instance()
+        IOLoop.clear_instance()
+        zmq_loop = ZMQIOLoop()
+        zmq_loop.install()
+
+        # start IPython, disabling its signal handlers that won't work due to running in a thread:
+        app = self._ipython_kernel = IPKernelApp.instance(log=logger)
+        # Don't connect to the history database
+        app.config.HistoryManager.hist_file = ':memory:'
+        # listen on all interfaces, so remote clients can connect:
+        app.ip = self.ip
+        app.init_signal = lambda : None
+        app.initialize([])
+        app.kernel.pre_handler_hook = lambda : None
+        app.kernel.post_handler_hook = lambda : None
+        app.kernel.start()
+
+        # save self in the IPython namespace as 'worker'
+        app.kernel.shell.user_ns['worker'] = self
+
+        # start IPython's IOLoop in a thread
+        zmq_loop_thread = Thread(target=zmq_loop.start)
+        zmq_loop_thread.start()
+
+        # put the global IOLoop instance back:
+        IOLoop.clear_instance()
+        save_inst.install()
+        return app
+
+    def start_ipython(self, stream):
+        """Start an IPython kernel
+
+        Returns Jupyter connection info dictionary.
+        """
+        if self._ipython_kernel is None:
+            self._ipython_kernel = self._start_ipython()
+        return self._ipython_kernel.get_connection_info()
 
     def upload_file(self, stream, filename=None, data=None, load=True):
         out_filename = os.path.join(self.local_dir, filename)

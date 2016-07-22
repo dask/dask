@@ -48,7 +48,7 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib
+  - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client
   - pip install git+https://github.com/dask/dask.git --upgrade
   - pip install git+https://github.com/joblib/joblib.git --upgrade
   - pip install git+https://github.com/dask/s3fs.git --upgrade

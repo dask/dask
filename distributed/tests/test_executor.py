@@ -11,6 +11,8 @@ from threading import Thread
 from time import sleep, time
 import traceback
 
+
+import mock
 import pytest
 from toolz import (identity, isdistinct, first, concat, pluck, valmap,
         partition_all)
@@ -3171,3 +3173,56 @@ def test_as_completed_list(loop):
             seq = e.map(inc, iter(range(5)))
             seq2 = list(as_completed(seq))
             assert set(e.gather(seq2)) == {1, 2, 3, 4, 5}
+
+
+@pytest.mark.ipython
+def test_start_ipython(loop):
+    from jupyter_client import BlockingKernelClient
+    from ipykernel.kernelapp import IPKernelApp
+    from IPython.core.interactiveshell import InteractiveShell
+    
+    with cluster(1) as (s, [a]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            info_dict = e.start_ipython()
+            info = first(info_dict.values())
+            key = info.pop('key')
+            kc = BlockingKernelClient(**info)
+            kc.session.key = key
+            kc.start_channels()
+            msg_id = kc.execute("worker")
+            reply = kc.get_shell_msg(timeout=10)
+            kc.stop_channels()
+
+@pytest.mark.ipython
+def test_start_ipython_magic(loop):
+    ip = mock.Mock()
+    with cluster() as (s, [a, b]):
+        with mock.patch('IPython.get_ipython', lambda : ip), Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            workers = list(e.ncores())[:2]
+            names = [ 'magic%i' % i for i in range(len(workers)) ]
+            e.start_ipython(workers, magic_names=names)
+    assert ip.register_magic_function.call_count == 4
+    expected = [
+        {'magic_kind': 'line', 'magic_name': 'magic0'},
+        {'magic_kind': 'cell', 'magic_name': 'magic0'},
+        {'magic_kind': 'line', 'magic_name': 'magic1'},
+        {'magic_kind': 'cell', 'magic_name': 'magic1'},
+    ]
+    call_kwargs_list = [ kwargs for (args, kwargs) in ip.register_magic_function.call_args_list ]
+    assert call_kwargs_list == expected
+
+
+@pytest.mark.ipython
+def test_start_ipython_qtconsole(loop):
+    Popen = mock.Mock()
+    with cluster() as (s, [a, b]):
+        with mock.patch('distributed._ipython_utils.Popen', Popen), Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            worker = first(e.ncores())
+            e.start_ipython(worker, qtconsole=True)
+            e.start_ipython(worker, qtconsole=True, qtconsole_args=['--debug'])
+    assert Popen.call_count == 2
+    (cmd,), kwargs = Popen.call_args_list[0]
+    assert cmd[:3] == [ 'jupyter', 'qtconsole', '--existing' ]
+    (cmd,), kwargs = Popen.call_args_list[1]
+    assert cmd[-1:] == [ '--debug' ]
+
