@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import dask
 from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.utils import eq, assert_dask_graph
@@ -90,24 +91,21 @@ def groupby_internal_head():
 
 
 def test_full_groupby():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                                  index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
-    full = d.compute()
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    assert raises(Exception, lambda: d.groupby('does_not_exist'))
-    assert raises(Exception, lambda: d.groupby('a').does_not_exist)
-    assert 'b' in dir(d.groupby('a'))
+    assert raises(Exception, lambda: df.groupby('does_not_exist'))
+    assert raises(Exception, lambda: df.groupby('a').does_not_exist)
+    assert 'b' in dir(df.groupby('a'))
 
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert eq(df.groupby('a').apply(func),
+              ddf.groupby('a').apply(func))
 
 
 def test_groupby_dir():
@@ -119,14 +117,10 @@ def test_groupby_dir():
 
 
 def test_groupby_on_index():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                                  index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
-    full = d.compute()
+    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    d = dd.from_pandas(full, npartitions=3)
 
     e = d.set_index('a')
     efull = full.set_index('a')
@@ -470,3 +464,23 @@ def test_numeric_column_names():
     ddf = dd.from_pandas(df, npartitions=2)
     eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     eq(ddf.groupby(0).apply(lambda x: x), df.groupby(0).apply(lambda x: x))
+
+
+
+def test_groupby_apply_tasks():
+    df = pd.util.testing.makeTimeDataFrame()
+    df['A'] = df.A // 0.1
+    df['B'] = df.B // 0.1
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    with dask.set_options(shuffle='tasks'):
+        for ind in [lambda x: 'A', lambda x: x.A]:
+            a = df.groupby(ind(df)).apply(len)
+            b = ddf.groupby(ind(ddf)).apply(len)
+            assert eq(a, b.compute())
+            assert not any('partd' in k[0] for k in b.dask)
+
+            a = df.groupby(ind(df)).B.apply(len)
+            b = ddf.groupby(ind(ddf)).B.apply(len)
+            assert eq(a, b.compute())
+            assert not any('partd' in k[0] for k in b.dask)

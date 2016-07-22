@@ -1827,7 +1827,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False,
-              suffixes=('_x', '_y'), npartitions=None):
+              suffixes=('_x', '_y'), npartitions=None, method=None):
 
         if not isinstance(right, (DataFrame, pd.DataFrame)):
             raise ValueError('right must be DataFrame')
@@ -1836,11 +1836,11 @@ class DataFrame(_Frame):
         return merge(self, right, how=how, on=on,
                      left_on=left_on, right_on=right_on,
                      left_index=left_index, right_index=right_index,
-                     suffixes=suffixes, npartitions=npartitions)
+                     suffixes=suffixes, npartitions=npartitions, method=method)
 
     @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
-             lsuffix='', rsuffix='', npartitions=None):
+             lsuffix='', rsuffix='', npartitions=None, method=None):
 
         if not isinstance(other, (DataFrame, pd.DataFrame)):
             raise ValueError('other must be DataFrame')
@@ -1849,7 +1849,7 @@ class DataFrame(_Frame):
         return merge(self, other, how=how,
                      left_index=on is None, right_index=True,
                      left_on=on, suffixes=[lsuffix, rsuffix],
-                     npartitions=npartitions)
+                     npartitions=npartitions, method=method)
 
     @derived_from(pd.DataFrame)
     def append(self, other):
@@ -2319,7 +2319,9 @@ def map_partitions(func, metadata, *args, **kwargs):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
         values = (apply, func, (tuple, values), kwargs)
-        dsk[(name, i)] = (_rename, columns, values)
+        if columns is not None:
+            values = (_rename, columns, values)
+        dsk[(name, i)] = values
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
     return return_type(merge(dsk, *dasks), name, metadata, args[0].divisions)

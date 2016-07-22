@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 import math
+from operator import getitem
 import types
 import uuid
 
@@ -29,6 +30,8 @@ def set_index(df, index, npartitions=None, method=None, compute=True,
     This shuffles and repartitions your data. If done in parallel the
     resulting order is non-deterministic.
     """
+    if (isinstance(index, Series) and index._name == df.index._name):
+        return df
     if isinstance(index, (DataFrame, tuple, list)):
         raise NotImplementedError(
             "Dask dataframe does not yet support multi-indexes.\n"
@@ -90,13 +93,7 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
     shuffle
     partd
     """
-    if method is None:
-        get = _globals.get('get')
-        if (isinstance(get, types.MethodType) and
-            'distributed' in get.__func__.__module__):
-            method = 'tasks'
-        else:
-            method = 'disk'
+    method = method or _globals.get('shuffle', 'disk')
 
     if method == 'disk':
         return set_partition_disk(df, index, divisions, compute=compute,
@@ -111,6 +108,7 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
 def barrier(args):
     list(args)
     return 0
+
 
 def _set_partition(df, index, divisions, p, drop=True):
     """ Shard partition and dump into partd """
@@ -131,8 +129,7 @@ def _set_collect(group, p, barrier_token, columns):
         # which has the same columns as original
         return pd.DataFrame(columns=columns)
 
-
-def shuffle(df, index, npartitions=None):
+def shuffle(df, index, method=None, npartitions=None, max_branch=32):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -147,8 +144,36 @@ def shuffle(df, index, npartitions=None):
     --------
     set_index
     set_partition
-    partd
+    shuffle_disk
+    shuffle_tasks
     """
+    method = method or _globals.get('shuffle', 'disk')
+    if method == 'disk':
+        return shuffle_disk(df, index, npartitions)
+    elif method == 'tasks':
+        if not isinstance(index, _Frame):
+            index = df[index]
+        return shuffle_tasks(df, index, max_branch, npartitions=npartitions)
+    raise NotImplementedError()
+
+
+def shuffle_tasks(df, index, max_branch=32, npartitions=None):
+    """ Shuffle by creating many tasks """
+    assert isinstance(index, _Frame)
+    if npartitions is not None and npartitions < df.npartitions:
+        raise ValueError("Must create as many or more partitions in shuffle")
+    partitions = index.map_partitions(partitioning_index,
+                                      npartitions=npartitions or df.npartitions,
+                                      columns=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch, npartitions)
+
+    df4 = df3.drop('_partitions', axis=1)
+    return df4
+
+
+def shuffle_disk(df, index, npartitions=None):
+    """ Shuffle using local disk """
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
     if npartitions is None:
@@ -233,7 +258,7 @@ def hash_series(s):
     elif np.issubdtype(dt, np.integer):
         return vals
     elif np.issubdtype(dt, np.floating):
-        return np.nan_to_num(vals).astype('int64')
+        return np.nan_to_num(vals).view('i' + str(dt.itemsize))
     elif dt == np.bool:
         return vals.view('int8')
     elif np.issubdtype(dt, np.datetime64) or np.issubdtype(dt, np.timedelta64):
@@ -261,58 +286,53 @@ def collect(group, p, meta, barrier_token):
     return res if len(res) > 0 else meta
 
 
-def shuffle_pre_partition_scalar(df, index, divisions, drop):
-    ind = df[index]
-    parts = pd.Series(divisions).searchsorted(ind, side='right') - 1
-    parts[(ind == divisions[-1]).values] = len(divisions) - 2
-    result = (df.assign(partitions=parts)
-                .set_index('partitions', drop=drop))
-    return result
+def set_partitions_pre(s, divisions):
+    partitions = pd.Series(divisions).searchsorted(s, side='right') - 1
+    partitions[(s == divisions[-1]).values] = len(divisions) - 2
+    return partitions
 
 
-def shuffle_pre_partition_series(df, index, divisions, drop):
-    parts = pd.Series(divisions).searchsorted(index, side='right') - 1
-    parts[(index == divisions[-1]).values] = len(divisions) - 2
-    result = (df.assign(partitions=parts, new_index=index)
-                .set_index('partitions', drop=drop))
-    return result
+def shuffle_group_2(df, col):
+    g = df.groupby(col)
+    return {i: g.get_group(i) for i in g.groups}, df.head(0)
 
 
-def shuffle_group(df, stage, k):
-    df['.old-index'] = df.index
-    index = df.index // k ** stage % k
-    inds = set(index.drop_duplicates())
-    df = df.set_index(index)
-
-    result = dict(((i, df.loc[i] if i in inds else df.head(0))
-                  for i in range(k)))
-    if isinstance(df, pd.DataFrame):
-        result = dict((k, pd.DataFrame(v).transpose()
-                           if isinstance(v, pd.Series) else v)
-                        for k, v in result.items())
-
-    for k in result:
-        part = result[k].set_index('.old-index')
-        part.index.name = 'partitions'
-        result[k] = part
-
-    return result
+def shuffle_group_get(g_head, i):
+    g, head = g_head
+    if i in g:
+        return g[i]
+    else:
+        return head
 
 
-def shuffle_post_scalar(df, index_name):
-    return df.set_index(index_name, drop=True)
+def shuffle_group(df, col, stage, k, npartitions):
+    ind = partitioning_index(df[col], npartitions)
+    c = ind // k ** stage % k
+    g = df.groupby(c)
+    return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
 
 
-def shuffle_post_series(df, index_name):
-    df = df.set_index('new_index', drop=True)
-    df.index.name = index_name
-    return df
+def set_index_post_scalar(df, index_name, drop):
+    return (df.drop('_partitions', axis=1)
+              .set_index(index_name, drop=drop))
+
+def set_index_post_series(df, index_name, drop):
+    df2 = df.drop('_partitions', axis=1).set_index('_index', drop=drop)
+    df2.index.name = index_name
+    return df2
 
 
-def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
+def rearrange_by_column(df, column, max_branch=32, npartitions=None):
+    """ Order divisions of DataFrame so that all values within column align
+
+    This enacts a task-based shuffle
+
+    See also:
+        set_partitions_tasks
+        shuffle_tasks
+    """
     max_branch = max_branch or 32
     n = df.npartitions
-    assert len(divisions) == n + 1
 
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
     if stages > 1:
@@ -327,32 +347,21 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(k**stages)]
 
-    if np.isscalar(index):
-        meta = shuffle_pre_partition_scalar(df._pd, index, divisions, drop)
-        meta = meta.drop(index, axis=1)
-        df2 = map_partitions(shuffle_pre_partition_scalar, meta, df, index,
-                             divisions, drop)
-    else:
-        meta = df._pd.copy()
-        meta.index = index._pd
-        df2 = map_partitions(shuffle_pre_partition_series, meta, df, index,
-                             divisions, drop)
-
-    token = tokenize(df, index, divisions, max_branch, drop)
+    token = tokenize(df, column, max_branch)
 
     start = dict((('shuffle-join-' + token, 0, inp),
-                  (df2._name, i) if i < df2.npartitions else df._pd)
+                  (df._name, i) if i < df.npartitions else df._pd)
                  for i, inp in enumerate(inputs))
 
     for stage in range(1, stages + 1):
         group = dict((('shuffle-group-' + token, stage, inp),
                       (shuffle_group,
                         ('shuffle-join-' + token, stage - 1, inp),
-                        stage - 1, k))
+                        column, stage - 1, k, n))
                      for inp in inputs)
 
         split = dict((('shuffle-split-' + token, stage, i, inp),
-                      (dict.get, ('shuffle-group-' + token, stage, inp), i, {}))
+                      (getitem, ('shuffle-group-' + token, stage, inp), i))
                      for i in range(k)
                      for inp in inputs)
 
@@ -365,17 +374,72 @@ def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
         splits.append(split)
         joins.append(join)
 
-    post = shuffle_post_scalar if np.isscalar(index) else shuffle_post_series
     end = dict((('shuffle-' + token, i),
-                (post, ('shuffle-join-' + token, stages, inp),
-                    index if np.isscalar(index) else index.name))
+                ('shuffle-join-' + token, stages, inp))
                 for i, inp in enumerate(inputs))
 
-    dsk = merge(df2.dask, start, end, *(groups + splits + joins))
+    dsk = merge(df.dask, start, end, *(groups + splits + joins))
+    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
 
-    meta = df._pd.set_index(index if np.isscalar(index) else index._pd)
-    result = DataFrame(dsk, 'shuffle-' + token, meta, divisions)
-    return result.map_partitions(pd.DataFrame.sort_index, result)
+    if npartitions is not None and npartitions != df.npartitions:
+        parts = partitioning_index(pd.Series(range(npartitions)),
+                                   df.npartitions)
+        token = tokenize(df2, npartitions)
+        dsk = {('repartition-group-' + token, i):
+               (shuffle_group_2, k, column)
+                for i, k in enumerate(df2._keys())}
+        for p in range(npartitions):
+            dsk[('repartition-get-' + token, p)] = \
+                (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
+
+        df3 = DataFrame(merge(df2.dask, dsk), 'repartition-get-' + token, df2,
+                        [None] * (npartitions + 1))
+    else:
+        df3 = df2
+        df3.divisions = (None,) * (df.npartitions + 1)
+
+    return df3
+
+
+def rearrange_by_divisions(df, column, divisions, max_branch):
+    """ Shuffle dataframe so that column separates along divisions """
+    partitions = df[column].map_partitions(set_partitions_pre,
+                divisions=divisions, columns=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch,
+                              npartitions=len(divisions) - 1)
+    return df3.drop('_partitions', axis=1)
+
+
+def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
+    """ Set partitions using task based scheme
+
+    See also:
+        set_partition
+        set_partition_disk
+    """
+    assert len(divisions) == len(df.divisions)
+    if np.isscalar(index):
+        partitions = df[index].map_partitions(set_partitions_pre,
+                divisions=divisions, columns=pd.Series([0]))
+        df2 = df.assign(_partitions=partitions)
+    else:
+        partitions = index.map_partitions(set_partitions_pre,
+                divisions=divisions, columns=pd.Series([0]))
+        df2 = df.assign(_partitions=partitions, _index=index)
+
+    df3 = rearrange_by_column(df2, '_partitions', max_branch)
+
+    if np.isscalar(index):
+        df4 = df3.map_partitions(set_index_post_scalar, index_name=index,
+                drop=drop)
+    else:
+        df4 = df3.map_partitions(set_index_post_series, index_name=index.name,
+                drop=drop)
+
+    df4.divisions = divisions
+
+    return df4.map_partitions(pd.DataFrame.sort_index)
 
 
 def set_partition_disk(df, index, divisions, compute=False, drop=True, **kwargs):
