@@ -246,9 +246,13 @@ class _Frame(Base):
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
     def get_division(self, n):
-        """ Get nth division of the data """
+        warnings.warn("Deprecation warning: use `get_partition` instead")
+        return get_partition(self, n)
+
+    def get_partition(self, n):
+        """Get a dask DataFrame/Series representing the `nth` partition."""
         if 0 <= n < self.npartitions:
-            name = 'get-division-%s-%s' % (str(n), self._name)
+            name = 'get-partition-%s-%s' % (str(n), self._name)
             dsk = {(name, 0): (self._name, n)}
             divisions = self.divisions[n:n+2]
             return self._constructor(merge(self.dask, dsk), name,
@@ -1180,7 +1184,7 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def iteritems(self):
         for i in range(self.npartitions):
-            s = self.get_division(i).compute()
+            s = self.get_partition(i).compute()
             for item in s.iteritems():
                 yield item
 
@@ -1864,14 +1868,14 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def iterrows(self):
         for i in range(self.npartitions):
-            df = self.get_division(i).compute()
+            df = self.get_partition(i).compute()
             for row in df.iterrows():
                 yield row
 
     @derived_from(pd.DataFrame)
     def itertuples(self):
         for i in range(self.npartitions):
-            df = self.get_division(i).compute()
+            df = self.get_partition(i).compute()
             for row in df.itertuples():
                 yield row
 
