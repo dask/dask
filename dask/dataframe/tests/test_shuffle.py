@@ -5,7 +5,7 @@ import numpy as np
 
 import dask.dataframe as dd
 from dask.dataframe.shuffle import (shuffle, hash_series, partitioning_index,
-        rearrange_by_column)
+        rearrange_by_column, rearrange_by_divisions)
 from dask.async import get_sync
 from dask.dataframe.utils import eq
 
@@ -220,3 +220,12 @@ def test_rearrange():
     parts = get_sync(result.dask, result._keys())
     for i in a.y.drop_duplicates():
         assert sum(i in part.y for part in parts) == 1
+
+
+def test_rearrange_by_column_with_narrow_divisions():
+    from dask.dataframe.tests.test_multi import list_eq
+    A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    df = rearrange_by_divisions(a, 'x', (0, 2, 5))
+    list_eq(df, a)

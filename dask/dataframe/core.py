@@ -245,6 +245,10 @@ class _Frame(Base):
         """Whether divisions are already known"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
+    def clear_divisions(self):
+        divisions = (None,) * (self.npartitions + 1)
+        return type(self)(self.dask, self._name, self._pd, divisions)
+
     def get_division(self, n):
         """ Get nth division of the data """
         if 0 <= n < self.npartitions:

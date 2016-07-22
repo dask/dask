@@ -383,7 +383,6 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
           npartitions=None, shuffle=None, max_branch=None):
-
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
         if not on:
@@ -430,9 +429,8 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                 right_index=right_index, suffixes=suffixes)
 
     # One side is indexed, the other not
-    elif (shuffle == 'tasks' and
-        (left_index and left.known_divisions and not right_index or
-        right_index and right.known_divisions and not left_index)):
+    elif (left_index and left.known_divisions and not right_index or
+          right_index and right.known_divisions and not left_index):
         left_empty = left._pd_nonempty
         right_empty = right._pd_nonempty
         dummy = pd.merge(left_empty, right_empty, how=how, on=on, left_on=left_on,
@@ -440,12 +438,12 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                 suffixes=suffixes)
         if left_index and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
-                    max_branch)
-            left.divisions = (None,) * (left.npartitions + 1)
+                    max_branch, shuffle=shuffle)
+            left = left.clear_divisions()
         elif right_index and right.known_divisions:
             left = rearrange_by_divisions(left, left_on, right.divisions,
-                    max_branch)
-            right.divisions = (None,) * (right.npartitions + 1)
+                    max_branch, shuffle=shuffle)
+            right = right.clear_divisions()
         return map_partitions(pd.merge, dummy, left, right, how=how, on=on,
                 left_on=left_on, right_on=right_on, left_index=left_index,
                 right_index=right_index, suffixes=suffixes)

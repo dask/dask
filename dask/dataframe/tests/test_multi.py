@@ -115,11 +115,15 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
            sorted(join_indexed_dataframes(a, b, how='outer').dask)
 
 
-def list_eq(a, b):
-    if isinstance(a, dd.DataFrame):
-        a = a.compute(get=get_sync)
-    if isinstance(b, dd.DataFrame):
-        b = b.compute(get=get_sync)
+def list_eq(aa, bb):
+    if isinstance(aa, dd.DataFrame):
+        a = aa.compute(get=get_sync)
+    else:
+        a = aa
+    if isinstance(bb, dd.DataFrame):
+        b = bb.compute(get=get_sync)
+    else:
+        b = bb
     tm.assert_index_equal(a.columns, b.columns)
 
     # ToDo: As of pandas 0,17, tm.assert_numpy_array_equal can
