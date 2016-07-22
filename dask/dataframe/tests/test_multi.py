@@ -137,7 +137,8 @@ def list_eq(a, b):
 
 
 @pytest.mark.parametrize('how', ['inner', 'left', 'right', 'outer'])
-def test_hash_join(how):
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_hash_join(how, method):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
@@ -151,7 +152,7 @@ def test_hash_join(how):
     list_eq(result, expected)
 
     # Different columns and npartitions
-    c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3)
+    c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3, method=method)
     assert c.npartitions == 3
 
     result = c.compute()
@@ -159,10 +160,10 @@ def test_hash_join(how):
 
     list_eq(result, expected)
 
-    assert hash_join(a, 'y', b, 'y', 'inner')._name == \
-           hash_join(a, 'y', b, 'y', 'inner')._name
-    assert hash_join(a, 'y', b, 'y', 'inner')._name != \
-           hash_join(a, 'y', b, 'y', 'outer')._name
+    assert hash_join(a, 'y', b, 'y', 'inner', method=method)._name == \
+           hash_join(a, 'y', b, 'y', 'inner', method=method)._name
+    assert hash_join(a, 'y', b, 'y', 'inner', method=method)._name != \
+           hash_join(a, 'y', b, 'y', 'outer', method=method)._name
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
@@ -221,50 +222,52 @@ def test_concat(join):
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
-def test_merge(how):
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_merge(how, method):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
     B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
-    eq(dd.merge(a, b, left_index=True, right_index=True),
+    eq(dd.merge(a, b, left_index=True, right_index=True, method=method),
        pd.merge(A, B, left_index=True, right_index=True))
 
     result = dd.merge(a, b, on='y', how=how)
     list_eq(result, pd.merge(A, B, on='y', how=how))
     assert all(d is None for d in result.divisions)
 
-    list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how),
+    list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how, method=method),
             pd.merge(A, B, left_on='x', right_on='z', how=how))
     list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how,
-                     suffixes=('1', '2')),
+                     suffixes=('1', '2'), method=method),
             pd.merge(A, B, left_on='x', right_on='z', how=how,
                      suffixes=('1', '2')))
 
-    list_eq(dd.merge(a, b, how=how), pd.merge(A, B, how=how))
-    list_eq(dd.merge(a, B, how=how), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, b, how=how), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, B, how=how), pd.merge(A, B, how=how))
+    list_eq(dd.merge(a, b, how=how, method=method), pd.merge(A, B, how=how))
+    list_eq(dd.merge(a, B, how=how, method=method), pd.merge(A, B, how=how))
+    list_eq(dd.merge(A, b, how=how, method=method), pd.merge(A, B, how=how))
+    list_eq(dd.merge(A, B, how=how, method=method), pd.merge(A, B, how=how))
 
-    list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how),
+    list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how,
+                     method=method),
             pd.merge(A, B, left_index=True, right_index=True, how=how))
     list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how,
-                     suffixes=('1', '2')),
+                     suffixes=('1', '2'), method=method),
             pd.merge(A, B, left_index=True, right_index=True, how=how,
                      suffixes=('1', '2')))
 
-    list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how),
+    list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how,
+                     method=method),
             pd.merge(A, B, left_on='x', right_index=True, how=how))
     list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how,
-                     suffixes=('1', '2')),
+                     suffixes=('1', '2'), method=method),
             pd.merge(A, B, left_on='x', right_index=True, how=how,
                      suffixes=('1', '2')))
 
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
-
 
 
 def test_merge_tasks_passes_through():
@@ -385,7 +388,8 @@ def test_merge_by_index_patterns(how, method):
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
-def test_join_by_index_patterns(how):
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_join_by_index_patterns(how, method):
 
     # Similar test cases as test_merge_by_index_patterns,
     # but columns / index for join have same dtype
@@ -445,12 +449,12 @@ def test_join_by_index_patterns(how):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
-            eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
+            eq(ddl.join(ddr, how=how, method=method), pdl.join(pdr, how=how))
+            eq(ddr.join(ddl, how=how, method=method), pdr.join(pdl, how=how))
 
-            eq(ddl.join(ddr, how=how, lsuffix='l', rsuffix='r'),
+            eq(ddl.join(ddr, how=how, lsuffix='l', rsuffix='r', method=method),
                pdl.join(pdr, how=how, lsuffix='l', rsuffix='r'))
-            eq(ddr.join(ddl, how=how, lsuffix='l', rsuffix='r'),
+            eq(ddr.join(ddl, how=how, lsuffix='l', rsuffix='r', method=method),
                pdr.join(pdl, how=how, lsuffix='l', rsuffix='r'))
 
             """
@@ -477,8 +481,8 @@ def test_join_by_index_patterns(how):
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
-def test_merge_by_multiple_columns(how):
-
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_merge_by_multiple_columns(how, method):
     pdf1l = pd.DataFrame({'a': list('abcdefghij'),
                           'b': list('abcdefghij'),
                           'c': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
@@ -513,26 +517,33 @@ def test_merge_by_multiple_columns(how):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
-            eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
+            eq(ddl.join(ddr, how=how, method=method), pdl.join(pdr, how=how))
+            eq(ddr.join(ddl, how=how, method=method), pdr.join(pdl, how=how))
 
-            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True,
+                method=method),
                pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
-            eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
+            eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True,
+                method=method),
                pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
             # hash join
-            list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='d'),
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='d',
+                             method=method),
                     pd.merge(pdl, pdr, how=how, left_on='a', right_on='d'))
-            list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='e'),
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='e',
+                             method=method),
                     pd.merge(pdl, pdr, how=how, left_on='b', right_on='e'))
 
-            list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='a'),
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='a',
+                             method=method),
                     pd.merge(pdr, pdl, how=how, left_on='d', right_on='a'))
-            list_eq(dd.merge(ddr, ddl, how=how, left_on='e', right_on='b'),
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='e', right_on='b',
+                             method=method),
                     pd.merge(pdr, pdl, how=how, left_on='e', right_on='b'))
 
-            list_eq(dd.merge(ddl, ddr, how=how, left_on=['a', 'b'], right_on=['d', 'e']),
+            list_eq(dd.merge(ddl, ddr, how=how, left_on=['a', 'b'],
+                             right_on=['d', 'e'], method=method),
                     pd.merge(pdl, pdr, how=how, left_on=['a', 'b'], right_on=['d', 'e']))
 
 

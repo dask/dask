@@ -284,8 +284,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs, left_on, rhs, right_on, left_index, right_index,
-                     how, npartitions, suffixes)
+    token = tokenize(lhs2, left_on, rhs2, right_on, left_index, right_index,
+                     how, npartitions, suffixes, method)
     name = 'hash-join-' + token
 
     dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
