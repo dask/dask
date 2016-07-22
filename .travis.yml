@@ -1,18 +1,15 @@
 language: python
 sudo: false
 
-env:
-  matrix:
-    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true'
-    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
-    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false'
-    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false'
-    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
-    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2
-
 matrix:
+  include:
+    - env: PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true'
+    - env: PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
+    - env: PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false'
+    - env: PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false'
+    - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
   allow_failures:
-    - env: PYTHONOPTIMIZE=2
+    - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2
 
 addons:
     apt:
