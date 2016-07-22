@@ -1068,15 +1068,19 @@ class Bag(Base):
             raise NotImplementedError(
               "Repartition only supports going to fewer partitions\n"
               " old: %d  new: %d" % (self.npartitions, npartitions))
-        size = self.npartitions / npartitions
-        L = [int(i * size) for i in range(npartitions + 1)]
-        name = 'repartition-%d-%s' % (npartitions, self.name)
-        dsk = dict(((name, i), (list,
-                                (toolz.concat,
-                                 [(self.name, j) for j in range(L[i], L[i + 1])]
-                                 )))
-                   for i in range(npartitions))
-        return Bag(merge(self.dask, dsk), name, npartitions)
+        npartitions_ratio = self.npartitions / npartitions
+        new_partitions_boundaries = [int(old_partition_index * npartitions_ratio)
+                                        for old_partition_index in range(npartitions + 1)]
+        new_name = 'repartition-%d-%s' % (npartitions, tokenize(self))
+        dsk = {(new_name, new_partition_index):
+                (list,
+                 (toolz.concat,
+                  [(self.name, old_partition_index)
+                    for old_partition_index in range(
+                        new_partitions_boundaries[new_partition_index],
+                        new_partitions_boundaries[new_partition_index + 1])]))
+                for new_partition_index in range(npartitions)}
+        return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
         """Repeatedly apply binary function to a sequence, accumulating results.

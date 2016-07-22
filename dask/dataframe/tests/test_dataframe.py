@@ -1158,22 +1158,23 @@ def test_repartition_on_pandas_dataframe():
 
 
 def test_repartition_npartitions():
-    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
-                      index=[10, 20, 30, 40, 50, 60])
-    for n in [1, 2, 4, 5]:
-        for k in [1, 2, 4, 5]:
-            if k > n:
-                continue
-            a = dd.from_pandas(df, npartitions=n)
-            k = min(a.npartitions, k)
+    for use_index in (True, False):
+        df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                          index=[10, 20, 30, 40, 50, 60])
+        for n in [1, 2, 4, 5]:
+            for k in [1, 2, 4, 5]:
+                if k > n:
+                    continue
+                a = dd.from_pandas(df, npartitions=n, sort=use_index)
+                k = min(a.npartitions, k)
 
-            b = a.repartition(npartitions=k)
-            eq(a, b)
-            assert b.npartitions == k
+                b = a.repartition(npartitions=k)
+                eq(a, b)
+                assert b.npartitions == k
 
-    a = dd.from_pandas(df, npartitions=1)
-    with pytest.raises(ValueError):
-        a.repartition(npartitions=5)
+        a = dd.from_pandas(df, npartitions=1)
+        with pytest.raises(ValueError):
+            a.repartition(npartitions=5)
 
 
 def test_embarrassingly_parallel_operations():
