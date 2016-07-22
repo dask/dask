@@ -8,8 +8,9 @@ matrix:
     - env: PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false'
     - env: PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false'
     - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
-  allow_failures:
     - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2
+  allow_failures:
+    - PYTHONOPTIMIZE=2
 
 addons:
     apt:
