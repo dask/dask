@@ -242,8 +242,11 @@ def _pdmerge(left, right, how, left_on, right_on,
     return result
 
 
+shuffle_func = shuffle  # name sometimes conflicts with keyword argument
+
+
 def hash_join(lhs, left_on, rhs, right_on, how='inner',
-              npartitions=None, suffixes=('_x', '_y'), method=None):
+              npartitions=None, suffixes=('_x', '_y'), shuffle=None):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -254,8 +257,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle(lhs, left_on, npartitions=npartitions, method=method)
-    rhs2 = shuffle(rhs, right_on, npartitions=npartitions, method=method)
+    lhs2 = shuffle_func(lhs, left_on, npartitions=npartitions, shuffle=shuffle)
+    rhs2 = shuffle_func(rhs, right_on, npartitions=npartitions, shuffle=shuffle)
 
     if isinstance(left_on, Index):
         left_on = None
@@ -285,7 +288,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_on = (list, tuple(right_on))
 
     token = tokenize(lhs2, left_on, rhs2, right_on, left_index, right_index,
-                     how, npartitions, suffixes, method)
+                     how, npartitions, suffixes, shuffle)
     name = 'hash-join-' + token
 
     dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
@@ -379,7 +382,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None, method=None, max_branch=None):
+          npartitions=None, shuffle=None, max_branch=None):
 
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
@@ -427,7 +430,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                 right_index=right_index, suffixes=suffixes)
 
     # One side is indexed, the other not
-    elif (method == 'tasks' and
+    elif (shuffle == 'tasks' and
         (left_index and left.known_divisions and not right_index or
         right_index and right.known_divisions and not left_index)):
         left_empty = left._pd_nonempty
@@ -450,7 +453,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
-                         how, npartitions, suffixes, method=method)
+                         how, npartitions, suffixes, shuffle=shuffle)
 
 
 ###############################################################

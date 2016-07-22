@@ -21,7 +21,7 @@ from ..optimize import cull
 from ..utils import digit, insert
 
 
-def set_index(df, index, npartitions=None, method=None, compute=True,
+def set_index(df, index, npartitions=None, shuffle=None, compute=True,
               drop=True, upsample=1.0, **kwargs):
     """ Set DataFrame index to new column
 
@@ -49,7 +49,7 @@ def set_index(df, index, npartitions=None, method=None, compute=True,
                   .compute()).tolist()
 
     return set_partition(df, index, divisions, compute=compute,
-                         method=method, drop=drop, **kwargs)
+                         shuffle=shuffle, drop=drop, **kwargs)
 
 
 def new_categories(categories, index):
@@ -60,7 +60,7 @@ def new_categories(categories, index):
     return categories
 
 
-def set_partition(df, index, divisions, method=None, compute=False, drop=True,
+def set_partition(df, index, divisions, shuffle=None, compute=False, drop=True,
                   max_branch=32, **kwargs):
     """ Group DataFrame by index
 
@@ -78,7 +78,7 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
         Values to form new divisions between partitions
     drop: bool, default True
         Whether to delete columns to be used as the new index
-    method: str (optional)
+    shuffle: str (optional)
         Either 'disk' for an on-disk shuffle or 'tasks' to use the task
         scheduling framework.  Use 'disk' if you are on a single machine
         and 'tasks' if you are on a distributed cluster.
@@ -93,16 +93,16 @@ def set_partition(df, index, divisions, method=None, compute=False, drop=True,
     shuffle
     partd
     """
-    method = method or _globals.get('shuffle', 'disk')
+    shuffle = shuffle or _globals.get('shuffle', 'disk')
 
-    if method == 'disk':
+    if shuffle == 'disk':
         return set_partition_disk(df, index, divisions, compute=compute,
                 drop=drop, **kwargs)
-    elif method == 'tasks':
+    elif shuffle == 'tasks':
         return set_partition_tasks(df, index, divisions,
                 max_branch=max_branch, drop=drop)
     else:
-        raise NotImplementedError("Unknown method %s" % method)
+        raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
 
 def barrier(args):
@@ -129,7 +129,7 @@ def _set_collect(group, p, barrier_token, columns):
         # which has the same columns as original
         return pd.DataFrame(columns=columns)
 
-def shuffle(df, index, method=None, npartitions=None, max_branch=32):
+def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -147,10 +147,10 @@ def shuffle(df, index, method=None, npartitions=None, max_branch=32):
     shuffle_disk
     shuffle_tasks
     """
-    method = method or _globals.get('shuffle', 'disk')
-    if method == 'disk':
+    shuffle = shuffle or _globals.get('shuffle', 'disk')
+    if shuffle == 'disk':
         return shuffle_disk(df, index, npartitions)
-    elif method == 'tasks':
+    elif shuffle == 'tasks':
         if not isinstance(index, _Frame):
             index = df[index]
         return shuffle_tasks(df, index, max_branch, npartitions=npartitions)

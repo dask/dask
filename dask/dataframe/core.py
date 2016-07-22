@@ -1827,7 +1827,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False,
-              suffixes=('_x', '_y'), npartitions=None, method=None):
+              suffixes=('_x', '_y'), npartitions=None, shuffle=None):
 
         if not isinstance(right, (DataFrame, pd.DataFrame)):
             raise ValueError('right must be DataFrame')
@@ -1836,11 +1836,11 @@ class DataFrame(_Frame):
         return merge(self, right, how=how, on=on,
                      left_on=left_on, right_on=right_on,
                      left_index=left_index, right_index=right_index,
-                     suffixes=suffixes, npartitions=npartitions, method=method)
+                     suffixes=suffixes, npartitions=npartitions, shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
-             lsuffix='', rsuffix='', npartitions=None, method=None):
+             lsuffix='', rsuffix='', npartitions=None, shuffle=None):
 
         if not isinstance(other, (DataFrame, pd.DataFrame)):
             raise ValueError('other must be DataFrame')
@@ -1849,7 +1849,7 @@ class DataFrame(_Frame):
         return merge(self, other, how=how,
                      left_index=on is None, right_index=True,
                      left_on=on, suffixes=[lsuffix, rsuffix],
-                     npartitions=npartitions, method=method)
+                     npartitions=npartitions, shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
     def append(self, other):
