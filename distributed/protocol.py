@@ -123,6 +123,8 @@ def maybe_compress(payload, compression=default_compression, min_size=1e4,
         return None, payload
     if len(payload) < min_size:
         return None, payload
+    if len(payload) > 2**31:
+        return None, payload
 
     min_size = int(min_size)
     sample_size = int(sample_size)
