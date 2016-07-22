@@ -67,7 +67,7 @@ from ..compatibility import apply
 from .core import (_Frame, Scalar, DataFrame, map_partitions,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
-from .shuffle import shuffle
+from .shuffle import shuffle, rearrange_by_divisions
 
 
 def bound(seq, left, right):
@@ -379,7 +379,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None, method=None):
+          npartitions=None, method=None, max_branch=None):
 
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
@@ -413,16 +413,40 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 
     # Both sides are now dd.DataFrame or dd.Series objects
 
+    # Both sides indexed
     if (left_index and left.known_divisions and
         right_index and right.known_divisions):  # Do indexed join
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
+    # Single partition on one side
     elif (left.npartitions == 1 and how in ('inner', 'right') or
           right.npartitions == 1 and how in ('inner', 'left')):
         return single_partition_join(left, right, how=how, right_on=right_on,
                 left_on=left_on, left_index=left_index,
                 right_index=right_index, suffixes=suffixes)
+
+    # One side is indexed, the other not
+    elif (method == 'tasks' and
+        (left_index and left.known_divisions and not right_index or
+        right_index and right.known_divisions and not left_index)):
+        left_empty = left._pd_nonempty
+        right_empty = right._pd_nonempty
+        dummy = pd.merge(left_empty, right_empty, how=how, on=on, left_on=left_on,
+                right_on=right_on, left_index=left_index, right_index=right_index,
+                suffixes=suffixes)
+        if left_index and left.known_divisions:
+            right = rearrange_by_divisions(right, right_on, left.divisions,
+                    max_branch)
+            left.divisions = (None,) * (left.npartitions + 1)
+        elif right_index and right.known_divisions:
+            left = rearrange_by_divisions(left, left_on, right.divisions,
+                    max_branch)
+            right.divisions = (None,) * (right.npartitions + 1)
+        return map_partitions(pd.merge, dummy, left, right, how=how, on=on,
+                left_on=left_on, right_on=right_on, left_index=left_index,
+                right_index=right_index, suffixes=suffixes)
+    # Catch all hash join
     else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,

@@ -622,3 +622,19 @@ def test_merge_index_without_divisions(method):
 
     eq(aa.join(bb, how='inner', method=method),
        a.join(b, how='inner'))
+
+
+def test_half_indexed_dataframe_avoids_shuffle():
+    a = pd.DataFrame({'x': np.random.randint(100, size=1000)})
+    b = pd.DataFrame({'y': np.random.randint(100, size=100)},
+                     index=np.random.randint(100, size=100))
+
+    aa = dd.from_pandas(a, npartitions=100)
+    bb = dd.from_pandas(b, npartitions=2)
+
+    c = pd.merge(a, b, left_index=True, right_on='y')
+    cc = dd.merge(aa, bb, left_index=True, right_on='y', method='tasks')
+
+    list_eq(c, cc)
+
+    assert len(cc.dask) < 500

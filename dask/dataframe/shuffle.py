@@ -166,26 +166,10 @@ def shuffle_tasks(df, index, max_branch=32, npartitions=None):
                                       npartitions=npartitions or df.npartitions,
                                       columns=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
-    df3 = rearrange_by_column(df2, '_partitions', max_branch)
-    if npartitions is not None and npartitions != df.npartitions:
-        parts = partitioning_index(pd.Series(range(npartitions)),
-                                   df.npartitions)
-        token = tokenize(df3, npartitions)
-        dsk = {('repartition-group-' + token, i):
-               (shuffle_group_2, k, '_partitions')
-                for i, k in enumerate(df3._keys())}
-        for p in range(npartitions):
-            dsk[('repartition-get-' + token, p)] = \
-                (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch, npartitions)
 
-        df4 = DataFrame(merge(df3.dask, dsk), 'repartition-get-' + token, df3,
-                        [None] * (npartitions + 1))
-    else:
-        df4 = df3
-        df4.divisions = (None,) * (df.npartitions + 1)
-
-    df5 = df4.drop('_partitions', axis=1)
-    return df5
+    df4 = df3.drop('_partitions', axis=1)
+    return df4
 
 
 def shuffle_disk(df, index, npartitions=None):
@@ -338,7 +322,7 @@ def set_index_post_series(df, index_name, drop):
     return df2
 
 
-def rearrange_by_column(df, column, max_branch=32):
+def rearrange_by_column(df, column, max_branch=32, npartitions=None):
     """ Order divisions of DataFrame so that all values within column align
 
     This enacts a task-based shuffle
@@ -395,8 +379,36 @@ def rearrange_by_column(df, column, max_branch=32):
                 for i, inp in enumerate(inputs))
 
     dsk = merge(df.dask, start, end, *(groups + splits + joins))
-    result = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
-    return result
+    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
+
+    if npartitions is not None and npartitions != df.npartitions:
+        parts = partitioning_index(pd.Series(range(npartitions)),
+                                   df.npartitions)
+        token = tokenize(df2, npartitions)
+        dsk = {('repartition-group-' + token, i):
+               (shuffle_group_2, k, column)
+                for i, k in enumerate(df2._keys())}
+        for p in range(npartitions):
+            dsk[('repartition-get-' + token, p)] = \
+                (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
+
+        df3 = DataFrame(merge(df2.dask, dsk), 'repartition-get-' + token, df2,
+                        [None] * (npartitions + 1))
+    else:
+        df3 = df2
+        df3.divisions = (None,) * (df.npartitions + 1)
+
+    return df3
+
+
+def rearrange_by_divisions(df, column, divisions, max_branch):
+    """ Shuffle dataframe so that column separates along divisions """
+    partitions = df[column].map_partitions(set_partitions_pre,
+                divisions=divisions, columns=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch,
+                              npartitions=len(divisions) - 1)
+    return df3.drop('_partitions', axis=1)
 
 
 def set_partition_tasks(df, index, divisions, max_branch=32, drop=True):
