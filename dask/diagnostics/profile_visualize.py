@@ -3,15 +3,13 @@ from __future__ import absolute_import, division, print_function
 from itertools import cycle
 from operator import itemgetter, add
 
-from toolz import unique, groupby, accumulate, pluck
-import bokeh.plotting as bp
-from bokeh.io import _state
-from bokeh.palettes import brewer
-from bokeh.models import HoverTool, LinearAxis, Range1d
-
-from ..utils import funcname
+from ..utils import funcname, import_required
 from ..core import istask
 from ..compatibility import apply
+
+
+_BOKEH_MISSING_MSG = ("Diagnostics plots require `bokeh` to be installed")
+_TOOLZ_MISSING_MSG = ("Diagnostics plots require `toolz` to be installed")
 
 
 def unquote(expr):
@@ -125,9 +123,12 @@ def get_colors(palette, funcs):
     funcs : iterable
         Iterable of function names
     """
-    unique_funcs = list(sorted(unique(funcs)))
+    palettes = import_required('bokeh.palettes', _BOKEH_MISSING_MSG)
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
+
+    unique_funcs = list(sorted(tz.unique(funcs)))
     n_funcs = len(unique_funcs)
-    palette_lookup = brewer[palette]
+    palette_lookup = palettes.brewer[palette]
     keys = list(palette_lookup.keys())
     low, high = min(keys), max(keys)
     if n_funcs > high:
@@ -163,6 +164,9 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.io import _state
+
     if not _state._notebook:
         file_path = file_path or "profile.html"
         bp.output_file(file_path)
@@ -195,8 +199,11 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-_figure_keywords = bp.Figure.properties()
-_figure_keywords.add('tools')
+def _get_figure_keywords():
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    o = bp.Figure.properties()
+    o.add('tools')
+    return o
 
 
 def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
@@ -220,17 +227,20 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.models import HoverTool
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _figure_keywords)
+                    _get_figure_keywords())
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
 
-        id_group = groupby(itemgetter(4), results)
+        id_group = tz.groupby(itemgetter(4), results)
         timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
                     id_group.items())
         id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
@@ -296,11 +306,15 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.palettes import brewer
+    from bokeh.models import LinearAxis, Range1d
+
     defaults = dict(title="Profile Results",
                     tools="save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _figure_keywords)
+                    _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
@@ -348,24 +362,27 @@ def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.models import HoverTool
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,wheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _figure_keywords)
+                    _get_figure_keywords())
 
     if results:
         starts, ends = list(zip(*results))[3:]
-        tics = list(sorted(unique(starts + ends)))
-        groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
+        tics = list(sorted(tz.unique(starts + ends)))
+        groups = tz.groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
         data = {}
         for k, vals in groups.items():
             cnts = dict.fromkeys(tics, 0)
             for v in vals:
                 cnts[v.cache_time] += v.metric
                 cnts[v.free_time] -= v.metric
-            data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
+            data[k] = [0] + list(tz.accumulate(add, tz.pluck(1, sorted(cnts.items()))))
 
         tics = [0] + [i - start_time for i in tics]
         p = bp.figure(x_range=[0, max(tics)], **defaults)
