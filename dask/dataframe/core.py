@@ -1599,9 +1599,7 @@ class DataFrame(_Frame):
                               None, columns)
 
     def query(self, expr, **kwargs):
-        if pd.DataFrame.query.__doc__ is not None:
-            self.query.__doc__ = """
-            Blocked version of pd.DataFrame.query
+            """ Blocked version of pd.DataFrame.query
     
             This is like the sequential version except that this will also happen
             in many threads.  This may conflict with ``numexpr`` which will use
@@ -1612,7 +1610,8 @@ class DataFrame(_Frame):
                 numexpr.set_nthreads(1)
     
             The original docstring follows below:\n
-            """ + pd.DataFrame.query.__doc__
+            """ + (pd.DataFrame.query.__doc__
+                   if pd.DataFrame.query.__doc__ is not None else '')
 
         name = 'query-%s' % tokenize(self, expr)
         if kwargs:
