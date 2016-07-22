@@ -1600,8 +1600,8 @@ class DataFrame(_Frame):
 
     def query(self, expr, **kwargs):
         if pd.DataFrame.query.__doc__ is not None:
-            query.__doc__ =\
-            """ Blocked version of pd.DataFrame.query
+            query.__doc__ = """
+            Blocked version of pd.DataFrame.query
     
             This is like the sequential version except that this will also happen
             in many threads.  This may conflict with ``numexpr`` which will use
