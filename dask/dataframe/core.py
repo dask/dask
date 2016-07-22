@@ -1599,19 +1599,19 @@ class DataFrame(_Frame):
                               None, columns)
 
     def query(self, expr, **kwargs):
-            """ Blocked version of pd.DataFrame.query
-    
-            This is like the sequential version except that this will also happen
-            in many threads.  This may conflict with ``numexpr`` which will use
-            multiple threads itself.  We recommend that you set numexpr to use a
-            single thread
-    
-                import numexpr
-                numexpr.set_nthreads(1)
-    
-            The original docstring follows below:\n
-            """ + (pd.DataFrame.query.__doc__
-                   if pd.DataFrame.query.__doc__ is not None else '')
+        """ Blocked version of pd.DataFrame.query
+
+        This is like the sequential version except that this will also happen
+        in many threads.  This may conflict with ``numexpr`` which will use
+        multiple threads itself.  We recommend that you set numexpr to use a
+        single thread
+
+            import numexpr
+            numexpr.set_nthreads(1)
+
+        The original docstring follows below:\n
+        """ + (pd.DataFrame.query.__doc__
+               if pd.DataFrame.query.__doc__ is not None else '')
 
         name = 'query-%s' % tokenize(self, expr)
         if kwargs:
