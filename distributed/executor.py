@@ -266,6 +266,8 @@ class Executor(object):
         if set_as_default:
             self._previous_get = _globals.get('get')
             dask.set_options(get=self.get)
+            self._previous_shuffle = _globals.get('shuffle')
+            dask.set_options(shuffle='tasks')
 
         if start:
             self.start(timeout=timeout)
@@ -463,6 +465,8 @@ class Executor(object):
             self._loop_thread.join(timeout=timeout)
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)
+        with ignoring(AttributeError):
+            dask.set_options(shuffle=self._previous_shuffle)
         if _global_executor[0] is self:
             _global_executor[0] = None
         if self.get == _globals.get('get'):

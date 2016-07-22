@@ -2994,18 +2994,25 @@ def test_cancel_stress_sync(loop):
 def test_default_get(loop):
     with cluster() as (s, [a, b]):
         pre_get = _globals.get('get')
+        pre_shuffle = _globals.get('shuffle')
         with Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True) as e:
             assert _globals['get'] == e.get
+            assert _globals['shuffle'] == 'tasks'
+
         assert _globals['get'] is pre_get
+        assert _globals['shuffle'] == pre_shuffle
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=False)
         assert _globals['get'] is pre_get
+        assert _globals['shuffle'] == pre_shuffle
         e.shutdown()
 
         e = Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=True)
+        assert _globals['shuffle'] == 'tasks'
         assert _globals['get'] == e.get
         e.shutdown()
         assert _globals['get'] is pre_get
+        assert _globals['shuffle'] == pre_shuffle
 
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             assert _globals['get'] == e.get
