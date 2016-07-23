@@ -1,3 +1,7 @@
+import sys
+import pytest
+pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
+
 from operator import add, mul
 import os
 from time import sleep
@@ -7,15 +11,12 @@ from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 from dask.compatibility import apply
-import pytest
 
-if sys.flags.optimize < 2:  # Exceptions in Bokeh in this case
-    try:
-        import bokeh
-    except:
-        bokeh = None
-else:
+try:
+    import bokeh
+except:
     bokeh = None
+
 
 try:
     import psutil
