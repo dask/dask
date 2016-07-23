@@ -55,30 +55,34 @@ def test_shuffle_npatitions_task():
            set(map(tuple, df.values.tolist()))
 
 
-def test_index_with_non_series():
-    tm.assert_frame_equal(shuffle(d, d.b).compute(),
-                          shuffle(d, 'b').compute())
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_index_with_non_series(method):
+    tm.assert_frame_equal(shuffle(d, d.b, shuffle=method).compute(),
+                          shuffle(d, 'b', shuffle=method).compute())
 
 
-def test_index_with_dataframe():
-    assert sorted(shuffle(d, d[['b']]).compute().values.tolist()) ==\
-           sorted(shuffle(d, ['b']).compute().values.tolist()) ==\
-           sorted(shuffle(d, 'b').compute().values.tolist())
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_index_with_dataframe(method):
+    assert sorted(shuffle(d, d[['b']], shuffle=method).compute().values.tolist()) ==\
+           sorted(shuffle(d, ['b'], shuffle=method).compute().values.tolist()) ==\
+           sorted(shuffle(d, 'b', shuffle=method).compute().values.tolist())
 
 
-def test_shuffle_from_one_partition_to_one_other():
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_shuffle_from_one_partition_to_one_other(method):
     df = pd.DataFrame({'x': [1, 2, 3]})
     a = dd.from_pandas(df, 1)
 
     for i in [1, 2]:
-        b = shuffle(a, 'x', npartitions=i)
+        b = shuffle(a, 'x', npartitions=i, shuffle=method)
         assert len(a.compute(get=get_sync)) == len(b.compute(get=get_sync))
 
 
-def test_shuffle_empty_partitions():
+@pytest.mark.parametrize('method', ['disk', 'tasks'])
+def test_shuffle_empty_partitions(method):
     df = pd.DataFrame({'x': [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
-    s = shuffle(ddf, ddf.x, npartitions=6)
+    s = shuffle(ddf, ddf.x, npartitions=6, shuffle=method)
     parts = s._get(s.dask, s._keys())
     for p in parts:
         assert s.columns == p.columns
@@ -144,19 +148,21 @@ def test_set_partition_tasks(npartitions):
        ddf.set_index(ddf.index, shuffle='tasks'))
 
 
-def test_set_index_self_index():
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_self_index(shuffle):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
                        index=np.random.random(100))
 
     a = dd.from_pandas(df, npartitions=4)
-    b = a.set_index(a.index)
+    b = a.set_index(a.index, shuffle=shuffle)
     assert a is b
 
     eq(b, df.set_index(df.index))
 
 
-def test_set_partition_tasks_names():
+@pytest.mark.parametrize('shuffle', ['tasks'])
+def test_set_partition_names(shuffle):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
                        index=np.random.random(100))
@@ -165,31 +171,33 @@ def test_set_partition_tasks_names():
 
     divisions = [0, .25, .50, .75, 1.0]
 
-    assert (set(ddf.set_index('x', shuffle='tasks').dask) ==
-            set(ddf.set_index('x', shuffle='tasks').dask))
-    assert (set(ddf.set_index('x', shuffle='tasks').dask) !=
-            set(ddf.set_index('y', shuffle='tasks').dask))
-    assert (set(ddf.set_index('x', max_branch=4, shuffle='tasks').dask) !=
-            set(ddf.set_index('x', max_branch=3, shuffle='tasks').dask))
-    assert (set(ddf.set_index('x', drop=True, shuffle='tasks').dask) !=
-            set(ddf.set_index('x', drop=False, shuffle='tasks').dask))
+    assert (set(ddf.set_index('x', shuffle=shuffle).dask) ==
+            set(ddf.set_index('x', shuffle=shuffle).dask))
+    assert (set(ddf.set_index('x', shuffle=shuffle).dask) !=
+            set(ddf.set_index('y', shuffle=shuffle).dask))
+    assert (set(ddf.set_index('x', max_branch=4, shuffle=shuffle).dask) !=
+            set(ddf.set_index('x', max_branch=3, shuffle=shuffle).dask))
+    assert (set(ddf.set_index('x', drop=True, shuffle=shuffle).dask) !=
+            set(ddf.set_index('x', drop=False, shuffle=shuffle).dask))
 
 
-def test_set_partition_tasks_2():
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_partition_tasks_2(shuffle):
     df = dd.demo.make_timeseries('2000', '2004',
             {'value': float, 'name': str, 'id': int},
             freq='2H', partition_freq='1M', seed=1)
 
-    df2 = df.set_index('name', shuffle='tasks')
+    df2 = df.set_index('name', shuffle=shuffle)
     df2.value.sum().compute(get=get_sync)
 
 
-def test_set_partition_tasks_3():
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_partition_tasks_3(shuffle):
     npartitions = 5
     df = pd.DataFrame(np.random.random((10, 2)), columns=['x', 'y'])
     ddf = dd.from_pandas(df, npartitions=5)
 
-    ddf2 = ddf.set_index('x', shuffle='tasks', max_branch=2)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, max_branch=2)
     df2 = df.set_index('x')
     eq(df2, ddf2)
     assert ddf2.npartitions == ddf.npartitions
@@ -206,12 +214,13 @@ def test_shuffle_sort(shuffle):
     eq(ddf2.loc[2:3], df2.loc[2:3])
 
 
-def test_rearrange():
+@pytest.mark.parametrize('shuffle', ['tasks', 'disk'])
+def test_rearrange(shuffle):
     df = pd.DataFrame({'x': range(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(y=ddf.x % 4)
 
-    result = rearrange_by_column(ddf2, 'y', max_branch=32)
+    result = rearrange_by_column(ddf2, 'y', max_branch=32, shuffle=shuffle)
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
 
