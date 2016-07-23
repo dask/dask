@@ -9,7 +9,7 @@ optimize2 = (sys.flags.optimize == 2)
 if not optimize2:
     pytest.importorskip("graphviz")
 else:
-    pytestmark = pytest.mark.skipif(sys.flags.optimize == 2,
+    pytestmark = pytest.mark.skipif(True,
                                     reason="graphviz exception with Python -OO flag")
 
 from dask.dot import dot_graph, task_label, label, to_graphviz
