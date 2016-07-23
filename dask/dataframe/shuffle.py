@@ -48,8 +48,8 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=True,
                   ._repartition_quantiles(npartitions, upsample=upsample)
                   .compute()).tolist()
 
-    return set_partition(df, index, divisions,
-                         shuffle=shuffle, drop=drop, **kwargs)
+    return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
+                         **kwargs)
 
 
 def new_categories(categories, index):
@@ -85,7 +85,8 @@ def _set_collect(group, p, barrier_token, columns):
         return pd.DataFrame(columns=columns)
 
 
-def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32):
+def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
+        compute=None):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -110,16 +111,17 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32):
                                       columns=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
-                              max_branch=max_branch, shuffle=shuffle)
+                              max_branch=max_branch, shuffle=shuffle,
+                              compute=compute)
     df4 = df3.drop('_partitions', axis=1)
     return df4
 
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
-        shuffle=None):
+        shuffle=None, compute=None):
     shuffle = shuffle or _globals.get('shuffle', 'disk')
     if shuffle == 'disk':
-        return rearrange_by_column_disk(df, col, npartitions)
+        return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
         if npartitions is not None and npartitions < df.npartitions:
             raise ValueError("Must create as many or more partitions in shuffle")
@@ -226,17 +228,20 @@ def shuffle_group_3(df, col, npartitions, p):
     p.append(d, fsync=True)
 
 
-def set_index_post_scalar(df, index_name, drop):
-    return (df.drop('_partitions', axis=1)
-              .set_index(index_name, drop=drop))
-
-def set_index_post_series(df, index_name, drop):
-    df2 = df.drop('_partitions', axis=1).set_index('_index', drop=drop)
-    df2.index.name = index_name
+def set_index_post_scalar(df, index_name, drop, column_dtype):
+    df2 = df.drop('_partitions', axis=1).set_index(index_name, drop=drop)
+    df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
-def rearrange_by_column_disk(df, column, npartitions=None):
+def set_index_post_series(df, index_name, drop, column_dtype):
+    df2 = df.drop('_partitions', axis=1).set_index('_index', drop=True)
+    df2.index.name = index_name
+    df2.columns = df2.columns.astype(column_dtype)
+    return df2
+
+
+def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     """ Shuffle using local disk """
     if npartitions is None:
         npartitions = df.npartitions
@@ -254,6 +259,13 @@ def rearrange_by_column_disk(df, column, npartitions=None):
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
             for i, key in enumerate(df._keys())}
 
+    dsk = merge(df.dask, dsk1, dsk2)
+    if compute:
+        keys = [p, sorted(dsk2)]
+        pp, values = (_globals.get('get') or DataFrame._get)(dsk, keys)
+        dsk1 = {p: pp}
+        dsk = dict(zip(sorted(dsk2), values))
+
     # Barrier
     barrier_token = 'barrier-' + always_new_token
     dsk3 = {barrier_token: (barrier, list(dsk2))}
@@ -265,7 +277,7 @@ def rearrange_by_column_disk(df, column, npartitions=None):
 
     divisions = (None,) * (npartitions + 1)
 
-    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
+    dsk = merge(dsk, dsk1, dsk3, dsk4)
 
     return DataFrame(dsk, name, df.columns, divisions)
 
@@ -359,7 +371,8 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     return df3.drop('_partitions', axis=1)
 
 
-def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None):
+def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
+        compute=None):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -391,7 +404,6 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None):
     shuffle
     partd
     """
-    assert len(divisions) == len(df.divisions)
     if np.isscalar(index):
         partitions = df[index].map_partitions(set_partitions_pre,
                 divisions=divisions, columns=pd.Series([0]))
@@ -402,14 +414,14 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None):
         df2 = df.assign(_partitions=partitions, _index=index)
 
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
-            npartitions=len(divisions) - 1, shuffle=shuffle)
+            npartitions=len(divisions) - 1, shuffle=shuffle, compute=compute)
 
     if np.isscalar(index):
         df4 = df3.map_partitions(set_index_post_scalar, index_name=index,
-                drop=drop)
+                drop=drop, column_dtype=df.columns.dtype)
     else:
         df4 = df3.map_partitions(set_index_post_series, index_name=index.name,
-                drop=drop)
+                drop=drop, column_dtype=df.columns.dtype)
 
     df4.divisions = divisions
 

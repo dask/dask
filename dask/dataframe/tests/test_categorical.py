@@ -1,5 +1,6 @@
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 
 import dask
 from dask.async import get_sync
@@ -26,12 +27,13 @@ def test_categorize():
     assert (d.categorize().compute().dtypes == 'category').all()
 
 
-def test_categorical_set_index():
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_categorical_set_index(shuffle):
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
-    df['y'] = df.y.astype('category')
+    df['y'] = df.y.astype('category', ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.set_options(get=get_sync):
+    with dask.set_options(get=get_sync, shuffle=shuffle):
         b = a.set_index('y')
         df2 = df.set_index('y')
         d1, d2 = b.get_division(0), b.get_division(1)
