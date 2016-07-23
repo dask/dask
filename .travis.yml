@@ -2,7 +2,6 @@ language: python
 sudo: false
 
 env:
-- XTRATESTARGS=
   matrix:
     - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true' XTRATESTARGS=
     - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' XTRATESTARGS=
