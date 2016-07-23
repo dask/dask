@@ -1,7 +1,9 @@
 import sys
 import pytest
-# Skip with -OO python flag because exceptions with Bokeh
-pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
+
+pytestmark = pytest.mark.\
+    skipif(sys.flags.optimize == 2,
+           reason="Exception with Bokeh and -OO python flag")
 
 from operator import add, mul
 import os
