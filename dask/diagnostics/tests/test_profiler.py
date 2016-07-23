@@ -1,29 +1,18 @@
-import sys
-import pytest
 from operator import add, mul
 import os
 from time import sleep
 from distutils.version import LooseVersion
 
+from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 from dask.compatibility import apply
-
-optimize2 = (sys.flags.optimize == 2)
-pytestmark = pytest.mark.\
-    skipif(optimize2, reason="Exception with Bokeh and -OO python flag")
-
-if not optimize2:
-    from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
-
-
+import pytest
 
 try:
     import bokeh
 except:
     bokeh = None
-
-
 try:
     import psutil
 except:

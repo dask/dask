@@ -270,6 +270,8 @@ def test_compute_with_literal():
 
 
 @pytest.mark.skipif('not da')
+@pytest.mark.skipif(sys.flags.optimize == 2,
+                    reason="graphviz exception with Python -OO flag")
 def test_visualize():
     pytest.importorskip('graphviz')
     with tmpdir() as d:
