@@ -64,6 +64,23 @@ and not actively maintained; use at your own risk.
 
 .. _Castra: http://github.com/blaze/castra
 
+From HDF5
+----------
+
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,    `dask <(http://dask.pydata.org/en/latest/index.html>`_ can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+
+.. code-block:: Python
+
+   >>> # Load hdf5 into dask DataFrame
+   >>> dd.read_hdf('myfile.1.hdf5', '/x', chunksize=1000000)
+   
+   
+   >>> # OR Load multiple hdf5 files into dask DataFrame
+   >>> dd.read_hdf('myfile.*.hdf5', '/x', chunksize=1000000)  
+   
+   
+   >>> # OR Load multiple hdf5 datasets into a dask DataFrame
+   >>> dd.read_hdf('myfile.1.hdf5', '/*', chunksize=1000000) 
 
 From Bags
 ---------
