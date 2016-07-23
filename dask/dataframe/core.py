@@ -1823,10 +1823,14 @@ class DataFrame(_Frame):
                    **kwargs)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0):
+    def drop(self, labels, axis=0, dtype=None):
         if axis != 1:
             raise NotImplementedError("Drop currently only works for axis=1")
-        return elemwise(pd.DataFrame.drop, self, labels, axis)
+
+        if dtype is not None:
+            return elemwise(drop_columns, self, labels, dtype)
+        else:
+            return elemwise(pd.DataFrame.drop, self, labels, axis)
 
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
@@ -2940,3 +2944,9 @@ def _var(x, **kwargs):
 
 def _std(x, **kwargs):
     return x.std(**kwargs)
+
+
+def drop_columns(df, columns, dtype):
+    df = df.drop(columns, axis=1)
+    df.columns = df.columns.astype(dtype)
+    return df

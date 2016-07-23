@@ -137,7 +137,8 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
                               max_branch=max_branch, shuffle=shuffle,
                               compute=compute)
-    df4 = df3.drop('_partitions', axis=1)
+
+    df4 = df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
     return df4
 
 
@@ -148,7 +149,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)
-    return df3.drop('_partitions', axis=1)
+    return df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
 
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
