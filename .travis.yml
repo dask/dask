@@ -41,7 +41,7 @@ install:
   - pip install --no-deps -e .[complete]
 
 script:
-    - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose XTRATESTARGS; else py.test dask --verbose XTRATESTARGS; fi
+    - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose $XTRATESTARGS; else py.test dask --verbose $XTRATESTARGS; fi
 
 after_success:
     - if [[ $coverage == 'true' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
