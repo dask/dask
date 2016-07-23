@@ -1,8 +1,9 @@
 from operator import add, mul
 import pytest
 import sys
-# Skip with -OO python flag because exceptions with Bokeh
-pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
+pytestmark = pytest.mark.\
+    skipif(sys.flags.optimize == 2,
+           reason="Exception with Bokeh and -OO python flag")
 
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
