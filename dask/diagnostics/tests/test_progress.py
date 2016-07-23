@@ -1,6 +1,7 @@
 from operator import add, mul
 import pytest
 import sys
+# Skip with -OO python flag because exceptions with Bokeh
 pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
 
 from dask.diagnostics import ProgressBar
