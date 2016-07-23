@@ -1,14 +1,16 @@
 from operator import add, mul
 import pytest
 import sys
-pytestmark = pytest.mark.\
-    skipif(sys.flags.optimize == 2,
-           reason="Exception with Bokeh and -OO python flag")
-
-from dask.diagnostics import ProgressBar
-from dask.diagnostics.progress import format_time
 from dask.threaded import get
 from dask.context import _globals
+
+optimize2 = (sys.flags.optimize == 2)
+pytestmark = pytest.mark.\
+    skipif(optimize2, reason="Exception with Bokeh and -OO python flag")
+
+if not optimize2:
+    from dask.diagnostics import ProgressBar
+    from dask.diagnostics.progress import format_time
 
 
 dsk = {'a': 1,
