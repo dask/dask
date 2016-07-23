@@ -9,10 +9,14 @@ from dask.utils import ignoring, tmpfile
 from dask.compatibility import apply
 import pytest
 
-try:
-    import bokeh
-except:
+if sys.flags.optimize < 2:  # Exceptions in Bokeh in this case
+    try:
+        import bokeh
+    except:
+        bokeh = None
+else:
     bokeh = None
+
 try:
     import psutil
 except:
