@@ -1,16 +1,15 @@
 language: python
 sudo: false
 
-matrix:
-  include:
-    - env: PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true'
-    - env: PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
-    - env: PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false'
-    - env: PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false'
-    - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false'
-    - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2
-  allow_failures:
-    - env: PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2
+env:
+- XTRATESTARGS=
+  matrix:
+    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='true' XTRATESTARGS=
+    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' XTRATESTARGS=
+    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false' XTRATESTARGS=
+    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.18.0 COVERAGE='false' XTRATESTARGS=
+    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' XTRATESTARGS=
+    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
 
 addons:
     apt:
@@ -43,7 +42,7 @@ install:
   - pip install --no-deps -e .[complete]
 
 script:
-    - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
+    - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose XTRATESTARGS; else py.test dask --verbose XTRATESTARGS; fi
 
 after_success:
     - if [[ $coverage == 'true' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
