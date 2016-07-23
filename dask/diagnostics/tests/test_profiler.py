@@ -1,5 +1,6 @@
 import sys
 import pytest
+# Skip with -OO python flag because exceptions with Bokeh
 pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
 
 from operator import add, mul
