@@ -1,5 +1,8 @@
 from operator import add, mul
 import pytest
+import sys
+pytestmark = pytest.mark.skipif(sys.flags.optimize == 2)
+
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
 from dask.threaded import get
