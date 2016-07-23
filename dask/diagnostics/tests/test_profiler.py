@@ -1,6 +1,5 @@
 import sys
 import pytest
-
 from operator import add, mul
 import os
 from time import sleep
