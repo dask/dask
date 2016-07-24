@@ -11,7 +11,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.*.csv')
+   >>> df = dd.read_csv('data.*.csv') # doctest: +SKIP
 
 2.  You can specify the size of each block of data in bytes of uncompressed
     data.  Note that, especially for text data the size on disk may be much
@@ -19,7 +19,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks
+   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks # doctest: +SKIP
 
 From an Array
 -------------
@@ -29,7 +29,7 @@ NumPy arrays and HDF5 datasets.
 
 .. code-block:: Python
 
-   >>> dd.from_array(x, chunksize=1000000)
+   >>> dd.from_array(x, chunksize=1000000) # doctest: +SKIP
 
 From BColz
 ----------
@@ -40,7 +40,7 @@ it.  There is a special ``from_bcolz`` function.
 
 .. code-block:: Python
 
-   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000)
+   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000) # doctest: +SKIP
 
 In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
 will only read the necessary columns from disk.  This can provide dramatic
@@ -58,29 +58,39 @@ and not actively maintained; use at your own risk.
 
 .. code-block:: Python
 
-   >>> from castra import Castra
-   >>> c = Castra(path='/my/castra/file')
-   >>> df = c.to_dask()
+   >>> from castra import Castra # doctest: +SKIP
+   >>> c = Castra(path='/my/castra/file') # doctest: +SKIP
+   >>> df = c.to_dask() # doctest: +SKIP
 
 .. _Castra: http://github.com/blaze/castra
 
 From HDF5
 ----------
 
-`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,    `dask <(http://dask.pydata.org/en/latest/index.html>`_ can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  
+
+First, we create a random HDF5 dataset.
 
 .. code-block:: Python
 
-   >>> # Load hdf5 into dask DataFrame
-   >>> dd.read_hdf('myfile.1.hdf5', '/x', chunksize=1000000)
+   >>> import h5py
+   >>> import numpy as np
+   >>> f = h5py.File("myfile.hdf5", "w")
+   >>> dset = f.create_dataset("mydataset", (1000000,), dtype='i')
+   >>> dset[...] = np.arange(1000000)
+   >>> print dset.shape
+   (1000000,)
    
+Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,    `dask <(http://dask.pydata.org/en/latest/index.html>`_ can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+
+.. code-block:: Python   
+
+   >>> import dask.dataframe as dd
+   >>> dd.read_hdf('myfile.1.hdf5', '/mydataset', chunksize=1000) # doctest: +SKIP
    
-   >>> # OR Load multiple hdf5 files into dask DataFrame
-   >>> dd.read_hdf('myfile.*.hdf5', '/x', chunksize=1000000)  
-   
-   
-   >>> # OR Load multiple hdf5 datasets into a dask DataFrame
-   >>> dd.read_hdf('myfile.1.hdf5', '/*', chunksize=1000000) 
+There are other examples on HDF5 functionality within `dask` here_
+
+.. _here: https://github.com/dask/dask/blob/master/dask/dataframe/io.py#L637-L649
 
 From Bags
 ---------
