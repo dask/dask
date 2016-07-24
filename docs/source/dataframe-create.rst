@@ -11,7 +11,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.*.csv') # doctest: +SKIP
+   >>> df = dd.read_csv('data.*.csv') 
 
 2.  You can specify the size of each block of data in bytes of uncompressed
     data.  Note that, especially for text data the size on disk may be much
@@ -29,7 +29,7 @@ NumPy arrays and HDF5 datasets.
 
 .. code-block:: Python
 
-   >>> dd.from_array(x, chunksize=1000000) # doctest: +SKIP
+   >>> dd.from_array(x, chunksize=1000000) 
 
 From BColz
 ----------
@@ -40,7 +40,7 @@ it.  There is a special ``from_bcolz`` function.
 
 .. code-block:: Python
 
-   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000) # doctest: +SKIP
+   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000) 
 
 In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
 will only read the necessary columns from disk.  This can provide dramatic
@@ -59,8 +59,8 @@ and not actively maintained; use at your own risk.
 .. code-block:: Python
 
    >>> from castra import Castra # doctest: +SKIP
-   >>> c = Castra(path='/my/castra/file') # doctest: +SKIP
-   >>> df = c.to_dask() # doctest: +SKIP
+   >>> c = Castra(path='/my/castra/file') 
+   >>> df = c.to_dask() 
 
 .. _Castra: http://github.com/blaze/castra
 
@@ -72,15 +72,15 @@ From HDF5
 .. code-block:: Python
 
    >>> # Load hdf5 into dask DataFrame 
-   >>> dd.read_hdf('myfile.1.hdf5', '/x', chunksize=1000000) # doctest: +SKIP
+   >>> dd.read_hdf('myfile.1.hdf5', '/x', chunksize=1000000) 
    
    
    >>> # OR Load multiple hdf5 files into dask DataFrame # 
-   >>> dd.read_hdf('myfile.*.hdf5', '/x', chunksize=1000000) # doctest: +SKIP 
+   >>> dd.read_hdf('myfile.*.hdf5', '/x', chunksize=1000000)  
    
    
    >>> # OR Load multiple hdf5 datasets into a dask DataFrame 
-   >>> dd.read_hdf('myfile.1.hdf5', '/*', chunksize=1000000) # doctest: +SKIP
+   >>> dd.read_hdf('myfile.1.hdf5', '/*', chunksize=1000000) 
 
 From Bags
 ---------
