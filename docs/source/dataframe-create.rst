@@ -67,30 +67,20 @@ and not actively maintained; use at your own risk.
 From HDF5
 ----------
 
-`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  
-
-First, we create a random HDF5 dataset.
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,    `dask <(http://dask.pydata.org/en/latest/index.html>`_ can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
 
 .. code-block:: Python
 
-   >>> import h5py
-   >>> import numpy as np
-   >>> f = h5py.File("myfile.hdf5", "w")
-   >>> dset = f.create_dataset("mydataset", (1000000,), dtype='i')
-   >>> dset[...] = np.arange(1000000)
-   >>> print dset.shape
-   (1000000,)
+   >>> # Load hdf5 into dask DataFrame 
+   >>> dd.read_hdf('myfile.1.hdf5', '/x', chunksize=1000000) # doctest: +SKIP
    
-Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,    `dask <(http://dask.pydata.org/en/latest/index.html>`_ can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
-
-.. code-block:: Python   
-
-   >>> import dask.dataframe as dd
-   >>> dd.read_hdf('myfile.1.hdf5', '/mydataset', chunksize=1000) # doctest: +SKIP
    
-There are other examples on HDF5 functionality within `dask` here_
-
-.. _here: https://github.com/dask/dask/blob/master/dask/dataframe/io.py#L637-L649
+   >>> # OR Load multiple hdf5 files into dask DataFrame # 
+   >>> dd.read_hdf('myfile.*.hdf5', '/x', chunksize=1000000) # doctest: +SKIP 
+   
+   
+   >>> # OR Load multiple hdf5 datasets into a dask DataFrame 
+   >>> dd.read_hdf('myfile.1.hdf5', '/*', chunksize=1000000) # doctest: +SKIP
 
 From Bags
 ---------
