@@ -40,6 +40,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   digitize
    dot
    dstack
    empty
@@ -275,6 +276,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: digitize
 .. autofunction:: dot
 .. autofunction:: dstack
 .. autofunction:: empty
