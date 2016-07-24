@@ -343,11 +343,13 @@ class _GroupBy(object):
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
-            df4 = df3.drop(cols, axis=1)
+            df4 = df3.drop(cols, axis=1, dtype=dummy.columns.dtype if
+                    isinstance(dummy, pd.DataFrame) else None)
         elif isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
-            df4 = df3.drop('_index', axis=1)
+            df4 = df3.drop('_index', axis=1, dtype=dummy.columns.dtype if
+                    isinstance(dummy, pd.DataFrame) else None)
         else:
             df4 = df3
             index2 = self.index

@@ -190,7 +190,6 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
 
     Parameters
     ----------
-
     x : bcolz.ctable
         Input data
     chunksize : int, optional
@@ -205,7 +204,6 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
 
     See Also
     --------
-
     from_array: more generic function not optimized for bcolz
     """
     if lock is True:
@@ -254,7 +252,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
         assert index in x.names
         a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
         q = np.linspace(0, 100, len(x) // chunksize + 2)
-        divisions = da.percentile(a, q).compute()
+        divisions = tuple(da.percentile(a, q).compute())
         return set_partition(result, index, divisions, **kwargs)
     else:
         return result
@@ -265,7 +263,6 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
 
     Parameters
     ----------
-
     x: bcolz.ctable
     slc: slice
     columns: list of column names or None
@@ -468,7 +465,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
             warn("To preserve order between partitions name_function "
                  "must preserve the order of its input")
 
-    # If user did not specify scheduler and write is sequential default to the 
+    # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
     if get is None and not 'get' in _globals and single_node and single_file:
         get = get_sync

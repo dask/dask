@@ -245,6 +245,10 @@ class _Frame(Base):
         """Whether divisions are already known"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
+    def clear_divisions(self):
+        divisions = (None,) * (self.npartitions + 1)
+        return type(self)(self.dask, self._name, self._pd, divisions)
+
     def get_division(self, n):
         warnings.warn("Deprecation warning: use `get_partition` instead")
         return get_partition(self, n)
@@ -1823,15 +1827,19 @@ class DataFrame(_Frame):
                    **kwargs)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0):
+    def drop(self, labels, axis=0, dtype=None):
         if axis != 1:
             raise NotImplementedError("Drop currently only works for axis=1")
-        return elemwise(pd.DataFrame.drop, self, labels, axis)
+
+        if dtype is not None:
+            return elemwise(drop_columns, self, labels, dtype)
+        else:
+            return elemwise(pd.DataFrame.drop, self, labels, axis)
 
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False,
-              suffixes=('_x', '_y'), npartitions=None, method=None):
+              suffixes=('_x', '_y'), npartitions=None, shuffle=None):
 
         if not isinstance(right, (DataFrame, pd.DataFrame)):
             raise ValueError('right must be DataFrame')
@@ -1840,11 +1848,11 @@ class DataFrame(_Frame):
         return merge(self, right, how=how, on=on,
                      left_on=left_on, right_on=right_on,
                      left_index=left_index, right_index=right_index,
-                     suffixes=suffixes, npartitions=npartitions, method=method)
+                     suffixes=suffixes, npartitions=npartitions, shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
-             lsuffix='', rsuffix='', npartitions=None, method=None):
+             lsuffix='', rsuffix='', npartitions=None, shuffle=None):
 
         if not isinstance(other, (DataFrame, pd.DataFrame)):
             raise ValueError('other must be DataFrame')
@@ -1853,7 +1861,7 @@ class DataFrame(_Frame):
         return merge(self, other, how=how,
                      left_index=on is None, right_index=True,
                      left_on=on, suffixes=[lsuffix, rsuffix],
-                     npartitions=npartitions, method=method)
+                     npartitions=npartitions, shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
     def append(self, other):
@@ -2940,3 +2948,9 @@ def _var(x, **kwargs):
 
 def _std(x, **kwargs):
     return x.std(**kwargs)
+
+
+def drop_columns(df, columns, dtype):
+    df = df.drop(columns, axis=1)
+    df.columns = df.columns.astype(dtype)
+    return df
