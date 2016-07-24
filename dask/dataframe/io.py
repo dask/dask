@@ -564,6 +564,9 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     raise TypeError(dont_use_fixed_error_message)
                 if stop is None:
                     stops.append(storer.nrows)
+                elif stop > storer.nrows:
+                    raise ValueError("Stop keyword exceeds dataset number "
+                                     "of rows ({})".format(storer.nrows))
                 else:
                     stops.append(stop)
         return keys, stops
@@ -581,6 +584,10 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         token = tokenize((path, os.path.getmtime(path), key, start,
                           stop, empty, chunksize))
         name = 'read-hdf-' + token
+
+        if start >= stop:
+            raise ValueError("Start row number ({}) is above or equal to stop "
+                             "row number ({})".format(start, stop))
 
         dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
                                  {'start': s,
@@ -628,7 +635,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         stop at
     columns : optional, a list of columns that if not None, will limit the
         return columns
-    chunksize : optional, nrows to include in iteration, return an iterator
+    chunksize : optional, positive integer
+        maximal number of rows per partition
 
     Returns
     -------
@@ -655,6 +663,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
+    if chunksize <= 0:
+        raise ValueError("Chunksize must be a positive integer")
     from .multi import concat
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize,

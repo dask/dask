@@ -1108,6 +1108,26 @@ def test_read_hdf():
                 sorted(dd.read_hdf(fn, '/data').dask))
 
 
+def test_read_hdf_start_stop_values():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+
+        with pytest.raises(ValueError) as e:
+            a = dd.read_hdf(fn, '/data', stop=10)
+        assert 'number of rows' in str(e)
+
+        with pytest.raises(ValueError) as e:
+            a = dd.read_hdf(fn, '/data', start=10)
+        assert 'is above or equal to' in str(e)
+
+        with pytest.raises(ValueError) as e:
+            a = dd.read_hdf(fn, '/data', chunksize=-1)
+        assert 'positive integer' in str(e)
+
+
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]})
