@@ -28,7 +28,7 @@ that function's options.  Additionally it gains two new functionalities
 From HDF5
 ----------
 
-`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,  ``dask.dataframe`` can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,  ``dask.dataframe`` can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets. For a more indepth tutorial (with data generation snippets), `visit the HDF5 examples section <http://dask.pydata.org/en/latest/dataframe-hdf5.html>`_. 
 
 ``dask.dataframe`` can read a single HDF5 ('myfile.hdf5') file by referencing a group key ('/x'):
 
