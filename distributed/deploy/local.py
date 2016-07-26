@@ -60,13 +60,17 @@ class LocalCluster(object):
                       'distributed.core',
                       'distributed.nanny']:
                 logging.getLogger(l).setLevel(silence_logs)
-        if n_workers is None:
+        if n_workers is None and threads_per_worker is None:
             if nanny:
                 n_workers = _ncores
                 threads_per_worker = 1
             else:
                 n_workers = 1
                 threads_per_worker = _ncores
+        if n_workers is None and threads_per_worker is not None:
+            n_workers = max(1, _ncores // threads_per_worker)
+        if n_workers is not None and threads_per_worker is None:
+            threads_per_worker = max(1, _ncores // n_workers)
 
         self.loop = loop or IOLoop()
         if not self.loop._running:

@@ -75,6 +75,18 @@ def test_defaults():
         assert all(isinstance(w, Worker) for w in c.workers)
         assert len(c.workers) == 1
 
+    with LocalCluster(n_workers=2, scheduler_port=0, silence_logs=False) as c:
+        assert sum(w.ncores for w in c.workers) == max(2, _ncores)
+
+    with LocalCluster(threads_per_worker=_ncores * 2, scheduler_port=0, silence_logs=False) as c:
+        assert len(c.workers) == 1
+
+    with LocalCluster(n_workers=_ncores * 2, scheduler_port=0, silence_logs=False) as c:
+        assert all(w.ncores == 1 for w in c.workers)
+    with LocalCluster(threads_per_worker=2, n_workers=3, scheduler_port=0, silence_logs=False) as c:
+        assert len(c.workers) == 3
+        assert all(w.ncores == 2 for w in c.workers)
+
 
 def test_cleanup():
     c = LocalCluster(2, scheduler_port=0, silence_logs=False)
