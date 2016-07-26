@@ -241,28 +241,6 @@ The scheduler also cleans up intermediate results when provided full dask
 graphs.  You can always use the lower level ``delete`` or ``clear`` functions
 in ``distributed.client`` to manage data manually.
 
-Dask Graph
-~~~~~~~~~~
-
-The executor and scheduler maintain a dask graph of all known computations.
-This graph is accessible via the ``.dask`` attribute.  At times it may be worth
-visualizing this object.
-
-.. code-block:: python
-
-   >>> executor.dask
-
-   >>> from dask.base import visualize
-   >>> visualize(executor, filename='executor.pdf')
-
-All functions like ``.submit``, ``.map``, and ``.get`` just add small subgraphs
-to this graph.  Functions like ``.result``, ``as_completed``, or ``.gather``,
-wait until their respective parts of the graph have completed.  All of
-these actions are asynchronous to the actual execution of the graph, which is
-managed in a background thread.
-
-The dask graph is also used to recover results in case of failure.
-
 Coroutines
 ~~~~~~~~~~
 
