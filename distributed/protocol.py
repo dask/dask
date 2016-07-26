@@ -139,8 +139,8 @@ def maybe_compress(payload, compression=default_compression, min_size=1e4,
     compressed = compress(payload)
     if len(compressed) > 0.9 * len(payload):  # not very compressible
         return None, payload
-
-    return compression, compress(payload)
+    else:
+        return compression, compressed
 
 
 def dumps_msgpack(msg):
