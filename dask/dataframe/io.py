@@ -657,7 +657,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     encoding = kwargs.get('encoding', sys.getdefaultencoding())
     values = [delayed(func)(d, **kwargs) for d in df.to_delayed()]
     values = write_bytes(values, filename, name_function, compression,
-                         lazy=True, encoding=None)
+                         encoding=None)
 
     if compute:
         from dask import compute

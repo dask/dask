@@ -18,10 +18,9 @@ delayed = delayed(pure=True)
 # Global registration dictionaries for backend storage functions
 # See docstrings to functions below for more information
 _read_bytes = dict()
-_write_bytes = dict()
+_open_files_write = dict()
 _open_files = dict()
 _open_text_files = dict()
-_write_files = dict()
 
 
 def write_block_to_file(data, f, compression, encoding):
@@ -78,8 +77,8 @@ def write_block_to_file(data, f, compression, encoding):
             f2.close()
 
 
-def write_bytes(values, urlpath, name_function=None, compression=None,
-                lazy=False, encoding=None, **kwargs):
+def write_bytes(data, urlpath, name_function=None, compression=None,
+                encoding=None, **kwargs):
     """For a list of values which evaluate to byte, produce delayed values
     which, when executed, result in writing to files.
 
@@ -91,7 +90,7 @@ def write_bytes(values, urlpath, name_function=None, compression=None,
 
     Parameters
     ----------
-    values: list of Values or dask collection
+    data: list of ``dask.Delayed`` objects or dask collection
         the data to be written
     urlpath: string
         Absolute or relative filepaths, URLs (may include protocols like
@@ -114,6 +113,9 @@ def write_bytes(values, urlpath, name_function=None, compression=None,
     list of ``dask.Delayed`` objects
     """
     if isinstance(urlpath, (tuple, list, set)):
+        if len(data) != len(urlpath):
+            raise ValueError('Number of paths and number of delayed objects'
+                             'must match (%s != %s)', len(urlpath), len(data))
         storage_options = infer_storage_options(urlpath[0],
                 inherit_storage_options=kwargs)
         del storage_options['path']
@@ -123,7 +125,7 @@ def write_bytes(values, urlpath, name_function=None, compression=None,
         storage_options = infer_storage_options(urlpath,
                                             inherit_storage_options=kwargs)
         path = storage_options.pop('path')
-        paths = _expand_paths(path, name_function, len(values))
+        paths = _expand_paths(path, name_function, len(data))
     else:
         raise ValueError('URL spec must be string or sequence of strings')
     if compression == 'infer':
@@ -134,19 +136,15 @@ def write_bytes(values, urlpath, name_function=None, compression=None,
     protocol = storage_options.pop('protocol')
     ensure_protocol(protocol)
     try:
-        write_bytes = _write_bytes[protocol]
+        open_files_write = _open_files_write[protocol]
     except KeyError:
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    files = write_bytes(values, paths, **storage_options)
+    files = open_files_write(paths, **storage_options)
     out = [delayed(write_block_to_file)(v, f, compression, encoding)
-           for (v, f) in zip(values, files)]
-    if lazy:
-        return out
-    else:
-        import dask
-        return dask.compute(*out)
+           for (v, f) in zip(data, files)]
+    return out
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,

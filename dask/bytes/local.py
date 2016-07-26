@@ -17,8 +17,8 @@ from ..utils import system_encoding
 logger = logging.getLogger(__name__)
 
 
-def write_bytes(values, paths, compression=None, encoding=None):
-    """ See dask.bytes.core.write_bytes for docstring """
+def open_file_write(paths):
+    """ Open list of files using delayed """
     out = [delayed(open)(path, 'wb') for path in paths]
     return out
 
@@ -95,25 +95,10 @@ def open_files(path):
             for _path in filepaths]
 
 
-def write_files(paths, mode='wb'):
-    """ Open many files for writing.  Return delayed objects.
-
-    See Also
-    --------
-    dask.bytes.core.write_files: User function
-    """
-    myopen = delayed(open)
-    files = [myopen(_path, mode=mode,
-                   dask_key_name='write-%s' % tokenize(_path, time.time()))
-             for _path in paths]
-    return files
-
-
 from . import core
 core._read_bytes['file'] = read_bytes
 core._open_files['file'] = open_files
-core._write_bytes['file'] = write_bytes
-core._write_files['file'] = write_bytes
+core._open_files_write['file'] = open_file_write
 
 if sys.version_info[0] >= 3:
     def open_text_files(path, encoding=system_encoding, errors='strict'):

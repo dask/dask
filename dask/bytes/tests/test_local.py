@@ -7,7 +7,7 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
-from dask.bytes.local import read_bytes, open_files, getsize, write_files
+from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
 from dask.bytes.core import open_text_files, write_bytes
 from dask.compatibility import FileNotFoundError
 from dask.utils import filetexts, tmpdir
@@ -228,7 +228,7 @@ def test_simple_write(tmpdir):
     make_bytes = lambda: b'000'
     some_bytes = delayed(make_bytes)()
     data = [some_bytes, some_bytes]
-    out = write_bytes(data, tmpdir, lazy=True)
+    out = write_bytes(data, tmpdir)
     assert len(out) == 2
     compute(*out)
     files = os.listdir(tmpdir)
@@ -243,8 +243,9 @@ def test_compressed_write(tmpdir):
     make_bytes = lambda: b'000'
     some_bytes = delayed(make_bytes)()
     data = [some_bytes, some_bytes]
-    write_bytes(data, os.path.join(tmpdir, 'bytes-*.gz'),
-                compression='gzip')
+    out = write_bytes(data, os.path.join(tmpdir, 'bytes-*.gz'),
+                      compression='gzip')
+    compute(*out)
     files = os.listdir(tmpdir)
     assert len(files) == 2
     assert 'bytes-0.gz' in files
@@ -253,9 +254,9 @@ def test_compressed_write(tmpdir):
     assert d == b'000'
 
 
-def test_write_files(tmpdir):
+def test_open_files_write(tmpdir):
     tmpdir = str(tmpdir)
-    f = write_files([tmpdir+'/test1', tmpdir+'/test2'])
+    f = open_file_write([tmpdir+'/test1', tmpdir+'/test2'])
     assert len(f) == 2
     files = compute(*f)
     assert files[0].mode == 'wb'

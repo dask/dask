@@ -162,11 +162,12 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
     out = write_bytes(b.to_delayed(), path, name_function, compression,
-                      lazy=not compute, encoding=encoding)
+                      encoding=encoding)
     if compute:
-        return from_sequence(out)
+        from dask import compute
+        return compute(*out)
     else:
-        return from_delayed(out)
+        return out
 
 
 def finalize(results):

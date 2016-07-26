@@ -688,7 +688,7 @@ def test_to_textfiles():
             continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -722,7 +722,7 @@ def test_to_textfiles_encoding():
             continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
