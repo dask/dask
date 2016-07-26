@@ -114,6 +114,7 @@ class Worker(Server):
         self.active = set()
         self.name = name
         self.heartbeat_interval = heartbeat_interval
+        self.heartbeat_active = False
         self._last_disk_io = None
         self._last_net_io = None
         self._ipython_kernel = None
@@ -159,14 +160,19 @@ class Worker(Server):
 
     @gen.coroutine
     def heartbeat(self):
-        logger.debug("Heartbeat: %s" % self.address)
-        yield self.scheduler.register(address=self.address, name=self.name,
-                                ncores=self.ncores,
-                                now=time(),
-                                info=self.process_health(),
-                                host_info=self.host_health(),
-                                services=self.service_ports,
-                                **self.process_health())
+        if not self.heartbeat_active:
+            self.heartbeat_active = True
+            logger.debug("Heartbeat: %s" % self.address)
+            yield self.scheduler.register(address=self.address, name=self.name,
+                                    ncores=self.ncores,
+                                    now=time(),
+                                    info=self.process_health(),
+                                    host_info=self.host_health(),
+                                    services=self.service_ports,
+                                    **self.process_health())
+            self.heartbeat_active = False
+        else:
+            logger.debug("Heartbeat skipped: channel busy")
 
     @property
     def center(self):
