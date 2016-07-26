@@ -14,12 +14,13 @@ from s3fs import S3FileSystem
 
 from dask import compute, get
 from dask.bytes.s3 import _get_s3, read_bytes, open_files, getsize
+from dask.bytes import core
 
 
 compute = partial(compute, get=get)
 
 
-test_bucket_name = 'test'
+test_bucket_name = 'mdsupertemp'
 files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 200, "name": "Bob"}\n'
                                    b'{"amount": 300, "name": "Charlie"}\n'
@@ -73,6 +74,17 @@ def test_get_s3():
         _get_s3(key='key', username='key')
     with pytest.raises(KeyError):
         _get_s3(secret='key', password='key')
+
+
+def test_write_bytes(s3):
+    paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
+    values = list(files.values())
+    out = core.write_bytes(values, paths, s3=s3)
+    compute(*out)
+    sample, values = read_bytes(test_bucket_name+'/more/test/accounts.*', s3=s3)
+    results = compute(*concat(values))
+    assert set(list(files.values())) == set(results)
+
 
 def test_read_bytes(s3):
     sample, values = read_bytes(test_bucket_name+'/test/accounts.*', s3=s3)
