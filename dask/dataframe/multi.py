@@ -383,6 +383,10 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
           npartitions=None, shuffle=None, max_branch=None):
+    for o in [on, left_on, right_on]:
+        if isinstance(o, _Frame):
+            raise NotImplementedError(
+                "Dask collections not currently allowed in merge columns")
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
         if not on:
