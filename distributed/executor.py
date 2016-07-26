@@ -446,7 +446,7 @@ class Executor(object):
         with ignoring(AttributeError):
             yield self.scheduler_stream.close(ignore_closed=True)
         with ignoring(AttributeError):
-            self.scheduler.close_streams()
+            self.scheduler.close_rpc()
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
@@ -458,7 +458,7 @@ class Executor(object):
                                    {'op': 'close-stream'})
             sync(self.loop, self.scheduler_stream.close)
         with ignoring(AttributeError):
-            self.scheduler.close_streams()
+            self.scheduler.close_rpc()
         if self._should_close_loop:
             sync(self.loop, self.loop.stop)
             self.loop.close(all_fds=True)

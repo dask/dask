@@ -3187,7 +3187,7 @@ def test_start_ipython(loop):
     from jupyter_client import BlockingKernelClient
     from ipykernel.kernelapp import IPKernelApp
     from IPython.core.interactiveshell import InteractiveShell
-    
+
     with cluster(1) as (s, [a]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             info_dict = e.start_ipython()
@@ -3233,3 +3233,26 @@ def test_start_ipython_qtconsole(loop):
     (cmd,), kwargs = Popen.call_args_list[1]
     assert cmd[-1:] == [ '--debug' ]
 
+
+@gen_cluster(ncores=[], executor=True, timeout=None)
+def test_stress_creation_and_deletion(e, s):
+    da = pytest.importorskip('dask.array')
+
+    x = da.random.random(size=(2000, 2000), chunks=(100, 100))
+    y = (x + 1).T + (x * 2) - x.mean(axis=1)
+
+    z = e.persist(y)
+
+    @gen.coroutine
+    def create_and_destroy_worker(delay):
+        start = time()
+        while time() < start + 10:
+            n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+            n.start(0)
+
+            yield gen.sleep(delay)
+
+            yield n._close()
+            print("Killed nanny")
+
+    yield [create_and_destroy_worker(0.1 * i) for i in range(10)]

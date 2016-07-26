@@ -29,9 +29,9 @@ from .batched import BatchedSend
 from .client import pack_data, gather_from_workers
 from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
-        error_message, read)
+        error_message, read, RPCClosed)
 from .sizeof import sizeof
-from .utils import funcname, get_ip, _maybe_complex, log_errors, All
+from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
 
 _ncores = ThreadPool()._processes
 
@@ -220,12 +220,13 @@ class Worker(Server):
 
     @gen.coroutine
     def _close(self, report=True, timeout=10):
-        if report:
-            yield gen.with_timeout(timedelta(seconds=timeout),
-                    self.scheduler.unregister(address=(self.ip, self.port)),
-                    io_loop=self.loop)
+        with ignoring(RPCClosed):
+            if report:
+                yield gen.with_timeout(timedelta(seconds=timeout),
+                        self.scheduler.unregister(address=(self.ip, self.port)),
+                        io_loop=self.loop)
+        self.scheduler.close_rpc()
         self.heartbeat_callback.stop()
-        self.scheduler.close_streams()
         self.stop()
         self.executor.shutdown()
         if os.path.exists(self.local_dir):
@@ -293,26 +294,25 @@ class Worker(Server):
         data: The scope in which to run tasks
         len(remote): the number of new keys we've gathered
         """
-        with log_errors():
-            who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
-            local = {k: self.data[k] for k in who_has if k in self.data}
-            who_has = {k: v for k, v in who_has.items() if k not in local}
-            remote, bad_data = yield gather_from_workers(who_has,
-                    permissive=True, rpc=self.rpc, close=False)
-            if remote:
-                self.data.update(remote)
-                yield self.scheduler.add_keys(address=self.address, keys=list(remote))
+        who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
+        local = {k: self.data[k] for k in who_has if k in self.data}
+        who_has = {k: v for k, v in who_has.items() if k not in local}
+        remote, bad_data = yield gather_from_workers(who_has,
+                permissive=True, rpc=self.rpc, close=False)
+        if remote:
+            self.data.update(remote)
+            yield self.scheduler.add_keys(address=self.address, keys=list(remote))
 
-            data = merge(local, remote)
+        data = merge(local, remote)
 
-            if bad_data:
-                missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
-                            for msg in msgs if 'who_has' in msg}
-                bad = {k: v for k, v in missing.items() if v}
-                good = [msg for msg in msgs if not missing.get(msg['key'])]
-            else:
-                good, bad = msgs, {}
-            raise Return([good, bad, data, len(remote)])
+        if bad_data:
+            missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
+                        for msg in msgs if 'who_has' in msg}
+            bad = {k: v for k, v in missing.items() if v}
+            good = [msg for msg in msgs if not missing.get(msg['key'])]
+        else:
+            good, bad = msgs, {}
+        raise Return([good, bad, data, len(remote)])
 
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
@@ -393,7 +393,6 @@ class Worker(Server):
             bstream = BatchedSend(interval=2, loop=self.loop)
             bstream.start(stream)
 
-        with log_errors():
             closed = False
             last = gen.sleep(0)
             while not closed:
@@ -419,93 +418,95 @@ class Worker(Server):
                 # self.loop.add_callback(self.compute_many, bstream, msgs)
                 last = self.compute_many(bstream, msgs)
 
-            yield last  # TODO: there might be more than one lingering
+            try:
+                yield last  # TODO: there might be more than one lingering
+            except (RPCClosed, RuntimeError):
+                pass
+
             yield bstream.close()
             logger.info("Close compute stream")
 
     @gen.coroutine
     def compute_many(self, bstream, msgs, report=False):
-        with log_errors():
-            transfer_start = time()
-            good, bad, data, num_transferred = yield self.gather_many(msgs)
-            transfer_end = time()
+        transfer_start = time()
+        good, bad, data, num_transferred = yield self.gather_many(msgs)
+        transfer_end = time()
 
-            for msg in msgs:
-                msg.pop('who_has', None)
+        for msg in msgs:
+            msg.pop('who_has', None)
 
-            if bad:
-                logger.warn("Could not find data for %s", sorted(bad))
-            for k, v in bad.items():
-                bstream.send({'status': 'missing-data',
-                              'key': k,
-                              'keys': list(v)})
+        if bad:
+            logger.warn("Could not find data for %s", sorted(bad))
+        for k, v in bad.items():
+            bstream.send({'status': 'missing-data',
+                          'key': k,
+                          'keys': list(v)})
 
-            if good:
-                futures = [self.compute_one(data, report=report, **msg)
-                                         for msg in good]
-                wait_iterator = gen.WaitIterator(*futures)
-                result = yield wait_iterator.next()
-                if num_transferred:
-                    result['transfer_start'] = transfer_start
-                    result['transfer_stop'] = transfer_end
-                bstream.send(result)
-                while not wait_iterator.done():
-                    msg = yield wait_iterator.next()
-                    bstream.send(msg)
+        if good:
+            futures = [self.compute_one(data, report=report, **msg)
+                                     for msg in good]
+            wait_iterator = gen.WaitIterator(*futures)
+            result = yield wait_iterator.next()
+            if num_transferred:
+                result['transfer_start'] = transfer_start
+                result['transfer_stop'] = transfer_end
+            bstream.send(result)
+            while not wait_iterator.done():
+                msg = yield wait_iterator.next()
+                bstream.send(msg)
 
     @gen.coroutine
     def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
                     report=False, task=None):
         logger.debug("Compute one on %s", key)
-        with log_errors():
-            diagnostics = dict()
-            try:
-                start = default_timer()
-                function, args, kwargs = self.deserialize(function, args, kwargs,
-                        task)
-                diagnostics['deserialization'] = default_timer() - start
-            except Exception as e:
-                logger.warn("Could not deserialize task", exc_info=True)
-                emsg = error_message(e)
-                emsg['key'] = key
-                raise Return(emsg)
+        diagnostics = dict()
+        try:
+            start = default_timer()
+            function, args, kwargs = self.deserialize(function, args, kwargs,
+                    task)
+            diagnostics['deserialization'] = default_timer() - start
+        except Exception as e:
+            logger.warn("Could not deserialize task", exc_info=True)
+            emsg = error_message(e)
+            emsg['key'] = key
+            raise Return(emsg)
 
-            self.active.add(key)
-            # Fill args with data
-            args2 = pack_data(args, data)
-            kwargs2 = pack_data(kwargs, data)
+        self.active.add(key)
+        # Fill args with data
+        args2 = pack_data(args, data)
+        kwargs2 = pack_data(kwargs, data)
 
-            # Log and compute in separate thread
-            result = yield self.executor_submit(key, apply_function, function,
-                                                args2, kwargs2)
+        # Log and compute in separate thread
+        result = yield self.executor_submit(key, apply_function, function,
+                                            args2, kwargs2)
 
-            result['key'] = key
-            result.update(diagnostics)
+        result['key'] = key
+        result.update(diagnostics)
 
-            if result['status'] == 'OK':
-                self.data[key] = result.pop('result')
-                if report:
-                    response = yield self.scheduler.add_keys(keys=[key],
-                                            address=(self.ip, self.port))
-                    if not response == 'OK':
-                        logger.warn('Could not report results to scheduler: %s',
-                                    str(response))
-            else:
-                logger.warn(" Compute Failed\n"
-                    "Function: %s\n"
-                    "args:     %s\n"
-                    "kwargs:   %s\n",
-                    str(funcname(function))[:1000],
-                    convert_args_to_str(args, max_len=1000),
-                    convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
+        if result['status'] == 'OK':
+            self.data[key] = result.pop('result')
+            if report:
+                response = yield self.scheduler.add_keys(keys=[key],
+                                        address=(self.ip, self.port))
+                if not response == 'OK':
+                    logger.warn('Could not report results to scheduler: %s',
+                                str(response))
+        else:
+            logger.warn(" Compute Failed\n"
+                "Function: %s\n"
+                "args:     %s\n"
+                "kwargs:   %s\n",
+                str(funcname(function))[:1000],
+                convert_args_to_str(args, max_len=1000),
+                convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
-            logger.debug("Send compute response to scheduler: %s, %s", key,
-                         result)
-            try:
-                self.active.remove(key)
-            except KeyError:
-                pass
-            raise Return(result)
+        logger.debug("Send compute response to scheduler: %s, %s", key,
+                     result)
+        try:
+            self.active.remove(key)
+        except KeyError:
+            pass
+        raise Return(result)
 
     @gen.coroutine
     def compute(self, stream=None, function=None, key=None, args=(), kwargs={},

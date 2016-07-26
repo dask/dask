@@ -36,6 +36,10 @@ with ignoring(ImportError):
 pickle_types = tuple(pickle_types)
 
 
+class RPCClosed(IOError):
+    pass
+
+
 def dumps(x):
     """ Manage between cloudpickle and pickle
 
@@ -388,6 +392,7 @@ class rpc(object):
         self.ip = ip
         self.port = port
         self.timeout = timeout
+        self.status = 'running'
         assert self.ip
         assert self.port
 
@@ -410,6 +415,8 @@ class rpc(object):
 
         As is done in __getattr__ below.
         """
+        if self.status == 'closed':
+            raise RPCClosed("RPC Closed")
         to_clear = set()
         open = False
         for stream, open in self.streams.items():
@@ -442,6 +449,11 @@ class rpc(object):
 
     def __del__(self):
         self.close_streams()
+
+    def close_rpc(self):
+        self.status = 'closed'
+        self.close_streams()
+
 
 
 def coerce_to_address(o, out=str):
