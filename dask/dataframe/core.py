@@ -1733,7 +1733,8 @@ class DataFrame(_Frame):
             numexpr.set_nthreads(1)
 
         The original docstring follows below:\n
-        """ + pd.DataFrame.query.__doc__
+        """ + (pd.DataFrame.query.__doc__
+               if pd.DataFrame.query.__doc__ is not None else '')
 
         name = 'query-%s' % tokenize(self, expr)
         if kwargs:

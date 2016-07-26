@@ -8,6 +8,7 @@ from operator import add, sub
 import os
 import shutil
 import time
+import sys
 
 from toolz import merge, countby
 from toolz.curried import identity
@@ -683,7 +684,8 @@ def test_unravel():
         assert_eq(x.reshape(*shape), unraveled)
         assert len(unraveled.dask) > len(a.dask) + len(a.chunks[0])
 
-    assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
+    if not sys.flags.optimize:  # Fail if optimized byte-compilation
+        assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
     assert unravel(a, a.shape) is a
 
 
