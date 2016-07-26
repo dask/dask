@@ -178,7 +178,7 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.worker_info = defaultdict(dict)
+        self.worker_info = dict()
         self.host_info = defaultdict(dict)
         self.aliases = dict()
         self.processing = dict()
@@ -1005,6 +1005,9 @@ class Scheduler(Server):
                 address = self.coerce_address(address)
                 host, port = address.split(':')
                 self.host_info[host]['last-seen'] = local_now
+
+            if address not in self.worker_info:
+                self.worker_info[address] = dict()
 
             if info:
                 self.worker_info[address].update(info)
