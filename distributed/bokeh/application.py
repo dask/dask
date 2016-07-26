@@ -21,14 +21,16 @@ logger = logging.getLogger(__file__)
 
 class BokehWebInterface(object):
     def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
-                 bokeh_port=8787, bokeh_whitelist=[], log_level='info', show=False):
+                 bokeh_port=8787, bokeh_whitelist=[], log_level='info',
+                 show=False, prefix=None, use_xheaders=False):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
 
         hosts = ['localhost',
                  '127.0.0.1',
                  ip,
-                 host] + list(map(str, bokeh_whitelist))
+                 host]
+
         with ignoring(Exception):
             hosts.append(socket.gethostbyname(ip))
         with ignoring(Exception):
@@ -38,14 +40,23 @@ class BokehWebInterface(object):
 
         hosts.append("*")
 
+        hosts.extend(map(str, bokeh_whitelist))
+
         args = ([binname, 'serve'] + paths +
                 ['--log-level', 'warning',
                  '--check-unused-sessions=50',
                  '--unused-session-lifetime=1',
                  '--port', str(bokeh_port)] +
                  sum([['--host', h] for h in hosts], []))
+
+        if prefix:
+            args.extend(['--prefix', prefix])
+
         if show:
             args.append('--show')
+
+        if use_xheaders:
+            args.append('--use-xheaders')
 
         if log_level in ('debug', 'info', 'warning', 'error', 'critical'):
             args.extend(['--log-level', log_level])

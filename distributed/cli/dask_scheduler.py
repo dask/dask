@@ -41,7 +41,12 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
-def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelist):
+@click.option('--prefix', type=str, default=None,
+              help="Prefix for the bokeh app")
+@click.option('--use-xheaders', type=bool, default=False, show_default=True,
+              help="User xheaders in bokeh app for ssl termination in header")
+def main(center, host, port, http_port, bokeh_port, show, _bokeh,
+         bokeh_whitelist, prefix, use_xheaders):
     given_host = host
     host = host or get_ip()
     if ':' in host and port == 8786:
@@ -60,7 +65,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh, bokeh_whitelis
             from distributed.bokeh.application import BokehWebInterface
             bokeh_proc = BokehWebInterface(host=host, http_port=http_port,
                     tcp_port=port, bokeh_port=bokeh_port,
-                    bokeh_whitelist=bokeh_whitelist, show=show)
+                    bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
+                    use_xheaders=use_xheaders)
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")
         except Exception as e:

@@ -98,8 +98,8 @@ def test_bokeh_whitelist(loop):
     with pytest.raises(Exception):
         requests.get('http://localhost:8787/status/').ok
 
-    with popen(['dask-scheduler', '--bokeh-whitelist', '127.0.0.2',
-                                  '--bokeh-whitelist', '127.0.0.3']) as proc:
+    with popen(['dask-scheduler', '--bokeh-whitelist', '127.0.0.2:8787',
+                                  '--bokeh-whitelist', '127.0.0.3:8787']) as proc:
         with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
             pass
 
