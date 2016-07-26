@@ -126,7 +126,7 @@ The first order of ``data.dataframe`` business is creating a dask DataFrame usin
 **Load multiple datasets from single HDF5 file:**
 -------------------------------------------- 
 
-Loading multiple datasets from a single file requires a small tweak and use of the wildcard charater.  After reading the HDF5 file in, use the ``dask.dataframe.visualize`` method to `render the computation of this dataframe object’s task graph using graphviz <http://dask.pydata.org/en/latest/dataframe-api.html?highlight=visualize#dask.dataframe.DataFrame.visualize>`_ ::
+Loading multiple datasets from a single file requires a small tweak and use of the wildcard charater.  After creating a dask DataFrame object, use the ``dask.dataframe.DataFrame.visualize`` method to `render the computation of the task graph using graphviz <http://dask.pydata.org/en/latest/dataframe-api.html?highlight=visualize#dask.dataframe.DataFrame.visualize>`_ ::
 
     import dask.dataframe as dd
     df = dd.read_hdf('my83.h5','/*')
