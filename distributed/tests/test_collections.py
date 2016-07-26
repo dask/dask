@@ -309,7 +309,7 @@ def test_dataframe_set_index_sync(loop):
                         freq='2H', partition_freq='1M', seed=1)
                 df = e.persist(df)
 
-                df2 = df.set_index('name', method='tasks')
+                df2 = df.set_index('name', shuffle='tasks')
                 df2 = e.persist(df2)
 
                 df2.head()
