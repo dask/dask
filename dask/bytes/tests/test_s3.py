@@ -20,7 +20,7 @@ from dask.bytes import core
 compute = partial(compute, get=get)
 
 
-test_bucket_name = 'mdsupertemp'
+test_bucket_name = 'test'
 files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 200, "name": "Bob"}\n'
                                    b'{"amount": 300, "name": "Charlie"}\n'
