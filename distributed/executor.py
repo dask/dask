@@ -1024,7 +1024,8 @@ class Executor(object):
             result = 'OK', result
         raise gen.Return(result)
 
-    def get(self, dsk, keys, restrictions=None, loose_restrictions=None):
+    def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
+            **kwargs):
         """ Compute dask graph
 
         Parameters

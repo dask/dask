@@ -309,6 +309,15 @@ def test_get_sync(loop):
             assert e.get({'x': (inc, 1)}, 'x') == 2
 
 
+def test_get_sync_optimize_grpah_passes_through(loop):
+    import dask.bag as db
+    import dask
+    bag = db.range(10, npartitions=3).map(inc)
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            dask.compute(bag.sum(), optimize_graph=False, get=e.get)
+
+
 def test_submit_errors(loop):
     def f(a, b, c):
         pass
