@@ -203,7 +203,7 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     dsk = merge(dsk, dsk1, dsk3, dsk4)
 
-    return DataFrame(dsk, name, df.columns, divisions)
+    return DataFrame(dsk, name, df._pd, divisions)
 
 
 def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):

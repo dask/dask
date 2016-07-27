@@ -117,6 +117,13 @@ _simple_fake_mapping = {
 }
 
 
+def make_empty_frame(dtypes, index=None):
+    """Create an empty dataframe from a mapping of column -> dtype"""
+    return pd.DataFrame({c: pd.Series([], dtype=d)
+                         for (c, d) in dtypes.items()},
+                        index=index)
+
+
 def nonempty_sample_df(empty):
     """ Create a dataframe from the given empty dataframe that contains one
     row of fake data (generated from the empty dataframe's dtypes).

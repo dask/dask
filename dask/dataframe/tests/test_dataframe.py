@@ -12,7 +12,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, make_empty_frame
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -21,7 +21,8 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 5, 9, 9])
+meta = make_empty_frame({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+d = dd.DataFrame(dsk, 'x', meta, [0, 5, 9, 9])
 full = d.compute()
 
 
@@ -140,7 +141,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -730,21 +731,16 @@ def test_args():
 
 def test_known_divisions():
     assert d.known_divisions
-
-    df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
-                      ['a', 'b'], divisions=[None, None, None])
+    df = dd.DataFrame(dsk, 'x', meta, divisions=[None, None, None])
     assert not df.known_divisions
-
-    df = dd.DataFrame({('x', 0): 'foo'}, 'x',
-                      ['a', 'b'], divisions=[0, 1])
-    assert d.known_divisions
 
 
 def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
+    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
     full = d.compute(get=dask.get)
 
     assert eq(d.a.sum(), full.a.sum())
@@ -755,22 +751,26 @@ def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    a = dd.DataFrame(dsk, 'x', meta, [None, None])
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    b = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    c = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    meta = make_empty_frame({'b': 'i8', 'c': 'i8'})
+    c = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60],
                                    'd': [70, 80, 90]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10],
                                    'd': [90, 80, 70]},
                                   index=[3, 4, 5])}
-    d = dd.DataFrame(dsk, 'y', ['b', 'c', 'd'], [0, 3, 5])
+    meta = make_empty_frame({'b': 'i8', 'c': 'i8', 'd': 'i8'},
+                            index=pd.Index([], 'i8'))
+    d = dd.DataFrame(dsk, 'y', meta, [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]
     assert dd.concat([a]) is a
@@ -963,16 +963,18 @@ def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    ddf2 = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    ddf2 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    ddf3 = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    meta = make_empty_frame({'b': 'i8', 'c': 'i8'})
+    ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     assert eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
     assert eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
@@ -1257,9 +1259,10 @@ def test_str_accessor():
 
 
 def test_empty_max():
+    meta = make_empty_frame({'x': 'i8'})
     a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
-                      ['x'], [None, None, None])
+                      meta, [None, None, None])
     assert eq(a.x.max(), 1)
 
 
@@ -1333,10 +1336,10 @@ def test_deterministic_apply_concat_apply_names():
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
-    assert (sorted(aca(a.x, f, f, a.x.name).dask) !=
-            sorted(aca(a.x, f2, f2, a.x.name).dask))
-    assert (sorted(aca(a.x, f, f, a.x.name).dask) ==
-            sorted(aca(a.x, f, f, a.x.name).dask))
+    assert (sorted(aca(a.x, f, f, a.x._pd).dask) !=
+            sorted(aca(a.x, f2, f2, a.x._pd).dask))
+    assert (sorted(aca(a.x, f, f, a.x._pd).dask) ==
+            sorted(aca(a.x, f, f, a.x._pd).dask))
 
 
 def test_gh_517():
@@ -1384,7 +1387,6 @@ def test_to_frame():
     s = pd.Series([1, 2, 3], name='foo')
     a = dd.from_pandas(s, npartitions=2)
 
-    assert a.to_frame()._known_dtype
     assert eq(s.to_frame(), a.to_frame())
     assert eq(s.to_frame('bar'), a.to_frame('bar'))
 
@@ -1584,28 +1586,17 @@ def test_dataframe_itertuples():
 def test_from_delayed():
     from dask import delayed
     dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
-    df = dd.from_delayed(dfs, metadata=['A', 'B', 'C', 'D'])
+    meta = dfs[0].compute()
+    df = dd.from_delayed(dfs, metadata=meta)
 
     assert (df.compute().columns == df.columns).all()
     assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
-    s = dd.from_delayed(ss, metadata='A')
+    s = dd.from_delayed(ss, metadata=meta.A)
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
-
-    s = dd.from_delayed(ss)
-    assert s._known_dtype
-    assert s.compute().name == s.name
-
-    df = dd.from_delayed(dfs, tm.makeTimeDataFrame(1))
-    assert df._known_dtype
-    assert list(df.columns) == ['A', 'B', 'C', 'D']
-
-    df = dd.from_delayed(dfs)
-    assert df._known_dtype
-    assert list(df.columns) == ['A', 'B', 'C', 'D']
 
 
 def test_to_delayed():
@@ -1709,7 +1700,7 @@ def test_timeseries_sorted():
 
 
 def test_build_pd():
-    s, known_dtype = dd.Series._build_pd(pd.NaT)
+    s = dd.Series._build_pd(pd.NaT)
     assert isinstance(s, pd.Series)
     assert np.issubdtype(s.dtype, np.datetime64)
 
