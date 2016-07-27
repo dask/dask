@@ -2660,6 +2660,11 @@ def bincount(x, weights=None, minlength=None):
 
     return Array(dsk, name, chunks, dtype)
 
+@wraps(np.digitize)
+def digitize(a, bins, right=False):
+    bins = np.asarray(bins)
+    dtype = np.digitize([0], bins, right=False).dtype
+    return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
