@@ -6,9 +6,9 @@ import dask
 
 extras_require = {
   'array': ['numpy', 'toolz >= 0.7.2'],
-  'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.3'],
+  'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.5'],
   'dataframe': ['numpy', 'pandas >= 0.18.0', 'toolz >= 0.7.2',
-                'partd >= 0.3.3', 'cloudpickle >= 0.2.1'],
+                'partd >= 0.3.5', 'cloudpickle >= 0.2.1'],
   'distributed': ['distributed >= 1.10', 's3fs'],
   'imperative': ['toolz >= 0.7.2'],
 }

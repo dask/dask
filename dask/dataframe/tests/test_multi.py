@@ -642,3 +642,17 @@ def test_half_indexed_dataframe_avoids_shuffle():
     list_eq(c, cc)
 
     assert len(cc.dask) < 500
+
+
+def test_errors_for_merge_on_frame_columns():
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[1, 2, 3, 4, 5])
+    b = pd.DataFrame({'y': [1, 2, 3, 4, 5]}, index=[5, 4, 3, 2, 1])
+
+    aa = dd.from_pandas(a, npartitions=3, sort=False)
+    bb = dd.from_pandas(b, npartitions=2)
+
+    with pytest.raises(NotImplementedError):
+        dd.merge(aa, bb, left_on='x', right_on=bb.y)
+
+    with pytest.raises(NotImplementedError):
+        dd.merge(aa, bb, left_on=aa.x, right_on=bb.y)

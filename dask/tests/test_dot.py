@@ -2,12 +2,17 @@ import os
 from functools import partial
 import re
 from operator import add, neg
-
+import sys
 import pytest
 
-pytest.importorskip("graphviz")
+optimize2 = (sys.flags.optimize == 2)
+if not optimize2:
+    pytest.importorskip("graphviz")
+    from dask.dot import dot_graph, task_label, label, to_graphviz
+else:
+    pytestmark = pytest.mark.skipif(True,
+                                    reason="graphviz exception with Python -OO flag")
 
-from dask.dot import dot_graph, task_label, label, to_graphviz
 from dask.utils import ensure_not_exists
 from IPython.display import Image, SVG
 
