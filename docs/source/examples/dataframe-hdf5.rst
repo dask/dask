@@ -7,9 +7,9 @@ This section provides working examples of ``dask.dataframe`` methods to read HDF
 
   While there is `planned work to refactor PyTables to use h5py bindings to HDF5 and create 100% compatibility <https://groups.google.com/forum/#!msg/pytables-users/GBVkvGexSag/IwLjEtIfKIgJ>`_, there are differences in how the interfaces are implemented. `dask.dataframe` will have `nearly seamless compatibility with HDF5 files built in pandas <https://github.com/bokeh/bokeh/issues/1246>`_.  Here is more information on the differences between *h5py* and *PyTables* and work to improve compatibility:
 
-    1.  `h5py explanation of differences from PyTables <http://docs.h5py.org/en/latest/faq.html#what-s-the-difference-between-h5py-and-pytables>`_
-    2.  `PyTables explanation of differences from h5py <http://www.pytables.org/FAQ.html#how-does-pytables-compare-with-the-h5py-project>`_
-    3.  `HackFest with h5py and PyTables teams <https://curtinic.github.io/python-and-hdf5-hackfest/>`_
+    -  `h5py explanation of differences from PyTables <http://docs.h5py.org/en/latest/faq.html#what-s-the-difference-between-h5py-and-pytables>`_
+    -  `PyTables explanation of differences from h5py <http://www.pytables.org/FAQ.html#how-does-pytables-compare-with-the-h5py-project>`_
+    -  `HackFest with h5py and PyTables teams <https://curtinic.github.io/python-and-hdf5-hackfest/>`_
 
 **Core DataFrame Functions in this Tutorial:**
 ----------------------------------------------
@@ -77,68 +77,6 @@ These exercises require multiple HDF5 files with multiple dataset keys.  The `Py
     # Create the HDF5 files and keys to access
     hdf5Keys = create_hdf5s(keys)
 
-
-.. doctest:: 
-    
-    def create_hdf5s(iters):
-        '''
-
-    >>> answer ={'my24.h5': 'g',
-    ... 'my37.h5': 'd',
-    ... 'my98.h5': 'c',
-    ... 'my83.h5': 'q',
-    ... 'my76.h5': 'a',
-    ... 'my21.h5': 'v',
-    ... 'my47.h5': 'w',
-    ... 'my87.h5': 't',
-    ... 'my10.h5': 'u'}
-
-    >>> iters=10
-    >>> import random
-    >>> import pandas as pd
-    >>> import numpy as np
-    >>> import string
-    >>> import json
-
-    >>> # Intitalize counter to build specific number of hdf5 files
-    >>> count = 0
-    >>> setseed=1
-    >>> np.random.seed(seed=setseed)
-    >>> random.seed(setseed)
-
-    >>> # Key to store group keys and file names for generated hdf5 files
-    >>> fileKeys = {}
-
-    >>> while count < iters:
-    ...     # randomly pick letter as dataset key
-    ...     groupkey = random.choice(list(string.ascii_lowercase))
-    ...     # randomly pick a number as hdf5 filename
-    ...     saver = 'my'+str(np.random.randint(100))+'.h5'
-    ...     # Make a dataframe; 26 rows, 2 columns
-    ...     df = pd.DataFrame(
-    ...     {'x': np.random.randint(1,1000,26),
-    ...     'y': np.random.randint(1,1000,26)},
-    ...     index=list(string.ascii_lowercase)
-    ...     )
-    ...     # Write synthetic hdf5 to current directory
-    ...     df.to_hdf(saver, key='/'+groupkey, format='table')
-    ...     fileKeys[saver]=groupkey
-    ...     count += 1
-    ...     setseed += 1
-
-    >>> # Return the dictionary with file key and filename for testing
-    >>> with open('hdf5Keys.json','w') as f:
-    ...     f.write(json.dumps(fileKeys))
-
-    >>> if 'my10.h5' in answer.keys() and 'my10.h5' in fileKeys.keys():
-    ...     True
-    True
-
-'''
-        return fileKeys
-    
-    # Build the exercise data
-    hdf5Keys = create_hdf5s(keys)
         
 **Read single dataset from HDF5:**
 --------------------------------------------
