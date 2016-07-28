@@ -1699,12 +1699,6 @@ def test_timeseries_sorted():
        df)
 
 
-def test_build_pd():
-    s = dd.Series._build_pd(pd.NaT)
-    assert isinstance(s, pd.Series)
-    assert np.issubdtype(s.dtype, np.datetime64)
-
-
 def test_column_assignment():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
