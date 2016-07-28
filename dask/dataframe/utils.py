@@ -8,19 +8,12 @@ import sys
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from pandas.core.common import is_datetime64tz_dtype
+from pandas.core.common import is_datetime64tz_dtype, is_categorical_dtype
 import toolz
 
-from dask.async import get_sync
+from ..async import get_sync
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
-
-# Pandas <0.18.1 doesn't have the `is_extension_type` function
-if PANDAS_VERSION > '0.18.0':
-    is_extension_type = pd.core.common.is_extension_type
-else:
-    def is_extension_type(x):
-        return False
 
 
 def shard_df_on_index(df, divisions):
@@ -103,20 +96,6 @@ def unique(divisions):
     raise NotImplementedError()
 
 
-_simple_fake_mapping = {
-    'b': True,   # boolean
-    'i': -1,   # signed int
-    'u': 1,   # unsigned int
-    'f': 1.0,   # float
-    'c': complex(1, 0),   # complex
-    'S': b'foo',   # bytestring
-    'U': u'foo',   # unicode string
-    'V': np.array([b' '], dtype=np.void)[0],  # void
-    'M': np.datetime64('1970-01-01'),
-    'm': np.timedelta64(1, 'D'),
-}
-
-
 def make_empty_frame(dtypes, index=None):
     """Create an empty dataframe from a mapping of column -> dtype"""
     return pd.DataFrame({c: pd.Series([], dtype=d)
@@ -124,37 +103,79 @@ def make_empty_frame(dtypes, index=None):
                         index=index)
 
 
-def nonempty_sample_df(empty):
-    """ Create a dataframe from the given empty dataframe that contains one
-    row of fake data (generated from the empty dataframe's dtypes).
+def _nonempty_index(idx):
+    typ = type(idx)
+    if typ is pd.RangeIndex:
+        return pd.RangeIndex(1, name=idx.name)
+    elif typ in (pd.Int64Index, pd.Float64Index):
+        return typ([1], name=idx.name)
+    elif typ is pd.Index:
+        return pd.Index(['a'], name=idx.name)
+    elif typ is pd.DatetimeIndex:
+        return pd.DatetimeIndex(['1970-01-01'], freq=idx.freq,
+                                tz=idx.tz, name=idx.name)
+    elif typ is pd.PeriodIndex:
+        return pd.PeriodIndex(['1970-01-01'], freq=idx.freq, name=idx.name)
+    elif typ is pd.TimedeltaIndex:
+        return pd.TimedeltaIndex([np.timedelta64(1, 'D')], freq=idx.freq,
+                                 name=idx.name)
+    elif typ is pd.CategoricalIndex:
+        return pd.CategoricalIndex([idx.categories[0]],
+                                   categories=idx.categories,
+                                   ordered=idx.ordered, name=idx.name)
+    elif typ is pd.MultiIndex:
+        levels = [_nonempty_index(i) for i in idx.levels]
+        labels = [[0] for i in idx.levels]
+        return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
+    raise TypeError("Don't know how to handle index of "
+                    "type {0}".format(type(idx).__name__))
+
+
+_simple_fake_mapping = {
+    'b': True,
+    'c': complex(1, 0),
+    'V': np.array([b' '], dtype=np.void)[0],
+    'M': np.datetime64('1970-01-01'),
+    'm': np.timedelta64(1, 'D'),
+    'O': 'foo'
+}
+
+
+def _nonempty_series(s, idx):
+    dtype = s.dtype
+    if is_datetime64tz_dtype(dtype):
+        entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
+    elif is_categorical_dtype(dtype):
+        entry = pd.Categorical([s.cat.categories[0]],
+                               categories=s.cat.categories,
+                               ordered=s.cat.ordered)
+    elif dtype.kind in ['i', 'f', 'u']:
+        entry = dtype.type(1)
+    elif dtype.kind in _simple_fake_mapping:
+        entry = _simple_fake_mapping[dtype.kind]
+    else:
+        raise TypeError("Can't handle dtype: {0}".format(dtype))
+    return pd.Series([entry], name=s.name, index=idx)
+
+
+def nonempty_pd(x):
+    """Create a nonempty pandas object from the given metadata.
+
+    Returns a pandas DataFrame, Series, or Index that contains one row
+    of fake data.
     """
-    nonempty = {}
-    idx = pd.RangeIndex(start=0, stop=1, step=1)
-    for key, dtype in empty.dtypes.iteritems():
-        if is_datetime64tz_dtype(dtype):
-            entry = pd.Timestamp('1970-01-01', tz='America/New_York')
-        elif pd.core.common.is_categorical_dtype(dtype):
-            accessor = empty[key].cat
-            example = accessor.categories[0]
-            cat = pd.Categorical([example], categories=accessor.categories,
-                                 ordered=accessor.ordered)
-            entry = pd.Series(cat, name=key)
-        elif dtype.kind in _simple_fake_mapping:
-            entry = _simple_fake_mapping[dtype.kind]
-        elif is_extension_type(dtype):
-            raise TypeError("Can't handle extension dtype: {}".format(dtype))
-        elif dtype.name == 'object':
-            entry = 'foo'
-        else:
-            raise TypeError("Can't handle dtype: {}".format(dtype))
-
-        if not isinstance(entry, pd.Series):
-            entry = pd.Series([entry], name=key, index=idx)
-
-        nonempty[key] = entry
-
-    df = pd.DataFrame(nonempty)
-    return df
+    if isinstance(x, pd.Index):
+        return _nonempty_index(x)
+    elif isinstance(x, pd.Series):
+        idx = _nonempty_index(x.index)
+        return _nonempty_series(x, idx)
+    elif isinstance(x, pd.DataFrame):
+        idx = _nonempty_index(x.index)
+        data = {c: _nonempty_series(x[c], idx) for c in x.columns}
+        return pd.DataFrame(data, columns=x.columns, index=idx)
+    else:
+        raise TypeError("Expected Index, Series, or DataFrame, "
+                        "got {0}".format(type(x).__name__))
 
 
 ###############################################################

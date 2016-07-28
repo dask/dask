@@ -30,7 +30,7 @@ from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from .indexing import (_partition_of_index_value, _loc, _try_loc,
                        _coerce_loc_index, _maybe_partial_time_string)
-from .utils import nonempty_sample_df
+from .utils import nonempty_pd
 
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
@@ -205,6 +205,11 @@ class _Frame(Base):
             _pd = cls._partition_type(columns=metadata)
             # known_dtype = False
         return _pd
+
+    @property
+    def _pd_nonempty(self):
+        """ A non-empty version of `_pd` with fake data."""
+        return nonempty_pd(self._pd)
 
     @property
     def _args(self):
@@ -742,7 +747,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
-        meta = self._pd.sum(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.sum(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_sum, meta, self,
                                   token=self._token_prefix + 'sum',
@@ -755,7 +760,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
-        meta = self._pd.max(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.max(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_max, meta, self,
                                   token=self._token_prefix + 'max',
@@ -768,7 +773,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def min(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
-        meta = self._pd.min(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.min(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_min, meta, self,
                                   token=self._token_prefix + 'min',
@@ -782,12 +787,12 @@ class _Frame(Base):
     def count(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
-            meta = self._pd.count(axis=axis)
+            meta = self._pd_nonempty.count(axis=axis)
             return map_partitions(_count, meta, self,
                                   token=self._token_prefix + 'count',
                                   axis=axis)
         else:
-            meta = self._pd.count()
+            meta = self._pd_nonempty.count()
             return self._aca_agg(token='count', func=_count,
                                  aggfunc=lambda x: x.sum(),
                                  meta=meta)
@@ -795,7 +800,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
-        meta = self._pd.mean(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.mean(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_mean, meta, self,
                                   token=self._token_prefix + 'mean',
@@ -816,7 +821,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def var(self, axis=None, skipna=True, ddof=1):
         axis = self._validate_axis(axis)
-        meta = self._pd.var(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_var, meta, self,
                                   token=self._token_prefix + 'var',
@@ -841,7 +846,7 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1):
         axis = self._validate_axis(axis)
-        meta = self._pd.std(axis=axis, skipna=skipna)
+        meta = self._pd_nonempty.std(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(_std, meta, self,
                                   token=self._token_prefix + 'std',
@@ -1533,11 +1538,6 @@ class DataFrame(_Frame):
     @property
     def _constructor(self):
         return DataFrame
-
-    @property
-    def _pd_nonempty(self):
-        """ A Pandas dataframe with the same metadata but fake data."""
-        return nonempty_sample_df(self._pd)
 
     @property
     def columns(self):
