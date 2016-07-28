@@ -6,6 +6,7 @@ from errno import ENOENT
 import functools
 import io
 import os
+import re
 import sys
 import shutil
 import struct
@@ -702,7 +703,8 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
-    if ':\\' in urlpath:
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:\\', urlpath):
         return {'protocol': 'file',
                 'path': urlpath}
 
@@ -714,7 +716,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     }
 
     if parsed_path.netloc:
-        inferred_storage_options['host'] = parsed_path.hostname
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
         if parsed_path.port:
             inferred_storage_options['port'] = parsed_path.port
         if parsed_path.username:
