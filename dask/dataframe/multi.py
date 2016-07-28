@@ -56,6 +56,7 @@ We proceed with hash joins in the following stages:
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect_left, bisect_right
+from warnings import warn
 
 from toolz import merge_sorted, unique, partial, first
 import toolz
@@ -64,7 +65,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from .core import (_Frame, Scalar, DataFrame, map_partitions,
+from .core import (_Frame, Scalar, DataFrame, map_partitions, elemwise,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle, rearrange_by_divisions
@@ -355,6 +356,19 @@ def _pdconcat(dfs, axis=0, join='outer'):
     return pd.concat(dfs, axis=axis, join=join)
 
 
+
+def concat_unindexed_dataframes(dfs):
+    name = 'concat-' + tokenize(*dfs)
+
+    dsk = {(name, i): (pd.concat, [(df._name, i) for df in dfs], 1)
+            for i in range(dfs[0].npartitions)}
+
+    meta = pd.concat([df._pd for df in dfs], axis=1)
+
+    return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
+                  name, meta, dfs[0].divisions)
+
+
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     """ Concatenate indexed dataframes together along the index """
 
@@ -574,7 +588,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dasks = [df for df in dfs if isinstance(df, _Frame)]
 
     if all(df.known_divisions for df in dasks):
-
         dfs = _maybe_from_pandas(dfs)
         if axis == 1:
             return concat_indexed_dataframes(dfs, axis=axis, join=join)
@@ -602,6 +615,13 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                 raise ValueError('All inputs have known divisions which cannot '
                                  'be concatenated in order. Specify '
                                  'interleave_partitions=True to ignore order')
+    elif (axis == 1 and
+          len(dasks) == len(dfs) and
+          all(not df.known_divisions for df in dfs) and
+          len({df.npartitions for df in dasks}) == 1):
+        warn("Concatenating dataframes assuming that they have the same length."
+             " This is not generally a safe assumption.")
+        return concat_unindexed_dataframes(dfs)
 
     else:
         if axis == 1:

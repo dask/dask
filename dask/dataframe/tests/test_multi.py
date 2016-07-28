@@ -656,3 +656,20 @@ def test_errors_for_merge_on_frame_columns():
 
     with pytest.raises(NotImplementedError):
         dd.merge(aa, bb, left_on=aa.x, right_on=bb.y)
+
+
+def test_concat_unknown_divisions():
+    import pandas as pd
+    a = pd.Series([1, 2, 3, 4])
+    b = pd.Series([4, 3, 2, 1])
+    aa = dd.from_pandas(a, npartitions=2, sort=False)
+    bb = dd.from_pandas(b, npartitions=2, sort=False)
+
+    assert not aa.known_divisions
+
+    assert eq(pd.concat([a, b], axis=1),
+              dd.concat([aa, bb], axis=1))
+
+    cc = dd.from_pandas(b, npartitions=1, sort=False)
+    with pytest.raises(ValueError):
+        dd.concat([aa, cc], axis=1)
