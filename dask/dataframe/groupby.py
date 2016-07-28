@@ -430,6 +430,9 @@ class SeriesGroupBy(_GroupBy):
 
     def nunique(self):
         name = self._pd.obj.name
+        meta = pd.Series([], dtype='int64',
+                         index=pd.Index([], dtype=self._pd.obj.dtype),
+                         name=name)
 
         if isinstance(self.obj, DataFrame):
 
@@ -438,7 +441,7 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_df_chunk, aggregate=agg,
-                       columns=name, token='series-groupby-nunique')
+                       columns=meta, token='series-groupby-nunique')
         else:
 
             def agg(df):
@@ -446,4 +449,4 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_series_chunk, aggregate=agg,
-                       columns=name, token='series-groupby-nunique')
+                       columns=meta, token='series-groupby-nunique')
