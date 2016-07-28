@@ -29,3 +29,10 @@ def test_nanny_worker_ports(loop):
                         assert time() - start < 5
                         sleep(0.1)
                 assert d['workers']['127.0.0.1:8788']['services']['nanny'] == 8789
+
+
+def test_no_nanny(loop):
+    with popen(['dask-scheduler']) as sched:
+        with popen(['dask-worker', '127.0.0.1:8786', '--no-nanny']) as worker:
+            assert any(b'Registered' in worker.stderr.readline()
+                        for i in range(10))
