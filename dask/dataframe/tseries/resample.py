@@ -88,7 +88,7 @@ class Resampler(object):
         self._rule = rule
         self._kwargs = kwargs
 
-    def _agg(self, how, columns=None, fill_value=np.nan):
+    def _agg(self, how, meta=None, fill_value=np.nan):
         rule = self._rule
         kwargs = self._kwargs
         name = 'resample-' + tokenize(self.obj, rule, kwargs, how)
@@ -107,9 +107,14 @@ class Resampler(object):
         for i, (k, s, e, c) in enumerate(args):
             dsk[(name, i)] = (_resample_series, k, s, e, c,
                               rule, kwargs, how, fill_value)
-        if columns:
-            return DataFrame(dsk, name, columns, outdivs)
-        return Series(dsk, name, self.obj.name, outdivs)
+
+        # Infer output metadata
+        meta_r = self.obj._pd_nonempty.resample(self._rule, **self._kwargs)
+        meta = getattr(meta_r, how)()
+
+        if isinstance(meta, pd.DataFrame):
+            return DataFrame(dsk, name, meta, outdivs)
+        return Series(dsk, name, meta, outdivs)
 
     def count(self):
         return self._agg('count', fill_value=0)
@@ -133,7 +138,7 @@ class Resampler(object):
         return self._agg('max')
 
     def ohlc(self):
-        return self._agg('ohlc', columns=['open', 'high', 'low', 'close'])
+        return self._agg('ohlc')
 
     def prod(self):
         return self._agg('prod')
