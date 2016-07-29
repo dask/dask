@@ -58,6 +58,8 @@
 
 [Skipper Seabold](https://github.com/jseabold)
 
+[Stefan Seefeld](https://github.com/stefanseefeld)
+
 [Stephan Hoyer](http://stephanhoyer.com)
 
 [Stuart Owen](http://stuartowen.com/)
