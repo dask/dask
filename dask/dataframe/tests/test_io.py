@@ -1107,6 +1107,17 @@ def test_read_hdf():
         assert (sorted(dd.read_hdf(fn, '/data').dask) ==
                 sorted(dd.read_hdf(fn, '/data').dask))
 
+def test_read_hdf_multiply_open():
+    "Test that we can read from a file that's already opened elsewhere in read-only mode."
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        with pd.HDFStore(fn, mode='r') as other:
+            a = dd.read_hdf(fn, '/data', chunksize=2, mode='r')
+
+
 def test_read_hdf_multiple():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
