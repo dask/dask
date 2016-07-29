@@ -420,9 +420,9 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
 
 
 @wraps(pd.DataFrame.to_hdf)
-def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=None, dask_kwargs={},
-           name_function=None, compute=True, lock=None, **kwargs):
+def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
+           name_function=None, compute=True, lock=None, dask_kwargs={},
+           **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -448,8 +448,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
     if '*' in key:
         single_node = False
 
-    if 'format' in kwargs:
-        warn("argument 'format' is ignored, only 'table' is supported.")
+    if 'format' in kwargs and kwargs['format'] != 'table':
+        raise ValueError("Dask only support 'table' format in hdf files.")
 
     if mode not in ('a', 'w', 'r+'):
         raise ValueError("Mode must be one of 'a', 'w' or 'r+'")
@@ -488,9 +488,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
         else:
             lock = Lock()
 
-    kwargs.update({'format': 'table', 'complevel': complevel,
-                   'complib': complib, 'fletcher32': fletcher32,
-                   'mode': mode, 'append': append})
+    kwargs.update({'format': 'table', 'mode': mode, 'append': append})
+
     dsk = dict()
 
     i_name = name_function(0)

@@ -548,11 +548,14 @@ class _Frame(Base):
         return self._constructor(merge(self.dask, dsk), name,
                                  self._pd, self.divisions)
 
-    def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
-               complib=None, fletcher32=False, get=None, **kwargs):
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
         """ Export frame to hdf file(s)
 
         Export dataframe to one or multiple hdf5 files or nodes.
+
+        Exported hdf format is pandas' hdf table format only.
+        Data saved by this function should be read by pandas dataframe
+        compatible reader.
 
 	By providing a single asterisk in either the path_or_buf or key
 	parameters you direct dask to save each partition to a different file
@@ -577,6 +580,9 @@ class _Frame(Base):
 	    A node / group path in file, can contain a single asterisk to save
 	    each partition to a different hdf node in a single file. Only one
 	    asterisk is allowed in both path_or_buf and key parameters.
+        format: optional, default 'table'
+            Default hdf storage format, currently only pandas' 'table' format
+            is supported.
         mode: optional, {'a', 'w', 'r+'}, default 'a'
 
           ``'a'``
@@ -663,8 +669,7 @@ class _Frame(Base):
         """
 
         from .io import to_hdf
-        return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
-                fletcher32, get=get, **kwargs)
+        return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
     @derived_from(pd.DataFrame)
     def to_csv(self, filename, get=get_sync, **kwargs):
