@@ -112,7 +112,7 @@ fundamental difference between the two projects.  Dask gives up high-level
 understanding to allow users to express more complex parallel algorithms.  This
 ended up being essential when writing complex projects like ``dask.array``,
 datetime algorithms in ``dask.dataframe`` or non-trivial algorithms in machine
-learning.handling in .
+learning.
 
 
 Developer-Facing Differences
