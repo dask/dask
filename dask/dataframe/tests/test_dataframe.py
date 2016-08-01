@@ -698,8 +698,20 @@ def test_index():
 
 
 def test_assign():
-    assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
-              full.assign(c=full.a + 1, e=full.a + full.b))
+    res = d.assign(c=1,
+                   d='string',
+                   e=np.float64(1),
+                   f=d.a.sum(),
+                   g=d.a + 1,
+                   h=d.a + d.b)
+    sol = full.assign(c=1,
+                      d='string',
+                      e=np.float64(1),
+                      f=full.a.sum(),
+                      g=full.a + 1,
+                      h=full.a + full.b)
+    assert eq(res, sol)
+    pytest.raises(TypeError, lambda: d.assign(c=list(range(9))))
 
 
 def test_map():

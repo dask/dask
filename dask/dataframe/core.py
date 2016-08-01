@@ -1711,6 +1711,11 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
+        for k, v in kwargs.items():
+            if not (isinstance(v, (Series, Scalar, pd.Series))
+                    or np.isscalar(v)):
+                raise TypeError("Column assignment doesn't support type "
+                                "{0}".format(type(v).__name__))
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
