@@ -835,7 +835,7 @@ def test_to_csv():
         a = dd.from_pandas(df, npartitions)
         with tmpdir() as dn:
             a.to_csv(dn, index=False)
-            result = dd.read_csv(dn+'/*').compute().reset_index(drop=True)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
         with tmpdir() as dn:
@@ -913,9 +913,8 @@ def test_to_csv_simple():
     assert (result.x == df0.x).all()
 
 
-def test_to_csv_simple():
-    df0 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+def test_to_csv_series():
+    df0 = pd.Series(['a', 'b', 'c', 'd'], index=[1., 2., 3., 4.])
     df = dd.from_pandas(df0, npartitions=2)
     with tmpdir() as dir:
         dir = str(dir)

@@ -661,7 +661,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
 
     if compute:
         from dask import compute
-        return compute(*values)
+        compute(*values)
     else:
         return values
 

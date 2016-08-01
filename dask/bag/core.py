@@ -165,7 +165,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                       encoding=encoding)
     if compute:
         from dask import compute
-        return compute(*out)
+        compute(*out)
     else:
         return out
 
