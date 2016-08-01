@@ -789,11 +789,6 @@ def test_concat2():
         assert eq(pd.concat(pdcase, join='inner'), result)
         assert result.dask == dd.concat(case, join='inner').dask
 
-        msg = ('Unable to concatenate DataFrame with unknown division '
-               'specifying axis=1')
-        with tm.assertRaisesRegexp(ValueError, msg):
-            dd.concat(case, axis=1)
-
 
 def test_concat3():
     pdf1 = pd.DataFrame(np.random.randn(6, 5),

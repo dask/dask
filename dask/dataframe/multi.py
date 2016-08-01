@@ -356,11 +356,16 @@ def _pdconcat(dfs, axis=0, join='outer'):
     return pd.concat(dfs, axis=axis, join=join)
 
 
+def concat_and_check(dfs):
+    if len(set(map(len, dfs))) != 1:
+        raise ValueError("Concattenated DataFrames of different lengths")
+    return pd.concat(dfs, axis=1)
+
 
 def concat_unindexed_dataframes(dfs):
     name = 'concat-' + tokenize(*dfs)
 
-    dsk = {(name, i): (pd.concat, [(df._name, i) for df in dfs], 1)
+    dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
             for i in range(dfs[0].npartitions)}
 
     meta = pd.concat([df._pd for df in dfs], axis=1)
@@ -619,8 +624,9 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
           len(dasks) == len(dfs) and
           all(not df.known_divisions for df in dfs) and
           len({df.npartitions for df in dasks}) == 1):
-        warn("Concatenating dataframes assuming that they have the same length."
-             " This is not generally a safe assumption.")
+        warn("Concattenating dataframes with unknown divisions.\n"
+             "We're assuming that the indexes of each dataframes are aligned\n."
+             "This assumption is not generally safe.")
         return concat_unindexed_dataframes(dfs)
 
     else:
