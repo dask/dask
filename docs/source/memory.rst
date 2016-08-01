@@ -73,7 +73,7 @@ In this example we build a computation by parsing CSV data, filtering rows, and
 then adding a new column.  Up until this point all work is lazy; we've just
 built up a recipe to perform the work as a graph in the ``df`` object.
 
-When we call ``df = e.perist(df)`` we cut this graph off of the ``df`` object,
+When we call ``df = e.persist(df)`` we cut this graph off of the ``df`` object,
 send it up to the scheduler, receive ``Future`` objects in return and create a
 new dataframe with a very shallow graph that points directly to these futures.
 This happens more or less immediately (as long as it takes to serialize and
