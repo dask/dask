@@ -841,7 +841,7 @@ def test_to_csv():
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
             compute(*r)
-            result = dd.read_csv(dn+'/*').compute().reset_index(drop=True)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
         with tmpdir() as dn:
@@ -909,7 +909,7 @@ def test_to_csv_simple():
         dir = str(dir)
         df.to_csv(dir)
         assert os.listdir(dir)
-        result = dd.read_csv(os.path.join(dir, '/*')).compute()
+        result = dd.read_csv(os.path.join(dir, '*')).compute()
     assert (result.x == df0.x).all()
 
 
@@ -920,7 +920,7 @@ def test_to_csv_series():
         dir = str(dir)
         df.to_csv(dir)
         assert os.listdir(dir)
-        result = dd.read_csv(os.path.join(dir, '/*'), header=None,
+        result = dd.read_csv(os.path.join(dir, '*'), header=None,
                              names=['x']).compute()
     assert (result.x == df0).all()
 
