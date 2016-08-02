@@ -548,7 +548,7 @@ class _Frame(Base):
                 fletcher32, get=get, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def to_csv(self, filename, get=get_sync, **kwargs):
+    def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 

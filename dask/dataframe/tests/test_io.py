@@ -909,7 +909,7 @@ def test_to_csv_simple():
         dir = str(dir)
         df.to_csv(dir)
         assert os.listdir(dir)
-        result = dd.read_csv(dir+'/*').compute()
+        result = dd.read_csv(os.path.join(dir, '/*')).compute()
     assert (result.x == df0.x).all()
 
 
@@ -920,7 +920,8 @@ def test_to_csv_series():
         dir = str(dir)
         df.to_csv(dir)
         assert os.listdir(dir)
-        result = dd.read_csv(dir+'/*', header=None, names=['x']).compute()
+        result = dd.read_csv(os.path.join(dir, '/*'), header=None,
+                             names=['x']).compute()
     assert (result.x == df0).all()
 
 
