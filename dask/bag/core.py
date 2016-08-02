@@ -1004,16 +1004,20 @@ class Bag(Base):
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
 
-        Bag should contain tuple or dict records.
-
-        Provide ``columns=`` keyword arg to specify column names.
+        Bag should contain tuples, dict records, or scalars.
 
         Index will not be particularly meaningful.  Use ``reindex`` afterwards
         if necessary.
 
+        Parameters
+        ----------
+        columns : list or pandas.DataFrame, optional
+            If a list, provides the desired column names. If a 
+            ``pandas.DataFrame``, it should mirror the column names and dtypes
+            of the output dataframe. If not provided, these will be computed.
+
         Examples
         --------
-
         >>> import dask.bag as db
         >>> b = db.from_sequence([{'name': 'Alice',   'balance': 100},
         ...                       {'name': 'Bob',     'balance': 200},
@@ -1029,21 +1033,20 @@ class Bag(Base):
         """
         import pandas as pd
         import dask.dataframe as dd
-        if columns is None:
+        if isinstance(columns, pd.DataFrame):
+            meta = columns
+        else:
             head = self.take(1)[0]
-            if isinstance(head, dict):
-                columns = sorted(head)
-            elif isinstance(head, (tuple, list)):
-                columns = list(range(len(head)))
+            meta = pd.DataFrame([head], columns=columns)
+        columns = list(meta.columns)
         name = 'to_dataframe-' + tokenize(self, columns)
         DataFrame = partial(pd.DataFrame, columns=columns)
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
 
         divisions = [None] * (self.npartitions + 1)
-
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, columns, divisions)
+                            name, meta, divisions)
 
     def to_imperative(self):
         warn("Deprecation warning: moved to to_delayed")

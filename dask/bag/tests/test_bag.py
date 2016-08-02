@@ -683,6 +683,16 @@ def test_to_dataframe():
     assert df2._name == b.to_dataframe()._name
     assert df2._name != df._name
 
+    meta = pd.DataFrame({'a': [1], 'b': [2]}).iloc[0:0]
+    df3 = b.to_dataframe(columns=meta)
+    assert df2._name == df3._name
+    assert (df3.compute().values == df2.compute().values).all()
+
+    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    df4 = b.to_dataframe()
+    assert len(df4.columns) == 1
+    assert list(df4.compute()) == list(pd.DataFrame(list(b)))
+
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
