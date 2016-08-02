@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
+import io
 from math import ceil
 from operator import getitem
 import os
@@ -10,6 +11,7 @@ from threading import Lock
 import multiprocessing
 import uuid
 from warnings import warn
+import sys
 
 import pandas as pd
 import numpy as np
@@ -17,7 +19,7 @@ import dask
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, apply
+from ..compatibility import unicode, apply, PY2
 from .. import array as da
 from ..async import get_sync
 from ..context import _globals
@@ -28,6 +30,7 @@ from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 
 from ..utils import build_name_function
+from ..bytes.core import write_bytes, write_block_to_file
 
 lock = Lock()
 
@@ -724,57 +727,30 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return delayed([Delayed(key, [dsk]) for key in keys])[0]
 
 
-def to_csv(df, filename, name_function=None, compression=None, get=None, compute=True, **kwargs):
-    if compression:
-        raise NotImplementedError("Writing compressed csv files not supported")
-    name = 'to-csv-' + uuid.uuid1().hex
+def to_csv(df, filename, name_function=None, compression=None, compute=True,
+           **kwargs):
 
-    kwargs2 = kwargs.copy()
+    def func(df, **kwargs):
+        if PY2:
+            out = io.BytesIO()
+        else:
+            out = io.StringIO()
+        df.to_csv(out, **kwargs)
+        out.seek(0)
+        if PY2:
+            return out.getvalue()
+        return out.getvalue().encode(encoding)
 
-    if name_function is None:
-        name_function = build_name_function(df.npartitions - 1)
-
-    if '*' in filename:
-        if filename.count('*') > 1:
-            raise ValueError("A maximum of one asterisk is accepted in filename")
-
-        if 'mode' in kwargs and kwargs['mode'] != 'w':
-            raise ValueError("to_csv does not support writing to multiple files in append mode, "
-                             "please specify mode='w'")
-
-        formatted_names = [name_function(i) for i in range(df.npartitions)]
-        if formatted_names != sorted(formatted_names):
-            warn("To preserve order between partitions name_function "
-                 "must preserve the order of its input")
-
-        single_file = False
-    else:
-        kwargs2.update({'mode': 'a', 'header': False})
-        single_file = True
-
-    dsk = dict()
-    dsk[(name, 0)] = (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
-                        (df._name, 0), filename.replace('*', name_function(0)), kwargs)
-
-    for i in range(1, df.npartitions):
-        filename_i = filename.replace('*', name_function(i))
-
-        task = (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
-                 (df._name, i), filename_i, kwargs2)
-        if single_file:
-            task = (_link, (name, i - 1), task)
-        dsk[(name, i)] = task
-
-    dsk = merge(dsk, df.dask)
-    if single_file:
-        keys = [(name, df.npartitions - 1)]
-    else:
-        keys = [(name, i) for i in range(df.npartitions)]
+    encoding = kwargs.get('encoding', sys.getdefaultencoding())
+    values = [delayed(func)(d, **kwargs) for d in df.to_delayed()]
+    values = write_bytes(values, filename, name_function, compression,
+                         encoding=None)
 
     if compute:
-        return DataFrame._get(dsk, keys, get=get)
+        from dask import compute
+        compute(*values)
     else:
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return values
 
 
 def _df_to_bag(df, index=False):

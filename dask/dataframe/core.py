@@ -672,9 +672,9 @@ class _Frame(Base):
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def to_csv(self, filename, get=get_sync, **kwargs):
+    def to_csv(self, filename, **kwargs):
         from .io import to_csv
-        return to_csv(self, filename, get=get, **kwargs)
+        return to_csv(self, filename, **kwargs)
 
     def to_imperative(self):
         warnings.warn("Deprecation warning: moved to to_delayed")

@@ -21,6 +21,7 @@ from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
+from dask import compute
 
 ########
 # CSVS #
@@ -1159,15 +1160,15 @@ def test_to_csv():
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        with tmpfile('csv') as fn:
-            a.to_csv(fn, index=False)
-            result = dd.read_csv(fn).compute().reset_index(drop=True)
+        with tmpdir() as dn:
+            a.to_csv(dn, index=False)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
-        with tmpfile('csv') as fn:
-            r = a.to_csv(fn, index=False, compute=False)
-            r.compute()
-            result = dd.read_csv(fn).compute().reset_index(drop=True)
+        with tmpdir() as dn:
+            r = a.to_csv(dn, index=False, compute=False)
+            compute(*r)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
         with tmpdir() as dn:
@@ -1198,8 +1199,7 @@ def test_to_csv_multiple_files_cornercases():
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df, 2)
     with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_1.csv')
-        a.to_csv(fn, index=False)
+        a.to_csv(dn, index=False)
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
@@ -1208,19 +1208,11 @@ def test_to_csv_multiple_files_cornercases():
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_01.csv')
-        a.to_csv(fn, index=False)
+        a.to_csv(dn, index=False)
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
         eq(result, df16)
-
-    # test handling existing files when mode isn't 'w'
-    a = dd.from_pandas(df, 2)
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.csv')
-        with pytest.raises(ValueError):
-            a.to_csv(fn, mode='a')
 
 
 @pytest.mark.xfail(reason="to_csv does not support compression")
@@ -1236,19 +1228,28 @@ def test_to_csv_gzip():
             tm.assert_frame_equal(result, df)
 
 
-def test_to_csv_series():
-    s = pd.Series([1, 2, 3], index=[10, 20, 30], name='foo')
-    a = dd.from_pandas(s, 2)
-    with tmpfile('csv') as fn:
-        with tmpfile('csv') as fn2:
-            a.to_csv(fn)
-            s.to_csv(fn2)
-            with open(fn) as f:
-                adata = f.read()
-            with open(fn2) as f:
-                sdata = f.read()
+def test_to_csv_simple():
+    df0 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir = str(dir)
+        df.to_csv(dir)
+        assert os.listdir(dir)
+        result = dd.read_csv(os.path.join(dir, '*')).compute()
+    assert (result.x == df0.x).all()
 
-            assert adata == sdata
+
+def test_to_csv_series():
+    df0 = pd.Series(['a', 'b', 'c', 'd'], index=[1., 2., 3., 4.])
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir = str(dir)
+        df.to_csv(dir)
+        assert os.listdir(dir)
+        result = dd.read_csv(os.path.join(dir, '*'), header=None,
+                             names=['x']).compute()
+    assert (result.x == df0).all()
 
 
 def test_read_csv_with_nrows():
