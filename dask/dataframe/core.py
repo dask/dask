@@ -781,6 +781,28 @@ class _Frame(Base):
                                  skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
+    def idxmax(self, axis=None, skipna=True):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return map_partitions(_idxmax, None, self,
+                                  token=self._token_prefix + 'idxmax',
+                                  skipna=skipna, axis=axis)
+        else:
+            return self._aca_agg(token='idxmax', func=_idxmax,
+                                 skipna=skipna, axis=axis)
+
+    @derived_from(pd.DataFrame)
+    def idxmin(self, axis=None, skipna=True):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return map_partitions(_idxmin, None, self,
+                                  token=self._token_prefix + 'idxmin',
+                                  skipna=skipna, axis=axis)
+        else:
+            return self._aca_agg(token='idxmin', func=_idxmin,
+                                 skipna=skipna, axis=axis)
+
+    @derived_from(pd.DataFrame)
     def count(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -2943,6 +2965,14 @@ def _min(x, **kwargs):
 
 def _max(x, **kwargs):
     return x.max(**kwargs)
+
+
+def _idxmax(x, **kwargs):
+    return x.idxmax(**kwargs)
+
+
+def _idxmin(x, **kwargs):
+    return x.idxmin(**kwargs)
 
 
 def _count(x, **kwargs):
