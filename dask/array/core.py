@@ -916,6 +916,21 @@ class Array(Base):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
+    def to_dask_dataframe(self, columns=None):
+        """ Convert dask Array to dask Dataframe
+
+        Parameters
+        ----------
+        columns: list or string
+            list of column names if DataFrame, single string if Series
+
+        See Also
+        --------
+        dask.dataframe.from_dask_array
+        """
+        from ..dataframe import from_dask_array
+        return from_dask_array(self, columns=columns)
+
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array
 
