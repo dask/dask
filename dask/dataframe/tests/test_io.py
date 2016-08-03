@@ -1061,12 +1061,16 @@ def test_to_hdf_process():
         eq(df, out)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_fmt_warns():
     pytest.importorskip('tables')
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # testing warning when breaking order
@@ -1109,7 +1113,8 @@ def test_read_hdf():
                 sorted(dd.read_hdf(fn, '/data').dask))
 
 def test_read_hdf_multiply_open():
-    "Test that we can read from a file that's already opened elsewhere in read-only mode."
+    """Test that we can read from a file that's already opened elsewhere in
+    read-only mode."""
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
@@ -1121,9 +1126,12 @@ def test_read_hdf_multiply_open():
 
 def test_read_hdf_multiple():
     pytest.importorskip('tables')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                             'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     with tmpfile('h5') as fn:
@@ -1187,8 +1195,10 @@ def test_to_csv_multiple_files_cornercases():
             fn = os.path.join(dn, "data_*_*.csv")
             a.to_csv(fn)
 
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]})
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]})
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.csv')
