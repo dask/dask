@@ -48,6 +48,8 @@
 
 [Phil Elson](https://github.com/pelson)
 
+[Rich Postelnik](https://github.com/postelrich)
+
 [Ruggero Turra](https://github.com/wiso)
 
 [Scott Sanderson](https://github.com/ssanderson)
