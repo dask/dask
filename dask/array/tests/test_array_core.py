@@ -15,6 +15,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe as dd
 from dask.delayed import delayed
 from dask.async import get_sync
 from dask.array.core import *
@@ -989,6 +990,16 @@ def test_to_hdf5():
             assert f['/x'].chunks == (2, 2)
             assert_eq(f['/y'][:], y)
             assert f['/y'].chunks == (2,)
+
+
+def test_to_dask_dataframe():
+    a = da.ones((4,), chunks=(2,))
+    d = a.to_dask_dataframe()
+    assert isinstance(d, dd.Series)
+
+    a = da.ones((4, 4), chunks=(2, 2))
+    d = a.to_dask_dataframe()
+    assert isinstance(d, dd.DataFrame)
 
 
 def test_np_array_with_zero_dimensions():
