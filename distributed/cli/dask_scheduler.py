@@ -15,18 +15,10 @@ import distributed
 from distributed import Scheduler
 from distributed.utils import get_ip
 from distributed.http import HTTPScheduler
-from distributed.cli.utils import check_python_3
+from distributed.cli.utils import check_python_3, install_signal_handlers
 from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
-
-import signal
-
-def handle_signal(sig, frame):
-    IOLoop.instance().add_callback(IOLoop.instance().stop)
-
-signal.signal(signal.SIGINT, handle_signal)
-signal.signal(signal.SIGTERM, handle_signal)
 
 
 @click.command()
@@ -82,6 +74,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh,
 
 
 def go():
+    install_signal_handlers()
     check_python_3()
     main()
 

@@ -42,7 +42,7 @@ For example, given the following dask application saved in a file called
         return x + 1
 
    if __name__=='__main__':
-        executor = Executor('10.210.220.181:8786')
+        executor = Executor('127.0.0.1:8786')
         x = executor.submit(inc, 10)
         print(x.result())
 

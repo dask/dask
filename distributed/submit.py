@@ -9,15 +9,18 @@ from tornado import gen
 
 from tornado.ioloop import IOLoop
 
+from distributed import rpc
 from distributed.compatibility import unicode
 from distributed.core import Server
 from distributed.utils import get_ip
+
 
 logger = logging.getLogger('distributed.remote')
 
 
 class RemoteClient(Server):
-    def __init__(self, ip=get_ip(), local_dir=tempfile.mkdtemp(prefix='client-'), loop=None, **kwargs):
+    def __init__(self, ip=get_ip(), local_dir=tempfile.mkdtemp(prefix='client-'),
+                 loop=None, **kwargs):
         self.ip = ip
         self.loop = loop or IOLoop.current()
         self.local_dir = local_dir
@@ -41,7 +44,8 @@ class RemoteClient(Server):
                                    stderr=subprocess.PIPE)
         out, err = process.communicate()
         return_code = process.returncode
-        raise gen.Return({'stdout': out, 'stderr': err, 'returncode': return_code})
+        raise gen.Return({'stdout': out, 'stderr': err,
+                          'returncode': return_code})
 
     def upload_file(self, stream, filename=None, file_payload=None):
         out_filename = os.path.join(self.local_dir, filename)
@@ -54,3 +58,28 @@ class RemoteClient(Server):
     @gen.coroutine
     def _close(self):
         self.stop()
+
+
+def _remote(host, port, loop=IOLoop.current(), client=RemoteClient):
+    host = host or get_ip()
+    if ':' in host and port == 8788:
+        host, port = host.rsplit(':', 1)
+        port = int(port)
+    ip = socket.gethostbyname(host)
+    remote_client = client(ip=ip, loop=loop)
+    remote_client.start(port=port)
+    loop.start()
+    loop.close()
+    remote_client.stop()
+    logger.info("End remote client at %s:%d", host, port)
+
+
+@gen.coroutine
+def _submit(remote_client_address, filepath):
+    rc = rpc(addr=remote_client_address)
+    remote_file = os.path.basename(filepath)
+    with open(filepath, 'rb') as f:
+        bytes_read = f.read()
+    yield rc.upload_file(filename=remote_file, file_payload=bytes_read)
+    result = yield rc.execute(filename=remote_file)
+    raise gen.Return((result['stdout'], result['stderr']))

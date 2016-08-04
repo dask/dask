@@ -16,8 +16,8 @@ from tornado import gen
 
 logger = logging.getLogger('distributed.dask_worker')
 
-
 import signal
+
 
 def handle_signal(sig, frame):
     loop = IOLoop.instance()
@@ -25,9 +25,6 @@ def handle_signal(sig, frame):
         loop.add_callback(loop.stop)
     else:
         exit(1)
-
-signal.signal(signal.SIGINT, handle_signal)
-signal.signal(signal.SIGTERM, handle_signal)
 
 
 @click.command()
@@ -123,6 +120,11 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
 
 def go():
+    # NOTE: We can't use the generic install_signal_handlers() function from
+    # distributed.cli.utils because we're handling the signal differently.
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
     check_python_3()
     main()
 

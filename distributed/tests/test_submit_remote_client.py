@@ -1,8 +1,9 @@
 from tornado import gen
 
 from distributed import rpc
-from distributed.submit.remote_client import RemoteClient
-from distributed.utils_test import current_loop, valid_python_script, invalid_python_script
+from distributed.submit import RemoteClient
+from distributed.utils_test import current_loop, valid_python_script,\
+    invalid_python_script
 
 
 def test_remote_client_uploads_a_file(current_loop, tmpdir, ):

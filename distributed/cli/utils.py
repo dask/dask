@@ -20,3 +20,16 @@ def check_python_3():
         import click
         click.echo(py3_err_msg, err=True)
         sys.exit(1)
+
+
+def install_signal_handlers():
+    """Install global signal handlers to halt the Tornado IOLoop in case of
+    a SIGINT or SIGTERM."""
+    from tornado.ioloop import IOLoop
+    import signal
+
+    def handle_signal(sig, frame):
+        IOLoop.instance().add_callback(IOLoop.instance().stop)
+
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
