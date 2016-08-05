@@ -405,7 +405,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
     callbacks : tuple or list of tuples, optional
-        Callbacks are passed in as tuples of length 4. Multiple sets of
+        Callbacks are passed in as tuples of length 5. Multiple sets of
         callbacks may be passed in as a list of tuples. For more information,
         see the dask.diagnostics documentation.
 
@@ -418,7 +418,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     if callbacks is None:
         callbacks = _globals['callbacks']
-    start_cbs, start_state_cbs, pretask_cbs, posttask_cbs, finish_cbs = unpack_callbacks(callbacks)
+    _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -426,10 +426,13 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
+    dsk = dsk.copy()
+    started_cbs = []
     try:
-        dsk = dsk.copy()
-        for f in start_cbs:
-            f(dsk)
+        for cb in callbacks:
+            if cb[0]:
+                cb[0](dsk)
+            started_cbs.append(cb)
 
         dsk, dependencies = cull(dsk, list(results))
 
@@ -437,8 +440,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
         state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
-        for f in start_state_cbs:
-            f(dsk, state)
+        for _, start_state, _, _, _ in callbacks:
+            if start_state:
+                start_state(dsk, state)
 
         if rerun_exceptions_locally is None:
             rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
@@ -469,8 +473,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         while state['waiting'] or state['ready'] or state['running']:
             key, res, tb, worker_id = queue.get()
             if isinstance(res, Exception):
-                for f in finish_cbs:
-                    f(dsk, state, True)
+                for _, _, _, _, finish in callbacks:
+                    if finish:
+                        finish(dsk, state, True)
                 if rerun_exceptions_locally:
                     data = dict((dep, state['cache'][dep])
                                 for dep in get_dependencies(dsk, key))
@@ -485,16 +490,18 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             while state['ready'] and len(state['running']) < num_workers:
                 fire_task()
     except KeyboardInterrupt:
-        for f in finish_cbs:
-            f(dsk, state, True)
+        for cb in started_cbs:
+            if cb[-1]:
+                cb[-1](dsk, state, True)
         raise
 
     # Final reporting
     while state['running'] or not queue.empty():
         key, res, tb, worker_id = queue.get()
 
-    for f in finish_cbs:
-        f(dsk, state, False)
+    for _, _, _, _, finish in started_cbs:
+        if finish:
+            finish(dsk, state, False)
 
     return nested_get(result, state['cache'])
 
