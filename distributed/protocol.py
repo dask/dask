@@ -27,17 +27,16 @@ outside of this module though and is not baked in.
 from __future__ import print_function, division, absolute_import
 
 import random
-import struct
+from copy import deepcopy
 
 try:
     import pandas.msgpack as msgpack
 except ImportError:
     import msgpack
 
-from toolz import first, keymap, identity, merge
+from toolz import identity, get_in
 
 from .utils import ignoring
-from .compatibility import unicode
 
 
 compressions = {None: {'compress': identity,
@@ -64,35 +63,93 @@ with ignoring(ImportError):
     default_compression = 'lz4'
 
 
+BIG_BYTES_SIZE = 2**20
+BIG_BYTES_SHARD_SIZE = 2**28
+
+
+def extract_big_bytes(x):
+    big = {}
+    _extract_big_bytes(x, big)
+    if big:
+        x = deepcopy(x)
+        for path in big:
+            t = get_in(path[:-1], x)
+            if isinstance(t, dict):
+                del t[path[-1]]
+            else:
+                t[path[-1]] = None
+    return x, big
+
+
+def _extract_big_bytes(x, big, path=()):
+    if type(x) is dict:
+        for k, v in x.items():
+            if isinstance(v, (list, dict)):
+                _extract_big_bytes(v, big, path + (k,))
+            elif type(v) is bytes and len(v) >= BIG_BYTES_SIZE:
+                big[path + (k,)] = v
+    elif type(x) is list:
+        for k, v in enumerate(x):
+            if isinstance(v, (list, dict)):
+                _extract_big_bytes(v, big, path + (k,))
+            elif type(v) is bytes and len(v) >= BIG_BYTES_SIZE:
+                big[path + (k,)] = v
+
+
 def dumps(msg):
     """ Transform Python value to bytestream suitable for communication """
-    small_header = {}
-
+    big = {}
+    # Only dicts can contain big values
     if isinstance(msg, dict):
-        big = {k: v for k, v in msg.items()
-                    if isinstance(v, bytes) and len(v) > 1e6}
-    else:
-        big = False
-    if big:
-        small = {k: v for k, v in msg.items() if k not in big}
-    else:
-        small = msg
+        msg, big = extract_big_bytes(msg)
+    small_header, small_payload = dumps_msgpack(msg)
+    if not big:
+        return small_header, small_payload
 
-    frames = dumps_msgpack(small)
-    if big:
-        frames += dumps_big_byte_dict(big)
+    # Shard the big segments
+    shards = []
+    res = {}
+    for k, v in list(big.items()):
+        L = []
+        for i, j in enumerate(range(0, len(v), BIG_BYTES_SHARD_SIZE)):
+            key = '.shard-%d-%s' % (i, k)
+            res[key] = v[j: j + BIG_BYTES_SHARD_SIZE]
+            L.append(key)
+        shards.append((k, L))
 
-    return frames
+    keys, values = zip(*res.items())
+
+    compression = []
+    values2 = []
+    for v in values:
+        fmt, vv = maybe_compress(v)
+        compression.append(fmt)
+        values2.append(vv)
+
+    header = {'encoding': 'big-byte-dict',
+              'keys': keys,
+              'compression': compression,
+              'shards': shards}
+
+    return [small_header, small_payload,
+            msgpack.dumps(header, use_bin_type=True)] + values2
 
 
 def loads(frames):
     """ Transform bytestream back into Python value """
-    header, payload, frames = frames[0], frames[1], frames[2:]
-    msg = loads_msgpack(header, payload)
+    small_header, small_payload, frames = frames[0], frames[1], frames[2:]
+    msg = loads_msgpack(small_header, small_payload)
 
     if frames:
-        big = loads_big_byte_dict(*frames)
-        msg.update(big)
+        header = msgpack.loads(frames[0], encoding='utf8')
+
+        values2 = [compressions[c]['decompress'](v)
+                   for c, v in zip(header['compression'], frames[1:])]
+        lk = dict(zip(header['keys'], values2))
+
+        for k, keys in header['shards']:
+            v = b''.join(lk.pop(kk) for kk in keys)
+            get_in(k[:-1], msg)[k[-1]] = v
 
     return msg
 
@@ -109,7 +166,7 @@ def byte_sample(b, size, n):
 
 
 def maybe_compress(payload, compression=default_compression, min_size=1e4,
-        sample_size=1e4, nsamples=5):
+                   sample_size=1e4, nsamples=5):
     """ Maybe compress payload
 
     1.  We don't compress small messages
@@ -183,65 +240,6 @@ def loads_msgpack(header, payload):
             payload = decompress(payload)
         except KeyError:
             raise ValueError("Data is compressed as %s but we don't have this"
-                    " installed" % header['compression'].decode())
+                             " installed" % header['compression'].decode())
 
     return msgpack.loads(payload, encoding='utf8')
-
-
-def dumps_big_byte_dict(d):
-    """ Serialize large byte dictionary to sequence of frames
-
-    The input must be a dictionary and all values of that dictionary must be
-    bytestrings.  These should probably be large.
-
-    Returns a sequence of frames, one header followed by each of the values
-
-    See Also:
-        loads_big_byte_dict
-    """
-    assert isinstance(d, dict) and all(isinstance(v, bytes) for v in d.values())
-    shards = {}
-    for k, v in list(d.items()):
-        if len(v) >= 2**31:
-            L = []
-            for i, j in enumerate(range(0, len(v), 2**30)):
-                key = '.shard-%d-%s' % (i, k)
-                d[key] = v[j: j + 2**30]
-                L.append(key)
-            del d[k]
-            shards[k] = L
-
-    keys, values = zip(*d.items())
-
-    compress = compressions[default_compression]['compress']
-    compression = []
-    values2 = []
-    for v in values:
-        fmt, vv = maybe_compress(v)
-        compression.append(fmt)
-        values2.append(vv)
-
-    header = {'encoding': 'big-byte-dict',
-              'keys': keys,
-              'compression': compression}
-    if shards:
-        header['shards'] = shards
-
-    return [msgpack.dumps(header, use_bin_type=True)] + values2
-
-
-def loads_big_byte_dict(header, *values):
-    """ Deserialize big-byte frames to large byte dictionary
-
-    See Also:
-        dumps_big_byte_dict
-    """
-    header = msgpack.loads(header, encoding='utf8')
-
-    values2 = [compressions[c]['decompress'](v)
-               for c, v in zip(header['compression'], values)]
-    result = dict(zip(header['keys'], values2))
-
-    for k, keys in header.get('shards', {}).items():
-        result[k] = b''.join(result.pop(kk) for kk in keys)
-    return result
