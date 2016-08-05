@@ -1,3 +1,4 @@
+import sys
 from operator import getitem
 
 import pandas as pd
@@ -68,6 +69,28 @@ def test_head_tail():
             sorted(d.tail(2, compute=False).dask))
     assert (sorted(d.tail(2, compute=False).dask) !=
             sorted(d.tail(3, compute=False).dask))
+
+
+def test_head_npartitions():
+    assert eq(d.head(5, npartitions=2), full.head(5))
+    assert eq(d.head(5, npartitions=2, compute=False), full.head(5))
+    assert eq(d.head(5, npartitions=-1), full.head(5))
+    assert eq(d.head(7, npartitions=-1), full.head(7))
+    assert eq(d.head(2, npartitions=-1), full.head(2))
+    with pytest.raises(ValueError):
+        d.head(2, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_head_npartitions_warn():
+    with pytest.warns(None):
+        d.head(100)
+
+    with pytest.warns(None):
+        d.head(7)
+
+    with pytest.warns(None):
+        d.head(7, npartitions=2)
 
 
 def test_index_head():

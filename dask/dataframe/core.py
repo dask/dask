@@ -367,16 +367,43 @@ class _Frame(Base):
                            self._pd, self.divisions)
                 for i, dsk in enumerate(dsks)]
 
-    def head(self, n=5, compute=True):
+    def head(self, n=5, npartitions=1, compute=True):
         """ First n rows of the dataset
 
-        Caveat, this only checks the first n rows of the first partition.
+        Parameters
+        ----------
+        n : int, optional
+            The number of rows to return. Default is 5.
+        npartitions : int, optional
+            Elements are only taken from the first ``npartitions``, with a
+            default of 1. If there are fewer than ``n`` rows in the first
+            ``npartitions`` a warning will be raised and any found rows
+            returned. Pass -1 to use all partitions.
+        compute : bool, optional
+            Whether to compute the result, default is True.
         """
-        name = 'head-%d-%s' % (n, self._name)
-        dsk = {(name, 0): (lambda x, n: x.head(n=n), (self._name, 0), n)}
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        if npartitions > self.npartitions:
+            raise ValueError("only {} partitions, head "
+                "received {}".format(self.npartitions, npartitions))
 
-        result = self._constructor(merge(self.dask, dsk), name,
-                                   self._pd, self.divisions[:2])
+        name = 'head-%d-%d-%s' % (npartitions, n, self._name)
+
+        if npartitions > 1:
+            name_p = 'head-partial-%d-%s' % (n, self._name)
+
+            dsk = {}
+            for i in range(npartitions):
+                dsk[(name_p, i)] = (self._partition_type.head, (self._name, i), n)
+
+            concat = (_concat, ([(name_p, i) for i in range(npartitions)]))
+            dsk[(name, 0)] = (safe_head, self._partition_type.head, concat, n)
+        else:
+            dsk = {(name, 0): (safe_head, self._partition_type.head, (self._name, 0), n)}
+
+        result = self._constructor(merge(self.dask, dsk), name, self._pd,
+                                   [self.divisions[0], self.divisions[npartitions]])
 
         if compute:
             result = result.compute()
@@ -2965,3 +2992,12 @@ def drop_columns(df, columns, dtype):
     df = df.drop(columns, axis=1)
     df.columns = df.columns.astype(dtype)
     return df
+
+
+def safe_head(head, df, n):
+    r = head(df, n=n)
+    if len(r) != n:
+        warnings.warn("Insufficient elements for `head`. {0} elements "
+             "requested, only {1} elements available. Try passing larger "
+             "`npartitions` to `head`.".format(n, len(r)))
+    return r

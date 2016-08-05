@@ -442,6 +442,26 @@ def test_take():
     assert isinstance(b.take(2, compute=False), Bag)
 
 
+def test_take_npartitions():
+    assert list(b.take(6, npartitions=2)) == [0, 1, 2, 3, 4, 0]
+    assert b.take(6, npartitions=-1) == (0, 1, 2, 3, 4, 0)
+    assert b.take(3, npartitions=-1) == (0, 1, 2)
+    with pytest.raises(ValueError):
+        b.take(1, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_take_npartitions_warn():
+    with pytest.warns(None):
+        b.take(100)
+
+    with pytest.warns(None):
+        b.take(7)
+
+    with pytest.warns(None):
+        b.take(7, npartitions=2)
+
+
 def test_map_is_lazy():
     from dask.bag.core import map
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
