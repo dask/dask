@@ -1002,5 +1002,30 @@ def test_reduction_empty():
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
 
 
+class StrictReal(int):
+    def __eq__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real == other.real
+
+    def __ne__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real != other.real
+
+
+def test_reduction_with_non_comparable_objects():
+    b = db.from_sequence([StrictReal(x) for x in range(10)], partition_size=2)
+    assert b.fold(max, max).compute(get=dask.get) == StrictReal(9)
+
+
+def test_reduction_with_sparse_matrices():
+    sp = pytest.importorskip('scipy.sparse')
+    b = db.from_sequence([sp.csr_matrix([0]) for x in range(4)], partition_size=2)
+
+    def sp_reduce(a, b):
+        return sp.vstack([a, b])
+
+    assert b.fold(sp_reduce, sp_reduce).compute(get=dask.get).shape == (4, 1)
+
+
 def test_empty():
     list(db.from_sequence([])) == []

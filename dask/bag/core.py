@@ -12,7 +12,7 @@ from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring
+from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate)
@@ -44,6 +44,7 @@ from ..bytes.core import write_bytes
 
 
 no_default = '__no__default__'
+no_result = '__no__result__'
 
 
 def lazify_task(task, start=True):
@@ -1607,9 +1608,9 @@ def empty_safe_apply(func, part):
     if part:
         return func(part)
     else:
-        return '--no-result--'
+        return no_result
 
 
 def empty_safe_aggregate(func, parts):
-    parts2 = [p for p in parts if p != '--no-result--']
+    parts2 = [p for p in parts if not eq_strict(p, no_result)]
     return empty_safe_apply(func, parts2)
