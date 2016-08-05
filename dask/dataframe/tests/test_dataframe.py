@@ -12,7 +12,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-from dask.dataframe.utils import eq, make_empty_frame
+from dask.dataframe.utils import eq, make_meta
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -21,7 +21,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-meta = make_empty_frame({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
 d = dd.DataFrame(dsk, 'x', meta, [0, 5, 9, 9])
 full = d.compute()
 
@@ -739,7 +739,7 @@ def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
     d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
     full = d.compute(get=dask.get)
 
@@ -751,7 +751,7 @@ def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
     a = dd.DataFrame(dsk, 'x', meta, [None, None])
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
@@ -760,7 +760,7 @@ def test_concat2():
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    meta = make_empty_frame({'b': 'i8', 'c': 'i8'})
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
     c = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60],
@@ -768,7 +768,7 @@ def test_concat2():
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10],
                                    'd': [90, 80, 70]},
                                   index=[3, 4, 5])}
-    meta = make_empty_frame({'b': 'i8', 'c': 'i8', 'd': 'i8'},
+    meta = make_meta({'b': 'i8', 'c': 'i8', 'd': 'i8'},
                             index=pd.Index([], 'i8'))
     d = dd.DataFrame(dsk, 'y', meta, [0, 3, 5])
 
@@ -963,7 +963,7 @@ def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    meta = make_empty_frame({'a': 'i8', 'b': 'i8'})
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
     ddf1 = dd.DataFrame(dsk, 'x', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
@@ -973,7 +973,7 @@ def test_append2():
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    meta = make_empty_frame({'b': 'i8', 'c': 'i8'})
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
     ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     assert eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
@@ -1259,7 +1259,7 @@ def test_str_accessor():
 
 
 def test_empty_max():
-    meta = make_empty_frame({'x': 'i8'})
+    meta = make_meta({'x': 'i8'})
     a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
                       meta, [None, None, None])

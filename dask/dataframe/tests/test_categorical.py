@@ -5,7 +5,7 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
-from dask.dataframe.utils import make_empty_frame
+from dask.dataframe.utils import make_meta
 
 
 def test_categorize():
@@ -15,7 +15,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                   index=[3, 4, 5])}
-    meta = make_empty_frame({'a': 'O', 'b': 'O'}, index=pd.Index([], 'i8'))
+    meta = make_meta({'a': 'O', 'b': 'O'}, index=pd.Index([], 'i8'))
     d = dd.DataFrame(dsk, 'x', meta, [0, 3, 5])
     full = d.compute()
 

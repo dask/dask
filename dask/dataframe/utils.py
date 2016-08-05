@@ -96,11 +96,35 @@ def unique(divisions):
     raise NotImplementedError()
 
 
-def make_empty_frame(dtypes, index=None):
-    """Create an empty dataframe from a mapping of column -> dtype"""
-    return pd.DataFrame({c: pd.Series([], dtype=d)
-                         for (c, d) in dtypes.items()},
-                        index=index)
+def make_meta(meta, index=None):
+    """Create an empty pandas object containing the desired metadata.
+
+    Parameters
+    ----------
+    meta : dict, tuple, pd.Series, pd.DataFrame, pd.Index
+        To create a DataFrame, provide a `dict` mapping of `{name: dtype}`. To
+        create a `Series`, provide a tuple of `(name, dtype)`. If a pandas
+        object, names, dtypes, and index should match the desired output.
+    index :  pd.Index, optional
+        Any pandas index to use in the metadata. If none provided, a
+        `RangeIndex` will be used.
+    """
+    if isinstance(meta, (pd.Series, pd.DataFrame)):
+        return meta.iloc[0:0]
+    elif isinstance(meta, pd.Index):
+        return meta[0:0]
+    index = index if index is None else index[0:0]
+    if isinstance(meta, dict):
+        return pd.DataFrame({c: pd.Series([], dtype=d)
+                             for (c, d) in meta.items()},
+                            index=index)
+    elif isinstance(meta, tuple):
+        if len(meta) != 2:
+            raise ValueError("Expected tuple of (name, dtype), "
+                             "got {0}".format(meta))
+        return pd.Series([], dtype=meta[1], name=meta[0], index=index)
+    else:
+        raise TypeError("Expected dict or tuple, got {0}".format(meta))
 
 
 def _nonempty_index(idx):

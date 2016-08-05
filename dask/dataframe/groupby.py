@@ -5,9 +5,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ..context import _globals
-from .core import (DataFrame, Series, Index, aca, map_partitions, no_default)
+from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
+from .utils import make_meta
 from ..utils import derived_from
 
 
@@ -198,18 +198,19 @@ class _GroupBy(object):
             return True
         return False
 
-    def _head(self):
+    def _sample(self, head=False):
         """
-        Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contais head data.
+        Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
-        head = self.obj.head()
+        sample = self.obj.head() if head else self.obj._pd_nonempty
         if isinstance(self.index, Series):
             if self._is_grouped_by_sliced_column(self.obj, self.index):
-                grouped = head.groupby(head[self.index.name])
+                grouped = sample.groupby(sample[self.index.name])
             else:
-                grouped = head.groupby(self.index.head())
+                index = self.index.head() if head else self.index._pd_nonempty
+                grouped = sample.groupby(index)
         else:
-            grouped = head.groupby(self.index)
+            grouped = sample.groupby(self.index)
         grouped = _maybe_slice(grouped, self._slice)
         return grouped
 
@@ -290,12 +291,12 @@ class _GroupBy(object):
         return map_partitions(_groupby_get_group, dummy, self.obj,
                               self.index, key, columns, token=token)
 
-    def apply(self, func, columns=no_default):
+    def apply(self, func, meta=no_default, columns=no_default):
         """ Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
 
-        1.  The user should provide output columns.
+        1.  The user should provide output metadata.
         2.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
 
@@ -303,28 +304,48 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
+        meta: pd.DataFrame, pd.Series, dict, tuple, optional
+            Metadata describing the output DataFrame or Series. Should have
+            matching names and dtypes. For ease of use, can also pass in a dict
+            instead of a dataframe, or a tuple instead of a series. If a dict,
+            should be a mapping of column name to dtype. If a tuple, should be
+            length 2 with name and dtype. If not provided, dask will try to
+            infer the metadata. This may take some time, and lead to unexpected
+            results, so providing `meta` is recommended.
         columns: list, scalar or None
-            If list is given, the result is a DataFrame which columns is
-            specified list. Otherwise, the result is a Series which name is
-            given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beginning of data. This
-            inference may take some time and lead to unexpected result
+            Deprecated, use `meta` instead. If list is given, the result is a
+            DataFrame which columns is specified list. Otherwise, the result is
+            a Series which name is given scalar or None (no name). If name
+            keyword is not given, dask tries to infer the result type using its
+            beginning of data. This inference may take some time and lead to
+            unexpected result
 
         Returns
         -------
         applied : Series or DataFrame depending on columns keyword
         """
-        if columns is no_default:
-            msg = ("columns is not specified, inferred from partial data. "
-                   "Please provide columns if the result is unexpected.\n"
+        if columns is not no_default:
+            warnings.warn("`columns` is deprecated, please use `meta` instead")
+            if meta is no_default and isinstance(columns, (pd.DataFrame, pd.Series)):
+                meta = columns
+        if meta is no_default:
+            msg = ("`meta` is not specified, inferred from partial data. "
+                   "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
-                   "  After:  .apply(func, columns=['x', 'y']) for dataframe result\n"
-                   "  or:     .apply(func, columns='x')        for series result")
+                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            dummy = self._head().apply(func)
+            try:
+                meta = self._sample().apply(func)
+            except:
+                try:
+                    meta = self._sample(head=True).apply(func)
+                except:
+                    raise ValueError("Metadata inference failed, please"
+                                     "provide `meta` keyword")
         else:
-            dummy = columns
+            meta = make_meta(meta)
 
         df = self.obj
         if isinstance(self.index, DataFrame):  # add index columns to dataframe
@@ -343,19 +364,19 @@ class _GroupBy(object):
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
-            df4 = df3.drop(cols, axis=1, dtype=dummy.columns.dtype if
-                    isinstance(dummy, pd.DataFrame) else None)
+            df4 = df3.drop(cols, axis=1, dtype=meta.columns.dtype if
+                    isinstance(meta, pd.DataFrame) else None)
         elif isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
-            df4 = df3.drop('_index', axis=1, dtype=dummy.columns.dtype if
-                    isinstance(dummy, pd.DataFrame) else None)
+            df4 = df3.drop('_index', axis=1, dtype=meta.columns.dtype if
+                    isinstance(meta, DataFrame) else None)
         else:
             df4 = df3
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
-        df5 = map_partitions(_groupby_slice_apply, dummy, df4, index2,
+        df5 = map_partitions(_groupby_slice_apply, meta, df4, index2,
                              self._slice, func)
 
         return df5
