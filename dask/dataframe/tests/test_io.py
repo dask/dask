@@ -144,8 +144,7 @@ def test_dummy_from_array():
     assert res['b'].dtype == np.float64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
 
     np.random.seed(42)
@@ -172,8 +171,7 @@ def test_dummy_from_1darray():
     assert res['x'].dtype == np.object_
     tm.assert_index_equal(res.columns, pd.Index(['x']))
 
-    msg = r"""Length mismatch: Expected axis has 1 elements, new values have 2 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         dd.io._dummy_from_array(x, columns=['a', 'b'])
 
 
@@ -186,14 +184,13 @@ def test_dummy_from_recarray():
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    res = dd.io._dummy_from_array(x, columns=['x', 'y'])
+    res = dd.io._dummy_from_array(x, columns=['b', 'a'])
     assert isinstance(res, pd.DataFrame)
-    assert res['x'].dtype == np.float64
-    assert res['y'].dtype == np.int64
-    tm.assert_index_equal(res.columns, pd.Index(['x', 'y']))
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['b', 'a']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
 
 
@@ -514,11 +511,10 @@ def test_Series_from_dask_array():
 def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
 
-    msg = r"from_array does not input more than 2D array, got array with shape \(3, 3, 3\)"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x)       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute())  # numpy
 
     x = da.ones((10, 3), chunks=(3, 3))
@@ -532,11 +528,10 @@ def test_from_dask_array_compat_numpy_array():
     assert (d2.compute().values == x.compute()).all()
     tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
 
-    msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x, columns=['a'])       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute(), columns=['a'])  # numpy
 
     d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask

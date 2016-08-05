@@ -41,24 +41,34 @@ def _dummy_from_array(x, columns=None):
 
     if getattr(x.dtype, 'names', None) is not None:
         # record array has named columns
-        cols = tuple(x.dtype.names)
-        dtypes = [x.dtype.fields[n][0] for n in x.dtype.names]
-    elif x.ndim == 1 and (np.isscalar(columns) or columns is None):
-        # Series
-        return pd.Series([], name=columns, dtype=x.dtype)
+        if columns is None:
+            columns = list(x.dtype.names)
+        elif np.isscalar(columns):
+            raise ValueError("For a struct dtype, columns must be a list.")
+        elif not all(i in x.dtype.names for i in columns):
+            extra = sorted(set(columns).difference(x.dtype.names))
+            raise ValueError("dtype {0} doesn't have fields "
+                             "{1}".format(x.dtype, extra))
+        fields = x.dtype.fields
+        dtypes = [fields[n][0] if n in fields else 'f8' for n in columns]
+    elif x.ndim == 1:
+        if np.isscalar(columns) or columns is None:
+            return pd.Series([], name=columns, dtype=x.dtype)
+        elif len(columns) == 1:
+            return pd.DataFrame(np.array([], dtype=x.dtype), columns=columns)
+        raise ValueError("For a 1d array, columns must be a scalar or single "
+                         "element list")
     else:
-        cols = list(range(x.shape[1])) if x.ndim == 2 else [0]
-        dtypes = [x.dtype] * len(cols)
+        if columns is None:
+            columns = list(range(x.shape[1])) if x.ndim == 2 else [0]
+        elif len(columns) != x.shape[1]:
+            raise ValueError("Number of column names must match width of the "
+                             "array. Got {0} names for {1} "
+                             "columns".format(len(columns), x.shape[1]))
+        dtypes = [x.dtype] * len(columns)
 
-    data = {}
-    for c, dt in zip(cols, dtypes):
-        data[c] = np.array([], dtype=dt)
-    data = pd.DataFrame(data, columns=cols)
-
-    if columns is not None:
-        # if invalid, raise error from pandas
-        data.columns = columns
-    return data
+    data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
+    return pd.DataFrame(data, columns=columns)
 
 
 def from_array(x, chunksize=50000, columns=None):
