@@ -780,27 +780,44 @@ class _Frame(Base):
             return self._aca_agg(token='min', func=_min,
                                  skipna=skipna, axis=axis)
 
-    @derived_from(pd.DataFrame)
-    def idxmax(self, axis=None, skipna=True):
+    def _idxmaxmin(self, fn, axis=None, skipna=True):
+        if fn == 'idxmax':
+            idxfn = _idxmax
+        elif fn == 'idxmin':
+            idxfn = _idxmin
+        else:
+            raise ValueError('Function must be idxmax or idxmin')
+
         axis = self._validate_axis(axis)
         if axis == 1:
-            return map_partitions(_idxmax, None, self,
-                                  token=self._token_prefix + 'idxmax',
+            return map_partitions(idxfn, None, self,
+                                  token=self._token_prefix + fn,
                                   skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='idxmax', func=_idxmax,
-                                 skipna=skipna, axis=axis)
+            def chunk(x):
+                idx = getattr(x, fn)()
+                value = x.iloc[idx]
+                n = len(x)
+                return pd.DataFrame([[idx, value, n]], columns=['idx','value', 'n'])
+
+            def agg(x, **kwargs):
+                print(x)
+                idx = getattr(x.value, fn)()
+                if self.known_divisions == True:
+                    return x.idx.iloc[idx]
+                else:
+                    return x.n.iloc[:idx-1].sum() + x.idx.iloc[idx]
+
+            return aca([self], chunk=chunk, aggregate=agg,
+                       columns=['idx','value', 'n'], token=self._token_prefix + fn)
+
+    @derived_from(pd.DataFrame)
+    def idxmax(self, axis=None, skipna=True):
+        return self._idxmaxmin('idxmax', axis=axis, skipna=skipna)
 
     @derived_from(pd.DataFrame)
     def idxmin(self, axis=None, skipna=True):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            return map_partitions(_idxmin, None, self,
-                                  token=self._token_prefix + 'idxmin',
-                                  skipna=skipna, axis=axis)
-        else:
-            return self._aca_agg(token='idxmin', func=_idxmin,
-                                 skipna=skipna, axis=axis)
+        return self._idxmaxmin('idxmin', axis=axis, skipna=skipna)
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
