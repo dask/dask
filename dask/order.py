@@ -80,7 +80,7 @@ def order(dsk, dependencies=None):
 
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
-    return dfs(dependencies, dependents, key=maxes.get)
+    return dfs(dependencies, dependents, key=lambda x: (-maxes.get(x), str(x)))
 
 
 def ndependents(dependencies, dependents):
@@ -172,7 +172,7 @@ def dfs(dependencies, dependents, key=lambda x: x):
     i = 0
 
     roots = [k for k, v in dependents.items() if not v]
-    stack = sorted(roots, key=key)
+    stack = sorted(roots, key=key, reverse=True)
     seen = set()
 
     while stack:
@@ -185,7 +185,7 @@ def dfs(dependencies, dependents, key=lambda x: x):
         deps = dependencies[item]
         if deps:
             deps = deps - seen
-            deps = sorted(deps, key=key)
+            deps = sorted(deps, key=key, reverse=True)
             stack.extend(deps)
         i += 1
 

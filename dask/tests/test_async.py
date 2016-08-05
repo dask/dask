@@ -192,3 +192,17 @@ def test_remote_exception():
     assert isinstance(a, TypeError)
     assert 'hello' in str(a)
     assert 'traceback' in str(a)
+
+
+def test_ordering():
+    L = []
+    def append(i):
+        L.append(i)
+
+    dsk = {('x', i): (append, i) for i in range(10)}
+    x_keys = sorted(dsk)
+    dsk['y'] = (lambda *args: None, list(x_keys))
+
+    get_sync(dsk, 'y')
+
+    assert L == sorted(L)

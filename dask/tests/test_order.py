@@ -1,4 +1,6 @@
 from itertools import chain
+from operator import add
+
 from dask.order import dfs, child_max, ndependents, order, inc
 from dask.core import get_deps
 
@@ -144,7 +146,6 @@ def test_stacklimit():
 
 
 def test_ndependents():
-    from operator import add
     a, b, c = 'abc'
     dsk = dict(chain((((a, i), i * 2) for i in range(5)),
                      (((b, i), (add, i, (a, i))) for i in range(5)),
@@ -166,3 +167,20 @@ def test_ndependents():
     deps = get_deps(dsk)
     assert ndependents(*deps) == {a: 3, b: 2, c: 1}
 
+
+def test_break_ties_by_str():
+    dsk = {('x', i): (inc, i) for i in range(10)}
+    x_keys = sorted(dsk)
+    dsk['y'] = list(x_keys)
+
+    o = order(dsk)
+    expected = {'y': 0}
+    expected.update({k: i + 1 for i, k in enumerate(x_keys)})
+
+    assert o == expected
+
+
+def test_order_doesnt_fail_on_mixed_type_keys():
+    o = order({'x': (inc, 1),
+              ('y', 0): (inc, 2),
+              'z': (add, 'x', ('y', 0))})
