@@ -1,3 +1,4 @@
+import sys
 from operator import getitem
 
 import pandas as pd
@@ -69,6 +70,28 @@ def test_head_tail():
             sorted(d.tail(2, compute=False).dask))
     assert (sorted(d.tail(2, compute=False).dask) !=
             sorted(d.tail(3, compute=False).dask))
+
+
+def test_head_npartitions():
+    assert eq(d.head(5, npartitions=2), full.head(5))
+    assert eq(d.head(5, npartitions=2, compute=False), full.head(5))
+    assert eq(d.head(5, npartitions=-1), full.head(5))
+    assert eq(d.head(7, npartitions=-1), full.head(7))
+    assert eq(d.head(2, npartitions=-1), full.head(2))
+    with pytest.raises(ValueError):
+        d.head(2, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_head_npartitions_warn():
+    with pytest.warns(None):
+        d.head(100)
+
+    with pytest.warns(None):
+        d.head(7)
+
+    with pytest.warns(None):
+        d.head(7, npartitions=2)
 
 
 def test_index_head():
@@ -701,8 +724,20 @@ def test_index():
 
 
 def test_assign():
-    assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
-              full.assign(c=full.a + 1, e=full.a + full.b))
+    res = d.assign(c=1,
+                   d='string',
+                   e=np.float64(1),
+                   f=d.a.sum(),
+                   g=d.a + 1,
+                   h=d.a + d.b)
+    sol = full.assign(c=1,
+                      d='string',
+                      e=np.float64(1),
+                      f=full.a.sum(),
+                      g=full.a + 1,
+                      h=full.a + full.b)
+    assert eq(res, sol)
+    pytest.raises(TypeError, lambda: d.assign(c=list(range(9))))
 
 
 def test_map():
@@ -792,11 +827,6 @@ def test_concat2():
         assert result.divisions == (None, ) * (result.npartitions + 1)
         assert eq(pd.concat(pdcase, join='inner'), result)
         assert result.dask == dd.concat(case, join='inner').dask
-
-        msg = ('Unable to concatenate DataFrame with unknown division '
-               'specifying axis=1')
-        with tm.assertRaisesRegexp(ValueError, msg):
-            dd.concat(case, axis=1)
 
 
 def test_concat3():

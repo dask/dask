@@ -12,7 +12,7 @@ from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring
+from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate)
@@ -40,8 +40,11 @@ from ..utils import (infer_compression, open, system_encoding,
                      takes_multiple_arguments, funcname, digit, insert,
                      build_name_function, different_seeds)
 from ..delayed import Delayed, delayed
+from ..bytes.core import write_bytes
+
 
 no_default = '__no__default__'
+no_result = '__no__result__'
 
 
 def lazify_task(task, start=True):
@@ -162,46 +165,13 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    if isinstance(path, (str, unicode)):
-        if name_function is None:
-            name_function = build_name_function(b.npartitions - 1)
-
-        if not '*' in path:
-            path = os.path.join(path, '*.part')
-
-        formatted_names = [name_function(i) for i in range(b.npartitions)]
-        if formatted_names != sorted(formatted_names):
-            warn("In order to preserve order between partitions "
-                 "name_function must preserve the order of its input")
-
-        paths = [path.replace('*', name_function(i))
-                 for i in range(b.npartitions)]
-    elif isinstance(path, (tuple, list, set)):
-        assert len(path) == b.npartitions
-        paths = path
-    else:
-        raise ValueError("""Path should be either"
-1.  A list of paths -- ['foo.json', 'bar.json', ...]
-2.  A directory -- 'foo/
-3.  A path with a * in it -- 'foo.*.json'""")
-
-    def get_compression(path, compression=compression):
-        if compression == 'infer':
-            compression = infer_compression(path)
-        return compression
-
-    name = 'to-textfiles-' + uuid.uuid4().hex
-    dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
-                            encoding))
-               for i, path in enumerate(paths))
-
-    dsk = merge(b.dask, dsk)
+    out = write_bytes(b.to_delayed(), path, name_function, compression,
+                      encoding=encoding)
     if compute:
-        result = Bag(dsk, name, b.npartitions)
-        result.compute()
+        from dask import compute
+        compute(*out)
     else:
-        keys = [(name, i) for i in range(b.npartitions)]
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return out
 
 
 def finalize(results):
@@ -911,19 +881,49 @@ class Bag(Base):
                                 list(dsk.keys())))}
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def take(self, k, compute=True):
+    def take(self, k, npartitions=1, compute=True):
         """ Take the first k elements
 
-        Evaluates by default, use ``compute=False`` to avoid computation.
-        Only takes from the first partition
+        Parameters
+        ----------
+        k : int
+            The number of elements to return
+        npartitions : int, optional
+            Elements are only taken from the first ``npartitions``, with a
+            default of 1. If there are fewer than ``k`` rows in the first
+            ``npartitions`` a warning will be raised and any found rows
+            returned. Pass -1 to use all partitions.
+        compute : bool, optional
+            Whether to compute the result, default is True.
 
         >>> b = from_sequence(range(10))
         >>> b.take(3)  # doctest: +SKIP
         (0, 1, 2)
         """
-        name = 'take-' + tokenize(self, k)
-        dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
+
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        if npartitions > self.npartitions:
+            raise ValueError("only {} partitions, take "
+                "received {}".format(self.npartitions, npartitions))
+
+        token = tokenize(self, k, npartitions)
+        name = 'take-' + token
+
+        if npartitions > 1:
+            name_p = 'take-partial-' + token
+
+            dsk = {}
+            for i in range(npartitions):
+                dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
+
+            concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
+            dsk[(name, 0)] = (safe_take, k, concat)
+        else:
+            dsk = {(name, 0): (safe_take, k, (self.name, 0))}
+
         b = Bag(merge(self.dask, dsk), name, 1)
+
         if compute:
             return tuple(b.compute())
         else:
@@ -1004,16 +1004,20 @@ class Bag(Base):
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
 
-        Bag should contain tuple or dict records.
-
-        Provide ``columns=`` keyword arg to specify column names.
+        Bag should contain tuples, dict records, or scalars.
 
         Index will not be particularly meaningful.  Use ``reindex`` afterwards
         if necessary.
 
+        Parameters
+        ----------
+        columns : list or pandas.DataFrame, optional
+            If a list, provides the desired column names. If a
+            ``pandas.DataFrame``, it should mirror the column names and dtypes
+            of the output dataframe. If not provided, these will be computed.
+
         Examples
         --------
-
         >>> import dask.bag as db
         >>> b = db.from_sequence([{'name': 'Alice',   'balance': 100},
         ...                       {'name': 'Bob',     'balance': 200},
@@ -1029,21 +1033,20 @@ class Bag(Base):
         """
         import pandas as pd
         import dask.dataframe as dd
-        if columns is None:
+        if isinstance(columns, pd.DataFrame):
+            meta = columns
+        else:
             head = self.take(1)[0]
-            if isinstance(head, dict):
-                columns = sorted(head)
-            elif isinstance(head, (tuple, list)):
-                columns = list(range(len(head)))
+            meta = pd.DataFrame([head], columns=columns)
+        columns = list(meta.columns)
         name = 'to_dataframe-' + tokenize(self, columns)
         DataFrame = partial(pd.DataFrame, columns=columns)
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
 
         divisions = [None] * (self.npartitions + 1)
-
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, columns, divisions)
+                            name, meta, divisions)
 
     def to_imperative(self):
         warn("Deprecation warning: moved to to_delayed")
@@ -1635,9 +1638,18 @@ def empty_safe_apply(func, part):
     if part:
         return func(part)
     else:
-        return '--no-result--'
+        return no_result
 
 
 def empty_safe_aggregate(func, parts):
-    parts2 = [p for p in parts if p != '--no-result--']
+    parts2 = [p for p in parts if not eq_strict(p, no_result)]
     return empty_safe_apply(func, parts2)
+
+
+def safe_take(n, b):
+    r = list(take(n, b))
+    if len(r) != n:
+        warn("Insufficient elements for `take`. {0} elements requested, "
+             "only {1} elements available. Try passing larger `npartitions` "
+             "to `take`.".format(n, len(r)))
+    return r

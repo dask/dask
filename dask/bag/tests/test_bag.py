@@ -10,7 +10,7 @@ import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, reify, partition, inline_singleton_lists, optimize,
         system_encoding, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, reduce
+from dask.compatibility import BZ2File, GzipFile, reduce, PY2
 from dask.utils import filetexts, tmpfile, tmpdir, raises, open
 from dask.async import get_sync
 import dask
@@ -442,6 +442,26 @@ def test_take():
     assert isinstance(b.take(2, compute=False), Bag)
 
 
+def test_take_npartitions():
+    assert list(b.take(6, npartitions=2)) == [0, 1, 2, 3, 4, 0]
+    assert b.take(6, npartitions=-1) == (0, 1, 2, 3, 4, 0)
+    assert b.take(3, npartitions=-1) == (0, 1, 2)
+    with pytest.raises(ValueError):
+        b.take(1, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_take_npartitions_warn():
+    with pytest.warns(None):
+        b.take(100)
+
+    with pytest.warns(None):
+        b.take(7)
+
+    with pytest.warns(None):
+        b.take(7, npartitions=2)
+
+
 def test_map_is_lazy():
     from dask.bag.core import map
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
@@ -683,13 +703,25 @@ def test_to_dataframe():
     assert df2._name == b.to_dataframe()._name
     assert df2._name != df._name
 
+    meta = pd.DataFrame({'a': [1], 'b': [2]}).iloc[0:0]
+    df3 = b.to_dataframe(columns=meta)
+    assert df2._name == df3._name
+    assert (df3.compute().values == df2.compute().values).all()
+
+    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    df4 = b.to_dataframe()
+    assert len(df4.columns) == 1
+    assert list(df4.compute()) == list(pd.DataFrame(list(b)))
+
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -719,9 +751,11 @@ def test_to_textfiles_name_function_warn():
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -986,6 +1020,31 @@ def test_reduction_empty():
     b = db.from_sequence(range(10), npartitions=100)
     assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
+
+
+class StrictReal(int):
+    def __eq__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real == other.real
+
+    def __ne__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real != other.real
+
+
+def test_reduction_with_non_comparable_objects():
+    b = db.from_sequence([StrictReal(x) for x in range(10)], partition_size=2)
+    assert b.fold(max, max).compute(get=dask.get) == StrictReal(9)
+
+
+def test_reduction_with_sparse_matrices():
+    sp = pytest.importorskip('scipy.sparse')
+    b = db.from_sequence([sp.csr_matrix([0]) for x in range(4)], partition_size=2)
+
+    def sp_reduce(a, b):
+        return sp.vstack([a, b])
+
+    assert b.fold(sp_reduce, sp_reduce).compute(get=dask.get).shape == (4, 1)
 
 
 def test_empty():

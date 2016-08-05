@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
+import io
 from math import ceil
 from operator import getitem
 import os
@@ -10,6 +11,7 @@ from threading import Lock
 import multiprocessing
 import uuid
 from warnings import warn
+import sys
 
 import pandas as pd
 import numpy as np
@@ -17,7 +19,7 @@ import dask
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, apply
+from ..compatibility import unicode, apply, PY2
 from .. import array as da
 from ..async import get_sync
 from ..context import _globals
@@ -28,6 +30,7 @@ from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 
 from ..utils import build_name_function
+from ..bytes.core import write_bytes, write_block_to_file
 
 lock = Lock()
 
@@ -430,9 +433,9 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
 
 
 @wraps(pd.DataFrame.to_hdf)
-def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=None, dask_kwargs={},
-           name_function=None, compute=True, lock=None, **kwargs):
+def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
+           name_function=None, compute=True, lock=None, dask_kwargs={},
+           **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -458,8 +461,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
     if '*' in key:
         single_node = False
 
-    if 'format' in kwargs:
-        warn("argument 'format' is ignored, only 'table' is supported.")
+    if 'format' in kwargs and kwargs['format'] != 'table':
+        raise ValueError("Dask only support 'table' format in hdf files.")
 
     if mode not in ('a', 'w', 'r+'):
         raise ValueError("Mode must be one of 'a', 'w' or 'r+'")
@@ -498,9 +501,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
         else:
             lock = Lock()
 
-    kwargs.update({'format': 'table', 'complevel': complevel,
-                   'complib': complib, 'fletcher32': fletcher32,
-                   'mode': mode, 'append': append})
+    kwargs.update({'format': 'table', 'mode': mode, 'append': append})
+
     dsk = dict()
 
     i_name = name_function(0)
@@ -550,7 +552,7 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
-                     chunksize=int(1e6), sorted_index=False, lock=None):
+                     chunksize=int(1e6), sorted_index=False, lock=None, mode=None):
     """
     Read a single hdf file into a dask.dataframe. Used for each file in
     read_hdf.
@@ -562,7 +564,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         given path. Also get the index of the last row of data for each matched
         key.
         """
-        with pd.HDFStore(path) as hdf:
+        with pd.HDFStore(path, mode=mode) as hdf:
             keys = [k for k in hdf.keys() if fnmatch(k, key)]
             stops = []
             divisions = []
@@ -591,7 +593,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         Get the data frame corresponding to one path and one key (which should
         not contain any wildcards).
         """
-        empty = pd.read_hdf(path, key, stop=0)
+        empty = pd.read_hdf(path, key, mode=mode, stop=0)
         if columns is not None:
             empty = empty[columns]
 
@@ -605,12 +607,14 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
 
         if division:
             dsk = {(name, 0): (_pd_read_hdf, path, key, lock,
-                                 {'columns': empty.columns})}
+                                 {'mode': mode,
+                                  'columns': empty.columns})}
 
             divisions = division
         else:
             dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
-                                     {'start': s,
+                                     {'mode': mode,
+                                      'start': s,
                                       'stop': s + chunksize,
                                       'columns': empty.columns}))
                         for i, s in enumerate(range(start, stop, chunksize)))
@@ -641,7 +645,7 @@ def _pd_read_hdf(path, key, lock, kwargs):
 
 @wraps(pd.read_hdf)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
-             chunksize=1000000, sorted_index=False, lock=True):
+             chunksize=1000000, sorted_index=False, lock=True, mode=None):
     """
     Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
     can read multiple files, and read multiple keys from the same file by using
@@ -693,7 +697,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize,
                                     sorted_index=sorted_index,
-                                    lock=lock)
+                                    lock=lock, mode=mode)
                    for path in paths])
 
 
@@ -733,57 +737,30 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return delayed([Delayed(key, [dsk]) for key in keys])[0]
 
 
-def to_csv(df, filename, name_function=None, compression=None, get=None, compute=True, **kwargs):
-    if compression:
-        raise NotImplementedError("Writing compressed csv files not supported")
-    name = 'to-csv-' + uuid.uuid1().hex
+def to_csv(df, filename, name_function=None, compression=None, compute=True,
+           **kwargs):
 
-    kwargs2 = kwargs.copy()
+    def func(df, **kwargs):
+        if PY2:
+            out = io.BytesIO()
+        else:
+            out = io.StringIO()
+        df.to_csv(out, **kwargs)
+        out.seek(0)
+        if PY2:
+            return out.getvalue()
+        return out.getvalue().encode(encoding)
 
-    if name_function is None:
-        name_function = build_name_function(df.npartitions - 1)
-
-    if '*' in filename:
-        if filename.count('*') > 1:
-            raise ValueError("A maximum of one asterisk is accepted in filename")
-
-        if 'mode' in kwargs and kwargs['mode'] != 'w':
-            raise ValueError("to_csv does not support writing to multiple files in append mode, "
-                             "please specify mode='w'")
-
-        formatted_names = [name_function(i) for i in range(df.npartitions)]
-        if formatted_names != sorted(formatted_names):
-            warn("To preserve order between partitions name_function "
-                 "must preserve the order of its input")
-
-        single_file = False
-    else:
-        kwargs2.update({'mode': 'a', 'header': False})
-        single_file = True
-
-    dsk = dict()
-    dsk[(name, 0)] = (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
-                        (df._name, 0), filename.replace('*', name_function(0)), kwargs)
-
-    for i in range(1, df.npartitions):
-        filename_i = filename.replace('*', name_function(i))
-
-        task = (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
-                 (df._name, i), filename_i, kwargs2)
-        if single_file:
-            task = (_link, (name, i - 1), task)
-        dsk[(name, i)] = task
-
-    dsk = merge(dsk, df.dask)
-    if single_file:
-        keys = [(name, df.npartitions - 1)]
-    else:
-        keys = [(name, i) for i in range(df.npartitions)]
+    encoding = kwargs.get('encoding', sys.getdefaultencoding())
+    values = [delayed(func)(d, **kwargs) for d in df.to_delayed()]
+    values = write_bytes(values, filename, name_function, compression,
+                         encoding=None)
 
     if compute:
-        return DataFrame._get(dsk, keys, get=get)
+        from dask import compute
+        compute(*values)
     else:
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return values
 
 
 def _df_to_bag(df, index=False):
