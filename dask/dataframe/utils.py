@@ -106,26 +106,32 @@ def make_empty_frame(dtypes, index=None):
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
-        return pd.RangeIndex(1, name=idx.name)
+        return pd.RangeIndex(2, name=idx.name)
     elif typ in (pd.Int64Index, pd.Float64Index):
-        return typ([1], name=idx.name)
+        return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
-        return pd.Index(['a'], name=idx.name)
+        return pd.Index(['a', 'b'], name=idx.name)
     elif typ is pd.DatetimeIndex:
-        return pd.DatetimeIndex(['1970-01-01'], freq=idx.freq,
+        start = '1970-01-01'
+        data = [start, start] if idx.freq is None else None
+        return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
                                 tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:
-        return pd.PeriodIndex(['1970-01-01'], freq=idx.freq, name=idx.name)
+        return pd.PeriodIndex(start='1970-01-01', periods=2, freq=idx.freq,
+                              name=idx.name)
     elif typ is pd.TimedeltaIndex:
-        return pd.TimedeltaIndex([np.timedelta64(1, 'D')], freq=idx.freq,
+        start = np.timedelta64(1, 'D')
+        data = [start, start] if idx.freq is None else None
+        return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        return pd.CategoricalIndex([idx.categories[0]],
+        element = idx.categories[0]
+        return pd.CategoricalIndex([element, element],
                                    categories=idx.categories,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(i) for i in idx.levels]
-        labels = [[0] for i in idx.levels]
+        labels = [[0, 0] for i in idx.levels]
         return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
     raise TypeError("Don't know how to handle index of "
                     "type {0}".format(type(idx).__name__))
@@ -155,13 +161,13 @@ def _nonempty_series(s, idx):
         entry = _simple_fake_mapping[dtype.kind]
     else:
         raise TypeError("Can't handle dtype: {0}".format(dtype))
-    return pd.Series([entry], name=s.name, index=idx)
+    return pd.Series([entry, entry], name=s.name, index=idx)
 
 
 def nonempty_pd(x):
     """Create a nonempty pandas object from the given metadata.
 
-    Returns a pandas DataFrame, Series, or Index that contains one row
+    Returns a pandas DataFrame, Series, or Index that contains two rows
     of fake data.
     """
     if isinstance(x, pd.Index):
@@ -183,7 +189,7 @@ def nonempty_pd(x):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True):
+def _check_dask(dsk, check_names=True, check_dtypes=True):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
         result = dsk.compute(get=get_sync)
@@ -195,6 +201,8 @@ def _check_dask(dsk, check_names=True):
             assert isinstance(dsk._pd, pd.Index), type(dsk._pd)
             if check_names:
                 assert dsk._pd.name == result.name
+            if check_dtypes:
+                assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series), type(result)
             if check_names:
@@ -203,6 +211,8 @@ def _check_dask(dsk, check_names=True):
             assert isinstance(dsk._pd, pd.Series), type(dsk._pd)
             if check_names:
                 assert dsk._pd.name == result.name
+            if check_dtypes:
+                assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
@@ -212,6 +222,8 @@ def _check_dask(dsk, check_names=True):
             assert isinstance(dsk._pd, pd.DataFrame), type(dsk._pd)
             if check_names:
                 tm.assert_index_equal(dsk._pd.columns, result.columns)
+            if check_dtypes:
+                assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))
@@ -234,13 +246,13 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
-def eq(a, b, check_names=True, **kwargs):
+def eq(a, b, check_names=True, check_dtypes=True, **kwargs):
     assert_divisions(a)
     assert_divisions(b)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names)
-    b = _check_dask(b, check_names=check_names)
+    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
+    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
@@ -306,3 +318,22 @@ def assert_sane_keynames(ddf):
         assert ' ' not in k
         if sys.version_info[0] >= 3:
             assert k.split('-')[0].isidentifier()
+
+
+def assert_dask_dtypes(ddf, res, numeric_equal=True):
+    """Check that the dask metadata matches the result.
+
+    If `numeric_equal`, integer and floating dtypes compare equal. This is
+    useful due to the implicit conversion of integer to floating upon
+    encountering missingness, which is hard to infer statically."""
+
+    eq_types = {'i', 'f'} if numeric_equal else {}
+
+    if isinstance(res, pd.DataFrame):
+        for col, a, b in pd.concat([ddf._pd.dtypes, res.dtypes],
+                                   axis=1).itertuples():
+            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+    elif isinstance(res, (pd.Series, pd.Index)):
+        a = ddf._pd.dtype
+        b = res.dtype
+        assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
