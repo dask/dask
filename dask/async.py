@@ -426,68 +426,68 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
-    dsk = dsk.copy()
-    for f in start_cbs:
-        f(dsk)
+    try:
+        dsk = dsk.copy()
+        for f in start_cbs:
+            f(dsk)
 
-    dsk, dependencies = cull(dsk, list(results))
+        dsk, dependencies = cull(dsk, list(results))
 
-    keyorder = order(dsk)
+        keyorder = order(dsk)
 
-    state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+        state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
-    for f in start_state_cbs:
-        f(dsk, state)
+        for f in start_state_cbs:
+            f(dsk, state)
 
-    if rerun_exceptions_locally is None:
-        rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
+        if rerun_exceptions_locally is None:
+            rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
 
-    if state['waiting'] and not state['ready']:
-        raise ValueError("Found no accessible jobs in dask")
+        if state['waiting'] and not state['ready']:
+            raise ValueError("Found no accessible jobs in dask")
 
-    def fire_task():
-        """ Fire off a task to the thread pool """
-        # Choose a good task to compute
-        key = state['ready'].pop()
-        state['running'].add(key)
-        for f in pretask_cbs:
-            f(key, dsk, state)
+        def fire_task():
+            """ Fire off a task to the thread pool """
+            # Choose a good task to compute
+            key = state['ready'].pop()
+            state['running'].add(key)
+            for f in pretask_cbs:
+                f(key, dsk, state)
 
-        # Prep data to send
-        data = dict((dep, state['cache'][dep])
-                    for dep in get_dependencies(dsk, key))
-        # Submit
-        apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                        get_id, raise_on_exception])
+            # Prep data to send
+            data = dict((dep, state['cache'][dep])
+                        for dep in get_dependencies(dsk, key))
+            # Submit
+            apply_async(execute_task, args=[key, dsk[key], data, queue,
+                                            get_id, raise_on_exception])
 
-    # Seed initial tasks into the thread pool
-    while state['ready'] and len(state['running']) < num_workers:
-        fire_task()
-
-    # Main loop, wait on tasks to finish, insert new ones
-    while state['waiting'] or state['ready'] or state['running']:
-        try:
-            key, res, tb, worker_id = queue.get()
-        except KeyboardInterrupt:
-            for f in finish_cbs:
-                f(dsk, state, True)
-            raise
-        if isinstance(res, Exception):
-            for f in finish_cbs:
-                f(dsk, state, True)
-            if rerun_exceptions_locally:
-                data = dict((dep, state['cache'][dep])
-                            for dep in get_dependencies(dsk, key))
-                task = dsk[key]
-                _execute_task(task, data)  # Re-execute locally
-            else:
-                raise(remote_exception(res, tb))
-        state['cache'][key] = res
-        finish_task(dsk, key, state, results, keyorder.get)
-        for f in posttask_cbs:
-            f(key, res, dsk, state, worker_id)
+        # Seed initial tasks into the thread pool
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
+
+        # Main loop, wait on tasks to finish, insert new ones
+        while state['waiting'] or state['ready'] or state['running']:
+            key, res, tb, worker_id = queue.get()
+            if isinstance(res, Exception):
+                for f in finish_cbs:
+                    f(dsk, state, True)
+                if rerun_exceptions_locally:
+                    data = dict((dep, state['cache'][dep])
+                                for dep in get_dependencies(dsk, key))
+                    task = dsk[key]
+                    _execute_task(task, data)  # Re-execute locally
+                else:
+                    raise(remote_exception(res, tb))
+            state['cache'][key] = res
+            finish_task(dsk, key, state, results, keyorder.get)
+            for f in posttask_cbs:
+                f(key, res, dsk, state, worker_id)
+            while state['ready'] and len(state['running']) < num_workers:
+                fire_task()
+    except KeyboardInterrupt:
+        for f in finish_cbs:
+            f(dsk, state, True)
+        raise
 
     # Final reporting
     while state['running'] or not queue.empty():
