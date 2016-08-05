@@ -2498,9 +2498,9 @@ def quantile(df, q):
         q = [q]
 
     if isinstance(df, Index):
-        meta = pd.Series(df._pd).quantile(q)
+        meta = pd.Series(df._pd_nonempty).quantile(q)
     else:
-        meta = df._pd.quantile(q)
+        meta = df._pd_nonempty.quantile(q)
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
