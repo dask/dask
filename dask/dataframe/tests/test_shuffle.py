@@ -7,7 +7,7 @@ import dask.dataframe as dd
 from dask.dataframe.shuffle import (shuffle, hash_series, partitioning_index,
         rearrange_by_column, rearrange_by_divisions)
 from dask.async import get_sync
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, make_meta
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
                               index=[0, 1, 3]),
@@ -15,7 +15,8 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [3, 6, 9]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
 full = d.compute()
 
 

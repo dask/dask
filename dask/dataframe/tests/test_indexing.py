@@ -8,7 +8,7 @@ from dask.utils import raises
 import dask.dataframe as dd
 
 from dask.dataframe.core import _coerce_loc_index
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, make_meta
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -17,7 +17,8 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 5, 9, 9])
+meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+d = dd.DataFrame(dsk, 'x', meta, [0, 5, 9, 9])
 full = d.compute()
 
 
@@ -63,7 +64,7 @@ def test_loc_non_informative_index():
 def test_loc_with_text_dates():
     A = tm.makeTimeSeries(10).iloc[:5]
     B = tm.makeTimeSeries(10).iloc[5:]
-    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None,
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', A,
                   [A.index.min(), B.index.min(), B.index.max()])
 
     assert s.loc['2000': '2010'].divisions == s.divisions

@@ -101,14 +101,17 @@ def make_meta(meta, index=None):
 
     Parameters
     ----------
-    meta : dict, tuple, pd.Series, pd.DataFrame, pd.Index
+    meta : dict, tuple, pd.Series, pd.DataFrame, pd.Index, scalar
         To create a DataFrame, provide a `dict` mapping of `{name: dtype}`. To
         create a `Series`, provide a tuple of `(name, dtype)`. If a pandas
-        object, names, dtypes, and index should match the desired output.
+        object, names, dtypes, and index should match the desired output. If a
+        scalar, a numpy scalar of the same dtype is returned.
     index :  pd.Index, optional
         Any pandas index to use in the metadata. If none provided, a
         `RangeIndex` will be used.
     """
+    if hasattr(meta, '_pd'):
+        return meta._pd
     if isinstance(meta, (pd.Series, pd.DataFrame)):
         return meta.iloc[0:0]
     elif isinstance(meta, pd.Index):
@@ -123,6 +126,8 @@ def make_meta(meta, index=None):
             raise ValueError("Expected tuple of (name, dtype), "
                              "got {0}".format(meta))
         return pd.Series([], dtype=meta[1], name=meta[0], index=index)
+    elif hasattr(meta, 'dtype'):
+        return np.array([], dtype=meta.dtype)
     else:
         raise TypeError("Expected dict or tuple, got {0}".format(meta))
 

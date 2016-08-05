@@ -406,47 +406,48 @@ def test_map_partitions_multi_argument():
 
 
 def test_map_partitions():
-    assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
+    assert eq(d.map_partitions(lambda df: df, meta=d), full)
     assert eq(d.map_partitions(lambda df: df), full)
-    result = d.map_partitions(lambda df: df.sum(axis=1), columns=None)
+    result = d.map_partitions(lambda df: df.sum(axis=1))
     assert eq(result, full.sum(axis=1))
 
 
 def test_map_partitions_names():
     func = lambda x: x
-    assert sorted(dd.map_partitions(func, d.columns, d).dask) == \
-           sorted(dd.map_partitions(func, d.columns, d).dask)
-    assert sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask) == \
-           sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask)
+    assert sorted(dd.map_partitions(func, d, d).dask) == \
+           sorted(dd.map_partitions(func, d, d).dask)
+    assert sorted(dd.map_partitions(lambda x: x, d, d, token=1).dask) == \
+           sorted(dd.map_partitions(lambda x: x, d, d, token=1).dask)
 
     func = lambda x, y: x
-    assert sorted(dd.map_partitions(func, d.columns, d, d).dask) == \
-           sorted(dd.map_partitions(func, d.columns, d, d).dask)
+    assert sorted(dd.map_partitions(func, d, d, d).dask) == \
+           sorted(dd.map_partitions(func, d, d, d).dask)
 
 
 def test_map_partitions_column_info():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
-    b = dd.map_partitions(lambda x: x, a.columns, a)
+    b = dd.map_partitions(lambda x: x, a, a)
     tm.assert_index_equal(b.columns, a.columns)
     assert eq(df, b)
 
-    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
     b = dd.map_partitions(lambda df: df.x + df.y, None, a)
-    assert b.name is None
     assert isinstance(b, dd.Series)
+    assert b.dtype == 'i8'
 
-    b = dd.map_partitions(lambda df: df.x + 1, 'x', a)
+    b = dd.map_partitions(lambda df: df.x + 1, ('x', 'i8'), a)
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
+    assert b.dtype == 'i8'
 
 
 def test_map_partitions_method_names():
@@ -457,13 +458,14 @@ def test_map_partitions_method_names():
     assert isinstance(b, dd.DataFrame)
     tm.assert_index_equal(b.columns, a.columns)
 
-    b = a.map_partitions(lambda df: df.x + 1, columns=None)
+    b = a.map_partitions(lambda df: df.x + 1)
     assert isinstance(b, dd.Series)
-    assert b.name is None
+    assert b.dtype == 'i8'
 
-    b = a.map_partitions(lambda df: df.x + 1, columns='x')
+    b = a.map_partitions(lambda df: df.x + 1, meta=('x', 'i8'))
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
+    assert b.dtype == 'i8'
 
 
 def test_map_partitions_keeps_kwargs_in_dict():
@@ -711,6 +713,8 @@ def test_map():
     lk = pd.Series(lk)
     assert eq(d.a.map(lk), full.a.map(lk))
     assert eq(d.b.map(lk), full.b.map(lk))
+    assert eq(d.b.map(lk, meta=d.b), full.b.map(lk))
+    assert eq(d.b.map(lk, meta=('b', 'i8')), full.b.map(lk))
     assert raises(TypeError, lambda: d.a.map(d.b))
 
 
@@ -1590,13 +1594,14 @@ def test_from_delayed():
     df = dd.from_delayed(dfs, metadata=meta)
 
     assert (df.compute().columns == df.columns).all()
-    assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
+    f = lambda x: pd.Series([len(x)])
+    assert list(df.map_partitions(f).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
     s = dd.from_delayed(ss, metadata=meta.A)
 
     assert s.compute().name == s.name
-    assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
+    assert list(s.map_partitions(f).compute()) == [1, 2, 3, 4]
 
 
 def test_to_delayed():
@@ -1659,8 +1664,8 @@ def test_set_index_sorted_true():
 def test_methods_tokenize_differently():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df = dd.from_pandas(df, npartitions=1)
-    assert (df.x.map_partitions(pd.Series.min)._name !=
-            df.x.map_partitions(pd.Series.max)._name)
+    assert (df.x.map_partitions(lambda x: pd.Series(x.min()))._name !=
+            df.x.map_partitions(lambda x: pd.Series(x.max()))._name)
 
 
 def test_sorted_index_single_partition():

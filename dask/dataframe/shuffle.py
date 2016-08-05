@@ -87,11 +87,11 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
     """
     if np.isscalar(index):
         partitions = df[index].map_partitions(set_partitions_pre,
-                divisions=divisions, columns=pd.Series([0]))
+                divisions=divisions, meta=pd.Series([0]))
         df2 = df.assign(_partitions=partitions)
     else:
         partitions = index.map_partitions(set_partitions_pre,
-                divisions=divisions, columns=pd.Series([0]))
+                divisions=divisions, meta=pd.Series([0]))
         df2 = df.assign(_partitions=partitions, _index=index)
 
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
@@ -132,7 +132,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
         index = df[index]
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
-                                      columns=pd.Series([0]))
+                                      meta=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
                               max_branch=max_branch, shuffle=shuffle,
@@ -145,7 +145,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
     """ Shuffle dataframe so that column separates along divisions """
     partitions = df[column].map_partitions(set_partitions_pre,
-                divisions=divisions, columns=pd.Series([0]))
+                divisions=divisions, meta=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)

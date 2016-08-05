@@ -30,7 +30,7 @@ from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from .indexing import (_partition_of_index_value, _loc, _try_loc,
                        _coerce_loc_index, _maybe_partial_time_string)
-from .utils import nonempty_pd
+from .utils import nonempty_pd, make_meta
 
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
@@ -187,24 +187,7 @@ class _Frame(Base):
     @classmethod
     def _build_pd(cls, metadata):
         """ build pandas instance from passed metadata """
-        if isinstance(metadata, cls):
-            # copy metadata
-            _pd = metadata._pd
-        elif isinstance(metadata, cls._partition_type):
-            if isinstance(metadata, pd.Index):
-                _pd = metadata[0:0]
-            else:
-                _pd = metadata.iloc[0:0]
-        elif np.isscalar(metadata) or metadata is None:
-            _pd = cls._partition_type([], name=metadata)
-            # known_dtype = False
-        elif isinstance(metadata, datetime):
-            _pd = cls._partition_type([metadata]).iloc[0:0]
-            # known_dtype = True
-        else:
-            _pd = cls._partition_type(columns=metadata)
-            # known_dtype = False
-        return _pd
+        raise NotImplementedError
 
     @property
     def _pd_nonempty(self):
@@ -297,36 +280,44 @@ class _Frame(Base):
     def __len__(self):
         return reduction(self, len, np.sum, token='len').compute()
 
-    def map_partitions(self, func, columns=no_default, *args, **kwargs):
-        """ Apply Python function on each DataFrame block
-
-        When using ``map_partitions`` you should provide either the column
-        names (if the result is a DataFrame) or the name of the Series (if the
-        result is a Series).  The output type will be determined by the type of
-        ``columns``.
+    def map_partitions(self, func, *args, **kwargs):
+        """ Apply Python function on each DataFrame block.
 
         Parameters
         ----------
 
         func : function
             Function applied to each blocks
-        columns : tuple or scalar
-            Column names or name of the output. Defaults to names of data itself.
-            When tuple is passed, DataFrame is returned. When scalar is passed,
-            Series is returned.
+        args, kwargs :
+            Arguments and keywords to pass to the function. The partition will
+            be the first argument, and these will be passed *after*.
+        meta : pd.DataFrame, pd.Series, dict, tuple, optional
+            Metadata describing the output DataFrame or Series. Should have
+            matching names and dtypes. For ease of use, can also pass in a dict
+            instead of a dataframe, or a tuple instead of a series. If a dict,
+            should be a mapping of column name to dtype. If a tuple, should be
+            length 2 with name and dtype. If not provided, dask will try to
+            infer the metadata. This may take some time, and lead to unexpected
+            results, so providing `meta` is recommended.
 
         Examples
         --------
 
-        When str is passed as columns, the result will be Series.
+        When tuple is passed as meta, the result will be Series.
 
-        >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
+        >>> df.map_partitions(lambda df: df.x + 1, meta=('x', 'i8'))  # doctest: +SKIP
 
-        When tuple is passed as columns, the result will be DataFrame.
+        When dict is passed as meta, the result will be DataFrame.
 
-        >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
+        >>> df.map_partitions(lambda df: df.head(), meta={'x': 'i8', 'y': 'i8'})  # doctest: +SKIP
+
+        Note that you can also pass in the DataFrame/Series itself, if the
+        metadata doesn't change:
+
+        >>> df.map_partitions(lambda df: df.head(), meta=df)  # doctest: +SKIP
         """
-        return map_partitions(func, columns, self, *args, **kwargs)
+        meta = kwargs.pop('meta', no_default)
+        return map_partitions(func, meta, self, *args, **kwargs)
 
     def random_split(self, p, random_state=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
@@ -1306,7 +1297,7 @@ class Series(_Frame):
         return elemwise(pd.Series.isin, self, list(other))
 
     @derived_from(pd.Series)
-    def map(self, arg, na_action=None):
+    def map(self, arg, na_action=None, meta=no_default):
         if not (isinstance(arg, (pd.Series, dict)) or callable(arg)):
             raise TypeError("arg must be pandas.Series, dict or callable."
                             " Got {0}".format(type(arg)))
@@ -1314,7 +1305,16 @@ class Series(_Frame):
         dsk = dict(((name, i), (pd.Series.map, k, arg, na_action)) for i, k in
                    enumerate(self._keys()))
         dsk.update(self.dask)
-        return Series(dsk, name, self.name, self.divisions)
+        if meta is no_default:
+            try:
+                meta = self._pd_nonempty.map(arg, na_action=na_action)
+            except Exception:
+                raise ValueError("Metadata inference failed, please provide "
+                                "`meta` keyword")
+        else:
+            meta = make_meta(meta)
+
+        return Series(dsk, name, meta, self.divisions)
 
     @derived_from(pd.Series)
     def astype(self, dtype):
@@ -1370,7 +1370,8 @@ class Series(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
-    def apply(self, func, convert_dtype=True, name=no_default, args=(), **kwds):
+    def apply(self, func, convert_dtype=True, meta=no_default,
+              name=no_default, args=(), **kwds):
         """ Parallel version of pandas.Series.apply
 
         This mimics the pandas version except for the following:
@@ -1385,12 +1386,21 @@ class Series(_Frame):
         convert_dtype: boolean, default True
             Try to find better dtype for elementwise function results.
             If False, leave as dtype=object
+        meta : pd.DataFrame, pd.Series, dict, tuple, optional
+            Metadata describing the output DataFrame or Series. Should have
+            matching names and dtypes. For ease of use, can also pass in a dict
+            instead of a dataframe, or a tuple instead of a series. If a dict,
+            should be a mapping of column name to dtype. If a tuple, should be
+            length 2 with name and dtype. If not provided, dask will try to
+            infer the metadata. This may take some time, and lead to unexpected
+            results, so providing `meta` is recommended.
         name: list, scalar or None, optional
-            If list is given, the result is a DataFrame which columns is
-            specified list. Otherwise, the result is a Series which name is
-            given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beginning of data. This
-            inference may take some time and lead to unexpected result.
+            Deprecated, use `meta` instead. If list is given, the result is a
+            DataFrame which columns is specified list. Otherwise, the result is
+            a Series which name is given scalar or None (no name). If name
+            keyword is not given, dask tries to infer the result type using its
+            beginning of data. This inference may take some time and lead to
+            unexpected result.
         args: tuple
             Positional arguments to pass to function in addition to the array/series
 
@@ -1400,20 +1410,33 @@ class Series(_Frame):
         -------
         applied : Series or DataFrame depending on name keyword
         """
+        if name is not no_default:
+            warnings.warn("`name` is deprecated, please use `meta` instead")
+            if meta is no_default and isinstance(name, (pd.DataFrame, pd.Series)):
+                meta = name
 
-        if name is no_default:
-            msg = ("name is not specified, inferred from partial data. "
-                   "Please provide name if the result is unexpected.\n"
+        if meta is no_default:
+            msg = ("`meta` is not specified, inferred from partial data. "
+                   "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
-                   "  After:  .apply(func, name=['x', 'y']) for dataframe result\n"
-                   "  or:     .apply(func, name='x')        for series result")
+                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            name = _emulate(pd.Series.apply, self.head(), func,
-                            convert_dtype=convert_dtype,
-                            args=args, **kwds)
+            try:
+                meta = _emulate(pd.Series.apply, self._pd_nonempty, func,
+                                convert_dtype=convert_dtype,
+                                args=args, **kwds)
+            except:
+                try:
+                    meta = _emulate(pd.Series.apply, self.head(), func,
+                                    convert_dtype=convert_dtype,
+                                    args=args, **kwds)
+                except:
+                    raise ValueError("Metadata inference failed, please"
+                                     "provide `meta` keyword")
 
-        return map_partitions(pd.Series.apply, name, self, func,
+        return map_partitions(pd.Series.apply, meta, self, func,
                               convert_dtype, args, **kwds)
 
     @derived_from(pd.Series)
@@ -1777,7 +1800,7 @@ class DataFrame(_Frame):
             raise NotImplementedError("Inplace eval not supported."
             " Please use inplace=False")
         meta = self._pd.eval(expr, inplace=inplace, **kwargs)
-        return self.map_partitions(_eval, meta, expr, inplace=inplace, **kwargs)
+        return self.map_partitions(_eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
@@ -1932,7 +1955,8 @@ class DataFrame(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
-    def apply(self, func, axis=0, args=(), columns=no_default, **kwds):
+    def apply(self, func, axis=0, args=(), meta=no_default,
+              columns=no_default, **kwds):
         """ Parallel version of pandas.DataFrame.apply
 
         This mimics the pandas version except for the following:
@@ -1948,12 +1972,21 @@ class DataFrame(_Frame):
         axis: {0 or 'index', 1 or 'columns'}, default 0
             - 0 or 'index': apply function to each column (NOT SUPPORTED)
             - 1 or 'columns': apply function to each row
+        meta : pd.DataFrame, pd.Series, dict, tuple, optional
+            Metadata describing the output DataFrame or Series. Should have
+            matching names and dtypes. For ease of use, can also pass in a dict
+            instead of a dataframe, or a tuple instead of a series. If a dict,
+            should be a mapping of column name to dtype. If a tuple, should be
+            length 2 with name and dtype. If not provided, dask will try to
+            infer the metadata. This may take some time, and lead to unexpected
+            results, so providing `meta` is recommended.
         columns: list, scalar or None
-            If list is given, the result is a DataFrame which columns is
-            specified list. Otherwise, the result is a Series which name is
-            given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beginning of data. This
-            inference may take some time and lead to unexpected result
+            Deprecated, please use `meta` instead. If list is given, the result
+            is a DataFrame which columns is specified list. Otherwise, the
+            result is a Series which name is given scalar or None (no name). If
+            name keyword is not given, dask tries to infer the result type
+            using its beginning of data. This inference may take some time and
+            lead to unexpected result
         args : tuple
             Positional arguments to pass to function in addition to the array/series
 
@@ -1971,18 +2004,31 @@ class DataFrame(_Frame):
                     "dd.DataFrame.apply only supports axis=1\n"
                     "  Try: df.apply(func, axis=1)")
 
-        if columns is no_default:
-            msg = ("columns is not specified, inferred from partial data. "
-                   "Please provide columns if the result is unexpected.\n"
+        if columns is not no_default:
+            warnings.warn("`columns` is deprecated, please use `meta` instead")
+            if meta is no_default and isinstance(columns, (pd.DataFrame, pd.Series)):
+                meta = columns
+
+        if meta is no_default:
+            msg = ("`meta` is not specified, inferred from partial data. "
+                   "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
-                   "  After:  .apply(func, columns=['x', 'y']) for dataframe result\n"
-                   "  or:     .apply(func, columns='x')        for series result")
+                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            columns = _emulate(pd.DataFrame.apply, self.head(), func,
-                               axis=axis, args=args, **kwds)
+            try:
+                meta = _emulate(pd.DataFrame.apply, self._pd_nonempty, func,
+                                axis=axis, args=args, **kwds)
+            except:
+                try:
+                    meta = _emulate(pd.DataFrame.apply, self.head(), func,
+                                    axis=axis, args=args, **kwds)
+                except:
+                    raise ValueError("Metadata inference failed, please"
+                                     "provide `meta` keyword")
 
-        return map_partitions(pd.DataFrame.apply, columns, self, func, axis,
+        return map_partitions(pd.DataFrame.apply, meta, self, func, axis,
                               False, False, None, args, **kwds)
 
     @derived_from(pd.DataFrame)
@@ -2261,21 +2307,25 @@ def _get_return_type(arg, metadata):
         return DataFrame
 
 
-def _extract_pd(x):
+def _extract_pd(x, nonempty=False):
     """
     Extract internal cache data (``_pd``) from dd.DataFrame / dd.Series
     """
     if isinstance(x, _Frame):
-        return x._pd
+        return x._pd_nonempty if nonempty else x._pd
     elif isinstance(x, list):
-        return [_extract_pd(_x) for _x in x]
+        return [_extract_pd(_x, nonempty) for _x in x]
     elif isinstance(x, tuple):
-        return tuple([_extract_pd(_x) for _x in x])
+        return tuple([_extract_pd(_x, nonempty) for _x in x])
     elif isinstance(x, dict):
         res = {}
         for k in x:
-            res[k] = _extract_pd(x[k])
+            res[k] = _extract_pd(x[k], nonempty)
         return res
+    elif isinstance(x, Scalar):
+        # TODO: clean this up. This is fine for most things,
+        # but will fail if the scalar isn't numeric.
+        return 1
     else:
         return x
 
@@ -2285,26 +2335,32 @@ def _emulate(func, *args, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_pd``) for calculation
     """
-    return func(*_extract_pd(args), **_extract_pd(kwargs))
+    return func(*_extract_pd(args, True), **_extract_pd(kwargs, True))
 
 
-def map_partitions(func, metadata, *args, **kwargs):
+def map_partitions(func, meta, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
     Parameters
     ----------
-
-    metadata: _Frame, columns, name
-        Metadata for output
+    meta : _Frame, dict, tuple, scalar, pd.DataFrame, pd.Series
+        Representation of the metadata for the output `DataFrame` or `Series`.
     targets : list
         List of target DataFrame / Series.
     """
-    metadata = _extract_pd(metadata)
+    if meta is None:
+        meta = no_default
+    if meta is not no_default:
+        meta = make_meta(meta)
 
     assert callable(func)
-    token = kwargs.pop('token', None)
-    name = token or funcname(func)
-    name = '{0}-{1}'.format(name, tokenize(metadata, *args, **kwargs))
+    if 'token' in kwargs:
+        name = kwargs.pop('token')
+        token = tokenize(meta, *args, **kwargs)
+    else:
+        name = funcname(func)
+        token = tokenize(func, meta, *args, **kwargs)
+    name = '{0}-{1}'.format(name, token)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
@@ -2316,22 +2372,21 @@ def map_partitions(func, metadata, *args, **kwargs):
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
 
-    if metadata is no_default:
-        # pass no_default as much, because it updates internal cache
+    if meta is no_default:
         try:
-            metadata = _emulate(func, *args, **kwargs)
+            meta = _emulate(func, *args, **kwargs)
         except Exception:
-            # user function may fail
-            metadata = None
+            raise ValueError("Metadata inference failed, please provide "
+                             "`meta` keyword")
 
-    if isinstance(metadata, pd.DataFrame):
-        columns = metadata.columns
-    elif isinstance(metadata, pd.Series):
-        columns = metadata.name
+    if isinstance(meta, pd.DataFrame):
+        columns = meta.columns
+    elif isinstance(meta, pd.Series):
+        columns = meta.name
     else:
-        columns = metadata
+        columns = meta
 
-    return_type = _get_return_type(dfs[0], metadata)
+    return_type = _get_return_type(dfs[0], meta)
 
     dsk = {}
     for i in range(dfs[0].npartitions):
@@ -2343,7 +2398,7 @@ def map_partitions(func, metadata, *args, **kwargs):
         dsk[(name, i)] = values
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
-    return return_type(merge(dsk, *dasks), name, metadata, args[0].divisions)
+    return return_type(merge(dsk, *dasks), name, meta, args[0].divisions)
 
 
 def _rename(columns, df):
@@ -2906,8 +2961,8 @@ def set_sorted_index(df, index, drop=True, **kwargs):
         index2 = index
         meta = df._pd.set_index(index._pd, drop=drop)
 
-    mins = index2.map_partitions(pd.Series.min)
-    maxes = index2.map_partitions(pd.Series.max)
+    mins = index2.map_partitions(lambda x: pd.Series(x.min()), meta=index2)
+    maxes = index2.map_partitions(lambda x: pd.Series(x.max()), meta=index2)
     mins, maxes = compute(mins, maxes, **kwargs)
 
     if (sorted(mins) != list(mins) or
