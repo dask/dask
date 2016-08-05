@@ -184,11 +184,6 @@ class _Frame(Base):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @classmethod
-    def _build_pd(cls, metadata):
-        """ build pandas instance from passed metadata """
-        raise NotImplementedError
-
     @property
     def _pd_nonempty(self):
         """ A non-empty version of `_pd` with fake data."""
@@ -1110,19 +1105,9 @@ class Series(_Frame):
         result = object.__new__(cls)
         result.dask = dsk
         result._name = _name
-        result._pd = cls._build_pd(meta)
+        result._pd = make_meta(meta)
         result.divisions = tuple(divisions)
         return result
-
-    @classmethod
-    def _build_pd(cls, metadata):
-        if isinstance(metadata, cls):
-            _pd = metadata._pd
-        elif isinstance(metadata, pd.Series):
-            _pd = metadata.iloc[0:0]
-        else:
-            raise ValueError("no metadata")
-        return _pd
 
     @property
     def _constructor_sliced(self):
@@ -1496,16 +1481,6 @@ class Index(Series):
     _partition_type = pd.Index
     _token_prefix = 'index-'
 
-    @classmethod
-    def _build_pd(cls, metadata):
-        if isinstance(metadata, cls):
-            _pd = metadata._pd
-        elif isinstance(metadata, pd.Index):
-            _pd = metadata[0:0]
-        else:
-            raise ValueError("no metadata")
-        return _pd
-
     @property
     def index(self):
         msg = "'{0}' object has no attribute 'index'"
@@ -1572,19 +1547,9 @@ class DataFrame(_Frame):
         result = object.__new__(cls)
         result.dask = dsk
         result._name = name
-        result._pd = cls._build_pd(meta)
+        result._pd = make_meta(meta)
         result.divisions = tuple(divisions)
         return result
-
-    @classmethod
-    def _build_pd(cls, metadata):
-        if isinstance(metadata, cls):
-            _pd = metadata._pd
-        elif isinstance(metadata, pd.DataFrame):
-            _pd = metadata.iloc[0:0]
-        else:
-            raise ValueError("no metadata")
-        return _pd
 
     @property
     def _constructor_sliced(self):
