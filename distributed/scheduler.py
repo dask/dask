@@ -1569,7 +1569,7 @@ class Scheduler(Server):
 
                     self.ensure_idle_ready()
 
-            except (StreamClosedError, IOError, OSError, FileNotFoundError):
+            except (StreamClosedError, IOError, OSError):
                 logger.info("Worker failed from closed stream: %s", worker)
             finally:
                 if not stream.closed():
