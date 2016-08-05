@@ -269,7 +269,7 @@ class _Frame(Base):
     def drop_duplicates(self, **kwargs):
         assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
         chunk = lambda s: s.drop_duplicates(**kwargs)
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self._pd,
+        return aca(self, chunk=chunk, aggregate=chunk, meta=self._pd,
                    token='drop-duplicates')
 
     def __len__(self):
@@ -1225,7 +1225,7 @@ class Series(_Frame):
 
         return aca([self], chunk=func,
                    aggregate=lambda x, **kwargs: aggfunc(pd.Series(x), **kwargs),
-                   columns=return_scalar, token=self._token_prefix + token,
+                   meta=return_scalar, token=self._token_prefix + token,
                    **kwargs)
 
     @derived_from(pd.Series)
@@ -1289,7 +1289,7 @@ class Series(_Frame):
         name = self.name
         chunk = lambda x: pd.Series(pd.Series.unique(x), name=name)
         return aca(self, chunk=chunk, aggregate=chunk,
-                   columns=self._pd, token='unique')
+                   meta=self._pd, token='unique')
 
     @derived_from(pd.Series)
     def nunique(self):
@@ -1300,14 +1300,14 @@ class Series(_Frame):
         chunk = lambda s: s.value_counts()
         agg = lambda s: s.groupby(level=0).sum().sort_values(ascending=False)
         meta = self._pd.value_counts()
-        return aca(self, chunk=chunk, aggregate=agg, columns=meta,
+        return aca(self, chunk=chunk, aggregate=agg, meta=meta,
                    token='value-counts')
 
     @derived_from(pd.Series)
     def nlargest(self, n=5):
         token = 'series-nlargest-n={0}'.format(n)
         f = lambda s: s.nlargest(n)
-        return aca(self, f, f, columns=self._pd, token=token)
+        return aca(self, f, f, meta=self._pd, token=token)
 
     @derived_from(pd.Series)
     def isin(self, other):
@@ -1581,23 +1581,23 @@ class DataFrame(_Frame):
                     return self._loc(key)
 
             # error is raised from pandas
-            dummy = self._pd[_extract_pd(key)]
+            meta = self._pd[_extract_pd(key)]
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
             return self._constructor_sliced(merge(self.dask, dsk), name,
-                                            dummy, self.divisions)
+                                            meta, self.divisions)
         elif isinstance(key, slice):
             return self._loc(key)
 
         if isinstance(key, list):
             # error is raised from pandas
-            dummy = self._pd[_extract_pd(key)]
+            meta = self._pd[_extract_pd(key)]
 
             dsk = dict(((name, i), (operator.getitem,
                                     (self._name, i), (list, key)))
                         for i in range(self.npartitions))
             return self._constructor(merge(self.dask, dsk), name,
-                                     dummy, self.divisions)
+                                     meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             #
@@ -1706,7 +1706,7 @@ class DataFrame(_Frame):
     def nlargest(self, n=5, columns=None):
         token = 'dataframe-nlargest-n={0}'.format(n)
         f = lambda df: df.nlargest(n, columns)
-        return aca(self, f, f, columns=self._pd, token=token)
+        return aca(self, f, f, meta=self._pd, token=token)
 
     @derived_from(pd.DataFrame)
     def reset_index(self):
@@ -1756,7 +1756,7 @@ class DataFrame(_Frame):
 
         # Figure out columns of the output
         df2 = self._pd.assign(**_extract_pd(kwargs))
-        return elemwise(_assign, self, *pairs, columns=df2)
+        return elemwise(_assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame)
     def rename(self, index=None, columns=None):
@@ -1792,9 +1792,9 @@ class DataFrame(_Frame):
             dsk = dict(((name, i), (pd.DataFrame.query, (self._name, i), expr))
                        for i in range(self.npartitions))
 
-        dummy = self._pd.query(expr, **kwargs)
+        meta = self._pd.query(expr, **kwargs)
         return self._constructor(merge(dsk, self.dask), name,
-                                 dummy, self.divisions)
+                                 meta, self.divisions)
 
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
@@ -1867,7 +1867,7 @@ class DataFrame(_Frame):
         # groupby.aggregation doesn't support skipna,
         # using gropuby.apply(aggfunc) is a workaround to handle each group as df
         return aca([self], chunk=func, aggregate=aggregate,
-                   columns=meta, token=self._token_prefix + token,
+                   meta=meta, token=self._token_prefix + token,
                    **kwargs)
 
     @derived_from(pd.DataFrame)
@@ -1951,8 +1951,8 @@ class DataFrame(_Frame):
                     msg = 'Unable to {0} dd.Series with axis=1'.format(name)
                     raise ValueError(msg)
 
-            dummy = _emulate(op, self, other, axis=axis, fill_value=fill_value)
-            return map_partitions(op, dummy, self, other,
+            meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+            return map_partitions(op, meta, self, other,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
@@ -2103,7 +2103,7 @@ def _assign(df, *pairs):
 
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
-    columns = kwargs.pop('columns', no_default)
+    meta = kwargs.pop('meta', no_default)
 
     _name = funcname(op) + '-' + tokenize(op, kwargs, *args)
 
@@ -2132,14 +2132,14 @@ def elemwise(op, *args, **kwargs):
         dsk = dict(((_name, i), (op,) + frs) for i, frs in enumerate(zip(*keys)))
     dsk = merge(dsk, *[d.dask for d in dasks])
 
-    if columns is no_default:
+    if meta is no_default:
         if len(dfs) >= 2 and len(dasks) != len(dfs):
             # should not occur in current funcs
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
-        columns = _emulate(op, *args, **kwargs)
+        meta = _emulate(op, *args, **kwargs)
 
-    return _Frame(dsk, _name, columns, divisions)
+    return _Frame(dsk, _name, meta, divisions)
 
 
 def remove_empties(seq):
@@ -2205,7 +2205,7 @@ def _maybe_from_pandas(dfs):
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None,
-                       columns=no_default, token=None, chunk_kwargs=None,
+                       meta=no_default, token=None, chunk_kwargs=None,
                        aggregate_kwargs=None, **kwargs):
     """ Apply a function to blocks, the concat, then apply again
 
@@ -2241,7 +2241,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     assert all(arg.npartitions == args[0].npartitions
                for arg in args if isinstance(arg, _Frame))
 
-    token_key = tokenize(token or (chunk, aggregate), columns, *args)
+    token_key = tokenize(token or (chunk, aggregate), meta, *args)
     token = token or 'apply-concat-apply'
 
     a = '{0}--first-{1}'.format(token, token_key)
@@ -2262,14 +2262,15 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     else:
         dsk2 = {(b, 0): (apply, aggregate, [conc], aggregate_kwargs)}
 
-    if columns is no_default:
+    if meta is no_default:
+        # TODO: handle this!
         return_type = type(args[0])
-        columns = None
+        meta = None
     else:
-        return_type = _get_return_type(args[0], columns)
+        return_type = _get_return_type(args[0], meta)
 
     dasks = [a.dask for a in args if isinstance(a, _Frame)]
-    return return_type(merge(dsk, dsk2, *dasks), b, columns, [None, None])
+    return return_type(merge(dsk, dsk2, *dasks), b, meta, [None, None])
 
 
 aca = apply_concat_apply

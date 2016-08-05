@@ -218,8 +218,8 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        dummy = func(self._pd)
-        columns = dummy.name if isinstance(dummy, pd.Series) else dummy.columns
+        meta = func(self._pd)
+        columns = meta.name if isinstance(meta, pd.Series) else meta.columns
 
         token = self._token_prefix + token
 
@@ -232,7 +232,7 @@ class _GroupBy(object):
 
         return aca([self.obj, self.index, func, columns],
                    chunk=_apply_chunk, aggregate=agg,
-                   columns=dummy, token=token)
+                   meta=meta, token=token)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
@@ -262,8 +262,8 @@ class _GroupBy(object):
         if isinstance(meta, pd.Series):
             meta = meta.to_frame()
         meta = meta.groupby(self.index).var(ddof=1)
-        result = aca([self.obj, self.index], _var_chunk,
-                     partial(_var_agg, ddof=ddof), meta,
+        result = aca([self.obj, self.index], chunk=_var_chunk,
+                     aggregate=partial(_var_agg, ddof=ddof), meta=meta,
                      token=self._token_prefix + 'var')
 
         if isinstance(self.obj, Series):
@@ -283,12 +283,12 @@ class _GroupBy(object):
     def get_group(self, key):
         token = self._token_prefix + 'get_group'
 
-        dummy = self._pd.obj
-        if isinstance(dummy, pd.DataFrame) and self._slice is not None:
-            dummy = dummy[self._slice]
-        columns = dummy.columns if isinstance(dummy, pd.DataFrame) else dummy.name
+        meta = self._pd.obj
+        if isinstance(meta, pd.DataFrame) and self._slice is not None:
+            meta = meta[self._slice]
+        columns = meta.columns if isinstance(meta, pd.DataFrame) else meta.name
 
-        return map_partitions(_groupby_get_group, dummy, self.obj,
+        return map_partitions(_groupby_get_group, meta, self.obj,
                               self.index, key, columns, token=token)
 
     def apply(self, func, meta=no_default, columns=no_default):
@@ -462,7 +462,7 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_df_chunk, aggregate=agg,
-                       columns=meta, token='series-groupby-nunique')
+                       meta=meta, token='series-groupby-nunique')
         else:
 
             def agg(df):
@@ -470,4 +470,4 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_series_chunk, aggregate=agg,
-                       columns=meta, token='series-groupby-nunique')
+                       meta=meta, token='series-groupby-nunique')

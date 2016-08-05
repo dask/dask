@@ -130,23 +130,23 @@ def test_usecols():
 ####################
 
 
-def test_dummy_from_array():
+def test_meta_from_array():
     x = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res[0].dtype == np.int64
     assert res[1].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index([0, 1]))
 
     x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
-    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    res = dd.io._meta_from_array(x, columns=['a', 'b'])
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.float64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
     with pytest.raises(ValueError):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
     np.random.seed(42)
     x = np.random.rand(201, 2)
@@ -154,45 +154,45 @@ def test_dummy_from_array():
     assert len(x.divisions) == 6 # Should be 5 partitions and the end
 
 
-def test_dummy_from_1darray():
+def test_meta_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.Series)
     assert res.dtype == np.float64
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns='x')
+    res = dd.io._meta_from_array(x, columns='x')
     assert isinstance(res, pd.Series)
     assert res.name == 'x'
     assert res.dtype == np.object_
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns=['x'])
+    res = dd.io._meta_from_array(x, columns=['x'])
     assert isinstance(res, pd.DataFrame)
     assert res['x'].dtype == np.object_
     tm.assert_index_equal(res.columns, pd.Index(['x']))
 
     with pytest.raises(ValueError):
-        dd.io._dummy_from_array(x, columns=['a', 'b'])
+        dd.io._meta_from_array(x, columns=['a', 'b'])
 
 
-def test_dummy_from_recarray():
+def test_meta_from_recarray():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    res = dd.io._dummy_from_array(x, columns=['b', 'a'])
+    res = dd.io._meta_from_array(x, columns=['b', 'a'])
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['b', 'a']))
 
     with pytest.raises(ValueError):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
 
 def test_from_array():

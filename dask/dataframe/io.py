@@ -35,7 +35,7 @@ from ..bytes.core import write_bytes, write_block_to_file
 lock = Lock()
 
 
-def _dummy_from_array(x, columns=None):
+def _meta_from_array(x, columns=None):
     """ Create empty pd.DataFrame or pd.Series which has correct dtype """
 
     if x.ndim > 2:
@@ -94,7 +94,7 @@ def from_array(x, chunksize=50000, columns=None):
     if isinstance(x, da.Array):
         return from_dask_array(x, columns=columns)
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
@@ -104,11 +104,11 @@ def from_array(x, chunksize=50000, columns=None):
     dsk = {}
     for i in range(0, int(ceil(len(x) / chunksize))):
         data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, data, None, dummy.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, data, None, dummy.columns)
-    return _Frame(dsk, name, dummy, divisions)
+            dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
+    return _Frame(dsk, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -366,7 +366,7 @@ def from_dask_array(x, columns=None):
     3  1.0  1.0
     """
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
@@ -386,12 +386,12 @@ def from_dask_array(x, columns=None):
         if x.ndim == 2:
             chunk = chunk[0]
 
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, chunk, ind, dummy.columns)
+            dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return _Frame(merge(x.dask, dsk), name, dummy, divisions)
+    return _Frame(merge(x.dask, dsk), name, meta, divisions)
 
 
 def from_castra(x, columns=None):
