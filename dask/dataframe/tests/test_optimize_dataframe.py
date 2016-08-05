@@ -36,6 +36,7 @@ def test_column_optimizations_with_bcolz_and_rewrite():
         assert result == expected
 
 
+@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_castra_column_store():
     castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
