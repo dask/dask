@@ -80,7 +80,12 @@ def order(dsk, dependencies=None):
 
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
-    return dfs(dependencies, dependents, key=lambda x: (-maxes.get(x), str(x)))
+    def key(x):
+        try:
+            return -maxes[x], str(x)
+        except KeyError:
+            return 0, str(x)
+    return dfs(dependencies, dependents, key=key)
 
 
 def ndependents(dependencies, dependents):
@@ -166,7 +171,7 @@ def dfs(dependencies, dependents, key=lambda x: x):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(dfs(dependencies, dependents).items())
-    [('a', 2), ('b', 3), ('c', 1), ('d', 0)]
+    [('a', 3), ('b', 1), ('c', 2), ('d', 0)]
     """
     result = dict()
     i = 0
