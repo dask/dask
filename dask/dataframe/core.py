@@ -780,7 +780,25 @@ class _Frame(Base):
             return self._aca_agg(token='min', func=_min,
                                  skipna=skipna, axis=axis)
 
-    def _idxmaxmin(self, fn, axis=None, skipna=True):
+    @staticmethod
+    def idxmaxmin_chunk(x, **kwargs):
+        fn = kwargs['fn']
+        idx = getattr(x, fn)()
+        minmax = 'max' if fn == 'idxmax' else 'min'
+        value = getattr(x, minmax)()
+        n = len(x)
+        return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)})
+
+    @staticmethod
+    def idxmaxmin_agg(x, **kwargs):
+        print(x)
+        idx = getattr(x.value, kwargs['fn'])()
+        if kwargs['known_divisions'] == True:
+            return x.idx.iloc[idx]
+        else:
+            return x.n.iloc[:idx-1].sum() + x.idx.iloc[idx]
+
+    def idxmaxmin(self, fn, axis=None, skipna=True):
         if fn == 'idxmax':
             idxfn = _idxmax
         elif fn == 'idxmin':
@@ -794,30 +812,18 @@ class _Frame(Base):
                                   token=self._token_prefix + fn,
                                   skipna=skipna, axis=axis)
         else:
-            def chunk(x):
-                idx = getattr(x, fn)()
-                value = x.iloc[idx]
-                n = len(x)
-                return pd.DataFrame([[idx, value, n]], columns=['idx','value', 'n'])
 
-            def agg(x, **kwargs):
-                print(x)
-                idx = getattr(x.value, fn)()
-                if self.known_divisions == True:
-                    return x.idx.iloc[idx]
-                else:
-                    return x.n.iloc[:idx-1].sum() + x.idx.iloc[idx]
-
-            return aca([self], chunk=chunk, aggregate=agg,
-                       columns=['idx','value', 'n'], token=self._token_prefix + fn)
+            return aca([self], chunk=self.idxmaxmin_chunk, aggregate=self.idxmaxmin_agg,
+                       columns=['idx','value', 'n'], token=self._token_prefix + fn,
+                       known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True):
-        return self._idxmaxmin('idxmax', axis=axis, skipna=skipna)
+        return self.idxmaxmin('idxmax', axis=axis, skipna=skipna)
 
     @derived_from(pd.DataFrame)
     def idxmin(self, axis=None, skipna=True):
-        return self._idxmaxmin('idxmin', axis=axis, skipna=skipna)
+        return self.idxmaxmin('idxmin', axis=axis, skipna=skipna)
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
