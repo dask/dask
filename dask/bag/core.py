@@ -1011,10 +1011,15 @@ class Bag(Base):
 
         Parameters
         ----------
-        columns : list or pandas.DataFrame, optional
-            If a list, provides the desired column names. If a
-            ``pandas.DataFrame``, it should mirror the column names and dtypes
-            of the output dataframe. If not provided, these will be computed.
+        columns : pandas.DataFrame or list, optional
+            If a ``pandas.DataFrame``, it should mirror the column names and
+            dtypes of the output dataframe. If a list, it provides the desired
+            column names. If not provided or a list, a single element from
+            the first partition will be computed, triggering a potentially
+            expensive call to ``compute``. Providing a list is only useful for
+            selecting subset of columns, to avoid an internal compute call you
+            must provide a ``pandas.DataFrame`` as dask requires dtype knowledge
+            ahead of time.
 
         Examples
         --------
