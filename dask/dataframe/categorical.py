@@ -36,7 +36,7 @@ def categorize(df, columns=None, **kwargs):
 
     func = partial(_categorize_block, categories=dict(zip(columns, values)))
 
-    meta = func(df._pd)
+    meta = func(df._meta)
     return df.map_partitions(func, meta=meta)
 
 

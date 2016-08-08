@@ -120,8 +120,8 @@ def make_meta(meta, index=None):
     >>> make_meta(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     """
-    if hasattr(meta, '_pd'):
-        return meta._pd
+    if hasattr(meta, '_meta'):
+        return meta._meta
     if isinstance(meta, (pd.Series, pd.DataFrame)):
         return meta.iloc[0:0]
     elif isinstance(meta, pd.Index):
@@ -207,7 +207,7 @@ def _nonempty_series(s, idx):
     return pd.Series([entry, entry], name=s.name, index=idx)
 
 
-def nonempty_pd(x):
+def meta_nonempty(x):
     """Create a nonempty pandas object from the given metadata.
 
     Returns a pandas DataFrame, Series, or Index that contains two rows
@@ -241,9 +241,9 @@ def _check_dask(dsk, check_names=True, check_dtypes=True):
             if check_names:
                 assert dsk.name == result.name
             # cache
-            assert isinstance(dsk._pd, pd.Index), type(dsk._pd)
+            assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
             if check_names:
-                assert dsk._pd.name == result.name
+                assert dsk._meta.name == result.name
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
@@ -251,9 +251,9 @@ def _check_dask(dsk, check_names=True, check_dtypes=True):
             if check_names:
                 assert dsk.name == result.name, (dsk.name, result.name)
             # cache
-            assert isinstance(dsk._pd, pd.Series), type(dsk._pd)
+            assert isinstance(dsk._meta, pd.Series), type(dsk._meta)
             if check_names:
-                assert dsk._pd.name == result.name
+                assert dsk._meta.name == result.name
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.DataFrame):
@@ -262,9 +262,9 @@ def _check_dask(dsk, check_names=True, check_dtypes=True):
             if check_names:
                 tm.assert_index_equal(dsk.columns, result.columns)
             # cache
-            assert isinstance(dsk._pd, pd.DataFrame), type(dsk._pd)
+            assert isinstance(dsk._meta, pd.DataFrame), type(dsk._meta)
             if check_names:
-                tm.assert_index_equal(dsk._pd.columns, result.columns)
+                tm.assert_index_equal(dsk._meta.columns, result.columns)
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.core.Scalar):
@@ -373,10 +373,10 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
     eq_types = {'i', 'f'} if numeric_equal else {}
 
     if isinstance(res, pd.DataFrame):
-        for col, a, b in pd.concat([ddf._pd.dtypes, res.dtypes],
+        for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes],
                                    axis=1).itertuples():
             assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
     elif isinstance(res, (pd.Series, pd.Index)):
-        a = ddf._pd.dtype
+        a = ddf._meta.dtype
         b = res.dtype
         assert (a.kind in eq_types and b.kind in eq_types) or (a == b)

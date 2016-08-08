@@ -204,8 +204,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._pd_nonempty
-    right_empty = rhs._pd_nonempty
+    left_empty = lhs._meta_nonempty
+    right_empty = rhs._meta_nonempty
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
 
@@ -274,7 +274,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # dummy result
-    meta = pd.merge(lhs._pd_nonempty, rhs._pd_nonempty, how, None,
+    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how, None,
                     left_on=left_on, right_on=right_on,
                     left_index=left_index, right_index=right_index,
                     suffixes=suffixes)
@@ -303,7 +303,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
 
 
 def single_partition_join(left, right, **kwargs):
-    meta = pd.merge(left._pd_nonempty, right._pd_nonempty, **kwargs)
+    meta = pd.merge(left._meta_nonempty, right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
         left_key = first(left._keys())
@@ -368,7 +368,7 @@ def concat_unindexed_dataframes(dfs):
     dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
             for i in range(dfs[0].npartitions)}
 
-    meta = pd.concat([df._pd for df in dfs], axis=1)
+    meta = pd.concat([df._meta for df in dfs], axis=1)
 
     return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                   name, meta, dfs[0].divisions)
@@ -385,7 +385,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
     dfs = _maybe_from_pandas(dfs)
     dfs2, divisions, parts = align_partitions(*dfs)
-    empties = [df._pd for df in dfs]
+    empties = [df._meta for df in dfs]
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
@@ -454,8 +454,8 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # One side is indexed, the other not
     elif (left_index and left.known_divisions and not right_index or
           right_index and right.known_divisions and not left_index):
-        left_empty = left._pd_nonempty
-        right_empty = right._pd_nonempty
+        left_empty = left._meta_nonempty
+        right_empty = right._meta_nonempty
         meta = pd.merge(left_empty, right_empty, how=how, on=on,
                         left_on=left_on, right_on=right_on,
                         left_index=left_index, right_index=right_index,
@@ -487,7 +487,7 @@ def _concat_dfs(dfs, name, join='outer'):
     dsk = dict()
     i = 0
 
-    empties = [df._pd for df in dfs]
+    empties = [df._meta for df in dfs]
     meta = pd.concat(empties, axis=0, join=join)
 
     if isinstance(meta, pd.Series):
@@ -663,7 +663,7 @@ def _append(df, other, divisions):
     for j in range(other.npartitions):
         dsk[(name, npart + j)] = (other._name, j)
     dsk = toolz.merge(dsk, df.dask, other.dask)
-    meta = df._pd.append(other._pd)
+    meta = df._meta.append(other._meta)
     return _Frame(dsk, name, meta, divisions)
 
 

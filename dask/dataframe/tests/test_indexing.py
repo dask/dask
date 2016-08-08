@@ -87,13 +87,13 @@ def test_getitem():
     ddf = dd.from_pandas(df, 2)
     assert eq(ddf['A'], df['A'])
     # check cache consistency
-    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A'])
+    tm.assert_series_equal(ddf['A']._meta, ddf._meta['A'])
 
     assert eq(ddf[['A', 'B']], df[['A', 'B']])
-    tm.assert_frame_equal(ddf[['A', 'B']]._pd, ddf._pd[['A', 'B']])
+    tm.assert_frame_equal(ddf[['A', 'B']]._meta, ddf._meta[['A', 'B']])
 
     assert eq(ddf[ddf.C], df[df.C])
-    tm.assert_series_equal(ddf.C._pd, ddf._pd.C)
+    tm.assert_series_equal(ddf.C._meta, ddf._meta.C)
 
     assert eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
 

@@ -175,12 +175,12 @@ class _GroupBy(object):
             # if group key (index) is a Series sliced from DataFrame,
             # emulation must be performed as the same.
             # otherwise, group key is regarded as a separate column
-            self._pd = self.obj._pd.groupby(self.obj._pd[index.name])
+            self._meta = self.obj._meta.groupby(self.obj._meta[index.name])
 
         elif isinstance(self.index, Series):
-            self._pd = self.obj._pd.groupby(self.index._pd)
+            self._meta = self.obj._meta.groupby(self.index._meta)
         else:
-            self._pd = self.obj._pd.groupby(self.index)
+            self._meta = self.obj._meta.groupby(self.index)
 
     def _is_grouped_by_sliced_column(self, df, index):
         """
@@ -202,12 +202,12 @@ class _GroupBy(object):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
-        sample = self.obj.head() if head else self.obj._pd_nonempty
+        sample = self.obj.head() if head else self.obj._meta_nonempty
         if isinstance(self.index, Series):
             if self._is_grouped_by_sliced_column(self.obj, self.index):
                 grouped = sample.groupby(sample[self.index.name])
             else:
-                index = self.index.head() if head else self.index._pd_nonempty
+                index = self.index.head() if head else self.index._meta_nonempty
                 grouped = sample.groupby(index)
         else:
             grouped = sample.groupby(self.index)
@@ -218,7 +218,7 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._pd)
+        meta = func(self._meta)
         columns = meta.name if isinstance(meta, pd.Series) else meta.columns
 
         token = self._token_prefix + token
@@ -258,7 +258,7 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1):
         from functools import partial
-        meta = self.obj._pd
+        meta = self.obj._meta
         if isinstance(meta, pd.Series):
             meta = meta.to_frame()
         meta = meta.groupby(self.index).var(ddof=1)
@@ -283,7 +283,7 @@ class _GroupBy(object):
     def get_group(self, key):
         token = self._token_prefix + 'get_group'
 
-        meta = self._pd.obj
+        meta = self._meta.obj
         if isinstance(meta, pd.DataFrame) and self._slice is not None:
             meta = meta[self._slice]
         columns = meta.columns if isinstance(meta, pd.DataFrame) else meta.name
@@ -410,7 +410,7 @@ class DataFrameGroupBy(_GroupBy):
                               slice=key, **self.kwargs)
 
         # error is raised from pandas
-        g._pd = g._pd[key]
+        g._meta = g._meta[key]
         return g
 
     def __dir__(self):
@@ -440,7 +440,7 @@ class SeriesGroupBy(_GroupBy):
                     msg = "Grouper for '{0}' not 1-dimensional"
                     raise ValueError(msg.format(index[0]))
                 # raise error from pandas
-                df._pd.groupby(index)
+                df._meta.groupby(index)
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 
@@ -450,9 +450,9 @@ class SeriesGroupBy(_GroupBy):
         return self._slice
 
     def nunique(self):
-        name = self._pd.obj.name
+        name = self._meta.obj.name
         meta = pd.Series([], dtype='int64',
-                         index=pd.Index([], dtype=self._pd.obj.dtype),
+                         index=pd.Index([], dtype=self._meta.obj.dtype),
                          name=name)
 
         if isinstance(self.obj, DataFrame):

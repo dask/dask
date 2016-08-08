@@ -109,7 +109,7 @@ class Resampler(object):
                               rule, kwargs, how, fill_value)
 
         # Infer output metadata
-        meta_r = self.obj._pd_nonempty.resample(self._rule, **self._kwargs)
+        meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
         meta = getattr(meta_r, how)()
 
         if isinstance(meta, pd.DataFrame):

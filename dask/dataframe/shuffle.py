@@ -196,14 +196,14 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     # Collect groups
     name = 'shuffle-collect-' + token
-    dsk4 = {(name, i): (collect, p, i, df._pd, barrier_token)
+    dsk4 = {(name, i): (collect, p, i, df._meta, barrier_token)
                 for i in range(npartitions)}
 
     divisions = (None,) * (npartitions + 1)
 
     dsk = merge(dsk, dsk1, dsk3, dsk4)
 
-    return DataFrame(dsk, name, df._pd, divisions)
+    return DataFrame(dsk, name, df._meta, divisions)
 
 
 def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
@@ -235,7 +235,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     token = tokenize(df, column, max_branch)
 
     start = dict((('shuffle-join-' + token, 0, inp),
-                  (df._name, i) if i < df.npartitions else df._pd)
+                  (df._name, i) if i < df.npartitions else df._meta)
                  for i, inp in enumerate(inputs))
 
     for stage in range(1, stages + 1):

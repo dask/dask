@@ -279,7 +279,7 @@ def test_rename_columns():
     ddf.columns = ['x', 'y']
     df.columns = ['x', 'y']
     tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
-    tm.assert_index_equal(ddf._pd.columns, pd.Index(['x', 'y']))
+    tm.assert_index_equal(ddf._meta.columns, pd.Index(['x', 'y']))
     assert eq(ddf, df)
 
     msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
@@ -1370,10 +1370,10 @@ def test_deterministic_apply_concat_apply_names():
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
-    assert (sorted(aca(a.x, f, f, a.x._pd).dask) !=
-            sorted(aca(a.x, f2, f2, a.x._pd).dask))
-    assert (sorted(aca(a.x, f, f, a.x._pd).dask) ==
-            sorted(aca(a.x, f, f, a.x._pd).dask))
+    assert (sorted(aca(a.x, f, f, a.x._meta).dask) !=
+            sorted(aca(a.x, f2, f2, a.x._meta).dask))
+    assert (sorted(aca(a.x, f, f, a.x._meta).dask) ==
+            sorted(aca(a.x, f, f, a.x._meta).dask))
 
 
 def test_gh_517():
