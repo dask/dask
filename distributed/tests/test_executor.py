@@ -3265,3 +3265,24 @@ def test_stress_creation_and_deletion(e, s):
             print("Killed nanny")
 
     yield [create_and_destroy_worker(0.1 * i) for i in range(10)]
+
+
+@gen_test()
+def test_status():
+    s = Scheduler()
+    s.start(0)
+
+    e = Executor((s.ip, s.port), start=False)
+    assert e.status != 'running'
+
+    with pytest.raises(Exception):
+        x = e.submit(inc, 1)
+
+    yield e._start()
+    assert e.status == 'running'
+    x = e.submit(inc, 1)
+
+    yield e._shutdown()
+    assert e.status == 'closed'
+
+    yield s.close()

@@ -302,6 +302,9 @@ class Executor(object):
         self.status = 'running'
 
     def _send_to_scheduler(self, msg):
+        if self.status is not 'running':
+            raise Exception("Executor not running.  Status: %s" % self.status)
+
         self.loop.add_callback(self.scheduler_stream.send, msg)
 
     @gen.coroutine
@@ -336,6 +339,7 @@ class Executor(object):
 
         _global_executor[0] = self
         yield start_event.wait()
+        self.status = 'running'
         logger.debug("Started scheduling coroutines. Synchronized")
 
     def __enter__(self):
@@ -435,8 +439,8 @@ class Executor(object):
         """ Send shutdown signal and wait until scheduler completes """
         if self.status == 'closed':
             raise Return()
-        self.status = 'closed'
         self._send_to_scheduler({'op': 'close-stream'})
+        self.status = 'closed'
         if _global_executor[0] is self:
             _global_executor[0] = None
         if not fast:
