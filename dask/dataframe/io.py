@@ -187,7 +187,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     return _Frame(dsk, name, data, divisions)
 
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
+def from_bcolz(x, chunksize=None, categorize=True, usecols=None, index=None, lock=lock,
                **kwargs):
     """ Read dask Dataframe from bcolz.ctable
 
@@ -200,6 +200,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
         comfortably fit in memory
     categorize : bool, defaults to True
         Automatically categorize all string dtypes
+    usecols: list of column names or None
     index : string, optional
         Column to make the index
     lock: bool or Lock
@@ -217,20 +218,21 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
 
     if isinstance(x, (str, unicode)):
         x = bcolz.ctable(rootdir=x)
-    bc_chunklen = max(x[name].chunklen for name in x.names)
+    xnames = usecols if usecols else x.names
+    bc_chunklen = max(x[name].chunklen for name in xnames)
     if chunksize is None and bc_chunklen > 10000:
         chunksize = bc_chunklen
 
     categories = dict()
     if categorize:
-        for name in x.names:
+        for name in xnames:
             if (np.issubdtype(x.dtype[name], np.string_) or
                 np.issubdtype(x.dtype[name], np.unicode_) or
                 np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
+                a = da.from_array(x[name], chunks=(chunksize * len(xnames),))
                 categories[name] = da.unique(a)
 
-    columns = tuple(x.dtype.names)
+    columns = tuple(xnames)
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
     if x.rootdir:
@@ -252,8 +254,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
     result = DataFrame(dsk, new_name, meta, divisions)
 
     if index:
-        assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
+        assert index in xnames
+        a = da.from_array(x[index], chunks=(chunksize * len(xnames),))
         q = np.linspace(0, 100, len(x) // chunksize + 2)
         divisions = tuple(da.percentile(a, q).compute())
         return set_partition(result, index, divisions, **kwargs)
