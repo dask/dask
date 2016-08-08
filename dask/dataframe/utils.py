@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
 
-from collections import Iterator
+from collections import Iterator, Iterable
 import sys
 
 import numpy as np
@@ -101,14 +101,24 @@ def make_meta(meta, index=None):
 
     Parameters
     ----------
-    meta : dict, tuple, pd.Series, pd.DataFrame, pd.Index, scalar
-        To create a DataFrame, provide a `dict` mapping of `{name: dtype}`. To
-        create a `Series`, provide a tuple of `(name, dtype)`. If a pandas
-        object, names, dtypes, and index should match the desired output. If a
-        scalar, a numpy scalar of the same dtype is returned.
+    meta : dict, tuple, iterable, pd.Series, pd.DataFrame, pd.Index, scalar
+        To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
+        an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
+        tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
+        should match the desired output. If a scalar, a numpy scalar of the
+        same dtype is returned.
     index :  pd.Index, optional
         Any pandas index to use in the metadata. If none provided, a
         `RangeIndex` will be used.
+
+    Examples
+    --------
+    >>> make_meta([('a', 'i8'), ('b', 'O')])
+    Empty DataFrame
+    Columns: [a, b]
+    Index: []
+    >>> make_meta(('a', 'f8'))
+    Series([], Name: a, dtype: float64)
     """
     if hasattr(meta, '_pd'):
         return meta._pd
@@ -121,11 +131,15 @@ def make_meta(meta, index=None):
         return pd.DataFrame({c: pd.Series([], dtype=d)
                              for (c, d) in meta.items()},
                             index=index)
-    elif isinstance(meta, tuple):
-        if len(meta) != 2:
-            raise ValueError("Expected tuple of (name, dtype), "
-                             "got {0}".format(meta))
+    elif isinstance(meta, tuple) and len(meta) == 2:
         return pd.Series([], dtype=meta[1], name=meta[0], index=index)
+    elif isinstance(meta, Iterable):
+        meta = list(meta)
+        if not all(isinstance(i, tuple) and len(i) == 2 for i in meta):
+            raise ValueError("Expected iterable of tuples of (name, dtype), "
+                             "got {0}".format(meta))
+        return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in meta},
+                            columns=[c for c, d in meta], index=index)
     elif hasattr(meta, 'dtype'):
         return np.array([], dtype=meta.dtype)
     else:
