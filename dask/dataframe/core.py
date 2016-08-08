@@ -292,8 +292,8 @@ class _Frame(Base):
             instead of a dataframe, or a tuple instead of a series. If a dict,
             should be a mapping of column name to dtype. If a tuple, should be
             length 2 with name and dtype. If not provided, dask will try to
-            infer the metadata. This may take some time, and lead to unexpected
-            results, so providing `meta` is recommended.
+            infer the metadata. This may lead to unexpected results, so
+            providing `meta` is recommended.
 
         Examples
         --------
@@ -1409,8 +1409,8 @@ class Series(_Frame):
             instead of a dataframe, or a tuple instead of a series. If a dict,
             should be a mapping of column name to dtype. If a tuple, should be
             length 2 with name and dtype. If not provided, dask will try to
-            infer the metadata. This may take some time, and lead to unexpected
-            results, so providing `meta` is recommended.
+            infer the metadata. This may lead to unexpected results, so
+            providing `meta` is recommended.
         name: list, scalar or None, optional
             Deprecated, use `meta` instead. If list is given, the result is a
             DataFrame which columns is specified list. Otherwise, the result is
@@ -1444,14 +1444,9 @@ class Series(_Frame):
                 meta = _emulate(pd.Series.apply, self._meta_nonempty, func,
                                 convert_dtype=convert_dtype,
                                 args=args, **kwds)
-            except:
-                try:
-                    meta = _emulate(pd.Series.apply, self.head(), func,
-                                    convert_dtype=convert_dtype,
-                                    args=args, **kwds)
-                except:
-                    raise ValueError("Metadata inference failed, please"
-                                     "provide `meta` keyword")
+            except Exception:
+                raise ValueError("Metadata inference failed, please provide "
+                                 "`meta` keyword")
 
         return map_partitions(pd.Series.apply, meta, self, func,
                               convert_dtype, args, **kwds)
@@ -1980,8 +1975,8 @@ class DataFrame(_Frame):
             instead of a dataframe, or a tuple instead of a series. If a dict,
             should be a mapping of column name to dtype. If a tuple, should be
             length 2 with name and dtype. If not provided, dask will try to
-            infer the metadata. This may take some time, and lead to unexpected
-            results, so providing `meta` is recommended.
+            infer the metadata. This may lead to unexpected results, so
+            providing `meta` is recommended.
         columns: list, scalar or None
             Deprecated, please use `meta` instead. If list is given, the result
             is a DataFrame which columns is specified list. Otherwise, the
@@ -2022,13 +2017,9 @@ class DataFrame(_Frame):
             try:
                 meta = _emulate(pd.DataFrame.apply, self._meta_nonempty, func,
                                 axis=axis, args=args, **kwds)
-            except:
-                try:
-                    meta = _emulate(pd.DataFrame.apply, self.head(), func,
-                                    axis=axis, args=args, **kwds)
-                except:
-                    raise ValueError("Metadata inference failed, please"
-                                     "provide `meta` keyword")
+            except Exception:
+                raise ValueError("Metadata inference failed, please provide "
+                                 "`meta` keyword")
 
         return map_partitions(pd.DataFrame.apply, meta, self, func, axis,
                               False, False, None, args, **kwds)

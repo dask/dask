@@ -96,12 +96,12 @@ def unique(divisions):
     raise NotImplementedError()
 
 
-def make_meta(meta, index=None):
+def make_meta(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
     Parameters
     ----------
-    meta : dict, tuple, iterable, pd.Series, pd.DataFrame, pd.Index, scalar
+    x : dict, tuple, iterable, pd.Series, pd.DataFrame, pd.Index, scalar
         To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
         an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
         tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
@@ -120,30 +120,30 @@ def make_meta(meta, index=None):
     >>> make_meta(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     """
-    if hasattr(meta, '_meta'):
-        return meta._meta
-    if isinstance(meta, (pd.Series, pd.DataFrame)):
-        return meta.iloc[0:0]
-    elif isinstance(meta, pd.Index):
-        return meta[0:0]
+    if hasattr(x, '_meta'):
+        return x._meta
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        return x.iloc[0:0]
+    elif isinstance(x, pd.Index):
+        return x[0:0]
     index = index if index is None else index[0:0]
-    if isinstance(meta, dict):
+    if isinstance(x, dict):
         return pd.DataFrame({c: pd.Series([], dtype=d)
-                             for (c, d) in meta.items()},
+                             for (c, d) in x.items()},
                             index=index)
-    elif isinstance(meta, tuple) and len(meta) == 2:
-        return pd.Series([], dtype=meta[1], name=meta[0], index=index)
-    elif isinstance(meta, Iterable):
-        meta = list(meta)
-        if not all(isinstance(i, tuple) and len(i) == 2 for i in meta):
+    elif isinstance(x, tuple) and len(x) == 2:
+        return pd.Series([], dtype=x[1], name=x[0], index=index)
+    elif isinstance(x, Iterable):
+        x = list(x)
+        if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError("Expected iterable of tuples of (name, dtype), "
-                             "got {0}".format(meta))
-        return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in meta},
-                            columns=[c for c, d in meta], index=index)
-    elif hasattr(meta, 'dtype'):
-        return np.array([], dtype=meta.dtype)
+                             "got {0}".format(x))
+        return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
+                            columns=[c for c, d in x], index=index)
+    elif hasattr(x, 'dtype'):
+        return np.array([], dtype=x.dtype)
     else:
-        raise TypeError("Expected dict or tuple, got {0}".format(meta))
+        raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
 def _nonempty_index(idx):

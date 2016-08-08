@@ -198,21 +198,20 @@ class _GroupBy(object):
             return True
         return False
 
-    def _sample(self, head=False):
+    @property
+    def _meta_nonempty(self):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
-        sample = self.obj.head() if head else self.obj._meta_nonempty
+        sample = self.obj._meta_nonempty
         if isinstance(self.index, Series):
             if self._is_grouped_by_sliced_column(self.obj, self.index):
                 grouped = sample.groupby(sample[self.index.name])
             else:
-                index = self.index.head() if head else self.index._meta_nonempty
-                grouped = sample.groupby(index)
+                grouped = sample.groupby(self.index._meta_nonempty)
         else:
             grouped = sample.groupby(self.index)
-        grouped = _maybe_slice(grouped, self._slice)
-        return grouped
+        return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None):
         if aggfunc is None:
@@ -310,8 +309,8 @@ class _GroupBy(object):
             instead of a dataframe, or a tuple instead of a series. If a dict,
             should be a mapping of column name to dtype. If a tuple, should be
             length 2 with name and dtype. If not provided, dask will try to
-            infer the metadata. This may take some time, and lead to unexpected
-            results, so providing `meta` is recommended.
+            infer the metadata. This may lead to unexpected results, so
+            providing `meta` is recommended.
         columns: list, scalar or None
             Deprecated, use `meta` instead. If list is given, the result is a
             DataFrame which columns is specified list. Otherwise, the result is
@@ -337,13 +336,10 @@ class _GroupBy(object):
             warnings.warn(msg)
 
             try:
-                meta = self._sample().apply(func)
+                meta = self._meta_nonempty.apply(func)
             except:
-                try:
-                    meta = self._sample(head=True).apply(func)
-                except:
-                    raise ValueError("Metadata inference failed, please"
-                                     "provide `meta` keyword")
+                raise ValueError("Metadata inference failed, please provide "
+                                 "`meta` keyword")
         else:
             meta = make_meta(meta)
 
