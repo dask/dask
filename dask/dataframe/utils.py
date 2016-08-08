@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import textwrap
 from distutils.version import LooseVersion
 
 from collections import Iterator, Iterable
@@ -94,6 +95,37 @@ def unique(divisions):
     if isinstance(divisions, (tuple, list, Iterator)):
         return tuple(toolz.unique(divisions))
     raise NotImplementedError()
+
+
+_META_TYPES = "meta : pd.DataFrame, pd.Series, dict, iterable, tuple, optional"
+_META_DESCRIPTION = """\
+An empty ``pd.DataFrame`` or ``pd.Series`` that matches the dtypes and
+column names of the output. This metadata is necessary for many algorithms
+in dask dataframe to work.  For ease of use, some alternative inputs are
+also available. Instead of a ``DataFrame``, a ``dict`` of ``{name: dtype}``
+or iterable of ``(name, dtype)`` can be provided. Instead of a series, a
+tuple of ``(name, dtype)`` can be used. If not provided, dask will try to
+infer the metadata. This may lead to unexpected results, so providing
+``meta`` is recommended. For more information, see
+``dask.dataframe.utils.make_meta``.
+"""
+
+
+def insert_meta_param_description(*args, **kwargs):
+    """Replace `$META` in docstring with param description.
+
+    If pad keyword is provided, will pad description by that number of
+    spaces (default is 8)."""
+    if not args:
+        return lambda f: insert_meta_param_description(f, **kwargs)
+    f = args[0]
+    if f.__doc__:
+        indent = " "*kwargs.get('pad', 8)
+        body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
+                             subsequent_indent=indent, width=78)
+        descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
+        f.__doc__ = f.__doc__.replace('$META', descr)
+    return f
 
 
 def make_meta(x, index=None):

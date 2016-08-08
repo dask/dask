@@ -7,7 +7,7 @@ import pandas as pd
 
 from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
-from .utils import make_meta
+from .utils import make_meta, insert_meta_param_description
 from ..utils import derived_from
 
 
@@ -275,7 +275,7 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def std(self, ddof=1):
         v = self.var(ddof)
-        result = map_partitions(np.sqrt, v, v)
+        result = map_partitions(np.sqrt, v, meta=v)
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -287,9 +287,10 @@ class _GroupBy(object):
             meta = meta[self._slice]
         columns = meta.columns if isinstance(meta, pd.DataFrame) else meta.name
 
-        return map_partitions(_groupby_get_group, meta, self.obj,
-                              self.index, key, columns, token=token)
+        return map_partitions(_groupby_get_group, self.obj, self.index, key,
+                              columns, meta=meta, token=token)
 
+    @insert_meta_param_description(pad=12)
     def apply(self, func, meta=no_default, columns=no_default):
         """ Parallel version of pandas GroupBy.apply
 
@@ -303,14 +304,7 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
-        meta: pd.DataFrame, pd.Series, dict, tuple, optional
-            Metadata describing the output DataFrame or Series. Should have
-            matching names and dtypes. For ease of use, can also pass in a dict
-            instead of a dataframe, or a tuple instead of a series. If a dict,
-            should be a mapping of column name to dtype. If a tuple, should be
-            length 2 with name and dtype. If not provided, dask will try to
-            infer the metadata. This may lead to unexpected results, so
-            providing `meta` is recommended.
+        $META
         columns: list, scalar or None
             Deprecated, use `meta` instead. If list is given, the result is a
             DataFrame which columns is specified list. Otherwise, the result is
@@ -372,8 +366,8 @@ class _GroupBy(object):
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
-        df5 = map_partitions(_groupby_slice_apply, meta, df4, index2,
-                             self._slice, func)
+        df5 = map_partitions(_groupby_slice_apply, df4, index2,
+                             self._slice, func, meta=meta)
 
         return df5
 

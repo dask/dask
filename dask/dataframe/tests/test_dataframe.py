@@ -422,9 +422,9 @@ def test_where_mask():
 
 
 def test_map_partitions_multi_argument():
-    assert eq(dd.map_partitions(lambda a, b: a + b, None, d.a, d.b),
+    assert eq(dd.map_partitions(lambda a, b: a + b, d.a, d.b),
               full.a + full.b)
-    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, None, d.a, d.b, 1),
+    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, d.a, d.b, 1),
               full.a + full.b + 1)
 
 
@@ -437,37 +437,37 @@ def test_map_partitions():
 
 def test_map_partitions_names():
     func = lambda x: x
-    assert sorted(dd.map_partitions(func, d, d).dask) == \
-           sorted(dd.map_partitions(func, d, d).dask)
-    assert sorted(dd.map_partitions(lambda x: x, d, d, token=1).dask) == \
-           sorted(dd.map_partitions(lambda x: x, d, d, token=1).dask)
+    assert sorted(dd.map_partitions(func, d, meta=d).dask) == \
+           sorted(dd.map_partitions(func, d, meta=d).dask)
+    assert sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) == \
+           sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask)
 
     func = lambda x, y: x
-    assert sorted(dd.map_partitions(func, d, d, d).dask) == \
-           sorted(dd.map_partitions(func, d, d, d).dask)
+    assert sorted(dd.map_partitions(func, d, d, meta=d).dask) == \
+           sorted(dd.map_partitions(func, d, d, meta=d).dask)
 
 
 def test_map_partitions_column_info():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
-    b = dd.map_partitions(lambda x: x, a, a)
+    b = dd.map_partitions(lambda x: x, a, meta=a)
     tm.assert_index_equal(b.columns, a.columns)
     assert eq(df, b)
 
-    b = dd.map_partitions(lambda x: x, a.x, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda x: x, a.x, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda df: df.x + df.y, None, a)
+    b = dd.map_partitions(lambda df: df.x + df.y, a)
     assert isinstance(b, dd.Series)
     assert b.dtype == 'i8'
 
-    b = dd.map_partitions(lambda df: df.x + 1, ('x', 'i8'), a)
+    b = dd.map_partitions(lambda df: df.x + 1, a, meta=('x', 'i8'))
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
     assert b.dtype == 'i8'
@@ -1376,6 +1376,23 @@ def test_deterministic_apply_concat_apply_names():
             sorted(aca(a.x, f, f, a.x._meta).dask))
 
 
+def test_aca_meta_infer():
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def chunk(x, y, constant=1.0):
+        return (x + y + constant).head()
+
+    def agg(x):
+        return x.head()
+
+    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg,
+            chunk_kwargs=dict(constant=2.0))
+    sol = (df + 2.0 + 2.0).head()
+    assert eq(res, sol)
+
+
 def test_gh_517():
     arr = np.random.randn(100, 2)
     df = pd.DataFrame(arr, columns=['a', 'b'])
@@ -1621,14 +1638,14 @@ def test_from_delayed():
     from dask import delayed
     dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
     meta = dfs[0].compute()
-    df = dd.from_delayed(dfs, metadata=meta)
+    df = dd.from_delayed(dfs, meta=meta)
 
     assert (df.compute().columns == df.columns).all()
     f = lambda x: pd.Series([len(x)])
     assert list(df.map_partitions(f).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
-    s = dd.from_delayed(ss, metadata=meta.A)
+    s = dd.from_delayed(ss, meta=meta.A)
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(f).compute()) == [1, 2, 3, 4]

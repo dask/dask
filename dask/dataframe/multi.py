@@ -468,7 +468,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = rearrange_by_divisions(left, left_on, right.divisions,
                     max_branch, shuffle=shuffle)
             right = right.clear_divisions()
-        return map_partitions(pd.merge, meta, left, right, how=how, on=on,
+        return map_partitions(pd.merge, left, right, meta=meta, how=how, on=on,
                 left_on=left_on, right_on=right_on, left_index=left_index,
                 right_index=right_index, suffixes=suffixes)
     # Catch all hash join

@@ -28,6 +28,7 @@ import dask.multiprocessing
 
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
+from .utils import insert_meta_param_description
 
 from ..utils import build_name_function
 from ..bytes.core import write_bytes, write_block_to_file
@@ -786,29 +787,26 @@ def from_imperative(*args, **kwargs):
     return from_delayed(*args, **kwargs)
 
 
-def from_delayed(dfs, metadata=None, divisions=None, columns=None,
-                      prefix='from-delayed'):
+@insert_meta_param_description
+def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
+                 metadata=None):
     """ Create DataFrame from many dask.delayed objects
 
     Parameters
     ----------
-    dfs: list of Values
+    dfs : list of Values
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.
-    metadata: str, list of column names, or empty dataframe, optional
-        Metadata for the underlying pandas object. Can be either column name
-        (if Series), list of column names, or pandas object with the same
-        columns/dtypes. If not provided, will be computed from the first
-        partition.
-    divisions: list, optional
+    $META
+    divisions : list, optional
         Partition boundaries along the index.
-    prefix, str, optional
+    prefix : str, optional
         Prefix to prepend to the keys.
     """
-    if columns is not None:
-        warn("Deprecation warning: Use metadata argument, not columns")
-        metadata = columns
+    if metadata is not None and meta is None:
+        warn("Deprecation warning: Use meta keyword, not metadata")
+        meta = metadata
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
@@ -821,13 +819,13 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None,
 
     if divisions is None:
         divisions = [None] * (len(dfs) + 1)
-    if metadata is None:
-        metadata = dfs[0].compute()
+    if meta is None:
+        meta = dfs[0].compute()
 
-    if isinstance(metadata, (str, pd.Series)):
-        return Series(merge(dsk, dsk2), name, metadata, divisions)
+    if isinstance(meta, (str, pd.Series)):
+        return Series(merge(dsk, dsk2), name, meta, divisions)
     else:
-        return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
+        return DataFrame(merge(dsk, dsk2), name, meta, divisions)
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):
