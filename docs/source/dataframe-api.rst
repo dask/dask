@@ -11,6 +11,7 @@ Top level user functions:
     DataFrame.add
     DataFrame.append
     DataFrame.apply
+    DataFrame.apply_concat_apply
     DataFrame.assign
     DataFrame.astype
     DataFrame.cache
