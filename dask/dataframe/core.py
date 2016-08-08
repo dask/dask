@@ -505,11 +505,12 @@ class _Frame(Base):
 
         Parameters
         ----------
-        divisions : list
-            List of partitions to be used
-        npartitions : int
+        divisions : list, optional
+            List of partitions to be used. If specified npartitions will be
+            ignored.
+        npartitions : int, optional
             Number of partitions of output, must be less than npartitions of
-            input
+            input. Only used if divisions isn't specified.
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
@@ -520,6 +521,10 @@ class _Frame(Base):
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         """
+        if npartitions is not None and divisions is not None:
+            warnings.warn("When providing both npartitions and divisions to "
+                          "repartition only npartitions is used.")
+
         if npartitions is not None:
             if npartitions > self.npartitions:
                 raise ValueError("Can only repartition to fewer partitions")
