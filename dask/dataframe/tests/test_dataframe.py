@@ -8,6 +8,7 @@ import pytest
 import dask
 from dask.async import get_sync
 from dask.utils import raises, ignoring
+import dask.array as da
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
@@ -1743,3 +1744,8 @@ def test_columns_assignment():
     ddf[['a', 'b']] = ddf2[['y', 'z']]
 
     eq(df, ddf)
+
+
+def test_idxmaxmin():
+    x = da.random.normal(0, 100, size=(20, 10), chunks=(10, 2)).to_dask_dataframe()
+    assert x.compute().idxmax() == x.idxmax().compute()
