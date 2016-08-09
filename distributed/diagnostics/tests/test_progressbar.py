@@ -31,20 +31,18 @@ def test_text_progressbar(capsys, loop):
             assert p.stream.closed()
 
 
-@gen_cluster()
-def test_TextProgressBar_error(s, a, b):
-    s.update_graph(tasks={'x': dumps_task((div, 1, 0))},
-                   keys=['x'],
-                   dependencies={})
+@gen_cluster(executor=True)
+def test_TextProgressBar_error(e, s, a, b):
+    x = e.submit(div, 1, 0)
 
-    progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
+    progress = TextProgressBar([x.key], scheduler=(s.ip, s.port),
                                start=False, interval=0.01)
     yield progress.listen()
 
     assert progress.status == 'error'
     assert progress.stream.closed()
 
-    progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
+    progress = TextProgressBar([x.key], scheduler=(s.ip, s.port),
                                start=False, interval=0.01)
     yield progress.listen()
     assert progress.status == 'error'

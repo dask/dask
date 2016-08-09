@@ -73,8 +73,10 @@ class Future(WrappedKey):
         self._generation = self.executor.generation
         self._cleared = False
 
-        if key not in executor.futures:
-            executor.futures[tokey(key)] = {'event': Event(), 'status': 'pending'}
+        tkey = tokey(key)
+
+        if tkey not in executor.futures:
+            executor.futures[tkey] = {'event': Event(), 'status': 'pending'}
 
     @property
     def status(self):
@@ -368,9 +370,10 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self._send_to_scheduler({'op': 'client-releases-keys',
-                                 'keys': [key],
-                                 'client': self.id})
+        if self.status == 'running':
+            self._send_to_scheduler({'op': 'client-releases-keys',
+                                     'keys': [key],
+                                     'client': self.id})
 
     @gen.coroutine
     def _handle_report(self, start_event):
@@ -544,7 +547,7 @@ class Executor(object):
             dsk = {key: (func,) + tuple(args)}
 
         futures = self._graph_to_futures(dsk, [key], restrictions,
-                loose_restrictions)
+                loose_restrictions, priority={key: 0})
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
 
@@ -658,8 +661,10 @@ class Executor(object):
         else:
             loose_restrictions = set()
 
+        priority = dict(zip(keys, range(len(keys))))
+
         futures = self._graph_to_futures(dsk, keys, restrictions,
-                loose_restrictions)
+                loose_restrictions, priority=priority)
         logger.debug("map(%s, ...)", funcname(func))
 
         return [futures[tokey(key)] for key in keys]
@@ -672,6 +677,7 @@ class Executor(object):
 
         @gen.coroutine
         def wait(k):
+            """ Want to stop the All(...) early if we find an error """
             yield self.futures[k]['event'].wait()
             if self.futures[k]['status'] != 'finished':
                 raise Exception()
@@ -965,8 +971,8 @@ class Executor(object):
         return sync(self.loop, self._run, function, *args, **kwargs)
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
-                                loose_restrictions=None,
-                                allow_other_workers=True):
+            loose_restrictions=None, allow_other_workers=True, priority=None):
+
         keyset = set(keys)
         flatkeys = list(map(tokey, keys))
         futures = {key: Future(key, self) for key in keyset}
@@ -1004,7 +1010,8 @@ class Executor(object):
                                  'keys': list(flatkeys),
                                  'restrictions': restrictions or {},
                                  'loose_restrictions': loose_restrictions,
-                                 'client': self.id})
+                                 'client': self.id,
+                                 'priority': priority})
 
         return futures
 
@@ -1064,7 +1071,7 @@ class Executor(object):
         results2 = pack_data(keys, results)
         return results2
 
-    def compute(self, args, sync=False):
+    def compute(self, args, sync=False, optimize_graph=True):
         """ Compute dask collections on cluster
 
         Parameters
@@ -1108,10 +1115,14 @@ class Executor(object):
 
         variables = [a for a in args if isinstance(a, Base)]
 
-        groups = groupby(lambda x: x._optimize, variables)
-        dsk = merge([opt(merge([v.dask for v in val]),
-                         [v._keys() for v in val])
-                    for opt, val in groups.items()])
+        if optimize_graph:
+            groups = groupby(lambda x: x._optimize, variables)
+            dsk = merge([opt(merge([v.dask for v in val]),
+                             [v._keys() for v in val])
+                        for opt, val in groups.items()])
+        else:
+            dsk = merge(c.dask for c in variables)
+
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
@@ -1136,7 +1147,7 @@ class Executor(object):
         else:
             return result
 
-    def persist(self, collections):
+    def persist(self, collections, optimize_graph=True):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -1169,15 +1180,17 @@ class Executor(object):
 
         assert all(isinstance(c, Base) for c in collections)
 
-        groups = groupby(lambda x: x._optimize, collections)
-        dsk = merge([opt(merge([v.dask for v in val]),
-                         [v._keys() for v in val])
-                    for opt, val in groups.items()])
+        if optimize_graph:
+            groups = groupby(lambda x: x._optimize, collections)
+            dsk = merge([opt(merge([v.dask for v in val]),
+                             [v._keys() for v in val])
+                        for opt, val in groups.items()])
+        else:
+            dsk = merge(c.dask for c in collections)
 
         names = {k for c in collections for k in flatten(c._keys())}
 
         futures = self._graph_to_futures(dsk, names)
-
 
         result = [redict_collection(c, {k: futures[k]
                                         for k in flatten(c._keys())})

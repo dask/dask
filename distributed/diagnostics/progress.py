@@ -79,7 +79,7 @@ class Progress(SchedulerPlugin):
     def setup(self):
         keys = self.keys
 
-        while not keys.issubset(self.scheduler.tasks):
+        while not keys.issubset(self.scheduler.task_state):
             yield gen.sleep(0.05)
 
         self.keys = None
@@ -105,7 +105,7 @@ class Progress(SchedulerPlugin):
         logger.debug("Set up Progress keys")
 
         for k in errors:
-            self.task_erred(None, k, None, True)
+            self.transition(k, None, 'erred', exception=True)
 
     def start(self):
         self.status = 'running'
@@ -119,22 +119,20 @@ class Progress(SchedulerPlugin):
     def _start(self):
         pass
 
-    def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
-        logger.debug("Progress sees key %s", key)
-        if key in self.keys:
+    def transition(self, key, start, finish, *args, **kwargs):
+        if key in self.keys and start == 'processing' and finish == 'memory':
+            logger.debug("Progress sees key %s", key)
             self.keys.remove(key)
 
-        if not self.keys:
-            self.stop()
+            if not self.keys:
+                self.stop()
 
-    def task_erred(self, scheduler, key, worker, exception, **kwargs):
-        logger.debug("Progress sees task erred")
-        if key in self.all_keys:
-            self.stop(exception=exception, key=key)
+        if key in self.all_keys and finish == 'erred':
+            logger.debug("Progress sees task erred")
+            self.stop(exception=kwargs['exception'], key=key)
 
-    def forget(self, scheduler, key, **kwargs):
-        logger.debug("A task was cancelled (%s), stopping progress", key)
-        if key in self.all_keys:
+        if key in self.keys and finish == 'forgotten':
+            logger.debug("A task was cancelled (%s), stopping progress", key)
             self.stop(exception=True)
 
     def restart(self, scheduler):
@@ -217,29 +215,29 @@ class MultiProgress(Progress):
                 self.keys[k] = set()
 
         for k in errors:
-            self.task_erred(None, k, None, True)
+            self.transition(k, None, 'erred', exception=True)
         logger.debug("Set up Progress keys")
 
-    def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
-        s = self.keys.get(self.func(key), None)
-        if s and key in s:
-            s.remove(key)
+    def transition(self, key, start, finish, *args, **kwargs):
+        if start == 'processing' and finish == 'memory':
+            s = self.keys.get(self.func(key), None)
+            if s and key in s:
+                s.remove(key)
 
-        if not self.keys or not any(self.keys.values()):
-            self.stop()
+            if not self.keys or not any(self.keys.values()):
+                self.stop()
 
-    def task_erred(self, scheduler, key, worker, exception, **kwargs):
-        logger.debug("Progress sees task erred")
+        if finish == 'erred':
+            logger.debug("Progress sees task erred")
+            k = self.func(key)
+            if (k in self.all_keys and key in self.all_keys[k]):
+                self.stop(exception=kwargs.get('exception'), key=key)
 
-        if (self.func(key) in self.all_keys and
-            key in self.all_keys[self.func(key)]):
-            self.stop(exception=exception, key=key)
-
-    def forget(self, scheduler, key, **kwargs):
-        logger.debug("A task was cancelled (%s), stopping progress", key)
-        if (self.func(key) in self.all_keys and
-            key in self.all_keys[self.func(key)]):
-            self.stop(exception=True)
+        if finish == 'forgotten':
+            k = self.func(key)
+            if k in self.all_keys and key in self.all_keys[k]:
+                logger.debug("A task was cancelled (%s), stopping progress", key)
+                self.stop(exception=True)
 
     def start(self):
         self.status = 'running'
@@ -276,75 +274,35 @@ class AllProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
     def __init__(self, scheduler):
         self.all = defaultdict(set)
-        self.in_memory = defaultdict(set)
-        self.erred = defaultdict(set)
-        self.released = defaultdict(set)
+        self.state = defaultdict(lambda: defaultdict(set))
+        self.scheduler = scheduler
 
-        for key in scheduler.tasks:
+        for key, state in self.scheduler.task_state.items():
             k = key_split(key)
             self.all[k].add(key)
-
-        for key in scheduler.who_has:
-            k = key_split(key)
-            self.in_memory[k].add(key)
-
-        for key in scheduler.exceptions_blame:
-            k = key_split(key)
-            self.erred[k].add(key)
-
-        for key in scheduler.released:
-            k = key_split(key)
-            self.released[k].add(key)
+            self.state[state][k].add(key)
 
         scheduler.add_plugin(self)
 
-    def update_graph(self, scheduler, tasks=None, **kwargs):
-        for key in tasks:
-            k = key_split(key)
-            self.all[k].add(key)
-
-    def mark_key_in_memory(self, scheduler, key, **kwargs):
-        if key in scheduler.tasks:
-            k = key_split(key)
-            self.in_memory[k].add(key)
-
-    def task_erred(self, scheduler, key=None, **kwargs):
+    def transition(self, key, start, finish, *args, **kwargs):
         k = key_split(key)
-        self.erred[k].add(key)
-
-    def delete(self, scheduler, key):
-        k = key_split(key)
+        self.all[k].add(key)
         try:
-            self.in_memory[k].remove(key)
-        except KeyError:
+            self.state[start][k].remove(key)
+        except KeyError: # TODO: remove me once we have a new or clean state
             pass
-        self.released[k].add(key)
-
-    def forget(self, scheduler, key):
-        k = key_split(key)
-        for d in [self.all, self.in_memory, self.released, self.erred]:
-            if k in d:
-                if key in d[k]:
-                    d[k].remove(key)
-                if not d[k]:
-                    del d[k]
-
-    def lost_data(self, scheduler, key=None):
-        k = key_split(key)
-        if k in self.in_memory:
-            try:
-                self.in_memory[k].remove(key)
-            except KeyError:
-                pass
+        if finish != 'forgotten':
+            self.state[finish][k].add(key)
+        else:
+            self.all[k].remove(key)
+            if not self.all[k]:
+                del self.all[k]
+                for v in self.state.values():
+                    try:
+                        del v[k]
+                    except KeyError:
+                        pass
 
     def restart(self, scheduler):
         self.all.clear()
-        self.in_memory.clear()
-        self.erred.clear()
-        self.released.clear()
-
-    def validate(self):
-        for c in [self.in_memory, self.erred, self.released]:
-            assert set(self.all).issuperset(set(c))
-            for k in c:
-                assert c[k] <= self.all[k]
+        self.state.clear()

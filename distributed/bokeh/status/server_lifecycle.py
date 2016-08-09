@@ -104,7 +104,7 @@ def on_server_loaded(server_context):
                          'times': deque(maxlen=100)}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
 
-    messages['progress'] = {'all': {}, 'in_memory': {},
+    messages['progress'] = {'all': {}, 'memory': {},
                             'erred': {}, 'released': {}}
 
     IOLoop.current().add_callback(progress)

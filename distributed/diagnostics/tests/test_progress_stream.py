@@ -15,19 +15,19 @@ from time import time, sleep
 
 def test_progress_quads():
     msg = {'all': {'inc': 5, 'dec': 1},
-           'in_memory': {'inc': 2, 'dec': 0},
+           'memory': {'inc': 2, 'dec': 0},
            'erred': {'inc': 0, 'dec': 1},
            'released': {'inc': 1, 'dec': 0}}
 
     d = progress_quads(msg)
     assert d['name'] == ['inc', 'dec']
     assert d['all'] == [5, 1]
-    assert d['in_memory'] == [2, 0]
+    assert d['memory'] == [2, 0]
     assert d['fraction'] == ['3 / 5', '0 / 1']
     assert d['erred'] == [0, 1]
     assert d['released'] == [1, 0]
     assert d['released_right'] == [1/5, 0]
-    assert d['in_memory_right'] == [3 / 5, 0]
+    assert d['memory_right'] == [3 / 5, 0]
     assert d['erred_left'] == [1, 0]
 
 
@@ -46,20 +46,20 @@ def test_progress_stream(e, s, a, b):
     msg = yield read(stream)
     assert msg == {'all': {'div': 10, 'inc': 5, 'finalize': 1},
                    'erred': {'div': 1},
-                   'in_memory': {'div': 9, 'finalize': 1},
-                   'released': {'div': 1, 'inc': 5}}
+                   'memory': {'div': 9, 'finalize': 1},
+                   'released': {'inc': 5}}
 
     d = progress_quads(msg)
 
     assert d == {'name': ['div', 'inc', 'finalize'],
                  'all': [10, 5, 1],
-                 'in_memory': [9, 0, 1],
-                 'in_memory_right': [1, 1, 1],
-                 'fraction': ['10 / 10', '5 / 5', '1 / 1'],
+                 'memory': [9, 0, 1],
+                 'memory_right': [0.9, 1, 1],
+                 'fraction': ['9 / 10', '5 / 5', '1 / 1'],
                  'erred': [1, 0, 0],
                  'erred_left': [0.9, 1, 1],
-                 'released': [1, 5, 0],
-                 'released_right': [0.1, 1, 0],
+                 'released': [0, 5, 0],
+                 'released_right': [0, 1, 0],
                  'top': [0.7, 1.7, 2.7],
                  'center': [0.5, 1.5, 2.5],
                  'bottom': [0.3, 1.3, 2.3]}

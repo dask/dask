@@ -20,13 +20,11 @@ class EventStream(SchedulerPlugin):
         if scheduler:
             scheduler.add_plugin(self)
 
-    def task_finished(self, scheduler, **msg):
-        """ Run when a task is reported complete """
-        self.buffer.append(msg)
-
-    def task_erred(self, scheduler, **msg):
-        """ Run when a task is reported failed """
-        self.buffer.append(msg)
+    def transition(self, key, start, finish, *args, **kwargs):
+        if start == 'processing':
+            kwargs['key'] = key
+            if finish == 'memory' or finish == 'erred':
+                self.buffer.append(kwargs)
 
 
 def swap_buffer(scheduler, es):

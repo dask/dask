@@ -160,7 +160,7 @@ def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
     center = ('127.0.0.1', center_port) if center_port else None
-    scheduler = Scheduler(center=center, loop=loop, **kwargs)
+    scheduler = Scheduler(center=center, loop=loop, validate=True, **kwargs)
     done = scheduler.start(scheduler_port)
 
     q.put(scheduler.port)
@@ -389,7 +389,7 @@ def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
     from .executor import _global_executor
     @gen.coroutine
     def g():
-        s = Scheduler(ip='127.0.0.1')
+        s = Scheduler(ip='127.0.0.1', validate=True)
         done = s.start(0)
         a = Worker('127.0.0.1', s.port, ncores=2, ip='127.0.0.1')
         yield a._start()
@@ -447,7 +447,7 @@ from .executor import Executor
 
 @gen.coroutine
 def start_cluster(ncores, loop, Worker=Worker):
-    s = Scheduler(ip='127.0.0.1', loop=loop)
+    s = Scheduler(ip='127.0.0.1', loop=loop, validate=True)
     done = s.start(0)
     workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop)
                 for i, (k, v) in enumerate(ncores)]

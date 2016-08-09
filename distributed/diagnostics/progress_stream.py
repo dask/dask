@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 
-from toolz import valmap
+from toolz import valmap, merge
 from tornado import gen
 
 from .progress import AllProgress
@@ -16,10 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 def counts(scheduler, allprogress):
-    return {'all': valmap(len, allprogress.all),
-            'in_memory': valmap(len, allprogress.in_memory),
-            'released': valmap(len, allprogress.released),
-            'erred': valmap(len, allprogress.erred)}
+    return merge({'all': valmap(len, allprogress.all)},
+                 {state: valmap(len, allprogress.state[state])
+                     for state in ['memory', 'erred', 'released']})
 
 
 @gen.coroutine
@@ -28,8 +27,8 @@ def progress_stream(address, interval):
 
     The messages coming back are dicts containing counts of key groups::
 
-        {'inc': {'all': 5, 'in_memory': 2, 'erred': 0, 'released': 1},
-         'dec': {'all': 1, 'in_memory': 0, 'erred': 0, 'released': 0}}
+        {'inc': {'all': 5, 'memory': 2, 'erred': 0, 'released': 1},
+         'dec': {'all': 1, 'memory': 0, 'erred': 0, 'released': 0}}
 
     Parameters
     ----------
@@ -57,7 +56,7 @@ def progress_quads(msg):
     Consumes messages like the following::
 
           {'all': {'inc': 5, 'dec': 1},
-           'in_memory': {'inc': 2, 'dec': 0},
+           'memory': {'inc': 2, 'dec': 0},
            'erred': {'inc': 0, 'dec': 1},
            'released': {'inc': 1, 'dec': 0}}
 
@@ -69,9 +68,9 @@ def progress_quads(msg):
     d['center'] = [i + 0.5 for i in range(len(names))]
     d['bottom'] = [i + 0.3 for i in range(len(names))]
     d['released_right'] = [r / a for r, a in zip(d['released'], d['all'])]
-    d['in_memory_right'] = [(r + im) / a for r, im, a in
-            zip(d['released'], d['in_memory'], d['all'])]
+    d['memory_right'] = [(r + im) / a for r, im, a in
+            zip(d['released'], d['memory'], d['all'])]
     d['fraction'] = ['%d / %d' % (im + r, a)
-                   for im, r, a in zip(d['in_memory'], d['released'], d['all'])]
+                   for im, r, a in zip(d['memory'], d['released'], d['all'])]
     d['erred_left'] = [1 - e / a for e, a in zip(d['erred'], d['all'])]
     return d

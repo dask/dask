@@ -248,7 +248,7 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
 
 def progress_plot(**kwargs):
     from ..diagnostics.progress_stream import progress_quads
-    data = progress_quads({'all': {}, 'in_memory': {},
+    data = progress_quads({'all': {}, 'memory': {},
                            'erred': {}, 'released': {}})
 
     x_range = Range1d(-0.5, 1.5)
@@ -260,7 +260,7 @@ def progress_plot(**kwargs):
     fig.quad(source=source, top='top', bottom='bottom',
              left=0, right='released_right', color=Spectral9[0], alpha=0.4)
     fig.quad(source=source, top='top', bottom='bottom',
-             left='released_right', right='in_memory_right',
+             left='released_right', right='memory_right',
              color=Spectral9[0], alpha=0.8)
     fig.quad(source=source, top='top', bottom='bottom',
              left='erred_left', right=1,
@@ -288,7 +288,7 @@ def progress_plot(**kwargs):
     </div>
     <div>
         <span style="font-size: 14px; font-weight: bold;">In Memory:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@in_memory</span>
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@memory</span>
     </div>
     <div>
         <span style="font-size: 14px; font-weight: bold;">Erred:</span>&nbsp;

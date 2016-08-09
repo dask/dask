@@ -331,7 +331,7 @@ class Worker(Server):
                 diagnostics['transfer_stop'] = time()
                 self.data.update(other)
                 yield self.scheduler.add_keys(address=self.address,
-                                           keys=list(other))
+                                              keys=list(other))
                 data.update(other)
             except KeyError as e:
                 logger.warn("Could not find data for %s", key)
@@ -539,7 +539,7 @@ class Worker(Server):
             self.data[key] = result.pop('result')
             if report:
                 response = yield self.scheduler.add_keys(address=(self.ip, self.port),
-                                                      keys=[key])
+                                                         keys=[key])
                 if not response == 'OK':
                     logger.warn('Could not report results to scheduler: %s',
                                 str(response))
