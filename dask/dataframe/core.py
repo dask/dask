@@ -787,11 +787,20 @@ class _Frame(Base):
         minmax = 'max' if fn == 'idxmax' else 'min'
         value = getattr(x, minmax)()
         n = len(x)
-        return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)})
+        return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)}).T
+
+    @staticmethod
+    def idxmaxmin_row(x):
+
+        pass
+        # for i in range(0, len(x)/3):
+
 
     @staticmethod
     def idxmaxmin_agg(x, **kwargs):
-        print(x)
+        print(x.T) #.iloc[:, ::3])
+        # x.T.apply(idxmaxmin_row, axis=1)
+
         idx = getattr(x.value, kwargs['fn'])()
         if kwargs['known_divisions'] == True:
             return x.idx.iloc[idx]
