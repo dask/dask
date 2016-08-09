@@ -28,6 +28,7 @@ import dask.multiprocessing
 
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
+from .utils import insert_meta_param_description
 
 from ..utils import build_name_function
 from ..bytes.core import write_bytes, write_block_to_file
@@ -35,7 +36,7 @@ from ..bytes.core import write_bytes, write_block_to_file
 lock = Lock()
 
 
-def _dummy_from_array(x, columns=None):
+def _meta_from_array(x, columns=None):
     """ Create empty pd.DataFrame or pd.Series which has correct dtype """
 
     if x.ndim > 2:
@@ -44,24 +45,34 @@ def _dummy_from_array(x, columns=None):
 
     if getattr(x.dtype, 'names', None) is not None:
         # record array has named columns
-        cols = tuple(x.dtype.names)
-        dtypes = [x.dtype.fields[n][0] for n in x.dtype.names]
-    elif x.ndim == 1 and (np.isscalar(columns) or columns is None):
-        # Series
-        return pd.Series([], name=columns, dtype=x.dtype)
+        if columns is None:
+            columns = list(x.dtype.names)
+        elif np.isscalar(columns):
+            raise ValueError("For a struct dtype, columns must be a list.")
+        elif not all(i in x.dtype.names for i in columns):
+            extra = sorted(set(columns).difference(x.dtype.names))
+            raise ValueError("dtype {0} doesn't have fields "
+                             "{1}".format(x.dtype, extra))
+        fields = x.dtype.fields
+        dtypes = [fields[n][0] if n in fields else 'f8' for n in columns]
+    elif x.ndim == 1:
+        if np.isscalar(columns) or columns is None:
+            return pd.Series([], name=columns, dtype=x.dtype)
+        elif len(columns) == 1:
+            return pd.DataFrame(np.array([], dtype=x.dtype), columns=columns)
+        raise ValueError("For a 1d array, columns must be a scalar or single "
+                         "element list")
     else:
-        cols = list(range(x.shape[1])) if x.ndim == 2 else [0]
-        dtypes = [x.dtype] * len(cols)
+        if columns is None:
+            columns = list(range(x.shape[1])) if x.ndim == 2 else [0]
+        elif len(columns) != x.shape[1]:
+            raise ValueError("Number of column names must match width of the "
+                             "array. Got {0} names for {1} "
+                             "columns".format(len(columns), x.shape[1]))
+        dtypes = [x.dtype] * len(columns)
 
-    data = {}
-    for c, dt in zip(cols, dtypes):
-        data[c] = np.array([], dtype=dt)
-    data = pd.DataFrame(data, columns=cols)
-
-    if columns is not None:
-        # if invalid, raise error from pandas
-        data.columns = columns
-    return data
+    data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
+    return pd.DataFrame(data, columns=columns)
 
 
 def from_array(x, chunksize=50000, columns=None):
@@ -84,7 +95,7 @@ def from_array(x, chunksize=50000, columns=None):
     if isinstance(x, da.Array):
         return from_dask_array(x, columns=columns)
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
@@ -94,11 +105,11 @@ def from_array(x, chunksize=50000, columns=None):
     dsk = {}
     for i in range(0, int(ceil(len(x) / chunksize))):
         data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, data, None, dummy.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, data, None, dummy.columns)
-    return _Frame(dsk, name, dummy, divisions)
+            dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
+    return _Frame(dsk, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -356,7 +367,7 @@ def from_dask_array(x, columns=None):
     3  1.0  1.0
     """
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
@@ -376,12 +387,12 @@ def from_dask_array(x, columns=None):
         if x.ndim == 2:
             chunk = chunk[0]
 
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, chunk, ind, dummy.columns)
+            dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return _Frame(merge(x.dask, dsk), name, dummy, divisions)
+    return _Frame(merge(x.dask, dsk), name, meta, divisions)
 
 
 def from_castra(x, columns=None):
@@ -776,29 +787,26 @@ def from_imperative(*args, **kwargs):
     return from_delayed(*args, **kwargs)
 
 
-def from_delayed(dfs, metadata=None, divisions=None, columns=None,
-                      prefix='from-delayed'):
+@insert_meta_param_description
+def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
+                 metadata=None):
     """ Create DataFrame from many dask.delayed objects
 
     Parameters
     ----------
-    dfs: list of Values
+    dfs : list of Values
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.
-    metadata: str, list of column names, or empty dataframe, optional
-        Metadata for the underlying pandas object. Can be either column name
-        (if Series), list of column names, or pandas object with the same
-        columns/dtypes. If not provided, will be computed from the first
-        partition.
-    divisions: list, optional
+    $META
+    divisions : list, optional
         Partition boundaries along the index.
-    prefix, str, optional
+    prefix : str, optional
         Prefix to prepend to the keys.
     """
-    if columns is not None:
-        warn("Deprecation warning: Use metadata argument, not columns")
-        metadata = columns
+    if metadata is not None and meta is None:
+        warn("Deprecation warning: Use meta keyword, not metadata")
+        meta = metadata
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
@@ -811,13 +819,13 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None,
 
     if divisions is None:
         divisions = [None] * (len(dfs) + 1)
-    if metadata is None:
-        metadata = dfs[0].compute()
+    if meta is None:
+        meta = dfs[0].compute()
 
-    if isinstance(metadata, (str, pd.Series)):
-        return Series(merge(dsk, dsk2), name, metadata, divisions)
+    if isinstance(meta, (str, pd.Series)):
+        return Series(merge(dsk, dsk2), name, meta, divisions)
     else:
-        return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
+        return DataFrame(merge(dsk, dsk2), name, meta, divisions)
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):

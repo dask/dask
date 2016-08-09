@@ -204,8 +204,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._pd_nonempty
-    right_empty = rhs._pd_nonempty
+    left_empty = lhs._meta_nonempty
+    right_empty = rhs._meta_nonempty
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
 
@@ -220,10 +220,10 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
                           lsuffix, rsuffix)
 
     # dummy result
-    dummy = left_empty.join(right_empty, on=None, how=how,
-                            lsuffix=lsuffix, rsuffix=rsuffix)
+    meta = left_empty.join(right_empty, on=None, how=how,
+                           lsuffix=lsuffix, rsuffix=rsuffix)
     return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk),
-                     name, dummy, divisions)
+                     name, meta, divisions)
 
 
 def _pdmerge(left, right, how, left_on, right_on,
@@ -274,10 +274,10 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # dummy result
-    dummy = pd.merge(lhs._pd_nonempty, rhs._pd_nonempty, how, None,
-                     left_on=left_on, right_on=right_on,
-                     left_index=left_index, right_index=right_index,
-                     suffixes=suffixes)
+    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how, None,
+                    left_on=left_on, right_on=right_on,
+                    left_index=left_index, right_index=right_index,
+                    suffixes=suffixes)
 
     merger = partial(_pdmerge, suffixes=suffixes,
                      default_left_columns=list(lhs.columns),
@@ -299,11 +299,11 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
 
     divisions = [None] * (npartitions + 1)
     return DataFrame(toolz.merge(lhs2.dask, rhs2.dask, dsk),
-                     name, dummy, divisions)
+                     name, meta, divisions)
 
 
 def single_partition_join(left, right, **kwargs):
-    meta = pd.merge(left._pd_nonempty, right._pd_nonempty, **kwargs)
+    meta = pd.merge(left._meta_nonempty, right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
         left_key = first(left._keys())
@@ -368,7 +368,7 @@ def concat_unindexed_dataframes(dfs):
     dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
             for i in range(dfs[0].npartitions)}
 
-    meta = pd.concat([df._pd for df in dfs], axis=1)
+    meta = pd.concat([df._meta for df in dfs], axis=1)
 
     return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                   name, meta, dfs[0].divisions)
@@ -381,11 +381,11 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     from dask.dataframe.core import _emulate
-    dummy = _emulate(pd.concat, dfs, axis=axis, join=join)
+    meta = _emulate(pd.concat, dfs, axis=axis, join=join)
 
     dfs = _maybe_from_pandas(dfs)
     dfs2, divisions, parts = align_partitions(*dfs)
-    empties = [df._pd for df in dfs]
+    empties = [df._meta for df in dfs]
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
@@ -396,7 +396,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
                 for i, part in enumerate(parts2))
 
     return _Frame(toolz.merge(dsk, *[df.dask for df in dfs2]),
-                  name, dummy, divisions)
+                  name, meta, divisions)
 
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
@@ -454,11 +454,12 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # One side is indexed, the other not
     elif (left_index and left.known_divisions and not right_index or
           right_index and right.known_divisions and not left_index):
-        left_empty = left._pd_nonempty
-        right_empty = right._pd_nonempty
-        dummy = pd.merge(left_empty, right_empty, how=how, on=on, left_on=left_on,
-                right_on=right_on, left_index=left_index, right_index=right_index,
-                suffixes=suffixes)
+        left_empty = left._meta_nonempty
+        right_empty = right._meta_nonempty
+        meta = pd.merge(left_empty, right_empty, how=how, on=on,
+                        left_on=left_on, right_on=right_on,
+                        left_index=left_index, right_index=right_index,
+                        suffixes=suffixes)
         if left_index and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
                     max_branch, shuffle=shuffle)
@@ -467,7 +468,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = rearrange_by_divisions(left, left_on, right.divisions,
                     max_branch, shuffle=shuffle)
             right = right.clear_divisions()
-        return map_partitions(pd.merge, dummy, left, right, how=how, on=on,
+        return map_partitions(pd.merge, left, right, meta=meta, how=how, on=on,
                 left_on=left_on, right_on=right_on, left_index=left_index,
                 right_index=right_index, suffixes=suffixes)
     # Catch all hash join
@@ -486,14 +487,14 @@ def _concat_dfs(dfs, name, join='outer'):
     dsk = dict()
     i = 0
 
-    empties = [df._pd for df in dfs]
-    dummy = pd.concat(empties, axis=0, join=join)
+    empties = [df._meta for df in dfs]
+    meta = pd.concat(empties, axis=0, join=join)
 
-    if isinstance(dummy, pd.Series):
+    if isinstance(meta, pd.Series):
         # in this case, input must be all Series. No need to care DataFrame.
         columns = pd.Index([])
     else:
-        columns = dummy.columns
+        columns = meta.columns
         if len(columns) == 0:
             raise ValueError('Failed to concat, no columns remain')
 
@@ -509,7 +510,7 @@ def _concat_dfs(dfs, name, join='outer'):
             dsk[(name, i)] = key
             i += 1
 
-    return dsk, dummy
+    return dsk, meta
 
 
 def concat(dfs, axis=0, join='outer', interleave_partitions=False):
@@ -604,7 +605,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
                    for i in range(len(dfs) - 1)):
                 name = 'concat-{0}'.format(tokenize(*dfs))
-                dsk, dummy = _concat_dfs(dfs, name, join=join)
+                dsk, meta = _concat_dfs(dfs, name, join=join)
 
                 divisions = []
                 for df in dfs[:-1]:
@@ -612,7 +613,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
                 return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                              name, dummy, divisions)
+                              name, meta, divisions)
             else:
                 if interleave_partitions:
                     return concat_indexed_dataframes(dfs, join=join)
@@ -637,11 +638,11 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
             name = 'concat-{0}'.format(tokenize(*dfs))
-            dsk, dummy = _concat_dfs(dfs, name, join=join)
+            dsk, meta = _concat_dfs(dfs, name, join=join)
 
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
             return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                          name, dummy, divisions)
+                          name, meta, divisions)
 
 
 
@@ -662,8 +663,8 @@ def _append(df, other, divisions):
     for j in range(other.npartitions):
         dsk[(name, npart + j)] = (other._name, j)
     dsk = toolz.merge(dsk, df.dask, other.dask)
-    dummy = df._pd.append(other._pd)
-    return _Frame(dsk, name, dummy, divisions)
+    meta = df._meta.append(other._meta)
+    return _Frame(dsk, name, meta, divisions)
 
 
 ###############################################################
@@ -675,7 +676,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
 
     from dask.dataframe.core import no_default
 
-    return frame.map_partitions(pd.melt, no_default, id_vars=id_vars,
+    return frame.map_partitions(pd.melt, meta=no_default, id_vars=id_vars,
                                 value_vars=value_vars,
                                 var_name=var_name, value_name=value_name,
                                 col_level=col_level, token='melt')

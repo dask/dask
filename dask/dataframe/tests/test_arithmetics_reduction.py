@@ -6,7 +6,7 @@ import pandas as pd
 
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.utils import eq, assert_dask_graph
+from dask.dataframe.utils import eq, assert_dask_graph, make_meta
 
 
 @pytest.mark.slow
@@ -17,7 +17,8 @@ def test_arithmetics():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                                   index=[9, 9, 9])}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     pdf2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
@@ -33,7 +34,7 @@ def test_arithmetics():
                                    index=[5, 6, 8]),
             ('y', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
                                    index=[9, 9, 9])}
-    ddf4 = dd.DataFrame(dsk4, 'y', ['a', 'b'], [0, 4, 9, 9])
+    ddf4 = dd.DataFrame(dsk4, 'y', meta, [0, 4, 9, 9])
     pdf4 = ddf4.compute()
 
     # Arithmetics
@@ -575,7 +576,8 @@ def test_reductions():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                                   index=[9, 9, 9])}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
@@ -639,7 +641,8 @@ def test_reduction_series_invalid_axis():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                                   index=[9, 9, 9])}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     for axis in [1, 'columns']:
@@ -714,7 +717,8 @@ def test_reductions_frame():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                                   index=[9, 9, 9])}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     assert eq(ddf1.sum(), pdf1.sum())
@@ -783,14 +787,6 @@ def test_reductions_frame_dtypes():
 
     numerics = ddf[['int', 'float']]
     assert numerics._get_numeric_data().dask == numerics.dask
-
-
-def test_get_numeric_data_unknown_part():
-    df = pd.DataFrame({'a': range(5), 'b': range(5), 'c': list('abcde')})
-    ddf = dd.from_pandas(df, 3)
-    # Drop dtype information
-    ddf = dd.DataFrame(ddf.dask, ddf._name, ['a', 'b', 'c'], ddf.divisions)
-    assert eq(ddf._get_numeric_data(), df._get_numeric_data())
 
 
 def test_reductions_frame_nan():

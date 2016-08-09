@@ -50,7 +50,6 @@ def test_read_csv():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=30, lineterminator=os.linesep)
         assert list(f.columns) == ['name', 'amount']
-        assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
@@ -64,7 +63,6 @@ def test_read_multiple_csv():
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
         df = dd.read_csv('_foo.*.csv', chunkbytes=30)
-        assert df._known_dtype
         assert df.npartitions > 2
 
         assert (len(dd.read_csv('_foo.*.csv').compute()) ==
@@ -93,7 +91,6 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-        assert df._known_dtype
 
 datetime_csv_file = """
 name,amount,when
@@ -107,7 +104,6 @@ Dan,400,2014-01-01
 def test_read_csv_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
-        assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -134,24 +130,23 @@ def test_usecols():
 ####################
 
 
-def test_dummy_from_array():
+def test_meta_from_array():
     x = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res[0].dtype == np.int64
     assert res[1].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index([0, 1]))
 
     x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
-    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    res = dd.io._meta_from_array(x, columns=['a', 'b'])
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.float64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
     np.random.seed(42)
     x = np.random.rand(201, 2)
@@ -159,61 +154,57 @@ def test_dummy_from_array():
     assert len(x.divisions) == 6 # Should be 5 partitions and the end
 
 
-def test_dummy_from_1darray():
+def test_meta_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.Series)
     assert res.dtype == np.float64
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns='x')
+    res = dd.io._meta_from_array(x, columns='x')
     assert isinstance(res, pd.Series)
     assert res.name == 'x'
     assert res.dtype == np.object_
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns=['x'])
+    res = dd.io._meta_from_array(x, columns=['x'])
     assert isinstance(res, pd.DataFrame)
     assert res['x'].dtype == np.object_
     tm.assert_index_equal(res.columns, pd.Index(['x']))
 
-    msg = r"""Length mismatch: Expected axis has 1 elements, new values have 2 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b'])
 
 
-def test_dummy_from_recarray():
+def test_meta_from_recarray():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    res = dd.io._dummy_from_array(x, columns=['x', 'y'])
+    res = dd.io._meta_from_array(x, columns=['b', 'a'])
     assert isinstance(res, pd.DataFrame)
-    assert res['x'].dtype == np.float64
-    assert res['y'].dtype == np.int64
-    tm.assert_index_equal(res.columns, pd.Index(['x', 'y']))
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['b', 'a']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
 
 def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
@@ -227,7 +218,6 @@ def test_from_array_with_record_dtype():
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
@@ -272,7 +262,6 @@ def test_from_bcolz():
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
-    assert d._known_dtype
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
@@ -523,11 +512,10 @@ def test_Series_from_dask_array():
 def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
 
-    msg = r"from_array does not input more than 2D array, got array with shape \(3, 3, 3\)"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x)       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute())  # numpy
 
     x = da.ones((10, 3), chunks=(3, 3))
@@ -541,11 +529,10 @@ def test_from_dask_array_compat_numpy_array():
     assert (d2.compute().values == x.compute()).all()
     tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
 
-    msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x, columns=['a'])       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute(), columns=['a'])  # numpy
 
     d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask
@@ -605,6 +592,7 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
+@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_to_castra():
     pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
@@ -652,6 +640,8 @@ def test_to_castra():
         c1.drop()
         c2.drop()
 
+
+@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_from_castra():
     pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
@@ -676,6 +666,7 @@ def test_from_castra():
         del with_fn, c
 
 
+@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_from_castra_with_selection():
     """ Optimizations fuse getitems with load_partitions
 
@@ -1101,7 +1092,6 @@ def test_read_hdf():
         df.to_hdf(fn, '/data', format='table')
         a = dd.read_hdf(fn, '/data', chunksize=2)
         assert a.npartitions == 2
-        assert a._known_dtype
 
         tm.assert_frame_equal(a.compute(), df)
 
