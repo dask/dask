@@ -145,14 +145,14 @@ class _GroupBy(object):
 
         # grouping key passed via groupby method
         if (isinstance(index, (DataFrame, Series, Index)) and
-            isinstance(df, DataFrame)):
+                isinstance(df, DataFrame)):
 
             if (isinstance(index, Series) and index.name in df.columns and
-                index._name == df[index.name]._name):
+                    index._name == df[index.name]._name):
                 index = index.name
             elif (isinstance(index, DataFrame) and
                 set(index.columns).issubset(df.columns) and
-                index._name == df[index.columns]._name):
+                    index._name == df[index.columns]._name):
                 index = list(index.columns)
 
         self.index = index
@@ -189,11 +189,11 @@ class _GroupBy(object):
         if isinstance(df, Series):
             return False
         if (isinstance(index, Series) and index._name in df.columns and
-            index._name == df[index.name]._name):
+                index._name == df[index.name]._name):
             return True
         if (isinstance(index, DataFrame) and
-            set(index.columns).issubset(df.columns) and
-            index._name == df[index.columns]._name):
+                set(index.columns).issubset(df.columns) and
+                index._name == df[index.columns]._name):
             index = list(index.columns)
             return True
         return False
@@ -349,7 +349,7 @@ class _GroupBy(object):
             df2 = df
             index = df[self.index]
 
-        df3 = shuffle(df2, index, **self.kwargs) # shuffle dataframe and index
+        df3 = shuffle(df2, index, **self.kwargs)  # shuffle dataframe and index
 
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]

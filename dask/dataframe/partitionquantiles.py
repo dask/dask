@@ -419,7 +419,6 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
-    from dask.array.percentile import _percentile
 
     qs = np.linspace(0, 1, npartitions + 1)
     # currently, only Series has quantile method
