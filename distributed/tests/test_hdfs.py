@@ -250,7 +250,6 @@ def test_read_csv(e, s, a, b):
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
         df = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n')
-        assert df._known_dtype
         result = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
@@ -277,7 +276,6 @@ def test_read_csv_lazy(e, s, a, b):
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
         df = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n')
-        assert df._known_dtype
         yield gen.sleep(0.5)
         assert not s.tasks
 

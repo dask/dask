@@ -53,7 +53,6 @@ def test__futures_to_dask_dataframe(e, s, a, b):
 
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.divisions == (0, 30, 60, 80)
-    assert ddf._known_dtype
     expr = ddf.x.sum()
     result = yield e._get(expr.dask, expr._keys())
     assert result == [sum([df.x.sum() for df in dfs])]
