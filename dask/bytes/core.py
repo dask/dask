@@ -39,6 +39,8 @@ def write_block_to_file(data, f, compression, encoding):
         encoding and binary mode.
     """
     original = False
+    opener, path, kwargs = f
+    f = opener(path, **kwargs)
     f2 = f
     f = SeekableFile(f)
     if compression:
@@ -141,7 +143,7 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    files = open_files_write(paths, **storage_options)
+    files = [(open_files_write, p, storage_options) for p in paths]
     out = [delayed(write_block_to_file)(v, f, compression, encoding)
            for (v, f) in zip(data, files)]
     return out
