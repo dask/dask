@@ -65,7 +65,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from .core import (_Frame, Scalar, DataFrame, map_partitions, elemwise,
+from .core import (_Frame, Scalar, DataFrame, map_partitions,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle, rearrange_by_divisions
@@ -198,6 +198,7 @@ def require(divisions, parts, required=None):
 ###############################################################
 
 required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
+
 
 def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     """ Join two partitiond dataframes along their index """
@@ -416,7 +417,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         on = None
 
     if (isinstance(left, (pd.Series, pd.DataFrame)) and
-        isinstance(right, (pd.Series, pd.DataFrame))):
+            isinstance(right, (pd.Series, pd.DataFrame))):
         return pd.merge(left, right, how=how, on=on, left_on=left_on,
                         right_on=right_on, left_index=left_index,
                         right_index=right_index, suffixes=suffixes)
@@ -440,7 +441,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 
     # Both sides indexed
     if (left_index and left.known_divisions and
-        right_index and right.known_divisions):  # Do indexed join
+            right_index and right.known_divisions):  # Do indexed join
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
@@ -632,8 +633,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     else:
         if axis == 1:
-             raise ValueError('Unable to concatenate DataFrame with unknown '
-                              'division specifying axis=1')
+            raise ValueError('Unable to concatenate DataFrame with unknown '
+                             'division specifying axis=1')
         else:
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
@@ -645,10 +646,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                           name, meta, divisions)
 
 
-
 ###############################################################
 # Append
 ###############################################################
+
 
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """

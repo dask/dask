@@ -19,7 +19,7 @@ import dask
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, apply, PY2
+from ..compatibility import unicode, PY2
 from .. import array as da
 from ..async import get_sync
 from ..context import _globals
@@ -31,7 +31,7 @@ from .shuffle import set_partition
 from .utils import insert_meta_param_description
 
 from ..utils import build_name_function
-from ..bytes.core import write_bytes, write_block_to_file
+from ..bytes.core import write_bytes
 
 lock = Lock()
 
@@ -236,8 +236,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
-                np.issubdtype(x.dtype[name], np.unicode_) or
-                np.issubdtype(x.dtype[name], np.object_)):
+                    np.issubdtype(x.dtype[name], np.unicode_) or
+                    np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
                 categories[name] = da.unique(a)
 
@@ -380,7 +380,7 @@ def from_dask_array(x, columns=None):
 
     if x.ndim == 2:
         if len(x.chunks[1]) > 1:
-           x = x.rechunk({1: x.shape[1]})
+            x = x.rechunk({1: x.shape[1]})
 
     dsk = {}
     for i, (chunk, ind) in enumerate(zip(x._keys(), index)):
@@ -481,7 +481,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
-    if get is None and not 'get' in _globals and single_node and single_file:
+    if get is None and 'get' not in _globals and single_node and single_file:
         get = get_sync
 
     # handle lock default based on whether we're writing to a single entity
@@ -489,7 +489,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and not _actual_get is dask.multiprocessing.get:
+        elif not single_file and _actual_get is not dask.multiprocessing.get:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
@@ -552,6 +552,7 @@ The combination is ambiguous because it could be interpreted as the starting
 and stopping index per file, or starting and stopping index of the global
 dataset."""
 
+
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                      chunksize=int(1e6), sorted_index=False, lock=None, mode=None):
     """
@@ -588,7 +589,6 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     divisions.append(None)
         return keys, stops, divisions
 
-
     def one_path_one_key(path, key, start, stop, columns, chunksize, division, lock):
         """
         Get the data frame corresponding to one path and one key (which should
@@ -620,7 +620,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                                       'columns': empty.columns}))
                         for i, s in enumerate(range(start, stop, chunksize)))
 
-            divisions = [None]  * (len(dsk) + 1)
+            divisions = [None] * (len(dsk) + 1)
 
         return DataFrame(dsk, name, empty, divisions)
 
@@ -685,7 +685,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     if lock is True:
         lock = Lock()
 
-    key = key if key.startswith('/')  else '/' + key
+    key = key if key.startswith('/') else '/' + key
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)

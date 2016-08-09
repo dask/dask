@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from datetime import datetime
-import math
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -239,7 +237,7 @@ class _Frame(Base):
 
     def get_division(self, n):
         warnings.warn("Deprecation warning: use `get_partition` instead")
-        return get_partition(self, n)
+        return self.get_partition(self, n)
 
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
@@ -577,29 +575,29 @@ class _Frame(Base):
         Data saved by this function should be read by pandas dataframe
         compatible reader.
 
-	By providing a single asterisk in either the path_or_buf or key
-	parameters you direct dask to save each partition to a different file
-	or node (respectively). The asterisk will be replaced with a zero
-	padded partition number, as this is the default implementation of
-	name_function.
+        By providing a single asterisk in either the path_or_buf or key
+        parameters you direct dask to save each partition to a different file
+        or node (respectively). The asterisk will be replaced with a zero
+        padded partition number, as this is the default implementation of
+        name_function.
 
-	When writing to a single hdf node in a single hdf file, all hdf save
-	tasks are required to execute in a specific order, often becoming the
-	bottleneck of the entire execution graph. Saving to multiple nodes or
-	files removes that restriction (order is still preserved by enforcing
-	order on output, using name_function) and enables executing save tasks
-	in parallel.
+        When writing to a single hdf node in a single hdf file, all hdf save
+        tasks are required to execute in a specific order, often becoming the
+        bottleneck of the entire execution graph. Saving to multiple nodes or
+        files removes that restriction (order is still preserved by enforcing
+        order on output, using name_function) and enables executing save tasks
+        in parallel.
 
         Parameters
         ----------
         path_or_buf: HDFStore object or string
-	    Destination file(s). If string, can contain a single asterisk to
-	    save each partition to a different file. Only one asterisk is
-	    allowed in both path_or_buf and key parameters.
+        Destination file(s). If string, can contain a single asterisk to
+        save each partition to a different file. Only one asterisk is
+        allowed in both path_or_buf and key parameters.
         key: string
-	    A node / group path in file, can contain a single asterisk to save
-	    each partition to a different hdf node in a single file. Only one
-	    asterisk is allowed in both path_or_buf and key parameters.
+        A node / group path in file, can contain a single asterisk to save
+        each partition to a different hdf node in a single file. Only one
+        asterisk is allowed in both path_or_buf and key parameters.
         format: optional, default 'table'
             Default hdf storage format, currently only pandas' 'table' format
             is supported.
@@ -612,52 +610,52 @@ class _Frame(Base):
           ``'r+'``
               Append to existing files, files must already exist.
         append: optional, default False
-	    If False, overwrites existing node with the same name otherwise
-	    appends to it.
+        If False, overwrites existing node with the same name otherwise
+        appends to it.
         complevel: optional, 0-9, default 0
             compression level, higher means better compression ratio and
             possibly more CPU time. Depends on complib.
         complib: {'zlib', 'bzip2', 'lzo', 'blosc', None}, default None
-	    If complevel > 0 compress using this compression library when
-	    possible
+        If complevel > 0 compress using this compression library when
+        possible
         fletcher32: bool, default False
-	    If True and compression is used, additionally apply the fletcher32
-	    checksum.
+        If True and compression is used, additionally apply the fletcher32
+        checksum.
         get: callable, optional
-	    A scheduler `get` function to use. If not provided, the default is
-	    to check the global settings first, and then fall back to defaults
-	    for the collections.
+        A scheduler `get` function to use. If not provided, the default is
+        to check the global settings first, and then fall back to defaults
+        for the collections.
         dask_kwargs: dict, optional
-	    A dictionary of keyword arguments passed to the `get` function
-	    used.
+        A dictionary of keyword arguments passed to the `get` function
+        used.
         name_function: callable, optional, default None
-	    A callable called for each partition that accepts a single int
-	    representing the partition number. name_function must return a
-	    string representation of a partition's index in a way that will
-	    preserve the partition's location after a string sort.
+        A callable called for each partition that accepts a single int
+        representing the partition number. name_function must return a
+        string representation of a partition's index in a way that will
+        preserve the partition's location after a string sort.
 
-	    If None, a default name_function is used. The default name_function
-	    will return a zero padded string of received int. See
-	    dask.utils.build_name_function for more info.
+        If None, a default name_function is used. The default name_function
+        will return a zero padded string of received int. See
+        dask.utils.build_name_function for more info.
         compute: bool, default True
             If True, execute computation of resulting dask graph.
             If False, return a Delayed object.
         lock: bool, None or lock object, default None
-	    In to_hdf locks are needed for two reasons. First, to protect
-	    against writing to the same file from multiple processes or threads
-	    simultaneously.  Second, default libhdf5 is not thread safe, so we
-	    must additionally lock on it's usage. By default if lock is None
-	    lock will be determined optimally based on path_or_buf, key and the
-	    scheduler used. Manually setting this parameter is usually not
-	    required to improve performance.
+        In to_hdf locks are needed for two reasons. First, to protect
+        against writing to the same file from multiple processes or threads
+        simultaneously.  Second, default libhdf5 is not thread safe, so we
+        must additionally lock on it's usage. By default if lock is None
+        lock will be determined optimally based on path_or_buf, key and the
+        scheduler used. Manually setting this parameter is usually not
+        required to improve performance.
 
-	    Alternatively, you can specify specific values:
-	    If False, no locking will occur. If True, default lock object will
-	    be created (multiprocessing.Manager.Lock on multiprocessing
-	    scheduler, Threading.Lock otherwise), This can be used to force
-	    using a lock in scenarios the default behavior will be to avoid
-	    locking. Else, value is assumed to implement the lock interface,
-	    and will be the lock object used.
+        Alternatively, you can specify specific values:
+        If False, no locking will occur. If True, default lock object will
+        be created (multiprocessing.Manager.Lock on multiprocessing
+        scheduler, Threading.Lock otherwise), This can be used to force
+        using a lock in scenarios the default behavior will be to avoid
+        locking. Else, value is assumed to implement the lock interface,
+        and will be the lock object used.
 
         See Also
         --------
@@ -681,8 +679,8 @@ class _Frame(Base):
 
         >>> df.to_hdf('output_*.hdf', '/data')          # doctest: +SKIP
 
-	Saving multiple files with the multiprocessing scheduler and manually
-	disabling locks:
+        Saving multiple files with the multiprocessing scheduler and manually
+        disabling locks:
 
         >>> df.to_hdf('output_*.hdf', '/data',
         ...   get=dask.multiprocessing.get, lock=False) # doctest: +SKIP
@@ -1385,7 +1383,7 @@ class Series(_Frame):
         """ bind operator method like DataFrame.add to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
-            if not level is None:
+            if level is not None:
                 raise NotImplementedError('level must be None')
             return map_partitions(op, self, other, meta=self._meta,
                                   axis=axis, fill_value=fill_value)
@@ -1743,8 +1741,8 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
         for k, v in kwargs.items():
-            if not (isinstance(v, (Series, Scalar, pd.Series))
-                    or np.isscalar(v)):
+            if not (isinstance(v, (Series, Scalar, pd.Series)) or
+                    np.isscalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
         pairs = list(sum(kwargs.items(), ()))
@@ -2104,7 +2102,7 @@ def elemwise(op, *args, **kwargs):
              if not isinstance(arg, (_Frame, Scalar))]
 
     # adjust the key length of Scalar
-    keys = [d._keys() *  n if isinstance(d, Scalar)
+    keys = [d._keys() * n if isinstance(d, Scalar)
             else d._keys() for d in dasks]
 
     if other:
@@ -2971,8 +2969,8 @@ def set_sorted_index(df, index, drop=True, **kwargs):
     mins, maxes = compute(mins, maxes, **kwargs)
 
     if (sorted(mins) != list(mins) or
-        sorted(maxes) != list(maxes) or
-        any(a >= b for a, b in zip(mins, maxes))):
+            sorted(maxes) != list(maxes) or
+            any(a >= b for a, b in zip(mins, maxes))):
         raise ValueError("Column not properly sorted", mins, maxes)
 
     divisions = tuple(mins) + (list(maxes)[-1],)

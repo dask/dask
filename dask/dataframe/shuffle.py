@@ -1,9 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 import math
 from operator import getitem
-import types
 import uuid
 
 import numpy as np
@@ -11,13 +9,10 @@ import pandas as pd
 from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
-from .categorical import strip_categories, _categorize, get_categories
-from .core import DataFrame, Series, _Frame, map_partitions, _concat
-from .utils import shard_df_on_index
+from .core import DataFrame, Series, _Frame, _concat
 
 from ..base import tokenize
 from ..context import _globals
-from ..optimize import cull
 from ..utils import digit, insert
 
 
@@ -392,5 +387,3 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     df2.index.name = index_name
     df2.columns = df2.columns.astype(column_dtype)
     return df2
-
-
