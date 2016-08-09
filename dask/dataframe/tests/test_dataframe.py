@@ -1747,5 +1747,9 @@ def test_columns_assignment():
 
 
 def test_idxmaxmin():
-    x = da.random.normal(0, 100, size=(20, 10), chunks=(10, 2)).to_dask_dataframe()
-    assert x.compute().idxmax() == x.idxmax().compute()
+    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    eq(pdf.idxmax(), ddf.idxmax())
+    eq(pdf.idxmin(), ddf.idxmin())
+    eq(pdf.a.idxmax(), ddf.a.idxmax())
+    eq(pdf.a.idxmin(), ddf.a.idxmin())
