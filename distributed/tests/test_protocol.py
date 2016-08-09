@@ -94,7 +94,16 @@ def test_large_messages():
     if psutil.virtual_memory().total < 8e9:
         return
 
-    big_bytes = b'0' * (2**31 + 10)
+    def f(n):
+        """
+        Want to avoid compiling b'0' * 2**31 as a constant during
+        setup.py install, so we turn this into a function and call it in
+        the next line
+
+        Otherwise this takes up 2 GB of memory during install
+        """
+        return b'0' * (2**n + 10)
+    big_bytes = f(31)
     msg = {'x': [big_bytes, b'small_bytes'],
            'y': {'a': big_bytes, 'b': b'small_bytes'}}
 
