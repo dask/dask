@@ -3,16 +3,19 @@ from __future__ import absolute_import, division, print_function
 import pytest
 pytest.importorskip('numpy')
 
+from distutils.version import LooseVersion
 from operator import add, sub
 import os
 import shutil
 import time
+import sys
 
 from toolz import merge, countby
 from toolz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe as dd
 from dask.delayed import delayed
 from dask.async import get_sync
 from dask.array.core import *
@@ -682,7 +685,8 @@ def test_unravel():
         assert_eq(x.reshape(*shape), unraveled)
         assert len(unraveled.dask) > len(a.dask) + len(a.chunks[0])
 
-    assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
+    if not sys.flags.optimize:  # Fail if optimized byte-compilation
+        assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
     assert unravel(a, a.shape) is a
 
 
@@ -804,7 +808,10 @@ def test_repr():
     assert str(d._dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
-
+    # Empty array
+    d = da.Array({}, 'd', ((), (3, 4)), dtype='i8')
+    assert str(d.shape) in repr(d)
+    assert str(d._dtype) in repr(d)
 
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
@@ -937,6 +944,15 @@ def test_store_locks():
             assert False
 
 
+@pytest.mark.xfail(reason="can't lock with multiprocessing")
+def test_store_multiprocessing_lock():
+    d = da.ones((10, 10), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(10, 10))
+    a.store(at, get=dask.multiprocessing.get, num_workers=10)
+
+
 def test_to_hdf5():
     h5py = pytest.importorskip('h5py')
     x = da.ones((4, 4), chunks=(2, 2))
@@ -974,6 +990,16 @@ def test_to_hdf5():
             assert f['/x'].chunks == (2, 2)
             assert_eq(f['/y'][:], y)
             assert f['/y'].chunks == (2,)
+
+
+def test_to_dask_dataframe():
+    a = da.ones((4,), chunks=(2,))
+    d = a.to_dask_dataframe()
+    assert isinstance(d, dd.Series)
+
+    a = da.ones((4, 4), chunks=(2, 2))
+    d = a.to_dask_dataframe()
+    assert isinstance(d, dd.DataFrame)
 
 
 def test_np_array_with_zero_dimensions():
@@ -1363,6 +1389,26 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert 'minlength' in str(e)
     else:
         assert False
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
+                    reason="NumPy doesn't yet support nd digitize")
+def test_digitize():
+    x = np.array([2, 4, 5, 6, 1])
+    bins = np.array([1, 2, 3, 4, 5])
+    for chunks in [2, 4]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            assert_eq(da.digitize(d, bins, right=right),
+                      np.digitize(x, bins, right=right))
+
+    x = np.random.random(size=(100, 100))
+    bins = np.random.random(size=13)
+    bins.sort()
+    for chunks in [(10, 10), (10, 20), (13, 17), (87, 54)]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            assert_eq(da.digitize(d, bins, right=right),
+                      np.digitize(x, bins, right=right))
 
 
 def test_histogram():

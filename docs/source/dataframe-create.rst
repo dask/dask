@@ -1,6 +1,10 @@
 Create Dask DataFrames
 ======================
 
+Dask can create dataframes objects from various data storage formats.  Dask dataframes are commonly used to quickly inspect and analyze large volumes of tabular data stored in CSV, HDF5, or other tabular formats.  
+
+See the `Overview section <http://dask.pydata.org/en/latest/dataframe-overview.html>`_ for an in depth discussion of ``dask.dataframe`` scope, use, limitations.    
+
 From CSV files
 --------------
 
@@ -11,7 +15,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.*.csv')
+   >>> df = dd.read_csv('data.*.csv') 
 
 2.  You can specify the size of each block of data in bytes of uncompressed
     data.  Note that, especially for text data the size on disk may be much
@@ -19,17 +23,44 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks
+   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks 
+   
+From HDF5
+----------
 
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,  ``dask.dataframe`` can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+
+``dask.dataframe`` can read a single HDF5 ('myfile.hdf5') file by referencing a group key ('/x'):
+
+.. code-block:: Python
+
+   >>> import dask.dataframe as dd
+   >>> dd.read_hdf('myfile1.hdf5', '/x', chunksize=1000000) 
+
+It is also possible to create a DataFrame object from multiple HDF5 files in a directory with similar group keys by using a wildcard character (\*).  The ``dask.dataframe`` syntax for this task is:
+
+.. code-block:: Python
+
+   >>> import dask.dataframe as dd
+   >>> dd.read_hdf('myfile*.hdf5', '/x', chunksize=1000000) 
+   
+Finally, ``dask.dataframe`` can load multiple datasets from a single HDF5 file using this syntax:
+
+.. code-block:: Python
+   
+   >>> import dask.dataframe as dd 
+   >>> dd.read_hdf('myfile1.hdf5', '/*', chunksize=1000000) 
+   
 From an Array
 -------------
 
 You can create a DataFrame from any sliceable array like object including both
-NumPy arrays and HDF5 datasets.
+NumPy arrays and HDF5 datasets. For a discussion of ``dask.array`` capabilities and
+instruction on creating dask arrays, see the `Array Overview <http://dask.pydata.org/en/latest/array-overview.html>`_ and `Create Dask Arrays <http://dask.pydata.org/en/latest/array-creation.html>`_ sections.
 
 .. code-block:: Python
 
-   >>> dd.from_array(x, chunksize=1000000)
+   >>> dd.from_array(x, chunksize=1000000) 
 
 From BColz
 ----------
@@ -40,7 +71,7 @@ it.  There is a special ``from_bcolz`` function.
 
 .. code-block:: Python
 
-   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000)
+   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000) 
 
 In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
 will only read the necessary columns from disk.  This can provide dramatic
@@ -58,9 +89,9 @@ and not actively maintained; use at your own risk.
 
 .. code-block:: Python
 
-   >>> from castra import Castra
-   >>> c = Castra(path='/my/castra/file')
-   >>> df = c.to_dask()
+   >>> from castra import Castra 
+   >>> c = Castra(path='/my/castra/file') 
+   >>> df = c.to_dask() 
 
 .. _Castra: http://github.com/blaze/castra
 

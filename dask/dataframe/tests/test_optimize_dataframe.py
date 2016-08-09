@@ -1,4 +1,5 @@
 import pytest
+from distutils.version import LooseVersion
 from operator import getitem
 from toolz import merge
 from dask.dataframe.optimize import dataframe_from_ctable
@@ -35,9 +36,12 @@ def test_column_optimizations_with_bcolz_and_rewrite():
         assert result == expected
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
+@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_castra_column_store():
     castra = pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
 
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
 

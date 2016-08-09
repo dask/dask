@@ -12,7 +12,7 @@ from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring
+from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate)
@@ -44,6 +44,7 @@ from ..bytes.core import write_bytes
 
 
 no_default = '__no__default__'
+no_result = '__no__result__'
 
 
 def lazify_task(task, start=True):
@@ -94,7 +95,10 @@ def inline_singleton_lists(dsk, dependencies=None):
 
     keys = [k for k, v in dsk.items()
             if istask(v) and v and v[0] is list and len(dependents[k]) == 1]
-    return inline(dsk, keys, inline_constants=False)
+    dsk = inline(dsk, keys, inline_constants=False)
+    for k in keys:
+        del dsk[k]
+    return dsk
 
 
 def optimize(dsk, keys, **kwargs):
@@ -171,6 +175,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
 
 def finalize(results):
+    if not results:
+        return results
     if isinstance(results, Iterator):
         results = list(results)
     if isinstance(results[0], Iterable) and not isinstance(results[0], str):
@@ -658,7 +664,7 @@ class Bag(Base):
             split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
-        dsk = dict(((a, i), (perpartition, (self.name, i)))
+        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
@@ -666,7 +672,9 @@ class Bag(Base):
         depth = 0
         while k > 1:
             c = fmt + str(depth)
-            dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
+            dsk2 = dict(((c, i), (empty_safe_aggregate,
+                                   aggregate,
+                                   [(b, j) for j in inds]))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -873,19 +881,49 @@ class Bag(Base):
                                 list(dsk.keys())))}
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def take(self, k, compute=True):
+    def take(self, k, npartitions=1, compute=True):
         """ Take the first k elements
 
-        Evaluates by default, use ``compute=False`` to avoid computation.
-        Only takes from the first partition
+        Parameters
+        ----------
+        k : int
+            The number of elements to return
+        npartitions : int, optional
+            Elements are only taken from the first ``npartitions``, with a
+            default of 1. If there are fewer than ``k`` rows in the first
+            ``npartitions`` a warning will be raised and any found rows
+            returned. Pass -1 to use all partitions.
+        compute : bool, optional
+            Whether to compute the result, default is True.
 
         >>> b = from_sequence(range(10))
         >>> b.take(3)  # doctest: +SKIP
         (0, 1, 2)
         """
-        name = 'take-' + tokenize(self, k)
-        dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
+
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        if npartitions > self.npartitions:
+            raise ValueError("only {} partitions, take "
+                "received {}".format(self.npartitions, npartitions))
+
+        token = tokenize(self, k, npartitions)
+        name = 'take-' + token
+
+        if npartitions > 1:
+            name_p = 'take-partial-' + token
+
+            dsk = {}
+            for i in range(npartitions):
+                dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
+
+            concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
+            dsk[(name, 0)] = (safe_take, k, concat)
+        else:
+            dsk = {(name, 0): (safe_take, k, (self.name, 0))}
+
         b = Bag(merge(self.dask, dsk), name, 1)
+
         if compute:
             return tuple(b.compute())
         else:
@@ -966,16 +1004,25 @@ class Bag(Base):
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
 
-        Bag should contain tuple or dict records.
-
-        Provide ``columns=`` keyword arg to specify column names.
+        Bag should contain tuples, dict records, or scalars.
 
         Index will not be particularly meaningful.  Use ``reindex`` afterwards
         if necessary.
 
+        Parameters
+        ----------
+        columns : pandas.DataFrame or list, optional
+            If a ``pandas.DataFrame``, it should mirror the column names and
+            dtypes of the output dataframe. If a list, it provides the desired
+            column names. If not provided or a list, a single element from
+            the first partition will be computed, triggering a potentially
+            expensive call to ``compute``. Providing a list is only useful for
+            selecting subset of columns, to avoid an internal compute call you
+            must provide a ``pandas.DataFrame`` as dask requires dtype knowledge
+            ahead of time.
+
         Examples
         --------
-
         >>> import dask.bag as db
         >>> b = db.from_sequence([{'name': 'Alice',   'balance': 100},
         ...                       {'name': 'Bob',     'balance': 200},
@@ -991,21 +1038,20 @@ class Bag(Base):
         """
         import pandas as pd
         import dask.dataframe as dd
-        if columns is None:
+        if isinstance(columns, pd.DataFrame):
+            meta = columns
+        else:
             head = self.take(1)[0]
-            if isinstance(head, dict):
-                columns = sorted(head)
-            elif isinstance(head, (tuple, list)):
-                columns = list(range(len(head)))
+            meta = pd.DataFrame([head], columns=columns)
+        columns = list(meta.columns)
         name = 'to_dataframe-' + tokenize(self, columns)
         DataFrame = partial(pd.DataFrame, columns=columns)
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
 
         divisions = [None] * (self.npartitions + 1)
-
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, columns, divisions)
+                            name, meta, divisions)
 
     def to_imperative(self):
         warn("Deprecation warning: moved to to_delayed")
@@ -1030,15 +1076,19 @@ class Bag(Base):
             raise NotImplementedError(
               "Repartition only supports going to fewer partitions\n"
               " old: %d  new: %d" % (self.npartitions, npartitions))
-        size = self.npartitions / npartitions
-        L = [int(i * size) for i in range(npartitions + 1)]
-        name = 'repartition-%d-%s' % (npartitions, self.name)
-        dsk = dict(((name, i), (list,
-                                (toolz.concat,
-                                 [(self.name, j) for j in range(L[i], L[i + 1])]
-                                 )))
-                   for i in range(npartitions))
-        return Bag(merge(self.dask, dsk), name, npartitions)
+        npartitions_ratio = self.npartitions / npartitions
+        new_partitions_boundaries = [int(old_partition_index * npartitions_ratio)
+                                        for old_partition_index in range(npartitions + 1)]
+        new_name = 'repartition-%d-%s' % (npartitions, tokenize(self))
+        dsk = {(new_name, new_partition_index):
+                (list,
+                 (toolz.concat,
+                  [(self.name, old_partition_index)
+                    for old_partition_index in range(
+                        new_partitions_boundaries[new_partition_index],
+                        new_partitions_boundaries[new_partition_index + 1])]))
+                for new_partition_index in range(npartitions)}
+        return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
         """Repeatedly apply binary function to a sequence, accumulating results.
@@ -1096,7 +1146,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2**20):
         d2 = defaultdict(list)
         for k, v in d.items():
             d2[abs(hash(k)) % npartitions].extend(v)
-        p.append(d2)
+        p.append(d2, fsync=True)
     return p
 
 
@@ -1586,3 +1636,25 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name,
                          npartitions)
+
+
+def empty_safe_apply(func, part):
+    part = list(part)
+    if part:
+        return func(part)
+    else:
+        return no_result
+
+
+def empty_safe_aggregate(func, parts):
+    parts2 = [p for p in parts if not eq_strict(p, no_result)]
+    return empty_safe_apply(func, parts2)
+
+
+def safe_take(n, b):
+    r = list(take(n, b))
+    if len(r) != n:
+        warn("Insufficient elements for `take`. {0} elements requested, "
+             "only {1} elements available. Try passing larger `npartitions` "
+             "to `take`.".format(n, len(r)))
+    return r

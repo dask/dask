@@ -4,13 +4,10 @@ from itertools import count
 from operator import getitem
 
 from .compatibility import zip_longest
+
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, add, inc, ishashable, preorder_traversal)
 from .rewrite import END
-
-
-def identity(x):
-    return x
 
 
 def cull(dsk, keys):
@@ -149,34 +146,44 @@ def fuse(dsk, keys=None, dependencies=None):
     return rv, dependencies
 
 
+def _flat_set(x):
+    if x is None:
+        return set()
+    elif isinstance(x, set):
+        return x
+    elif not isinstance(x, (list, set)):
+        x = [x]
+    return set(x)
+
+
 def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     """ Return new dask with the given keys inlined with their values.
 
-    Inlines all constants if ``inline_constants`` keyword is True.
+    Inlines all constants if ``inline_constants`` keyword is True. Note that
+    the constant keys will remain in the graph, to remove them follow
+    ``inline`` with ``cull``.
 
     Examples
     --------
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)  # doctest: +SKIP
-    {'y': (inc, 1), 'z': (add, 1, 'y')}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
     >>> inline(d, keys='y')  # doctest: +SKIP
-    {'z': (add, 1, (inc, 1))}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
     >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
-    {'x': 1, 'z': (add, 'x', (inc, 'x'))}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
-    if keys is None:
-        keys = []
-    elif not isinstance(keys, (list, set)):
-        keys = [keys]
-    keys = set(flatten(keys))
-
-    if inline_constants:
-        keys.update(k for k, v in dsk.items() if not istask(v))
+    keys = _flat_set(keys)
 
     if dependencies is None:
         dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+
+    if inline_constants:
+        keys.update(k for k, v in dsk.items() if
+                    (ishashable(v) and v in dsk) or
+                    (not dependencies[k] and not istask(v)))
 
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
@@ -194,14 +201,13 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
         keysubs[key] = val
 
     # Make new dask with substitutions
-    rv = {}
+    dsk2 = keysubs.copy()
     for key, val in dsk.items():
-        if key in keys:
-            continue
-        for item in keys & dependencies[key]:
-            val = subs(val, item, keysubs[item])
-        rv[key] = val
-    return rv
+        if key not in dsk2:
+            for item in keys & dependencies[key]:
+                val = subs(val, item, keysubs[item])
+            dsk2[key] = val
+    return dsk2
 
 
 def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
@@ -244,10 +250,11 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
               and dependents[k]
               and k not in output]
     if keys:
-        return inline(dsk, keys, inline_constants=inline_constants,
+        dsk = inline(dsk, keys, inline_constants=inline_constants,
                 dependencies=dependencies)
-    else:
-        return dsk
+        for k in keys:
+            del dsk[k]
+    return dsk
 
 
 def functions_of(task):
@@ -275,18 +282,13 @@ def unwrap_partial(func):
     return func
 
 
-def dealias(dsk, keys=None):
+def dealias(dsk, keys=None, dependencies=None):
     """ Remove aliases from dask
 
-    Removes and renames aliases using ``inline``.  Keeps aliases at the top of
-    the DAG to ensure entry points stay the same.
-
-    Aliases are not expected by schedulers.  It's unclear that this is a legal
-    state.
-
-    Optional ``keys`` keyword argument allows us to protect keys from being
-    deleted.  This is useful to protect keys that would be expected by a
-    scheduler.
+    Removes and renames aliases using ``inline``. Optional ``keys`` keyword
+    argument protects keys from being deleted. This is useful to protect keys
+    that would be expected by a scheduler. If not provided, all inlined aliases
+    are removed.
 
     Examples
     --------
@@ -300,42 +302,31 @@ def dealias(dsk, keys=None):
     >>> dealias(dsk)  # doctest: +SKIP
     {'a': (range, 5),
      'd': (sum, 'a'),
-     'e': (identity, 'd'),
      'f': (inc, 'd')}
 
     >>> dsk = {'a': (range, 5),
     ...        'b': 'a'}
     >>> dealias(dsk)  # doctest: +SKIP
-    {'b': (range, 5)}
+    {'a': (range, 5)}
 
     >>> dealias(dsk, keys=['a', 'b'])  # doctest: +SKIP
     {'a': (range, 5),
-     'b': (identity, 5)}
+     'b': 'a'}
     """
     keys = keys or set()
     if not isinstance(keys, set):
         keys = set(keys)
 
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
-    dependents = reverse_dict(dependencies)
+    if not dependencies:
+        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
 
-    aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
-    roots = set((k for k, v in dependents.items() if not v))
+    aliases = set(k for k, task in dsk.items() if
+                  ishashable(task) and task in dsk)
 
-    dsk2 = inline(dsk, aliases - roots - keys, inline_constants=False)
-    dsk3 = dsk2.copy()
-
-    dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
-    dependents = reverse_dict(dependencies)
-
-    for k in roots & aliases:
-        k2 = dsk3[k]
-        if len(dependents[k2]) == 1 and k2 not in keys:
-            dsk3[k] = dsk3[k2]
-            del dsk3[k2]
-        else:
-            dsk3[k] = (identity, k2)
-    return dsk3
+    dsk2 = inline(dsk, aliases, inline_constants=False)
+    for k in aliases.difference(keys):
+        del dsk2[k]
+    return dsk2
 
 
 def equivalent(term1, term2, subs=None):

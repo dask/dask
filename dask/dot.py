@@ -4,10 +4,14 @@ import re
 import os
 from functools import partial
 
-from graphviz import Digraph
-
 from .core import istask, get_dependencies, ishashable
-from .utils import funcname
+from .utils import funcname, import_required
+
+
+graphviz = import_required("graphviz", "Drawing dask graphs requires the "
+                                       "`graphviz` python library and the "
+                                       "`graphviz` system library to be "
+                                       "installed.")
 
 
 def task_label(task):
@@ -105,7 +109,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None, **kwargs):
 
     attributes = {'rankdir': 'BT'}
     attributes.update(kwargs)
-    g = Digraph(graph_attr=attributes)
+    g = graphviz.Digraph(graph_attr=attributes)
 
     seen = set()
     cache = {}

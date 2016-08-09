@@ -1,3 +1,4 @@
+import sys
 from operator import getitem
 
 import pandas as pd
@@ -12,7 +13,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, make_meta
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -21,7 +22,8 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 5, 9, 9])
+meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+d = dd.DataFrame(dsk, 'x', meta, [0, 5, 9, 9])
 full = d.compute()
 
 
@@ -70,6 +72,28 @@ def test_head_tail():
             sorted(d.tail(3, compute=False).dask))
 
 
+def test_head_npartitions():
+    assert eq(d.head(5, npartitions=2), full.head(5))
+    assert eq(d.head(5, npartitions=2, compute=False), full.head(5))
+    assert eq(d.head(5, npartitions=-1), full.head(5))
+    assert eq(d.head(7, npartitions=-1), full.head(7))
+    assert eq(d.head(2, npartitions=-1), full.head(2))
+    with pytest.raises(ValueError):
+        d.head(2, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_head_npartitions_warn():
+    with pytest.warns(None):
+        d.head(100)
+
+    with pytest.warns(None):
+        d.head(7)
+
+    with pytest.warns(None):
+        d.head(7, npartitions=2)
+
+
 def test_index_head():
     assert eq(d.index.head(2), full.index[:2])
     assert eq(d.index.head(3), full.index[:3])
@@ -110,6 +134,9 @@ def test_attributes():
 
     df = dd.from_pandas(pd.DataFrame({'a b c': [1, 2, 3]}), npartitions=2)
     assert 'a b c' not in dir(df)
+    df = dd.from_pandas(pd.DataFrame({'a': [1, 2], 5: [1, 2]}), npartitions=2)
+    assert 'a' in dir(df)
+    assert 5 not in dir(df)
 
 
 def test_column_names():
@@ -137,7 +164,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -252,7 +279,7 @@ def test_rename_columns():
     ddf.columns = ['x', 'y']
     df.columns = ['x', 'y']
     tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
-    tm.assert_index_equal(ddf._pd.columns, pd.Index(['x', 'y']))
+    tm.assert_index_equal(ddf._meta.columns, pd.Index(['x', 'y']))
     assert eq(ddf, df)
 
     msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
@@ -395,54 +422,55 @@ def test_where_mask():
 
 
 def test_map_partitions_multi_argument():
-    assert eq(dd.map_partitions(lambda a, b: a + b, None, d.a, d.b),
+    assert eq(dd.map_partitions(lambda a, b: a + b, d.a, d.b),
               full.a + full.b)
-    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, None, d.a, d.b, 1),
+    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, d.a, d.b, 1),
               full.a + full.b + 1)
 
 
 def test_map_partitions():
-    assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
+    assert eq(d.map_partitions(lambda df: df, meta=d), full)
     assert eq(d.map_partitions(lambda df: df), full)
-    result = d.map_partitions(lambda df: df.sum(axis=1), columns=None)
+    result = d.map_partitions(lambda df: df.sum(axis=1))
     assert eq(result, full.sum(axis=1))
 
 
 def test_map_partitions_names():
     func = lambda x: x
-    assert sorted(dd.map_partitions(func, d.columns, d).dask) == \
-           sorted(dd.map_partitions(func, d.columns, d).dask)
-    assert sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask) == \
-           sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask)
+    assert sorted(dd.map_partitions(func, d, meta=d).dask) == \
+           sorted(dd.map_partitions(func, d, meta=d).dask)
+    assert sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) == \
+           sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask)
 
     func = lambda x, y: x
-    assert sorted(dd.map_partitions(func, d.columns, d, d).dask) == \
-           sorted(dd.map_partitions(func, d.columns, d, d).dask)
+    assert sorted(dd.map_partitions(func, d, d, meta=d).dask) == \
+           sorted(dd.map_partitions(func, d, d, meta=d).dask)
 
 
 def test_map_partitions_column_info():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
-    b = dd.map_partitions(lambda x: x, a.columns, a)
+    b = dd.map_partitions(lambda x: x, a, meta=a)
     tm.assert_index_equal(b.columns, a.columns)
     assert eq(df, b)
 
-    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda df: df.x + df.y, None, a)
-    assert b.name is None
+    b = dd.map_partitions(lambda df: df.x + df.y, a)
     assert isinstance(b, dd.Series)
+    assert b.dtype == 'i8'
 
-    b = dd.map_partitions(lambda df: df.x + 1, 'x', a)
+    b = dd.map_partitions(lambda df: df.x + 1, a, meta=('x', 'i8'))
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
+    assert b.dtype == 'i8'
 
 
 def test_map_partitions_method_names():
@@ -453,13 +481,14 @@ def test_map_partitions_method_names():
     assert isinstance(b, dd.DataFrame)
     tm.assert_index_equal(b.columns, a.columns)
 
-    b = a.map_partitions(lambda df: df.x + 1, columns=None)
+    b = a.map_partitions(lambda df: df.x + 1)
     assert isinstance(b, dd.Series)
-    assert b.name is None
+    assert b.dtype == 'i8'
 
-    b = a.map_partitions(lambda df: df.x + 1, columns='x')
+    b = a.map_partitions(lambda df: df.x + 1, meta=('x', 'i8'))
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
+    assert b.dtype == 'i8'
 
 
 def test_map_partitions_keeps_kwargs_in_dict():
@@ -523,36 +552,36 @@ def test_set_partition_compute():
     assert len(d4.dask) > len(d5.dask)
 
 
-def test_get_division():
+def test_get_partition():
     pdf = pd.DataFrame(np.random.randn(10, 5), columns=list('abcde'))
     ddf = dd.from_pandas(pdf, 3)
     assert ddf.divisions == (0, 4, 8, 9)
 
     # DataFrame
-    div1 = ddf.get_division(0)
+    div1 = ddf.get_partition(0)
     assert isinstance(div1, dd.DataFrame)
     assert eq(div1, pdf.loc[0:3])
-    div2 = ddf.get_division(1)
+    div2 = ddf.get_partition(1)
     assert eq(div2, pdf.loc[4:7])
-    div3 = ddf.get_division(2)
+    div3 = ddf.get_partition(2)
     assert eq(div3, pdf.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf)
 
     # Series
-    div1 = ddf.a.get_division(0)
+    div1 = ddf.a.get_partition(0)
     assert isinstance(div1, dd.Series)
     assert eq(div1, pdf.a.loc[0:3])
-    div2 = ddf.a.get_division(1)
+    div2 = ddf.a.get_partition(1)
     assert eq(div2, pdf.a.loc[4:7])
-    div3 = ddf.a.get_division(2)
+    div3 = ddf.a.get_partition(2)
     assert eq(div3, pdf.a.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
     with tm.assertRaises(ValueError):
-        ddf.get_division(-1)
+        ddf.get_partition(-1)
 
     with tm.assertRaises(ValueError):
-        ddf.get_division(3)
+        ddf.get_partition(3)
 
 
 def test_ndim():
@@ -695,8 +724,20 @@ def test_index():
 
 
 def test_assign():
-    assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
-              full.assign(c=full.a + 1, e=full.a + full.b))
+    res = d.assign(c=1,
+                   d='string',
+                   e=np.float64(1),
+                   f=d.a.sum(),
+                   g=d.a + 1,
+                   h=d.a + d.b)
+    sol = full.assign(c=1,
+                      d='string',
+                      e=np.float64(1),
+                      f=full.a.sum(),
+                      g=full.a + 1,
+                      h=full.a + full.b)
+    assert eq(res, sol)
+    pytest.raises(TypeError, lambda: d.assign(c=list(range(9))))
 
 
 def test_map():
@@ -707,6 +748,8 @@ def test_map():
     lk = pd.Series(lk)
     assert eq(d.a.map(lk), full.a.map(lk))
     assert eq(d.b.map(lk), full.b.map(lk))
+    assert eq(d.b.map(lk, meta=d.b), full.b.map(lk))
+    assert eq(d.b.map(lk, meta=('b', 'i8')), full.b.map(lk))
     assert raises(TypeError, lambda: d.a.map(d.b))
 
 
@@ -727,21 +770,16 @@ def test_args():
 
 def test_known_divisions():
     assert d.known_divisions
-
-    df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
-                      ['a', 'b'], divisions=[None, None, None])
+    df = dd.DataFrame(dsk, 'x', meta, divisions=[None, None, None])
     assert not df.known_divisions
-
-    df = dd.DataFrame({('x', 0): 'foo'}, 'x',
-                      ['a', 'b'], divisions=[0, 1])
-    assert d.known_divisions
 
 
 def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
     full = d.compute(get=dask.get)
 
     assert eq(d.a.sum(), full.a.sum())
@@ -752,22 +790,26 @@ def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    a = dd.DataFrame(dsk, 'x', meta, [None, None])
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    b = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    c = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
+    c = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60],
                                    'd': [70, 80, 90]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10],
                                    'd': [90, 80, 70]},
                                   index=[3, 4, 5])}
-    d = dd.DataFrame(dsk, 'y', ['b', 'c', 'd'], [0, 3, 5])
+    meta = make_meta({'b': 'i8', 'c': 'i8', 'd': 'i8'},
+                            index=pd.Index([], 'i8'))
+    d = dd.DataFrame(dsk, 'y', meta, [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]
     assert dd.concat([a]) is a
@@ -785,11 +827,6 @@ def test_concat2():
         assert result.divisions == (None, ) * (result.npartitions + 1)
         assert eq(pd.concat(pdcase, join='inner'), result)
         assert result.dask == dd.concat(case, join='inner').dask
-
-        msg = ('Unable to concatenate DataFrame with unknown division '
-               'specifying axis=1')
-        with tm.assertRaisesRegexp(ValueError, msg):
-            dd.concat(case, axis=1)
 
 
 def test_concat3():
@@ -960,16 +997,18 @@ def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
-    ddf2 = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+    ddf2 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
            ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
-    ddf3 = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
+    ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
     assert eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
     assert eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
@@ -1155,22 +1194,23 @@ def test_repartition_on_pandas_dataframe():
 
 
 def test_repartition_npartitions():
-    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
-                      index=[10, 20, 30, 40, 50, 60])
-    for n in [1, 2, 4, 5]:
-        for k in [1, 2, 4, 5]:
-            if k > n:
-                continue
-            a = dd.from_pandas(df, npartitions=n)
-            k = min(a.npartitions, k)
+    for use_index in (True, False):
+        df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                          index=[10, 20, 30, 40, 50, 60])
+        for n in [1, 2, 4, 5]:
+            for k in [1, 2, 4, 5]:
+                if k > n:
+                    continue
+                a = dd.from_pandas(df, npartitions=n, sort=use_index)
+                k = min(a.npartitions, k)
 
-            b = a.repartition(npartitions=k)
-            eq(a, b)
-            assert b.npartitions == k
+                b = a.repartition(npartitions=k)
+                eq(a, b)
+                assert b.npartitions == k
 
-    a = dd.from_pandas(df, npartitions=1)
-    with pytest.raises(ValueError):
-        a.repartition(npartitions=5)
+        a = dd.from_pandas(df, npartitions=1)
+        with pytest.raises(ValueError):
+            a.repartition(npartitions=5)
 
 
 def test_embarrassingly_parallel_operations():
@@ -1253,9 +1293,10 @@ def test_str_accessor():
 
 
 def test_empty_max():
+    meta = make_meta({'x': 'i8'})
     a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
-                      ['x'], [None, None, None])
+                      meta, [None, None, None])
     assert eq(a.x.max(), 1)
 
 
@@ -1329,10 +1370,27 @@ def test_deterministic_apply_concat_apply_names():
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
-    assert (sorted(aca(a.x, f, f, a.x.name).dask) !=
-            sorted(aca(a.x, f2, f2, a.x.name).dask))
-    assert (sorted(aca(a.x, f, f, a.x.name).dask) ==
-            sorted(aca(a.x, f, f, a.x.name).dask))
+    assert (sorted(aca(a.x, f, f, a.x._meta).dask) !=
+            sorted(aca(a.x, f2, f2, a.x._meta).dask))
+    assert (sorted(aca(a.x, f, f, a.x._meta).dask) ==
+            sorted(aca(a.x, f, f, a.x._meta).dask))
+
+
+def test_aca_meta_infer():
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def chunk(x, y, constant=1.0):
+        return (x + y + constant).head()
+
+    def agg(x):
+        return x.head()
+
+    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg,
+            chunk_kwargs=dict(constant=2.0))
+    sol = (df + 2.0 + 2.0).head()
+    assert eq(res, sol)
 
 
 def test_gh_517():
@@ -1380,7 +1438,6 @@ def test_to_frame():
     s = pd.Series([1, 2, 3], name='foo')
     a = dd.from_pandas(s, npartitions=2)
 
-    assert a.to_frame()._known_dtype
     assert eq(s.to_frame(), a.to_frame())
     assert eq(s.to_frame('bar'), a.to_frame('bar'))
 
@@ -1580,28 +1637,18 @@ def test_dataframe_itertuples():
 def test_from_delayed():
     from dask import delayed
     dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
-    df = dd.from_delayed(dfs, metadata=['A', 'B', 'C', 'D'])
+    meta = dfs[0].compute()
+    df = dd.from_delayed(dfs, meta=meta)
 
     assert (df.compute().columns == df.columns).all()
-    assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
+    f = lambda x: pd.Series([len(x)])
+    assert list(df.map_partitions(f).compute()) == [1, 2, 3, 4]
 
     ss = [df.A for df in dfs]
-    s = dd.from_delayed(ss, metadata='A')
+    s = dd.from_delayed(ss, meta=meta.A)
 
     assert s.compute().name == s.name
-    assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
-
-    s = dd.from_delayed(ss)
-    assert s._known_dtype
-    assert s.compute().name == s.name
-
-    df = dd.from_delayed(dfs, tm.makeTimeDataFrame(1))
-    assert df._known_dtype
-    assert list(df.columns) == ['A', 'B', 'C', 'D']
-
-    df = dd.from_delayed(dfs)
-    assert df._known_dtype
-    assert list(df.columns) == ['A', 'B', 'C', 'D']
+    assert list(s.map_partitions(f).compute()) == [1, 2, 3, 4]
 
 
 def test_to_delayed():
@@ -1664,8 +1711,8 @@ def test_set_index_sorted_true():
 def test_methods_tokenize_differently():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df = dd.from_pandas(df, npartitions=1)
-    assert (df.x.map_partitions(pd.Series.min)._name !=
-            df.x.map_partitions(pd.Series.max)._name)
+    assert (df.x.map_partitions(lambda x: pd.Series(x.min()))._name !=
+            df.x.map_partitions(lambda x: pd.Series(x.max()))._name)
 
 
 def test_sorted_index_single_partition():
@@ -1702,12 +1749,6 @@ def test_timeseries_sorted():
     df.index.name = 'index'
     eq(ddf.set_index('index', sorted=True, drop=True),
        df)
-
-
-def test_build_pd():
-    s, known_dtype = dd.Series._build_pd(pd.NaT)
-    assert isinstance(s, pd.Series)
-    assert np.issubdtype(s.dtype, np.datetime64)
 
 
 def test_column_assignment():

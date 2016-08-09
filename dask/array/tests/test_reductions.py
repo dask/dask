@@ -4,6 +4,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import dask.array as da
+from dask.array.utils import assert_eq as _assert_eq
 from dask.core import get_deps
 from dask.context import set_options
 
@@ -16,15 +17,8 @@ except ImportError:  # pragma: no cover
     nanprod = npcompat.nanprod
 
 
-def eq(a, b):
-    if isinstance(a, da.Array):
-        a = a.compute()
-    if isinstance(b, da.Array):
-        b = b.compute()
-    if isinstance(a, (np.generic, np.ndarray)):
-        return np.all(np.isclose(a, b, equal_nan=True))
-    else:
-        return a == b
+def assert_eq(a, b):
+    _assert_eq(a, b, equal_nan=True)
 
 
 def same_keys(a, b):
@@ -37,21 +31,21 @@ def same_keys(a, b):
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
-    assert eq(da_func(darr), np_func(narr))
-    assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+    assert_eq(da_func(darr), np_func(narr))
+    assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert same_keys(da_func(darr), da_func(darr))
     assert same_keys(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
     if use_dtype:
-        assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
-        assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
+        assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
+        assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
         assert same_keys(da_func(darr, dtype='i8'), da_func(darr, dtype='i8'))
     if split_every:
         a1 = da_func(darr, split_every=2)
         a2 = da_func(darr, split_every={0: 2})
         assert same_keys(a1, a2)
-        assert eq(a1, np_func(narr))
-        assert eq(a2, np_func(narr))
-        assert eq(da_func(darr, keepdims=True, split_every=2),
+        assert_eq(a1, np_func(narr))
+        assert_eq(a2, np_func(narr))
+        assert_eq(da_func(darr, keepdims=True, split_every=2),
                   np_func(narr, keepdims=True))
 
 
@@ -81,34 +75,34 @@ def test_reductions_1D(dtype):
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
-    assert eq(da_func(darr), np_func(narr))
-    assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
-    assert eq(da_func(darr, axis=0), np_func(narr, axis=0))
-    assert eq(da_func(darr, axis=1), np_func(narr, axis=1))
-    assert eq(da_func(darr, axis=1, keepdims=True),
+    assert_eq(da_func(darr), np_func(narr))
+    assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+    assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
+    assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
+    assert_eq(da_func(darr, axis=1, keepdims=True),
               np_func(narr, axis=1, keepdims=True))
-    assert eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
+    assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
 
     assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
     assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
     if use_dtype:
-        assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
-        assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
+        assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
+        assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
 
     if split_every:
         a1 = da_func(darr, split_every=4)
         a2 = da_func(darr, split_every={0: 2, 1: 2})
         assert same_keys(a1, a2)
-        assert eq(a1, np_func(narr))
-        assert eq(a2, np_func(narr))
-        assert eq(da_func(darr, keepdims=True, split_every=4),
+        assert_eq(a1, np_func(narr))
+        assert_eq(a2, np_func(narr))
+        assert_eq(da_func(darr, keepdims=True, split_every=4),
                   np_func(narr, keepdims=True))
-        assert eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
-        assert eq(da_func(darr, axis=0, keepdims=True, split_every=2),
+        assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+        assert_eq(da_func(darr, axis=0, keepdims=True, split_every=2),
                   np_func(narr, axis=0, keepdims=True))
-        assert eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
-        assert eq(da_func(darr, axis=1, keepdims=True, split_every=2),
+        assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
+        assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
                   np_func(narr, axis=1, keepdims=True))
 
 
@@ -146,24 +140,24 @@ def test_arg_reductions(dfunc, func):
     x = np.random.random((10, 10, 10))
     a = da.from_array(x, chunks=(3, 4, 5))
 
-    assert eq(dfunc(a), func(x))
-    assert eq(dfunc(a, 0), func(x, 0))
-    assert eq(dfunc(a, 1), func(x, 1))
-    assert eq(dfunc(a, 2), func(x, 2))
+    assert_eq(dfunc(a), func(x))
+    assert_eq(dfunc(a, 0), func(x, 0))
+    assert_eq(dfunc(a, 1), func(x, 1))
+    assert_eq(dfunc(a, 2), func(x, 2))
     with set_options(split_every=2):
-        assert eq(dfunc(a), func(x))
-        assert eq(dfunc(a, 0), func(x, 0))
-        assert eq(dfunc(a, 1), func(x, 1))
-        assert eq(dfunc(a, 2), func(x, 2))
+        assert_eq(dfunc(a), func(x))
+        assert_eq(dfunc(a, 0), func(x, 0))
+        assert_eq(dfunc(a, 1), func(x, 1))
+        assert_eq(dfunc(a, 2), func(x, 2))
 
     pytest.raises(ValueError, lambda: dfunc(a, 3))
     pytest.raises(TypeError, lambda: dfunc(a, (0, 1)))
 
     x2 = np.arange(10)
     a2 = da.from_array(x2, chunks=3)
-    assert eq(dfunc(a2), func(x2))
-    assert eq(dfunc(a2, 0), func(x2, 0))
-    assert eq(dfunc(a2, 0, split_every=2), func(x2, 0))
+    assert_eq(dfunc(a2), func(x2))
+    assert_eq(dfunc(a2, 0), func(x2, 0))
+    assert_eq(dfunc(a2, 0, split_every=2), func(x2, 0))
 
 
 @pytest.mark.parametrize(['dfunc', 'func'],
@@ -172,8 +166,8 @@ def test_nanarg_reductions(dfunc, func):
     x = np.random.random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
-    assert eq(dfunc(a), func(x))
-    assert eq(dfunc(a, 0), func(x, 0))
+    assert_eq(dfunc(a), func(x))
+    assert_eq(dfunc(a, 0), func(x, 0))
     with pytest.raises(ValueError):
         dfunc(a, 1).compute()
 
@@ -212,18 +206,18 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
     reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
-    assert eq(da.argmax(a), np.argmax(x))
-    assert eq(da.argmin(a), np.argmin(x))
-    assert eq(da.nanargmax(a), np.nanargmax(x))
-    assert eq(da.nanargmin(a), np.nanargmin(x))
-    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
-    assert eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-    assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
+    assert_eq(da.argmax(a), np.argmax(x))
+    assert_eq(da.argmin(a), np.argmin(x))
+    assert_eq(da.nanargmax(a), np.nanargmax(x))
+    assert_eq(da.nanargmin(a), np.nanargmin(x))
+    assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+    assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+    assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
+    assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+    assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
+    assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
 def test_moment():
@@ -234,30 +228,30 @@ def test_moment():
     # Poorly conditioned
     x = np.array([1., 2., 3.]*10).reshape((3, 10)) + 1e8
     a = da.from_array(x, chunks=5)
-    assert eq(a.moment(2), moment(x, 2))
-    assert eq(a.moment(3), moment(x, 3))
-    assert eq(a.moment(4), moment(x, 4))
+    assert_eq(a.moment(2), moment(x, 2))
+    assert_eq(a.moment(3), moment(x, 3))
+    assert_eq(a.moment(4), moment(x, 4))
 
     x = np.arange(1, 122).reshape((11, 11)).astype('f8')
     a = da.from_array(x, chunks=(4, 4))
-    assert eq(a.moment(4, axis=1), moment(x, 4, axis=1))
-    assert eq(a.moment(4, axis=(1, 0)), moment(x, 4, axis=(1, 0)))
+    assert_eq(a.moment(4, axis=1), moment(x, 4, axis=1))
+    assert_eq(a.moment(4, axis=(1, 0)), moment(x, 4, axis=(1, 0)))
 
     # Tree reduction
-    assert eq(a.moment(order=4, split_every=4), moment(x, 4))
-    assert eq(a.moment(order=4, axis=0, split_every=4), moment(x, 4, axis=0))
-    assert eq(a.moment(order=4, axis=1, split_every=4), moment(x, 4, axis=1))
+    assert_eq(a.moment(order=4, split_every=4), moment(x, 4))
+    assert_eq(a.moment(order=4, axis=0, split_every=4), moment(x, 4, axis=0))
+    assert_eq(a.moment(order=4, axis=1, split_every=4), moment(x, 4, axis=1))
 
 
 def test_reductions_with_negative_axes():
     x = np.random.random((4, 4, 4))
     a = da.from_array(x, chunks=2)
 
-    assert eq(a.argmin(axis=-1), x.argmin(axis=-1))
-    assert eq(a.argmin(axis=-1, split_every=2), x.argmin(axis=-1))
+    assert_eq(a.argmin(axis=-1), x.argmin(axis=-1))
+    assert_eq(a.argmin(axis=-1, split_every=2), x.argmin(axis=-1))
 
-    assert eq(a.sum(axis=-1), x.sum(axis=-1))
-    assert eq(a.sum(axis=(0, -1)), x.sum(axis=(0, -1)))
+    assert_eq(a.sum(axis=-1), x.sum(axis=-1))
+    assert_eq(a.sum(axis=(0, -1)), x.sum(axis=(0, -1)))
 
 
 def test_nan():
@@ -266,16 +260,16 @@ def test_nan():
                   [9, 10, 11, 12]])
     d = da.from_array(x, chunks=(2, 2))
 
-    assert eq(np.nansum(x), da.nansum(d))
-    assert eq(np.nansum(x, axis=0), da.nansum(d, axis=0))
-    assert eq(np.nanmean(x, axis=1), da.nanmean(d, axis=1))
-    assert eq(np.nanmin(x, axis=1), da.nanmin(d, axis=1))
-    assert eq(np.nanmax(x, axis=(0, 1)), da.nanmax(d, axis=(0, 1)))
-    assert eq(np.nanvar(x), da.nanvar(d))
-    assert eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
-    assert eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
-    assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
-    assert eq(nanprod(x), da.nanprod(d))
+    assert_eq(np.nansum(x), da.nansum(d))
+    assert_eq(np.nansum(x, axis=0), da.nansum(d, axis=0))
+    assert_eq(np.nanmean(x, axis=1), da.nanmean(d, axis=1))
+    assert_eq(np.nanmin(x, axis=1), da.nanmin(d, axis=1))
+    assert_eq(np.nanmax(x, axis=(0, 1)), da.nanmax(d, axis=(0, 1)))
+    assert_eq(np.nanvar(x), da.nanvar(d))
+    assert_eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
+    assert_eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
+    assert_eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
+    assert_eq(nanprod(x), da.nanprod(d))
 
 
 def test_0d_array():

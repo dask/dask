@@ -27,7 +27,7 @@ def categorize(df, columns=None, **kwargs):
     if columns is None:
         dtypes = df.dtypes
         columns = [name for name, dt in zip(dtypes.index, dtypes.values)
-                    if dt == 'O']
+                   if dt == 'O']
     if not isinstance(columns, (list, tuple)):
         columns = [columns]
 
@@ -35,7 +35,9 @@ def categorize(df, columns=None, **kwargs):
     values = compute(*distincts, **kwargs)
 
     func = partial(_categorize_block, categories=dict(zip(columns, values)))
-    return df.map_partitions(func, columns=df.columns)
+
+    meta = func(df._meta)
+    return df.map_partitions(func, meta=meta)
 
 
 def _categorize(categories, df):
@@ -98,6 +100,7 @@ def strip_categories(df):
                               if iscategorical(df.index.dtype)
                               else df.index)
 
+
 def iscategorical(dt):
     return isinstance(dt, pd.core.common.CategoricalDtype)
 
@@ -116,4 +119,3 @@ def get_categories(df):
     if iscategorical(df.index.dtype):
         result['.index'] = df.index.categories
     return result
-

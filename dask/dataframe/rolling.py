@@ -106,7 +106,7 @@ class Rolling(object):
         self.axis = axis
 
         # Allow pandas to raise if appropriate
-        obj._pd.rolling(**self._rolling_kwargs())
+        obj._meta.rolling(**self._rolling_kwargs())
 
     def _rolling_kwargs(self):
         return {
@@ -153,9 +153,9 @@ class Rolling(object):
             else:
                 # Either we are only looking backward or this was the
                 # only chunk.
-                next_partition = self.obj._pd
+                next_partition = self.obj._meta
             dsk[new_name, 0] = (call_pandas_rolling_method_with_neighbors,
-                self.obj._pd, (old_name, 0), next_partition, 0, after,
+                self.obj._meta, (old_name, 0), next_partition, 0, after,
                 self._rolling_kwargs(), method_name, args, kwargs)
 
             # All the middle chunks
@@ -178,11 +178,11 @@ class Rolling(object):
 
                 dsk[new_name, end] = (
                     call_pandas_rolling_method_with_neighbors,
-                    (tail_name, end-1), (old_name, end), self.obj._pd, before, 0,
+                    (tail_name, end-1), (old_name, end), self.obj._meta, before, 0,
                     self._rolling_kwargs(), method_name, args, kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata
-        pd_rolling = self.obj._pd.rolling(**self._rolling_kwargs())
+        pd_rolling = self.obj._meta.rolling(**self._rolling_kwargs())
         metadata = getattr(pd_rolling, method_name)(*args, **kwargs)
 
         return self.obj._constructor(

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import dask
 from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.utils import eq, assert_dask_graph
@@ -15,14 +16,14 @@ def groupby_internal_repr():
     gp = pdf.groupby('y')
     dp = ddf.groupby('y')
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
 
     gp = pdf.groupby('y')['x']
     dp = ddf.groupby('y')['x']
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
     assert eq(dp.obj, gp.obj)
@@ -30,7 +31,7 @@ def groupby_internal_repr():
     gp = pdf.groupby('y')[['x']]
     dp = ddf.groupby('y')[['x']]
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
@@ -38,7 +39,7 @@ def groupby_internal_repr():
     gp = pdf.groupby(pdf.y)['x']
     dp = ddf.groupby(ddf.y)['x']
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
     assert eq(dp.obj, gp.obj)
@@ -46,7 +47,7 @@ def groupby_internal_repr():
     gp = pdf.groupby(pdf.y)[['x']]
     dp = ddf.groupby(ddf.y)[['x']]
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
@@ -90,24 +91,21 @@ def groupby_internal_head():
 
 
 def test_full_groupby():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                                  index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
-    full = d.compute()
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    assert raises(Exception, lambda: d.groupby('does_not_exist'))
-    assert raises(Exception, lambda: d.groupby('a').does_not_exist)
-    assert 'b' in dir(d.groupby('a'))
+    assert raises(Exception, lambda: df.groupby('does_not_exist'))
+    assert raises(Exception, lambda: df.groupby('a').does_not_exist)
+    assert 'b' in dir(df.groupby('a'))
 
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert eq(df.groupby('a').apply(func),
+              ddf.groupby('a').apply(func))
 
 
 def test_groupby_dir():
@@ -119,14 +117,10 @@ def test_groupby_dir():
 
 
 def test_groupby_on_index():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                                  index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
-    full = d.compute()
+    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    d = dd.from_pandas(full, npartitions=3)
 
     e = d.set_index('a')
     efull = full.set_index('a')
@@ -192,7 +186,8 @@ def test_groupby_get_group():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = dsk[('x', 0)]
+    d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     full = d.compute()
 
     for ddkey, pdkey in [('b', 'b'), (d.b, full.b),
@@ -230,7 +225,7 @@ def test_series_groupby_propagates_names():
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df['y'].sum()
 
-    result = ddf.groupby('x').apply(func, columns='y')
+    result = ddf.groupby('x').apply(func, meta=('y', 'i8'))
 
     expected = df.groupby('x').apply(func)
     expected.name = 'y'
@@ -460,3 +455,33 @@ def test_apply_shuffle():
 
     assert eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
+
+
+def test_numeric_column_names():
+    # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
+    # This ensures that we cast all column iterables to list beforehand.
+    df = pd.DataFrame({0: [0, 1, 0, 1],
+                       1: [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    eq(ddf.groupby(0).apply(lambda x: x), df.groupby(0).apply(lambda x: x))
+
+
+
+def test_groupby_apply_tasks():
+    df = pd.util.testing.makeTimeDataFrame()
+    df['A'] = df.A // 0.1
+    df['B'] = df.B // 0.1
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    with dask.set_options(shuffle='tasks'):
+        for ind in [lambda x: 'A', lambda x: x.A]:
+            a = df.groupby(ind(df)).apply(len)
+            b = ddf.groupby(ind(ddf)).apply(len)
+            assert eq(a, b.compute())
+            assert not any('partd' in k[0] for k in b.dask)
+
+            a = df.groupby(ind(df)).B.apply(len)
+            b = ddf.groupby(ind(ddf)).B.apply(len)
+            assert eq(a, b.compute())
+            assert not any('partd' in k[0] for k in b.dask)
