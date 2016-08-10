@@ -9,7 +9,7 @@ from warnings import warn
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
 from ..compatibility import PY2, unicode
-from ..delayed import delayed
+from ..delayed import delayed, Delayed, apply
 from ..utils import (infer_storage_options, system_encoding,
                      build_name_function, infer_compression)
 
@@ -39,8 +39,6 @@ def write_block_to_file(data, f, compression, encoding):
         encoding and binary mode.
     """
     original = False
-    opener, path, kwargs = f
-    f = opener(path, **kwargs)
     f2 = f
     f = SeekableFile(f)
     if compression:
@@ -119,13 +117,13 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
             raise ValueError('Number of paths and number of delayed objects'
                              'must match (%s != %s)', len(urlpath), len(data))
         storage_options = infer_storage_options(urlpath[0],
-                inherit_storage_options=kwargs)
+                                                inherit_storage_options=kwargs)
         del storage_options['path']
         paths = [infer_storage_options(u, inherit_storage_options=kwargs)['path']
                  for u in urlpath]
     elif isinstance(urlpath, (str, unicode)):
         storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
+                                                inherit_storage_options=kwargs)
         path = storage_options.pop('path')
         paths = _expand_paths(path, name_function, len(data))
     else:
@@ -143,10 +141,13 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    files = [(open_files_write, p, storage_options) for p in paths]
-    out = [delayed(write_block_to_file)(v, f, compression, encoding)
-           for (v, f) in zip(data, files)]
-    return out
+    keys = ['write-block-%s' % path for path in paths]
+    return [Delayed(key, dasks=[{key: (write_block_to_file, v.key,
+                                       (apply, open_files_write, (p,),
+                                        storage_options),
+                                       compression, encoding),
+                                 }, v.dask])
+            for key, v, p in zip(keys, data, paths)]
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
