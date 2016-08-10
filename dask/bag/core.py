@@ -249,6 +249,13 @@ class Item(Base):
         self.key = key
         self.name = key
 
+    @property
+    def _args(self):
+        return (self.dask, self.key)
+
+    def __getnewargs__(self):
+        return self._args
+
     def _keys(self):
         return [self.key]
 
@@ -368,6 +375,9 @@ class Bag(Base):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
+
+    def __getnewargs__(self):
+        return self._args
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
