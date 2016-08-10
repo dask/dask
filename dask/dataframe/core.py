@@ -3011,12 +3011,12 @@ def idxmaxmin_chunk(x, **kwargs):
     return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)}).T
 
 
-def idxmaxmin_row(x):
-
-    idx = x.ix['idx'].reset_index(drop=True)
+def idxmaxmin_row(x, fn=None):
+    idx = x.ix['idx'].reset_index(drop=True).astype(int)
     value = x.ix['value'].reset_index(drop=True)
-    return idx.iloc[value.idxmax()]
+    return idx.iloc[getattr(value, fn)()]
 
 
 def idxmaxmin_agg(x, **kwargs):
-    return x.T.apply(idxmaxmin_row, axis=1)
+    fn = kwargs['fn']
+    return x.T.apply(idxmaxmin_row, axis=1, fn=fn)
