@@ -83,17 +83,12 @@ def test_futures_to_dask_dataframe(loop):
 
 @gen_cluster(timeout=120, executor=True)
 def test_dataframes(e, s, a, b):
-    dfs = [pd.DataFrame({'x': np.random.random(100),
-                         'y': np.random.random(100)},
-                        index=list(range(i, i + 100)))
-           for i in range(0, 100*10, 100)]
+    df = pd.DataFrame({'x': np.random.random(10000),
+                       'y': np.random.random(10000)},
+                       index=np.arange(10000))
+    ldf = dd.from_pandas(df, npartitions=10)
 
-    remote_dfs = e.map(lambda x: x, dfs)
-    rdf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True)
-    name = 'foo'
-    ldf = dd.DataFrame({(name, i): df for i, df in enumerate(dfs)},
-                       name, dfs[0].columns,
-                       list(range(0, 1000, 100)) + [999])
+    rdf = e.persist(ldf)
 
     assert rdf.divisions == ldf.divisions
 
