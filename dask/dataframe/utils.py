@@ -172,8 +172,13 @@ def make_meta(x, index=None):
                              "got {0}".format(x))
         return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
                             columns=[c for c, d in x], index=index)
+    # For operations that return scalars:
     elif hasattr(x, 'dtype'):
         return np.array([], dtype=x.dtype)
+    elif isinstance(x, pd.datetime):
+        return pd.Series([x]).as_matrix()[:0]
+    elif np.isscalar(x):
+        return np.array([x])[:0]
     else:
         raise TypeError("Don't know how to create metadata from {0}".format(x))
 
