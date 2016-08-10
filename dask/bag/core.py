@@ -247,14 +247,20 @@ class Item(Base):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
-        self.name = key
+
+    @property
+    def name(self):
+        return self.key
 
     @property
     def _args(self):
         return (self.dask, self.key)
 
-    def __getnewargs__(self):
+    def __getstate__(self):
         return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.key = state
 
     def _keys(self):
         return [self.key]
@@ -316,7 +322,10 @@ class Bag(Base):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
-        self.str = StringAccessor(self)
+
+    @property
+    def str(self):
+        return StringAccessor(self)
 
     def __str__(self):
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
@@ -376,8 +385,11 @@ class Bag(Base):
     def _args(self):
         return (self.dask, self.name, self.npartitions)
 
-    def __getnewargs__(self):
+    def __getstate__(self):
         return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self.npartitions = state
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
