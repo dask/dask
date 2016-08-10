@@ -805,6 +805,12 @@ class Array(Base):
     def _args(self):
         return (self.dask, self.name, self.chunks, self.dtype)
 
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self._chunks, self._dtype = state
+
     @property
     def numblocks(self):
         return tuple(map(len, self.chunks))

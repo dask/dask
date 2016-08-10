@@ -1049,3 +1049,20 @@ def test_reduction_with_sparse_matrices():
 
 def test_empty():
     list(db.from_sequence([])) == []
+
+
+def test_bag_picklable():
+    from pickle import loads, dumps
+
+    b = db.from_sequence(range(10), npartitions=3)
+    b2 = loads(dumps(b))
+    assert b.compute() == b2.compute()
+
+    s = b.sum()
+    s2 = loads(dumps(s))
+    assert s.compute() == s2.compute()
+    assert s.key == s2.key
+    assert s.name == s2.name
+
+    assert (b2.map(str).str.upper().compute() ==
+            b.map(str).str.upper().compute())
