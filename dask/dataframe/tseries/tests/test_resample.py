@@ -41,3 +41,13 @@ def test_series_resample_not_implemented():
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
     assert raises(NotImplementedError, lambda: resample(ds, '57T'))
+
+
+def test_unknown_divisions_error():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    try:
+        ddf.x.resample('1m').mean()
+        assert False
+    except ValueError as e:
+        assert 'divisions' in str(e)

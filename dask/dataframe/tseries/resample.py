@@ -77,6 +77,10 @@ def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
 
 class Resampler(object):
     def __init__(self, obj, rule, **kwargs):
+        if not obj.known_divisions:
+            raise ValueError("Can only resample dataframes with known divisions"
+                    "\nSee dask.pydata.io/en/latest/dataframe-partitions.html"
+                    "\nfor more information.")
         self.obj = obj
         rule = pd.datetools.to_offset(rule)
         day_nanos = pd.datetools.Day().nanos
