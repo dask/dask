@@ -812,6 +812,8 @@ class Scheduler(Server):
             try:
                 func = getattr(self, 'validate_' + self.task_state[key])
             except KeyError:
+                logger.debug("Key lost: %s", key)
+            except AttributeError:
                 logger.info("self.validate_%s not found", self.task_state[key])
             else:
                 func(key)
@@ -1462,17 +1464,17 @@ class Scheduler(Server):
         else:
             return valmap(list, self.who_has)
 
-    def get_has_what(self, stream=None, keys=None):
-        if keys is not None:
-            keys = map(self.coerce_address, keys)
-            return {k: list(self.has_what.get(k, ())) for k in keys}
+    def get_has_what(self, stream=None, workers=None):
+        if workers is not None:
+            workers = map(self.coerce_address, workers)
+            return {w: list(self.has_what.get(w, ())) for w in workers}
         else:
             return valmap(list, self.has_what)
 
-    def get_ncores(self, stream=None, addresses=None):
-        if addresses is not None:
-            addresses = map(self.coerce_address, addresses)
-            return {k: self.ncores.get(k, None) for k in addresses}
+    def get_ncores(self, stream=None, workers=None):
+        if workers is not None:
+            workers = map(self.coerce_address, workers)
+            return {w: self.ncores.get(w, None) for w in workers}
         else:
             return self.ncores
 
@@ -2086,11 +2088,17 @@ class Scheduler(Server):
         This includes feedback from previous transitions and continues until we
         reach a steady state
         """
+        keys = set()
         recommendations = recommendations.copy()
         while recommendations:
             key, finish = recommendations.popitem()
+            keys.add(key)
             new = self.transition(key, finish)
             recommendations.update(new)
+
+        if self.validate:
+            for key in keys:
+                self.validate_key(key)
 
     def transition_story(self, *keys):
         """ Get all transitions that touch one of the input keys """
@@ -2398,12 +2406,6 @@ class Scheduler(Server):
             else:
                 out.update({ww for ww in self.ncores if w in ww}) # TODO: quadratic
         return list(out)
-
-    def log_state(self, msg=''):
-        """ Log current full state of the scheduler """
-        logger.debug("Runtime State: %s", msg)
-        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n',
-                     self.waiting, self.stacks, self.processing)
 
 
 def decide_worker(dependencies, stacks, processing, who_has, has_what, restrictions,

@@ -11,6 +11,7 @@ from time import sleep
 import uuid
 from threading import Thread
 import six
+import socket
 
 import dask
 from dask.base import tokenize, normalize_token, Base
@@ -315,7 +316,7 @@ class Executor(object):
             from distributed.deploy import LocalCluster
             try:
                 self.cluster = LocalCluster(loop=self.loop, start=False)
-            except OSError:
+            except (OSError, socket.error):
                 self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
                                             start=False)
             self._start_arg = self.cluster.scheduler_address
@@ -325,16 +326,15 @@ class Executor(object):
             ident = yield r.identity()
         except (StreamClosedError, OSError):
             raise IOError("Could not connect to %s:%d" % (r.ip, r.port))
-        if ident['type'] == 'Scheduler':
-            self.scheduler = r
-            stream = yield connect(r.ip, r.port)
-            yield write(stream, {'op': 'register-client',
-                                 'client': self.id})
-            bstream = BatchedSend(interval=10, loop=self.loop)
-            bstream.start(stream)
-            self.scheduler_stream = bstream
-        else:
-            raise ValueError("Unknown Type")
+        assert ident['type'] == 'Scheduler'
+
+        self.scheduler = r
+        stream = yield connect(r.ip, r.port)
+        yield write(stream, {'op': 'register-client',
+                             'client': self.id})
+        bstream = BatchedSend(interval=10, loop=self.loop)
+        bstream.start(stream)
+        self.scheduler_stream = bstream
 
         start_event = Event()
         self.coroutines.append(self._handle_report(start_event))
@@ -1360,7 +1360,7 @@ class Executor(object):
             workers = list(workers)
         if workers is not None and not isinstance(workers, (list, set)):
             workers = [workers]
-        return sync(self.loop, self.scheduler.ncores, addresses=workers)
+        return sync(self.loop, self.scheduler.ncores, workers=workers)
 
     def who_has(self, futures=None):
         """ The workers storing each future's data
@@ -1422,7 +1422,7 @@ class Executor(object):
             workers = list(workers)
         if workers is not None and not isinstance(workers, (list, set)):
             workers = [workers]
-        return sync(self.loop, self.scheduler.has_what, keys=workers)
+        return sync(self.loop, self.scheduler.has_what, workers=workers)
 
     def stacks(self, workers=None):
         """ The task queues on each worker

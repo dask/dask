@@ -87,3 +87,6 @@ def test_progress_function(loop, capsys):
 
             progress([[f], [[g]]], notebook=False)
             check_bar_completed(capsys)
+
+            progress(f)
+            check_bar_completed(capsys)

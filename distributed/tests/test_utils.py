@@ -1,20 +1,22 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterator
-import pytest
+from functools import partial
 import io
 from time import time, sleep
 from threading import Thread
 import threading
+import traceback
+
+import pytest
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
-import traceback
 
 import dask
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
-        iterator_to_queue, _maybe_complex, read_block, seek_delimiter)
+        iterator_to_queue, _maybe_complex, read_block, seek_delimiter, funcname)
 from distributed.utils_test import loop, inc, throws, div
 from distributed.compatibility import Queue, isqueue
 
@@ -129,7 +131,10 @@ def test_is_kernel():
 
 def test_ensure_ip():
     assert ensure_ip('localhost') == '127.0.0.1'
+    assert ensure_ip('localhost:8787') == '127.0.0.1:8787'
+    assert ensure_ip(b'localhost:8787') == '127.0.0.1:8787'
     assert ensure_ip('123.123.123.123') == '123.123.123.123'
+    assert ensure_ip('123.123.123.123:8787') == '123.123.123.123:8787'
 
 
 def test_truncate_exception():
@@ -257,3 +262,12 @@ def test_seek_delimiter_endline():
     f.seek(5)
     seek_delimiter(f, b'\n', 5)
     assert f.tell() == 7
+
+
+def test_funcname():
+    def f():
+        pass
+
+    assert funcname(f) == 'f'
+    assert funcname(partial(f)) == 'f'
+    assert funcname(partial(partial(f))) == 'f'

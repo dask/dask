@@ -19,6 +19,7 @@ from toolz import (identity, isdistinct, first, concat, pluck, valmap,
 from tornado import gen
 from tornado.ioloop import IOLoop
 
+import dask
 from dask import delayed
 from dask.context import _globals
 from distributed import Worker, Nanny
@@ -2260,6 +2261,7 @@ def test_futures_of(e, s, a, b):
     assert set(futures_of(x)) == {x}
     assert set(futures_of([x, y, z])) == {x, y, z}
     assert set(futures_of([x, [y], [[z]]])) == {x, y, z}
+    assert set(futures_of({'x': x, 'y': [y]})) == {x, y}
 
     import dask.bag as db
     b = db.Bag({('b', i): f for i, f in enumerate([x, y, z])}, 'b', 3)
@@ -3070,6 +3072,12 @@ def test_default_get(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             assert _globals['get'] == e.get
 
+        with Executor(('127.0.0.1', s['port']), loop=loop, set_as_default=False) as e:
+            assert _globals['get'] != e.get
+            dask.set_options(get=e.get)
+            assert _globals['get'] == e.get
+        assert _globals['get'] != e.get
+
 
 @gen_cluster(executor=True)
 def test_get_stacks_processing(e, s, a, b):
@@ -3084,11 +3092,46 @@ def test_get_stacks_processing(e, s, a, b):
 
     yield gen.sleep(0.2)
 
-    stacks = yield e.scheduler.stacks()
-    assert stacks == valmap(list, s.stacks)
+    c = yield e.scheduler.stacks()
+    assert c == valmap(list, s.stacks)
 
-    processing = yield e.scheduler.processing()
-    assert processing == valmap(list, s.processing)
+    c = yield e.scheduler.stacks(workers=[a.address])
+    assert c == {a.address: list(s.stacks[a.address])}
+
+    c = yield e.scheduler.processing()
+    assert c == valmap(list, s.processing)
+
+    c = yield e.scheduler.processing(workers=[a.address])
+    assert c == {a.address: list(s.processing[a.address])}
+
+@gen_cluster(executor=True)
+def test_get_foo(e, s, a, b):
+    futures = e.map(inc, range(10))
+    yield _wait(futures)
+
+    c = yield e.scheduler.ncores()
+    assert c == s.ncores
+
+    c = yield e.scheduler.ncores(workers=[a.address])
+    assert c == {a.address: s.ncores[a.address]}
+
+    c = yield e.scheduler.has_what()
+    assert c == valmap(list, s.has_what)
+
+    c = yield e.scheduler.has_what(workers=[a.address])
+    assert c == {a.address: list(s.has_what[a.address])}
+
+    c = yield e.scheduler.nbytes(summary=False)
+    assert c == s.nbytes
+
+    c = yield e.scheduler.nbytes(keys=[futures[0].key], summary=False)
+    assert c == {futures[0].key: s.nbytes[futures[0].key]}
+
+    c = yield e.scheduler.who_has()
+    assert c == valmap(list, s.who_has)
+
+    c = yield e.scheduler.who_has(keys=[futures[0].key])
+    assert c == {futures[0].key: list(s.who_has[futures[0].key])}
 
 
 @gen_cluster(executor=True, Worker=Nanny)
@@ -3334,22 +3377,30 @@ def test_status():
 
 
 @gen_cluster(executor=True)
-def test_compute_optimize_graph(e, s, a, b):
+def test_persist_optimize_graph(e, s, a, b):
+    i = 10
     import dask.bag as db
-    b = db.range(10, npartitions=2)
-    b2 = b.map(inc)
-    b3 = b2.map(inc)
+    for method in [e.persist, e.compute]:
+        b = db.range(i, npartitions=2); i += 1
+        b2 = b.map(inc)
+        b3 = b2.map(inc)
 
-    b4 = e.persist(b3, optimize_graph=False)
-    yield _wait(b4)
+        b4 = method(b3, optimize_graph=False)
+        yield _wait(b4)
 
-    assert set(map(tokey, b3._keys())).issubset(s.tasks)
+        assert set(map(tokey, b3._keys())).issubset(s.tasks)
 
-    b = db.range(12, npartitions=2)
-    b2 = b.map(inc)
-    b3 = b2.map(inc)
+        b = db.range(i, npartitions=2); i += 1
+        b2 = b.map(inc)
+        b3 = b2.map(inc)
 
-    b4 = e.persist(b3, optimize_graph=True)
-    yield _wait(b4)
+        b4 = method(b3, optimize_graph=True)
+        yield _wait(b4)
 
-    assert not any(tokey(k) in s.tasks for k in b2._keys())
+        assert not any(tokey(k) in s.tasks for k in b2._keys())
+
+
+@gen_cluster(executor=True, ncores=[])
+def test_persist_optimize_graph(e, s):
+    with pytest.raises(ValueError):
+        yield e._scatter([1])

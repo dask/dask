@@ -107,18 +107,6 @@ class Progress(SchedulerPlugin):
         for k in errors:
             self.transition(k, None, 'erred', exception=True)
 
-    def start(self):
-        self.status = 'running'
-        logger.debug("Start Progress Plugin")
-        self._start()
-        if any(k in self.scheduler.exceptions_blame for k in self.all_keys):
-            self.stop(True)
-        elif not self.keys:
-            self.stop()
-
-    def _start(self):
-        pass
-
     def transition(self, key, start, finish, *args, **kwargs):
         if key in self.keys and start == 'processing' and finish == 'memory':
             logger.debug("Progress sees key %s", key)
@@ -146,10 +134,6 @@ class Progress(SchedulerPlugin):
         else:
             self.status = 'finished'
         logger.debug("Remove Progress plugin")
-
-    @property
-    def elapsed(self):
-        return default_timer() - self._start_time
 
 
 class MultiProgress(Progress):
@@ -239,18 +223,6 @@ class MultiProgress(Progress):
                 logger.debug("A task was cancelled (%s), stopping progress", key)
                 self.stop(exception=True)
 
-    def start(self):
-        self.status = 'running'
-        logger.debug("Start Progress Plugin")
-        self._start()
-        if not self.keys or not any(v for v in self.keys.values()):
-            self.stop()
-        elif all(k in self.scheduler.exceptions_blame for k in
-                concat(self.keys.values())):
-            key = next(k for k in concat(self.keys.values()) if k in
-                    self.scheduler.exceptions_blame)
-            self.stop(exception=True, key=key)
-
 
 def format_time(t):
     """Format seconds into a human readable form.
@@ -259,6 +231,8 @@ def format_time(t):
     '10.4s'
     >>> format_time(1000.4)
     '16min 40.4s'
+    >>> format_time(100000.4)
+    '27hr 46min 40.4s'
     """
     m, s = divmod(t, 60)
     h, m = divmod(m, 60)

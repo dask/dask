@@ -59,8 +59,14 @@ def test_Executor_with_local(loop):
 
 
 def test_Executor_solo(loop):
-    e = Executor(loop=loop)
-    e.shutdown()
+    with Executor(loop=loop) as e:
+        pass
+
+
+def test_Executor_twice(loop):
+    with Executor(loop=loop) as e:
+        with Executor(loop=loop) as f:
+            assert e.cluster.scheduler.port != f.cluster.scheduler.port
 
 
 def test_defaults():

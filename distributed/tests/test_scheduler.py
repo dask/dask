@@ -37,6 +37,12 @@ bob = 'bob:1234'
 
 
 @gen_cluster()
+def test_administration(s, a, b):
+    assert isinstance(s.address, str)
+    assert s.address_tuple[0] in s.address
+
+
+@gen_cluster()
 def test_ready_add_worker(s, a, b):
     s.add_client(client='client')
     s.add_worker(address=alice, coerce_address=False)
@@ -937,3 +943,20 @@ def test_add_worker_is_idempotent(s):
 def test_io_loop(loop):
     s = Scheduler(loop=loop, validate=True)
     assert s.io_loop is loop
+
+
+@gen_cluster(executor=True)
+def test_transition_story(e, s, a, b):
+    x = delayed(inc)(1)
+    y = delayed(inc)(x)
+    f = e.persist(y)
+    yield _wait([f])
+
+    assert s.transition_log
+
+    story = s.transition_story(x.key)
+    assert all(line in s.transition_log for line in story)
+    assert len(story) < len(s.transition_log)
+    assert all(x.key == line[0] or x.key in line[-1] for line in story)
+
+    assert len(s.transition_story(x.key, y.key)) > len(story)

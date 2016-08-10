@@ -226,11 +226,11 @@ def ensure_ip(hostname):
     >>> ensure_ip('localhost:5000')
     '127.0.0.1:5000'
     """
+    if PY3 and isinstance(hostname, bytes):
+        hostname = hostname.decode()
     if ':' in hostname:
         host, port = hostname.rsplit(':', 1)
         return ':'.join([ensure_ip(host), port])
-    if PY3 and isinstance(hostname, bytes):
-        hostname = hostname.decode()
     if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
         return hostname
     else:

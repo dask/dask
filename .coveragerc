@@ -7,6 +7,10 @@ omit =
     distributed/cluster.py
     distributed/*/tests/test*
     distributed/compatibility.py
+    distributed/cli/utils.py
+    distributed/utils_test.py
+    distributed/deploy/ssh.py
+    distributed/_ipython_utils.py
 
 [report]
 show_missing = True
