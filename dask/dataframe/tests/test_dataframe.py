@@ -1733,6 +1733,24 @@ def test_set_index_sorted_true():
         a.set_index(a.z, sorted=True)
 
 
+def test_compute_divisions():
+    from dask.dataframe.core import compute_divisions
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [10, 20, 30, 40],
+                       'z': [4, 3, 2, 1]},
+                       index=[1, 3, 10, 20])
+    a = dd.from_pandas(df, 2, sort=False)
+    assert not a.known_divisions
+
+    b = compute_divisions(a)
+    eq(a, b)
+    assert b.known_divisions
+
+def test_columns_assignment():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+
 def test_methods_tokenize_differently():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df = dd.from_pandas(df, npartitions=1)
