@@ -8,10 +8,7 @@ from bokeh.io import curdoc
 from bokeh.layouts import column, row
 from toolz import valmap
 
-from distributed.bokeh.status_monitor import (
-    worker_table_plot, worker_table_update, task_table_plot,
-    task_table_update, progress_plot, task_stream_plot
-)
+from distributed.bokeh.status_monitor import progress_plot, task_stream_plot
 from distributed.bokeh.worker_monitor import resource_profile_plot
 from distributed.diagnostics.progress_stream import progress_quads
 from distributed.utils import log_errors
@@ -23,6 +20,7 @@ WIDTH = 600
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
 
+"""
 worker_source, worker_table = worker_table_plot()
 def worker_update():
     with log_errors():
@@ -43,6 +41,7 @@ def task_update():
             return
         task_table_update(task_source, msg)
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
+"""
 
 
 resource_index = [0]

@@ -27,8 +27,10 @@ client = AsyncHTTPClient()
 
 messages = distributed.bokeh.messages  # monkey-patching
 
-if os.path.exists('.dask-web-ui.json'):
-    with open('.dask-web-ui.json', 'r') as f:
+dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
+options_path = os.path.join(dask_dir, '.dask-web-ui.json')
+if os.path.exists(options_path):
+    with open(options_path, 'r') as f:
         options = json.load(f)
 else:
     options = {'host': '127.0.0.1',
@@ -40,11 +42,11 @@ else:
 def http_get(route):
     """ Get data from JSON route, store in messages deques """
     try:
-        response = yield client.fetch(
-                'http://%(host)s:%(http-port)d/' % options
-                 + route + '.json')
-    except ConnectionRefusedError:
-        import sys; sys.exit(0)
+        url = 'http://%(host)s:%(http-port)d/' % options + route + '.json'
+        response = yield client.fetch(url)
+    except ConnectionRefusedError as e:
+        logger.info("Can not connect to %s", url, exc_info=True)
+        return
     except HTTPError:
         logger.warn("http route %s failed", route)
         return

@@ -13,6 +13,7 @@ from distributed.bokeh.worker_monitor import (resource_profile_plot,
 from distributed.diagnostics.scheduler import workers, tasks
 from distributed.utils_test import gen_cluster
 
+
 @gen_cluster()
 def test_resource_monitor_plot(s, a, b):
     while any('last-seen' not in v for v in s.host_info.values()):

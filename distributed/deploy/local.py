@@ -53,7 +53,8 @@ class LocalCluster(object):
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
-            silence_logs=logging.CRITICAL, diagnostics_port=None, **kwargs):
+            silence_logs=logging.CRITICAL, diagnostics_port=8787,
+            services={'http': HTTPScheduler}, **kwargs):
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',
@@ -80,10 +81,8 @@ class LocalCluster(object):
             while not self.loop._running:
                 sleep(0.001)
 
-        if diagnostics_port and 'services' not in kwargs:  # bokeh needs http
-            kwargs['services'] = {('http', 0): HTTPScheduler}
-
-        self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1', **kwargs)
+        self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1',
+                                   services=services)
         self.scheduler.start(scheduler_port)
         self.workers = []
 

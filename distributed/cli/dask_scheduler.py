@@ -58,7 +58,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh,
             bokeh_proc = BokehWebInterface(host=host, http_port=http_port,
                     tcp_port=port, bokeh_port=bokeh_port,
                     bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
-                    use_xheaders=use_xheaders)
+                    use_xheaders=use_xheaders, quiet=False)
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")
         except Exception as e:

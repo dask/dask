@@ -19,10 +19,15 @@ binname = os.path.join(os.path.dirname(sys.argv[0]), binname)
 
 logger = logging.getLogger(__file__)
 
+dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
+if not os.path.exists(dask_dir):
+    os.mkdir(dask_dir)
+
+
 class BokehWebInterface(object):
     def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
-                 bokeh_port=8787, bokeh_whitelist=[], log_level='info',
-                 show=False, prefix=None, use_xheaders=False):
+                 bokeh_port=8787, bokeh_whitelist=[], log_level='critical',
+                 show=False, prefix=None, use_xheaders=False, quiet=True):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
 
@@ -65,32 +70,47 @@ class BokehWebInterface(object):
                          'http-port': http_port,
                          'tcp-port': tcp_port,
                          'bokeh-port': bokeh_port}
-        with open('.dask-web-ui.json', 'w') as f:
+        with open(os.path.join(dask_dir, '.dask-web-ui.json'), 'w') as f:
             json.dump(bokeh_options, f, indent=2)
 
         if sys.version_info[0] >= 3:
-            from bokeh.command.bootstrap import main
             ctx = multiprocessing.get_context('spawn')
-            self.process = ctx.Process(target=main, args=(args,))
-            self.process.daemon = True
+            self.process = ctx.Process(target=bokeh_main, args=(args,), daemon=True)
             self.process.start()
         else:
             import subprocess
-            self.process = subprocess.Popen(args)
+            self.process = subprocess.Popen(args, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
 
-        logger.info(" Bokeh UI at:  http://%s:%d/status/"
-                    % (ip, bokeh_port))
+        if not quiet:
+            logger.info(" Bokeh UI at:  http://%s:%d/status/"
+                         % (ip, bokeh_port))
 
-    def close(self):
+    def close(self, join=True, timeout=None):
         if sys.version_info[0] >= 3:
             try:
                 if self.process.is_alive():
                     self.process.terminate()
             except AssertionError:
                 self.process.terminate()
+            if join:
+                self.process.join(timeout=timeout)
         else:
             if self.process.returncode is None:
                 self.process.terminate()
 
     def __del__(self):
         self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
+def bokeh_main(args):
+    from bokeh.command.bootstrap import main
+    import logging
+    logger = logging.getLogger('bokeh').setLevel(logging.CRITICAL)
+    main(args)
