@@ -592,11 +592,11 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
-@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_to_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
@@ -641,11 +641,11 @@ def test_to_castra():
         c2.drop()
 
 
-@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_from_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
@@ -666,15 +666,15 @@ def test_from_castra():
         del with_fn, c
 
 
-@pytest.mark.xfail(reason="from_castra inference in castra broken")
 def test_from_castra_with_selection():
     """ Optimizations fuse getitems with load_partitions
 
     We used to use getitem for both column access and selections
     """
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
