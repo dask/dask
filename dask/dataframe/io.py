@@ -798,9 +798,12 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.
-    $META
-    divisions : list, optional
+    divisions : tuple, str, optional
         Partition boundaries along the index.
+        For tuple, see http://dask.pydata.io/en/latest/dataframe-partitions.html
+        For string 'sorted' will compute the delayed values to find index
+        values.  Assumes that the indexes are mutually sorted.
+        If None, then won't use index information
     prefix : str, optional
         Prefix to prepend to the keys.
     """
@@ -816,16 +819,24 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     names = [(name, i) for i in range(len(dfs))]
     values = [df.key for df in dfs]
     dsk2 = dict(zip(names, values))
+    dsk3 = merge(dsk, dsk2)
 
-    if divisions is None:
-        divisions = [None] * (len(dfs) + 1)
     if meta is None:
         meta = dfs[0].compute()
-
     if isinstance(meta, (str, pd.Series)):
-        return Series(merge(dsk, dsk2), name, meta, divisions)
+        Frame = Series
     else:
-        return DataFrame(merge(dsk, dsk2), name, meta, divisions)
+        Frame = DataFrame
+
+    if divisions == 'sorted':
+        from .core import compute_divisions
+        divisions = [None] * (len(dfs) + 1)
+        df = Frame(dsk3, name, meta, divisions)
+        return compute_divisions(df)
+    elif divisions is None:
+        divisions = [None] * (len(dfs) + 1)
+
+    return Frame(dsk3, name, meta, divisions)
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):

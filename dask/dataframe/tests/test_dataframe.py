@@ -8,6 +8,7 @@ import pytest
 
 import dask
 from dask.async import get_sync
+from dask import delayed
 from dask.utils import raises, ignoring
 import dask.dataframe as dd
 
@@ -1660,7 +1661,6 @@ def test_dataframe_itertuples():
 
 
 def test_from_delayed():
-    from dask import delayed
     dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
     meta = dfs[0].compute()
     df = dd.from_delayed(dfs, meta=meta)
@@ -1674,6 +1674,16 @@ def test_from_delayed():
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(f).compute()) == [1, 2, 3, 4]
+
+
+def test_from_delayed_sorted():
+    a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
+    b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
+
+    A = dd.from_delayed([delayed(a), delayed(b)], divisions='sorted')
+    assert A.known_divisions
+
+    assert A.divisions == (1, 100, 200)
 
 
 def test_to_delayed():
@@ -1745,6 +1755,7 @@ def test_compute_divisions():
     b = compute_divisions(a)
     eq(a, b)
     assert b.known_divisions
+
 
 def test_columns_assignment():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
