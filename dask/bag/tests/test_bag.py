@@ -1061,3 +1061,9 @@ def test_bag_picklable():
     s = b.sum()
     s2 = loads(dumps(s))
     assert s.compute() == s2.compute()
+
+
+def test_msgpack_unicode():
+    b = db.from_sequence([{"a": 1}]).groupby("a")
+    result = b.compute(get=dask.async.get_sync)
+    assert dict(result) == {1: [{'a': 1}]}
