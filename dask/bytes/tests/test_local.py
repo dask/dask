@@ -224,8 +224,6 @@ def test_modification_time_open_files(open_files):
 
 
 def test_simple_write(tmpdir):
-    import dask
-    dask.set_options(get=dask.async.get_sync)
     tmpdir = str(tmpdir)
     make_bytes = lambda: b'000'
     some_bytes = delayed(make_bytes)()
