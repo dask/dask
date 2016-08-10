@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+from copy import copy
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -2967,27 +2968,32 @@ class StringAccessor(Accessor):
 
 def set_sorted_index(df, index, drop=True, **kwargs):
     if not isinstance(index, Series):
-        index2 = df[index]
         meta = df._meta.set_index(index, drop=drop)
     else:
-        index2 = index
         meta = df._meta.set_index(index._meta, drop=drop)
 
-    mins = index2.map_partitions(lambda x: pd.Series(x.min()), meta=index2)
-    maxes = index2.map_partitions(lambda x: pd.Series(x.max()), meta=index2)
+    result = map_partitions(_set_sorted_index, df, index, drop=drop, meta=meta)
+
+    return compute_divisions(result, **kwargs)
+
+
+def compute_divisions(df, **kwargs):
+    mins = df.index.map_partitions(lambda x: pd.Series(x.min()), meta=df.index)
+    maxes = df.index.map_partitions(lambda x: pd.Series(x.max()), meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
 
     if (sorted(mins) != list(mins) or
             sorted(maxes) != list(maxes) or
             any(a >= b for a, b in zip(mins, maxes))):
-        raise ValueError("Column not properly sorted", mins, maxes)
+        raise ValueError("Partitions must be sorted ascending with the index",
+                         mins, maxes)
 
     divisions = tuple(mins) + (list(maxes)[-1],)
 
-    result = map_partitions(_set_sorted_index, df, index, drop=drop, meta=meta)
-    result.divisions = divisions
+    df = copy(df)
+    df.divisions = divisions
 
-    return result
+    return df
 
 
 def _set_sorted_index(df, idx, drop):
