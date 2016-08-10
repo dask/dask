@@ -130,13 +130,16 @@ def test_Index():
 def test_attributes():
     assert 'a' in dir(d)
     assert 'foo' not in dir(d)
-    assert raises(AttributeError, lambda: d.foo)
+    pytest.raises(AttributeError, lambda: d.foo)
 
     df = dd.from_pandas(pd.DataFrame({'a b c': [1, 2, 3]}), npartitions=2)
     assert 'a b c' not in dir(df)
     df = dd.from_pandas(pd.DataFrame({'a': [1, 2], 5: [1, 2]}), npartitions=2)
     assert 'a' in dir(df)
     assert 5 not in dir(df)
+
+    df = dd.from_pandas(tm.makeTimeDataFrame(), npartitions=3)
+    pytest.raises(AttributeError, lambda: df.foo)
 
 
 def test_column_names():
@@ -1041,25 +1044,34 @@ def test_append2():
 def test_dataframe_picklable():
     from pickle import loads, dumps
     cloudpickle = pytest.importorskip('cloudpickle')
-    dumps = cloudpickle.dumps
+    cp_dumps = cloudpickle.dumps
 
-    df = d + 2
+    d = tm.makeTimeDataFrame()
+    df = dd.from_pandas(d, npartitions=3)
+    df = df + 2
 
     # dataframe
     df2 = loads(dumps(df))
     assert eq(df, df2)
+    df2 = loads(cp_dumps(df))
+    assert eq(df, df2)
 
     # series
-    a2 = loads(dumps(df.a))
-    assert eq(df.a, a2)
+    a2 = loads(dumps(df.A))
+    assert eq(df.A, a2)
+    a2 = loads(cp_dumps(df.A))
+    assert eq(df.A, a2)
 
-    #index
+    # index
     i2 = loads(dumps(df.index))
     assert eq(df.index, i2)
+    i2 = loads(cp_dumps(df.index))
+    assert eq(df.index, i2)
 
-    #scalar
-    s = df.a.sum()
-    s2 = loads(dumps(s))
+    # scalar
+    # lambdas are present, so only test cloudpickle
+    s = df.A.sum()
+    s2 = loads(cp_dumps(s))
     assert eq(s, s2)
 
 
