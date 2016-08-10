@@ -68,6 +68,24 @@ def test_make_meta():
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
 
+    # Numpy scalar
+    meta = make_meta(np.float64(1.0))
+    assert isinstance(meta, np.ndarray)
+    assert meta.shape == (0,)
+    assert meta.dtype == 'f8'
+
+    # Python scalar
+    meta = make_meta(1.0)
+    assert isinstance(meta, np.ndarray)
+    assert meta.shape == (0,)
+    assert meta.dtype == 'f8'
+
+    # datetime
+    meta = make_meta(pd.NaT)
+    assert isinstance(meta, np.ndarray)
+    assert meta.shape == (0,)
+    assert meta.dtype == pd.Series(pd.NaT).dtype
+
 
 def test_meta_nonempty():
     df1 = pd.DataFrame({'A': pd.Categorical(['Alice', 'Bob', 'Carol']),
