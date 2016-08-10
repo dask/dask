@@ -89,6 +89,9 @@ class Scalar(Base):
     def _args(self):
         return (self.dask, self._name)
 
+    def __getnewargs__(self):
+        return self._args
+
     @property
     def key(self):
         return (self._name, 0)
@@ -200,7 +203,6 @@ class _Frame(Base):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getnewargs__(self):
-        """ To load pickle """
         return self._args
 
     def _keys(self):
@@ -520,12 +522,6 @@ class _Frame(Base):
         else:
             raise ValueError(
                 "Provide either divisions= or npartitions= to repartition")
-
-    def __getstate__(self):
-        return self.__dict__
-
-    def __setstate__(self, dict):
-        self.__dict__ = dict
 
     @derived_from(pd.Series)
     def fillna(self, value):

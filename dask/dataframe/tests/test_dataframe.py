@@ -1038,16 +1038,29 @@ def test_append2():
     assert eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
 
-def test_dataframe_series_are_pickleable():
-    import pickle
+def test_dataframe_picklable():
+    from pickle import loads, dumps
     cloudpickle = pytest.importorskip('cloudpickle')
-
     dumps = cloudpickle.dumps
-    loads = pickle.loads
 
-    e = d.groupby(d.a).b.sum()
-    f = loads(dumps(e))
-    assert eq(e, f)
+    df = d + 2
+
+    # dataframe
+    df2 = loads(dumps(df))
+    assert eq(df, df2)
+
+    # series
+    a2 = loads(dumps(df.a))
+    assert eq(df.a, a2)
+
+    #index
+    i2 = loads(dumps(df.index))
+    assert eq(df.index, i2)
+
+    #scalar
+    s = df.a.sum()
+    s2 = loads(dumps(s))
+    assert eq(s, s2)
 
 
 def test_random_partitions():

@@ -213,6 +213,69 @@ def unpack_kwargs(kwargs):
     return dsk, kw_pairs
 
 
+class StringAccessor(object):
+    """ String processing functions
+
+    Examples
+    --------
+
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
+    >>> list(b.str.lower())
+    ['alice smith', 'bob jones', 'charlie smith']
+
+    >>> list(b.str.match('*Smith'))
+    ['Alice Smith', 'Charlie Smith']
+
+    >>> list(b.str.split(' '))
+    [['Alice', 'Smith'], ['Bob', 'Jones'], ['Charlie', 'Smith']]
+    """
+    def __init__(self, bag):
+        self._bag = bag
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(str)))
+
+    def _strmap(self, key, *args, **kwargs):
+        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(str):
+                func = getattr(str, key)
+                return robust_wraps(func)(partial(self._strmap, key))
+            else:
+                raise
+
+    def match(self, pattern):
+        """ Filter strings by those that match a pattern
+
+        Examples
+        --------
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
+        >>> list(b.str.match('*Smith'))
+        ['Alice Smith', 'Charlie Smith']
+
+        See Also
+        --------
+        fnmatch.fnmatch
+        """
+        from fnmatch import fnmatch
+        return self._bag.filter(partial(fnmatch, pat=pattern))
+
+
+def robust_wraps(wrapper):
+    """ A weak version of wraps that only copies doc """
+    def _(wrapped):
+        wrapped.__doc__ = wrapper.__doc__
+        return wrapped
+    return _
+
+
 class Item(Base):
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(mpget)
@@ -248,6 +311,16 @@ class Item(Base):
         self.dask = dsk
         self.key = key
         self.name = key
+
+    @property
+    def _args(self):
+        return (self.dask, self.key)
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.key = state
 
     def _keys(self):
         return [self.key]
@@ -309,13 +382,14 @@ class Bag(Base):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
-        self.str = StringAccessor(self)
 
     def __str__(self):
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
         return 'dask.bag<%s, npartitions=%d>' % (name, self.npartitions)
 
     __repr__ = __str__
+
+    str = property(fget=StringAccessor)
 
     def map(self, func, **kwargs):
         """ Map a function across all elements in collection
@@ -368,6 +442,12 @@ class Bag(Base):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self.npartitions = state
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
@@ -1341,69 +1421,6 @@ def concat(bags):
     dsk = dict(((name, next(counter)), key)
                for bag in bags for key in sorted(bag._keys()))
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
-
-
-class StringAccessor(object):
-    """ String processing functions
-
-    Examples
-    --------
-
-    >>> import dask.bag as db
-    >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
-    >>> list(b.str.lower())
-    ['alice smith', 'bob jones', 'charlie smith']
-
-    >>> list(b.str.match('*Smith'))
-    ['Alice Smith', 'Charlie Smith']
-
-    >>> list(b.str.split(' '))
-    [['Alice', 'Smith'], ['Bob', 'Jones'], ['Charlie', 'Smith']]
-    """
-    def __init__(self, bag):
-        self._bag = bag
-
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(str)))
-
-    def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(str):
-                func = getattr(str, key)
-                return robust_wraps(func)(partial(self._strmap, key))
-            else:
-                raise
-
-    def match(self, pattern):
-        """ Filter strings by those that match a pattern
-
-        Examples
-        --------
-
-        >>> import dask.bag as db
-        >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
-        >>> list(b.str.match('*Smith'))
-        ['Alice Smith', 'Charlie Smith']
-
-        See Also
-        --------
-        fnmatch.fnmatch
-        """
-        from fnmatch import fnmatch
-        return self._bag.filter(partial(fnmatch, pat=pattern))
-
-
-def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc """
-    def _(wrapped):
-        wrapped.__doc__ = wrapper.__doc__
-        return wrapped
-    return _
 
 
 def reify(seq):
