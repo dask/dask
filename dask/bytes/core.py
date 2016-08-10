@@ -9,6 +9,7 @@ from warnings import warn
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
 from ..compatibility import PY2, unicode
+from ..base import tokenize
 from ..delayed import delayed, Delayed, apply
 from ..utils import (infer_storage_options, system_encoding,
                      build_name_function, infer_compression)
@@ -141,7 +142,8 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    keys = ['write-block-%s' % path for path in paths]
+    keys = ['write-block-%s' % tokenize(d.key, path, storage_options,
+            compression, encoding) for (d, path) in zip(data, paths)]
     return [Delayed(key, dasks=[{key: (write_block_to_file, v.key,
                                        (apply, open_files_write, (p,),
                                         storage_options),
