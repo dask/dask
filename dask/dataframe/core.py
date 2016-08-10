@@ -89,8 +89,11 @@ class Scalar(Base):
     def _args(self):
         return (self.dask, self._name)
 
-    def __getnewargs__(self):
+    def __getstate__(self):
         return self._args
+
+    def __setstate__(self, state):
+        self.dask, self._name = state
 
     @property
     def key(self):
@@ -204,6 +207,12 @@ class _Frame(Base):
 
     def __getnewargs__(self):
         return self._args
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self._name, self._meta, self.divisions = state
 
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
@@ -1613,10 +1622,14 @@ class DataFrame(_Frame):
         self._meta = df._meta
 
     def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError as e:
-            raise AttributeError(e)
+        if key in self.columns:
+            meta = self._meta[key]
+            name = 'getitem-%s' % tokenize(self, key)
+            dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
+                       for i in range(self.npartitions))
+            return self._constructor_sliced(merge(self.dask, dsk), name,
+                                            meta, self.divisions)
+        raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __dir__(self):
         o = set(dir(type(self)))
