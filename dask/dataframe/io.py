@@ -798,6 +798,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.
+    $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
         For tuple, see http://dask.pydata.io/en/latest/dataframe-partitions.html
