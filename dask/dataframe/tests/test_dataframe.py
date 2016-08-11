@@ -12,8 +12,8 @@ from dask import delayed
 from dask.utils import raises, ignoring
 import dask.dataframe as dd
 
-from dask.dataframe.core import (repartition_divisions, _loc,
-        _coerce_loc_index, aca, reduction, _concat, _Frame)
+from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,
+                                 _concat, _Frame)
 from dask.dataframe.utils import eq, make_meta
 
 
@@ -1119,7 +1119,6 @@ def test_repartition():
     assert eq(a, b)
     assert eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
 
-
     for div in [[20, 60], [10, 50], [1], # first / last element mismatch
                 [0, 60], [10, 70], # do not allow to expand divisions by default
                 [10, 50, 20, 60],  # not sorted
@@ -1354,7 +1353,6 @@ def test_eval():
         if p.eval('z = x + y', inplace=None) is None:
             with pytest.raises(NotImplementedError):
                 d.eval('z = x + y', inplace=None)
-
 
 
 def test_deterministic_arithmetic_names():
@@ -1757,11 +1755,6 @@ def test_compute_divisions():
     assert b.known_divisions
 
 
-def test_columns_assignment():
-    df = pd.DataFrame({'x': [1, 2, 3, 4]})
-    ddf = dd.from_pandas(df, npartitions=2)
-
-
 def test_methods_tokenize_differently():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df = dd.from_pandas(df, npartitions=1)
@@ -1814,6 +1807,7 @@ def test_column_assignment():
     df['z'] = df.x + df.y
 
     eq(df, ddf)
+    assert 'z' not in orig.columns
 
 
 def test_columns_assignment():

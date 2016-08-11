@@ -768,4 +768,3 @@ def lstsq(a, b):
               chunks=r.shape[0], dtype=ss.dtype)
 
     return x, residuals, rank, s
-

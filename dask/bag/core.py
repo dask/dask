@@ -4,7 +4,6 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 import itertools
 import math
-from operator import getitem
 import os
 import types
 import uuid
@@ -24,22 +23,20 @@ try:
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
     if LooseVersion(cytoolz.__version__) > '0.7.3':
-        from cytoolz import accumulate
+        from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
 except:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
-from ..compatibility import apply, unicode, urlopen
+from ..compatibility import apply, urlopen
 from ..context import _globals
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import (infer_compression, open, system_encoding,
-                     takes_multiple_arguments, funcname, digit, insert,
-                     build_name_function, different_seeds)
-from ..delayed import Delayed, delayed
+from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
+                     digit, insert, different_seeds)
 from ..bytes.core import write_bytes
 
 
@@ -569,7 +566,6 @@ class Bag(Base):
                     if kwargs else (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
-
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -1579,7 +1575,6 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(k**stages)]
-    sinputs = set(inputs)
 
     b2 = b.map(lambda x: (hash(grouper(x)), x))
 

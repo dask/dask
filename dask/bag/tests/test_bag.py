@@ -2,27 +2,25 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
+import math
+import os
+import sys
+from collections import Iterator
 from distutils.version import LooseVersion
 
-from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial, valmap, groupby, pluck)
-import math
-from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, reify, partition, inline_singleton_lists, optimize,
-        system_encoding, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, reduce, PY2
-from dask.utils import filetexts, tmpfile, tmpdir, raises, open
-from dask.async import get_sync
+import partd
+from toolz import merge, join, filter, identity, valmap, groupby, pluck
+
 import dask
 import dask.bag as db
-import bz2
-import io
-import shutil
-import os
-import partd
-import sys
+from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
+        reduceby, reify, partition, inline_singleton_lists, optimize,
+        from_delayed)
+from dask.async import get_sync
+from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.utils import filetexts, tmpfile, tmpdir, raises, open
+from dask.utils_test import inc, add
 
-from collections import Iterator
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -32,17 +30,12 @@ L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
 
-def inc(x):
-    return x + 1
-
 def iseven(x):
     return x % 2 == 0
 
+
 def isodd(x):
     return x % 2 == 1
-
-def add(x, y):
-    return x + y
 
 
 def test_Bag():
@@ -244,8 +237,8 @@ def test_reductions():
     assert int(b.sum()) == 30
     assert int(b.max()) == 4
     assert int(b.min()) == 0
-    assert int(b.any()) == True
-    assert int(b.all()) == False  # some zeros exist
+    assert b.any().compute() is True
+    assert b.all().compute() is False
     assert b.all().key == b.all().key
     assert b.all().key != b.any().key
 
@@ -472,7 +465,7 @@ def test_can_use_dict_to_make_concrete():
 
 
 def test_from_castra():
-    castra = pytest.importorskip('castra')
+    pytest.importorskip('castra')
     pd = pytest.importorskip('pandas')
     dd = pytest.importorskip('dask.dataframe')
     blosc = pytest.importorskip('blosc')
@@ -549,7 +542,7 @@ def test_read_text_large_gzip():
         f.close()
 
         with pytest.raises(ValueError):
-            b = db.read_text(fn, blocksize=100, linedelimiter='\n')
+            db.read_text(fn, blocksize=100, linedelimiter='\n')
 
         c = db.read_text(fn)
         assert c.npartitions == 1
@@ -559,7 +552,7 @@ def test_read_text_large_gzip():
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
-    s3fs = pytest.importorskip('s3fs')
+    pytest.importorskip('s3fs')
 
     five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
                  u'16.99,1.01,Female,No,Sun,Dinner,2\n',
@@ -675,11 +668,8 @@ def test_args():
 
 
 def test_to_dataframe():
-    try:
-        import dask.dataframe
-        import pandas as pd
-    except ImportError:
-        return
+    pytest.importorskip('dask.dataframe')
+    pd = pytest.importorskip('pandas')
     b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
 
     df = b.to_dataframe()
@@ -958,7 +948,6 @@ def test_groupby_tasks():
             if a is not b:
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
-
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, method='tasks')
     assert len(out.dask) < 100**2
@@ -968,7 +957,6 @@ def test_groupby_tasks():
         for b in partitions:
             if a is not b:
                 assert not set(pluck(0, a)) & set(pluck(0, b))
-
 
     b = db.from_sequence(range(10000), npartitions=345)
     out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')

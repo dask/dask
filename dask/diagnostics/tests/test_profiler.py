@@ -50,7 +50,7 @@ def test_profiler_works_under_error():
 
     with ignoring(ZeroDivisionError):
         with prof:
-            out = get(dsk, 'z')
+            get(dsk, 'z')
 
     assert all(len(v) == 5 for v in prof.results)
     assert len(prof.results) == 2
@@ -78,7 +78,7 @@ def test_two_gets():
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
     results = rprof.results
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
@@ -118,7 +118,7 @@ def test_resource_profiler_multiple_gets():
 
 def test_cache_profiler():
     with CacheProfiler() as cprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
     results = cprof.results
     assert all(isinstance(i, tuple) and len(i) == 5 for i in results)
 
@@ -131,7 +131,7 @@ def test_cache_profiler():
         return tics[0]
 
     with CacheProfiler(nbytes) as cprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
     results = cprof.results
     assert tics[-1] == len(results)
     assert tics[-1] == results[-1].metric

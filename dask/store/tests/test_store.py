@@ -1,10 +1,6 @@
 from dask.store import Store
-from operator import add, mul
 from dask.utils import raises
-
-
-def inc(x):
-    return x + 1
+from dask.utils_test import inc, add
 
 
 def test_basic():

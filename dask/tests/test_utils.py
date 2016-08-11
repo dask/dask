@@ -1,4 +1,3 @@
-import io
 import os
 
 import numpy as np
@@ -86,7 +85,6 @@ def test_gh606():
     linesep = os.linesep
 
     bin_euro = u'\u20ac'.encode(encoding)
-    bin_yen = u'\u00a5'.encode(encoding)
     bin_linesep = linesep.encode(encoding)
 
     data = (euro * 10) + linesep + (yen * 10) + linesep + (euro * 10)

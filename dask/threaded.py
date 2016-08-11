@@ -7,9 +7,10 @@ from __future__ import absolute_import, division, print_function
 
 from multiprocessing.pool import ThreadPool
 from threading import current_thread
-from .async import get_async, inc, add
+from .async import get_async
 from .compatibility import Queue
 from .context import _globals
+from .utils_test import inc, add  # noqa: F401
 
 
 default_pool = ThreadPool()

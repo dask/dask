@@ -56,9 +56,8 @@ the descendent on whose result the most tasks depend.
 """
 from __future__ import absolute_import, division, print_function
 
-from operator import add
-
-from .core import get_dependencies, reverse_dict, get_deps
+from .core import get_dependencies, reverse_dict, get_deps  # noqa: F401
+from .utils_test import add, inc  # noqa: F401
 
 
 def order(dsk, dependencies=None):
@@ -192,7 +191,3 @@ def dfs(dependencies, dependents, key=lambda x: x):
         i += 1
 
     return result
-
-
-def inc(x):
-    return x + 1

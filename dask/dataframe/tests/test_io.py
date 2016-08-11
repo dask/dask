@@ -8,13 +8,12 @@ import dask
 import pytest
 from distutils.version import LooseVersion
 from threading import Lock
-import shutil
 from time import sleep
 import threading
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
+from dask.dataframe.io import from_array, from_dask_array
 from dask.delayed import Delayed
 
 from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
@@ -429,6 +428,16 @@ def test_from_pandas_small():
         assert len(a.compute()) == 3
         assert a.divisions[0] == 0
         assert a.divisions[-1] == 2
+
+    for sort in [True, False]:
+        for i in [0, 2]:
+            df = pd.DataFrame({'x': [0] * i})
+            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
+            eq(df, ddf)
+
+            s = pd.Series([0] * i, name='x')
+            ds = dd.from_pandas(s, npartitions=5, sort=sort)
+            eq(s, ds)
 
 
 @pytest.mark.xfail(reason="")
@@ -1110,8 +1119,8 @@ def test_read_hdf_multiply_open():
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
-        with pd.HDFStore(fn, mode='r') as other:
-            a = dd.read_hdf(fn, '/data', chunksize=2, mode='r')
+        with pd.HDFStore(fn, mode='r'):
+            dd.read_hdf(fn, '/data', chunksize=2, mode='r')
 
 
 def test_read_hdf_multiple():
@@ -1140,15 +1149,15 @@ def test_read_hdf_start_stop_values():
         df.to_hdf(fn, '/data', format='table')
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', stop=10)
+            dd.read_hdf(fn, '/data', stop=10)
         assert 'number of rows' in str(e)
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', start=10)
+            dd.read_hdf(fn, '/data', start=10)
         assert 'is above or equal to' in str(e)
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', chunksize=-1)
+            dd.read_hdf(fn, '/data', chunksize=-1)
         assert 'positive integer' in str(e)
 
 
@@ -1372,7 +1381,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            f = dd.read_csv(fn, chunkbytes=30, index_col='name')
+            dd.read_csv(fn, chunkbytes=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -1540,15 +1549,3 @@ def test_read_csv_singleton_dtype():
     with filetext(data, mode='wb') as fn:
         eq(pd.read_csv(fn, dtype=float),
            dd.read_csv(fn, dtype=float))
-
-
-def test_from_pandas_small():
-    for sort in [True, False]:
-        for i in [0, 2]:
-            df = pd.DataFrame({'x': [0] * i})
-            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
-            eq(df, ddf)
-
-            s = pd.Series([0] * i, name='x')
-            ds = dd.from_pandas(s, npartitions=5, sort=sort)
-            eq(s, ds)

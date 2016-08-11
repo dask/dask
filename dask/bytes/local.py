@@ -1,11 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 from glob import glob
-import io
 import logging
 import os
 import sys
-import time
 
 from .compression import files as compress_files, seekable_files
 from .utils import SeekableFile, read_block

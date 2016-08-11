@@ -1,3 +1,4 @@
+# flake8: noqa
 from __future__ import absolute_import, division, print_function
 
 import functools
@@ -36,8 +37,7 @@ if PY3:
         pass
 
     from urllib.request import urlopen
-    from urllib.parse import urlparse
-    from urllib.parse import quote, unquote
+    from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
@@ -63,7 +63,7 @@ else:
     import bz2
     import gzip
     from urllib2 import urlopen
-    from urlparse import urlparse
+    from urlparse import urlparse, urlsplit
     from urllib import quote, unquote
     unicode = unicode
     long = long
