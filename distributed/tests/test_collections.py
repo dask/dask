@@ -83,9 +83,9 @@ def test_futures_to_dask_dataframe(loop):
 
 @gen_cluster(timeout=240, executor=True)
 def test_dataframes(e, s, a, b):
-    df = pd.DataFrame({'x': np.random.random(10000),
-                       'y': np.random.random(10000)},
-                       index=np.arange(10000))
+    df = pd.DataFrame({'x': np.random.random(1000),
+                       'y': np.random.random(1000)},
+                       index=np.arange(1000))
     ldf = dd.from_pandas(df, npartitions=10)
 
     rdf = e.persist(ldf)
@@ -109,8 +109,7 @@ def test_dataframes(e, s, a, b):
     for f in exprs:
         local = f(ldf).compute(get=dask.get)
         remote = e.compute(f(rdf))
-        remote = yield gen.with_timeout(timedelta(seconds=5),
-                                        remote._result())
+        remote = yield remote._result()
         assert_equal(local, remote)
 
 
