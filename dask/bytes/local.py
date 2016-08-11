@@ -23,6 +23,10 @@ def open_file_write(paths):
     return out
 
 
+def open_file_write_direct(path):
+    return open(path, 'wb')
+
+
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
         sample=True, compression=None):
     """ See dask.bytes.core.read_bytes for docstring """
@@ -98,7 +102,7 @@ def open_files(path):
 from . import core
 core._read_bytes['file'] = read_bytes
 core._open_files['file'] = open_files
-core._open_files_write['file'] = open_file_write
+core._open_files_write['file'] = open_file_write_direct
 
 if sys.version_info[0] >= 3:
     def open_text_files(path, encoding=system_encoding, errors='strict'):
