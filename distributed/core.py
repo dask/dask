@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from datetime import timedelta
 import logging
 import six
+import socket
 import struct
 from time import time
 import traceback
@@ -155,7 +156,7 @@ class Server(TCPServer):
             try:
                 super(Server, self).listen(port)
                 break
-            except OSError:
+            except (socket.error, OSError):
                 if port:
                     raise
                 else:
@@ -451,7 +452,6 @@ class rpc(object):
     def close_rpc(self):
         self.status = 'closed'
         self.close_streams()
-
 
 
 def coerce_to_address(o, out=str):

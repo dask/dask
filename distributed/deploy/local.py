@@ -55,6 +55,7 @@ class LocalCluster(object):
             loop=None, start=True, scheduler_port=8786,
             silence_logs=logging.CRITICAL, diagnostics_port=8787,
             services={'http': HTTPScheduler}, **kwargs):
+        self.status = None
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',
@@ -191,16 +192,15 @@ class LocalCluster(object):
 
     def close(self):
         """ Close the cluster """
-        if self.status == 'closed':
-            return
-        self.status = 'closed'
-        if self.loop._running:
-            sync(self.loop, self._close)
-        if hasattr(self, '_thread'):
-            sync(self.loop, self.loop.stop)
-            self._thread.join(timeout=1)
-            self.loop.close()
-            del self._thread
+        if self.status == 'running':
+            self.status = 'closed'
+            if self.loop._running:
+                sync(self.loop, self._close)
+            if hasattr(self, '_thread'):
+                sync(self.loop, self.loop.stop)
+                self._thread.join(timeout=1)
+                self.loop.close()
+                del self._thread
 
     def __del__(self):
         self.close()

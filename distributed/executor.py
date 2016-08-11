@@ -478,6 +478,8 @@ class Executor(object):
             _global_executor[0] = None
         if self.get == _globals.get('get'):
             del _globals['get']
+        with ignoring(AttributeError):
+            self.cluster.close()
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler

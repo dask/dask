@@ -61,6 +61,7 @@ def test_Executor_with_local(loop):
 def test_Executor_solo(loop):
     with Executor(loop=loop) as e:
         pass
+    assert e.cluster.status == 'closed'
 
 
 def test_Executor_twice(loop):
