@@ -1201,6 +1201,8 @@ def test_arithmetic():
     assert_eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert_eq(da.fabs(b), np.fabs(y))
     assert_eq(da.sign(b - 2), np.sign(y - 2))
+    assert_eq(da.absolute(b - 2), np.absolute(y - 2))
+    assert_eq(da.absolute(b - 2 + 1j), np.absolute(y - 2 + 1j))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
