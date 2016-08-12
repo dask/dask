@@ -32,7 +32,6 @@ from .indexing import (_partition_of_index_value, _loc, _try_loc,
 from .utils import meta_nonempty, make_meta, insert_meta_param_description
 
 no_default = '__no_default__'
-return_scalar = '__return_scalar__'
 
 pd.computation.expressions.set_use_numexpr(False)
 
@@ -1226,14 +1225,14 @@ class Series(_Frame):
         # convert to numeric axis
         return {None: 0, 'index': 0}.get(axis, axis)
 
-    def _aca_agg(self, token, func, aggfunc=None, meta=None, **kwargs):
+    def _aca_agg(self, token, func, aggfunc=None, meta=no_default, **kwargs):
         """ Wrapper for aggregations """
         if aggfunc is None:
             aggfunc = func
 
         return aca([self], chunk=func,
                    aggregate=lambda x, **kwargs: aggfunc(pd.Series(x), **kwargs),
-                   meta=return_scalar, token=self._token_prefix + token,
+                   meta=meta, token=self._token_prefix + token,
                    **kwargs)
 
     @derived_from(pd.Series)
@@ -1509,11 +1508,13 @@ class Index(Series):
     @derived_from(pd.Index)
     def max(self):
         # it doesn't support axis and skipna kwds
-        return self._aca_agg(token='max', func=_max)
+        return self._aca_agg(token='max', func=_max,
+                             meta=self._meta_nonempty.max())
 
     @derived_from(pd.Index)
     def min(self):
-        return self._aca_agg(token='min', func=_min)
+        return self._aca_agg(token='min', func=_min,
+                             meta=self._meta_nonempty.min())
 
     def count(self):
         f = lambda x: pd.notnull(x).sum()
@@ -1858,7 +1859,7 @@ class DataFrame(_Frame):
         # convert to numeric axis
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
 
-    def _aca_agg(self, token, func, aggfunc=None, meta=None, **kwargs):
+    def _aca_agg(self, token, func, aggfunc=None, meta=no_default, **kwargs):
         """ Wrapper for aggregations """
         if aggfunc is None:
             aggfunc = func
@@ -2273,9 +2274,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
         except Exception:
             raise ValueError("Metadata inference failed, please provide "
                              "`meta` keyword")
-    if meta is not return_scalar:
-        meta = make_meta(meta)
-    return_type = _get_return_type(args[0], meta)
+    meta = make_meta(meta)
+    return_type = _get_return_type(meta)
 
     dasks = [a.dask for a in args if isinstance(a, _Frame)]
     return return_type(merge(dsk, dsk2, *dasks), b, meta, [None, None])
@@ -2284,16 +2284,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 aca = apply_concat_apply
 
 
-def _get_return_type(arg, metadata):
-    """ Get the class of the result
-
-    - When metadata is str/unicode, the result is:
-       - Scalar when columns is ``return_scalar``
-       - Index if arg is Index
-       - Series otherwise
-    - Otherwise, result is DataFrame.
-    """
-
+def _get_return_type(metadata):
+    """ Get the class of the result, based on the type of metadata."""
     if isinstance(metadata, _Frame):
         metadata = metadata._meta
 
@@ -2301,21 +2293,10 @@ def _get_return_type(arg, metadata):
         return Series
     elif isinstance(metadata, pd.DataFrame):
         return DataFrame
-    elif isinstance(metadata, pd.Index) and isinstance(arg, Index):
-        # DataFrame may pass df.columns (Index)
-        # thus needs to check arg
+    elif isinstance(metadata, pd.Index):
         return Index
-
-    # legacy logic, required to handle user input
-    if np.isscalar(metadata) or metadata is None:
-        if metadata == return_scalar:
-            return Scalar
-        elif isinstance(arg, Index):
-            return Index
-        else:
-            return Series
     else:
-        return DataFrame
+        return Scalar
 
 
 def _extract_meta(x, nonempty=False):
@@ -2394,12 +2375,12 @@ def map_partitions(func, *args, **kwargs):
 
     if isinstance(meta, pd.DataFrame):
         columns = meta.columns
-    elif isinstance(meta, pd.Series):
+    elif isinstance(meta, (pd.Series, pd.Index)):
         columns = meta.name
     else:
-        columns = meta
+        columns = None
 
-    return_type = _get_return_type(dfs[0], meta)
+    return_type = _get_return_type(meta)
 
     dsk = {}
     for i in range(dfs[0].npartitions):

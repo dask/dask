@@ -70,21 +70,23 @@ def test_make_meta():
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0))
-    assert isinstance(meta, np.ndarray)
-    assert meta.shape == (0,)
-    assert meta.dtype == 'f8'
+    assert isinstance(meta, np.float64)
 
     # Python scalar
     meta = make_meta(1.0)
-    assert isinstance(meta, np.ndarray)
-    assert meta.shape == (0,)
-    assert meta.dtype == 'f8'
+    assert isinstance(meta, np.float64)
 
     # datetime
-    meta = make_meta(pd.NaT)
-    assert isinstance(meta, np.ndarray)
-    assert meta.shape == (0,)
-    assert meta.dtype == pd.Series(pd.NaT).dtype
+    x = pd.datetime(2000, 1, 1)
+    meta = make_meta(x)
+    assert meta is x
+
+    # categorical
+    x = pd.Categorical(['a', 'b', 'c'], ordered=True)
+    meta = make_meta(x)
+    assert (meta.categories == x.categories).all()
+    assert meta.ordered
+    assert len(meta) == 1
 
 
 def test_meta_nonempty():
