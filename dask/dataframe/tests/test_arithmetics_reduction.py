@@ -452,7 +452,6 @@ def test_scalar_arithmetics_with_dask_instances():
     assert isinstance(result, dd.Series)
     assert eq(result, pds + e)
 
-
     # pandas DataFrame
     result = pdf + s   # this result pd.DataFrame (automatically computed)
     assert isinstance(result, pd.DataFrame)
@@ -616,7 +615,6 @@ def test_reductions():
         assert eq(dds.std(skipna=False, ddof=0), pds.std(skipna=False, ddof=0))
         assert eq(dds.var(skipna=False, ddof=0), pds.var(skipna=False, ddof=0))
         assert eq(dds.mean(skipna=False), pds.mean(skipna=False))
-
 
     assert_dask_graph(ddf1.b.sum(), 'series-sum')
     assert_dask_graph(ddf1.b.min(), 'series-min')

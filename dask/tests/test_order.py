@@ -1,8 +1,8 @@
 from itertools import chain
-from operator import add
 
-from dask.order import dfs, child_max, ndependents, order, inc
+from dask.order import child_max, ndependents, order
 from dask.core import get_deps
+from dask.utils_test import add, inc
 
 
 def issorted(L, reverse=False):
@@ -45,9 +45,6 @@ def test_prefer_broker_nodes():
     dsk = {(a, 0): (f,), (a, 1): (f,),
            (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 1))}
 
-    dependencies, dependents = get_deps(dsk)
-    nd = ndependents(dependencies, dependents)
-    cm = child_max(dependencies, dependents, nd)
     o = order(dsk)
 
     assert o[(a, 1)] < o[(a, 0)]
@@ -110,10 +107,6 @@ def test_deep_bases_win_over_dependents():
     """
     dsk = {'a': (f, 'b', 'c', 'd'), 'b': (f, 'd', 'e'), 'c': (f, 'd'), 'd': 1,
             'e': 2}
-
-    dependencies, dependents = get_deps(dsk)
-    nd = ndependents(dependencies, dependents)
-    cm = child_max(dependencies, dependents, nd)
 
     o = order(dsk)
     assert o['d'] < o['e']
@@ -181,6 +174,6 @@ def test_break_ties_by_str():
 
 
 def test_order_doesnt_fail_on_mixed_type_keys():
-    o = order({'x': (inc, 1),
-              ('y', 0): (inc, 2),
-              'z': (add, 'x', ('y', 0))})
+    order({'x': (inc, 1),
+           ('y', 0): (inc, 2),
+           'z': (add, 'x', ('y', 0))})

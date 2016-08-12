@@ -467,7 +467,6 @@ def test_numeric_column_names():
     eq(ddf.groupby(0).apply(lambda x: x), df.groupby(0).apply(lambda x: x))
 
 
-
 def test_groupby_apply_tasks():
     df = pd.util.testing.makeTimeDataFrame()
     df['A'] = df.A // 0.1

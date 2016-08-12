@@ -38,4 +38,3 @@ def test_fit():
     result = da.learn.predict(sgd, Z)
     assert result.chunks == ((2, 2),)
     assert result.compute(get=dask.get).tolist() == [1, -1, 1, -1]
-

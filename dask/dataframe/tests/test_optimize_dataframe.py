@@ -19,7 +19,6 @@ def test_column_optimizations_with_bcolz_and_rewrite():
     bcolz = pytest.importorskip('bcolz')
 
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
-    func = lambda x: x
     for cols in [None, 'abc', ['abc']]:
         dsk2 = merge(dict((('x', i),
                           (dataframe_from_ctable, bc, slice(0, 2), cols, {}))

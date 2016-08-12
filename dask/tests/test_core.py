@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 from dask.utils import raises
-from dask.utils_test import GetFunctionTestMixin
+from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
 from dask.core import (istask, get_dependencies, flatten, subs,
                        preorder_traversal, quote, _deps, has_tasks)
@@ -16,14 +16,6 @@ def contains(a, b):
     False
     """
     return all(a.get(k) == v for k, v in b.items())
-
-
-def inc(x):
-    return x + 1
-
-
-def add(x, y):
-    return x + y
 
 
 def test_istask():

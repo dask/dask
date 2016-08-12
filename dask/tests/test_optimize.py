@@ -1,14 +1,11 @@
 from itertools import count
-from operator import add, mul, getitem
+from operator import mul, getitem
 from functools import partial
 from dask.utils import raises
+from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
         dealias, equivalent, sync_keys, merge_sync, fuse_getitem,
         fuse_selections)
-
-
-def inc(x):
-    return x + 1
 
 
 def double(x):
@@ -221,7 +218,6 @@ def test_inline_functions_protects_output_keys():
 def test_functions_of():
     a = lambda x: x
     b = lambda x: x
-    c = lambda x: x
     assert functions_of((a, 1)) == set([a])
     assert functions_of((a, (b, 1))) == set([a, b])
     assert functions_of((a, [(b, 1)])) == set([a, b])

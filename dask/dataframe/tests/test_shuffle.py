@@ -128,8 +128,6 @@ def test_set_partition_tasks(npartitions):
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    divisions = [0, .25, .50, .75, 1.0]
-
     eq(df.set_index('x'),
        ddf.set_index('x', shuffle='tasks'))
 
@@ -170,8 +168,6 @@ def test_set_partition_names(shuffle):
 
     ddf = dd.from_pandas(df, npartitions=4)
 
-    divisions = [0, .25, .50, .75, 1.0]
-
     assert (set(ddf.set_index('x', shuffle=shuffle).dask) ==
             set(ddf.set_index('x', shuffle=shuffle).dask))
     assert (set(ddf.set_index('x', shuffle=shuffle).dask) !=
@@ -194,7 +190,6 @@ def test_set_partition_tasks_2(shuffle):
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_partition_tasks_3(shuffle):
-    npartitions = 5
     df = pd.DataFrame(np.random.random((10, 2)), columns=['x', 'y'])
     ddf = dd.from_pandas(df, npartitions=5)
 

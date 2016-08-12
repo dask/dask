@@ -114,7 +114,6 @@ See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
-from operator import add
 import sys
 import traceback
 
@@ -124,10 +123,7 @@ from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
 from .optimize import cull
-
-
-def inc(x):
-    return x + 1
+from .utils_test import add, inc  # noqa: F401
 
 
 DEBUG = False
@@ -512,6 +508,7 @@ Usually we supply a multi-core apply_async function.  Here we provide a
 sequential one.  This is useful for debugging and for code dominated by the
 GIL
 """
+
 
 def apply_sync(func, args=(), kwds={}):
     """ A naive synchronous version of apply_async """

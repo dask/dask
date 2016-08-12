@@ -146,7 +146,6 @@ def coarsen(reduction, x, axes, trim_excess=False):
     newshape = tuple(concat([(x.shape[i] / axes[i], axes[i])
                                 for i in range(x.ndim)]))
 
-
     return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim*2, 2)))
 
 

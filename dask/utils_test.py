@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from .core import get
-
 
 def inc(x):
     return x + 1
@@ -27,8 +25,6 @@ class GetFunctionTestMixin(object):
     Note that the foreign `myget` function has to be explicitly decorated as a
     staticmethod.
     """
-    get = staticmethod(get)
-
     def test_get(self):
         d = {':x': 1,
              ':y': (inc, ':x'),

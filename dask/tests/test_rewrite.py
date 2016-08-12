@@ -1,12 +1,5 @@
 from dask.rewrite import RewriteRule, RuleSet, head, args, VAR, Traverser
-
-
-def inc(x):
-    return x + 1
-
-
-def add(x, y):
-    return x + y
+from dask.utils_test import inc, add
 
 
 def double(x):

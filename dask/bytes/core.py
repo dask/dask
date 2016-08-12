@@ -12,7 +12,8 @@ from ..compatibility import PY2, unicode
 from ..base import tokenize
 from ..delayed import delayed, Delayed, apply
 from ..utils import (infer_storage_options, system_encoding,
-                     build_name_function, infer_compression)
+                     build_name_function, infer_compression,
+                     import_required)
 
 delayed = delayed(pure=True)
 
@@ -289,7 +290,7 @@ def _expand_paths(path, name_function, num):
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        if not '*' in path:
+        if '*' not in path:
             path = os.path.join(path, '*.part')
 
         formatted_names = [name_function(i) for i in range(num)]
@@ -364,25 +365,23 @@ def open_text_files(urlpath, encoding=system_encoding, errors='strict',
 
 
 def ensure_protocol(protocol):
-    if protocol in _read_bytes or protocol in _open_files:
+    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes)
+            or (protocol in _open_files))):
         return
 
     if protocol == 's3':
-        try:
-            import dask.s3
-        except ImportError:
-            raise ImportError("Need to install `s3fs` library for s3 support\n"
-                    "    conda install s3fs -c conda-forge\n"
-                    "    or\n"
-                    "    pip install s3fs")
+        import_required('s3fs',
+                        "Need to install `s3fs` library for s3 support\n"
+                        "    conda install s3fs -c conda-forge\n"
+                        "    or\n"
+                        "    pip install s3fs")
 
     elif protocol == 'hdfs':
-        try:
-            import distributed.hdfs
-        except ImportError:
-            raise ImportError("Need to install `distributed` and `hdfs3` "
-                    "for HDFS support\n"
-                    "    conda install distributed hdfs3 -c conda-forge")
+        msg = ("Need to install `distributed` and `hdfs3` "
+               "for HDFS support\n"
+               "    conda install distributed hdfs3 -c conda-forge")
+        import_required('distributed.hdfs', msg)
+        import_required('hdfs3', msg)
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)

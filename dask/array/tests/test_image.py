@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 import os
-import shutil
 
 import pytest
 pytest.importorskip('skimage')

@@ -1,17 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
 import os
-from time import sleep, time
+from time import sleep
 
 import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
+from dask.compatibility import FileNotFoundError
+from dask.utils import filetexts
+from dask.bytes import compression
 from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
 from dask.bytes.core import open_text_files, write_bytes
-from dask.compatibility import FileNotFoundError
-from dask.utils import filetexts, tmpdir
-from dask.bytes import compression
 
 compute = partial(compute, get=get)
 
@@ -91,8 +91,9 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-from dask.bytes.compression import compress, files as cfiles, seekable_files
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
+fmt_bs = ([(fmt, None) for fmt in compression.files] +
+          [(fmt, 10) for fmt in compression.seekable_files])
+
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_compression(fmt, blocksize):
@@ -145,7 +146,7 @@ def test_open_files():
         assert list(data) == [files[k] for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+@pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_binary(fmt):
     from dask.bytes.core import open_files
     files2 = valmap(compression.compress[fmt], files)
@@ -155,7 +156,7 @@ def test_compression_binary(fmt):
         assert list(data) == [files[k] for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+@pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_text(fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
@@ -164,10 +165,10 @@ def test_compression_text(fmt):
         assert list(data) == [files[k].decode() for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', list(seekable_files))
+@pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
     compress = compression.compress[fmt]
-    with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode = 'b'):
+    with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
         assert getsize('.tmp.getsize', fmt) == 10
 
 
