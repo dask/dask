@@ -11,20 +11,18 @@ from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, make_hdfs
 from distributed.utils import get_ip
 from distributed.utils_test import loop
-from distributed.hdfs import (read_bytes, get_block_locations, write_bytes)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
+hdfs3 = pytest.importorskip('hdfs3')
+from distributed.hdfs import read_bytes, get_block_locations, write_bytes
 
-pytest.importorskip('hdfs3')
-from hdfs3 import HDFileSystem
 try:
-    hdfs = HDFileSystem(host='localhost', port=8020)
+    hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
     hdfs.df()
     del hdfs
 except:
-    pytestmark = pytest.mark.skipif('True')
-
+    pytestmark = pytest.skip()
 
 ip = get_ip()
 
