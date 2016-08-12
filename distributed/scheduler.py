@@ -1054,7 +1054,8 @@ class Scheduler(Server):
                         self.transitions(recommendations)
 
                         if self.validate:
-                            logger.info("%s\n%s", msgs, recommendations)
+                            logger.info("Messages: %s\nRecommendations: %s",
+                                        msgs, recommendations)
                     self.ensure_occupied()
 
         except (StreamClosedError, IOError, OSError):

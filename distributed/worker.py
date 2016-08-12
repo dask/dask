@@ -163,14 +163,16 @@ class Worker(Server):
         if not self.heartbeat_active:
             self.heartbeat_active = True
             logger.debug("Heartbeat: %s" % self.address)
-            yield self.scheduler.register(address=self.address, name=self.name,
-                                    ncores=self.ncores,
-                                    now=time(),
-                                    info=self.process_health(),
-                                    host_info=self.host_health(),
-                                    services=self.service_ports,
-                                    **self.process_health())
-            self.heartbeat_active = False
+            try:
+                yield self.scheduler.register(address=self.address, name=self.name,
+                                        ncores=self.ncores,
+                                        now=time(),
+                                        info=self.process_health(),
+                                        host_info=self.host_health(),
+                                        services=self.service_ports,
+                                        **self.process_health())
+            finally:
+                self.heartbeat_active = False
         else:
             logger.debug("Heartbeat skipped: channel busy")
 
@@ -220,13 +222,13 @@ class Worker(Server):
 
     @gen.coroutine
     def _close(self, report=True, timeout=10):
-        with ignoring(RPCClosed):
+        self.heartbeat_callback.stop()
+        with ignoring(RPCClosed, StreamClosedError):
             if report:
                 yield gen.with_timeout(timedelta(seconds=timeout),
                         self.scheduler.unregister(address=(self.ip, self.port)),
                         io_loop=self.loop)
         self.scheduler.close_rpc()
-        self.heartbeat_callback.stop()
         self.stop()
         self.executor.shutdown()
         if os.path.exists(self.local_dir):

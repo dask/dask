@@ -18,6 +18,7 @@ from toolz import (identity, isdistinct, first, concat, pluck, valmap,
         partition_all, partial)
 from tornado import gen
 from tornado.ioloop import IOLoop
+from tornado.iostream import StreamClosedError
 
 import dask
 from dask import delayed
@@ -31,8 +32,8 @@ from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
-        _test_scheduler, loop, inc, dec, div, throws,
-        gen_cluster, gen_test, double, deep)
+        _test_scheduler, loop, inc, dec, div, throws, gen_cluster, gen_test,
+        double, deep)
 
 
 @gen_cluster(executor=True, timeout=None)
@@ -2822,6 +2823,8 @@ def test_executor_replicate_sync(loop):
             with pytest.raises(ValueError):
                 e.replicate([x], n=0)
 
+            assert y.result() == 3
+
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
 def test_task_load_adapts_quickly(e, s, a):
@@ -3401,6 +3404,58 @@ def test_persist_optimize_graph(e, s, a, b):
 
 
 @gen_cluster(executor=True, ncores=[])
-def test_persist_optimize_graph(e, s):
+def test_scatter_raises_if_no_workers(e, s):
     with pytest.raises(ValueError):
         yield e._scatter([1])
+
+
+from distributed.utils_test import popen
+def test_reconnect(loop):
+    w = Worker('127.0.0.1', 9393, loop=loop)
+    w.start()
+    with popen(['dask-scheduler', '--port', '9393', '--no-bokeh']) as s:
+        e = Executor('localhost:9393', loop=loop)
+        assert len(e.ncores()) == 1
+        x = e.submit(inc, 1)
+        assert x.result() == 2
+
+    start = time()
+    while e.status != 'connecting':
+        assert time() < start + 5
+        sleep(0.01)
+
+    with pytest.raises(Exception):
+        e.ncores()
+
+    assert x.status == 'cancelled'
+    with pytest.raises(CancelledError):
+        x.result()
+
+    with popen(['dask-scheduler', '--port', '9393', '--no-bokeh']) as s:
+        start = time()
+        while e.status != 'running':
+            sleep(0.01)
+            assert time() < start + 5
+
+        start = time()
+        while len(e.ncores()) != 1:
+            sleep(0.01)
+            assert time() < start + 5
+
+        x = e.submit(inc, 1)
+        assert x.result() == 2
+
+    start = time()
+    while True:
+        try:
+            x.result()
+            assert False
+        except StreamClosedError:
+            continue
+        except CancelledError:
+            break
+        assert time() < start + 5
+        sleep(0.1)
+
+    e.shutdown()
+    sync(loop, w._close)
