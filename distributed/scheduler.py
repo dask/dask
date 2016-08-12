@@ -737,7 +737,7 @@ class Scheduler(Server):
                     if key in self.waiting_data and not self.waiting_data[key]:
                         r = self.transition(key, 'released')
                         self.transitions(r)
-                    if not self.dependents[key]:
+                    if key in self.dependents and not self.dependents[key]:
                         r = self.transition(key, 'forgotten')
                         self.transitions(r)
 
@@ -1606,6 +1606,7 @@ class Scheduler(Server):
             self.processing[worker][key] = duration
             self.rprocessing[key].add(worker)
             self.occupancy[worker] += duration
+            self.task_state[key] = 'processing'
 
             logger.debug("Send job to worker: %s, %s", worker, key)
 
@@ -1613,9 +1614,6 @@ class Scheduler(Server):
                 self.send_task_to_worker(worker, key)
             except StreamClosedError:
                 self.remove_worker(worker)
-                return
-
-            self.task_state[key] = 'processing'
 
             return {}
         except Exception as e:

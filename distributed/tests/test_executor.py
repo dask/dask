@@ -4,6 +4,7 @@ from operator import add
 
 from collections import Iterator
 from concurrent.futures import CancelledError
+from datetime import timedelta
 import itertools
 from multiprocessing import Process
 import sys
@@ -30,7 +31,7 @@ from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         default_executor, _first_completed, ensure_default_get, futures_of)
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
-from distributed.utils import sync, tmp_text, ignoring, tokey
+from distributed.utils import sync, tmp_text, ignoring, tokey, All
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
         _test_scheduler, loop, inc, dec, div, throws, gen_cluster, gen_test,
         double, deep)
@@ -1997,9 +1998,9 @@ def test__cancel_collection(e, s, a, b):
 def test_cancel(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            x = e.submit(slowinc, 1)
-            y = e.submit(slowinc, x)
-            z = e.submit(slowinc, y)
+            x = e.submit(slowinc, 1, key='x')
+            y = e.submit(slowinc, x, key='y')
+            z = e.submit(slowinc, y, key='z')
 
             e.cancel([y])
 
@@ -3335,6 +3336,7 @@ def test_start_ipython_qtconsole(loop):
 
 @gen_cluster(ncores=[], executor=True, timeout=None)
 def test_stress_creation_and_deletion(e, s):
+    # Assertions are handled by the validate mechanism in the scheduler
     s.allowed_failures = 100000
     da = pytest.importorskip('dask.array')
 
@@ -3355,7 +3357,9 @@ def test_stress_creation_and_deletion(e, s):
             yield n._close()
             print("Killed nanny")
 
-    yield [create_and_destroy_worker(0.1 * i) for i in range(10)]
+    yield gen.with_timeout(timedelta(minutes=1),
+                          All([create_and_destroy_worker(0.1 * i) for i in
+                              range(10)]))
 
 
 @gen_test()
