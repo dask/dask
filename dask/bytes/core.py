@@ -365,11 +365,12 @@ def open_text_files(urlpath, encoding=system_encoding, errors='strict',
 
 
 def ensure_protocol(protocol):
-    if protocol in _read_bytes or protocol in _open_files:
+    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes)
+            or (protocol in _open_files))):
         return
 
     if protocol == 's3':
-        import_required('dask.s3',
+        import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
                         "    conda install s3fs -c conda-forge\n"
                         "    or\n"
