@@ -824,9 +824,9 @@ class _Frame(Base):
                                   token=self._token_prefix + fn,
                                   skipna=skipna, axis=axis)
         else:
-
+            meta = getattr(self._meta_nonempty, fn)()
             return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                       columns=['idx','value', 'n'], token=self._token_prefix + fn,
+                       meta=meta, token=self._token_prefix + fn,
                        known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)

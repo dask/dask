@@ -1827,7 +1827,7 @@ def test_columns_assignment():
 def test_idxmaxmin():
     pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(pdf, npartitions=3)
-    assert pdf.idxmax().equals(ddf.idxmax().compute())
-    assert pdf.idxmin().equals(ddf.idxmin().compute())
-    assert pdf.a.idxmax() == ddf.a.idxmax().compute()
-    assert pdf.a.idxmin() == ddf.a.idxmin().compute()
+    assert eq(pdf.idxmax(), ddf.idxmax())
+    assert eq(pdf.idxmin(), ddf.idxmin())
+    assert eq(pdf.a.idxmax(), ddf.a.idxmax())
+    assert eq(pdf.a.idxmin(), ddf.a.idxmin())
