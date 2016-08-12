@@ -1,10 +1,36 @@
 from __future__ import print_function, division, absolute_import
 
-from joblib._parallel_backends import ParallelBackendBase, AutoBatchingMixin
-from joblib.parallel import register_parallel_backend
+from distutils.version import LooseVersion
+
 from tornado import gen
 
 from .executor import Executor, _wait
+from .utils import ignoring
+
+
+# A user could have installed joblib, sklearn, both, or neither. Further, only
+# joblib >= 0.10.0 supports backends, so we also need to check for that. This
+# bit of logic is to ensure that we create and register the backend for all
+# viable installations of joblib.
+joblib = sk_joblib = None
+with ignoring(ImportError):
+    import joblib
+    if LooseVersion(joblib.__version__) < '0.10.0':
+        joblib = None
+with ignoring(ImportError):
+    import sklearn.externals.joblib as sk_joblib
+    if LooseVersion(sk_joblib.__version__) < '0.10.0':
+        sk_joblib = None
+
+if joblib:
+    from joblib._parallel_backends import (ParallelBackendBase,
+        AutoBatchingMixin)
+elif sk_joblib:
+    from sklearn.externals.joblib._parallel_backends import (
+        ParallelBackendBase, AutoBatchingMixin)
+else:
+    raise RuntimeError("Joblib backend requires either `joblib` >= '0.10.0' "
+                       " or `sklearn` > '0.17.1'. Please install or upgrade")
 
 
 class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
@@ -45,4 +71,8 @@ class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         self.futures.clear()
 
 
-register_parallel_backend('distributed', DistributedBackend)
+# Register the backend with any available versions of joblib
+if joblib:
+    joblib.register_parallel_backend('distributed', DistributedBackend)
+if sk_joblib:
+    sk_joblib.register_parallel_backend('distributed', DistributedBackend)

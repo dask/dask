@@ -2,7 +2,7 @@ Joblib Frontend
 ===============
 
 Joblib_ is a library for simple parallel programming primarily developed and
-used by the Scikit Learn community.  As of version 0.10 it contains a plugin
+used by the Scikit Learn community.  As of version 0.10.0 it contains a plugin
 mechanism to allow Joblib code to use other parallel frameworks to execute
 computations.  The ``distributed`` scheduler implements such a plugin in the
 ``distributed.joblib`` module and registers it appropriately with Joblib.  As a
@@ -17,13 +17,18 @@ the distributed scheduler if you enclose it in a context manager as follows:
    with parallel_backend('distributed', scheduler_host='HOST:PORT'):
        # normal Joblib code
 
-For example you might distributed a randomized cross validated parameter search
-as follows:
+
+Note that scikit-learn bundles joblib internally, so if you want to specify the
+joblib backend you'll need to import ``parallel_backend`` from scikit-learn
+instead of ``joblib``. As an example you might distributed a randomized cross
+validated parameter search as follows.
 
 .. code-block:: python
 
    import distributed.joblib
-   from joblib import Parallel, parallel_backend
+   # Scikit-learn bundles joblib, so you need to import from
+   # `sklearn.externals.joblib` instead of `joblib` directly
+   from sklearn.externals.joblib import parallel_backend
    from sklearn.datasets import load_digits
    from sklearn.grid_search import RandomizedSearchCV
    from sklearn.svm import SVC

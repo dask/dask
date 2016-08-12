@@ -1,14 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
 import pytest
-pytest.importorskip('joblib')
 from random import random
-
-from joblib import parallel_backend, Parallel, delayed
-
-import distributed.joblib
-from distributed.utils_test import inc, cluster, loop
 from time import sleep
+
+from distributed.utils_test import inc, cluster, loop
+
+backend = pytest.importorskip('distributed.joblib')
+joblibs = [backend.joblib, backend.sk_joblib]
 
 
 def slow_raise_value_error(condition, duration=0.05):
@@ -17,37 +16,46 @@ def slow_raise_value_error(condition, duration=0.05):
         raise ValueError("condition evaluated to True")
 
 
-def test_simple(loop):
+@pytest.mark.parametrize('joblib', joblibs)
+def test_simple(loop, joblib):
+    if joblib is None:
+        pytest.skip()
+    Parallel = joblib.Parallel
+    delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with parallel_backend('distributed', loop=loop,
-                scheduler_host=('127.0.0.1', s['port'])) as p:
+        with joblib.parallel_backend('distributed', loop=loop,
+                scheduler_host=('127.0.0.1', s['port'])):
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
 
             with pytest.raises(ValueError):
                 Parallel()(delayed(slow_raise_value_error)(i == 3)
-                    for i in range(10))
+                           for i in range(10))
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
 
-            from joblib.parallel import get_active_backend
-            ba, _ = get_active_backend()
+            ba, _ = joblib.parallel.get_active_backend()
             ba.executor.shutdown()
 
 
 def random2():
     return random()
 
-def test_dont_assume_function_purity(loop):
+
+@pytest.mark.parametrize('joblib', joblibs)
+def test_dont_assume_function_purity(loop, joblib):
+    if joblib is None:
+        pytest.skip()
+    Parallel = joblib.Parallel
+    delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with parallel_backend('distributed', loop=loop,
-                scheduler_host=('127.0.0.1', s['port'])) as p:
+        with joblib.parallel_backend('distributed', loop=loop,
+                scheduler_host=('127.0.0.1', s['port'])):
 
             x, y = Parallel()(delayed(random2)() for i in range(2))
             assert x != y
 
-            from joblib.parallel import get_active_backend
-            ba, _ = get_active_backend()
+            ba, _ = joblib.parallel.get_active_backend()
             ba.executor.shutdown()
