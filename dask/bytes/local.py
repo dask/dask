@@ -1,11 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 from glob import glob
-import io
 import logging
 import os
 import sys
-import time
 
 from .compression import files as compress_files, seekable_files
 from .utils import SeekableFile, read_block
@@ -21,6 +19,10 @@ def open_file_write(paths):
     """ Open list of files using delayed """
     out = [delayed(open)(path, 'wb') for path in paths]
     return out
+
+
+def open_file_write_direct(path):
+    return open(path, 'wb')
 
 
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
@@ -98,7 +100,7 @@ def open_files(path):
 from . import core
 core._read_bytes['file'] = read_bytes
 core._open_files['file'] = open_files
-core._open_files_write['file'] = open_file_write
+core._open_files_write['file'] = open_file_write_direct
 
 if sys.version_info[0] >= 3:
     def open_text_files(path, encoding=system_encoding, errors='strict'):

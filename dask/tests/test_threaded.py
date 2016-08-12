@@ -1,12 +1,9 @@
-from dask.threaded import get
-from dask.async import inc
-from dask.utils import raises
-from operator import add
-from dask.context import set_options
 from multiprocessing.pool import ThreadPool
 
-
-inc = lambda x: x + 1
+from dask.context import set_options
+from dask.threaded import get
+from dask.utils import raises
+from dask.utils_test import inc, add
 
 
 def test_get():

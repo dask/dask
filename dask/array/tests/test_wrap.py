@@ -33,8 +33,8 @@ def test_full():
     assert a._dtype == a.compute(get=dask.get).dtype == 'i8'
 
 def test_can_make_really_big_array_of_ones():
-    a = ones((1000000, 1000000), chunks=(100000, 100000))
-    a = ones(shape=(1000000, 1000000), chunks=(100000, 100000))
+    ones((1000000, 1000000), chunks=(100000, 100000))
+    ones(shape=(1000000, 1000000), chunks=(100000, 100000))
 
 
 def test_wrap_consistent_names():

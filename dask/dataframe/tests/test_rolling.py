@@ -1,10 +1,8 @@
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.async import get_sync
 from dask.dataframe.utils import eq
 from dask.utils import raises, ignoring
 
@@ -126,7 +124,7 @@ def test_rolling_dataframe(npartitions, method, args, window, center, axis,
                        'e': np.random.randint(100, size=(N,))})
     ddf = dd.from_pandas(df, npartitions)
 
-    prolling =  df.rolling(window, center=center, axis=axis)
+    prolling = df.rolling(window, center=center, axis=axis)
     drolling = ddf.rolling(window, center=center, axis=axis)
     eq(getattr(prolling, method)(*args), getattr(drolling, method)(*args),
        check_less_precise=check_less_precise)

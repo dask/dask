@@ -19,7 +19,7 @@ import dask
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, apply, PY2
+from ..compatibility import unicode, PY2
 from .. import array as da
 from ..async import get_sync
 from ..context import _globals
@@ -28,14 +28,15 @@ import dask.multiprocessing
 
 from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
+from .utils import insert_meta_param_description
 
 from ..utils import build_name_function
-from ..bytes.core import write_bytes, write_block_to_file
+from ..bytes.core import write_bytes
 
 lock = Lock()
 
 
-def _dummy_from_array(x, columns=None):
+def _meta_from_array(x, columns=None):
     """ Create empty pd.DataFrame or pd.Series which has correct dtype """
 
     if x.ndim > 2:
@@ -44,24 +45,34 @@ def _dummy_from_array(x, columns=None):
 
     if getattr(x.dtype, 'names', None) is not None:
         # record array has named columns
-        cols = tuple(x.dtype.names)
-        dtypes = [x.dtype.fields[n][0] for n in x.dtype.names]
-    elif x.ndim == 1 and (np.isscalar(columns) or columns is None):
-        # Series
-        return pd.Series([], name=columns, dtype=x.dtype)
+        if columns is None:
+            columns = list(x.dtype.names)
+        elif np.isscalar(columns):
+            raise ValueError("For a struct dtype, columns must be a list.")
+        elif not all(i in x.dtype.names for i in columns):
+            extra = sorted(set(columns).difference(x.dtype.names))
+            raise ValueError("dtype {0} doesn't have fields "
+                             "{1}".format(x.dtype, extra))
+        fields = x.dtype.fields
+        dtypes = [fields[n][0] if n in fields else 'f8' for n in columns]
+    elif x.ndim == 1:
+        if np.isscalar(columns) or columns is None:
+            return pd.Series([], name=columns, dtype=x.dtype)
+        elif len(columns) == 1:
+            return pd.DataFrame(np.array([], dtype=x.dtype), columns=columns)
+        raise ValueError("For a 1d array, columns must be a scalar or single "
+                         "element list")
     else:
-        cols = list(range(x.shape[1])) if x.ndim == 2 else [0]
-        dtypes = [x.dtype] * len(cols)
+        if columns is None:
+            columns = list(range(x.shape[1])) if x.ndim == 2 else [0]
+        elif len(columns) != x.shape[1]:
+            raise ValueError("Number of column names must match width of the "
+                             "array. Got {0} names for {1} "
+                             "columns".format(len(columns), x.shape[1]))
+        dtypes = [x.dtype] * len(columns)
 
-    data = {}
-    for c, dt in zip(cols, dtypes):
-        data[c] = np.array([], dtype=dt)
-    data = pd.DataFrame(data, columns=cols)
-
-    if columns is not None:
-        # if invalid, raise error from pandas
-        data.columns = columns
-    return data
+    data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
+    return pd.DataFrame(data, columns=columns)
 
 
 def from_array(x, chunksize=50000, columns=None):
@@ -84,7 +95,7 @@ def from_array(x, chunksize=50000, columns=None):
     if isinstance(x, da.Array):
         return from_dask_array(x, columns=columns)
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
@@ -94,11 +105,11 @@ def from_array(x, chunksize=50000, columns=None):
     dsk = {}
     for i in range(0, int(ceil(len(x) / chunksize))):
         data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, data, None, dummy.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, data, None, dummy.columns)
-    return _Frame(dsk, name, dummy, divisions)
+            dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
+    return _Frame(dsk, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -225,8 +236,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
-                np.issubdtype(x.dtype[name], np.unicode_) or
-                np.issubdtype(x.dtype[name], np.object_)):
+                    np.issubdtype(x.dtype[name], np.unicode_) or
+                    np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
                 categories[name] = da.unique(a)
 
@@ -356,7 +367,7 @@ def from_dask_array(x, columns=None):
     3  1.0  1.0
     """
 
-    dummy = _dummy_from_array(x, columns)
+    meta = _meta_from_array(x, columns)
 
     name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
@@ -369,19 +380,19 @@ def from_dask_array(x, columns=None):
 
     if x.ndim == 2:
         if len(x.chunks[1]) > 1:
-           x = x.rechunk({1: x.shape[1]})
+            x = x.rechunk({1: x.shape[1]})
 
     dsk = {}
     for i, (chunk, ind) in enumerate(zip(x._keys(), index)):
         if x.ndim == 2:
             chunk = chunk[0]
 
-        if isinstance(dummy, pd.Series):
-            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, dummy.name)
+        if isinstance(meta, pd.Series):
+            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, chunk, ind, dummy.columns)
+            dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return _Frame(merge(x.dask, dsk), name, dummy, divisions)
+    return _Frame(merge(x.dask, dsk), name, meta, divisions)
 
 
 def from_castra(x, columns=None):
@@ -470,7 +481,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
-    if get is None and not 'get' in _globals and single_node and single_file:
+    if get is None and 'get' not in _globals and single_node and single_file:
         get = get_sync
 
     # handle lock default based on whether we're writing to a single entity
@@ -478,7 +489,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and not _actual_get is dask.multiprocessing.get:
+        elif not single_file and _actual_get is not dask.multiprocessing.get:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
@@ -541,6 +552,7 @@ The combination is ambiguous because it could be interpreted as the starting
 and stopping index per file, or starting and stopping index of the global
 dataset."""
 
+
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                      chunksize=int(1e6), sorted_index=False, lock=None, mode=None):
     """
@@ -577,7 +589,6 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     divisions.append(None)
         return keys, stops, divisions
 
-
     def one_path_one_key(path, key, start, stop, columns, chunksize, division, lock):
         """
         Get the data frame corresponding to one path and one key (which should
@@ -609,7 +620,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                                       'columns': empty.columns}))
                         for i, s in enumerate(range(start, stop, chunksize)))
 
-            divisions = [None]  * (len(dsk) + 1)
+            divisions = [None] * (len(dsk) + 1)
 
         return DataFrame(dsk, name, empty, divisions)
 
@@ -674,7 +685,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     if lock is True:
         lock = Lock()
 
-    key = key if key.startswith('/')  else '/' + key
+    key = key if key.startswith('/') else '/' + key
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
@@ -776,29 +787,30 @@ def from_imperative(*args, **kwargs):
     return from_delayed(*args, **kwargs)
 
 
-def from_delayed(dfs, metadata=None, divisions=None, columns=None,
-                      prefix='from-delayed'):
+@insert_meta_param_description
+def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
+                 metadata=None):
     """ Create DataFrame from many dask.delayed objects
 
     Parameters
     ----------
-    dfs: list of Values
+    dfs : list of Values
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.
-    metadata: str, list of column names, or empty dataframe, optional
-        Metadata for the underlying pandas object. Can be either column name
-        (if Series), list of column names, or pandas object with the same
-        columns/dtypes. If not provided, will be computed from the first
-        partition.
-    divisions: list, optional
+    $META
+    divisions : tuple, str, optional
         Partition boundaries along the index.
-    prefix, str, optional
+        For tuple, see http://dask.pydata.io/en/latest/dataframe-partitions.html
+        For string 'sorted' will compute the delayed values to find index
+        values.  Assumes that the indexes are mutually sorted.
+        If None, then won't use index information
+    prefix : str, optional
         Prefix to prepend to the keys.
     """
-    if columns is not None:
-        warn("Deprecation warning: Use metadata argument, not columns")
-        metadata = columns
+    if metadata is not None and meta is None:
+        warn("Deprecation warning: Use meta keyword, not metadata")
+        meta = metadata
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
@@ -808,16 +820,24 @@ def from_delayed(dfs, metadata=None, divisions=None, columns=None,
     names = [(name, i) for i in range(len(dfs))]
     values = [df.key for df in dfs]
     dsk2 = dict(zip(names, values))
+    dsk3 = merge(dsk, dsk2)
 
-    if divisions is None:
-        divisions = [None] * (len(dfs) + 1)
-    if metadata is None:
-        metadata = dfs[0].compute()
-
-    if isinstance(metadata, (str, pd.Series)):
-        return Series(merge(dsk, dsk2), name, metadata, divisions)
+    if meta is None:
+        meta = dfs[0].compute()
+    if isinstance(meta, (str, pd.Series)):
+        Frame = Series
     else:
-        return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
+        Frame = DataFrame
+
+    if divisions == 'sorted':
+        from .core import compute_divisions
+        divisions = [None] * (len(dfs) + 1)
+        df = Frame(dsk3, name, meta, divisions)
+        return compute_divisions(df)
+    elif divisions is None:
+        divisions = [None] * (len(dfs) + 1)
+
+    return Frame(dsk3, name, meta, divisions)
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):

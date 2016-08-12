@@ -5,9 +5,7 @@ from operator import add
 
 from dask.context import set_options
 from dask.multiprocessing import get, _dumps, _loads
-
-
-inc = lambda x: x + 1
+from dask.utils_test import inc
 
 
 def test_pickle_globals():

@@ -5,9 +5,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ..context import _globals
-from .core import (DataFrame, Series, Index, aca, map_partitions, no_default)
+from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
+from .utils import make_meta, insert_meta_param_description
 from ..utils import derived_from
 
 
@@ -145,14 +145,14 @@ class _GroupBy(object):
 
         # grouping key passed via groupby method
         if (isinstance(index, (DataFrame, Series, Index)) and
-            isinstance(df, DataFrame)):
+                isinstance(df, DataFrame)):
 
             if (isinstance(index, Series) and index.name in df.columns and
-                index._name == df[index.name]._name):
+                    index._name == df[index.name]._name):
                 index = index.name
             elif (isinstance(index, DataFrame) and
                 set(index.columns).issubset(df.columns) and
-                index._name == df[index.columns]._name):
+                    index._name == df[index.columns]._name):
                 index = list(index.columns)
 
         self.index = index
@@ -175,12 +175,12 @@ class _GroupBy(object):
             # if group key (index) is a Series sliced from DataFrame,
             # emulation must be performed as the same.
             # otherwise, group key is regarded as a separate column
-            self._pd = self.obj._pd.groupby(self.obj._pd[index.name])
+            self._meta = self.obj._meta.groupby(self.obj._meta[index.name])
 
         elif isinstance(self.index, Series):
-            self._pd = self.obj._pd.groupby(self.index._pd)
+            self._meta = self.obj._meta.groupby(self.index._meta)
         else:
-            self._pd = self.obj._pd.groupby(self.index)
+            self._meta = self.obj._meta.groupby(self.index)
 
     def _is_grouped_by_sliced_column(self, df, index):
         """
@@ -189,36 +189,36 @@ class _GroupBy(object):
         if isinstance(df, Series):
             return False
         if (isinstance(index, Series) and index._name in df.columns and
-            index._name == df[index.name]._name):
+                index._name == df[index.name]._name):
             return True
         if (isinstance(index, DataFrame) and
-            set(index.columns).issubset(df.columns) and
-            index._name == df[index.columns]._name):
+                set(index.columns).issubset(df.columns) and
+                index._name == df[index.columns]._name):
             index = list(index.columns)
             return True
         return False
 
-    def _head(self):
+    @property
+    def _meta_nonempty(self):
         """
-        Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contais head data.
+        Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
-        head = self.obj.head()
+        sample = self.obj._meta_nonempty
         if isinstance(self.index, Series):
             if self._is_grouped_by_sliced_column(self.obj, self.index):
-                grouped = head.groupby(head[self.index.name])
+                grouped = sample.groupby(sample[self.index.name])
             else:
-                grouped = head.groupby(self.index.head())
+                grouped = sample.groupby(self.index._meta_nonempty)
         else:
-            grouped = head.groupby(self.index)
-        grouped = _maybe_slice(grouped, self._slice)
-        return grouped
+            grouped = sample.groupby(self.index)
+        return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None):
         if aggfunc is None:
             aggfunc = func
 
-        dummy = func(self._pd)
-        columns = dummy.name if isinstance(dummy, pd.Series) else dummy.columns
+        meta = func(self._meta)
+        columns = meta.name if isinstance(meta, pd.Series) else meta.columns
 
         token = self._token_prefix + token
 
@@ -231,7 +231,7 @@ class _GroupBy(object):
 
         return aca([self.obj, self.index, func, columns],
                    chunk=_apply_chunk, aggregate=agg,
-                   columns=dummy, token=token)
+                   meta=meta, token=token)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
@@ -257,12 +257,12 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1):
         from functools import partial
-        meta = self.obj._pd
+        meta = self.obj._meta
         if isinstance(meta, pd.Series):
             meta = meta.to_frame()
         meta = meta.groupby(self.index).var(ddof=1)
-        result = aca([self.obj, self.index], _var_chunk,
-                     partial(_var_agg, ddof=ddof), meta,
+        result = aca([self.obj, self.index], chunk=_var_chunk,
+                     aggregate=partial(_var_agg, ddof=ddof), meta=meta,
                      token=self._token_prefix + 'var')
 
         if isinstance(self.obj, Series):
@@ -275,27 +275,28 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def std(self, ddof=1):
         v = self.var(ddof)
-        result = map_partitions(np.sqrt, v, v)
+        result = map_partitions(np.sqrt, v, meta=v)
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def get_group(self, key):
         token = self._token_prefix + 'get_group'
 
-        dummy = self._pd.obj
-        if isinstance(dummy, pd.DataFrame) and self._slice is not None:
-            dummy = dummy[self._slice]
-        columns = dummy.columns if isinstance(dummy, pd.DataFrame) else dummy.name
+        meta = self._meta.obj
+        if isinstance(meta, pd.DataFrame) and self._slice is not None:
+            meta = meta[self._slice]
+        columns = meta.columns if isinstance(meta, pd.DataFrame) else meta.name
 
-        return map_partitions(_groupby_get_group, dummy, self.obj,
-                              self.index, key, columns, token=token)
+        return map_partitions(_groupby_get_group, self.obj, self.index, key,
+                              columns, meta=meta, token=token)
 
-    def apply(self, func, columns=no_default):
+    @insert_meta_param_description(pad=12)
+    def apply(self, func, meta=no_default, columns=no_default):
         """ Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
 
-        1.  The user should provide output columns.
+        1.  The user should provide output metadata.
         2.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
 
@@ -303,28 +304,38 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
+        $META
         columns: list, scalar or None
-            If list is given, the result is a DataFrame which columns is
-            specified list. Otherwise, the result is a Series which name is
-            given scalar or None (no name). If name keyword is not given, dask
-            tries to infer the result type using its beginning of data. This
-            inference may take some time and lead to unexpected result
+            Deprecated, use `meta` instead. If list is given, the result is a
+            DataFrame which columns is specified list. Otherwise, the result is
+            a Series which name is given scalar or None (no name). If name
+            keyword is not given, dask tries to infer the result type using its
+            beginning of data. This inference may take some time and lead to
+            unexpected result
 
         Returns
         -------
         applied : Series or DataFrame depending on columns keyword
         """
-        if columns is no_default:
-            msg = ("columns is not specified, inferred from partial data. "
-                   "Please provide columns if the result is unexpected.\n"
+        if columns is not no_default:
+            warnings.warn("`columns` is deprecated, please use `meta` instead")
+            if meta is no_default and isinstance(columns, (pd.DataFrame, pd.Series)):
+                meta = columns
+        if meta is no_default:
+            msg = ("`meta` is not specified, inferred from partial data. "
+                   "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
-                   "  After:  .apply(func, columns=['x', 'y']) for dataframe result\n"
-                   "  or:     .apply(func, columns='x')        for series result")
+                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            dummy = self._head().apply(func)
+            try:
+                meta = self._meta_nonempty.apply(func)
+            except:
+                raise ValueError("Metadata inference failed, please provide "
+                                 "`meta` keyword")
         else:
-            dummy = columns
+            meta = make_meta(meta)
 
         df = self.obj
         if isinstance(self.index, DataFrame):  # add index columns to dataframe
@@ -338,25 +349,25 @@ class _GroupBy(object):
             df2 = df
             index = df[self.index]
 
-        df3 = shuffle(df2, index, **self.kwargs) # shuffle dataframe and index
+        df3 = shuffle(df2, index, **self.kwargs)  # shuffle dataframe and index
 
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
-            df4 = df3.drop(cols, axis=1, dtype=dummy.columns.dtype if
-                    isinstance(dummy, pd.DataFrame) else None)
+            df4 = df3.drop(cols, axis=1, dtype=meta.columns.dtype if
+                    isinstance(meta, pd.DataFrame) else None)
         elif isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
-            df4 = df3.drop('_index', axis=1, dtype=dummy.columns.dtype if
-                    isinstance(dummy, pd.DataFrame) else None)
+            df4 = df3.drop('_index', axis=1, dtype=meta.columns.dtype if
+                    isinstance(meta, DataFrame) else None)
         else:
             df4 = df3
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
-        df5 = map_partitions(_groupby_slice_apply, dummy, df4, index2,
-                             self._slice, func)
+        df5 = map_partitions(_groupby_slice_apply, df4, index2,
+                             self._slice, func, meta=meta)
 
         return df5
 
@@ -389,7 +400,7 @@ class DataFrameGroupBy(_GroupBy):
                               slice=key, **self.kwargs)
 
         # error is raised from pandas
-        g._pd = g._pd[key]
+        g._meta = g._meta[key]
         return g
 
     def __dir__(self):
@@ -419,7 +430,7 @@ class SeriesGroupBy(_GroupBy):
                     msg = "Grouper for '{0}' not 1-dimensional"
                     raise ValueError(msg.format(index[0]))
                 # raise error from pandas
-                df._pd.groupby(index)
+                df._meta.groupby(index)
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 
@@ -429,7 +440,10 @@ class SeriesGroupBy(_GroupBy):
         return self._slice
 
     def nunique(self):
-        name = self._pd.obj.name
+        name = self._meta.obj.name
+        meta = pd.Series([], dtype='int64',
+                         index=pd.Index([], dtype=self._meta.obj.dtype),
+                         name=name)
 
         if isinstance(self.obj, DataFrame):
 
@@ -438,7 +452,7 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_df_chunk, aggregate=agg,
-                       columns=name, token='series-groupby-nunique')
+                       meta=meta, token='series-groupby-nunique')
         else:
 
             def agg(df):
@@ -446,4 +460,4 @@ class SeriesGroupBy(_GroupBy):
 
             return aca([self.obj, self.index],
                        chunk=_nunique_series_chunk, aggregate=agg,
-                       columns=name, token='series-groupby-nunique')
+                       meta=meta, token='series-groupby-nunique')

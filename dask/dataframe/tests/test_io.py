@@ -8,13 +8,12 @@ import dask
 import pytest
 from distutils.version import LooseVersion
 from threading import Lock
-import shutil
 from time import sleep
 import threading
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
+from dask.dataframe.io import from_array, from_dask_array
 from dask.delayed import Delayed
 
 from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
@@ -50,7 +49,6 @@ def test_read_csv():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=30, lineterminator=os.linesep)
         assert list(f.columns) == ['name', 'amount']
-        assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
@@ -64,7 +62,6 @@ def test_read_multiple_csv():
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
         df = dd.read_csv('_foo.*.csv', chunkbytes=30)
-        assert df._known_dtype
         assert df.npartitions > 2
 
         assert (len(dd.read_csv('_foo.*.csv').compute()) ==
@@ -93,7 +90,6 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-        assert df._known_dtype
 
 datetime_csv_file = """
 name,amount,when
@@ -107,7 +103,6 @@ Dan,400,2014-01-01
 def test_read_csv_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
-        assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -134,24 +129,23 @@ def test_usecols():
 ####################
 
 
-def test_dummy_from_array():
+def test_meta_from_array():
     x = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res[0].dtype == np.int64
     assert res[1].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index([0, 1]))
 
     x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
-    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    res = dd.io._meta_from_array(x, columns=['a', 'b'])
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.float64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
     np.random.seed(42)
     x = np.random.rand(201, 2)
@@ -159,61 +153,57 @@ def test_dummy_from_array():
     assert len(x.divisions) == 6 # Should be 5 partitions and the end
 
 
-def test_dummy_from_1darray():
+def test_meta_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.Series)
     assert res.dtype == np.float64
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns='x')
+    res = dd.io._meta_from_array(x, columns='x')
     assert isinstance(res, pd.Series)
     assert res.name == 'x'
     assert res.dtype == np.object_
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns=['x'])
+    res = dd.io._meta_from_array(x, columns=['x'])
     assert isinstance(res, pd.DataFrame)
     assert res['x'].dtype == np.object_
     tm.assert_index_equal(res.columns, pd.Index(['x']))
 
-    msg = r"""Length mismatch: Expected axis has 1 elements, new values have 2 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b'])
 
 
-def test_dummy_from_recarray():
+def test_meta_from_recarray():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    res = dd.io._dummy_from_array(x, columns=['x', 'y'])
+    res = dd.io._meta_from_array(x, columns=['b', 'a'])
     assert isinstance(res, pd.DataFrame)
-    assert res['x'].dtype == np.float64
-    assert res['y'].dtype == np.int64
-    tm.assert_index_equal(res.columns, pd.Index(['x', 'y']))
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['b', 'a']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
 
 def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
@@ -227,7 +217,6 @@ def test_from_array_with_record_dtype():
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
@@ -272,7 +261,6 @@ def test_from_bcolz():
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
-    assert d._known_dtype
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
@@ -441,6 +429,16 @@ def test_from_pandas_small():
         assert a.divisions[0] == 0
         assert a.divisions[-1] == 2
 
+    for sort in [True, False]:
+        for i in [0, 2]:
+            df = pd.DataFrame({'x': [0] * i})
+            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
+            eq(df, ddf)
+
+            s = pd.Series([0] * i, name='x')
+            ds = dd.from_pandas(s, npartitions=5, sort=sort)
+            eq(s, ds)
+
 
 @pytest.mark.xfail(reason="")
 def test_from_pandas_npartitions_is_accurate():
@@ -523,11 +521,10 @@ def test_Series_from_dask_array():
 def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
 
-    msg = r"from_array does not input more than 2D array, got array with shape \(3, 3, 3\)"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x)       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute())  # numpy
 
     x = da.ones((10, 3), chunks=(3, 3))
@@ -541,11 +538,10 @@ def test_from_dask_array_compat_numpy_array():
     assert (d2.compute().values == x.compute()).all()
     tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
 
-    msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x, columns=['a'])       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute(), columns=['a'])  # numpy
 
     d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask
@@ -606,9 +602,10 @@ def test_from_dask_array_struct_dtype():
 
 
 def test_to_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
@@ -652,10 +649,12 @@ def test_to_castra():
         c1.drop()
         c2.drop()
 
+
 def test_from_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
@@ -681,9 +680,10 @@ def test_from_castra_with_selection():
 
     We used to use getitem for both column access and selections
     """
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
         pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
@@ -1061,12 +1061,16 @@ def test_to_hdf_process():
         eq(df, out)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_fmt_warns():
     pytest.importorskip('tables')
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # testing warning when breaking order
@@ -1097,7 +1101,6 @@ def test_read_hdf():
         df.to_hdf(fn, '/data', format='table')
         a = dd.read_hdf(fn, '/data', chunksize=2)
         assert a.npartitions == 2
-        assert a._known_dtype
 
         tm.assert_frame_equal(a.compute(), df)
 
@@ -1109,21 +1112,25 @@ def test_read_hdf():
                 sorted(dd.read_hdf(fn, '/data').dask))
 
 def test_read_hdf_multiply_open():
-    "Test that we can read from a file that's already opened elsewhere in read-only mode."
+    """Test that we can read from a file that's already opened elsewhere in
+    read-only mode."""
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
-        with pd.HDFStore(fn, mode='r') as other:
-            a = dd.read_hdf(fn, '/data', chunksize=2, mode='r')
+        with pd.HDFStore(fn, mode='r'):
+            dd.read_hdf(fn, '/data', chunksize=2, mode='r')
 
 
 def test_read_hdf_multiple():
     pytest.importorskip('tables')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                             'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     with tmpfile('h5') as fn:
@@ -1142,15 +1149,15 @@ def test_read_hdf_start_stop_values():
         df.to_hdf(fn, '/data', format='table')
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', stop=10)
+            dd.read_hdf(fn, '/data', stop=10)
         assert 'number of rows' in str(e)
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', start=10)
+            dd.read_hdf(fn, '/data', start=10)
         assert 'is above or equal to' in str(e)
 
         with pytest.raises(ValueError) as e:
-            a = dd.read_hdf(fn, '/data', chunksize=-1)
+            dd.read_hdf(fn, '/data', chunksize=-1)
         assert 'positive integer' in str(e)
 
 
@@ -1187,8 +1194,10 @@ def test_to_csv_multiple_files_cornercases():
             fn = os.path.join(dn, "data_*_*.csv")
             a.to_csv(fn)
 
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]})
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]})
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.csv')
@@ -1372,7 +1381,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            f = dd.read_csv(fn, chunkbytes=30, index_col='name')
+            dd.read_csv(fn, chunkbytes=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -1540,15 +1549,3 @@ def test_read_csv_singleton_dtype():
     with filetext(data, mode='wb') as fn:
         eq(pd.read_csv(fn, dtype=float),
            dd.read_csv(fn, dtype=float))
-
-
-def test_from_pandas_small():
-    for sort in [True, False]:
-        for i in [0, 2]:
-            df = pd.DataFrame({'x': [0] * i})
-            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
-            eq(df, ddf)
-
-            s = pd.Series([0] * i, name='x')
-            ds = dd.from_pandas(s, npartitions=5, sort=sort)
-            eq(s, ds)

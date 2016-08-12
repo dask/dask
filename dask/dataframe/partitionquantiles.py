@@ -419,7 +419,6 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
-    from dask.array.percentile import _percentile
 
     qs = np.linspace(0, 1, npartitions + 1)
     # currently, only Series has quantile method
@@ -459,4 +458,4 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
                                           npartitions, (name0, 0)))}
 
     dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
-    return return_type(dsk, name3, df_name, new_divisions)
+    return return_type(dsk, name3, df._meta, new_divisions)

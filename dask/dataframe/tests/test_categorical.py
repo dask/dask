@@ -5,6 +5,7 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
+from dask.dataframe.utils import make_meta
 
 
 def test_categorize():
@@ -14,7 +15,8 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                   index=[3, 4, 5])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 3, 5])
+    meta = make_meta({'a': 'O', 'b': 'O'}, index=pd.Index([], 'i8'))
+    d = dd.DataFrame(dsk, 'x', meta, [0, 3, 5])
     full = d.compute()
 
     c = d.categorize('a')
@@ -35,19 +37,16 @@ def test_categorical_set_index(shuffle):
 
     with dask.set_options(get=get_sync, shuffle=shuffle):
         b = a.set_index('y')
-        df2 = df.set_index('y')
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
         b = a.set_index(a.y)
-        df2 = df.set_index(df.y)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
         b = a.set_partition('y', ['a', 'b', 'c'])
-        df2 = df.set_index(df.y)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']

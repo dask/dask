@@ -104,7 +104,7 @@ def test_docs():
 
 
 def test_can_make_really_big_random_array():
-    x = normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))
+    normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))
 
 
 def test_random_seed():

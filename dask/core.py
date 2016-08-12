@@ -1,11 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
-
 from itertools import chain
 
-def inc(x):
-    return x + 1
+from .utils_test import add, inc  # noqa: F401
+
 
 def ishashable(x):
     """ Is x hashable?

@@ -16,14 +16,14 @@ def groupby_internal_repr():
     gp = pdf.groupby('y')
     dp = ddf.groupby('y')
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
 
     gp = pdf.groupby('y')['x']
     dp = ddf.groupby('y')['x']
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
     assert eq(dp.obj, gp.obj)
@@ -31,7 +31,7 @@ def groupby_internal_repr():
     gp = pdf.groupby('y')[['x']]
     dp = ddf.groupby('y')[['x']]
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
@@ -39,7 +39,7 @@ def groupby_internal_repr():
     gp = pdf.groupby(pdf.y)['x']
     dp = ddf.groupby(ddf.y)['x']
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.SeriesGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
     assert eq(dp.obj, gp.obj)
@@ -47,7 +47,7 @@ def groupby_internal_repr():
     gp = pdf.groupby(pdf.y)[['x']]
     dp = ddf.groupby(ddf.y)[['x']]
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._pd, pd.core.groupby.DataFrameGroupBy)
+    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
     assert eq(dp.obj, gp.obj)
@@ -186,7 +186,8 @@ def test_groupby_get_group():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    meta = dsk[('x', 0)]
+    d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     full = d.compute()
 
     for ddkey, pdkey in [('b', 'b'), (d.b, full.b),
@@ -224,7 +225,7 @@ def test_series_groupby_propagates_names():
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df['y'].sum()
 
-    result = ddf.groupby('x').apply(func, columns='y')
+    result = ddf.groupby('x').apply(func, meta=('y', 'i8'))
 
     expected = df.groupby('x').apply(func)
     expected.name = 'y'
@@ -464,7 +465,6 @@ def test_numeric_column_names():
     ddf = dd.from_pandas(df, npartitions=2)
     eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     eq(ddf.groupby(0).apply(lambda x: x), df.groupby(0).apply(lambda x: x))
-
 
 
 def test_groupby_apply_tasks():

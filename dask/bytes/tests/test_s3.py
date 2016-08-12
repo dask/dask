@@ -12,7 +12,7 @@ import moto
 from toolz import concat, valmap, partial
 from s3fs import S3FileSystem
 
-from dask import compute, get
+from dask import compute, get, delayed
 from dask.bytes.s3 import _get_s3, read_bytes, open_files, getsize
 from dask.bytes import core
 
@@ -34,7 +34,7 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
 @pytest.yield_fixture
 def s3():
     # writable local S3 system
-    with moto.mock_s3() as m:
+    with moto.mock_s3():
         client = boto3.client('s3')
         client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
         for f, data in files.items():
@@ -78,7 +78,7 @@ def test_get_s3():
 
 def test_write_bytes(s3):
     paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
-    values = list(files.values())
+    values = [delayed(v) for v in files.values()]
     out = core.write_bytes(values, paths, s3=s3)
     compute(*out)
     sample, values = read_bytes(test_bucket_name+'/more/test/accounts.*', s3=s3)

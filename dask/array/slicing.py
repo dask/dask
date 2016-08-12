@@ -139,7 +139,6 @@ def slice_array(out_name, in_name, blockdims, index):
     return dsk_out, bd_out
 
 
-
 def slice_with_newaxes(out_name, in_name, blockdims, index):
     """
     Handle indexing with Nones

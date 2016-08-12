@@ -1,25 +1,36 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-pytest.importorskip('numpy')
+np = pytest.importorskip('numpy')
 
-from distutils.version import LooseVersion
-from operator import add, sub
 import os
-import shutil
 import time
 import sys
+from distutils.version import LooseVersion
+from operator import add, sub, getitem
+from threading import Lock
 
-from toolz import merge, countby
+from toolz import merge, countby, concat
 from toolz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe as dd
+from dask.base import tokenize
 from dask.delayed import delayed
 from dask.async import get_sync
-from dask.array.core import *
 from dask.utils import raises, ignoring, tmpfile, tmpdir
+from dask.utils_test import inc
+
+from dask.array import chunk
+from dask.array.core import (getem, getarray, top, dotmany, concatenate3,
+                             broadcast_dimensions, Array, stack, concatenate,
+                             from_array, take, elemwise, isnull, notnull,
+                             broadcast_shapes, partial_by_order, exp,
+                             tensordot, choose, where, coarsen, insert,
+                             broadcast_to, unravel, reshape, fromfunction,
+                             blockdims_from_blockshape, store, optimize,
+                             from_func, normalize_chunks, broadcast_chunks,
+                             atop, from_delayed)
 from dask.array.utils import assert_eq
 
 # temporary until numpy functions migrated
@@ -29,9 +40,6 @@ except ImportError:  # pragma: no cover
     import dask.array.numpy_compat as npcompat
     nancumsum = npcompat.nancumsum
     nancumprod = npcompat.nancumprod
-
-def inc(x):
-    return x + 1
 
 
 def same_keys(a, b):
@@ -560,7 +568,7 @@ def test_where():
 def test_where_has_informative_error():
     x = da.ones(5, chunks=3)
     try:
-        result = da.where(x > 0)
+        da.where(x > 0)
     except Exception as e:
         assert 'dask' in str(e)
 
@@ -728,8 +736,6 @@ def test_full():
 
 
 def test_map_blocks():
-    inc = lambda x: x + 1
-
     x = np.arange(400).reshape((20, 20))
     d = from_array(x, chunks=(7, 7))
 
@@ -947,7 +953,7 @@ def test_store_locks():
 @pytest.mark.xfail(reason="can't lock with multiprocessing")
 def test_store_multiprocessing_lock():
     d = da.ones((10, 10), chunks=(2, 2))
-    a, b = d + 1, d + 2
+    a = d + 1
 
     at = np.zeros(shape=(10, 10))
     a.store(at, get=dask.multiprocessing.get, num_workers=10)
@@ -993,6 +999,7 @@ def test_to_hdf5():
 
 
 def test_to_dask_dataframe():
+    dd = pytest.importorskip('dask.dataframe')
     a = da.ones((4,), chunks=(2,))
     d = a.to_dask_dataframe()
     assert isinstance(d, dd.Series)
@@ -1201,6 +1208,8 @@ def test_arithmetic():
     assert_eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert_eq(da.fabs(b), np.fabs(y))
     assert_eq(da.sign(b - 2), np.sign(y - 2))
+    assert_eq(da.absolute(b - 2), np.absolute(y - 2))
+    assert_eq(da.absolute(b - 2 + 1j), np.absolute(y - 2 + 1j))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
@@ -1255,7 +1264,6 @@ def test_slicing_with_non_ndarrays():
 
         def __getitem__(self, key):
             return ARangeSlice(key[0].start, key[0].stop)
-
 
     x = da.from_array(ARangeSlicable(10), chunks=(4,))
 
@@ -1428,8 +1436,6 @@ def test_histogram():
 
 def test_histogram_alternative_bins_range():
     v = da.random.random(100, chunks=10)
-    bins = np.arange(0, 1.01, 0.01)
-    # Other input
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
     (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
     assert_eq(a1, a2)
@@ -1673,8 +1679,6 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
-
-
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     assert raises(IndexError, lambda: d.vindex[0])
@@ -1682,6 +1686,7 @@ def test_vindex_errors():
     assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
     assert raises(IndexError, lambda: d.vindex[[1], [1, 2, 3]])
     assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [[1], [2], [3]]])
+
 
 def test_vindex_merge():
     from dask.array.core import _vindex_merge
@@ -1953,7 +1958,6 @@ def test_cumulative():
         assert_eq(da.nancumprod(x, axis=axis), nancumprod(a, axis=axis))
 
 
-
 def test_eye():
     assert_eq(da.eye(9, chunks=3), np.eye(9))
     assert_eq(da.eye(10, chunks=3), np.eye(10))
@@ -2083,3 +2087,11 @@ def test_from_array_names():
 
     names = countby(key_split, d.dask)
     assert set(names.values()) == set([1, 5])
+
+
+def test_array_picklable():
+    from pickle import loads, dumps
+
+    a = da.arange(100, chunks=25)
+    a2 = loads(dumps(a))
+    assert_eq(a, a2)

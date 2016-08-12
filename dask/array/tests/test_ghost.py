@@ -206,7 +206,7 @@ def test_map_overlap():
     x = np.arange(16).reshape((4, 4))
     d = da.from_array(x, chunks=(2, 2))
     exp1 = d.map_overlap(lambda x: x + x.size, depth=1).compute()
-    exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},\
+    exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},
                     boundary={0: 'reflect', 1: 'none'}).compute()
     assert eq(exp1, x + 16)
     assert eq(exp2, x + 12)

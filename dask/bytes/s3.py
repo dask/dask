@@ -154,6 +154,12 @@ def open_file_write(paths, s3=None, **kwargs):
     return out
 
 
+def open_file_write_direct(path, s3=None, **kwargs):
+    bucket = kwargs.pop('host', '')
+    if s3 is None:
+        s3 = _get_s3(**kwargs)
+    return s3.open(bucket + path, 'wb')
+
 def open_files(path, s3=None, **kwargs):
     """ Open many files.  Return delayed objects.
 
@@ -191,4 +197,4 @@ def getsize(path, compression, s3):
 from . import core
 core._read_bytes['s3'] = read_bytes
 core._open_files['s3'] = open_files
-core._open_files_write['s3'] = open_file_write
+core._open_files_write['s3'] = open_file_write_direct

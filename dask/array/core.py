@@ -23,7 +23,7 @@ import numpy as np
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute, tokenize, normalize_token
+from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
         IndexCallable, funcname)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
@@ -804,6 +804,12 @@ class Array(Base):
     @property
     def _args(self):
         return (self.dask, self.name, self.chunks, self.dtype)
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self._chunks, self._dtype = state
 
     @property
     def numblocks(self):
@@ -1890,8 +1896,6 @@ def concatenate(seq, axis=0):
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
 
-
-
     return Array(dsk2, name, chunks, dtype=dt)
 
 
@@ -2216,7 +2220,6 @@ def elemwise(op, *args, **kwargs):
                 dtype=dt, name=name)
 
 
-
 def wrap_elemwise(func, **kwargs):
     """ Wrap up numpy function into dask.array """
     f = partial(elemwise, func, **kwargs)
@@ -2301,6 +2304,7 @@ imag = wrap_elemwise(np.imag)
 clip = wrap_elemwise(np.clip)
 fabs = wrap_elemwise(np.fabs)
 sign = wrap_elemwise(np.sign)
+absolute = wrap_elemwise(np.absolute)
 
 
 def frexp(x):
@@ -2742,7 +2746,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
     name = 'histogram-sum-' + token
-
 
     # Map the histogram to all bins
     def block_hist(x, weights=None):

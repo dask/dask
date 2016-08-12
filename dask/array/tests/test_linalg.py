@@ -403,7 +403,6 @@ def test_cholesky(shape, chunk):
     assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
 
 
-
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"),
                          [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk):

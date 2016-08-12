@@ -65,6 +65,7 @@ def call_pandas_rolling_method_single(this_partition, rolling_kwargs,
     method = getattr(this_partition.rolling(**rolling_kwargs), method_name)
     return method(*method_args, **method_kwargs)
 
+
 def call_pandas_rolling_method_with_neighbors(
         prev_partition, this_partition, next_partition, before, after,
         rolling_kwargs, method_name, method_args, method_kwargs):
@@ -79,11 +80,14 @@ def call_pandas_rolling_method_with_neighbors(
     else:
         return applied.iloc[before:]
 
+
 def tail(obj, n):
     return obj.tail(n)
 
+
 def head(obj, n):
     return obj.head(n)
+
 
 class Rolling(object):
     # What you get when you do ddf.rolling(...) or similar
@@ -106,7 +110,7 @@ class Rolling(object):
         self.axis = axis
 
         # Allow pandas to raise if appropriate
-        obj._pd.rolling(**self._rolling_kwargs())
+        obj._meta.rolling(**self._rolling_kwargs())
 
     def _rolling_kwargs(self):
         return {
@@ -125,7 +129,7 @@ class Rolling(object):
 
         dsk = {}
         if self.axis in [1, 'columns'] or self.window <= 1 or self.obj.npartitions == 1:
-            # This is the easy scenario, we're rolling over columns (or not 
+            # This is the easy scenario, we're rolling over columns (or not
             # really rolling at all, so each chunk is independent.
             for i in range(self.obj.npartitions):
                 dsk[new_name, i] = (
@@ -153,9 +157,9 @@ class Rolling(object):
             else:
                 # Either we are only looking backward or this was the
                 # only chunk.
-                next_partition = self.obj._pd
+                next_partition = self.obj._meta
             dsk[new_name, 0] = (call_pandas_rolling_method_with_neighbors,
-                self.obj._pd, (old_name, 0), next_partition, 0, after,
+                self.obj._meta, (old_name, 0), next_partition, 0, after,
                 self._rolling_kwargs(), method_name, args, kwargs)
 
             # All the middle chunks
@@ -178,11 +182,11 @@ class Rolling(object):
 
                 dsk[new_name, end] = (
                     call_pandas_rolling_method_with_neighbors,
-                    (tail_name, end-1), (old_name, end), self.obj._pd, before, 0,
+                    (tail_name, end-1), (old_name, end), self.obj._meta, before, 0,
                     self._rolling_kwargs(), method_name, args, kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata
-        pd_rolling = self.obj._pd.rolling(**self._rolling_kwargs())
+        pd_rolling = self.obj._meta.rolling(**self._rolling_kwargs())
         metadata = getattr(pd_rolling, method_name)(*args, **kwargs)
 
         return self.obj._constructor(

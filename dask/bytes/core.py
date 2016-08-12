@@ -9,9 +9,11 @@ from warnings import warn
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile
 from ..compatibility import PY2, unicode
-from ..delayed import delayed
+from ..base import tokenize
+from ..delayed import delayed, Delayed, apply
 from ..utils import (infer_storage_options, system_encoding,
-                     build_name_function, infer_compression)
+                     build_name_function, infer_compression,
+                     import_required)
 
 delayed = delayed(pure=True)
 
@@ -117,13 +119,13 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
             raise ValueError('Number of paths and number of delayed objects'
                              'must match (%s != %s)', len(urlpath), len(data))
         storage_options = infer_storage_options(urlpath[0],
-                inherit_storage_options=kwargs)
+                                                inherit_storage_options=kwargs)
         del storage_options['path']
         paths = [infer_storage_options(u, inherit_storage_options=kwargs)['path']
                  for u in urlpath]
     elif isinstance(urlpath, (str, unicode)):
         storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
+                                                inherit_storage_options=kwargs)
         path = storage_options.pop('path')
         paths = _expand_paths(path, name_function, len(data))
     else:
@@ -141,10 +143,14 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    files = open_files_write(paths, **storage_options)
-    out = [delayed(write_block_to_file)(v, f, compression, encoding)
-           for (v, f) in zip(data, files)]
-    return out
+    keys = ['write-block-%s' % tokenize(d.key, path, storage_options,
+            compression, encoding) for (d, path) in zip(data, paths)]
+    return [Delayed(key, dasks=[{key: (write_block_to_file, v.key,
+                                       (apply, open_files_write, (p,),
+                                        storage_options),
+                                       compression, encoding),
+                                 }, v.dask])
+            for key, v, p in zip(keys, data, paths)]
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -284,7 +290,7 @@ def _expand_paths(path, name_function, num):
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        if not '*' in path:
+        if '*' not in path:
             path = os.path.join(path, '*.part')
 
         formatted_names = [name_function(i) for i in range(num)]
@@ -359,25 +365,23 @@ def open_text_files(urlpath, encoding=system_encoding, errors='strict',
 
 
 def ensure_protocol(protocol):
-    if protocol in _read_bytes or protocol in _open_files:
+    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes)
+            or (protocol in _open_files))):
         return
 
     if protocol == 's3':
-        try:
-            import dask.s3
-        except ImportError:
-            raise ImportError("Need to install `s3fs` library for s3 support\n"
-                    "    conda install s3fs -c conda-forge\n"
-                    "    or\n"
-                    "    pip install s3fs")
+        import_required('s3fs',
+                        "Need to install `s3fs` library for s3 support\n"
+                        "    conda install s3fs -c conda-forge\n"
+                        "    or\n"
+                        "    pip install s3fs")
 
     elif protocol == 'hdfs':
-        try:
-            import distributed.hdfs
-        except ImportError:
-            raise ImportError("Need to install `distributed` and `hdfs3` "
-                    "for HDFS support\n"
-                    "    conda install distributed hdfs3 -c conda-forge")
+        msg = ("Need to install `distributed` and `hdfs3` "
+               "for HDFS support\n"
+               "    conda install distributed hdfs3 -c conda-forge")
+        import_required('distributed.hdfs', msg)
+        import_required('hdfs3', msg)
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)

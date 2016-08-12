@@ -13,8 +13,8 @@ from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         logical_and, logical_or, logical_xor, logical_not, maximum, minimum,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
         copysign, nextafter, ldexp, fmod, floor, ceil, trunc, degrees, radians,
-        rint, fix, angle, real, imag, clip, fabs, sign, frexp, modf, around,
-        isnull, notnull, isclose, eye, triu, tril, diag, corrcoef)
+        rint, fix, angle, real, imag, clip, fabs, sign, absolute, frexp, modf,
+        around, isnull, notnull, isclose, eye, triu, tril, diag, corrcoef)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,

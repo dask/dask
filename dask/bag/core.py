@@ -4,7 +4,6 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 import itertools
 import math
-from operator import getitem
 import os
 import types
 import uuid
@@ -12,7 +11,7 @@ from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring
+from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate)
@@ -24,26 +23,25 @@ try:
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
     if LooseVersion(cytoolz.__version__) > '0.7.3':
-        from cytoolz import accumulate
+        from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
 except:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
-from ..compatibility import apply, unicode, urlopen
+from ..compatibility import apply, urlopen
 from ..context import _globals
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import (infer_compression, open, system_encoding,
-                     takes_multiple_arguments, funcname, digit, insert,
-                     build_name_function, different_seeds)
-from ..delayed import Delayed, delayed
+from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
+                     digit, insert, different_seeds)
 from ..bytes.core import write_bytes
 
 
 no_default = '__no__default__'
+no_result = '__no__result__'
 
 
 def lazify_task(task, start=True):
@@ -212,6 +210,69 @@ def unpack_kwargs(kwargs):
     return dsk, kw_pairs
 
 
+class StringAccessor(object):
+    """ String processing functions
+
+    Examples
+    --------
+
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
+    >>> list(b.str.lower())
+    ['alice smith', 'bob jones', 'charlie smith']
+
+    >>> list(b.str.match('*Smith'))
+    ['Alice Smith', 'Charlie Smith']
+
+    >>> list(b.str.split(' '))
+    [['Alice', 'Smith'], ['Bob', 'Jones'], ['Charlie', 'Smith']]
+    """
+    def __init__(self, bag):
+        self._bag = bag
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(str)))
+
+    def _strmap(self, key, *args, **kwargs):
+        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(str):
+                func = getattr(str, key)
+                return robust_wraps(func)(partial(self._strmap, key))
+            else:
+                raise
+
+    def match(self, pattern):
+        """ Filter strings by those that match a pattern
+
+        Examples
+        --------
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
+        >>> list(b.str.match('*Smith'))
+        ['Alice Smith', 'Charlie Smith']
+
+        See Also
+        --------
+        fnmatch.fnmatch
+        """
+        from fnmatch import fnmatch
+        return self._bag.filter(partial(fnmatch, pat=pattern))
+
+
+def robust_wraps(wrapper):
+    """ A weak version of wraps that only copies doc """
+    def _(wrapped):
+        wrapped.__doc__ = wrapper.__doc__
+        return wrapped
+    return _
+
+
 class Item(Base):
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(mpget)
@@ -247,6 +308,16 @@ class Item(Base):
         self.dask = dsk
         self.key = key
         self.name = key
+
+    @property
+    def _args(self):
+        return (self.dask, self.key)
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.key = state
 
     def _keys(self):
         return [self.key]
@@ -308,13 +379,14 @@ class Bag(Base):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
-        self.str = StringAccessor(self)
 
     def __str__(self):
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
         return 'dask.bag<%s, npartitions=%d>' % (name, self.npartitions)
 
     __repr__ = __str__
+
+    str = property(fget=StringAccessor)
 
     def map(self, func, **kwargs):
         """ Map a function across all elements in collection
@@ -367,6 +439,12 @@ class Bag(Base):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
+
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self.npartitions = state
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
@@ -488,7 +566,6 @@ class Bag(Base):
                     if kwargs else (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
-
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -880,19 +957,49 @@ class Bag(Base):
                                 list(dsk.keys())))}
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def take(self, k, compute=True):
+    def take(self, k, npartitions=1, compute=True):
         """ Take the first k elements
 
-        Evaluates by default, use ``compute=False`` to avoid computation.
-        Only takes from the first partition
+        Parameters
+        ----------
+        k : int
+            The number of elements to return
+        npartitions : int, optional
+            Elements are only taken from the first ``npartitions``, with a
+            default of 1. If there are fewer than ``k`` rows in the first
+            ``npartitions`` a warning will be raised and any found rows
+            returned. Pass -1 to use all partitions.
+        compute : bool, optional
+            Whether to compute the result, default is True.
 
         >>> b = from_sequence(range(10))
         >>> b.take(3)  # doctest: +SKIP
         (0, 1, 2)
         """
-        name = 'take-' + tokenize(self, k)
-        dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
+
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        if npartitions > self.npartitions:
+            raise ValueError("only {} partitions, take "
+                "received {}".format(self.npartitions, npartitions))
+
+        token = tokenize(self, k, npartitions)
+        name = 'take-' + token
+
+        if npartitions > 1:
+            name_p = 'take-partial-' + token
+
+            dsk = {}
+            for i in range(npartitions):
+                dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
+
+            concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
+            dsk[(name, 0)] = (safe_take, k, concat)
+        else:
+            dsk = {(name, 0): (safe_take, k, (self.name, 0))}
+
         b = Bag(merge(self.dask, dsk), name, 1)
+
         if compute:
             return tuple(b.compute())
         else:
@@ -980,10 +1087,15 @@ class Bag(Base):
 
         Parameters
         ----------
-        columns : list or pandas.DataFrame, optional
-            If a list, provides the desired column names. If a 
-            ``pandas.DataFrame``, it should mirror the column names and dtypes
-            of the output dataframe. If not provided, these will be computed.
+        columns : pandas.DataFrame or list, optional
+            If a ``pandas.DataFrame``, it should mirror the column names and
+            dtypes of the output dataframe. If a list, it provides the desired
+            column names. If not provided or a list, a single element from
+            the first partition will be computed, triggering a potentially
+            expensive call to ``compute``. Providing a list is only useful for
+            selecting subset of columns, to avoid an internal compute call you
+            must provide a ``pandas.DataFrame`` as dask requires dtype knowledge
+            ahead of time.
 
         Examples
         --------
@@ -1307,69 +1419,6 @@ def concat(bags):
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
 
 
-class StringAccessor(object):
-    """ String processing functions
-
-    Examples
-    --------
-
-    >>> import dask.bag as db
-    >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
-    >>> list(b.str.lower())
-    ['alice smith', 'bob jones', 'charlie smith']
-
-    >>> list(b.str.match('*Smith'))
-    ['Alice Smith', 'Charlie Smith']
-
-    >>> list(b.str.split(' '))
-    [['Alice', 'Smith'], ['Bob', 'Jones'], ['Charlie', 'Smith']]
-    """
-    def __init__(self, bag):
-        self._bag = bag
-
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(str)))
-
-    def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(str):
-                func = getattr(str, key)
-                return robust_wraps(func)(partial(self._strmap, key))
-            else:
-                raise
-
-    def match(self, pattern):
-        """ Filter strings by those that match a pattern
-
-        Examples
-        --------
-
-        >>> import dask.bag as db
-        >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])
-        >>> list(b.str.match('*Smith'))
-        ['Alice Smith', 'Charlie Smith']
-
-        See Also
-        --------
-        fnmatch.fnmatch
-        """
-        from fnmatch import fnmatch
-        return self._bag.filter(partial(fnmatch, pat=pattern))
-
-
-def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc """
-    def _(wrapped):
-        wrapped.__doc__ = wrapper.__doc__
-        return wrapped
-    return _
-
-
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
@@ -1526,7 +1575,6 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages))
               for i in range(k**stages)]
-    sinputs = set(inputs)
 
     b2 = b.map(lambda x: (hash(grouper(x)), x))
 
@@ -1607,9 +1655,18 @@ def empty_safe_apply(func, part):
     if part:
         return func(part)
     else:
-        return '--no-result--'
+        return no_result
 
 
 def empty_safe_aggregate(func, parts):
-    parts2 = [p for p in parts if p != '--no-result--']
+    parts2 = [p for p in parts if not eq_strict(p, no_result)]
     return empty_safe_apply(func, parts2)
+
+
+def safe_take(n, b):
+    r = list(take(n, b))
+    if len(r) != n:
+        warn("Insufficient elements for `take`. {0} elements requested, "
+             "only {1} elements available. Try passing larger `npartitions` "
+             "to `take`.".format(n, len(r)))
+    return r

@@ -1,4 +1,3 @@
-import io
 import os
 
 import numpy as np
@@ -7,7 +6,7 @@ import pytest
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, different_seeds, file_size,
-                        infer_storage_options)
+                        infer_storage_options, eq_strict)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -86,7 +85,6 @@ def test_gh606():
     linesep = os.linesep
 
     bin_euro = u'\u20ac'.encode(encoding)
-    bin_yen = u'\u00a5'.encode(encoding)
     bin_linesep = linesep.encode(encoding)
 
     data = (euro * 10) + linesep + (yen * 10) + linesep + (euro * 10)
@@ -172,3 +170,8 @@ def test_infer_storage_options():
 def test_infer_storage_options_c():
     so = infer_storage_options(r'c:\foo\bar')
     assert so['protocol'] == 'file'
+
+
+def test_eq_strict():
+    assert eq_strict('a', 'a')
+    assert not eq_strict(b'a', u'a')
