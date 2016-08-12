@@ -6,6 +6,7 @@ from tornado import gen
 from dask.delayed import Delayed
 import dask.bag as db
 import dask.dataframe as dd
+from dask import compute, delayed
 
 from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, make_hdfs
@@ -15,7 +16,7 @@ from distributed import Executor
 from distributed.executor import _wait, Future
 
 hdfs3 = pytest.importorskip('hdfs3')
-from distributed.hdfs import read_bytes, get_block_locations, write_bytes
+from distributed.hdfs import read_bytes, get_block_locations
 
 try:
     hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
@@ -371,3 +372,22 @@ def test_deterministic_key_names(e, s, a, b):
 
         assert [f.key for f in x] == [f.key for f in y]
         assert [f.key for f in x] != [f.key for f in z]
+
+
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+def test_write_bytes(e, s, a, b):
+    from dask.bytes.core import write_bytes, read_bytes
+    with make_hdfs() as hdfs:
+        path = 'hdfs:///tmp/test/'
+        data = [b'test data %i' % i for i in range(5)]
+        values = [delayed(d) for d in data]
+        out = write_bytes(values, path, hdfs=hdfs)
+        futures = e.compute(out)
+        results = yield e._gather(futures)
+        assert len(hdfs.ls('/tmp/test/')) == 5
+
+        sample, vals = read_bytes('hdfs:///tmp/test/*.part',
+                                    hdfs=hdfs, lazy=True)
+        futures = e.compute(vals)
+        results = yield e._gather(futures)
+        assert data == results

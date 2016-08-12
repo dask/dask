@@ -40,6 +40,22 @@ def read_block_from_hdfs(filename, offset, length, host=None, port=None,
     return bytes
 
 
+def open_file_write(paths, hdfs=None, **kwargs):
+    """ Open list of files using delayed """
+    if hdfs is None:
+        hdfs = HDFileSystem(kwargs.get('host'), kwargs.get('port'))
+    out = [delayed(hdfs.open)(path, 'wb') for path in paths]
+    return out
+
+
+def open_file_write_direct(path, hdfs=None, **kwargs):
+    if hdfs is None:
+        hdfs = HDFileSystem(kwargs.get('host'), kwargs.get('port'))
+    return hdfs.open(path, 'wb')
+
+dask.bytes.core._open_files_write['hdfs'] = open_file_write_direct
+
+
 def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
                not_zero=False, sample=True, blocksize=None, compression=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
@@ -121,58 +137,6 @@ def open_files(path, hdfs=None, lazy=None, **auth):
 
 
 dask.bytes.core._open_files['hdfs'] = open_files
-
-
-def write_block_to_hdfs(fn, data, hdfs=None):
-    """ Write bytes to HDFS """
-    if not isinstance(data, bytes):
-        raise TypeError("Data to write to HDFS must be of type bytes, got %s" %
-                        type(data).__name__)
-    with hdfs.open(fn, 'wb') as f:
-        f.write(data)
-    return len(data)
-
-
-def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
-    """ Write bytestring futures to HDFS
-
-    Parameters
-    ----------
-    path: string
-        Path on HDFS to write data.  Either globstring like ``/data/file.*.dat``
-        or a directory name like ``/data`` (directory will be created)
-    futures: list
-        List of futures.  Each future should refer to a block of bytes.
-    executor: Executor
-    hdfs: HDFileSystem
-
-    Returns
-    -------
-    Futures that wait until writing is complete.  Returns the number of bytes
-    written.
-
-    Examples
-    --------
-
-    >>> write_bytes('/data/file.*.dat', futures, hdfs=hdfs)  # doctest: +SKIP
-    >>> write_bytes('/data/', futures, hdfs=hdfs)  # doctest: +SKIP
-    """
-    hdfs = hdfs or HDFileSystem(**hdfs_auth)
-    executor = default_executor(executor)
-
-    n = len(futures)
-    n_digits = int(log(n) / log(10))
-    template = '%0' + str(n_digits) + 'd'
-
-    if '*' in path:
-        dirname = os.path.split(path)[0]
-        hdfs.mkdir(dirname)
-        filenames = [path.replace('*', template % i) for i in range(n)]
-    else:
-        hdfs.mkdir(path)
-        filenames = [os.path.join(path, template % i) for i in range(n)]
-
-    return executor.map(write_block_to_hdfs, filenames, futures, hdfs=hdfs)
 
 
 def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
