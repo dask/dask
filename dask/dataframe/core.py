@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
+from collections import Iterator, Sequence
 from copy import copy
 import operator
 from operator import getitem, setitem
@@ -819,15 +819,16 @@ class _Frame(Base):
             raise ValueError('Function must be idxmax or idxmin')
 
         axis = self._validate_axis(axis)
-        if axis == 1:
-            return map_partitions(idxfn, None, self,
-                                  token=self._token_prefix + fn,
-                                  skipna=skipna, axis=axis)
-        else:
-            meta = getattr(self._meta_nonempty, fn)()
-            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                       meta=meta, token=self._token_prefix + fn,
-                       known_divisions=self.known_divisions, fn=fn, axis=axis)
+        # if axis == 1:
+            # return map_partitions(idxfn, None, self,
+                                  # token=self._token_prefix + fn,
+                                  # skipna=skipna, axis=axis)
+        # else:
+        meta = getattr(self._meta_nonempty, fn)(axis=axis)
+        print(meta)
+        return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                    meta=meta, token=self._token_prefix + fn,
+                    known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True):
@@ -3075,21 +3076,28 @@ def drop_columns(df, columns, dtype):
 
 def idxmaxmin_chunk(x, **kwargs):
     fn = kwargs['fn']
-    idx = getattr(x, fn)()
+    axis = kwargs['axis']
+    idx = getattr(x, fn)(axis=axis)
     minmax = 'max' if fn == 'idxmax' else 'min'
-    value = getattr(x, minmax)()
+    value = getattr(x, minmax)(axis=axis)
     n = len(x)
-    return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)}).T
-
+    if isinstance(idx, pd.Series):
+        return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)}).T
+    return pd.DataFrame({'idx': [idx], 'value': [value], 'n': [n]}).T
 
 def idxmaxmin_row(x, fn=None):
-    idx = x.ix['idx'].reset_index(drop=True).astype(int)
+    idx = x.ix['idx'].reset_index(drop=True) # .astype(int)
+    try:
+        idx = idx.astype(int)
+    except:
+        pass
     value = x.ix['value'].reset_index(drop=True)
     return idx.iloc[getattr(value, fn)()]
 
 
 def idxmaxmin_agg(x, **kwargs):
     fn = kwargs['fn']
+    print(x.T)
     return x.T.apply(idxmaxmin_row, axis=1, fn=fn)
 
 
