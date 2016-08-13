@@ -106,7 +106,7 @@ Rolling Operations
    rolling.rolling_var
    rolling.rolling_window
 
-IO Tools (Array, CSV, HDF5, ...)
+Create Dask DataFrames
 ~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe
