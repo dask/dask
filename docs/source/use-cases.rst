@@ -15,7 +15,7 @@ Dask use cases can be roughly divided in the following two categories:
     :doc:`dask.dataframe<dataframe>`, :doc:`dask.bag<bag>` to analyze large
     datasets with familiar techniques.  This is similar to Databases, Spark_,
     or big array libraries.
-2.  Ad-hoc task scheduling.  You submit a graph of functions that depend on
+2.  Custom task scheduling.  You submit a graph of functions that depend on
     each other for custom workloads.  This is similar to Luigi_, Airflow_,
     Celery_, or Makefiles_.
 
@@ -49,7 +49,7 @@ organizations like universities, research labs, or private companies.
 
 Below we give specific examples of how people use Dask.  We start with large
 NumPy/Pandas/List examples because they're somewhat more familiar to people
-looking at "big data" frameworks.  We then follow with ad-hoc scheduling
+looking at "big data" frameworks.  We then follow with custom scheduling
 examples, which tend to be applicable more often, and are arguably a bit more
 interesting.
 
@@ -165,7 +165,7 @@ where they stream the data through memory or across a cluster.
    records.filter(lambda d: d['name'] == 'Alice').pluck('id').frequencies()
 
 
-Ad Hoc Examples
+Custom Examples
 ---------------
 
 The large collections (array, dataframe, bag) are wonderful when they fit the
