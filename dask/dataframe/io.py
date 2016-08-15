@@ -341,6 +341,59 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
+def to_bcolz(df, rootdir, expectedlen=None, reset_index=True, compute=True,
+             overwrite=True, get=get_sync):
+    """ Save dask DataFrame to BColz table
+    Parameters
+    ----------
+    df: da.DataFrame
+    rootdir: directory to save BColz table
+    expectedlen: expected length of table
+    """
+    from bcolz import ctable
+
+    if os.path.exists(rootdir):
+        if overwrite:
+            import shutil
+            shutil.rmtree(rootdir)
+        else:
+            raise ValueError('Directory already exists')
+
+    name = 'to-bcolz-' + uuid.uuid1().hex
+
+    # Create empty ctable and append solution
+    # dtype = [(name, dtype.str) for name, dtype in zip(ddf.columns, ddf.dtypes)]
+    # dsk[(name, -1)] = (bcolz.fromiter, (), dtype, 0)  # Create empty table
+
+    if expectedlen is None:
+        # row_bytes = sum([d.itemsize for d in df.dtypes])
+        # if reset_index:
+        #     row_bytes += df.index.dtype.itemsize
+        # chunksize = np.ceil(1e7 / row_bytes).astype(int)
+        expectedlen = (lambda df, n: len(df)*n, (df._name, 0), df.npartitions)
+
+    if reset_index:
+        df = df.reset_index()
+
+    dsk = dict()
+    dsk[(name, -1)] = expectedlen
+    dsk[(name, 0)] = (lambda df, exp_len, rt: ctable.fromdataframe(
+        df, expectedlen=int(exp_len), rootdir=rt),
+        (df._name, 0), (name, -1), rootdir)
+
+    for i in range(1, df.npartitions):
+        task = (lambda ct, df: ct.append(ctable.fromdataframe(df)),
+                (name, 0), (df._name, i))
+        dsk[(name, i)] = task
+
+    dsk = merge(df.dask, dsk)
+    keys = [(name, df.npartitions - 1)]
+    if compute:
+        return DataFrame._get(dsk, keys, get=get)
+    else:
+        return delayed([Delayed(key, [dsk]) for key in keys])
+
+
 def from_dask_array(x, columns=None):
     """ Convert dask Array to dask DataFrame
 
