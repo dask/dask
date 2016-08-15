@@ -28,8 +28,9 @@ class SchedulerPlugin(object):
     ...     def __init__(self):
     ...         self.counter = 0
     ...
-    ...     def task_finished(self, scheduler, key, worker, nbytes):
-    ...         self.counter += 1
+    ...     def transition(self, key, start, finish, *args, **kwargs):
+    ...         if start == 'processing' and finish == 'memory':
+    ...             self.counter += 1
     ...
     ...     def restart(self, scheduler):
     ...         self.counter = 0
