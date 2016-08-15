@@ -9,7 +9,7 @@ that Dask can serve them beyond their original intent.
 Overview
 --------
 
-Dask algorithms cases can be roughly divided in the following two categories:
+Dask use cases can be roughly divided in the following two categories:
 
 1.  Large NumPy/Pandas/Lists with :doc:`dask.array<array>`,
     :doc:`dask.dataframe<dataframe>`, :doc:`dask.bag<bag>` to analyze large
@@ -58,7 +58,7 @@ Collection Examples
 
 Dask contains large parallel collections for n-dimensional arrays (similar to
 NumPy), dataframes (similar to Pandas), and lists (similar to PyToolz or
-PySpark.)
+PySpark).
 
 On disk arrays
 ~~~~~~~~~~~~~~
@@ -111,8 +111,9 @@ without significantly changing their code.
 
 .. _Pandas: http://pandas.pydata.org/
 
+
 Directory of CSV files on HDFS
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same analyst as above uses dask.dataframe with the dask.distributed_ scheduler
 to analyze terabytes of data on their institution's Hadoop cluster straight
@@ -134,8 +135,8 @@ the analyst is already very comfortable.
 .. _HDFS3: http://hdfs3.readthedocs.io/en/latest/
 
 
-Directories of custom tabular files
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Directories of custom format files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same analyst has a bunch of files of a custom format not supported by
 Dask.dataframe, or perhaps these files are in a directory structure that
@@ -193,24 +194,42 @@ parallelize and load balance the work.
       ...
       return ...
 
-   # results = [process(x) for x in inputs]  # sequential
+**Normal Sequential Processing**:
+
+.. code-block:: python
+
+   results = [process(x) for x in inputs]
+
+**Build Dask Computation**:
+
+.. code-block:: python
 
    from dask import compute, delayed
    values = [delayed(process)(x) for x in inputs]
 
-   import dask.threaded
-   results = compute(*values, get=dask.threaded.get)         # use threads
+**Multiple Threads**:
 
-   # or
+.. code-block:: python
+
+   import dask.threaded
+   results = compute(*values, get=dask.threaded.get)
+
+**Multiple Processes**:
+
+.. code-block:: python
+
 
    import dask.multiprocessing
-   results = compute(*values, get=dask.multiprocessing.get)  # use processes
+   results = compute(*values, get=dask.multiprocessing.get)
 
-   # or
+**Distributed Cluster**:
+
+.. code-block:: python
+
 
    from dask.distributed import Executor
    e = Executor("cluster-address:8786")
-   results = compute(*values, get=e.get)                     # use a cluster
+   results = compute(*values, get=e.get)
 
 
 Complex dependencies
@@ -254,7 +273,7 @@ dask.delayed to wrap their function calls and capture the implicit parallelism.
 
    lazy_results = delayed(summarize)(compare, roll_A, roll_B)
 
-They they depend on the dask schedulers to run this complex web of computations
+They then depend on the dask schedulers to run this complex web of computations
 in parallel.
 
 .. code-block:: python
@@ -293,7 +312,7 @@ Scikit-Learn or Joblib User
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A data scientist wants to scale their machine learning pipeline to run on their
-cluster to accelerate parameter searches.  They already use ``sklearn``'s
+cluster to accelerate parameter searches.  They already use the ``sklearn``
 ``njobs=`` parameter to accelerate their computation on their local computer
 with Joblib_.  Now they wrap their ``sklearn`` code with a context manager to
 parallelize the exact same code across a cluster (also available with
