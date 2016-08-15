@@ -2596,15 +2596,16 @@ def reshape(array, shape):
         trailing_size_before = int(np.prod(array.shape[ndim_same+1:]))
         trailing_size_after = int(np.prod(shape[ndim_same+1:]))
 
-        if any(c * trailing_size_before % trailing_size_after != 0
-               for c in array.chunks[ndim_same]):
-            raise ValueError('dask.array.reshape requires that the first '
-                             'reshaped dimension can be cleanly divided into '
-                             'chunks')
+        ndim_same_chunks, remainders = zip(
+            *(divmod(c * trailing_size_before, trailing_size_after)
+              for c in array.chunks[ndim_same]))
 
-        chunks = (array.chunks[:ndim_same]
-                  + (tuple(c * trailing_size_before // trailing_size_after
-                           for c in array.chunks[ndim_same]),)
+        if any(remainder != 0 for remainder in remainders):
+            raise ValueError('dask.array.reshape requires that the first '
+                             'reshaped dimension can be evenly divided into '
+                             'new chunks')
+
+        chunks = (array.chunks[:ndim_same] + (ndim_same_chunks,)
                   + tuple((c,) for c in shape[ndim_same+1:]))
 
     name = 'reshape-' + tokenize(array, shape)
