@@ -10,7 +10,6 @@ import dask
 from dask.async import get_sync
 from dask import delayed
 from dask.utils import raises, ignoring
-import dask.array as da
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,

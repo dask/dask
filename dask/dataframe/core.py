@@ -815,18 +815,28 @@ class _Frame(Base):
         fn = 'idxmax'
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
-        return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                    meta=meta, token=self._token_prefix + fn, skipna=skipna,
-                    known_divisions=self.known_divisions, fn=fn, axis=axis)
+        if axis == 1:
+            return map_partitions(_idxmax, self, meta=meta,
+                                  token=self._token_prefix + fn,
+                                  skipna=skipna, axis=axis)
+        else:
+            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                        known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def idxmin(self, axis=None, skipna=True):
         fn = 'idxmin'
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.idxmax(axis=axis)
-        return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                    meta=meta, token=self._token_prefix + fn, skipna=skipna,
-                    known_divisions=self.known_divisions, fn=fn, axis=axis)
+        if axis == 1:
+            return map_partitions(_idxmin, self, meta=meta,
+                                  token=self._token_prefix + fn,
+                                  skipna=skipna, axis=axis)
+        else:
+            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                        known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
