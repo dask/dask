@@ -8,7 +8,7 @@ from dask.utils import raises
 import dask.dataframe as dd
 
 from dask.dataframe.core import _coerce_loc_index
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, make_meta
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -17,7 +17,8 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 5, 9, 9])
+meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+d = dd.DataFrame(dsk, 'x', meta, [0, 5, 9, 9])
 full = d.compute()
 
 
@@ -63,7 +64,7 @@ def test_loc_non_informative_index():
 def test_loc_with_text_dates():
     A = tm.makeTimeSeries(10).iloc[:5]
     B = tm.makeTimeSeries(10).iloc[5:]
-    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None,
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', A,
                   [A.index.min(), B.index.min(), B.index.max()])
 
     assert s.loc['2000': '2010'].divisions == s.divisions
@@ -86,13 +87,13 @@ def test_getitem():
     ddf = dd.from_pandas(df, 2)
     assert eq(ddf['A'], df['A'])
     # check cache consistency
-    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A'])
+    tm.assert_series_equal(ddf['A']._meta, ddf._meta['A'])
 
     assert eq(ddf[['A', 'B']], df[['A', 'B']])
-    tm.assert_frame_equal(ddf[['A', 'B']]._pd, ddf._pd[['A', 'B']])
+    tm.assert_frame_equal(ddf[['A', 'B']]._meta, ddf._meta[['A', 'B']])
 
     assert eq(ddf[ddf.C], df[df.C])
-    tm.assert_series_equal(ddf.C._pd, ddf._pd.C)
+    tm.assert_series_equal(ddf.C._meta, ddf._meta.C)
 
     assert eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
 

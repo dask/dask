@@ -5,8 +5,9 @@ from operator import getitem
 
 from .compatibility import zip_longest
 
+from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
-                   reverse_dict, add, inc, ishashable, preorder_traversal)
+                   reverse_dict, ishashable, preorder_traversal)
 from .rewrite import END
 
 

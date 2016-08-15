@@ -16,7 +16,7 @@ Release per project:
 
 *  Upload to PyPI
 
-        rm -rf dist
+        git clean -xfd
         python setup.py register sdist bdist_wheel --universal
         twine upload dist/*
 

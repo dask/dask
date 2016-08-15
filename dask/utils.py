@@ -1,30 +1,27 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
-from contextlib import contextmanager
-from errno import ENOENT
+import codecs
 import functools
+import inspect
 import io
+import math
 import os
-import sys
+import re
 import shutil
 import struct
+import sys
 import tempfile
-import inspect
-import codecs
-import math
-from sys import getdefaultencoding
+from errno import ENOENT
+from collections import Iterator
+from contextlib import contextmanager
+from importlib import import_module
 
-try:
-    from urllib.parse import urlsplit
-except ImportError: # fallback to Python 2.x
-    from urlparse import urlsplit
-
-from .compatibility import long, getargspec, BZ2File, GzipFile, LZMAFile
+from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
+                            urlsplit)
 from .core import get_deps
 
 
-system_encoding = getdefaultencoding()
+system_encoding = sys.getdefaultencoding()
 if system_encoding == 'ascii':
     system_encoding = 'utf-8'
 
@@ -60,6 +57,17 @@ def ignoring(*exceptions):
         yield
     except exceptions:
         pass
+
+
+def import_required(mod_name, error_msg):
+    """Attempt to import a required dependency.
+
+    Raises a RuntimeError if the requested module is not available.
+    """
+    try:
+        return import_module(mod_name)
+    except ImportError:
+        raise RuntimeError(error_msg)
 
 
 @contextmanager
@@ -423,13 +431,12 @@ ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
     classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset,
     hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range,
     repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple,
-    type, vars, zip])
-if sys.version_info[0] == 3: # Python 3
-    ONE_ARITY_BUILTINS |= set([ascii])
-if sys.version_info[:2] != (2, 6):
-    ONE_ARITY_BUILTINS |= set([memoryview])
+    type, vars, zip, memoryview])
+if PY3:
+    ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
 MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
     isinstance, issubclass, map, pow, setattr])
+
 
 def takes_multiple_arguments(func):
     """ Does this function take multiple arguments?
@@ -620,7 +627,7 @@ def digit(n, k, base):
     >>> digit(1234, 3, 10)
     1
     """
-    return n // base**k  % base
+    return n // base**k % base
 
 
 def insert(tup, loc, val):
@@ -690,7 +697,8 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
-    if ':\\' in urlpath:
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:\\', urlpath):
         return {'protocol': 'file',
                 'path': urlpath}
 
@@ -702,7 +710,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     }
 
     if parsed_path.netloc:
-        inferred_storage_options['host'] = parsed_path.hostname
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
         if parsed_path.port:
             inferred_storage_options['port'] = parsed_path.port
         if parsed_path.username:
@@ -739,3 +750,10 @@ def dependency_depth(dsk):
         return d
 
     return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
+
+
+def eq_strict(a, b):
+    """Returns True if both values have the same type and are equal."""
+    if type(a) is type(b):
+        return a == b
+    return False

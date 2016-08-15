@@ -1,13 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
-from copy import deepcopy
-
 import dask
-import pytest
 
-from dask.async import *
-from dask.utils_test import GetFunctionTestMixin
+from dask.async import (start_state_from_dask, get_sync, finish_task, sortkey,
+                        remote_exception)
+from dask.order import order
+from dask.utils_test import GetFunctionTestMixin, inc, add
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -17,23 +15,24 @@ def test_start_state():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     result = start_state_from_dask(dsk)
 
-    expeted = {'cache': {'x': 1, 'y': 2},
-               'dependencies': {'w': set(['y', 'z']),
-                                'x': set([]),
-                                'y': set([]),
-                                'z': set(['x'])},
-               'dependents': {'w': set([]),
-                              'x': set(['z']),
-                              'y': set(['w']),
-                              'z': set(['w'])},
-               'finished': set([]),
-               'released': set([]),
-               'running': set([]),
-               'ready': ['z'],
-               'waiting': {'w': set(['z'])},
-               'waiting_data': {'x': set(['z']),
-                                'y': set(['w']),
-                                'z': set(['w'])}}
+    expected = {'cache': {'x': 1, 'y': 2},
+                'dependencies': {'w': set(['y', 'z']),
+                                 'x': set([]),
+                                 'y': set([]),
+                                 'z': set(['x'])},
+                'dependents': {'w': set([]),
+                               'x': set(['z']),
+                               'y': set(['w']),
+                               'z': set(['w'])},
+                'finished': set([]),
+                'released': set([]),
+                'running': set([]),
+                'ready': ['z'],
+                'waiting': {'w': set(['z'])},
+                'waiting_data': {'x': set(['z']),
+                                 'y': set(['w']),
+                                 'z': set(['w'])}}
+    assert result == expected
 
 
 def test_start_state_looks_at_cache():
@@ -75,7 +74,6 @@ def test_finish_task():
     task = 'z'
     result = 2
 
-    oldstate = deepcopy(state)
     state['cache']['z'] = result
     finish_task(dsk, task, state, set(), sortkey)
 
@@ -192,3 +190,17 @@ def test_remote_exception():
     assert isinstance(a, TypeError)
     assert 'hello' in str(a)
     assert 'traceback' in str(a)
+
+
+def test_ordering():
+    L = []
+    def append(i):
+        L.append(i)
+
+    dsk = {('x', i): (append, i) for i in range(10)}
+    x_keys = sorted(dsk)
+    dsk['y'] = (lambda *args: None, list(x_keys))
+
+    get_sync(dsk, 'y')
+
+    assert L == sorted(L)

@@ -56,13 +56,13 @@ def test_seek_delimiter_endline():
 
 def test_ensure_protocol():
     try:
-        import hdfs3
-        return
+        import hdfs3  # noqa: F401
+        pytest.skip()
     except ImportError:
         pass
 
     dd = pytest.importorskip('dask.dataframe')
     try:
-        df = dd.read_csv('hdfs://data/*.csv')
-    except ImportError as e:
+        dd.read_csv('hdfs://data/*.csv')
+    except RuntimeError as e:
         assert "hdfs3" in str(e)

@@ -1,16 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
-from time import sleep, time
+import os
+from time import sleep
 
 import pytest
 from toolz import concat, valmap, partial
 
-from dask import compute, get
-from dask.bytes.local import read_bytes, open_files, getsize
-from dask.bytes.core import open_text_files
+from dask import compute, get, delayed
 from dask.compatibility import FileNotFoundError
 from dask.utils import filetexts
 from dask.bytes import compression
+from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
+from dask.bytes.core import open_text_files, write_bytes
 
 compute = partial(compute, get=get)
 
@@ -90,8 +91,9 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-from dask.bytes.compression import compress, files as cfiles, seekable_files
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
+fmt_bs = ([(fmt, None) for fmt in compression.files] +
+          [(fmt, 10) for fmt in compression.seekable_files])
+
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_compression(fmt, blocksize):
@@ -144,7 +146,7 @@ def test_open_files():
         assert list(data) == [files[k] for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+@pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_binary(fmt):
     from dask.bytes.core import open_files
     files2 = valmap(compression.compress[fmt], files)
@@ -154,7 +156,7 @@ def test_compression_binary(fmt):
         assert list(data) == [files[k] for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', [fmt for fmt in cfiles])
+@pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_text(fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
@@ -163,10 +165,10 @@ def test_compression_text(fmt):
         assert list(data) == [files[k].decode() for k in sorted(files)]
 
 
-@pytest.mark.parametrize('fmt', list(seekable_files))
+@pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
     compress = compression.compress[fmt]
-    with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode = 'b'):
+    with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
         assert getsize('.tmp.getsize', fmt) == 10
 
 
@@ -220,3 +222,43 @@ def test_modification_time_open_files(open_files):
         c = open_files('.test.accounts.*')
 
     assert [aa._key for aa in a] != [cc._key for cc in c]
+
+
+def test_simple_write(tmpdir):
+    tmpdir = str(tmpdir)
+    make_bytes = lambda: b'000'
+    some_bytes = delayed(make_bytes)()
+    data = [some_bytes, some_bytes]
+    out = write_bytes(data, tmpdir)
+    assert len(out) == 2
+    compute(*out)
+    files = os.listdir(tmpdir)
+    assert len(files) == 2
+    assert '0.part' in files
+    d = open(os.path.join(tmpdir, files[0]), 'rb').read()
+    assert d == b'000'
+
+
+def test_compressed_write(tmpdir):
+    tmpdir = str(tmpdir)
+    make_bytes = lambda: b'000'
+    some_bytes = delayed(make_bytes)()
+    data = [some_bytes, some_bytes]
+    out = write_bytes(data, os.path.join(tmpdir, 'bytes-*.gz'),
+                      compression='gzip')
+    compute(*out)
+    files = os.listdir(tmpdir)
+    assert len(files) == 2
+    assert 'bytes-0.gz' in files
+    import gzip
+    d = gzip.GzipFile(os.path.join(tmpdir, files[0])).read()
+    assert d == b'000'
+
+
+def test_open_files_write(tmpdir):
+    tmpdir = str(tmpdir)
+    f = open_file_write([os.path.join(tmpdir, 'test1'),
+                         os.path.join(tmpdir, 'test2')])
+    assert len(f) == 2
+    files = compute(*f)
+    assert files[0].mode == 'wb'
