@@ -383,6 +383,5 @@ cluster resources in response to demand.
 
 .. _`combine dask.distributed with normal Python Queues`: http://distributed.readthedocs.io/en/latest/queues.html
 
-
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
 .. _dask.distributed: http://distributed.readthedocs.io/en/latest/
