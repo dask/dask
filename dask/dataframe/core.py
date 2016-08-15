@@ -3080,20 +3080,22 @@ def idxmaxmin_chunk(x, fn, axis=0, skipna=True, **kwargs):
     value = getattr(x, minmax)(axis=axis, skipna=skipna)
     n = len(x)
     if isinstance(idx, pd.Series):
-        return pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)}).T
-    return pd.DataFrame({'idx': [idx], 'value': [value], 'n': [n]}).T
+        chunk = pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)})
+        chunk['idx'] = chunk['idx'].astype(type(idx.iloc[0]))
+    else:
+        chunk = pd.DataFrame({'idx': [idx], 'value': [value], 'n': [n]})
+        chunk['idx'] = chunk['idx'].astype(type(idx))
+    print(chunk)
+    return chunk.T
 
 def idxmaxmin_row(x, fn, axis=0, skipna=True):
     idx = x.ix['idx'].reset_index(drop=True) # .astype(int)
-    try:
-        idx = idx.astype(int)
-    except:
-        pass
     value = x.ix['value'].reset_index(drop=True)
     return idx.iloc[getattr(value, fn)(skipna=skipna)]
 
 
 def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
+    print(x)
     return x.T.apply(idxmaxmin_row, axis=1, fn=fn, skipna=skipna)
 
 
