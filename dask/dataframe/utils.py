@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import textwrap
 from distutils.version import LooseVersion
 
-from collections import Iterator, Iterable
+from collections import Iterator
 import sys
 
 import numpy as np
@@ -133,7 +133,7 @@ def make_meta(x, index=None):
 
     Parameters
     ----------
-    x : dict, tuple, iterable, pd.Series, pd.DataFrame, pd.Index, scalar
+    x : dict, tuple, list, pd.Series, pd.DataFrame, pd.Index, scalar
         To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
         an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
         tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
@@ -165,20 +165,22 @@ def make_meta(x, index=None):
                             index=index)
     elif isinstance(x, tuple) and len(x) == 2:
         return pd.Series([], dtype=x[1], name=x[0], index=index)
-    elif isinstance(x, Iterable):
-        x = list(x)
+    elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError("Expected iterable of tuples of (name, dtype), "
                              "got {0}".format(x))
         return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
                             columns=[c for c, d in x], index=index)
     # For operations that return scalars:
+    elif isinstance(x, pd.Categorical):
+        return pd.Categorical(x.categories[:1], categories=x.categories,
+                              ordered=x.ordered)
+    elif isinstance(x, (pd.Timestamp, pd.Timedelta, pd.Period, pd.datetime)):
+        return x
     elif hasattr(x, 'dtype'):
-        return np.array([], dtype=x.dtype)
-    elif isinstance(x, pd.datetime):
-        return pd.Series([x]).as_matrix()[:0]
+        return _fake_np_scalar(x.dtype)
     elif np.isscalar(x):
-        return np.array([x])[:0]
+        return np.array([x])[0]
     else:
         raise TypeError("Don't know how to create metadata from {0}".format(x))
 
@@ -226,6 +228,14 @@ _simple_fake_mapping = {
     'O': 'foo'
 }
 
+def _fake_np_scalar(dtype):
+    if dtype.kind in ['i', 'f', 'u']:
+        return dtype.type(1)
+    elif dtype.kind in _simple_fake_mapping:
+        return _simple_fake_mapping[dtype.kind]
+    else:
+        raise TypeError("Can't handle dtype: {0}".format(dtype))
+
 
 def _nonempty_series(s, idx):
     dtype = s.dtype
@@ -235,12 +245,8 @@ def _nonempty_series(s, idx):
         entry = pd.Categorical([s.cat.categories[0]],
                                categories=s.cat.categories,
                                ordered=s.cat.ordered)
-    elif dtype.kind in ['i', 'f', 'u']:
-        entry = dtype.type(1)
-    elif dtype.kind in _simple_fake_mapping:
-        entry = _simple_fake_mapping[dtype.kind]
     else:
-        raise TypeError("Can't handle dtype: {0}".format(dtype))
+        entry = _fake_np_scalar(dtype)
     return pd.Series([entry, entry], name=s.name, index=idx)
 
 

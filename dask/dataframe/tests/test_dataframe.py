@@ -13,7 +13,7 @@ from dask.utils import raises, ignoring
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,
-                                 _concat, _Frame)
+                                 _concat, _Frame, Scalar)
 from dask.dataframe.utils import eq, make_meta
 
 
@@ -505,7 +505,7 @@ def test_map_partitions_keeps_kwargs_in_dict():
     b = a.x.map_partitions(f, x=5)
 
     assert "'x': 5" in str(b.dask)
-    eq(df.x + 5, b)
+    assert eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
@@ -1415,6 +1415,12 @@ def test_aca_meta_infer():
             chunk_kwargs=dict(constant=2.0))
     sol = (df + 2.0 + 2.0).head()
     assert eq(res, sol)
+
+    # Should infer as a scalar
+    res = aca([ddf.x], chunk=lambda x: pd.Series([x.sum()]),
+              aggregate=lambda x: x.sum())
+    assert isinstance(res, Scalar)
+    assert res.compute() == df.x.sum()
 
 
 def test_gh_517():
