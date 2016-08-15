@@ -53,6 +53,25 @@ def _concat(args, **kwargs):
     return args
 
 
+def new_dd_object(dsk, _name, meta, divisions):
+    """Generic constructor for dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if isinstance(meta, _Frame):
+        meta = meta._meta
+
+    if isinstance(meta, pd.Series):
+        typ = Series
+    elif isinstance(meta, pd.DataFrame):
+        typ = DataFrame
+    elif isinstance(meta, pd.Index):
+        typ = Index
+    else:
+        typ = Scalar
+    return typ(dsk, _name, meta, divisions)
+
+
 def optimize(dsk, keys, **kwargs):
     from .optimize import optimize
     return optimize(dsk, keys, **kwargs)
@@ -133,7 +152,7 @@ def _scalar_binary(op, a, b, inv=False):
         dsk.update({(name, 0): (op, (a._name, 0), b)})
 
     if isinstance(b, (pd.Series, pd.DataFrame)):
-        return _Frame(dsk, name, b, [b.index.min(), b.index.max()])
+        return new_dd_object(dsk, name, b, [b.index.min(), b.index.max()])
     else:
         return Scalar(dsk, name)
 
@@ -159,14 +178,6 @@ class _Frame(Base):
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
-
-    def __new__(cls, dsk, _name, meta, divisions):
-        if isinstance(meta, (Index, pd.Index)):
-            return Index(dsk, _name, meta, divisions)
-        elif isinstance(meta, (Series, pd.Series)):
-            return Series(dsk, _name, meta, divisions)
-        else:
-            return DataFrame(dsk, _name, meta, divisions)
 
     # constructor properties
     # http://pandas.pydata.org/pandas-docs/stable/internals.html#override-constructor-properties
@@ -204,9 +215,6 @@ class _Frame(Base):
     @property
     def _args(self):
         return (self.dask, self._name, self._meta, self.divisions)
-
-    def __getnewargs__(self):
-        return self._args
 
     def __getstate__(self):
         return self._args
@@ -1108,13 +1116,12 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
-    def __new__(cls, dsk, _name, meta, divisions):
-        result = object.__new__(cls)
-        result.dask = dsk
-        result._name = _name
-        result._meta = make_meta(meta)
-        result.divisions = tuple(divisions)
-        return result
+    def __init__(self, dsk, _name, meta, divisions):
+        super(Series, self).__init__()
+        self.dask = dsk
+        self._name = _name
+        self._meta = make_meta(meta)
+        self.divisions = tuple(divisions)
 
     @property
     def _constructor_sliced(self):
@@ -1543,13 +1550,12 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
 
-    def __new__(cls, dsk, name, meta, divisions):
-        result = object.__new__(cls)
-        result.dask = dsk
-        result._name = name
-        result._meta = make_meta(meta)
-        result.divisions = tuple(divisions)
-        return result
+    def __init__(self, dsk, name, meta, divisions):
+        super(DataFrame, self).__init__()
+        self.dask = dsk
+        self._name = name
+        self._meta = make_meta(meta)
+        self.divisions = tuple(divisions)
 
     @property
     def _constructor_sliced(self):
@@ -2132,7 +2138,7 @@ def elemwise(op, *args, **kwargs):
             raise NotImplementedError(msg)
         meta = _emulate(op, *args, **kwargs)
 
-    return _Frame(dsk, _name, meta, divisions)
+    return new_dd_object(dsk, _name, meta, divisions)
 
 
 def remove_empties(seq):
@@ -2275,28 +2281,12 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
             raise ValueError("Metadata inference failed, please provide "
                              "`meta` keyword")
     meta = make_meta(meta)
-    return_type = _get_return_type(meta)
 
     dasks = [a.dask for a in args if isinstance(a, _Frame)]
-    return return_type(merge(dsk, dsk2, *dasks), b, meta, [None, None])
+    return new_dd_object(merge(dsk, dsk2, *dasks), b, meta, [None, None])
 
 
 aca = apply_concat_apply
-
-
-def _get_return_type(metadata):
-    """ Get the class of the result, based on the type of metadata."""
-    if isinstance(metadata, _Frame):
-        metadata = metadata._meta
-
-    if isinstance(metadata, pd.Series):
-        return Series
-    elif isinstance(metadata, pd.DataFrame):
-        return DataFrame
-    elif isinstance(metadata, pd.Index):
-        return Index
-    else:
-        return Scalar
 
 
 def _extract_meta(x, nonempty=False):
@@ -2380,8 +2370,6 @@ def map_partitions(func, *args, **kwargs):
     else:
         columns = None
 
-    return_type = _get_return_type(meta)
-
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
@@ -2392,7 +2380,7 @@ def map_partitions(func, *args, **kwargs):
         dsk[(name, i)] = values
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
-    return return_type(merge(dsk, *dasks), name, meta, args[0].divisions)
+    return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
 
 
 def _rename(columns, df):
@@ -2461,7 +2449,7 @@ def _rename_dask(df, names):
     dsk = {}
     for i in range(df.npartitions):
         dsk[name, i] = (_rename, metadata, (df._name, i))
-    return _Frame(merge(dsk, df.dask), name, metadata, df.divisions)
+    return new_dd_object(merge(dsk, df.dask), name, metadata, df.divisions)
 
 
 def quantile(df, q):
@@ -2875,7 +2863,7 @@ def repartition(df, divisions=None, force=False):
         from .utils import shard_df_on_index
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
-        return _Frame(dsk, name, df, divisions)
+        return new_dd_object(dsk, name, df, divisions)
     raise ValueError('Data must be DataFrame or Series')
 
 
