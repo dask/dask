@@ -1869,5 +1869,5 @@ def test_idxmaxmin(idx):
     assert eq(pdf.idxmin(), ddf.idxmin())
     assert eq(pdf.idxmax(axis=1), ddf.idxmax(axis=1))
     assert eq(pdf.idxmin(axis=1), ddf.idxmin(axis=1))
-    # assert eq(pdf.a.idxmax(), ddf.a.idxmax())
-    # assert eq(pdf.a.idxmin(), ddf.a.idxmin())
+    assert eq(pdf.a.idxmax(), ddf.a.idxmax())
+    assert eq(pdf.a.idxmin(), ddf.a.idxmin())

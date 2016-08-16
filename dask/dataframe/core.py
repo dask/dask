@@ -3125,7 +3125,7 @@ def idxmaxmin_row(x, fn, skipna=True):
 def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
     indices = list(set(x.index.tolist()))
     idxmaxmin = [idxmaxmin_row(x.ix[idx], fn, skipna=skipna)  for idx in indices]
-    if len(idxmaxmin) == 0:
+    if len(idxmaxmin) == 1:
         return idxmaxmin[0]
     else:
         return pd.Series(idxmaxmin, index=indices)
