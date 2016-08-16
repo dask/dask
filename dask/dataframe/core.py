@@ -3085,18 +3085,22 @@ def idxmaxmin_chunk(x, fn, axis=0, skipna=True, **kwargs):
     else:
         chunk = pd.DataFrame({'idx': [idx], 'value': [value], 'n': [n]})
         chunk['idx'] = chunk['idx'].astype(type(idx))
-    print(chunk)
-    return chunk.T
+    return chunk
 
-def idxmaxmin_row(x, fn, axis=0, skipna=True):
-    idx = x.ix['idx'].reset_index(drop=True) # .astype(int)
-    value = x.ix['value'].reset_index(drop=True)
+
+def idxmaxmin_row(x, fn, skipna=True):
+    idx = x.idx.reset_index(drop=True)
+    value = x.value.reset_index(drop=True)
     return idx.iloc[getattr(value, fn)(skipna=skipna)]
 
 
 def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
-    print(x)
-    return x.T.apply(idxmaxmin_row, axis=1, fn=fn, skipna=skipna)
+    indices = list(set(x.index.tolist()))
+    idxmaxmin = [idxmaxmin_row(x.ix[idx], fn, skipna=skipna)  for idx in indices]
+    if len(idxmaxmin) == 0:
+        return idxmaxmin[0]
+    else:
+        return pd.Series(idxmaxmin, index=indices)
 
 
 def safe_head(head, df, n):
