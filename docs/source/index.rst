@@ -99,6 +99,7 @@ Contents
    :maxdepth: 1
    :caption: Developer Documentation
 
+   develop
    foundations
    clients
    worker-center
