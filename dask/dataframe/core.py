@@ -360,19 +360,58 @@ class _Frame(Base):
 
         Examples
         --------
+        Given a DataFrame, Series, or Index, such as:
 
-        When tuple is passed as meta, the result will be Series.
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+        ...                    'y': [1., 2., 3., 4., 5.]})
+        >>> ddf = dd.from_pandas(df, npartitions=2)
 
-        >>> df.map_partitions(lambda df: df.x + 1, meta=('x', 'i8'))  # doctest: +SKIP
+        One can use ``map_partitions`` to apply a function on each partition.
+        Extra arguments and keywords can optionally be provided, and will be
+        passed to the function after the partition.
 
-        When dict is passed as meta, the result will be DataFrame.
+        Here we apply a function with arguments and keywords to a DataFrame,
+        resulting in a Series:
 
-        >>> df.map_partitions(lambda df: df.head(), meta={'x': 'i8', 'y': 'i8'})  # doctest: +SKIP
+        >>> def myadd(df, a, b=1):
+        ...     return df.x + df.y + a + b
+        >>> res = ddf.map_partitions(myadd, 1, b=2)
+        >>> res.dtype
+        dtype('float64')
 
-        Note that you can also pass in the DataFrame/Series itself, if the
-        metadata doesn't change:
+        By default, dask tries to infer the output metadata by running your
+        provided function on some fake data. This works well in many cases, but
+        can sometimes be expensive, or even fail. To avoid this, you can
+        manually specify the output metadata with the ``meta`` keyword. This
+        can be specified in many forms, for more information see
+        ``dask.dataframe.utils.make_meta``.
 
-        >>> df.map_partitions(lambda df: df.head(), meta=df)  # doctest: +SKIP
+        Here we specify the output is a Series with no name, and dtype
+        ``float64``:
+
+        >>> res = ddf.map_partitions(myadd, 1, b=2, meta=(None, 'f8'))
+
+        Here we map a funtion that takes in a DataFrame, and returns a
+        DataFrame with a new column:
+
+        >>> res = ddf.map_partitions(lambda df: df.assign(z=df.x * df.y))
+        >>> res.dtypes
+        x      int64
+        y    float64
+        z    float64
+        dtype: object
+
+        As before, the output metadata can also be specified manually. This
+        time we pass in a ``dict``, as the output is a DataFrame:
+
+        >>> res = ddf.map_partitions(lambda df: df.assign(z=df.x * df.y),
+        ...                          meta={'x': 'i8', 'y': 'f8', 'z': 'f8'})
+
+        In the case where the metadata doesn't change, you can also pass in
+        the object itself directly:
+
+        >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
         """
         return map_partitions(func, self, *args, **kwargs)
 
@@ -1461,34 +1500,63 @@ class Series(_Frame):
               name=no_default, args=(), **kwds):
         """ Parallel version of pandas.Series.apply
 
-        This mimics the pandas version except for the following:
-
-        1.  The user should provide output name.
-
         Parameters
         ----------
-
-        func: function
+        func : function
             Function to apply
-        convert_dtype: boolean, default True
+        convert_dtype : boolean, default True
             Try to find better dtype for elementwise function results.
-            If False, leave as dtype=object
+            If False, leave as dtype=object.
         $META
-        name: list, scalar or None, optional
+        name : list, scalar or None, optional
             Deprecated, use `meta` instead. If list is given, the result is a
             DataFrame which columns is specified list. Otherwise, the result is
             a Series which name is given scalar or None (no name). If name
             keyword is not given, dask tries to infer the result type using its
             beginning of data. This inference may take some time and lead to
             unexpected result.
-        args: tuple
-            Positional arguments to pass to function in addition to the array/series
+        args : tuple
+            Positional arguments to pass to function in addition to the value.
 
-        Additional keyword arguments will be passed as keywords to the function
+        Additional keyword arguments will be passed as keywords to the function.
 
         Returns
         -------
-        applied : Series or DataFrame depending on name keyword
+        applied : Series or DataFrame if func returns a Series.
+
+        Examples
+        --------
+        >>> import dask.dataframe as dd
+        >>> s = pd.Series(range(5), name='x')
+        >>> ds = dd.from_pandas(s, npartitions=2)
+
+        Apply a function elementwise across the Series, passing in extra
+        arguments in ``args`` and ``kwargs``:
+
+        >>> def myadd(x, a, b=1):
+        ...     return x + a + b
+        >>> res = ds.apply(myadd, args=(2,), b=1.5)
+
+        By default, dask tries to infer the output metadata by running your
+        provided function on some fake data. This works well in many cases, but
+        can sometimes be expensive, or even fail. To avoid this, you can
+        manually specify the output metadata with the ``meta`` keyword. This
+        can be specified in many forms, for more information see
+        ``dask.dataframe.utils.make_meta``.
+
+        Here we specify the output is a Series with name ``'x'``, and dtype
+        ``float64``:
+
+        >>> res = ds.apply(myadd, args=(2,), b=1.5, meta=('x', 'f8'))
+
+        In the case where the metadata doesn't change, you can also pass in
+        the object itself directly:
+
+        >>> res = ds.apply(lambda x: x + 1, meta=ds)
+
+        See Also
+        --------
+        dask.Series.map_partitions
         """
         if name is not no_default:
             warnings.warn("`name` is deprecated, please use `meta` instead")
@@ -2027,19 +2095,18 @@ class DataFrame(_Frame):
 
         This mimics the pandas version except for the following:
 
-        1.  The user must specify axis=1 explicitly.
-        2.  The user should provide output columns.
+        1.  Only ``axis=1`` is supported (and must be specified explicitly).
+        2.  The user should provide output metadata via the `meta` keyword.
 
         Parameters
         ----------
-
-        func: function
-            Function to apply to each column
-        axis: {0 or 'index', 1 or 'columns'}, default 0
+        func : function
+            Function to apply to each column/row
+        axis : {0 or 'index', 1 or 'columns'}, default 0
             - 0 or 'index': apply function to each column (NOT SUPPORTED)
             - 1 or 'columns': apply function to each row
         $META
-        columns: list, scalar or None
+        columns : list, scalar or None
             Deprecated, please use `meta` instead. If list is given, the result
             is a DataFrame which columns is specified list. Otherwise, the
             result is a Series which name is given scalar or None (no name). If
@@ -2053,7 +2120,42 @@ class DataFrame(_Frame):
 
         Returns
         -------
-        applied : Series or DataFrame depending on name keyword
+        applied : Series or DataFrame
+
+        Examples
+        --------
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+        ...                    'y': [1., 2., 3., 4., 5.]})
+        >>> ddf = dd.from_pandas(df, npartitions=2)
+
+        Apply a function to row-wise passing in extra arguments in ``args`` and
+        ``kwargs``:
+
+        >>> def myadd(row, a, b=1):
+        ...     return row.sum() + a + b
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)
+
+        By default, dask tries to infer the output metadata by running your
+        provided function on some fake data. This works well in many cases, but
+        can sometimes be expensive, or even fail. To avoid this, you can
+        manually specify the output metadata with the ``meta`` keyword. This
+        can be specified in many forms, for more information see
+        ``dask.dataframe.utils.make_meta``.
+
+        Here we specify the output is a Series with name ``'x'``, and dtype
+        ``float64``:
+
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5, meta=('x', 'f8'))
+
+        In the case where the metadata doesn't change, you can also pass in
+        the object itself directly:
+
+        >>> res = ddf.apply(lambda row: row + 1, axis=1, meta=ddf)
+
+        See Also
+        --------
+        dask.DataFrame.map_partitions
         """
 
         axis = self._validate_axis(axis)
