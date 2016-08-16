@@ -65,7 +65,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from .core import (_Frame, Scalar, DataFrame, map_partitions,
+from .core import (_Frame, DataFrame, map_partitions,
                    Index, _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
 from .shuffle import shuffle, rearrange_by_divisions
@@ -91,7 +91,6 @@ def align_partitions(*dfs):
     dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
         Sequence of dataframes to be aligned on their index
 
-
     Returns
     -------
     dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
@@ -105,6 +104,10 @@ def align_partitions(*dfs):
     dfs1 = [df for df in dfs if isinstance(df, _Frame)]
     if len(dfs) == 0:
         raise ValueError("dfs contains no DataFrame and Series")
+    if not all(df.known_divisions for df in dfs1):
+        raise ValueError("Not all divisions are known, can't align "
+                         "partitions. Please use `set_index` or "
+                         "`set_partition` to set the index.")
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs1])))
     dfs2 = [df.repartition(divisions, force=True)
             if isinstance(df, _Frame) else df for df in dfs]
@@ -129,22 +132,19 @@ def align_partitions(*dfs):
 
 
 def _maybe_align_partitions(args):
-    """ Align DataFrame blocks if divisions are different """
-    # passed to align_partitions
-    indexer, dasks = zip(*[x for x in enumerate(args)
-                           if isinstance(x[1], (_Frame, Scalar))])
+    """Align DataFrame blocks if divisions are different.
 
-    # to get current divisions
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
-    if len(dfs) == 0:
-        # no need to align
+    Note that if all divisions are unknown, but have equal npartitions, then
+    they will be passed through unchanged. This is different than
+    `align_partitions`, which will fail if divisions aren't all known"""
+    dfs = [df for df in args if isinstance(df, _Frame)]
+    if not dfs:
         return args
 
     divisions = dfs[0].divisions
     if not all(df.divisions == divisions for df in dfs):
-        dasks, _, _ = align_partitions(*dasks)
-        for i, d in zip(indexer, dasks):
-            args[i] = d
+        dfs2 = iter(align_partitions(*dfs)[0])
+        return [a if not isinstance(a, _Frame) else next(dfs2) for a in args]
     return args
 
 
