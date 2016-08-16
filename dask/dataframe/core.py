@@ -101,16 +101,15 @@ class Scalar(Base):
     def _meta_nonempty(self):
         return self._meta
 
-    def __getattr__(self, key):
-        if key == 'dtype':
-            return self._meta.dtype
-        raise AttributeError("'Scalar' object has no attribute %r" % key)
+    @property
+    def dtype(self):
+        return self._meta.dtype
 
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        if hasattr(self._meta, 'dtype'):
-            o.add('dtype')
+        if not hasattr(self._meta, 'dtype'):
+            o.remove('dtype')  # dtype only in `dir` if available
         return list(o)
 
     @property
@@ -1199,10 +1198,16 @@ class Series(_Frame):
         """ Return data type """
         return self._meta.dtype
 
-    def __getattr__(self, key):
-        if key == 'cat':
-            return self._meta.cat
-        raise AttributeError("'Series' object has no attribute %r" % key)
+    @property
+    def cat(self):
+        return self._meta.cat
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        if not hasattr(self._meta, 'cat'):
+            o.remove('cat')  # cat only in `dir` if available
+        return list(o)
 
     @property
     def column_info(self):
