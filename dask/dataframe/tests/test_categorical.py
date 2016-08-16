@@ -58,7 +58,9 @@ def test_dataframe_categoricals():
     df.x = df.x.astype('category')
     ddf = dd.from_pandas(df, npartitions=2)
     assert (ddf.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+    assert 'cat' in dir(ddf.x)
     assert not hasattr(df.y, 'cat')
+    assert 'cat' not in dir(ddf.y)
 
 
 def test_categories():

@@ -66,7 +66,7 @@ import pandas as pd
 from ..base import tokenize
 from ..compatibility import apply
 from .core import (_Frame, Scalar, DataFrame, map_partitions,
-                   Index, _maybe_from_pandas)
+                   Index, _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
 from .shuffle import shuffle, rearrange_by_divisions
 
@@ -371,8 +371,8 @@ def concat_unindexed_dataframes(dfs):
 
     meta = pd.concat([df._meta for df in dfs], axis=1)
 
-    return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                  name, meta, dfs[0].divisions)
+    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
+                         name, meta, dfs[0].divisions)
 
 
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):
@@ -396,8 +396,8 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     dsk = dict(((name, i), (_pdconcat, part, axis, join))
                 for i, part in enumerate(parts2))
 
-    return _Frame(toolz.merge(dsk, *[df.dask for df in dfs2]),
-                  name, meta, divisions)
+    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs2]),
+                         name, meta, divisions)
 
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
@@ -613,8 +613,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-                return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                              name, meta, divisions)
+                return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
+                                     name, meta, divisions)
             else:
                 if interleave_partitions:
                     return concat_indexed_dataframes(dfs, join=join)
@@ -642,8 +642,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             dsk, meta = _concat_dfs(dfs, name, join=join)
 
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                          name, meta, divisions)
+            return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
+                                 name, meta, divisions)
 
 
 ###############################################################
@@ -665,7 +665,7 @@ def _append(df, other, divisions):
         dsk[(name, npart + j)] = (other._name, j)
     dsk = toolz.merge(dsk, df.dask, other.dask)
     meta = df._meta.append(other._meta)
-    return _Frame(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, divisions)
 
 
 ###############################################################

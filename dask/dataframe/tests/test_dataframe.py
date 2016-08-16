@@ -128,6 +128,22 @@ def test_Index():
         assert raises(AttributeError, lambda: ddf.index.index)
 
 
+def test_Scalar():
+    val = np.int64(1)
+    s = Scalar({('a', 0): val}, 'a', 'i8')
+    assert hasattr(s, 'dtype')
+    assert 'dtype' in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, dtype=int64>"
+
+    val = pd.Timestamp('2001-01-01')
+    s = Scalar({('a', 0): val}, 'a', val)
+    assert not hasattr(s, 'dtype')
+    assert 'dtype' not in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, type=Timestamp>"
+
+
 def test_attributes():
     assert 'a' in dir(d)
     assert 'foo' not in dir(d)
@@ -1547,6 +1563,18 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+def test_cov_corr_meta():
+    df = pd.DataFrame({'a': np.array([1, 2, 3]),
+                       'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
+                       'c': np.array([1.0, 2.0, 3.0])},
+                       index=pd.Index([1, 2, 3], name='myindex'))
+    ddf = dd.from_pandas(df, npartitions=2)
+    eq(ddf.corr(), df.corr())
+    eq(ddf.cov(), df.cov())
+    assert ddf.a.cov(ddf.b)._meta.dtype == 'f8'
+    assert ddf.a.corr(ddf.b)._meta.dtype == 'f8'
 
 
 @pytest.mark.slow

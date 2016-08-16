@@ -26,7 +26,7 @@ from ..context import _globals
 from ..delayed import Delayed, delayed
 import dask.multiprocessing
 
-from .core import _Frame, DataFrame, Series
+from .core import DataFrame, Series, new_dd_object
 from .shuffle import set_partition
 from .utils import insert_meta_param_description
 
@@ -109,7 +109,7 @@ def from_array(x, chunksize=50000, columns=None):
             dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
         else:
             dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
-    return _Frame(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -181,7 +181,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     name = name or ('from_pandas-' + tokenize(data, chunksize))
 
     if not nrows:
-        return _Frame({(name, 0): data}, name, data, [None, None])
+        return new_dd_object({(name, 0): data}, name, data, [None, None])
 
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
@@ -195,7 +195,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     dsk = dict(((name, i), data.iloc[start: stop])
                for i, (start, stop) in enumerate(zip(locations[:-1],
                    locations[1:])))
-    return _Frame(dsk, name, data, divisions)
+    return new_dd_object(dsk, name, data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
@@ -392,7 +392,7 @@ def from_dask_array(x, columns=None):
         else:
             dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return _Frame(merge(x.dask, dsk), name, meta, divisions)
+    return new_dd_object(merge(x.dask, dsk), name, meta, divisions)
 
 
 def from_castra(x, columns=None):
