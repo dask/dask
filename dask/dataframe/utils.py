@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import textwrap
 from distutils.version import LooseVersion
 
-from collections import Iterator, Iterable
+from collections import Iterator
 import sys
 
 import numpy as np
@@ -133,11 +133,11 @@ def make_meta(x, index=None):
 
     Parameters
     ----------
-    x : dict, tuple, iterable, pd.Series, pd.DataFrame, pd.Index, scalar
+    x : dict, tuple, list, pd.Series, pd.DataFrame, pd.Index, dtype, scalar
         To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
         an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
         tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
-        should match the desired output. If a scalar, a numpy scalar of the
+        should match the desired output. If a dtype or scalar, a scalar of the
         same dtype is returned.
     index :  pd.Index, optional
         Any pandas index to use in the metadata. If none provided, a
@@ -151,6 +151,8 @@ def make_meta(x, index=None):
     Index: []
     >>> make_meta(('a', 'f8'))
     Series([], Name: a, dtype: float64)
+    >>> make_meta('i8')
+    1
     """
     if hasattr(x, '_meta'):
         return x._meta
@@ -165,22 +167,27 @@ def make_meta(x, index=None):
                             index=index)
     elif isinstance(x, tuple) and len(x) == 2:
         return pd.Series([], dtype=x[1], name=x[0], index=index)
-    elif isinstance(x, Iterable):
-        x = list(x)
+    elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError("Expected iterable of tuples of (name, dtype), "
                              "got {0}".format(x))
         return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
                             columns=[c for c, d in x], index=index)
-    # For operations that return scalars:
-    elif hasattr(x, 'dtype'):
-        return np.array([], dtype=x.dtype)
-    elif isinstance(x, pd.datetime):
-        return pd.Series([x]).as_matrix()[:0]
-    elif np.isscalar(x):
-        return np.array([x])[:0]
-    else:
-        raise TypeError("Don't know how to create metadata from {0}".format(x))
+    elif not hasattr(x, 'dtype') and x is not None:
+        # could be a string, a dtype object, or a python type. Skip `None`,
+        # because it is implictly converted to `dtype('f8')`, which we don't
+        # want here.
+        try:
+            dtype = np.dtype(x)
+            return _scalar_from_dtype(dtype)
+        except:
+            # Continue on to next check
+            pass
+
+    if is_pd_scalar(x):
+        return _nonempty_scalar(x)
+
+    raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
 def _nonempty_index(idx):
@@ -218,30 +225,58 @@ def _nonempty_index(idx):
 
 
 _simple_fake_mapping = {
-    'b': True,
-    'c': complex(1, 0),
-    'V': np.array([b' '], dtype=np.void)[0],
+    'b': np.bool_(True),
+    'V': np.void(b' '),
     'M': np.datetime64('1970-01-01'),
     'm': np.timedelta64(1, 'D'),
+    'S': np.str_('foo'),
+    'a': np.str_('foo'),
+    'U': np.unicode_('foo'),
     'O': 'foo'
 }
+
+def _scalar_from_dtype(dtype):
+    if dtype.kind in ('i', 'f', 'u'):
+        return dtype.type(1)
+    elif dtype.kind == 'c':
+        return dtype.type(complex(1, 0))
+    elif dtype.kind in _simple_fake_mapping:
+        return _simple_fake_mapping[dtype.kind]
+    else:
+        raise TypeError("Can't handle dtype: {0}".format(dtype))
+
+
+def _nonempty_scalar(x):
+    if isinstance(x, (pd.Timestamp, pd.Timedelta, pd.Period)):
+        return x
+    elif np.isscalar(x):
+        dtype = x.dtype if hasattr(x, 'dtype') else np.dtype(type(x))
+        return _scalar_from_dtype(dtype)
+    else:
+        raise TypeError("Can't handle meta of type "
+                        "'{0}'".format(type(x).__name__))
+
+
+def is_pd_scalar(x):
+    """Whether the object is a scalar type"""
+    return (np.isscalar(x) or isinstance(x, (pd.Timestamp, pd.Timedelta,
+                                             pd.Period)))
 
 
 def _nonempty_series(s, idx):
     dtype = s.dtype
     if is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
+        data = [entry, entry]
     elif is_categorical_dtype(dtype):
-        entry = pd.Categorical([s.cat.categories[0]],
+        entry = s.cat.categories[0]
+        data = pd.Categorical([entry, entry],
                                categories=s.cat.categories,
                                ordered=s.cat.ordered)
-    elif dtype.kind in ['i', 'f', 'u']:
-        entry = dtype.type(1)
-    elif dtype.kind in _simple_fake_mapping:
-        entry = _simple_fake_mapping[dtype.kind]
     else:
-        raise TypeError("Can't handle dtype: {0}".format(dtype))
-    return pd.Series([entry, entry], name=s.name, index=idx)
+        entry = _scalar_from_dtype(dtype)
+        data = [entry, entry]
+    return pd.Series(data, name=s.name, index=idx)
 
 
 def meta_nonempty(x):
@@ -259,8 +294,10 @@ def meta_nonempty(x):
         idx = _nonempty_index(x.index)
         data = {c: _nonempty_series(x[c], idx) for c in x.columns}
         return pd.DataFrame(data, columns=x.columns, index=idx)
+    elif is_pd_scalar(x):
+        return _nonempty_scalar(x)
     else:
-        raise TypeError("Expected Index, Series, or DataFrame, "
+        raise TypeError("Expected Index, Series, DataFrame, or scalar, "
                         "got {0}".format(type(x).__name__))
 
 
@@ -307,6 +344,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True):
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))
+            if check_dtypes:
+                assert_dask_dtypes(dsk, result)
         else:
             msg = 'Unsupported dask instance {0} found'.format(type(dsk))
             raise AssertionError(msg)
@@ -407,7 +446,9 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
     useful due to the implicit conversion of integer to floating upon
     encountering missingness, which is hard to infer statically."""
 
-    eq_types = {'i', 'f'} if numeric_equal else {}
+    eq_types = {'O', 'S', 'U', 'a'}     # treat object and strings alike
+    if numeric_equal:
+        eq_types.update(('i', 'f'))
 
     if isinstance(res, pd.DataFrame):
         for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes],
@@ -417,3 +458,14 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
         a = ddf._meta.dtype
         b = res.dtype
         assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+    else:
+        if hasattr(ddf._meta, 'dtype'):
+            a = ddf._meta.dtype
+            if not hasattr(res, 'dtype'):
+                assert np.isscalar(res)
+                b = np.dtype(type(res))
+            else:
+                b = res.dtype
+            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+        else:
+            assert type(ddf._meta) == type(res)

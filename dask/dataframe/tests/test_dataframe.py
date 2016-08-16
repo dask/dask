@@ -13,7 +13,7 @@ from dask.utils import raises, ignoring
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,
-                                 _concat, _Frame)
+                                 _concat, _Frame, Scalar)
 from dask.dataframe.utils import eq, make_meta
 
 
@@ -126,6 +126,22 @@ def test_Index():
         assert eq(ddf.index, case.index)
         assert repr(ddf.index).startswith('dd.Index')
         assert raises(AttributeError, lambda: ddf.index.index)
+
+
+def test_Scalar():
+    val = np.int64(1)
+    s = Scalar({('a', 0): val}, 'a', 'i8')
+    assert hasattr(s, 'dtype')
+    assert 'dtype' in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, dtype=int64>"
+
+    val = pd.Timestamp('2001-01-01')
+    s = Scalar({('a', 0): val}, 'a', val)
+    assert not hasattr(s, 'dtype')
+    assert 'dtype' not in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, type=Timestamp>"
 
 
 def test_attributes():
@@ -505,7 +521,7 @@ def test_map_partitions_keeps_kwargs_in_dict():
     b = a.x.map_partitions(f, x=5)
 
     assert "'x': 5" in str(b.dask)
-    eq(df.x + 5, b)
+    assert eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
@@ -1416,6 +1432,12 @@ def test_aca_meta_infer():
     sol = (df + 2.0 + 2.0).head()
     assert eq(res, sol)
 
+    # Should infer as a scalar
+    res = aca([ddf.x], chunk=lambda x: pd.Series([x.sum()]),
+              aggregate=lambda x: x.sum())
+    assert isinstance(res, Scalar)
+    assert res.compute() == df.x.sum()
+
 
 def test_gh_517():
     arr = np.random.randn(100, 2)
@@ -1541,6 +1563,18 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+def test_cov_corr_meta():
+    df = pd.DataFrame({'a': np.array([1, 2, 3]),
+                       'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
+                       'c': np.array([1.0, 2.0, 3.0])},
+                       index=pd.Index([1, 2, 3], name='myindex'))
+    ddf = dd.from_pandas(df, npartitions=2)
+    eq(ddf.corr(), df.corr())
+    eq(ddf.cov(), df.cov())
+    assert ddf.a.cov(ddf.b)._meta.dtype == 'f8'
+    assert ddf.a.corr(ddf.b)._meta.dtype == 'f8'
 
 
 @pytest.mark.slow
