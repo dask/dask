@@ -53,23 +53,25 @@ def _concat(args, **kwargs):
     return args
 
 
+def _get_return_type(meta):
+    if isinstance(meta, _Frame):
+        meta = meta._meta
+
+    if isinstance(meta, pd.Series):
+        return Series
+    elif isinstance(meta, pd.DataFrame):
+        return DataFrame
+    elif isinstance(meta, pd.Index):
+        return Index
+    return Scalar
+
+
 def new_dd_object(dsk, _name, meta, divisions):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if isinstance(meta, _Frame):
-        meta = meta._meta
-
-    if isinstance(meta, pd.Series):
-        typ = Series
-    elif isinstance(meta, pd.DataFrame):
-        typ = DataFrame
-    elif isinstance(meta, pd.Index):
-        typ = Index
-    else:
-        typ = Scalar
-    return typ(dsk, _name, meta, divisions)
+    return _get_return_type(meta)(dsk, _name, meta, divisions)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -82,22 +84,27 @@ def finalize(results):
 
 
 class Scalar(Base):
-    """ A Dask-thing to represent a scalar
-
-    TODO: Clean up this abstraction
-    """
+    """ A Dask object to represent a pandas scalar"""
 
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(first)
 
-    def __init__(self, dsk, _name, name=None, divisions=None):
+    def __init__(self, dsk, name, meta, divisions=None):
+        # divisions is ignored, only present to be compatible with other
+        # objects.
         self.dask = dsk
-        self._name = _name
-        self.divisions = [None, None]
+        self._name = name
+        self._meta = make_meta(meta)
 
-        # name and divisions are ignored.
-        # There are dummies to be compat with Series and DataFrame
+    @property
+    def _meta_nonempty(self):
+        return self._meta
+
+    @property
+    def divisions(self):
+        """Dummy divisions to be compat with Series and DataFrame"""
+        return [None, None]
 
     def __array__(self):
         # array interface is required to support pandas instance + Scalar
@@ -106,13 +113,13 @@ class Scalar(Base):
 
     @property
     def _args(self):
-        return (self.dask, self._name)
+        return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name = state
+        self.dask, self._name, self._meta = state
 
     @property
     def key(self):
@@ -126,7 +133,12 @@ class Scalar(Base):
         def f(self):
             name = funcname(op) + '-' + tokenize(self)
             dsk = {(name, 0): (op, (self._name, 0))}
-            return Scalar(merge(dsk, self.dask), name)
+            try:
+                meta = op(self._meta_nonempty)
+            except:
+                raise ValueError("Metadata inference failed in operator "
+                                 "{0}.".format(funcname(op)))
+            return Scalar(merge(dsk, self.dask), name, meta)
         return f
 
     @classmethod
@@ -134,27 +146,41 @@ class Scalar(Base):
         return lambda self, other: _scalar_binary(op, self, other, inv=inv)
 
 
-def _scalar_binary(op, a, b, inv=False):
-    name = '{0}-{1}'.format(funcname(op), tokenize(a, b))
+def _scalar_binary(op, self, other, inv=False):
+    name = '{0}-{1}'.format(funcname(op), tokenize(self, other))
 
-    dsk = a.dask
-    if not isinstance(b, Base):
-        pass
-    elif isinstance(b, Scalar):
-        dsk = merge(dsk, b.dask)
-        b = (b._name, 0)
-    else:
+    dsk = self.dask
+    return_type = _get_return_type(other)
+
+    if isinstance(other, Scalar):
+        dsk = merge(dsk, other.dask)
+        other_key = (other._name, 0)
+    elif isinstance(other, Base):
         return NotImplemented
+    else:
+        other_key = other
 
     if inv:
-        dsk.update({(name, 0): (op, b, (a._name, 0))})
+        dsk.update({(name, 0): (op, other_key, (self._name, 0))})
     else:
-        dsk.update({(name, 0): (op, (a._name, 0), b)})
+        dsk.update({(name, 0): (op, (self._name, 0), other_key)})
 
-    if isinstance(b, (pd.Series, pd.DataFrame)):
-        return new_dd_object(dsk, name, b, [b.index.min(), b.index.max()])
+    try:
+        other_meta = make_meta(other)
+        other_meta_nonempty = meta_nonempty(other_meta)
+        if inv:
+            meta = op(other_meta_nonempty, self._meta_nonempty)
+        else:
+            meta = op(self._meta_nonempty, other_meta_nonempty)
+    except:
+        raise ValueError("Metadata inference failed in operator "
+                         "{0}.".format(funcname(op)))
+
+    if return_type is not Scalar:
+        return return_type(dsk, name, meta,
+                           [other.index.min(), other.index.max()])
     else:
-        return Scalar(dsk, name)
+        return Scalar(dsk, name, meta)
 
 
 class _Frame(Base):
@@ -298,7 +324,7 @@ class _Frame(Base):
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self, len, np.sum, token='len').compute()
+        return reduction(self, len, np.sum, token='len', meta=int).compute()
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
@@ -1166,7 +1192,8 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
-        return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes')
+        return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes',
+                         meta=int)
 
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
@@ -1397,7 +1424,9 @@ class Series(_Frame):
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
                 raise NotImplementedError('level must be None')
-            return map_partitions(op, self, other, meta=self._meta,
+            axis = self._validate_axis(axis)
+            meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+            return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
@@ -1525,7 +1554,7 @@ class Index(Series):
 
     def count(self):
         f = lambda x: pd.notnull(x).sum()
-        return reduction(self, f, np.sum, token='index-count')
+        return reduction(self, f, np.sum, token='index-count', meta=int)
 
 
 class DataFrame(_Frame):
@@ -2178,7 +2207,7 @@ def empty_safe(func, arg):
         return func(arg)
 
 
-def reduction(x, chunk, aggregate, token=None):
+def reduction(x, chunk, aggregate, token=None, meta=no_default):
     """ General version of reductions
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
@@ -2193,7 +2222,16 @@ def reduction(x, chunk, aggregate, token=None):
     dsk2 = {(b, 0): (aggregate, (remove_empties,
                      [(a, i) for i in range(x.npartitions)]))}
 
-    return Scalar(merge(x.dask, dsk, dsk2), b)
+    if meta is no_default:
+        try:
+            meta_chunk = _emulate(empty_safe, chunk, x)
+            meta = _emulate(aggregate, remove_empties([meta_chunk]))
+        except Exception:
+            raise ValueError("Metadata inference failed, please provide "
+                             "`meta` keyword")
+    meta = make_meta(meta)
+
+    return Scalar(merge(x.dask, dsk, dsk2), b, meta)
 
 
 def _maybe_from_pandas(dfs):
@@ -2293,7 +2331,7 @@ def _extract_meta(x, nonempty=False):
     """
     Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
     """
-    if isinstance(x, _Frame):
+    if isinstance(x, (_Frame, Scalar)):
         return x._meta_nonempty if nonempty else x._meta
     elif isinstance(x, list):
         return [_extract_meta(_x, nonempty) for _x in x]
@@ -2304,11 +2342,6 @@ def _extract_meta(x, nonempty=False):
         for k in x:
             res[k] = _extract_meta(x[k], nonempty)
         return res
-    elif isinstance(x, Scalar):
-        # TODO: clean this up. This is fine for most things, but will fail if
-        # the scalar isn't numeric. Fixing this is coupled to fixing the TODO
-        # above for Scalar's managing dtype.
-        return 1
     else:
         return x
 
@@ -2346,15 +2379,9 @@ def map_partitions(func, *args, **kwargs):
         token = tokenize(func, meta, *args, **kwargs)
     name = '{0}-{1}'.format(name, token)
 
-    if all(isinstance(arg, Scalar) for arg in args):
-        dask = {(name, 0):
-                (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
-        return Scalar(merge(dask, *[arg.dask for arg in args]), name)
-
-    args = _maybe_from_pandas(args)
     from .multi import _maybe_align_partitions
+    args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
-    dfs = [df for df in args if isinstance(df, _Frame)]
 
     if meta is no_default:
         try:
@@ -2363,6 +2390,11 @@ def map_partitions(func, *args, **kwargs):
             raise ValueError("Metadata inference failed, please provide "
                              "`meta` keyword")
 
+    if all(isinstance(arg, Scalar) for arg in args):
+        dask = {(name, 0):
+                (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
+        return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
+
     if isinstance(meta, pd.DataFrame):
         columns = meta.columns
     elif isinstance(meta, (pd.Series, pd.Index)):
@@ -2370,6 +2402,7 @@ def map_partitions(func, *args, **kwargs):
     else:
         columns = None
 
+    dfs = [df for df in args if isinstance(df, _Frame)]
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
@@ -2543,8 +2576,9 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False):
                       corr, scalar)
     dsk = merge(df.dask, dsk)
     if scalar:
-        return Scalar(dsk, name)
-    return DataFrame(dsk, name, df._meta, (df.columns[0], df.columns[-1]))
+        return Scalar(dsk, name, 'f8')
+    meta = make_meta([(c, 'f8') for c in df.columns], index=df._meta.columns)
+    return DataFrame(dsk, name, meta, (df.columns[0], df.columns[-1]))
 
 
 def cov_corr_chunk(df, corr=False):

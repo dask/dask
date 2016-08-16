@@ -1549,6 +1549,18 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+def test_cov_corr_meta():
+    df = pd.DataFrame({'a': np.array([1, 2, 3]),
+                       'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
+                       'c': np.array([1.0, 2.0, 3.0])},
+                       index=pd.Index([1, 2, 3], name='myindex'))
+    ddf = dd.from_pandas(df, npartitions=2)
+    eq(ddf.corr(), df.corr())
+    eq(ddf.cov(), df.cov())
+    assert ddf.a.cov(ddf.b)._meta.dtype == 'f8'
+    assert ddf.a.corr(ddf.b)._meta.dtype == 'f8'
+
+
 @pytest.mark.slow
 def test_cov_corr_stable():
     df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])

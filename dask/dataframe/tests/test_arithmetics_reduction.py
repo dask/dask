@@ -353,15 +353,14 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
 
 
 def test_scalar_arithmetics():
-    l = dd.core.Scalar({('l', 0): 10}, 'l')
-    r = dd.core.Scalar({('r', 0): 4}, 'r')
-    el = 10
-    er = 4
+    el = np.int64(10)
+    er = np.int64(4)
+    l = dd.core.Scalar({('l', 0): el}, 'l', 'i8')
+    r = dd.core.Scalar({('r', 0): er}, 'r', 'i8')
 
     assert isinstance(l, dd.core.Scalar)
     assert isinstance(r, dd.core.Scalar)
 
-    # l, r may be repartitioned, test whether repartition keeps original data
     assert eq(l, el)
     assert eq(r, er)
 
@@ -424,7 +423,7 @@ def test_scalar_arithmetics():
 
 
 def test_scalar_arithmetics_with_dask_instances():
-    s = dd.core.Scalar({('s', 0): 10}, 's')
+    s = dd.core.Scalar({('s', 0): 10}, 's', 'i8')
     e = 10
 
     pds = pd.Series([1, 2, 3, 4, 5, 6, 7])
@@ -487,7 +486,7 @@ def test_frame_series_arithmetic_methods():
     ds1 = ddf1.A
     ds2 = ddf2.A
 
-    s = dd.core.Scalar({('s', 0): 4}, 's')
+    s = dd.core.Scalar({('s', 0): 4}, 's', 'i8')
 
     for l, r, el, er in [(ddf1, ddf2, pdf1, pdf2), (ds1, ds2, ps1, ps2),
                          (ddf1.repartition(['a', 'f', 'j']), ddf2, pdf1, pdf2),

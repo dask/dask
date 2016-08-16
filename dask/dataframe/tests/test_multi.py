@@ -19,7 +19,7 @@ def test_align_partitions():
                      index=[30, 70, 80, 100])
     b = dd.repartition(B, [30, 80, 100])
 
-    s = dd.core.Scalar({('s', 0): 10}, 's')
+    s = dd.core.Scalar({('s', 0): 10}, 's', 'i8')
 
     (aa, bb), divisions, L = align_partitions(a, b)
 

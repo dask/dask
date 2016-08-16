@@ -3,6 +3,8 @@ import pandas as pd
 import dask.dataframe as dd
 from dask.dataframe.utils import shard_df_on_index, meta_nonempty, make_meta
 
+import pytest
+
 
 def test_shard_df_on_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
@@ -76,17 +78,19 @@ def test_make_meta():
     meta = make_meta(1.0)
     assert isinstance(meta, np.float64)
 
-    # datetime
-    x = pd.datetime(2000, 1, 1)
+    # Timestamp
+    x = pd.Timestamp(2000, 1, 1)
     meta = make_meta(x)
     assert meta is x
 
-    # categorical
-    x = pd.Categorical(['a', 'b', 'c'], ordered=True)
-    meta = make_meta(x)
-    assert (meta.categories == x.categories).all()
-    assert meta.ordered
-    assert len(meta) == 1
+    # Dtype expressions
+    meta = make_meta('i8')
+    assert isinstance(meta, np.int64)
+    meta = make_meta(float)
+    assert isinstance(meta, np.dtype(float).type)
+    meta = make_meta(np.dtype('bool'))
+    assert isinstance(meta, np.bool_)
+    assert pytest.raises(TypeError, lambda: make_meta(None))
 
 
 def test_meta_nonempty():
@@ -102,6 +106,7 @@ def test_meta_nonempty():
                        columns=list('DCBAHGFE'))
     df2 = df1.iloc[0:0]
     df3 = meta_nonempty(df2)
+    assert (df3.dtypes == df2.dtypes).all()
     assert df3['A'][0] == 'Alice'
     assert df3['B'][0] == 'foo'
     assert df3['C'][0] == 'foo'
@@ -113,6 +118,7 @@ def test_meta_nonempty():
     assert df3['H'][0] == 'foo'
 
     s = meta_nonempty(df2['A'])
+    assert s.dtype == df2['A'].dtype
     assert (df3['A'] == s).all()
 
 
@@ -168,3 +174,12 @@ def test_meta_nonempty_index():
         assert type(idx1) is type(idx2)
         assert idx1.name == idx2.name
     assert res.names == idx.names
+
+
+def test_meta_nonempty_scalar():
+    meta = meta_nonempty(np.float64(1.0))
+    assert isinstance(meta, np.float64)
+
+    x = pd.Timestamp(2000, 1, 1)
+    meta = meta_nonempty(x)
+    assert meta is x
