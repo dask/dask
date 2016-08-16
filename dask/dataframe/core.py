@@ -101,10 +101,30 @@ class Scalar(Base):
     def _meta_nonempty(self):
         return self._meta
 
+    def __getattr__(self, key):
+        if key == 'dtype':
+            return self._meta.dtype
+        raise AttributeError("'Scalar' object has no attribute %r" % key)
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        if hasattr(self._meta, 'dtype'):
+            o.add('dtype')
+        return list(o)
+
     @property
     def divisions(self):
         """Dummy divisions to be compat with Series and DataFrame"""
         return [None, None]
+
+    def __repr__(self):
+        name = self._name if len(self._name) < 10 else self._name[:7] + '...'
+        if hasattr(self._meta, 'dtype'):
+            extra = ', dtype=%s' % self._meta.dtype
+        else:
+            extra = ', type=%s' % type(self._meta).__name__
+        return "dd.Scalar<%s%s>" % (name, extra)
 
     def __array__(self):
         # array interface is required to support pandas instance + Scalar

@@ -128,6 +128,22 @@ def test_Index():
         assert raises(AttributeError, lambda: ddf.index.index)
 
 
+def test_Scalar():
+    val = np.int64(1)
+    s = Scalar({('a', 0): val}, 'a', 'i8')
+    assert hasattr(s, 'dtype')
+    assert 'dtype' in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, dtype=int64>"
+
+    val = pd.Timestamp('2001-01-01')
+    s = Scalar({('a', 0): val}, 'a', val)
+    assert not hasattr(s, 'dtype')
+    assert 'dtype' not in dir(s)
+    assert eq(s, val)
+    assert repr(s) == "dd.Scalar<a, type=Timestamp>"
+
+
 def test_attributes():
     assert 'a' in dir(d)
     assert 'foo' not in dir(d)
