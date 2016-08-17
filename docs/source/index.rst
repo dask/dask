@@ -167,6 +167,7 @@ for single machine processing using threads or processes, and one for
 distributed memory clusters.
 
 * :doc:`scheduler-overview`
+* :doc:`scheduler-choice`
 * :doc:`Single machine scheduler<shared>`
 * `Distributed scheduler`_  (separate webpage)
 * :doc:`scheduling-policy`
@@ -177,6 +178,7 @@ distributed memory clusters.
    :caption: Scheduling
 
    scheduler-overview.rst
+   scheduler-choice.rst
    shared.rst
    scheduling-policy.rst
 
