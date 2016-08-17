@@ -8,20 +8,20 @@ different choices so that users can make decisions that improve performance.
 
 Briefly, the current options are as follows:
 
-*   ``dask.threaded.get``: Use multiple threads in the same process.  Good for
+*   ``dask.threaded.get``: Uses multiple threads in the same process.  Good for
     numeric code that releases the GIL (NumPy, Pandas, SKLearn, Numba) because
-    data is free to share.  The default on dask.array and dask.dataframe and
-    dask.delayed
+    data is free to share.  The default scheduler for ``dask.array``,
+    ``dask.dataframe`` and ``dask.delayed``
 *   ``dask.multiprocessing.get``: Uses multiple processes.  Good for Python
-    bound code that needs multiple interpreters to accelerate.  Some costs to
-    data sharing back and forth between processes.  The default on dask.bag and
-    sometimes useful with dask.dataframe
+    bound code that needs multiple interpreters to accelerate.  There are some
+    costs to sharing data back and forth between processes.  The default
+    scheduler for ``dask.bag`` and sometimes useful with ``dask.dataframe``.
 *   ``dask.async.get_sync``: Uses the single main thread.  Good for profiling
     and debugging because all code is run sequentially
 *   ``distributed.Exectuor.get``:  Uses multiple machines connected over
-    sockets.  Good for larger work but also a viable alternative for
+    sockets.  Good for larger work but also a viable alternative to
     ``dask.multiprocessing`` on a single machine.  Also sometimes used for its
-    improve diagnostic tools.
+    improved diagnostic tools.
 
 Threads vs Processes
 --------------------
