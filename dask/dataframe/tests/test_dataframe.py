@@ -1863,16 +1863,14 @@ def test_columns_assignment():
     pd.date_range('20150101', periods=100)
 ])
 def test_idxmaxmin(idx):
-    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'), index=idx)
-    ddf = dd.from_pandas(pdf, npartitions=3)
-    assert eq(pdf.idxmax(), ddf.idxmax())
-    assert eq(pdf.idxmin(), ddf.idxmin())
-    assert eq(pdf.idxmax(axis=1), ddf.idxmax(axis=1))
-    assert eq(pdf.idxmin(axis=1), ddf.idxmin(axis=1))
-    assert eq(pdf.a.idxmax(), ddf.a.idxmax())
-    assert eq(pdf.a.idxmin(), ddf.a.idxmin())
-    pdf.b.iloc[31] = np.nan
-    pdf.d.iloc[78] = np.nan
-    assert eq(pdf.idxmax(), ddf.idxmax())
-    assert eq(pdf.idxmax(skipna=True), ddf.idxmax(skipna=True))
-    assert eq(pdf.idxmin(skipna=True), ddf.idxmin(skipna=True))
+    for skipna in [True, False]:
+        pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'), index=idx)
+        pdf.b.iloc[31] = np.nan
+        pdf.d.iloc[78] = np.nan
+        ddf = dd.from_pandas(pdf, npartitions=3)
+        assert eq(pdf.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
+        assert eq(pdf.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
+        assert eq(pdf.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+        assert eq(pdf.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
+        assert eq(pdf.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert eq(pdf.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))

@@ -3119,7 +3119,13 @@ def idxmaxmin_chunk(x, fn, axis=0, skipna=True, **kwargs):
 def idxmaxmin_row(x, fn, skipna=True):
     idx = x.idx.reset_index(drop=True)
     value = x.value.reset_index(drop=True)
-    return idx.iloc[getattr(value, fn)(skipna=skipna)]
+    subidx = getattr(value, fn)(skipna=skipna)
+
+    # if skipna is False, pandas returns NaN so mimic behavior
+    if pd.isnull(subidx):
+        return subidx
+
+    return idx.iloc[subidx]
 
 
 def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
