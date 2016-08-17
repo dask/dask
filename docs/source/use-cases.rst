@@ -304,7 +304,7 @@ Their algorithm is written the same in all cases, drastically reducing the
 cognitive load, and letting the readers of their work experiment with their
 system on their own machines, aiding reproducibility.
 
-.. _`distributed machine`: http://distributed.readthedocs.io/en/latest/web.html
+.. _`distributed diagnostics`: http://distributed.readthedocs.io/en/latest/web.html
 .. _dask-ec2: http://distributed.readthedocs.io/en/latest/ec2.html
 
 
