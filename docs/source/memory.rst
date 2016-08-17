@@ -1,5 +1,5 @@
-Memory Management
-=================
+Managing Memory
+===============
 
 Dask.distributed stores the results of tasks in the distributed memory of the
 worker nodes.  The central scheduler tracks all data on the cluster and

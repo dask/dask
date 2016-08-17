@@ -89,6 +89,7 @@ Contents
    local-cluster
    efficiency
    locality
+   manage-computation
    memory
    joblib
    queues
