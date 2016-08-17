@@ -120,3 +120,17 @@ The workers and scheduler have no persistent state.
 
 Programmatically you can use the client interface (``rpc``) to call the
 ``terminate`` methods on the workers and schedulers.
+
+Software Environment
+--------------------
+
+The workers and clients should all share the same software environment.  That
+means that they should all have access to the same libraries and that those
+libraries should be the same version.  Dask generally assumes that it can call
+a function on any worker with the same outcome (unless explicitly told
+otherwise.)
+
+This is typically enforced through external means, such as by having a network
+file system (NFS) mount for libraries, by starting the ``dask-worker``
+processes in equivalent docker containers, or through any of the other means
+typically employed by cluster administrators.
