@@ -2541,51 +2541,13 @@ def broadcast_to(x, shape):
 
 @wraps(np.ravel)
 def ravel(array):
-    if array.ndim == 0:
-        return array[None]
-    elif array.ndim == 1:
-        return array
-    elif all(len(c) == 1 for c in array.chunks[1:]):
-        # we can simply map np.ravel over the chunks
-        name = 'ravel-' + tokenize(array)
-        trailing_size = int(np.prod([c[0] for c in array.chunks[1:]]))
-        chunks = (tuple(c * trailing_size for c in array.chunks[0]),)
-        dsk = dict(((name, key[1]), (np.ravel, key))
-                   for key in core.flatten(array._keys()))
-        return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
-    else:
-        # we need to do an expensive shuffling of the data
-        return concatenate([ravel(a) for a in array])
-
-
-def unravel(array, shape):
-    """ Given a 1D array, reshape it to the given shape
-    """
-    assert array.ndim == 1
-    if len(shape) == 1:
-        return array
-    else:
-        trailing_size = int(np.prod(shape[1:]))
-        if all(c % trailing_size == 0 for c in array.chunks[0]):
-            # we can call np.reshape on each chunk
-            name = 'unravel-' + tokenize(array)
-            chunks = ((tuple(c // trailing_size for c in array.chunks[0]),)
-                      + tuple((c,) for c in shape[1:]))
-            dsk = dict(((name, key[1]) + (0,) * (len(shape) - 1),
-                        (np.reshape, key, (c,) + shape[1:]))
-                       for key, c in zip(array._keys(), chunks[0]))
-            return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
-        else:
-            # we need to shuffle
-            # nb. this doesn't always work, stack requires aligned chunks
-            return stack([unravel(array[n * trailing_size
-                                        : (n + 1) * trailing_size], shape[1:])
-                          for n in range(shape[0])])
+    return reshape(array, (-1,))
 
 
 @wraps(np.reshape)
 def reshape(array, shape):
     from .slicing import sanitize_index
+
     shape = tuple(map(sanitize_index, shape))
     known_sizes = [s for s in shape if s != -1]
     if len(known_sizes) < len(shape):
@@ -2596,7 +2558,70 @@ def reshape(array, shape):
 
     if np.prod(shape) != array.size:
         raise ValueError('total size of new array must be unchanged')
-    return unravel(ravel(array), shape)
+
+    # ensure the same number of leading dimensions of size 1, to simply the
+    # logic below
+    leading_ones_diff = 0
+    for size in array.shape:
+        if size != 1:
+            break
+        leading_ones_diff += 1
+    for size in shape:
+        if size != 1:
+            break
+        leading_ones_diff -= 1
+
+    if leading_ones_diff > 0:
+        array = array[(0,) * leading_ones_diff]
+    elif leading_ones_diff < 0:
+        array = array[(np.newaxis,) * -leading_ones_diff]
+
+    # leading dimensions with the same size can be ignored in the reshape
+    ndim_same = 0
+    for old_size, new_size in zip(array.shape, shape):
+        if old_size != new_size:
+            break
+        ndim_same += 1
+
+    if any(len(c) != 1 for c in array.chunks[ndim_same+1:]):
+        raise ValueError('dask.array.reshape requires that reshaped '
+                         'dimensions after the first contain at most one chunk')
+
+    if ndim_same == len(shape):
+        chunks = array.chunks[:ndim_same]
+    elif ndim_same == array.ndim:
+        chunks = (array.chunks[:ndim_same] +
+                  tuple((c,) for c in shape[ndim_same:]))
+    else:
+        trailing_size_before = int(np.prod(array.shape[ndim_same+1:]))
+        trailing_size_after = int(np.prod(shape[ndim_same+1:]))
+
+        ndim_same_chunks, remainders = zip(
+            *(divmod(c * trailing_size_before, trailing_size_after)
+              for c in array.chunks[ndim_same]))
+
+        if any(remainder != 0 for remainder in remainders):
+            raise ValueError('dask.array.reshape requires that the first '
+                             'reshaped dimension can be evenly divided into '
+                             'new chunks')
+
+        chunks = (array.chunks[:ndim_same] + (ndim_same_chunks,)
+                  + tuple((c,) for c in shape[ndim_same+1:]))
+
+    name = 'reshape-' + tokenize(array, shape)
+
+    dsk = {}
+    prev_index_count = min(ndim_same + 1, array.ndim, len(shape))
+    extra_zeros = len(shape) - prev_index_count
+    for key in core.flatten(array._keys()):
+        index = key[1:]
+        valid_index = index[:prev_index_count]
+        new_key = (name,) + valid_index + (0,) * extra_zeros
+        new_shape = (tuple(chunk[i] for i, chunk in zip(valid_index, chunks))
+                     + shape[prev_index_count:])
+        dsk[new_key] = (np.reshape, key, new_shape)
+
+    return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
 
 
 def offset_func(func, offset, *args):
