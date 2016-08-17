@@ -9,7 +9,7 @@ import pytest
 import dask
 from dask.async import get_sync
 from dask import delayed
-from dask.utils import raises, ignoring
+from dask.utils import raises, ignoring, put_lines
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,
@@ -1806,6 +1806,13 @@ def test_sorted_index_single_partition():
 def test_info():
     from io import StringIO
     from dask.compatibility import unicode
+
+    # TODO This should be fixed in pandas 0.18.2
+    if pd.__version__ == '0.18.0':
+        from pandas.core import format
+    else:
+        from pandas.formats import format
+    format._put_lines = put_lines
 
     test_frames = [
         pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=pd.Int64Index(range(4))),  # No RangeIndex in dask

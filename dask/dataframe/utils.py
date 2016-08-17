@@ -13,6 +13,7 @@ from pandas.core.common import is_datetime64tz_dtype, is_categorical_dtype
 import toolz
 
 from ..async import get_sync
+from ..compatibility import unicode
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
 

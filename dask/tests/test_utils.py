@@ -167,7 +167,6 @@ def test_infer_storage_options():
         infer_storage_options('hdfs:///bucket/file.csv', {'protocol': 'collide'})
 
 
-<<<<<<< HEAD
 def test_infer_storage_options_c():
     so = infer_storage_options(r'c:\foo\bar')
     assert so['protocol'] == 'file'
@@ -178,7 +177,6 @@ def test_eq_strict():
     assert not eq_strict(b'a', u'a')
 
 
-======
 def test_memory_repr():
     for power, mem_repr in enumerate(['1.0 bytes', '1.0 KB', '1.0 MB', '1.0 GB']):
         assert memory_repr(1024 ** power) == mem_repr
