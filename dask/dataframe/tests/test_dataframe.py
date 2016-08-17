@@ -1857,7 +1857,6 @@ def test_columns_assignment():
     eq(df, ddf)
 
 
-
 @pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("idx", [
     np.arange(100),
