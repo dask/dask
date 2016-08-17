@@ -2,11 +2,12 @@ API
 ---
 
 .. currentmodule:: dask.dataframe
+    
 
 Top level user functions:
 
 .. autosummary::
-
+    
     DataFrame
     DataFrame.add
     DataFrame.append
@@ -105,7 +106,7 @@ Rolling Operations
    rolling.rolling_var
    rolling.rolling_window
 
-Create DataFrames
+Create Dask DataFrames
 ~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe
@@ -115,6 +116,7 @@ Create DataFrames
    from_bcolz
    from_castra
    read_csv
+   read_hdf
    from_dask_array
    from_delayed
    from_pandas
@@ -167,6 +169,7 @@ Other functions
 .. currentmodule:: dask.dataframe
 
 .. autofunction:: read_csv
+.. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
