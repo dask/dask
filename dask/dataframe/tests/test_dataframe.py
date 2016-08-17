@@ -1875,3 +1875,22 @@ def test_columns_assignment():
     ddf[['a', 'b']] = ddf2[['y', 'z']]
 
     eq(df, ddf)
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("idx", [
+    np.arange(100),
+    sorted(np.random.random(size=100)),
+    pd.date_range('20150101', periods=100)
+])
+def test_idxmaxmin(idx, skipna):
+    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'), index=idx)
+    pdf.b.iloc[31] = np.nan
+    pdf.d.iloc[78] = np.nan
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    assert eq(pdf.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
+    assert eq(pdf.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
+    assert eq(pdf.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+    assert eq(pdf.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
+    assert eq(pdf.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+    assert eq(pdf.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))

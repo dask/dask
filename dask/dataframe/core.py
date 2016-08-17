@@ -902,6 +902,34 @@ class _Frame(Base):
                                  meta=meta)
 
     @derived_from(pd.DataFrame)
+    def idxmax(self, axis=None, skipna=True):
+        fn = 'idxmax'
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
+        if axis == 1:
+            return map_partitions(_idxmax, self, meta=meta,
+                                  token=self._token_prefix + fn,
+                                  skipna=skipna, axis=axis)
+        else:
+            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                        known_divisions=self.known_divisions, fn=fn, axis=axis)
+
+    @derived_from(pd.DataFrame)
+    def idxmin(self, axis=None, skipna=True):
+        fn = 'idxmin'
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.idxmax(axis=axis)
+        if axis == 1:
+            return map_partitions(_idxmin, self, meta=meta,
+                                  token=self._token_prefix + fn,
+                                  skipna=skipna, axis=axis)
+        else:
+            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                        known_divisions=self.known_divisions, fn=fn, axis=axis)
+
+    @derived_from(pd.DataFrame)
     def count(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -3146,6 +3174,14 @@ def _max(x, **kwargs):
     return x.max(**kwargs)
 
 
+def _idxmax(x, **kwargs):
+    return x.idxmax(**kwargs)
+
+
+def _idxmin(x, **kwargs):
+    return x.idxmin(**kwargs)
+
+
 def _count(x, **kwargs):
     return x.count(**kwargs)
 
@@ -3166,6 +3202,41 @@ def drop_columns(df, columns, dtype):
     df = df.drop(columns, axis=1)
     df.columns = df.columns.astype(dtype)
     return df
+
+
+def idxmaxmin_chunk(x, fn, axis=0, skipna=True, **kwargs):
+    idx = getattr(x, fn)(axis=axis, skipna=skipna)
+    minmax = 'max' if fn == 'idxmax' else 'min'
+    value = getattr(x, minmax)(axis=axis, skipna=skipna)
+    n = len(x)
+    if isinstance(idx, pd.Series):
+        chunk = pd.DataFrame({'idx': idx, 'value': value, 'n': [n] * len(idx)})
+        chunk['idx'] = chunk['idx'].astype(type(idx.iloc[0]))
+    else:
+        chunk = pd.DataFrame({'idx': [idx], 'value': [value], 'n': [n]})
+        chunk['idx'] = chunk['idx'].astype(type(idx))
+    return chunk
+
+
+def idxmaxmin_row(x, fn, skipna=True):
+    idx = x.idx.reset_index(drop=True)
+    value = x.value.reset_index(drop=True)
+    subidx = getattr(value, fn)(skipna=skipna)
+
+    # if skipna is False, pandas returns NaN so mimic behavior
+    if pd.isnull(subidx):
+        return subidx
+
+    return idx.iloc[subidx]
+
+
+def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
+    indices = list(set(x.index.tolist()))
+    idxmaxmin = [idxmaxmin_row(x.ix[idx], fn, skipna=skipna) for idx in indices]
+    if len(idxmaxmin) == 1:
+        return idxmaxmin[0]
+    else:
+        return pd.Series(idxmaxmin, index=indices)
 
 
 def safe_head(head, df, n):
