@@ -1112,7 +1112,7 @@ class Scheduler(Server):
         """
         Add external plugin to scheduler
 
-        See http://http://distributed.readthedocs.io/en/latest/plugins.html
+        See http://distributed.readthedocs.io/en/latest/plugins.html
         """
         self.plugins.append(plugin)
 
