@@ -2209,24 +2209,31 @@ class DataFrame(_Frame):
         Concise summary of a Dask DataFrame.
         """
 
-        from pandas.formats.format import _put_lines
-
-        lines = [str(type(self))]
-
         if buf is None:
             import sys
             buf = sys.stdout
 
+        lines = [str(type(self))]
+
         if len(self.columns) == 0:
             lines.append('Index: 0 entries')
             lines.append('Empty %s' % type(self).__name__)
-            _put_lines(buf, lines)
+            pd.formats.format._put_lines(buf, lines)
             return
+
+        # Group and execute the required computations
+        computations = {}
+        if verbose:
+            computations.update({'index': self.index, 'count': self.count()})
+        if memory_usage:
+            computations.update({'memory_usage': self.map_partitions(pd.DataFrame.memory_usage, index=True)})
+        computations = dict(zip(computations.keys(), da.compute(*computations.values())))
 
         column_template = "{0:<%d} {1}" % (self.columns.str.len().max() + 5)
 
         if verbose:
-            index, counts = da.compute(self.index, self.count())
+            index = computations['index']
+            counts = computations['count']
             lines.append(index.summary())
             column_template = column_template.format('{0}', '{1} non-null {2}')
             column_info = [column_template.format(*x) for x in zip(self.columns, counts, self.dtypes)]
@@ -2239,10 +2246,10 @@ class DataFrame(_Frame):
         lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
 
         if memory_usage:
-            memory_int = self.map_partitions(pd.DataFrame.memory_usage, index=True).compute().sum()
+            memory_int = computations['memory_usage'].sum()
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
-        _put_lines(buf, lines)
+        pd.formats.format._put_lines(buf, lines)
 
 
 # bind operators
