@@ -1871,3 +1871,8 @@ def test_idxmaxmin(idx):
     assert eq(pdf.idxmin(axis=1), ddf.idxmin(axis=1))
     assert eq(pdf.a.idxmax(), ddf.a.idxmax())
     assert eq(pdf.a.idxmin(), ddf.a.idxmin())
+    pdf.b.iloc[31] = np.nan
+    pdf.d.iloc[78] = np.nan
+    assert eq(pdf.idxmax(), ddf.idxmax())
+    assert eq(pdf.idxmax(skipna=True), ddf.idxmax(skipna=True))
+    assert eq(pdf.idxmin(skipna=True), ddf.idxmin(skipna=True))
