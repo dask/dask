@@ -8,7 +8,7 @@ import inspect
 from itertools import product
 from numbers import Number
 import operator
-from operator import add, getitem
+from operator import add, getitem, mul
 import os
 import pickle
 from threading import Lock
@@ -817,7 +817,7 @@ class Array(Base):
 
     @property
     def npartitions(self):
-        return np.prod(self.numblocks)
+        return reduce(mul, self.numblocks, 1)
 
     @property
     def shape(self):
@@ -865,7 +865,7 @@ class Array(Base):
     @property
     def size(self):
         """ Number of elements in array """
-        return np.prod(self.shape)
+        return reduce(mul, self.shape, 1)
 
     @property
     def nbytes(self):
@@ -2553,10 +2553,10 @@ def reshape(array, shape):
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
             raise ValueError('can only specify one unknown dimension')
-        missing_size = sanitize_index(array.size / np.prod(known_sizes))
+        missing_size = sanitize_index(array.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
-    if np.prod(shape) != array.size:
+    if reduce(mul, shape, 1) != array.size:
         raise ValueError('total size of new array must be unchanged')
 
     # ensure the same number of leading dimensions of size 1, to simply the
@@ -2593,8 +2593,8 @@ def reshape(array, shape):
         chunks = (array.chunks[:ndim_same] +
                   tuple((c,) for c in shape[ndim_same:]))
     else:
-        trailing_size_before = int(np.prod(array.shape[ndim_same+1:]))
-        trailing_size_after = int(np.prod(shape[ndim_same+1:]))
+        trailing_size_before = reduce(mul, array.shape[ndim_same+1:], 1)
+        trailing_size_after = reduce(mul, shape[ndim_same+1:], 1)
 
         ndim_same_chunks, remainders = zip(
             *(divmod(c * trailing_size_before, trailing_size_after)
