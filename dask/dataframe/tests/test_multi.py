@@ -2,7 +2,7 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
-        hash_join, concat_indexed_dataframes)
+        hash_join, concat_indexed_dataframes, _maybe_align_partitions)
 import pandas.util.testing as tm
 from dask.async import get_sync
 from dask.dataframe.utils import eq
@@ -59,7 +59,7 @@ def test_align_partitions():
                      (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
                      (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
                      (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2))]:
-        (lresult, rresult), div, parts = dd.multi.align_partitions(lhs, rhs)
+        (lresult, rresult), div, parts = align_partitions(lhs, rhs)
         assert eq(lresult, ldf)
         assert eq(rresult, rdf)
 
@@ -75,9 +75,76 @@ def test_align_partitions():
                      (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
                      (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
                      (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2))]:
-        (lresult, rresult), div, parts = dd.multi.align_partitions(lhs, rhs)
+        (lresult, rresult), div, parts = align_partitions(lhs, rhs)
         assert eq(lresult, ldf)
         assert eq(rresult, rdf)
+
+
+def test_align_partitions_unknown_divisions():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                       'b': [7, 6, 5, 4, 3, 2, 1]})
+    # One known, one unknown
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf2.known_divisions
+
+    with pytest.raises(ValueError):
+        align_partitions(ddf, ddf2)
+
+    # Both unknown
+    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
+    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf.known_divisions
+    assert not ddf2.known_divisions
+
+    with pytest.raises(ValueError):
+        align_partitions(ddf, ddf2)
+
+
+def test__maybe_align_partitions():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                       'b': [7, 6, 5, 4, 3, 2, 1]})
+    # Both known, same divisions
+    ddf = dd.from_pandas(df + 1, npartitions=2)
+    ddf2 = dd.from_pandas(df, npartitions=2)
+
+    a, b = _maybe_align_partitions([ddf, ddf2])
+    assert a is ddf
+    assert b is ddf2
+
+    # Both unknown, same divisions
+    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
+    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf.known_divisions
+    assert not ddf2.known_divisions
+
+    a, b = _maybe_align_partitions([ddf, ddf2])
+    assert a is ddf
+    assert b is ddf2
+
+    # Both known, different divisions
+    ddf = dd.from_pandas(df + 1, npartitions=2)
+    ddf2 = dd.from_pandas(df, npartitions=3)
+
+    a, b = _maybe_align_partitions([ddf, ddf2])
+    assert a.divisions == b.divisions
+
+    # Both unknown, different divisions
+    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
+    ddf2 = dd.from_pandas(df, npartitions=3, sort=False)
+    assert not ddf.known_divisions
+    assert not ddf2.known_divisions
+
+    with pytest.raises(ValueError):
+        _maybe_align_partitions([ddf, ddf2])
+
+    # One known, one unknown
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf2.known_divisions
+
+    with pytest.raises(ValueError):
+        _maybe_align_partitions([ddf, ddf2])
 
 
 def test_join_indexed_dataframe_to_indexed_dataframe():
@@ -600,17 +667,17 @@ def test_cheap_single_partition_merge():
             a.merge(b, on='x', how='inner'))
 
 
-@pytest.mark.parametrize('lhs', [pd.DataFrame({'A': [1, 2, 3],
-                                               'B': list('abc'),
-                                               'C': 'foo',
-                                               'D': 1.0},
-                                              columns=list('DCBA'))])
-@pytest.mark.parametrize('rhs', [pd.DataFrame({'G': [4, 5],
-                                               'H': 6.0,
-                                               'I': 'bar',
-                                               'B': list('ab')},
-                                              columns=list('GHIB'))])
-def test_merge_maintains_columns(lhs, rhs):
+def test_merge_maintains_columns():
+    lhs = pd.DataFrame({'A': [1, 2, 3],
+                        'B': list('abc'),
+                        'C': 'foo',
+                        'D': 1.0},
+                        columns=list('DCBA'))
+    rhs = pd.DataFrame({'G': [4, 5],
+                        'H': 6.0,
+                        'I': 'bar',
+                        'B': list('ab')},
+                        columns=list('GHIB'))
     ddf = dd.from_pandas(lhs, npartitions=1)
     merged = dd.merge(ddf, rhs, on='B').compute()
     assert tuple(merged.columns) == ('D', 'C', 'B', 'A', 'G', 'H', 'I')

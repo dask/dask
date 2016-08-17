@@ -744,20 +744,40 @@ def test_index():
 
 
 def test_assign():
+    d_unknown = dd.from_pandas(full, npartitions=3, sort=False)
+    assert not d_unknown.known_divisions
     res = d.assign(c=1,
                    d='string',
-                   e=np.float64(1),
-                   f=d.a.sum(),
-                   g=d.a + 1,
-                   h=d.a + d.b)
+                   e=d.a.sum(),
+                   f=d.a + d.b)
+    res_unknown = d_unknown.assign(c=1,
+                                   d='string',
+                                   e=d_unknown.a.sum(),
+                                   f=d_unknown.a + d_unknown.b)
     sol = full.assign(c=1,
                       d='string',
-                      e=np.float64(1),
-                      f=full.a.sum(),
-                      g=full.a + 1,
-                      h=full.a + full.b)
+                      e=full.a.sum(),
+                      f=full.a + full.b)
     assert eq(res, sol)
-    pytest.raises(TypeError, lambda: d.assign(c=list(range(9))))
+    assert eq(res_unknown, sol)
+
+    res = d.assign(c=full.a + 1)
+    assert eq(res, full.assign(c=full.a + 1))
+
+    # divisions unknown won't work with pandas
+    with pytest.raises(ValueError):
+        d_unknown.assign(c=full.a + 1)
+
+    # unsupported type
+    with pytest.raises(TypeError):
+        d.assign(c=list(range(9)))
+
+    # Fails when assigning known divisions to unknown divisions
+    with pytest.raises(ValueError):
+        d_unknown.assign(foo=d.a)
+    # Fails when assigning unknown divisions to known divisions
+    with pytest.raises(ValueError):
+        d.assign(foo=d_unknown.a)
 
 
 def test_map():
