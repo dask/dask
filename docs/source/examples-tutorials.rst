@@ -7,7 +7,7 @@ Examples
 You can view examples for each Dask collection:
 
 * :doc:`Dask Array Examples <array-examples>`
-* :doc:`Dask Bag Examples <delayed-examples>`
+* :doc:`Dask Bag Examples <bag-examples>`
 * :doc:`Dask DataFrame Examples <dataframe-examples>`
 * :doc:`Dask delayed Examples <delayed-examples>`
 
