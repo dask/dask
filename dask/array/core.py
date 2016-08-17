@@ -23,7 +23,7 @@ import numpy as np
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute, tokenize, normalize_token
+from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
         IndexCallable, funcname)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
@@ -805,6 +805,12 @@ class Array(Base):
     def _args(self):
         return (self.dask, self.name, self.chunks, self.dtype)
 
+    def __getstate__(self):
+        return self._args
+
+    def __setstate__(self, state):
+        self.dask, self.name, self._chunks, self._dtype = state
+
     @property
     def numblocks(self):
         return tuple(map(len, self.chunks))
@@ -847,7 +853,7 @@ class Array(Base):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] for c in self.chunks))
+        chunksize = str(tuple(c[0] if c else 0 for c in self.chunks))
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self._dtype, chunksize))
@@ -915,6 +921,21 @@ class Array(Base):
         h5py.File.create_dataset
         """
         return to_hdf5(filename, datapath, self, **kwargs)
+
+    def to_dask_dataframe(self, columns=None):
+        """ Convert dask Array to dask Dataframe
+
+        Parameters
+        ----------
+        columns: list or string
+            list of column names if DataFrame, single string if Series
+
+        See Also
+        --------
+        dask.dataframe.from_dask_array
+        """
+        from ..dataframe import from_dask_array
+        return from_dask_array(self, columns=columns)
 
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array
@@ -1875,8 +1896,6 @@ def concatenate(seq, axis=0):
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
 
-
-
     return Array(dsk2, name, chunks, dtype=dt)
 
 
@@ -2201,7 +2220,6 @@ def elemwise(op, *args, **kwargs):
                 dtype=dt, name=name)
 
 
-
 def wrap_elemwise(func, **kwargs):
     """ Wrap up numpy function into dask.array """
     f = partial(elemwise, func, **kwargs)
@@ -2286,6 +2304,7 @@ imag = wrap_elemwise(np.imag)
 clip = wrap_elemwise(np.clip)
 fabs = wrap_elemwise(np.fabs)
 sign = wrap_elemwise(np.sign)
+absolute = wrap_elemwise(np.absolute)
 
 
 def frexp(x):
@@ -2660,6 +2679,11 @@ def bincount(x, weights=None, minlength=None):
 
     return Array(dsk, name, chunks, dtype)
 
+@wraps(np.digitize)
+def digitize(a, bins, right=False):
+    bins = np.asarray(bins)
+    dtype = np.digitize([0], bins, right=False).dtype
+    return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
@@ -2668,15 +2692,36 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     Follows the signature of numpy.histogram exactly with the following
     exceptions:
 
-    - either the ``bins`` or ``range`` argument is required as computing
-      ``min`` and ``max`` over blocked arrays is an expensive operation
-      that must be performed explicitly.
+    - Either an iterable specifying the ``bins`` or the number of ``bins``
+      and a ``range`` argument is required as computing ``min`` and ``max``
+      over blocked arrays is an expensive operation that must be performed
+      explicitly.
 
     - ``weights`` must be a dask.array.Array with the same block structure
-       as ``a``.
+      as ``a``.
 
-    Original signature follows below.
-    """ + np.histogram.__doc__
+    Examples
+    --------
+    Using number of bins and range:
+
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> x = da.from_array(np.arange(10000), chunks=10)
+    >>> h, bins = da.histogram(x, bins=10, range=[0, 10000])
+    >>> bins
+    array([     0.,   1000.,   2000.,   3000.,   4000.,   5000.,   6000.,
+             7000.,   8000.,   9000.,  10000.])
+    >>> h.compute()
+    array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
+
+    Explicitly specifying the bins:
+
+    >>> h, bins = da.histogram(x, bins=np.array([0, 5000, 10000]))
+    >>> bins
+    array([    0,  5000, 10000])
+    >>> h.compute()
+    array([5000, 5000])
+    """
     if bins is None or (range is None and bins is None):
         raise ValueError('dask.array.histogram requires either bins '
                          'or bins and range to be defined.')
@@ -2701,7 +2746,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
     name = 'histogram-sum-' + token
-
 
     # Map the histogram to all bins
     def block_hist(x, weights=None):
@@ -3009,7 +3053,7 @@ def concatenate3(arrays):
     if not ndim:
         return arrays
     if not arrays:
-        return np.empty(())
+        return np.empty(0)
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 

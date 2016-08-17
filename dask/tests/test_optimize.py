@@ -1,14 +1,11 @@
 from itertools import count
-from operator import add, mul, getitem
+from operator import mul, getitem
 from functools import partial
 from dask.utils import raises
+from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
         dealias, equivalent, sync_keys, merge_sync, fuse_getitem,
-        fuse_selections, identity)
-
-
-def inc(x):
-    return x + 1
+        fuse_selections)
 
 
 def double(x):
@@ -124,15 +121,48 @@ def test_fuse_keys():
 
 
 def test_inline():
-    d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'), 'd': (add, 'a', 'c')}
-    assert inline(d) == {'b': (inc, 1), 'c': (inc, 'b'), 'd': (add, 1, 'c')}
-    assert inline(d, ['a', 'b', 'c']) == {'d': (add, 1, (inc, (inc, 1)))}
+    d = {'a': 1,
+         'b': (inc, 'a'),
+         'c': (inc, 'b'),
+         'd': (add, 'a', 'c')}
+    assert inline(d) == {'a': 1,
+                         'b': (inc, 1),
+                         'c': (inc, 'b'),
+                         'd': (add, 1, 'c')}
+    assert inline(d, ['a', 'b', 'c']) == {'a': 1,
+                                          'b': (inc, 1),
+                                          'c': (inc, (inc, 1)),
+                                          'd': (add, 1, (inc, (inc, 1)))}
+    d = {'x': 1,
+         'y': (inc, 'x'),
+         'z': (add, 'x', 'y')}
+    assert inline(d) == {'x': 1,
+                         'y': (inc, 1),
+                         'z': (add, 1, 'y')}
+    assert inline(d, keys='y') == {'x': 1,
+                                   'y': (inc, 1),
+                                   'z': (add, 1, (inc, 1))}
+    assert inline(d, keys='y',
+                  inline_constants=False) == {'x': 1,
+                                              'y': (inc, 'x'),
+                                              'z': (add, 'x', (inc, 'x'))}
 
-    d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    assert inline(d) == {'y': (inc, 1), 'z': (add, 1, 'y')}
-    assert inline(d, keys='y') == {'z': (add, 1, (inc, 1))}
-    assert inline(d, keys='y', inline_constants=False) == {
-        'x': 1, 'z': (add, 'x', (inc, 'x'))}
+    d = {'a': 1,
+         'b': 'a',
+         'c': 'b',
+         'd': ['a', 'b', 'c'],
+         'e': (add, (len, 'd'), 'a')}
+    assert inline(d, 'd') == {'a': 1,
+                              'b': 1,
+                              'c': 1,
+                              'd': [1, 1, 1],
+                              'e': (add, (len, [1, 1, 1]), 1)}
+    assert inline(d, 'a',
+                  inline_constants=False) == {'a': 1,
+                                              'b': 1,
+                                              'c': 'b',
+                                              'd': [1, 'b', 'c'],
+                                              'e': (add, (len, 'd'), 1)}
 
 
 def test_inline_functions():
@@ -155,7 +185,8 @@ def test_inline_ignores_curries_and_partials():
            'b': (inc, 'a')}
 
     result = inline_functions(dsk, [], fast_functions=set([add]))
-    assert 'a' not in set(result.keys())
+    assert result['b'] == (inc, dsk['a'])
+    assert 'a' not in result
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
@@ -177,7 +208,7 @@ def test_inline_traverses_lists():
     assert result == expected
 
 
-def test_inline_protects_output_keys():
+def test_inline_functions_protects_output_keys():
     dsk = {'x': (inc, 1), 'y': (double, 'x')}
     assert inline_functions(dsk, [], [inc]) == {'y': (double, (inc, 1))}
     assert inline_functions(dsk, ['x'], [inc]) == {'y': (double, 'x'),
@@ -187,7 +218,6 @@ def test_inline_protects_output_keys():
 def test_functions_of():
     a = lambda x: x
     b = lambda x: x
-    c = lambda x: x
     assert functions_of((a, 1)) == set([a])
     assert functions_of((a, (b, 1))) == set([a, b])
     assert functions_of((a, [(b, 1)])) == set([a, b])
@@ -208,34 +238,27 @@ def test_dealias():
 
     expected = {'a': (range, 5),
                 'd': (sum, 'a'),
-                'g': (identity, 'd'),
                 'f': (inc, 'd')}
 
-    assert dealias(dsk)  == expected
-
+    assert dealias(dsk) == expected
 
     dsk = {'a': (range, 5),
            'b': 'a',
            'c': 'a'}
 
-    expected = {'a': (range, 5),
-                'b': (identity, 'a'),
-                'c': (identity, 'a')}
+    expected = {'a': (range, 5)}
 
-    assert dealias(dsk)  == expected
+    assert dealias(dsk) == expected
 
-
-def test_dealias_keys():
     dsk = {'a': (inc, 1),
            'b': 'a',
            'c': (inc, 2),
            'd': 'c'}
 
-    assert dealias(dsk) == {'b': (inc, 1), 'd': (inc, 2)}
+    assert dealias(dsk) == {'a': (inc, 1),
+                            'c': (inc, 2)}
 
-    assert dealias(dsk, keys=['a', 'b', 'd']) == {'a': (inc, 1),
-                                                  'b': (identity, 'a'),
-                                                  'd': (inc, 2)}
+    assert dealias(dsk, keys=['a', 'b', 'd']) == dsk
 
 
 def test_equivalent():

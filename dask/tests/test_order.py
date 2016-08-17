@@ -1,6 +1,8 @@
 from itertools import chain
-from dask.order import dfs, child_max, ndependents, order, inc
+
+from dask.order import child_max, ndependents, order
 from dask.core import get_deps
+from dask.utils_test import add, inc
 
 
 def issorted(L, reverse=False):
@@ -43,9 +45,6 @@ def test_prefer_broker_nodes():
     dsk = {(a, 0): (f,), (a, 1): (f,),
            (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 1))}
 
-    dependencies, dependents = get_deps(dsk)
-    nd = ndependents(dependencies, dependents)
-    cm = child_max(dependencies, dependents, nd)
     o = order(dsk)
 
     assert o[(a, 1)] < o[(a, 0)]
@@ -109,10 +108,6 @@ def test_deep_bases_win_over_dependents():
     dsk = {'a': (f, 'b', 'c', 'd'), 'b': (f, 'd', 'e'), 'c': (f, 'd'), 'd': 1,
             'e': 2}
 
-    dependencies, dependents = get_deps(dsk)
-    nd = ndependents(dependencies, dependents)
-    cm = child_max(dependencies, dependents, nd)
-
     o = order(dsk)
     assert o['d'] < o['e']
     assert o['d'] < o['b'] or o['d'] < o['c']
@@ -144,7 +139,6 @@ def test_stacklimit():
 
 
 def test_ndependents():
-    from operator import add
     a, b, c = 'abc'
     dsk = dict(chain((((a, i), i * 2) for i in range(5)),
                      (((b, i), (add, i, (a, i))) for i in range(5)),
@@ -166,3 +160,20 @@ def test_ndependents():
     deps = get_deps(dsk)
     assert ndependents(*deps) == {a: 3, b: 2, c: 1}
 
+
+def test_break_ties_by_str():
+    dsk = {('x', i): (inc, i) for i in range(10)}
+    x_keys = sorted(dsk)
+    dsk['y'] = list(x_keys)
+
+    o = order(dsk)
+    expected = {'y': 0}
+    expected.update({k: i + 1 for i, k in enumerate(x_keys)})
+
+    assert o == expected
+
+
+def test_order_doesnt_fail_on_mixed_type_keys():
+    order({'x': (inc, 1),
+           ('y', 0): (inc, 2),
+           'z': (add, 'x', ('y', 0))})

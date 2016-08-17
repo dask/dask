@@ -1,3 +1,4 @@
+# flake8: noqa
 from __future__ import print_function, division, absolute_import
 
 from warnings import warn

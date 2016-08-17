@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 from dask.utils import raises
-from dask.utils_test import GetFunctionTestMixin
+from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
 from dask.core import (istask, get_dependencies, flatten, subs,
                        preorder_traversal, quote, _deps, has_tasks)
@@ -16,14 +16,6 @@ def contains(a, b):
     False
     """
     return all(a.get(k) == v for k, v in b.items())
-
-
-def inc(x):
-    return x + 1
-
-
-def add(x, y):
-    return x + y
 
 
 def test_istask():
@@ -109,6 +101,25 @@ def test_flatten():
 def test_subs():
     assert subs((sum, [1, 'x']), 'x', 2) == (sum, [1, 2])
     assert subs((sum, [1, ['x']]), 'x', 2) == (sum, [1, [2]])
+
+
+class MutateOnEq(object):
+    hit_eq = 0
+    def __eq__(self, other):
+        self.hit_eq += 1
+        return False
+
+
+def test_subs_no_key_data_eq():
+    # Numpy throws a deprecation warning on bool(array == scalar), which
+    # pollutes the terminal. This test checks that `subs` never tries to
+    # compare keys (scalars) with values (which could be arrays)`subs` never
+    # tries to compare keys (scalars) with values (which could be arrays).
+    a = MutateOnEq()
+    subs(a, 'x', 1)
+    assert a.hit_eq == 0
+    subs((add, a, 'x'), 'x', 1)
+    assert a.hit_eq == 0
 
 
 def test_subs_with_unfriendly_eq():

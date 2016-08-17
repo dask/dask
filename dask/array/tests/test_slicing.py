@@ -290,7 +290,6 @@ def test_take():
     assert dsk == expected
     assert chunks == ((4,), (20, 20))
 
-
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
     expected = dict((('y', i, 0),
             (getitem,

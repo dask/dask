@@ -101,6 +101,7 @@ Index
 **Getting Started**
 
 * :doc:`install`
+* :doc:`use-cases`
 * :doc:`examples-tutorials`
 * :doc:`cheatsheet`
 
@@ -110,6 +111,7 @@ Index
    :caption: Getting Started
 
    install.rst
+   use-cases.rst
    examples-tutorials.rst
    cheatsheet.rst
 

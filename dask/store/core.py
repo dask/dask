@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict, MutableMapping
-from operator import getitem, add
+from operator import getitem
 from datetime import datetime
 from time import time
 
 from ..core import istask, ishashable
+from ..utils_test import add  # noqa: F401
 
 
 class Store(MutableMapping):

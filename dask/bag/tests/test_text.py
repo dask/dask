@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import pytest
-from toolz import concat, valmap, partial
+from toolz import partial
 
 from dask import compute, get
 from dask.utils import filetexts
@@ -23,10 +23,9 @@ files = {'.test.accounts.1.json':  ('{"amount": 100, "name": "Alice"}\n'
 
 expected = ''.join([files[v] for v in sorted(files)])
 
-from dask.bytes.compression import compress, files as cfiles, seekable_files
-fmt_bs = ([(fmt, None) for fmt in cfiles]
-        + [(fmt, 10) for fmt in seekable_files]
-        + [(fmt, None) for fmt in seekable_files])
+fmt_bs = ([(fmt, None) for fmt in compression.files]
+        + [(fmt, 10) for fmt in compression.seekable_files]
+        + [(fmt, None) for fmt in compression.seekable_files])
 encodings = ['ascii', 'utf-8'] # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs
                                   for encoding in encodings]

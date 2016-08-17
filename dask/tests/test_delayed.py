@@ -249,7 +249,7 @@ def test_key_names_include_type_names():
     assert delayed(1).key.startswith('int')
 
 
-def test_value_picklable():
+def test_delayed_picklable():
     x = delayed(1)
     y = pickle.loads(pickle.dumps(x))
     assert x.dask == y.dask

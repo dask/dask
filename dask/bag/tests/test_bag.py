@@ -2,26 +2,25 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-
-from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial, valmap, groupby, pluck)
 import math
-from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, reify, partition, inline_singleton_lists, optimize,
-        system_encoding, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, reduce
-from dask.utils import filetexts, tmpfile, tmpdir, raises, open
-from dask.async import get_sync
+import os
+import sys
+from collections import Iterator
+from distutils.version import LooseVersion
+
+import partd
+from toolz import merge, join, filter, identity, valmap, groupby, pluck
+
 import dask
 import dask.bag as db
-import bz2
-import io
-import shutil
-import os
-import partd
-import sys
+from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
+        reduceby, reify, partition, inline_singleton_lists, optimize,
+        from_delayed)
+from dask.async import get_sync
+from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.utils import filetexts, tmpfile, tmpdir, raises, open
+from dask.utils_test import inc, add
 
-from collections import Iterator
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -31,17 +30,12 @@ L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
 
-def inc(x):
-    return x + 1
-
 def iseven(x):
     return x % 2 == 0
 
+
 def isodd(x):
     return x % 2 == 1
-
-def add(x, y):
-    return x + y
 
 
 def test_Bag():
@@ -243,8 +237,8 @@ def test_reductions():
     assert int(b.sum()) == 30
     assert int(b.max()) == 4
     assert int(b.min()) == 0
-    assert int(b.any()) == True
-    assert int(b.all()) == False  # some zeros exist
+    assert b.any().compute() is True
+    assert b.all().compute() is False
     assert b.all().key == b.all().key
     assert b.all().key != b.any().key
 
@@ -441,6 +435,26 @@ def test_take():
     assert isinstance(b.take(2, compute=False), Bag)
 
 
+def test_take_npartitions():
+    assert list(b.take(6, npartitions=2)) == [0, 1, 2, 3, 4, 0]
+    assert b.take(6, npartitions=-1) == (0, 1, 2, 3, 4, 0)
+    assert b.take(3, npartitions=-1) == (0, 1, 2)
+    with pytest.raises(ValueError):
+        b.take(1, npartitions=5)
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_take_npartitions_warn():
+    with pytest.warns(None):
+        b.take(100)
+
+    with pytest.warns(None):
+        b.take(7)
+
+    with pytest.warns(None):
+        b.take(7, npartitions=2)
+
+
 def test_map_is_lazy():
     from dask.bag.core import map
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
@@ -450,11 +464,13 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
-    castra = pytest.importorskip('castra')
+    pytest.importorskip('castra')
     pd = pytest.importorskip('pandas')
     dd = pytest.importorskip('dask.dataframe')
+    blosc = pytest.importorskip('blosc')
+    if LooseVersion(blosc.__version__) == '1.3.0':
+        pytest.skip()
     df = pd.DataFrame({'x': list(range(100)),
                        'y': [str(i) for i in range(100)]})
     a = dd.from_pandas(df, 10)
@@ -526,7 +542,7 @@ def test_read_text_large_gzip():
         f.close()
 
         with pytest.raises(ValueError):
-            b = db.read_text(fn, blocksize=100, linedelimiter='\n')
+            db.read_text(fn, blocksize=100, linedelimiter='\n')
 
         c = db.read_text(fn)
         assert c.npartitions == 1
@@ -536,7 +552,7 @@ def test_read_text_large_gzip():
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
-    boto = pytest.importorskip('s3fs')
+    pytest.importorskip('s3fs')
 
     five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
                  u'16.99,1.01,Female,No,Sun,Dinner,2\n',
@@ -545,11 +561,11 @@ def test_from_s3():
                  u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test compressed data
-    e = db.read_text('s3://tip-data/t*.gz')
+    e = db.read_text('s3://tip-data/t*.gz', storage_options=dict(anon=True))
     assert e.take(5) == five_tips
 
     # test all keys in bucket
-    c = db.read_text('s3://tip-data/*')
+    c = db.read_text('s3://tip-data/*', storage_options=dict(anon=True))
     assert c.npartitions == 4
 
 
@@ -652,11 +668,8 @@ def test_args():
 
 
 def test_to_dataframe():
-    try:
-        import dask.dataframe
-        import pandas as pd
-    except ImportError:
-        return
+    pytest.importorskip('dask.dataframe')
+    pd = pytest.importorskip('pandas')
     b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
 
     df = b.to_dataframe()
@@ -680,13 +693,25 @@ def test_to_dataframe():
     assert df2._name == b.to_dataframe()._name
     assert df2._name != df._name
 
+    meta = pd.DataFrame({'a': [1], 'b': [2]}).iloc[0:0]
+    df3 = b.to_dataframe(columns=meta)
+    assert df2._name == df3._name
+    assert (df3.compute().values == df2.compute().values).all()
+
+    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    df4 = b.to_dataframe()
+    assert len(df4.columns) == 1
+    assert list(df4.compute()) == list(pd.DataFrame(list(b)))
+
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -716,9 +741,11 @@ def test_to_textfiles_name_function_warn():
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
+        if ext == 'bz2' and PY2:
+            continue
         with tmpdir() as dir:
             c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
-            c.compute(get=dask.get)
+            dask.compute(*c)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
             f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -921,7 +948,6 @@ def test_groupby_tasks():
             if a is not b:
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
-
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, method='tasks')
     assert len(out.dask) < 100**2
@@ -931,7 +957,6 @@ def test_groupby_tasks():
         for b in partitions:
             if a is not b:
                 assert not set(pluck(0, a)) & set(pluck(0, b))
-
 
     b = db.from_sequence(range(10000), npartitions=345)
     out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
@@ -977,3 +1002,56 @@ def test_to_textfiles_empty_partitions():
         b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
         b.to_textfiles(os.path.join(d, '*.txt'))
         assert len(os.listdir(d)) == 5
+
+
+def test_reduction_empty():
+    b = db.from_sequence(range(10), npartitions=100)
+    assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
+    assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
+
+
+class StrictReal(int):
+    def __eq__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real == other.real
+
+    def __ne__(self, other):
+        assert isinstance(other, StrictReal)
+        return self.real != other.real
+
+
+def test_reduction_with_non_comparable_objects():
+    b = db.from_sequence([StrictReal(x) for x in range(10)], partition_size=2)
+    assert b.fold(max, max).compute(get=dask.get) == StrictReal(9)
+
+
+def test_reduction_with_sparse_matrices():
+    sp = pytest.importorskip('scipy.sparse')
+    b = db.from_sequence([sp.csr_matrix([0]) for x in range(4)], partition_size=2)
+
+    def sp_reduce(a, b):
+        return sp.vstack([a, b])
+
+    assert b.fold(sp_reduce, sp_reduce).compute(get=dask.get).shape == (4, 1)
+
+
+def test_empty():
+    list(db.from_sequence([])) == []
+
+
+def test_bag_picklable():
+    from pickle import loads, dumps
+
+    b = db.from_sequence(range(100))
+    b2 = loads(dumps(b))
+    assert b.compute() == b2.compute()
+
+    s = b.sum()
+    s2 = loads(dumps(s))
+    assert s.compute() == s2.compute()
+
+
+def test_msgpack_unicode():
+    b = db.from_sequence([{"a": 1}]).groupby("a")
+    result = b.compute(get=dask.async.get_sync)
+    assert dict(result) == {1: [{'a': 1}]}

@@ -12,8 +12,9 @@ import moto
 from toolz import concat, valmap, partial
 from s3fs import S3FileSystem
 
-from dask import compute, get
+from dask import compute, get, delayed
 from dask.bytes.s3 import _get_s3, read_bytes, open_files, getsize
+from dask.bytes import core
 
 
 compute = partial(compute, get=get)
@@ -33,7 +34,7 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
 @pytest.yield_fixture
 def s3():
     # writable local S3 system
-    with moto.mock_s3() as m:
+    with moto.mock_s3():
         client = boto3.client('s3')
         client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
         for f, data in files.items():
@@ -74,6 +75,17 @@ def test_get_s3():
     with pytest.raises(KeyError):
         _get_s3(secret='key', password='key')
 
+
+def test_write_bytes(s3):
+    paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
+    values = [delayed(v) for v in files.values()]
+    out = core.write_bytes(values, paths, s3=s3)
+    compute(*out)
+    sample, values = read_bytes(test_bucket_name+'/more/test/accounts.*', s3=s3)
+    results = compute(*concat(values))
+    assert set(list(files.values())) == set(results)
+
+
 def test_read_bytes(s3):
     sample, values = read_bytes(test_bucket_name+'/test/accounts.*', s3=s3)
     assert isinstance(sample, bytes)
@@ -99,11 +111,11 @@ def test_read_bytes_blocksize_none(s3):
 
 @pytest.mark.slow
 def test_read_bytes_blocksize_on_large_data():
-    _, L = read_bytes('dask-data/nyc-taxi/2015/yellow_tripdata_2015-01.csv',
-                      blocksize=None)
+    _, L = read_bytes('s3://dask-data/nyc-taxi/2015/yellow_tripdata_2015-01.csv',
+                      blocksize=None, anon=True)
     assert len(L) == 1
 
-    _, L = read_bytes('dask-data/nyc-taxi/2014/*.csv', blocksize=None)
+    _, L = read_bytes('s3://dask-data/nyc-taxi/2014/*.csv', blocksize=None, anon=True)
     assert len(L) == 12
 
 

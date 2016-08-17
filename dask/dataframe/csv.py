@@ -66,7 +66,7 @@ def coerce_dtypes(df, dtypes):
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
             if (np.issubdtype(df.dtypes[c], np.floating) and
-                np.issubdtype(dtypes[c], np.integer)):
+                    np.issubdtype(dtypes[c], np.integer)):
                 if (df[c] % 1).any():
                     raise TypeError("Runtime type mismatch. "
                     "Add {'%s': float} to dtype= keyword in read_csv" % c)
@@ -192,7 +192,7 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
         lineterminator = '\n'
     if chunkbytes is not None:
         warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
-        blocksize=chunkbytes
+        blocksize = chunkbytes
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
                          "dd.read_csv(...).set_index('my-index') instead")

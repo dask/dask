@@ -73,7 +73,7 @@ def test_intersect_2():
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
     a = np.random.uniform(0,1,300)
-    x = da.from_array(a, chunks = ((100,)*3,))
+    x = da.from_array(a, chunks=((100,)*3,))
     new = ((50,)*6,)
     x2 =rechunk(x, chunks=new)
     assert x2.chunks == new
@@ -83,7 +83,7 @@ def test_rechunk_1d():
 def test_rechunk_2d():
     """Try rechunking a random 2d matrix"""
     a = np.random.uniform(0,1,300).reshape((10,30))
-    x = da.from_array(a, chunks = ((1,2,3,4),(5,)*6))
+    x = da.from_array(a, chunks=((1,2,3,4),(5,)*6))
     new = ((5,5), (15,)*2)
     x2 =rechunk(x, chunks=new)
     assert x2.chunks == new
@@ -94,9 +94,9 @@ def test_rechunk_4d():
     """Try rechunking a random 4d matrix"""
     old = ((5,5),)*4
     a = np.random.uniform(0,1,10000).reshape((10,) * 4)
-    x = da.from_array(a, chunks = old)
+    x = da.from_array(a, chunks=old)
     new = ((10,),)* 4
-    x2 =rechunk(x, chunks = new)
+    x2 =rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 

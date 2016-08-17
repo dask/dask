@@ -6,19 +6,21 @@ import sys
 import os
 import dask
 import pytest
+from distutils.version import LooseVersion
 from threading import Lock
-import shutil
 from time import sleep
 import threading
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (from_array, from_bcolz, from_dask_array)
+from dask.dataframe.io import from_array, from_dask_array
+from dask.delayed import Delayed
 
-from dask.utils import filetext, filetexts, tmpfile, tmpdir
+from dask.utils import filetext, filetexts, tmpfile, tmpdir, dependency_depth
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
+from dask import compute
 
 ########
 # CSVS #
@@ -47,7 +49,6 @@ def test_read_csv():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=30, lineterminator=os.linesep)
         assert list(f.columns) == ['name', 'amount']
-        assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
@@ -61,7 +62,6 @@ def test_read_multiple_csv():
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
         df = dd.read_csv('_foo.*.csv', chunkbytes=30)
-        assert df._known_dtype
         assert df.npartitions > 2
 
         assert (len(dd.read_csv('_foo.*.csv').compute()) ==
@@ -90,7 +90,6 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-        assert df._known_dtype
 
 datetime_csv_file = """
 name,amount,when
@@ -104,7 +103,6 @@ Dan,400,2014-01-01
 def test_read_csv_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
-        assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -131,24 +129,23 @@ def test_usecols():
 ####################
 
 
-def test_dummy_from_array():
+def test_meta_from_array():
     x = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res[0].dtype == np.int64
     assert res[1].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index([0, 1]))
 
     x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
-    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    res = dd.io._meta_from_array(x, columns=['a', 'b'])
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.float64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
     np.random.seed(42)
     x = np.random.rand(201, 2)
@@ -156,61 +153,57 @@ def test_dummy_from_array():
     assert len(x.divisions) == 6 # Should be 5 partitions and the end
 
 
-def test_dummy_from_1darray():
+def test_meta_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.Series)
     assert res.dtype == np.float64
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns='x')
+    res = dd.io._meta_from_array(x, columns='x')
     assert isinstance(res, pd.Series)
     assert res.name == 'x'
     assert res.dtype == np.object_
 
     x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns=['x'])
+    res = dd.io._meta_from_array(x, columns=['x'])
     assert isinstance(res, pd.DataFrame)
     assert res['x'].dtype == np.object_
     tm.assert_index_equal(res.columns, pd.Index(['x']))
 
-    msg = r"""Length mismatch: Expected axis has 1 elements, new values have 2 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b'])
 
 
-def test_dummy_from_recarray():
+def test_meta_from_recarray():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
-    res = dd.io._dummy_from_array(x)
+    res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
     assert res['a'].dtype == np.float64
     assert res['b'].dtype == np.int64
     tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
 
-    res = dd.io._dummy_from_array(x, columns=['x', 'y'])
+    res = dd.io._meta_from_array(x, columns=['b', 'a'])
     assert isinstance(res, pd.DataFrame)
-    assert res['x'].dtype == np.float64
-    assert res['y'].dtype == np.int64
-    tm.assert_index_equal(res.columns, pd.Index(['x', 'y']))
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['b', 'a']))
 
-    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
-        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+    with pytest.raises(ValueError):
+        dd.io._meta_from_array(x, columns=['a', 'b', 'c'])
 
 
 def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
@@ -224,7 +217,6 @@ def test_from_array_with_record_dtype():
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._known_dtype
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
@@ -269,7 +261,6 @@ def test_from_bcolz():
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
-    assert d._known_dtype
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
@@ -438,6 +429,16 @@ def test_from_pandas_small():
         assert a.divisions[0] == 0
         assert a.divisions[-1] == 2
 
+    for sort in [True, False]:
+        for i in [0, 2]:
+            df = pd.DataFrame({'x': [0] * i})
+            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
+            eq(df, ddf)
+
+            s = pd.Series([0] * i, name='x')
+            ds = dd.from_pandas(s, npartitions=5, sort=sort)
+            eq(s, ds)
+
 
 @pytest.mark.xfail(reason="")
 def test_from_pandas_npartitions_is_accurate():
@@ -520,11 +521,10 @@ def test_Series_from_dask_array():
 def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
 
-    msg = r"from_array does not input more than 2D array, got array with shape \(3, 3, 3\)"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x)       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute())  # numpy
 
     x = da.ones((10, 3), chunks=(3, 3))
@@ -538,11 +538,10 @@ def test_from_dask_array_compat_numpy_array():
     assert (d2.compute().values == x.compute()).all()
     tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
 
-    msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_dask_array(x, columns=['a'])       # dask
 
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError):
         from_array(x.compute(), columns=['a'])  # numpy
 
     d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask
@@ -602,9 +601,12 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_to_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -630,16 +632,30 @@ def test_to_castra():
     finally:
         c.drop()
 
-    dsk, keys = a.to_castra(compute=False)
-    assert isinstance(dsk, dict)
-    assert isinstance(keys, list)
-    c, last = keys
-    assert last[1] == a.npartitions - 1
+    delayed = a.to_castra(compute=False)
+    assert isinstance(delayed, Delayed)
+    c = delayed.compute()
+    try:
+        tm.assert_frame_equal(c[:], df)
+    finally:
+        c.drop()
+
+    # make sure compute=False preserves the same interface
+    c1 = a.to_castra(compute=True)
+    c2 = a.to_castra(compute=False).compute()
+    try:
+        tm.assert_frame_equal(c1[:], c2[:])
+    finally:
+        c1.drop()
+        c2.drop()
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -659,13 +675,16 @@ def test_from_castra():
         del with_fn, c
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra_with_selection():
     """ Optimizations fuse getitems with load_partitions
 
     We used to use getitem for both column access and selections
     """
-    pytest.importorskip('castra')
+    castra = pytest.importorskip('castra')
+    blosc = pytest.importorskip('blosc')
+    if (LooseVersion(blosc.__version__) == '1.3.0' or
+            LooseVersion(castra.__version__) < '0.1.8'):
+        pytest.skip()
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
@@ -706,7 +725,7 @@ def test_to_hdf():
         tm.assert_frame_equal(df, out[:])
 
 
-def test_to_hdf_multiple_datasets():
+def test_to_hdf_multiple_nodes():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
@@ -716,24 +735,17 @@ def test_to_hdf_multiple_datasets():
                             index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     b = dd.from_pandas(df16, 16)
 
-    # saving to multiple datasets making sure order is kept
-    with tmpfile('h5') as fn:
-        b.to_hdf(fn, '/data*')
-        out = dd.read_hdf(fn, '/data*')
-        eq(df16, out)
-
-    # saving to multiple datasets
+    # saving to multiple nodes
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
         eq(df, out)
 
-    # saving to multiple files
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data')
-        out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+    # saving to multiple nodes making sure order is kept
+    with tmpfile('h5') as fn:
+        b.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df16, out)
 
     # saving to multiple datasets with custom name_function
     with tmpfile('h5') as fn:
@@ -745,6 +757,38 @@ def test_to_hdf_multiple_datasets():
         tm.assert_frame_equal(out, df.iloc[:2])
         out = pd.read_hdf(fn, '/data_aa')
         tm.assert_frame_equal(out, df.iloc[2:])
+
+    # test multiple nodes with hdf object
+    with tmpfile('h5') as fn:
+        with pd.HDFStore(fn) as hdf:
+            b.to_hdf(hdf, '/data*')
+            out = dd.read_hdf(fn, '/data*')
+            eq(df16, out)
+
+
+def test_to_hdf_multiple_files():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    b = dd.from_pandas(df16, 16)
+
+    # saving to multiple files
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # saving to multiple files making sure order is kept
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        b.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df16, out)
 
     # saving to multiple files with custom name_function
     with tmpdir() as dn:
@@ -758,6 +802,171 @@ def test_to_hdf_multiple_datasets():
         out = pd.read_hdf(os.path.join(dn, 'data_aa.h5'), '/data')
         tm.assert_frame_equal(out, df.iloc[2:])
 
+    # test hdf object
+    with tmpfile('h5') as fn:
+        with pd.HDFStore(fn) as hdf:
+            a.to_hdf(hdf, '/data*')
+            out = dd.read_hdf(fn, '/data*')
+            eq(df, out)
+
+
+def test_to_hdf_modes_multiple_nodes():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    # appending a single partition to existing data
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # overwriting a file with a single partition
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='w')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+    # appending two partitions to existing data
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # overwriting a file with two partitions
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='w')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+    # overwriting a single partition, keeping other partitions
+    a = dd.from_pandas(df, 2)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data1')
+        a.to_hdf(fn, '/data2')
+        a.to_hdf(fn, '/data*', mode='a', append=False)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+
+def test_to_hdf_modes_multiple_files():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    # appending a single partition to existing data
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data2'), '/data')
+        a.to_hdf(fn, '/data', mode='a')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df.append(df), out)
+
+    # appending two partitions to existing data
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data2'), '/data')
+        a.to_hdf(fn, '/data', mode='a')
+        out = dd.read_hdf(fn, '/data')
+        eq(df.append(df), out)
+
+    # overwriting a file with two partitions
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data1'), '/data')
+        a.to_hdf(fn, '/data', mode='w')
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # overwriting a single partition, keeping other partitions
+    a = dd.from_pandas(df, 2)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a.to_hdf(os.path.join(dn, 'data1'), '/data')
+        a.to_hdf(fn, '/data', mode='a', append=False)
+        out = dd.read_hdf(fn, '/data')
+        eq(df.append(df), out)
+
+
+def test_to_hdf_link_optimizations():
+    """testing dask link levels is correct by calculating the depth of the dask graph"""
+    pytest.importorskip('tables')
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df16, 16)
+
+    # saving to multiple hdf files, no links are needed
+    # expected layers: from_pandas, to_hdf, list = depth of 3
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        d = a.to_hdf(fn, '/data', compute=False)
+        assert dependency_depth(d.dask) == 3
+
+    # saving to a single hdf file with multiple nodes
+    # all subsequent nodes depend on the first
+    # expected layers: from_pandas, first to_hdf(creates file+node), subsequent to_hdfs, list = 4
+    with tmpfile() as fn:
+        d = a.to_hdf(fn, '/data*', compute=False)
+        assert dependency_depth(d.dask) == 4
+
+    # saving to a single hdf file with a single node
+    # every node depends on the previous node
+    # expected layers: from_pandas, to_hdf times npartitions(15), list = 2 + npartitions = 17
+    with tmpfile() as fn:
+        d = a.to_hdf(fn, '/data', compute=False)
+        assert dependency_depth(d.dask) == 2 + a.npartitions
+
+
+@pytest.mark.slow
+def test_to_hdf_lock_delays():
+    pytest.importorskip('tables')
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df16, 16)
+
+    # adding artifichial delays to make sure last tasks finish first
+    # that's a way to simulate last tasks finishing last
+    def delayed_nop(i):
+        if i[1] < 10:
+            sleep(0.1*(10-i[1]))
+        return i
+
+    # saving to multiple hdf nodes
+    with tmpfile() as fn:
+        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a.to_hdf(fn, '/data*')
+        out = dd.read_hdf(fn, '/data*')
+        eq(df16, out)
+
+    # saving to multiple hdf files
+    # adding artifichial delays to make sure last tasks finish first
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data*')
+        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a.to_hdf(fn, '/data')
+        out = dd.read_hdf(fn, '/data')
+        eq(df16, out)
+
+
+def test_to_hdf_exceptions():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 1)
+
     # triggering too many asterisks error
     with tmpdir() as dn:
         with pytest.raises(ValueError):
@@ -770,20 +979,98 @@ def test_to_hdf_multiple_datasets():
             with pytest.raises(ValueError):
                 a.to_hdf(hdf, '/data_*_*')
 
-    # test hdf object
-    with tmpfile('h5') as fn:
-        with pd.HDFStore(fn) as hdf:
-            a.to_hdf(hdf, '/data*')
-            out = dd.read_hdf(fn, '/data*')
-            eq(df, out)
 
-
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
-def test_to_fmt_warns():
+def test_to_hdf_sync():
     pytest.importorskip('tables')
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
                             index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=get_sync)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=get_sync)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=get_sync)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+
+def test_to_hdf_thread():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=dask.threaded.get)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=dask.threaded.get)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=dask.threaded.get)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+
+def test_to_hdf_process():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    # test single file single node
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
+        out = pd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test multiple files single node
+    with tmpdir() as dn:
+        fn = os.path.join(dn, 'data_*.h5')
+        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
+        out = dd.read_hdf(fn, '/data')
+        eq(df, out)
+
+    # test single file multiple nodes
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*', get=dask.multiprocessing.get)
+        out = dd.read_hdf(fn, '/data*')
+        eq(df, out)
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3,3),
+    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+def test_to_fmt_warns():
+    pytest.importorskip('tables')
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # testing warning when breaking order
@@ -814,7 +1101,6 @@ def test_read_hdf():
         df.to_hdf(fn, '/data', format='table')
         a = dd.read_hdf(fn, '/data', chunksize=2)
         assert a.npartitions == 2
-        assert a._known_dtype
 
         tm.assert_frame_equal(a.compute(), df)
 
@@ -825,6 +1111,55 @@ def test_read_hdf():
         assert (sorted(dd.read_hdf(fn, '/data').dask) ==
                 sorted(dd.read_hdf(fn, '/data').dask))
 
+def test_read_hdf_multiply_open():
+    """Test that we can read from a file that's already opened elsewhere in
+    read-only mode."""
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        with pd.HDFStore(fn, mode='r'):
+            dd.read_hdf(fn, '/data', chunksize=2, mode='r')
+
+
+def test_read_hdf_multiple():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                             'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]},
+                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                                   10., 11., 12., 13., 14., 15., 16.])
+    a = dd.from_pandas(df, 16)
+
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data*')
+        r = dd.read_hdf(fn, '/data*', sorted_index=True)
+        assert a.npartitions == r.npartitions
+        assert a.divisions == r.divisions
+        eq(a, r)
+
+
+def test_read_hdf_start_stop_values():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+
+        with pytest.raises(ValueError) as e:
+            dd.read_hdf(fn, '/data', stop=10)
+        assert 'number of rows' in str(e)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_hdf(fn, '/data', start=10)
+        assert 'is above or equal to' in str(e)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_hdf(fn, '/data', chunksize=-1)
+        assert 'positive integer' in str(e)
+
 
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -832,15 +1167,15 @@ def test_to_csv():
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        with tmpfile('csv') as fn:
-            a.to_csv(fn, index=False)
-            result = dd.read_csv(fn).compute().reset_index(drop=True)
+        with tmpdir() as dn:
+            a.to_csv(dn, index=False)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
-        with tmpfile('csv') as fn:
-            r = a.to_csv(fn, index=False, compute=False)
-            r.compute()
-            result = dd.read_csv(fn).compute().reset_index(drop=True)
+        with tmpdir() as dn:
+            r = a.to_csv(dn, index=False, compute=False)
+            compute(*r)
+            result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             eq(result, df)
 
         with tmpdir() as dn:
@@ -859,8 +1194,10 @@ def test_to_csv_multiple_files_cornercases():
             fn = os.path.join(dn, "data_*_*.csv")
             a.to_csv(fn)
 
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]})
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                             10, 11, 12, 13, 14, 15, 16]})
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.csv')
@@ -871,8 +1208,7 @@ def test_to_csv_multiple_files_cornercases():
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df, 2)
     with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_1.csv')
-        a.to_csv(fn, index=False)
+        a.to_csv(dn, index=False)
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
@@ -881,22 +1217,14 @@ def test_to_csv_multiple_files_cornercases():
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_01.csv')
-        a.to_csv(fn, index=False)
+        a.to_csv(dn, index=False)
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
         eq(result, df16)
 
-    # test handling existing files when mode isn't 'w'
-    a = dd.from_pandas(df, 2)
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.csv')
-        with pytest.raises(ValueError):
-            a.to_csv(fn, mode='a')
 
-
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
+@pytest.mark.xfail(reason="to_csv does not support compression")
 def test_to_csv_gzip():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
@@ -909,19 +1237,28 @@ def test_to_csv_gzip():
             tm.assert_frame_equal(result, df)
 
 
-def test_to_csv_series():
-    s = pd.Series([1, 2, 3], index=[10, 20, 30], name='foo')
-    a = dd.from_pandas(s, 2)
-    with tmpfile('csv') as fn:
-        with tmpfile('csv') as fn2:
-            a.to_csv(fn)
-            s.to_csv(fn2)
-            with open(fn) as f:
-                adata = f.read()
-            with open(fn2) as f:
-                sdata = f.read()
+def test_to_csv_simple():
+    df0 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir = str(dir)
+        df.to_csv(dir)
+        assert os.listdir(dir)
+        result = dd.read_csv(os.path.join(dir, '*')).compute()
+    assert (result.x == df0.x).all()
 
-            assert adata == sdata
+
+def test_to_csv_series():
+    df0 = pd.Series(['a', 'b', 'c', 'd'], index=[1., 2., 3., 4.])
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir = str(dir)
+        df.to_csv(dir)
+        assert os.listdir(dir)
+        result = dd.read_csv(os.path.join(dir, '*'), header=None,
+                             names=['x']).compute()
+    assert (result.x == df0).all()
 
 
 def test_read_csv_with_nrows():
@@ -988,10 +1325,10 @@ def test_to_bag():
                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(a, 2)
 
-    assert ddf.to_bag().compute(get=get_sync) == list(a.itertuples(False))
-    assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
-    assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
-    assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
+    assert ddf.to_bag().compute() == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute() == list(a.itertuples(True))
+    assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
+    assert ddf.x.to_bag().compute() == list(a.x)
 
 
 @pytest.mark.xfail(reason='we might want permissive behavior here')
@@ -1044,7 +1381,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            f = dd.read_csv(fn, chunkbytes=30, index_col='name')
+            dd.read_csv(fn, chunkbytes=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -1194,11 +1531,10 @@ def test_to_hdf_kwargs():
     pytest.importorskip('tables')
     df = pd.DataFrame({'A': ['a', 'aaaa']})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_hdf('tst.h5', 'foo4', format='table', min_itemsize=4)
-
-    df2 = pd.read_hdf('tst.h5', 'foo4')
-
-    tm.assert_frame_equal(df, df2)
+    with tmpfile('h5') as fn:
+        ddf.to_hdf(fn, 'foo4', format='table', min_itemsize=4)
+        df2 = pd.read_hdf(fn, 'foo4')
+        tm.assert_frame_equal(df, df2)
 
 
 def test_read_csv_slash_r():
@@ -1213,15 +1549,3 @@ def test_read_csv_singleton_dtype():
     with filetext(data, mode='wb') as fn:
         eq(pd.read_csv(fn, dtype=float),
            dd.read_csv(fn, dtype=float))
-
-
-def test_from_pandas_small():
-    for sort in [True, False]:
-        for i in [0, 2]:
-            df = pd.DataFrame({'x': [0] * i})
-            ddf = dd.from_pandas(df, npartitions=5, sort=sort)
-            eq(df, ddf)
-
-            s = pd.Series([0] * i, name='x')
-            ds = dd.from_pandas(s, npartitions=5, sort=sort)
-            eq(s, ds)
