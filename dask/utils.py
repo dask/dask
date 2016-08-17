@@ -764,10 +764,3 @@ def memory_repr(num):
         if num < 1024.0:
             return "%3.1f %s" % (num, x)
         num /= 1024.0
-
-
-def put_lines(buf, lines):
-    from .compatibility import unicode
-    if any(not isinstance(x, unicode) for x in lines):
-        lines = [unicode(x) for x in lines]
-    buf.write('\n'.join(lines))
