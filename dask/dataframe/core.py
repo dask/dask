@@ -2209,6 +2209,8 @@ class DataFrame(_Frame):
         Concise summary of a Dask DataFrame.
         """
 
+        from pandas.formats.format import _put_lines as put_lines
+
         if buf is None:
             import sys
             buf = sys.stdout
@@ -2218,7 +2220,7 @@ class DataFrame(_Frame):
         if len(self.columns) == 0:
             lines.append('Index: 0 entries')
             lines.append('Empty %s' % type(self).__name__)
-            pd.formats.format._put_lines(buf, lines)
+            put_lines(buf, lines)
             return
 
         # Group and execute the required computations
@@ -2249,7 +2251,7 @@ class DataFrame(_Frame):
             memory_int = computations['memory_usage'].sum()
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
-        pd.formats.format._put_lines(buf, lines)
+        put_lines(buf, lines)
 
 
 # bind operators
