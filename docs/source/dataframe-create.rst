@@ -24,11 +24,13 @@ that function's options.  Additionally it gains two new functionalities
 .. code-block:: python
 
    >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks 
-   
+
+For a detailed example of the ``dask.dataframe.read_csv`` method, :doc:`visit the CSV examples section</examples/dataframe-csv>`
+
 From HDF5
 ----------
 
-`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,  ``dask.dataframe`` can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets.
+`HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ is a Hierarchical Data Format (HDF) designed to store and organize large amounts of data.  Similar to the `pandas I\/O API <http://pandas.pydata.org/pandas-docs/stable/io.html>`_,  ``dask.dataframe`` can create a DataFrame directly from `HDF5 <https://www.hdfgroup.org/HDF5/doc/H5.intro.html>`_ datasets. For more detailed examples, :doc:`visit the HDF5 examples section</examples/dataframe-hdf5>`.
 
 ``dask.dataframe`` can read a single HDF5 ('myfile.hdf5') file by referencing a group key ('/x'):
 
