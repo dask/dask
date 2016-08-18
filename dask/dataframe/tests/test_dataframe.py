@@ -12,8 +12,8 @@ from dask import delayed
 from dask.utils import raises, ignoring, put_lines
 import dask.dataframe as dd
 
-from dask.dataframe.core import (repartition_divisions, _loc, aca, reduction,
-                                 _concat, _Frame, Scalar)
+from dask.dataframe.core import (repartition_divisions, _loc, aca, _concat,
+                                 _Frame, Scalar)
 from dask.dataframe.utils import eq, make_meta
 
 
@@ -1410,11 +1410,6 @@ def test_deterministic_reduction_names():
     assert a.x.min()._name == a.x.min()._name
     assert a.x.max()._name == a.x.max()._name
     assert a.x.count()._name == a.x.count()._name
-    # Test reduction without token string
-    assert (sorted(reduction(a.x, len, np.sum).dask) !=
-            sorted(reduction(a.x, np.sum, np.sum).dask))
-    assert (sorted(reduction(a.x, len, np.sum).dask) ==
-            sorted(reduction(a.x, len, np.sum).dask))
 
 
 def test_deterministic_apply_concat_apply_names():

@@ -343,7 +343,7 @@ class _Frame(Base):
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self, len, np.sum, token='len', meta=int).compute()
+        return self.reduction(len, np.sum, token='len', meta=int).compute()
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
@@ -420,9 +420,6 @@ class _Frame(Base):
                   token=None, chunk_kwargs=None, aggregate_kwargs=None,
                   **kwargs):
         """Generic row-wise reductions.
-
-        Useful to perform easily parallelizable aggregations based on data from
-        the whole series, like minimum, maximum, mean, etc.
 
         Parameters
         ----------
@@ -1379,8 +1376,8 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
-        return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes',
-                         meta=int)
+        return self.reduction(lambda s: s.nbytes, np.sum, token='nbytes',
+                              meta=int)
 
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
@@ -1758,8 +1755,8 @@ class Index(Series):
                               token=self._token_prefix + 'min')
 
     def count(self):
-        f = lambda x: pd.notnull(x).sum()
-        return reduction(self, f, np.sum, token='index-count', meta=int)
+        return self.reduction(lambda x: pd.notnull(x).sum(),
+                              np.sum, token='index-count', meta=int)
 
 
 class DataFrame(_Frame):
@@ -2461,33 +2458,6 @@ def empty_safe(func, arg):
         return ('empty', func(arg))
     else:
         return func(arg)
-
-
-def reduction(x, chunk, aggregate, token=None, meta=no_default):
-    """ General version of reductions
-
-    >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
-    """
-    token_key = tokenize(x, token or (chunk, aggregate))
-    token = token or 'reduction'
-    a = '{0}--chunk-{1}'.format(token, token_key)
-    dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
-               for i in range(x.npartitions))
-
-    b = '{0}--aggregation-{1}'.format(token, token_key)
-    dsk2 = {(b, 0): (aggregate, (remove_empties,
-                     [(a, i) for i in range(x.npartitions)]))}
-
-    if meta is no_default:
-        try:
-            meta_chunk = _emulate(empty_safe, chunk, x)
-            meta = _emulate(aggregate, remove_empties([meta_chunk]))
-        except Exception:
-            raise ValueError("Metadata inference failed, please provide "
-                             "`meta` keyword")
-    meta = make_meta(meta)
-
-    return Scalar(merge(x.dask, dsk, dsk2), b, meta)
 
 
 def _maybe_from_pandas(dfs):
