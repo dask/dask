@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from importlib import import_module
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
-                            urlsplit)
+                            urlsplit, unicode)
 from .core import get_deps
 
 
