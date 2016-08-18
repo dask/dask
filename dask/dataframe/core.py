@@ -24,7 +24,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds, funcname)
+                     pseudorandom, derived_from, different_seeds, funcname, memory_repr, put_lines)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from .indexing import (_partition_of_index_value, _loc, _try_loc,
@@ -2232,21 +2232,52 @@ class DataFrame(_Frame):
         meta = self._meta.astype(dtype)
         return self.map_partitions(pd.DataFrame.astype, meta=meta, dtype=dtype)
 
-    def info(self):
+    def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame.
         """
-        lines = list()
-        lines.append(str(type(self)))
-        lines.append('Data columns (total %d columns):' % len(self.columns))
-        dtypes = self.dtypes
-        space = max([len(k) for k in self.columns]) + 4
-        template = "%s%s"
-        for i, col in enumerate(self.columns):
-            dtype = dtypes.iloc[i]
-            lines.append(template % (('%s' % col)[:space].ljust(space), dtype))
 
-        print('\n'.join(lines))
+        if buf is None:
+            import sys
+            buf = sys.stdout
+
+        lines = [str(type(self))]
+
+        if len(self.columns) == 0:
+            lines.append('Index: 0 entries')
+            lines.append('Empty %s' % type(self).__name__)
+            put_lines(buf, lines)
+            return
+
+        # Group and execute the required computations
+        computations = {}
+        if verbose:
+            computations.update({'index': self.index, 'count': self.count()})
+        if memory_usage:
+            computations.update({'memory_usage': self.map_partitions(pd.DataFrame.memory_usage, index=True)})
+        computations = dict(zip(computations.keys(), da.compute(*computations.values())))
+
+        column_template = "{0:<%d} {1}" % (self.columns.str.len().max() + 5)
+
+        if verbose:
+            index = computations['index']
+            counts = computations['count']
+            lines.append(index.summary())
+            column_template = column_template.format('{0}', '{1} non-null {2}')
+            column_info = [column_template.format(*x) for x in zip(self.columns, counts, self.dtypes)]
+        else:
+            column_info = [column_template.format(*x) for x in zip(self.columns, self.dtypes)]
+
+        lines.append('Data columns (total {} columns):'.format(len(self.columns)))
+        lines.extend(column_info)
+        dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems())]
+        lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
+
+        if memory_usage:
+            memory_int = computations['memory_usage'].sum()
+            lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
+
+        put_lines(buf, lines)
 
 
 # bind operators

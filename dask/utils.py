@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from importlib import import_module
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
-                            urlsplit)
+                            urlsplit, unicode)
 from .core import get_deps
 
 
@@ -757,3 +757,16 @@ def eq_strict(a, b):
     if type(a) is type(b):
         return a == b
     return False
+
+
+def memory_repr(num):
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+
+def put_lines(buf, lines):
+    if any(not isinstance(x, unicode) for x in lines):
+        lines = [unicode(x) for x in lines]
+    buf.write('\n'.join(lines))

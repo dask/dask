@@ -6,7 +6,7 @@ import pytest
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, different_seeds, file_size,
-                        infer_storage_options, eq_strict)
+                        infer_storage_options, eq_strict, memory_repr)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -175,3 +175,8 @@ def test_infer_storage_options_c():
 def test_eq_strict():
     assert eq_strict('a', 'a')
     assert not eq_strict(b'a', u'a')
+
+
+def test_memory_repr():
+    for power, mem_repr in enumerate(['1.0 bytes', '1.0 KB', '1.0 MB', '1.0 GB']):
+        assert memory_repr(1024 ** power) == mem_repr
