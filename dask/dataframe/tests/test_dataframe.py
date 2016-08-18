@@ -1427,6 +1427,7 @@ def test_deterministic_apply_concat_apply_names():
             sorted(a.x.drop_duplicates().dask))
     assert (sorted(a.groupby('x').y.mean().dask) ==
             sorted(a.groupby('x').y.mean().dask))
+
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
@@ -1434,6 +1435,32 @@ def test_deterministic_apply_concat_apply_names():
             sorted(aca(a.x, f2, f2, a.x._meta).dask))
     assert (sorted(aca(a.x, f, f, a.x._meta).dask) ==
             sorted(aca(a.x, f, f, a.x._meta).dask))
+
+    # Test aca with keywords
+    def chunk(x, c_key=0, both_key=0):
+        return x.sum() + c_key + both_key
+
+    def agg(x, a_key=0, both_key=0):
+        return pd.Series(x).sum() + a_key + both_key
+
+    c_key = 2
+    a_key = 3
+    both_key = 4
+
+    res = aca(a.x, chunk=chunk, aggregate=agg, chunk_kwargs={'c_key': c_key},
+              aggregate_kwargs={'a_key': a_key}, both_key=both_key)
+    assert (sorted(res.dask) ==
+            sorted(aca(a.x, chunk=chunk, aggregate=agg,
+                       chunk_kwargs={'c_key': c_key},
+                       aggregate_kwargs={'a_key': a_key},
+                       both_key=both_key).dask))
+    assert (sorted(res.dask) !=
+            sorted(aca(a.x, chunk=chunk, aggregate=agg,
+                       chunk_kwargs={'c_key': c_key},
+                       aggregate_kwargs={'a_key': a_key},
+                       both_key=0).dask))
+
+    assert eq(res, df.x.sum() + 2*(c_key + both_key) + a_key + both_key)
 
 
 def test_aca_meta_infer():
@@ -1457,6 +1484,38 @@ def test_aca_meta_infer():
               aggregate=lambda x: x.sum())
     assert isinstance(res, Scalar)
     assert res.compute() == df.x.sum()
+
+
+def test_reduction_method():
+    df = pd.DataFrame({'x': range(50), 'y': range(50, 100)})
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    chunk = lambda x, val=0: (x >= val).sum()
+    agg = lambda x: x.sum()
+
+    # Output of chunk is a scalar
+    res = ddf.x.reduction(chunk, aggregate=agg)
+    assert eq(res, df.x.count())
+
+    # Output of chunk is a series
+    res = ddf.reduction(chunk, aggregate=agg)
+    assert res._name == ddf.reduction(chunk, aggregate=agg)._name
+    assert eq(res, df.count())
+
+    # Test with keywords
+    res2 = ddf.reduction(chunk, aggregate=agg, chunk_kwargs={'val': 25})
+    res2._name == ddf.reduction(chunk, aggregate=agg,
+                                chunk_kwargs={'val': 25})._name
+    assert res2._name != res._name
+    assert eq(res2, (df >= 25).sum())
+
+    # Output of chunk is a dataframe
+    def sum_and_count(x):
+        return pd.DataFrame({'sum': x.sum(), 'count': x.count()})
+    res = ddf.reduction(sum_and_count,
+                        aggregate=lambda x: x.groupby(level=0).sum())
+
+    assert eq(res, pd.DataFrame({'sum': df.sum(), 'count': df.count()}))
 
 
 def test_gh_517():
