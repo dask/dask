@@ -35,7 +35,7 @@ def test_workers(e, s, a, b):
 
     assert 0 <= d[a.ip]['cpu'] <= 100
     assert 0 <= d[a.ip]['memory']
-    assert 0 < d[a.ip]['memory-percent'] < 100
+    assert 0 < d[a.ip]['memory_percent'] < 100
     assert set(map(int, d[a.ip]['ports'])) == {a.port, b.port}
     assert d[a.ip]['processing'] == {}
     # assert d[a.ip]['last-seen'] > 0
@@ -45,7 +45,7 @@ def test_workers(e, s, a, b):
 
     assert 0 <= d[a.ip]['cpu'] <= 100
     assert 0 <= d[a.ip]['memory']
-    assert 0 < d[a.ip]['memory-percent'] < 100
+    assert 0 < d[a.ip]['memory_percent'] < 100
     assert set(map(int, d[a.ip]['ports'])) == {a.port, b.port}
     assert d[a.ip]['processing'] == {}
     assert 0 <= d[a.ip]['disk-read']

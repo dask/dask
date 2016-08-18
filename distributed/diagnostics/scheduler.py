@@ -39,7 +39,7 @@ def workers(s):
                    'network-send': 1234,
                    'network-recv': 1234,
                    'memory': 16701911040,
-                   'memory-percent': 85}}
+                   'memory_percent': 85}}
     """
     hosts = {host: ['%s:%s' % (host, port) for port in d['ports']]
                 for host, d in s.host_info.items()}

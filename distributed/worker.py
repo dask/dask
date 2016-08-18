@@ -706,7 +706,7 @@ class Worker(Server):
             mem = psutil.virtual_memory()
             d.update({'cpu': psutil.cpu_percent(),
                       'memory': mem.total,
-                      'memory-percent': mem.percent})
+                      'memory_percent': mem.percent})
 
             net_io = psutil.net_io_counters()
             if self._last_net_io:
