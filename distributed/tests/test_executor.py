@@ -7,11 +7,11 @@ from concurrent.futures import CancelledError
 from datetime import timedelta
 import itertools
 from multiprocessing import Process
+from random import random
 import sys
 from threading import Thread
 from time import sleep, time
 import traceback
-
 
 import mock
 import pytest
@@ -3463,3 +3463,38 @@ def test_reconnect(loop):
 
     e.shutdown()
     sync(loop, w._close)
+
+
+@slow
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="num_fds not supported on windows")
+@pytest.mark.parametrize("worker,count,repeat", [(Worker, 100, 5),
+                                                 (Nanny, 10, 20)])
+def test_open_close_many_workers(loop, worker, count, repeat):
+    psutil = pytest.importorskip('psutil')
+    proc = psutil.Process()
+
+    with cluster(nworkers=0) as (s, []):
+        before = proc.num_fds()
+        @gen.coroutine
+        def start_worker(sleep, duration, repeat=1):
+            for i in range(repeat):
+                yield gen.sleep(sleep)
+                w = worker('127.0.0.1', s['port'], loop=loop)
+                yield w._start()
+                yield gen.sleep(duration)
+                yield w._close()
+
+        for i in range(count):
+            loop.add_callback(start_worker, random() / 5, random() / 5,
+                              repeat=repeat)
+
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            sleep(1)
+            start = time()
+            while e.ncores():
+                sleep(0.2)
+                assert time() < start + 10
+
+    after = proc.num_fds()
+    assert before >= after
