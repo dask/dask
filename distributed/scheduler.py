@@ -1229,12 +1229,22 @@ class Scheduler(Server):
                     logger.exception(e)
 
     @gen.coroutine
-    def broadcast(self, stream=None, msg=None, workers=None):
+    def broadcast(self, stream=None, msg=None, workers=None, hosts=None):
         """ Broadcast message to workers, return all results """
         if workers is None:
-            workers = list(self.ncores)
+            if hosts is None:
+                workers = list(self.ncores)
+            else:
+                workers = []
+        if hosts is not None:
+            for host in hosts:
+                if host in self.host_info:
+                    workers.extend([host + ':' + port
+                            for port in self.host_info[host]['ports']])
+
         results = yield All([send_recv(arg=address, close=True, **msg)
                              for address in workers])
+
         raise Return(dict(zip(workers, results)))
 
     @gen.coroutine
