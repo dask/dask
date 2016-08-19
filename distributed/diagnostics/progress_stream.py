@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def counts(scheduler, allprogress):
-    return merge({'all': valmap(len, allprogress.all)},
+    return merge({'all': valmap(len, allprogress.all),
+                  'nbytes': allprogress.nbytes},
                  {state: valmap(len, allprogress.state[state])
                      for state in ['memory', 'erred', 'released']})
 
@@ -50,6 +51,46 @@ def progress_stream(address, interval):
     raise gen.Return(stream)
 
 
+def nbytes_bar(nbytes):
+    """ Convert nbytes message into rectangle placements
+
+    >>> nbytes_bar({'inc': 1000, 'dec': 3000}) # doctest: +NORMALIZE_WHITESPACE
+    {'names': ['dec', 'inc'],
+     'left': [0, 0.75],
+     'center': [0.375, 0.875],
+     'right': [0.75, 1.0]}
+    """
+    total = sum(nbytes.values())
+    names = sorted(nbytes)
+
+    d = {'name': [],
+         'text': [],
+         'left': [],
+         'right': [],
+         'center': [],
+         'color': [],
+         'percent': [],
+         'MB': []}
+    right = 0
+    for name in names:
+        left = right
+        right = nbytes[name] / total + left
+        center = (right + left) / 2
+        d['MB'].append(nbytes[name] / 1000000)
+        d['percent'].append(round(nbytes[name] / total * 100, 2))
+        d['left'].append(left)
+        d['right'].append(right)
+        d['center'].append(center)
+        d['color'].append(task_stream_palette[incrementing_index(name)])
+        d['name'].append(name)
+        if right - left > 0.1:
+            d['text'].append(name)
+        else:
+            d['text'].append('')
+
+    return d
+
+
 def progress_quads(msg):
     """
 
@@ -74,3 +115,16 @@ def progress_quads(msg):
                    for im, r, a in zip(d['memory'], d['released'], d['all'])]
     d['erred_left'] = [1 - e / a for e, a in zip(d['erred'], d['all'])]
     return d
+
+
+from toolz import memoize
+from bokeh.palettes import Spectral11, Spectral9, viridis
+import random
+task_stream_palette = list(viridis(25))
+random.shuffle(task_stream_palette)
+
+import itertools
+counter = itertools.count()
+@memoize
+def incrementing_index(o):
+    return next(counter)

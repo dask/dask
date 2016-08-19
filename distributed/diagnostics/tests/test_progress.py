@@ -122,12 +122,16 @@ def test_AllProgress(e, s, a, b):
     assert p.state['memory']['inc'] == {x.key, y.key, z.key}
     assert p.state['released'] == {}
     assert p.state['erred'] == {}
+    assert 'inc' in p.nbytes
+    assert isinstance(p.nbytes['inc'], int)
+    assert p.nbytes['inc'] > 0
 
     yield _wait([xx, yy, zz])
     assert p.all['dec'] == {xx.key, yy.key, zz.key}
     assert p.state['memory']['dec'] == {xx.key, yy.key, zz.key}
     assert p.state['released'] == {}
     assert p.state['erred'] == {}
+    assert p.nbytes['inc'] == p.nbytes['dec']
 
     t = e.submit(sum, [x, y, z])
     yield t._result()
@@ -142,6 +146,8 @@ def test_AllProgress(e, s, a, b):
     assert p.state['released']['inc'] == keys
     assert p.all['inc'] == keys
     assert p.all['dec'] == {xx.key, yy.key, zz.key}
+    if 'inc' in p.nbytes:
+        assert p.nbytes['inc'] == 0
 
     xxx = e.submit(div, 1, 0)
     yield _wait([xxx])
@@ -154,7 +160,7 @@ def test_AllProgress(e, s, a, b):
     while tkey in s.task_state:
         yield gen.sleep(0.01)
 
-    for c in [p.all] + list(p.state.values()):
+    for c in [p.all, p.nbytes] + list(p.state.values()):
         assert 'inc' not in c
         assert 'dec' not in c
 

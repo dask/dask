@@ -248,6 +248,7 @@ class AllProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
     def __init__(self, scheduler):
         self.all = defaultdict(set)
+        self.nbytes = defaultdict(lambda: 0)
         self.state = defaultdict(lambda: defaultdict(set))
         self.scheduler = scheduler
 
@@ -255,6 +256,8 @@ class AllProgress(SchedulerPlugin):
             k = key_split(key)
             self.all[k].add(key)
             self.state[state][k].add(key)
+            if key in self.scheduler.nbytes:
+                self.nbytes[k] += self.scheduler.nbytes[key]
 
         scheduler.add_plugin(self)
 
@@ -271,11 +274,17 @@ class AllProgress(SchedulerPlugin):
             self.all[k].remove(key)
             if not self.all[k]:
                 del self.all[k]
+                del self.nbytes[k]
                 for v in self.state.values():
                     try:
                         del v[k]
                     except KeyError:
                         pass
+
+        if start == 'memory':
+            self.nbytes[k] -= self.scheduler.nbytes[key]
+        if finish == 'memory':
+            self.nbytes[k] += self.scheduler.nbytes[key]
 
     def restart(self, scheduler):
         self.all.clear()

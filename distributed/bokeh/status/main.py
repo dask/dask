@@ -8,9 +8,10 @@ from bokeh.io import curdoc
 from bokeh.layouts import column, row
 from toolz import valmap
 
-from distributed.bokeh.status_monitor import progress_plot, task_stream_plot
+from distributed.bokeh.status_monitor import (progress_plot, task_stream_plot,
+        nbytes_plot)
 from distributed.bokeh.worker_monitor import resource_profile_plot
-from distributed.diagnostics.progress_stream import progress_quads
+from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
 from distributed.utils import log_errors
 import distributed.bokeh
 
@@ -66,6 +67,9 @@ def resource_update():
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
 
+nbytes_task_source, nbytes_task_plot = nbytes_plot(sizing_mode=SIZING_MODE,
+        width=WIDTH, height=60)
+
 progress_source, progress_plot = progress_plot(sizing_mode=SIZING_MODE,
         width=WIDTH, height=300)
 def progress_update():
@@ -77,6 +81,11 @@ def progress_update():
             "in-memory: %(in-memory)s, processing: %(processing)s, "
             "ready: %(ready)s, waiting: %(waiting)s, failed: %(failed)s"
             % messages['tasks']['deque'][-1])
+
+        nb = nbytes_bar(msg['nbytes'])
+        nbytes_task_source.data.update(nb)
+        nbytes_task_plot.title.text = \
+                "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
 doc.add_periodic_callback(progress_update, 50)
 
 
@@ -113,6 +122,7 @@ layout = column(
         column(combo_toolbar, sizing_mode=SIZING_MODE),
         sizing_mode=SIZING_MODE
     ),
+    row(nbytes_task_plot, sizing_mode=SIZING_MODE),
     row(task_stream_plot, sizing_mode=SIZING_MODE),
     row(progress_plot, sizing_mode=SIZING_MODE),
     sizing_mode=SIZING_MODE
