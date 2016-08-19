@@ -169,6 +169,7 @@ class Scheduler(Server):
 
     def __init__(self, center=None, loop=None,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
+            synchronize_worker_interval=5000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
             validate=False, **kwargs):
 
@@ -178,6 +179,7 @@ class Scheduler(Server):
         self.validate = validate
         self.status = None
         self.delete_interval = delete_interval
+        self.synchronize_worker_interval = synchronize_worker_interval
 
         # Communication state
         self.loop = loop or IOLoop.current()
@@ -330,6 +332,12 @@ class Scheduler(Server):
                                  io_loop=self.loop)
         self._delete_periodic_callback.start()
 
+        self._synchronize_data_periodic_callback = \
+                PeriodicCallback(callback=self.synchronize_worker_data,
+                                 callback_time=self.synchronize_worker_interval,
+                                 io_loop=self.loop)
+        self._synchronize_data_periodic_callback.start()
+
         if start_queues:
             self.loop.add_callback(self.handle_queues, self.scheduler_queues[0], None)
 
@@ -371,6 +379,8 @@ class Scheduler(Server):
         --------
         Scheduler.cleanup
         """
+        self._delete_periodic_callback.stop()
+        self._synchronize_data_periodic_callback.stop()
         for service in self.services.values():
             service.stop()
         yield self.cleanup()
@@ -1365,6 +1375,29 @@ class Scheduler(Server):
                 for w, v in results.items():
                     if v['status'] == 'OK':
                         self.add_keys(address=w, keys=list(gathers[w]))
+
+    @gen.coroutine
+    def synchronize_worker_data(self, stream=None, worker=None):
+        if worker is None:
+            result = yield {w: self.synchronize_worker_data(worker=w)
+                    for w in self.worker_info}
+            result = {k: v for k, v in result.items() if any(v.values())}
+            if result:
+                logger.info("Excess keys found on workers: %s", result)
+            raise Return(result)
+        else:
+            keys = yield self.rpc(addr=worker).keys()
+            keys = set(keys)
+            extra = keys - self.has_what[worker] - self.deleted_keys[worker]
+            if extra:
+                yield self.rpc(addr=worker).delete_data(keys=list(extra),
+                        report=False)
+
+            missing = self.has_what[worker] - keys
+            if missing:
+                self.stimulus_missing_data(keys=missing)
+
+            raise Return({'extra': list(extra), 'missing': list(missing)})
 
     def add_keys(self, stream=None, address=None, keys=()):
         """

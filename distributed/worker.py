@@ -149,6 +149,7 @@ class Worker(Server):
                     'health': self.host_health,
                     'upload_file': self.upload_file,
                     'start_ipython': self.start_ipython,
+                    'keys': self.keys,
                 }
 
         super(Worker, self).__init__(handlers, io_loop=self.loop, **kwargs)
@@ -733,6 +734,9 @@ class Worker(Server):
         except ImportError:
             pass
         return d
+
+    def keys(self, stream=None):
+        return list(self.data)
 
 
 job_counter = [0]
