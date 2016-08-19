@@ -1026,15 +1026,23 @@ class Array(Base):
 
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if (isinstance(index, (str, unicode)) or
-            (    isinstance(index, list)
-            and all(isinstance(i, (str, unicode)) for i in index))):
-            if self._dtype is not None and isinstance(index, (str, unicode)):
-                dt = self._dtype[index]
-            elif self._dtype is not None and isinstance(index, list):
-                dt = np.dtype([(name, self._dtype[name]) for name in index])
+                (isinstance(index, list) and
+                 all(isinstance(i, (str, unicode)) for i in index))):
+            if self._dtype is not None:
+                if isinstance(index, (str, unicode)):
+                    dt = self._dtype[index]
+                else:
+                    dt = np.dtype([(name, self._dtype[name]) for name in index])
             else:
                 dt = None
-            return elemwise(getitem, self, index, dtype=dt, name=out)
+
+            if dt is not None and dt.shape:
+                new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
+                chunks = self.chunks + tuple((i,) for i in dt.shape)
+                return self.map_blocks(getitem, index, dtype=dt.base, name=out,
+                                       chunks=chunks, new_axis=new_axis)
+            else:
+                return self.map_blocks(getitem, index, dtype=dt, name=out)
 
         # Slicing
         if not isinstance(index, tuple):
