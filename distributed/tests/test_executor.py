@@ -1949,6 +1949,16 @@ def test__cancel(e, s, a, b):
     s.validate_state()
 
 
+@gen_cluster(executor=True)
+def test__cancel_tuple_key(e, s, a, b):
+    x = e.submit(inc, 1, key=('x', 0, 1))
+
+    result = yield x._result()
+    yield e._cancel(x)
+    with pytest.raises(CancelledError):
+        yield x._result()
+
+
 @gen_cluster()
 def test__cancel_multi_client(s, a, b):
     e = Executor((s.ip, s.port), start=False)

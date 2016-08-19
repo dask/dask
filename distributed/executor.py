@@ -436,7 +436,9 @@ class Executor(object):
                 for msg in msgs:
                     logger.debug("Executor receives message %s", msg)
 
-                    if msg['op'] == 'close':
+                    if msg.get('status') == 'scheduler-error':
+                        six.reraise(*clean_exception(**msg))
+                    elif msg['op'] == 'close':
                         breakout = True
                         break
                     elif msg['op'] == 'key-in-memory':
@@ -571,7 +573,9 @@ class Executor(object):
             else:
                 key = funcname(func) + '-' + str(uuid.uuid4())
 
-        if tokey(key) in self.futures:
+        skey = tokey(key)
+
+        if skey in self.futures:
             return Future(key, self)
 
         if allow_other_workers and workers is None:
@@ -580,23 +584,23 @@ class Executor(object):
         if isinstance(workers, str):
             workers = [workers]
         if workers is not None:
-            restrictions = {key: workers}
-            loose_restrictions = [key] if allow_other_workers else []
+            restrictions = {skey: workers}
+            loose_restrictions = [skey] if allow_other_workers else []
         else:
             restrictions = {}
             loose_restrictions = []
 
         if kwargs:
-            dsk = {key: (apply, func, list(args), kwargs)}
+            dsk = {skey: (apply, func, list(args), kwargs)}
         else:
-            dsk = {key: (func,) + tuple(args)}
+            dsk = {skey: (func,) + tuple(args)}
 
-        futures = self._graph_to_futures(dsk, [key], restrictions,
-                loose_restrictions, priority={key: 0})
+        futures = self._graph_to_futures(dsk, [skey], restrictions,
+                loose_restrictions, priority={skey: 0})
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
 
-        return futures[tokey(key)]
+        return futures[skey]
 
     def _threaded_map(self, q_out, func, qs_in, **kwargs):
         """ Internal function for mapping Queue """
@@ -950,7 +954,7 @@ class Executor(object):
                         broadcast=broadcast)
     @gen.coroutine
     def _cancel(self, futures):
-        keys = {f.key for f in futures_of(futures)}
+        keys = {tokey(f.key) for f in futures_of(futures)}
         yield self.scheduler.cancel(keys=list(keys), client=self.id)
         for k in keys:
             with ignoring(KeyError):
