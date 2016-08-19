@@ -13,11 +13,12 @@ from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 
 
-default_pool = ThreadPool()
-
-
 def _thread_get_id():
     return current_thread().ident
+
+
+default_pool = ThreadPool()
+default_thread = _thread_get_id()
 
 
 def get(dsk, result, cache=None, num_workers=None, **kwargs):
@@ -48,6 +49,8 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
 
     if pool is None:
         if num_workers:
+            pool = ThreadPool(num_workers)
+        elif _thread_get_id() != default_thread:
             pool = ThreadPool(num_workers)
         else:
             pool = default_pool
