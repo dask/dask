@@ -1,5 +1,7 @@
 from multiprocessing.pool import ThreadPool
 
+from threading import Thread
+
 from dask.context import set_options
 from dask.threaded import get
 from dask.utils import raises
@@ -25,12 +27,28 @@ def test_get_without_computation():
 def bad(x):
     raise ValueError()
 
+
 def test_exceptions_rise_to_top():
     dsk = {'x': 1, 'y': (bad, 'x')}
     assert raises(ValueError, lambda: get(dsk, 'y'))
+
 
 def test_reuse_pool():
     pool = ThreadPool()
     with set_options(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
+
+
+def test_threaded_within_thread():
+    L = []
+    def f(i):
+        result = get({'x': (lambda: i,)}, 'x')
+        L.append(result)
+
+    t = Thread(target=f, args=(1,))
+    t.daemon = True
+    t.start()
+    t.join()
+
+    assert L == [1]
