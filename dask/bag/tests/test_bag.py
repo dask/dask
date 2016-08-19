@@ -1055,3 +1055,9 @@ def test_msgpack_unicode():
     b = db.from_sequence([{"a": 1}]).groupby("a")
     result = b.compute(get=dask.async.get_sync)
     assert dict(result) == {1: [{'a': 1}]}
+
+
+def test_bag_with_single_callable():
+    f = lambda: None
+    b = db.from_sequence([f])
+    assert list(b.compute(get=dask.get)) == [f]
