@@ -343,7 +343,7 @@ class _Frame(Base):
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self, len, np.sum, token='len', meta=int).compute()
+        return self.reduction(len, np.sum, token='len', meta=int).compute()
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
@@ -414,6 +414,106 @@ class _Frame(Base):
         >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
         """
         return map_partitions(func, self, *args, **kwargs)
+
+    @insert_meta_param_description(pad=12)
+    def reduction(self, chunk, aggregate=None, meta=no_default,
+                  token=None, chunk_kwargs=None, aggregate_kwargs=None,
+                  **kwargs):
+        """Generic row-wise reductions.
+
+        Parameters
+        ----------
+        chunk : callable
+            Function to operate on each partition. Should return a
+            ``pandas.DataFrame``, ``pandas.Series``, or a scalar.
+        aggregate : callable, optional
+            Function to operate on the concatenated result of ``chunk``. If not
+            specified, defaults to ``chunk``.
+
+            The input to ``aggregate`` depends on the output of ``chunk``.
+            If the output of ``chunk`` is a:
+            - scalar: Input is a Series, with one row per partition.
+            - Series: Input is a DataFrame, with one row per partition. Columns
+              are the rows in the output series.
+            - DataFrame: Input is a DataFrame, with one row per partition.
+              Columns are the columns in the output dataframes.
+
+            Should return a ``pandas.DataFrame``, ``pandas.Series``, or a
+            scalar.
+        $META
+        token : str, optional
+            The name to use for the output keys.
+        chunk_kwargs : dict, optional
+            Keyword arguments to pass on to ``chunk`` only.
+        aggregate_kwargs : dict, optional
+            Keyword arguments to pass on to ``aggregate`` only.
+        kwargs :
+            All remaining keywords will be passed to both ``chunk`` and
+            ``aggregate``.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'x': range(50), 'y': range(50, 100)})
+        >>> ddf = dd.from_pandas(df, npartitions=4)
+
+        Count the number of rows in a DataFrame. To do this, count the number
+        of rows in each partition, then sum the results:
+
+        >>> res = ddf.reduction(lambda x: x.count(),
+        ...                     aggregate=lambda x: x.sum())
+        >>> res.compute()
+        x    50
+        y    50
+        dtype: int64
+
+        Count the number of rows in a Series with elements greater than or
+        equal to a value (provided via a keyword).
+
+        >>> def count_greater(x, value=0):
+        ...     return (x >= value).sum()
+        >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
+        ...                       chunk_kwargs={'value': 25})
+        >>> res.compute()
+        25
+
+        Aggregate both the sum and count of a Series at the same time:
+
+        >>> def sum_and_count(x):
+        ...     return pd.Series({'sum': x.sum(), 'count': x.count()})
+        >>> res = ddf.x.reduction(sum_and_count, aggregate=lambda x: x.sum())
+        >>> res.compute()
+        count      50
+        sum      1225
+        dtype: int64
+
+        Doing the same, but for a DataFrame. Here ``chunk`` returns a
+        DataFrame, meaning the input to ``aggregate`` is a DataFrame with an
+        index with non-unique entries for both 'x' and 'y'. We groupby the
+        index, and sum each group to get the final result.
+
+        >>> def sum_and_count(x):
+        ...     return pd.DataFrame({'sum': x.sum(), 'count': x.count()})
+        >>> res = ddf.reduction(sum_and_count,
+        ...                     aggregate=lambda x: x.groupby(level=0).sum())
+        >>> res.compute()
+           count   sum
+        x     50  1225
+        y     50  3725
+        """
+        if aggregate is None:
+            aggregate = chunk
+
+        chunk_kwargs = chunk_kwargs.copy() if chunk_kwargs else {}
+        chunk_kwargs['aca_chunk'] = chunk
+
+        aggregate_kwargs = aggregate_kwargs.copy() if aggregate_kwargs else {}
+        aggregate_kwargs['aca_aggregate'] = aggregate
+
+        return aca(self, chunk=_reduction_chunk, aggregate=_reduction_aggregate,
+                   meta=meta, token=token, chunk_kwargs=chunk_kwargs,
+                   aggregate_kwargs=aggregate_kwargs, **kwargs)
 
     def random_split(self, p, random_state=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
@@ -814,10 +914,6 @@ class _Frame(Base):
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def _aca_agg(self, token, func, aggfunc=None, **kwargs):
-        """ Wrapper for aggregations """
-        raise NotImplementedError
-
     def rolling(self, window, min_periods=None, freq=None, center=False,
                 win_type=None, axis=0):
         """Provides rolling transformations.
@@ -866,40 +962,37 @@ class _Frame(Base):
     def sum(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.sum(axis=axis, skipna=skipna)
+        token = self._token_prefix + 'sum'
         if axis == 1:
-            return map_partitions(_sum, self, meta=meta,
-                                  token=self._token_prefix + 'sum',
-                                  axis=axis, skipna=skipna)
+            return self.map_partitions(_sum, meta=meta, token=token,
+                                       skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='sum', func=_sum,
-                                 skipna=skipna, axis=axis,
-                                 meta=meta)
+            return self.reduction(_sum, meta=meta, token=token,
+                                  skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.max(axis=axis, skipna=skipna)
+        token = self._token_prefix + 'max'
         if axis == 1:
-            return map_partitions(_max, self, meta=meta,
-                                  token=self._token_prefix + 'max',
-                                  skipna=skipna, axis=axis)
+            return self.map_partitions(_max, meta=meta, token=token,
+                                       skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='max', func=_max,
-                                 skipna=skipna, axis=axis,
-                                 meta=meta)
+            return self.reduction(_max, meta=meta, token=token,
+                                  skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def min(self, axis=None, skipna=True):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.min(axis=axis, skipna=skipna)
+        token = self._token_prefix + 'min'
         if axis == 1:
-            return map_partitions(_min, self, meta=meta,
-                                  token=self._token_prefix + 'min',
-                                  skipna=skipna, axis=axis)
+            return self.map_partitions(_min, meta=meta, token=token,
+                                       skipna=skipna, axis=axis)
         else:
-            return self._aca_agg(token='min', func=_min,
-                                 skipna=skipna, axis=axis,
-                                 meta=meta)
+            return self.reduction(_min, meta=meta, token=token,
+                                  skipna=skipna, axis=axis)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True):
@@ -932,16 +1025,15 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
         axis = self._validate_axis(axis)
+        token = self._token_prefix + 'count'
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
-            return map_partitions(_count, self, meta=meta,
-                                  token=self._token_prefix + 'count',
-                                  axis=axis)
+            return self.map_partitions(_count, meta=meta, token=token,
+                                       axis=axis)
         else:
             meta = self._meta_nonempty.count()
-            return self._aca_agg(token='count', func=_count,
-                                 aggfunc=lambda x: x.sum(),
-                                 meta=meta)
+            return self.reduction(_count, meta=meta, token=token,
+                                  aggregate=_sum)
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True):
@@ -1284,8 +1376,8 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
-        return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes',
-                         meta=int)
+        return self.reduction(lambda s: s.nbytes, np.sum, token='nbytes',
+                              meta=int)
 
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
@@ -1350,16 +1442,6 @@ class Series(_Frame):
             raise ValueError('No axis named {0}'.format(axis))
         # convert to numeric axis
         return {None: 0, 'index': 0}.get(axis, axis)
-
-    def _aca_agg(self, token, func, aggfunc=None, meta=no_default, **kwargs):
-        """ Wrapper for aggregations """
-        if aggfunc is None:
-            aggfunc = func
-
-        return aca([self], chunk=func,
-                   aggregate=lambda x, **kwargs: aggfunc(pd.Series(x), **kwargs),
-                   meta=meta, token=self._token_prefix + token,
-                   **kwargs)
 
     @derived_from(pd.Series)
     def groupby(self, index, **kwargs):
@@ -1664,18 +1746,17 @@ class Index(Series):
 
     @derived_from(pd.Index)
     def max(self):
-        # it doesn't support axis and skipna kwds
-        return self._aca_agg(token='max', func=_max,
-                             meta=self._meta_nonempty.max())
+        return self.reduction(_max, meta=self._meta_nonempty.max(),
+                              token=self._token_prefix + 'max')
 
     @derived_from(pd.Index)
     def min(self):
-        return self._aca_agg(token='min', func=_min,
-                             meta=self._meta_nonempty.min())
+        return self.reduction(_min, meta=self._meta_nonempty.min(),
+                              token=self._token_prefix + 'min')
 
     def count(self):
-        f = lambda x: pd.notnull(x).sum()
-        return reduction(self, f, np.sum, token='index-count', meta=int)
+        return self.reduction(lambda x: pd.notnull(x).sum(),
+                              np.sum, token='index-count', meta=int)
 
 
 class DataFrame(_Frame):
@@ -2014,20 +2095,6 @@ class DataFrame(_Frame):
             raise ValueError('No axis named {0}'.format(axis))
         # convert to numeric axis
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
-
-    def _aca_agg(self, token, func, aggfunc=None, meta=no_default, **kwargs):
-        """ Wrapper for aggregations """
-        if aggfunc is None:
-            aggfunc = func
-
-        def aggregate(x, **kwargs):
-            return x.groupby(level=0).apply(aggfunc, **kwargs)
-
-        # groupby.aggregation doesn't support skipna,
-        # using gropuby.apply(aggfunc) is a workaround to handle each group as df
-        return aca([self], chunk=func, aggregate=aggregate,
-                   meta=meta, token=self._token_prefix + token,
-                   **kwargs)
 
     @derived_from(pd.DataFrame)
     def drop(self, labels, axis=0, dtype=None):
@@ -2393,33 +2460,6 @@ def empty_safe(func, arg):
         return func(arg)
 
 
-def reduction(x, chunk, aggregate, token=None, meta=no_default):
-    """ General version of reductions
-
-    >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
-    """
-    token_key = tokenize(x, token or (chunk, aggregate))
-    token = token or 'reduction'
-    a = '{0}--chunk-{1}'.format(token, token_key)
-    dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
-               for i in range(x.npartitions))
-
-    b = '{0}--aggregation-{1}'.format(token, token_key)
-    dsk2 = {(b, 0): (aggregate, (remove_empties,
-                     [(a, i) for i in range(x.npartitions)]))}
-
-    if meta is no_default:
-        try:
-            meta_chunk = _emulate(empty_safe, chunk, x)
-            meta = _emulate(aggregate, remove_empties([meta_chunk]))
-        except Exception:
-            raise ValueError("Metadata inference failed, please provide "
-                             "`meta` keyword")
-    meta = make_meta(meta)
-
-    return Scalar(merge(x.dask, dsk, dsk2), b, meta)
-
-
 def _maybe_from_pandas(dfs):
     from .io import from_pandas
     dfs = [from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame))
@@ -2428,10 +2468,10 @@ def _maybe_from_pandas(dfs):
 
 
 @insert_meta_param_description
-def apply_concat_apply(args, chunk=None, aggregate=None,
-                       meta=no_default, token=None, chunk_kwargs=None,
-                       aggregate_kwargs=None, **kwargs):
-    """ Apply a function to blocks, the concat, then apply again
+def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
+                       token=None, chunk_kwargs=None, aggregate_kwargs=None,
+                       **kwargs):
+    """Apply a function to blocks, then concat, then apply again
 
     Parameters
     ----------
@@ -2476,10 +2516,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     assert all(arg.npartitions == args[0].npartitions
                for arg in args if isinstance(arg, _Frame))
 
-    token_key = tokenize(token or (chunk, aggregate), meta, *args)
-    token = token or 'apply-concat-apply'
+    token_key = tokenize(token or (chunk, aggregate), meta, args,
+                         chunk_kwargs, aggregate_kwargs)
 
-    a = '{0}--first-{1}'.format(token, token_key)
+    a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
         dsk = dict(((a, i), (chunk, key))
                    for i, key in enumerate(args[0]._keys()))
@@ -2490,7 +2530,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
                              chunk_kwargs))
                for i in range(args[0].npartitions))
 
-    b = '{0}--second-{1}'.format(token, token_key)
+    b = '{0}-{1}'.format(token or funcname(aggregate), token_key)
     conc = (_concat, (list, [(a, i) for i in range(args[0].npartitions)]))
     if not aggregate_kwargs:
         dsk2 = {(b, 0): (aggregate, conc)}
@@ -2500,7 +2540,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     if meta is no_default:
         try:
             meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
-            meta = _emulate(apply, aggregate, [meta_chunk], aggregate_kwargs)
+            meta = _emulate(apply, aggregate, [_concat([meta_chunk])],
+                            aggregate_kwargs)
         except Exception:
             raise ValueError("Metadata inference failed, please provide "
                              "`meta` keyword")
@@ -3227,6 +3268,18 @@ def _var(x, **kwargs):
 
 def _std(x, **kwargs):
     return x.std(**kwargs)
+
+
+def _reduction_chunk(x, aca_chunk=None, **kwargs):
+    o = aca_chunk(x, **kwargs)
+    # Return a dataframe so that the concatenated version is also a dataframe
+    return o.to_frame().T if isinstance(o, pd.Series) else o
+
+
+def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
+    if isinstance(x, list):
+        x = pd.Series(x)
+    return aca_aggregate(x, **kwargs)
 
 
 def drop_columns(df, columns, dtype):
