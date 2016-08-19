@@ -179,6 +179,56 @@ def test_groupby_multilevel_agg():
     assert eq(res, sol)
 
 
+def test_groupby_min():
+    df = pd.DataFrame({'a': [1, 2, 3, 1, 2, 3],
+                       'b': [1, 2, 1, 4, 2, 1],
+                       'c': [1, 3, 2, 1, 1, 2],
+                       'd': [1, 2, 1, 1, 2, 2]})
+    ddf = dd.from_pandas(df, 2)
+
+    sol = df.groupby(['a']).min()
+    res = ddf.groupby(['a']).min()
+    assert eq(res, sol)
+
+    sol = df.groupby(['a', 'c']).min()
+    res = ddf.groupby(['a', 'c']).min()
+    assert eq(res, sol)
+
+
+def test_groupby_std():
+    df = pd.DataFrame({'a': [1, 4, 3, 1, 2, 3],
+                       'b': [1, 2, 1, 4, 2, 1],
+                       'c': [1, 3, 2, 1, 1, 2],
+                       'd': [1, 2, 1, 1, 2, 2]})
+    ddf = dd.from_pandas(df, 2)
+
+    sol = df.groupby(['a']).std()
+    res = ddf.groupby(['a']).std()
+    assert eq(res, sol)
+
+    sol = df.groupby(['a', 'c']).std()
+    # we don't support multiindex, so just force it through
+    res = ddf.groupby(['a', 'c']).std().compute()
+    res.index = sol.index
+    assert eq(res, sol)
+
+
+def test_groupby_fillna():
+    df = pd.DataFrame({'a': [1, 2, 3, 1, 2, 3],
+                       'b': [1, np.NaN, 1, np.NaN, 2, 1],
+                       'c': [1, 3, 2, 1, 1, 2],
+                       'd': [1, 2, 1, 1, np.NaN, 2]})
+    ddf = dd.from_pandas(df, 2)
+
+    sol = df.groupby(['a']).fillna(9)
+    res = ddf.groupby(['a']).fillna(9)
+    assert eq(res, sol)
+
+    sol = df.groupby(['a', 'c']).fillna(9)
+    res = ddf.groupby(['a', 'c']).fillna(9)
+    assert eq(res, sol)
+
+
 def test_groupby_get_group():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
                                   index=[0, 1, 3]),

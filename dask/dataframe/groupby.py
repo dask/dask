@@ -75,6 +75,14 @@ def _count(g):
     return g.count()
 
 
+def _fillna(df, value, index, columns, **kwargs):
+    grouped = df.groupby(index)
+
+    if isinstance(df, pd.DataFrame):
+        grouped = grouped[columns]
+    return grouped.fillna(value, **kwargs)
+
+
 def _var_chunk(df, index):
     if isinstance(df, pd.Series):
         df = df.to_frame()
@@ -412,6 +420,18 @@ class DataFrameGroupBy(_GroupBy):
             return self[key]
         except KeyError as e:
             raise AttributeError(e)
+
+    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    def fillna(self, value):
+        meta = self.obj.head(1).groupby(self.index).fillna(value)
+        if isinstance(meta, pd.DataFrame) and self._slice is not None:
+            meta = meta[self._slice]
+        columns = meta.columns if isinstance(meta, pd.DataFrame) else meta.name
+
+        result = map_partitions(_fillna, self.obj, value, self.index, columns,
+                                meta=meta, token='fillna')
+
+        return result
 
 
 class SeriesGroupBy(_GroupBy):
