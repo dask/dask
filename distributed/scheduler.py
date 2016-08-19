@@ -1380,11 +1380,11 @@ class Scheduler(Server):
     def synchronize_worker_data(self, stream=None, worker=None):
         if worker is None:
             result = yield {w: self.synchronize_worker_data(worker=w)
-                    for w in self.worker_info}
+                            for w in self.worker_info}
             result = {k: v for k, v in result.items() if any(v.values())}
             if result:
                 logger.info("Excess keys found on workers: %s", result)
-            raise Return(result)
+            raise Return(result or None)
         else:
             keys = yield self.rpc(addr=worker).keys()
             keys = set(keys)
