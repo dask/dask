@@ -287,18 +287,7 @@ class Item(Base):
     def from_delayed(value):
         """ Create bag item from a dask.delayed value
 
-        Parameters
-        ----------
-        value: a Value
-            A single dask.delayed.Value object, such as come from dask.do
-
-        Returns
-        -------
-        Item
-
-        Examples
-        --------
-        >>> b = db.Item.from_delayed(x)  # doctest: +SKIP
+        See ``dask.bag.from_delayed`` for details
         """
         from dask.delayed import Value
         assert isinstance(value, Value)
@@ -1435,11 +1424,13 @@ def from_imperative(values):
 def from_delayed(values):
     """ Create bag from many dask.delayed objects
 
+    These objects will become the partitions of the resulting Bag.  They should
+    evaluate to a ``list`` or some other concrete sequence.
+
     Parameters
     ----------
-    values: list of Values
-        An iterable of dask.delayed.Value objects, such as come from dask.do
-        These comprise the individual partitions of the resulting bag
+    values: list of delayed values
+        An iterable of dask Delayed objects.  Each evaluating to a list.
 
     Returns
     -------
@@ -1447,7 +1438,13 @@ def from_delayed(values):
 
     Examples
     --------
+    >>> x, y, z = [delayed(load_sequence_from_file)(fn)
+    ...             for fn in filenames] # doctest: +SKIP
     >>> b = from_delayed([x, y, z])  # doctest: +SKIP
+
+    See also
+    --------
+    dask.delayed
     """
     from dask.delayed import Value
     if isinstance(values, Value):
