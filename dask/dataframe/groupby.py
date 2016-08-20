@@ -421,7 +421,6 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e)
 
-    @derived_from(pd.core.groupby.DataFrameGroupBy)
     def fillna(self, value):
         meta = self.obj.head(1).groupby(self.index).fillna(value)
         if isinstance(meta, pd.DataFrame) and self._slice is not None:
