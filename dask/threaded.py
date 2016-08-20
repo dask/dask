@@ -5,8 +5,11 @@ See async.py
 """
 from __future__ import absolute_import, division, print_function
 
+from collections import defaultdict
 from multiprocessing.pool import ThreadPool
+import threading
 from threading import current_thread
+
 from .async import get_async
 from .compatibility import Queue
 from .context import _globals
@@ -19,6 +22,9 @@ def _thread_get_id():
 
 default_pool = ThreadPool()
 default_thread = _thread_get_id()
+main_thread = current_thread()
+
+pools = defaultdict(dict)
 
 
 def get(dsk, result, cache=None, num_workers=None, **kwargs):
@@ -46,18 +52,28 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
     (4, 2)
     """
     pool = _globals['pool']
+    thread = current_thread()
 
     if pool is None:
-        if num_workers:
-            pool = ThreadPool(num_workers)
-        elif _thread_get_id() != default_thread:
-            pool = ThreadPool(num_workers)
-        else:
+        if num_workers is None and thread is main_thread:
             pool = default_pool
+        elif thread in pools and num_workers in pools[thread]:
+            pool = pools[thread][num_workers]
+        else:
+            pool = ThreadPool(num_workers)
+            pools[thread][num_workers] = pool
 
     queue = Queue()
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
                         cache=cache, queue=queue, get_id=_thread_get_id,
                         **kwargs)
+
+    # Cleanup pools associated to dead threads
+    active_threads = set(threading.enumerate())
+    if thread is not main_thread:
+        for t in list(pools):
+            if t not in active_threads:
+                for p in pools.pop(t).values():
+                    p.close()
 
     return results
