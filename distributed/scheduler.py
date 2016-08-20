@@ -559,7 +559,8 @@ class Scheduler(Server):
                 self.loose_restrictions |= set(loose_restrictions)
 
         for key in sorted(touched | keys, key=self.priority.get):
-            recommendations[key] = 'waiting'
+            if self.task_state[key] == 'released':
+                recommendations[key] = 'waiting'
 
         for key in touched | keys:
             for dep in self.dependencies[key]:
@@ -578,6 +579,10 @@ class Scheduler(Server):
                         loose_restrictions=loose_restrictions)
             except Exception as e:
                 logger.exception(e)
+
+        for key in keys:
+            if self.task_state[key] in ('memory', 'erred'):
+                self.report_on_key(key)
 
         self.ensure_occupied()
 
@@ -1447,6 +1452,18 @@ class Scheduler(Server):
             self.report({'op': 'key-in-memory',
                          'key': key,
                          'workers': list(workers)})
+
+    def report_on_key(self, key):
+        if self.task_state[key] == 'memory':
+            self.report({'op': 'key-in-memory',
+                         'key': key})
+        elif self.task_state[key] == 'erred':
+            failing_key = self.exceptions_blame[key]
+            self.report({'op': 'task-erred',
+                         'key': key,
+                         'exception': self.exceptions[failing_key],
+                         'traceback': self.tracebacks.get(failing_key, None)})
+
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):

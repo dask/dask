@@ -3530,3 +3530,49 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
     after = proc.num_fds()
     assert before >= after
+
+
+@gen_cluster(executor=False, timeout=None)
+def test_idempotence(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    # Submit
+    x = e.submit(inc, 1)
+    yield x._result()
+    log = list(s.transition_log)
+
+    len_single_submit = len(log)  # see last assert
+
+    y = f.submit(inc, 1)
+    assert x.key == y.key
+    yield y._result()
+    yield gen.sleep(0.1)
+    log2 = list(s.transition_log)
+    assert log == log2
+
+    # Error
+    a = e.submit(div, 1, 0)
+    yield _wait(a)
+    assert a.status == 'error'
+    log = list(s.transition_log)
+
+    b = f.submit(div, 1, 0)
+    assert a.key == b.key
+    yield _wait(b)
+    yield gen.sleep(0.1)
+    log2 = list(s.transition_log)
+    assert log == log2
+
+    s.transition_log.clear()
+    # Simultaneous Submit
+    c = e.submit(inc, 2)
+    d = e.submit(inc, 2)
+    yield _wait([c, d])
+
+    assert len(s.transition_log) == len_single_submit
+
+    yield e._shutdown()
+    yield f._shutdown()
