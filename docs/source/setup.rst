@@ -77,8 +77,15 @@ IOLoop (defaults to ``IOLoop.current()``)
 .. code-block:: python
 
    from distributed import Scheduler
+   from tornado.ioloop import IOLoop
+   from threading import Thread
+
+   loop = IOLoop.current()
+   t = Thread(target=loop.start, daemon=True)
+   t.start()
+
    s = Scheduler(loop=loop)
-   s.start(port)
+   s.start(8786)
 
 On other nodes start worker processes that point to the IP address and port of
 the scheduler.
@@ -86,23 +93,32 @@ the scheduler.
 .. code-block:: python
 
    from distributed import Worker
-   w = Worker('192.168.0.1', 8786, loop=loop)
+   from tornado.ioloop import IOLoop
+   from threading import Thread
+
+   loop = IOLoop.current()
+   t = Thread(target=loop.start, daemon=True)
+   t.start()
+
+   w = Worker('127.0.0.1', 8786, loop=loop)
    w.start(0)  # choose randomly assigned port
 
 Alternatively, replace ``Worker`` with ``Nanny`` if you want your workers to be
 managed in a separate process by a local nanny process.
 
-If you do not already have a Tornado event loop running you will need to create
-and start one, possibly in a separate thread.
+
+Using LocalCluster
+------------------
+
+You can do the work above easily using :doc:`LocalCluster<local-cluster>`.
 
 .. code-block:: python
 
-   from tornado.ioloop import IOLoop
-   loop = IOLoop()
+   from distributed import LocalCluster
+   c = LocalCluster(nanny=False)
 
-   from threading import Thread
-   t = Thread(target=loop.start)
-   t.start()
+A scheduler will be available under ``c.scheduler`` and a list of workers under
+``c.workers``.  There is an IOLoop running in a background thread.
 
 
 Using Amazon EC2
