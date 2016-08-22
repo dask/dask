@@ -1,4 +1,4 @@
-# Continious Integration
+# Continuous Integration
 
 ## Local test
 
