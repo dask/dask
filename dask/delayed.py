@@ -70,7 +70,7 @@ def to_task_dasks(expr, **kwargs):
     if isinstance(expr, Delayed):
         return expr.key, expr._dasks
     if isinstance(expr, base.Base):
-        name = tokenize(expr, pure=True)
+        name = 'finalize-' + tokenize(expr, pure=True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
         dsk[name] = (expr._finalize, (concrete, keys))
