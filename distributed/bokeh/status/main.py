@@ -21,29 +21,6 @@ WIDTH = 600
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
 
-"""
-worker_source, worker_table = worker_table_plot()
-def worker_update():
-    with log_errors():
-        try:
-            msg = messages['workers']['deque'][-1]
-        except IndexError:
-            return
-        worker_table_update(worker_source, msg)
-doc.add_periodic_callback(worker_update, messages['workers']['interval'])
-
-
-task_source, task_table = task_table_plot()
-def task_update():
-    with log_errors():
-        try:
-            msg = messages['tasks']['deque'][-1]
-        except IndexError:
-            return
-        task_table_update(task_source, msg)
-doc.add_periodic_callback(task_update, messages['tasks']['interval'])
-"""
-
 
 resource_index = [0]
 resource_source, resource_plot, network_plot, combo_toolbar = resource_profile_plot(sizing_mode=SIZING_MODE, width=WIDTH, height=80)
@@ -115,6 +92,7 @@ def task_stream_update():
         task_stream_source.stream(rectangles, 1000)
 
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
+
 
 layout = column(
     row(

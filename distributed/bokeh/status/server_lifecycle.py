@@ -96,7 +96,7 @@ def on_server_loaded(server_context):
                            'index': deque(maxlen=n),
                            'plot-data': {'time': deque(maxlen=n),
                                          'cpu': deque(maxlen=n),
-                                         'memory-percent': deque(maxlen=n),
+                                         'memory_percent': deque(maxlen=n),
                                          'network-send': deque(maxlen=n),
                                          'network-recv': deque(maxlen=n)}}
     server_context.add_periodic_callback(workers, 500)

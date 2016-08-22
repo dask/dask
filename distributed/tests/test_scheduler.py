@@ -808,12 +808,15 @@ def test_ready_add_worker(s, a, b):
 
 
 @gen_cluster()
-def test_ready_add_worker(s, a, b):
+def test_broadcast(s, a, b):
     result = yield s.broadcast(msg={'op': 'ping'})
     assert result == {a.address: b'pong', b.address: b'pong'}
 
     result = yield s.broadcast(msg={'op': 'ping'}, workers=[a.address])
     assert result == {a.address: b'pong'}
+
+    result = yield s.broadcast(msg={'op': 'ping'}, hosts=[a.ip])
+    assert result == {a.address: b'pong', b.address: b'pong'}
 
 
 @gen_test()
@@ -902,7 +905,7 @@ def test_host_health(s, a, b, c):
         assert w.ip in s.host_info
         assert 0 <= s.host_info[w.ip]['cpu'] <= 100
         assert 0 < s.host_info[w.ip]['memory']
-        assert 0 < s.host_info[w.ip]['memory-percent'] < 100
+        assert 0 < s.host_info[w.ip]['memory_percent'] < 100
 
         assert isinstance(s.host_info[w.ip]['last-seen'], (int, float))
         assert -1 < s.worker_info[w.address]['time-delay'] < 1

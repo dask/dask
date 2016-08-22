@@ -16,80 +16,10 @@ from ..diagnostics.progress_stream import (nbytes_bar, task_stream_palette,
 try:
     from bokeh.palettes import Spectral11, Spectral9, viridis
     from bokeh.models import ColumnDataSource, DataRange1d, HoverTool, Range1d
-    from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
-    from bokeh.plotting import vplot, output_notebook, show, figure
+    from bokeh.plotting import figure
     from bokeh.io import curstate, push_notebook
 except ImportError:
     Spectral11 = None
-
-
-def task_table_plot(row_headers=False, width=600, height=400):
-    names = ['waiting', 'ready', 'failed', 'processing', 'in-memory', 'total']
-    source = ColumnDataSource({k: [] for k in names})
-
-    columns = [TableColumn(field=name, title=name) for name in names]
-    table = DataTable(source=source, columns=columns,
-                      row_headers=row_headers, width=width, height=height)
-    return source, table
-
-
-def task_table_update(source, d):
-    d = {k: [v] for k, v in d.items()}
-    source.data = d
-
-
-def worker_table_plot(width=600, height=400, **kwargs):
-    """ Column data source and plot for host table """
-    names = ['workers', 'cpu', 'memory-percent', 'memory', 'cores', 'processes',
-             'processing', 'latency', 'last-seen', 'disk-read', 'disk-write',
-             'network-send', 'network-recv']
-    source = ColumnDataSource({k: [] for k in names})
-
-    columns = {name: TableColumn(field=name, title=name) for name in names}
-
-    slow_names = ['workers', 'cores', 'processes', 'memory',
-                  'latency', 'last-seen']
-    slow = DataTable(source=source, columns=[columns[n] for n in slow_names],
-                     width=width, height=height, **kwargs)
-    slow.columns[3].formatter = NumberFormatter(format='0.0 b')
-    slow.columns[4].formatter = NumberFormatter(format='0.00000')
-    slow.columns[5].formatter = NumberFormatter(format='0.000')
-
-    fast_names = ['workers', 'cpu', 'memory-percent', 'processing',
-            'disk-read', 'disk-write', 'network-send', 'network-recv']
-    fast = DataTable(source=source, columns=[columns[n] for n in fast_names],
-                     width=width, height=height, **kwargs)
-    fast.columns[1].formatter = NumberFormatter(format='0.0 %')
-    fast.columns[2].formatter = NumberFormatter(format='0.0 %')
-    fast.columns[4].formatter = NumberFormatter(format='0 b')
-    fast.columns[5].formatter = NumberFormatter(format='0 b')
-    fast.columns[6].formatter = NumberFormatter(format='0 b')
-    fast.columns[7].formatter = NumberFormatter(format='0 b')
-
-    table = vplot(slow, fast)
-    return source, table
-
-
-def worker_table_update(source, d):
-    """ Update host table source """
-    workers = sorted(d)
-
-    data = {}
-    data['workers'] = workers
-    for name in ['cores', 'cpu', 'memory-percent', 'latency', 'last-seen',
-                 'memory', 'disk-read', 'disk-write', 'network-send',
-                 'network-recv']:
-        try:
-            if name in ('cpu', 'memory-percent'):
-                data[name] = [d[w][name] / 100 for w in workers]
-            else:
-                data[name] = [d[w][name] for w in workers]
-        except KeyError:
-            pass
-
-    data['processing'] = [sorted(d[w]['processing']) for w in workers]
-    data['processes'] = [len(d[w]['ports']) for w in workers]
-    source.data.update(data)
 
 
 def task_stream_plot(sizing_mode='scale_width', **kwargs):

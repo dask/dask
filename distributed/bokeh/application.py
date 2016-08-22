@@ -12,7 +12,7 @@ from ..utils import ignoring
 
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
-         for name in ['status', 'tasks']]
+         for name in ['status', 'tasks', 'workers']]
 
 binname = 'bokeh.exe' if sys.platform.startswith('win') else 'bokeh'
 binname = os.path.join(os.path.dirname(sys.argv[0]), binname)
