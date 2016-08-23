@@ -91,29 +91,58 @@ def nbytes_bar(nbytes):
     return d
 
 
-def progress_quads(msg):
+def progress_quads(msg, nrows=8, ncols=3):
     """
 
-    Consumes messages like the following::
+    >>> msg = {'all': {'inc': 5, 'dec': 1, 'add': 4},
+    ...        'memory': {'inc': 2, 'dec': 0, 'add': 1},
+    ...        'erred': {'inc': 0, 'dec': 1, 'add': 0},
+    ...        'released': {'inc': 1, 'dec': 0, 'add': 1}}
 
-          {'all': {'inc': 5, 'dec': 1},
-           'memory': {'inc': 2, 'dec': 0},
-           'erred': {'inc': 0, 'dec': 1},
-           'released': {'inc': 1, 'dec': 0}}
-
+    >>> progress_quads(msg, nrows=2)  # doctest: +SKIP
+    {'name': ['inc', 'add', 'dec'],
+     'left': [0, 0, 1],
+     'right': [0.9, 0.9, 1.9],
+     'top': [0, -1, 0],
+     'bottom': [-.8, -1.8, -.8],
+     'released': [1, 1, 0],
+     'memory': [2, 1, 0],
+     'erred': [0, 0, 1],
+     'done': ['3 / 5', '2 / 4', '1 / 1'],
+     'released-loc': [.2/.9, .25 / 0.9, 1],
+     'memory-loc': [3 / 5 / .9, .5 / 0.9, 1],
+     'erred-loc': [3 / 5 / .9, .5 / 0.9, 1.9]}
     """
+    width = 0.9
     names = sorted(msg['all'], key=msg['all'].get, reverse=True)
+    names = names[:nrows * ncols]
+    n = len(names)
     d = {k: [v.get(name, 0) for name in names] for k, v in msg.items()}
+
     d['name'] = names
-    d['top'] = [i + 0.7 for i in range(len(names))]
-    d['center'] = [i + 0.5 for i in range(len(names))]
-    d['bottom'] = [i + 0.3 for i in range(len(names))]
-    d['released_right'] = [r / a for r, a in zip(d['released'], d['all'])]
-    d['memory_right'] = [(r + im) / a for r, im, a in
-            zip(d['released'], d['memory'], d['all'])]
-    d['fraction'] = ['%d / %d' % (im + r, a)
-                   for im, r, a in zip(d['memory'], d['released'], d['all'])]
-    d['erred_left'] = [1 - e / a for e, a in zip(d['erred'], d['all'])]
+    d['show-name'] = [name if len(name) <= 15 else name[:12] + '...'
+                      for name in names]
+    d['left'] = [i // nrows for i in range(n)]
+    d['right'] = [i // nrows + width for i in range(n)]
+    d['top'] = [-(i % nrows) for i in range(n)]
+    d['bottom'] = [-(i % nrows) - 0.8 for i in range(n)]
+
+
+    d['released-loc'] = []
+    d['memory-loc'] = []
+    d['erred-loc'] = []
+    d['done'] = []
+    for r, m, e, a, l in zip(d['released'], d['memory'],
+                             d['erred'], d['all'], d['left']):
+        rl = width * r / a + l
+        ml = width * (r + m) / a + l
+        el = width * (r + m + e) / a + l
+        done = '%d / %d' % (r + m + e, a)
+        d['released-loc'].append(rl)
+        d['memory-loc'].append(ml)
+        d['erred-loc'].append(el)
+        d['done'].append(done)
+
     return d
 
 

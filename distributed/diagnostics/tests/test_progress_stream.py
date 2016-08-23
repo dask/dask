@@ -14,21 +14,37 @@ from distributed.worker import dumps_task
 from time import time, sleep
 
 def test_progress_quads():
-    msg = {'all': {'inc': 5, 'dec': 1},
-           'memory': {'inc': 2, 'dec': 0},
-           'erred': {'inc': 0, 'dec': 1},
-           'released': {'inc': 1, 'dec': 0}}
+    msg = {'all': {'inc': 5, 'dec': 1, 'add': 4},
+           'memory': {'inc': 2, 'dec': 0, 'add': 1},
+           'erred': {'inc': 0, 'dec': 1, 'add': 0},
+           'released': {'inc': 1, 'dec': 0, 'add': 1}}
 
-    d = progress_quads(msg)
-    assert d['name'] == ['inc', 'dec']
-    assert d['all'] == [5, 1]
-    assert d['memory'] == [2, 0]
-    assert d['fraction'] == ['3 / 5', '0 / 1']
-    assert d['erred'] == [0, 1]
-    assert d['released'] == [1, 0]
-    assert d['released_right'] == [1/5, 0]
-    assert d['memory_right'] == [3 / 5, 0]
-    assert d['erred_left'] == [1, 0]
+    d = progress_quads(msg, nrows=2)
+    assert d == {'name': ['inc', 'add', 'dec'],
+                 'show-name': ['inc', 'add', 'dec'],
+                 'left': [0, 0, 1],
+                 'right': [0.9, 0.9, 1.9],
+                 'top': [0, -1, 0],
+                 'bottom': [-.8, -1.8, -.8],
+                 'all': [5, 4, 1],
+                 'released': [1, 1, 0],
+                 'memory': [2, 1, 0],
+                 'erred': [0, 0, 1],
+                 'done': ['3 / 5', '2 / 4', '1 / 1'],
+                 'released-loc': [.9 * 1 / 5, .25 * 0.9, 1.0],
+                 'memory-loc': [.9 * 3 / 5, .5 * 0.9, 1.0],
+                 'erred-loc': [.9 * 3 / 5, .5 * 0.9, 1.9]}
+
+
+def test_progress_quads_too_many():
+    keys = ['x-%d' % i for i in range(1000)]
+    msg = {'all': {k: 1 for k in keys},
+           'memory': {k: 0 for k in keys},
+           'erred': {k: 0 for k in keys},
+           'released': {k: 0 for k in keys}}
+
+    d = progress_quads(msg, nrows=6, ncols=3)
+    assert len(d['name']) == 6 * 3
 
 
 @gen_cluster(executor=True, timeout=None)
@@ -52,20 +68,7 @@ def test_progress_stream(e, s, a, b):
     assert set(nbytes) == set(msg['all'])
     assert all(v > 0 for v in nbytes.values())
 
-    d = progress_quads(msg)
-
-    assert d == {'name': ['div', 'inc', 'finalize'],
-                 'all': [10, 5, 1],
-                 'memory': [9, 0, 1],
-                 'memory_right': [0.9, 1, 1],
-                 'fraction': ['9 / 10', '5 / 5', '1 / 1'],
-                 'erred': [1, 0, 0],
-                 'erred_left': [0.9, 1, 1],
-                 'released': [0, 5, 0],
-                 'released_right': [0, 1, 0],
-                 'top': [0.7, 1.7, 2.7],
-                 'center': [0.5, 1.5, 2.5],
-                 'bottom': [0.3, 1.3, 2.3]}
+    assert progress_quads(msg)
 
     stream.close()
 

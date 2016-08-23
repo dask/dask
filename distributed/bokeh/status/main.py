@@ -48,7 +48,7 @@ nbytes_task_source, nbytes_task_plot = nbytes_plot(sizing_mode=SIZING_MODE,
         width=WIDTH, height=60)
 
 progress_source, progress_plot = progress_plot(sizing_mode=SIZING_MODE,
-        width=WIDTH, height=300)
+        width=WIDTH, height=160)
 def progress_update():
     with log_errors():
         msg = messages['progress']
