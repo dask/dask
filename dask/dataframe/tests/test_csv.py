@@ -245,3 +245,9 @@ def test_auto_blocksize_csv(monkeypatch):
         read_csv('2014-01-01.csv')
         assert mock_read_bytes.called
         assert mock_read_bytes.call_args[1]['blocksize'] == expected_block_size
+
+
+def test_head_partial_line_fix():
+    with filetexts({'.overflow.csv': 'a,b\n0,"abcdefghijklmnopqrstuvwxyz"\n1,"abcdefghijklmnopqrstuvwxyz"'}):
+        # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.
+        read_csv('.overflow.csv', sample=52)
