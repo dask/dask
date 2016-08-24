@@ -1417,7 +1417,8 @@ class Scheduler(Server):
 
             missing = self.has_what[worker] - keys
             if missing:
-                self.stimulus_missing_data(keys=missing)
+                logger.info("Expected data missing from worker: %s, %s",
+                            worker, missing)
 
             extra = keys - self.has_what[worker] - self.deleted_keys[worker]
             if extra:

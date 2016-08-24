@@ -3476,6 +3476,23 @@ def test_synchronize_worker_data_callback():
     yield a._close()
     s.stop()
 
+
+@gen_cluster(executor=True)
+def test_synchronize_missing_data_on_one_worker(e, s, a, b):
+    s.synchronize_worker_interval = 10
+    np = pytest.importorskip('numpy')
+    [f] = yield e._scatter([1], broadcast=True)
+    assert a.data and b.data
+
+    del a.data[f.key]
+
+    yield s.synchronize_worker_data()
+
+    assert s.task_state[f.key] == 'memory'
+    assert b.data
+    # assert set(s.has_what[b.address]) == set(a.data)
+
+
 from distributed.utils_test import popen
 def test_reconnect(loop):
     w = Worker('127.0.0.1', 9393, loop=loop)
