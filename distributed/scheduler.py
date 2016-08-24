@@ -298,6 +298,12 @@ class Scheduler(Server):
     # Administration #
     ##################
 
+    def __str__(self):
+        return '<Scheduler: "%s:%d" processes: %d cores: %d>' % (
+                self.ip, self.port, len(self.ncores), sum(self.ncores.values()))
+
+    __repr__ = __str__
+
     def __del__(self):
         self.close_streams()
 
