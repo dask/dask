@@ -3580,3 +3580,11 @@ def test_idempotence(s, a, b):
 
     yield e._shutdown()
     yield f._shutdown()
+
+
+def test_scheduler_info(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            info = e.scheduler_info()
+            assert isinstance(info, dict)
+            assert len(info['workers']) == 2

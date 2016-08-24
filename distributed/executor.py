@@ -1579,6 +1579,24 @@ class Executor(object):
         return sync(self.loop, self.scheduler.nbytes, keys=keys,
                     summary=summary)
 
+    def scheduler_info(self):
+        """ Basic information about the workers in the cluster
+
+        Examples
+        --------
+        >>> e.scheduler_info()  # doctest: +SKIP
+        {'id': '2de2b6da-69ee-11e6-ab6a-e82aea155996',
+         'services': {},
+         'type': 'Scheduler',
+         'workers': {'127.0.0.1:40575': {'active': 0,
+                                         'last-seen': 1472038237.4845693,
+                                         'name': '127.0.0.1:40575',
+                                         'services': {},
+                                         'stored': 0,
+                                         'time-delay': 0.0061032772064208984},
+        """
+        return sync(self.loop, self.scheduler.identity)
+
     def futures_of(self, futures):
         return futures_of(futures, executor=self)
 
