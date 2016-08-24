@@ -265,8 +265,13 @@ class Scheduler(Server):
             else:
                 port = 0
 
-            self.services[k] = v(self, io_loop=self.loop)
-            self.services[k].listen(port)
+            try:
+                service = v(self, io_loop=self.loop)
+                service.listen(port)
+                self.services[k] = service
+            except Exception as e:
+                logger.info("Could not launch service: %s-%d", k, port,
+                            exc_info=True)
 
         self._transitions = {
                  ('released', 'waiting'): self.transition_released_waiting,

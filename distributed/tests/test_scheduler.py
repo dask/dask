@@ -963,3 +963,17 @@ def test_transition_story(e, s, a, b):
     assert all(x.key == line[0] or x.key in line[-1] for line in story)
 
     assert len(s.transition_story(x.key, y.key)) > len(story)
+
+
+@gen_test()
+def test_launch_without_blocked_services():
+    from distributed.http import HTTPScheduler
+    s = Scheduler(services={('http', 3849): HTTPScheduler})
+    s.start(0)
+
+    s2 = Scheduler(services={('http', 3849): HTTPScheduler})
+    s2.start(0)
+
+    assert not s2.services
+
+    yield [s.close(), s2.close()]

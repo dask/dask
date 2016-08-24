@@ -3451,7 +3451,11 @@ def test_reconnect(loop):
     w.start()
     with popen(['dask-scheduler', '--port', '9393', '--no-bokeh']) as s:
         e = Executor('localhost:9393', loop=loop)
-        assert len(e.ncores()) == 1
+        start = time()
+        while  len(e.ncores()) != 1:
+            sleep(0.1)
+            assert time() < start + 3
+
         x = e.submit(inc, 1)
         assert x.result() == 2
 
