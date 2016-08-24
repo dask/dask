@@ -3619,3 +3619,17 @@ def test_scheduler_info(loop):
             info = e.scheduler_info()
             assert isinstance(info, dict)
             assert len(info['workers']) == 2
+
+
+def test_threaded_get_within_distributed(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            import dask.multiprocessing
+            for get in [dask.async.get_sync,
+                        dask.multiprocessing.get,
+                        dask.threaded.get]:
+                def f():
+                    return get({'x': (lambda: 1,)}, 'x')
+
+                future = e.submit(f)
+                assert future.result() == 1
