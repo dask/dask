@@ -13,7 +13,7 @@ from tornado.iostream import StreamClosedError
 from tornado.ioloop import IOLoop
 
 from distributed.compatibility import ConnectionRefusedError
-from distributed.core import read
+from distributed.core import read, connect, write, dumps
 from distributed.diagnostics.progress_stream import progress_stream
 from distributed.bokeh.worker_monitor import resource_append
 import distributed.bokeh
@@ -88,6 +88,23 @@ def progress():
                 messages['progress'] = msg
 
 
+@gen.coroutine
+def processing():
+    with log_errors():
+        from distributed.diagnostics.scheduler import processing
+        stream = yield connect(ip=options['host'], port=options['tcp-port'])
+        yield write(stream, {'op': 'feed',
+                             'function': dumps(processing),
+                             'interval': 0.200})
+        while True:
+            try:
+                msg = yield read(stream)
+            except StreamClosedError:
+                break
+            else:
+                messages['processing'] = msg
+
+
 def on_server_loaded(server_context):
     n = 60
     messages['workers'] = {'interval': 500,
@@ -108,5 +125,9 @@ def on_server_loaded(server_context):
 
     messages['progress'] = {'all': {}, 'memory': {},
                             'erred': {}, 'released': {}}
+
+    messages['processing'] = {'stacks': {}, 'processing': {},
+                              'memory': 0, 'waiting': 0, 'ready': 0}
+    IOLoop.current().add_callback(processing)
 
     IOLoop.current().add_callback(progress)

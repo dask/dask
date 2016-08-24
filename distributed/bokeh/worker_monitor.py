@@ -200,3 +200,74 @@ def worker_table_update(source, d):
     data['processing'] = [sorted(d[w]['processing']) for w in workers]
     data['processes'] = [len(d[w]['ports']) for w in workers]
     source.data.update(data)
+
+
+def processing_plot(**kwargs):
+    data = processing_update({'processing': {}, 'stacks': {}, 'ncores': {},
+        'ready': 0})
+    source = ColumnDataSource(data)
+
+    x_range = Range1d(-1, 1)
+    fig = figure(title='Processing and Pending', tools='resize',
+                 x_range=x_range, **kwargs)
+    fig.quad(source=source, left=0, right='right', color=Spectral9[0],
+             top='top', bottom='bottom')
+    fig.quad(source=source, left='left', right=0, color=Spectral9[1],
+             top='top', bottom='bottom', alpha='alpha')
+
+    fig.xaxis.minor_tick_line_alpha = 0
+    fig.yaxis.visible = False
+    fig.ygrid.visible = False
+
+    hover = HoverTool()
+    fig.add_tools(hover)
+    hover = fig.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Host:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Stacks:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@stacks</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Processing:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@processing</span>
+    </div>
+    """
+    hover.point_policy = 'follow_mouse'
+    return source, fig
+
+
+def processing_update(msg):
+    names = sorted(msg['stacks'])
+    stacks = msg['stacks']
+    stacks = [stacks[name] for name in names]
+    names = sorted(names)
+    processing = msg['processing']
+    processing = [processing[name] for name in names]
+    ncores = msg['ncores']
+    ncores = [ncores[name] for name in names]
+    n = len(names)
+    d = {'name': list(names),
+         'processing': processing,
+         'stacks': list(stacks),
+         'right': list(processing),
+         'left': [-s for s in stacks],
+         'top': list(range(n, 0, -1)),
+         'bottom': list(range(n - 1, -1, -1)),
+         'ncores': ncores}
+
+    d['name'].append('ready')
+    d['processing'].append(0)
+    d['stacks'].append(msg['ready'])
+    d['left'].append(-msg['ready'] / n if n else 0)
+    d['right'].append(0)
+    d['top'].append(n)
+    d['bottom'].append(0)
+    d['ncores'].append(sum(msg['ncores'].values()))
+
+    d['alpha'] = [0.7] * n + [0.2]
+
+    return d

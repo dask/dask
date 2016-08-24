@@ -71,3 +71,46 @@ def test_worker_table(s, a, b):
     worker_table_update(source, data)
 
     assert source.data['host'] == ['127.0.0.1']
+
+
+def test_processing_update():
+    from distributed.diagnostics.scheduler import processing
+    from distributed.bokeh.worker_monitor import processing_update
+
+    class C(object):
+        pass
+
+    s = C()
+    s.stacks = {'alice': ['inc', 'inc', 'add'], 'bob': ['add', 'add']}
+    s.processing = {'alice': {'inc', 'add'}, 'bob': {'inc'}}
+    s.ready = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    s.waiting = {'x': set()}
+    s.who_has = {'z': set()}
+    s.ncores = {'alice': 4, 'bob': 4}
+
+    msg = processing(s)
+
+    assert msg == {'processing': {'alice': 2, 'bob': 1},
+                   'stacks': {'alice': 3, 'bob': 2},
+                   'ready': 7,
+                   'waiting': 1,
+                   'memory': 1,
+                   'ncores': {'alice': 4, 'bob': 4}}
+
+    data = processing_update(msg)
+    expected = {'name': ['alice', 'bob', 'ready'],
+                'processing': [2, 1, 0],
+                'stacks': [3, 2, 7],
+                'left': [-3, -2, -7/2],
+                'right': [2, 1, 0],
+                'top': [2, 1, 2],
+                'bottom': [1, 0, 0],
+                'ncores': [4, 4, 8],
+                'alpha': [0.7, 0.7, 0.2]}
+
+    assert data == expected
+
+
+def test_processing_plot():
+    from distributed.bokeh.worker_monitor import processing_plot
+    source, fig = processing_plot()
