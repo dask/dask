@@ -1408,14 +1408,20 @@ class Scheduler(Server):
         else:
             keys = yield self.rpc(addr=worker).keys()
             keys = set(keys)
-            extra = keys - self.has_what[worker] - self.deleted_keys[worker]
-            if extra:
-                yield self.rpc(addr=worker).delete_data(keys=list(extra),
-                        report=False)
 
             missing = self.has_what[worker] - keys
             if missing:
                 self.stimulus_missing_data(keys=missing)
+
+            extra = keys - self.has_what[worker] - self.deleted_keys[worker]
+            if extra:
+                yield gen.sleep(self.synchronize_worker_interval / 1000)  # delay
+                keys = yield self.rpc(addr=worker).keys()  # check again
+                extra &= set(keys)  # make sure the keys are still on worker
+                extra -= self.has_what[worker]  # and still unknown to scheduler
+                if extra:  # still around?  delete them
+                    yield self.rpc(addr=worker).delete_data(keys=list(extra),
+                            report=False)
 
             raise Return({'extra': list(extra), 'missing': list(missing)})
 

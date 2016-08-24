@@ -3423,12 +3423,41 @@ def test_scatter_raises_if_no_workers(e, s):
         yield e._scatter([1])
 
 
-@gen_cluster(executor=True)
-def test_synchronize_worker_data(e, s, a, b):
+@gen_test()
+def test_synchronize_worker_data():
+    s = Scheduler(synchronize_worker_interval=50)
+    s.start(0)
+    a = Worker(s.ip, s.port, name='alice')
+    yield a._start()
+
     a.data['x'] = 1
     response = yield s.synchronize_worker_data()
+
     assert response == {a.address: {'extra': ['x'], 'missing': []}}
     assert not a.data
+
+    yield a._close()
+    s.stop()
+
+
+@gen_test()
+def test_synchronize_worker_data_race_condition():
+    s = Scheduler(synchronize_worker_interval=50)
+    s.start(0)
+    a = Worker(s.ip, s.port, name='alice')
+    yield a._start()
+
+    a.data['x'] = 1
+    s.loop.add_callback(s.synchronize_worker_data)
+    yield gen.sleep(0.020)
+    s.has_what[a.address].add('x')
+    s.who_has['x'] = {a.address}
+
+    yield gen.sleep(0.100)
+    assert a.data == {'x': 1}
+
+    yield a._close()
+    s.stop()
 
 
 @gen_test()
@@ -3444,6 +3473,8 @@ def test_synchronize_worker_data_callback():
 
     assert not a.data
 
+    yield a._close()
+    s.stop()
 
 from distributed.utils_test import popen
 def test_reconnect(loop):
