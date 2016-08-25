@@ -753,9 +753,6 @@ def blockdims_from_blockshape(shape, chunks):
         raise ValueError("shape can only contain integers.")
     shape = tuple(map(int, shape))
     chunks = tuple(map(int, chunks))
-    if any(map(operator.gt, chunks, shape)):
-        raise ValueError("Chunk dimension is larger than shape dimension. "
-                "Got chunks=%s, shape=%s" % (chunks, shape))
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, chunks))
 
@@ -1491,9 +1488,10 @@ def normalize_chunks(chunks, shape=None):
         chunks = ((),) * len(shape)
 
     if shape and len(chunks) != len(shape):
-        raise ValueError(
-            "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape))
+        if not (len(shape) == 1 and sum(chunks) == shape[0]):
+            raise ValueError(
+                "Chunks and shape must be of the same length/dimension. "
+                "Got chunks=%s, shape=%s" % (chunks, shape))
 
     if shape is not None:
         chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
