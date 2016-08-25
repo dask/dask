@@ -111,7 +111,7 @@ specify ``chunks`` in one of three ways
 Your chunks input will be normalized and stored in the third and most explicit
 form.
 
-A good choice of ``chunks`` follows the following rules:
+For performance, a good choice of ``chunks`` follows the following rules:
 
 1.  A chunk should be small enough to fit comfortably in memory.  We'll
     have many chunks in memory at once.
@@ -124,6 +124,92 @@ A good choice of ``chunks`` follows the following rules:
     chunks.  If you want to add two arrays then its convenient if those arrays
     have matching chunks patterns.
 
+Chunks Examples
+~~~~~~~~~~~~~~~
+
+We'll show of how different inputs for ``chunks=`` cut up the following array::
+
+   1 2 3 4 5 6
+   7 8 9 0 1 2
+   3 4 5 6 7 8
+   9 0 1 2 3 4
+   5 6 7 8 9 0
+   1 2 3 4 5 6
+
+We show how different ``chunks=`` arguments split the array into different blocks
+
+**chunks=3**: Symmetric blocks of size 3::
+
+   1 2 3  4 5 6
+   7 8 9  0 1 2
+   3 4 5  6 7 8
+
+   9 0 1  2 3 4
+   5 6 7  8 9 0
+   1 2 3  4 5 6
+
+**chunks=2**: Symmetric blocks of size 2::
+
+   1 2  3 4  5 6
+   7 8  9 0  1 2
+
+   3 4  5 6  7 8
+   9 0  1 2  3 4
+
+   5 6  7 8  9 0
+   1 2  3 4  5 6
+
+**chunks=(3, 2)**: Asymmetric but repeated blocks of size ``(3, 2)``::
+
+   1 2  3 4  5 6
+   7 8  9 0  1 2
+   3 4  5 6  7 8
+
+   9 0  1 2  3 4
+   5 6  7 8  9 0
+   1 2  3 4  5 6
+
+**chunks=(1, 6)**: Asymmetric but repeated blocks of size ``(1, 6)``::
+
+   1 2 3 4 5 6
+
+   7 8 9 0 1 2
+
+   3 4 5 6 7 8
+
+   9 0 1 2 3 4
+
+   5 6 7 8 9 0
+
+   1 2 3 4 5 6
+
+**chunks=((2, 4), (3, 3))**: Asymmetric and non-repeated blocks::
+
+   1 2 3  4 5 6
+   7 8 9  0 1 2
+
+   3 4 5  6 7 8
+   9 0 1  2 3 4
+   5 6 7  8 9 0
+   1 2 3  4 5 6
+
+**chunks=((2, 2, 1, 1), (3, 2, 1))**: Asymmetric and non-repeated blocks::
+
+   1 2 3  4 5  6
+   7 8 9  0 1  2
+
+   3 4 5  6 7  8
+   9 0 1  2 3  4
+
+   5 6 7  8 9  0
+
+   1 2 3  4 5  6
+
+**Discussion**
+
+The latter examples are rarely provided by users on original data but arise from complex slicing and broadcasting operations.  Generally people use the simplest form until they need more complex forms.  The choice of chunks should align with the computations you want to do.
+
+For example, if you plan to take out thin slices along the first dimension then you might want to make that dimension skinnier than the others.  If you plan to do linear algebra then you might want more symmetric blocks.
 
 Example
 ~~~~~~~
