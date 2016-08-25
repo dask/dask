@@ -169,7 +169,7 @@ def tsqr(data, name=None, compute_svd=False):
 
         u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks,
                   dtype=uu.dtype)
-        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n), dtype=ss.dtype)
+        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n,), dtype=ss.dtype)
         v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n),
                   dtype=vv.dtype)
         return u, s, v

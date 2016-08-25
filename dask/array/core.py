@@ -751,8 +751,8 @@ def blockdims_from_blockshape(shape, chunks):
         raise ValueError("chunks can only contain integers.")
     if not all(map(is_integer, shape)):
         raise ValueError("shape can only contain integers.")
-    shape = map(int, shape)
-    chunks = map(int, chunks)
+    shape = tuple(map(int, shape))
+    chunks = tuple(map(int, chunks))
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, chunks))
 
@@ -1487,6 +1487,12 @@ def normalize_chunks(chunks, shape=None):
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((),) * len(shape)
 
+    if shape and len(chunks) != len(shape):
+        if not (len(shape) == 1 and sum(chunks) == shape[0]):
+            raise ValueError(
+                "Chunks and shape must be of the same length/dimension. "
+                "Got chunks=%s, shape=%s" % (chunks, shape))
+
     if shape is not None:
         chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
 
@@ -1526,6 +1532,9 @@ def from_array(x, chunks, name=None, lock=False):
     if len(chunks) != len(x.shape):
         raise ValueError("Input array has %d dimensions but the supplied "
                 "chunks has only %d dimensions" % (len(x.shape), len(chunks)))
+    if tuple(map(sum, chunks)) != x.shape:
+        raise ValueError("Chunks do not add up to shape. "
+                "Got chunks=%s, shape=%s" % (chunks, x.shape))
     token = tokenize(x, chunks)
     original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
