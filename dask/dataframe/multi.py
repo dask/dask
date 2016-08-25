@@ -402,7 +402,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None, shuffle=None, max_branch=None):
+          npartitions=None, shuffle=None, max_branch=None, indicator=False):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
