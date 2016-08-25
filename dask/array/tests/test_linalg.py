@@ -320,7 +320,7 @@ def test_solve(shape, chunk):
 
     # vector
     b = np.random.random_integers(1, 10, shape)
-    db = da.from_array(b, (chunk, chunk))
+    db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
     assert_eq(res, scipy.linalg.solve(A, b))
@@ -371,7 +371,7 @@ def test_solve_sym_pos(shape, chunk):
 
     # vector
     b = np.random.random_integers(1, 10, shape)
-    db = da.from_array(b, (chunk, chunk))
+    db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
     assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
