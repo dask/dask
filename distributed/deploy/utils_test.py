@@ -35,3 +35,7 @@ class ClusterTest(object):
         with self.Cluster() as c:
             with Executor(c) as e:
                 assert e.ncores()
+
+    def test_no_workers(self):
+        with self.Cluster(0, scheduler_port=0) as c:
+            pass
