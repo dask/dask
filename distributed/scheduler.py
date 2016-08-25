@@ -286,6 +286,7 @@ class Scheduler(Server):
                  ('processing', 'memory'): self.transition_processing_memory,
                  ('processing', 'erred'): self.transition_processing_erred,
                  ('released', 'forgotten'): self.transition_released_forgotten,
+                 ('memory', 'forgotten'): self.transition_memory_forgotten,
                  ('erred', 'forgotten'): self.transition_released_forgotten,
                  ('memory', 'released'): self.transition_memory_released,
                  ('released', 'erred'): self.transition_released_erred
@@ -711,15 +712,20 @@ class Scheduler(Server):
                 elif not self.rprocessing[k]:
                     recommendations[k] = 'released'
 
-            in_flight |= set(self.stacks.pop(address))
+            for k in self.stacks.pop(address):
+                if k in self.tasks:
+                    recommendations[k] = 'waiting'
+
             del self.occupancy[address]
-            in_flight = {k for k in in_flight if k in self.tasks}
-            missing = set()
 
             for key in self.has_what.pop(address):
                 self.who_has[key].remove(address)
                 if not self.who_has[key]:
-                    recommendations[key] = 'released'
+                    if key in self.tasks:
+                        recommendations[key] = 'released'
+                    else:
+                        recommendations[key] = 'forgotten'
+
 
             self.transitions(recommendations)
 
@@ -927,7 +933,7 @@ class Scheduler(Server):
         --------
         Scheduler.worker_stream: The equivalent function for workers
         """
-        with log_errors():
+        with log_errors(pdb=LOG_PDB):
             if isinstance(in_queue, Queue):
                 next_message = in_queue.get
             elif isinstance(in_queue, IOStream):
@@ -1482,7 +1488,10 @@ class Scheduler(Server):
                          'workers': list(workers)})
 
     def report_on_key(self, key):
-        if self.task_state[key] == 'memory':
+        if key not in self.task_state:
+            self.report({'op': 'cancelled-key',
+                         'key': key})
+        elif self.task_state[key] == 'memory':
             self.report({'op': 'key-in-memory',
                          'key': key})
         elif self.task_state[key] == 'erred':
@@ -1587,8 +1596,12 @@ class Scheduler(Server):
                 # assert key not in self.rstacks
                 assert key not in self.who_has
                 assert key not in self.rprocessing
-                assert all(dep in self.dependencies
-                           for dep in self.dependencies[key])
+                # assert all(dep in self.task_state
+                #            for dep in self.dependencies[key])
+
+            if not all(dep in self.task_state for dep in
+                    self.dependencies[key]):
+                return {key: 'forgotten'}
 
             self.waiting[key] = set()
 
@@ -1831,7 +1844,12 @@ class Scheduler(Server):
             self.task_state[key] = 'released'
             self.report({'op': 'lost-data', 'key': key})
 
-            if key in self.who_wants or self.waiting_data.get(key):
+            if key not in self.tasks: # pure data
+                recommendations[key] = 'forgotten'
+            elif not all(dep in self.task_state
+                         for dep in self.dependencies[key]):
+                recommendations[key] = 'forgotten'
+            elif key in self.who_wants or self.waiting_data.get(key):
                 recommendations[key] = 'waiting'
 
             if key in self.waiting_data:
@@ -1905,7 +1923,11 @@ class Scheduler(Server):
                 assert not any(key in self.waiting_data.get(dep, ())
                                for dep in self.dependencies[key])
 
-            if (key not in self.exceptions_blame and
+            if any(dep not in self.task_state for dep in
+                    self.dependencies[key]):
+                recommendations[key] = 'forgotten'
+
+            elif (key not in self.exceptions_blame and
                 (key in self.who_wants or self.waiting_data.get(key))):
                 recommendations[key] = 'waiting'
 
@@ -1933,7 +1955,10 @@ class Scheduler(Server):
 
             recommendations = OrderedDict()
 
-            if self.waiting_data[key] or key in self.who_wants:
+            if any(dep not in self.task_state
+                   for dep in self.dependencies[key]):
+                recommendations[key] = 'forgotten'
+            elif self.waiting_data[key] or key in self.who_wants:
                 recommendations[key] = 'waiting'
             else:
                 for dep in self.dependencies[key]:
@@ -2051,52 +2076,139 @@ class Scheduler(Server):
                 import pdb; pdb.set_trace()
             raise
 
+    def remove_key(self, key):
+        if key in self.tasks:
+            del self.tasks[key]
+        del self.task_state[key]
+        if key in self.dependencies:
+            del self.dependencies[key]
+        del self.dependents[key]
+        if key in self.restrictions:
+            del self.restrictions[key]
+        if key in self.loose_restrictions:
+            self.loose_restrictions.remove(key)
+        if key in self.priority:
+            del self.priority[key]
+        if key in self.exceptions:
+            del self.exceptions[key]
+        if key in self.exceptions_blame:
+            del self.exceptions_blame[key]
+        if key in self.released:
+            self.released.remove(key)
+        if key in self.waiting_data:
+            del self.waiting_data[key]
+        if key in self.suspicious_tasks:
+            del self.suspicious_tasks[key]
+        if key in self.nbytes:
+            del self.nbytes[key]
+
+    def transition_memory_forgotten(self, key):
+        try:
+            if self.validate:
+                assert key in self.dependents
+                assert self.task_state[key] == 'memory'
+                assert key in self.waiting_data
+                assert key in self.who_has
+                assert key not in self.rprocessing
+                assert key not in self.ready
+                assert key not in self.waiting
+
+            recommendations = {}
+
+            for dep in self.waiting_data[key]:
+                recommendations[dep] = 'forgotten'
+
+            for dep in self.dependents[key]:
+                if self.task_state[dep] == 'released':
+                    recommendations[dep] = 'forgotten'
+
+            for dep in self.dependencies.get(key, ()):
+                try:
+                    s = self.dependents[dep]
+                    s.remove(key)
+                    if not s and dep not in self.who_wants:
+                        assert dep is not key
+                        recommendations[dep] = 'forgotten'
+                except KeyError:
+                    pass
+
+            workers = self.who_has.pop(key)
+            for w in workers:
+                if w in self.worker_info:  # in case worker has died
+                    self.has_what[w].remove(key)
+                    self.deleted_keys[w].add(key)
+
+            if self.validate:
+                assert all(key not in self.dependents[dep]
+                            for dep in self.dependencies[key]
+                            if dep in self.task_state)
+                assert all(key not in self.waiting_data.get(dep, ())
+                            for dep in self.dependencies[key]
+                            if dep in self.task_state)
+
+            self.remove_key(key)
+
+            self.report_on_key(key)
+
+            return recommendations
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
+
     def transition_released_forgotten(self, key):
         try:
             if self.validate:
                 assert key in self.dependencies
                 assert self.task_state[key] in ('released', 'erred')
                 # assert not self.waiting_data[key]
-                assert not key in self.who_wants
-                assert not self.dependents[key]
+                if key in self.tasks and self.dependencies[key].issubset(self.task_state):
+                    assert key not in self.who_wants
+                    assert not self.dependents[key]
+                    assert not any(key in self.waiting_data.get(dep, ())
+                                   for dep in self.dependencies[key])
                 assert key not in self.who_has
                 assert key not in self.rprocessing
                 assert key not in self.ready
                 assert key not in self.waiting
-                assert not any(key in self.waiting_data.get(dep, ())
-                               for dep in self.dependencies[key])
 
             recommendations = {}
-            if key in self.tasks:
-                del self.tasks[key]
-            del self.task_state[key]
             for dep in self.dependencies[key]:
-                s = self.dependents[dep]
-                s.remove(key)
-                if not s and dep not in self.who_wants:
-                    assert dep is not key
+                try:
+                    s = self.dependents[dep]
+                    s.remove(key)
+                    if not s and dep not in self.who_wants:
+                        assert dep is not key
+                        recommendations[dep] = 'forgotten'
+                except KeyError:
+                    pass
+
+            for dep in self.dependents[key]:
+                if self.task_state[dep] not in ('memory', 'error'):
                     recommendations[dep] = 'forgotten'
 
-            del self.dependencies[key]
-            del self.dependents[key]
-            if key in self.restrictions:
-                del self.restrictions[key]
-            if key in self.loose_restrictions:
-                self.loose_restrictions.remove(key)
-            if key in self.priority:
-                del self.priority[key]
-            if key in self.exceptions:
-                del self.exceptions[key]
-            if key in self.exceptions_blame:
-                del self.exceptions_blame[key]
-            if key in self.released:
-                self.released.remove(key)
-            if key in self.waiting_data:
-                del self.waiting_data[key]
-            if key in self.suspicious_tasks:
-                del self.suspicious_tasks[key]
-            if key in self.nbytes:
-                del self.nbytes[key]
+            for dep in self.dependents[key]:
+                if self.task_state[dep] == 'released':
+                    recommendations[dep] = 'forgotten'
+
+            for dep in self.dependencies[key]:
+                try:
+                    self.waiting_data[dep].remove(key)
+                except KeyError:
+                    pass
+
+            if self.validate:
+                assert all(key not in self.dependents[dep]
+                            for dep in self.dependencies[key]
+                            if dep in self.task_state)
+                assert all(key not in self.waiting_data.get(dep, ())
+                            for dep in self.dependencies[key]
+                            if dep in self.task_state)
+
+            self.remove_key(key)
+
+            self.report_on_key(key)
 
             return recommendations
         except Exception as e:
@@ -2136,6 +2248,8 @@ class Scheduler(Server):
                 func = self._transitions['released', finish]
                 assert not args and not kwargs
                 a = self.transition(key, 'released')
+                if key in a:
+                    func = self._transitions['released', a[key]]
                 b = func(key)
                 a = a.copy()
                 a.update(b)
@@ -2632,8 +2746,9 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
             if not (in_stacks and waiting):  # known ok state
                 raise ValueError("Key exists in wrong number of places", key, vals)
 
-        if not all(map(check_key, dependencies[key])):  # Recursive case
-            raise ValueError("Failed to check dependencies")
+        for dep in dependencies[key]:
+            if dep in dependents:
+                check_key(dep)  # Recursive case
 
         if who_has.get(key):
             assert not any(key in waiting.get(dep, ())

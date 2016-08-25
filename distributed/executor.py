@@ -1684,7 +1684,11 @@ def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     if timeout is not None:
         raise NotImplementedError("Timeouts not yet supported")
     if return_when == 'ALL_COMPLETED':
-        yield All({f.event.wait() for f in fs})
+        try:
+            yield All({f.event.wait() for f in fs})
+        except KeyError:
+            raise CancelledError([f.key for f in fs
+                                        if f.key not in f.executor.futures])
         done, not_done = set(fs), set()
     else:
         raise NotImplementedError("Only return_when='ALL_COMPLETED' supported")
