@@ -4,6 +4,7 @@ from collections import defaultdict, deque, OrderedDict
 from datetime import datetime, timedelta
 import logging
 import math
+from math import log
 import os
 import pickle
 import random
@@ -137,7 +138,8 @@ class Scheduler(Server):
         Which clients want each key.  The active targets of computation.
     * **nbytes:** ``{key: int}``:
         Number of bytes for a key as reported by workers holding that key.
-
+    * **stealable:** ``[[key]]``
+        A list of stacks of stealable keys, ordered by stealability
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
     * **idle:** ``{worker}``:
@@ -221,6 +223,8 @@ class Scheduler(Server):
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
+        self.stealable = [set() for i in range(12)]
+        self.stealable_unknown_durations = defaultdict(set)
 
         # Worker state
         self.ncores = dict()
@@ -1673,6 +1677,7 @@ class Scheduler(Server):
                 else:
                     self.stacks[new_worker].append(key)
                     self.maybe_idle.add(new_worker)
+                    self.put_key_in_stealable(key)
                     self.task_state[key] = 'stacks'
             else:
                 self.ready.appendleft(key)
@@ -1702,6 +1707,7 @@ class Scheduler(Server):
             self.rprocessing[key].add(worker)
             self.occupancy[worker] += duration
             self.task_state[key] = 'processing'
+            self.remove_key_from_stealable(key)
 
             logger.debug("Send job to worker: %s, %s", worker, key)
 
@@ -1752,6 +1758,11 @@ class Scheduler(Server):
                                   + 0.5 * new_duration)
 
                 self.task_duration[ks] = avg_duration
+                if ks in self.stealable_unknown_durations:
+                    for k in self.stealable_unknown_durations.pop(ks, ()):
+                        if self.task_state[k] == 'stacks':
+                            self.put_key_in_stealable(k)
+
                 info['last-task'] = compute_stop
 
             ############################
@@ -2384,7 +2395,7 @@ class Scheduler(Server):
                         for worker, count in zip(workers2, counts):
                             self.ensure_occupied_queue(worker, count=count)
 
-            if self.idle and self.saturated:
+            if self.idle and any(self.stealable):
                 thieves = self.work_steal()
                 for worker in thieves:
                     self.ensure_occupied_stacks(worker)
@@ -2410,7 +2421,7 @@ class Scheduler(Server):
                 self.occupancy[worker] < latency * self.ncores[worker])):
             key = stack.pop()
 
-            if self.task_state[key] == 'stacks':
+            if self.task_state.get(key) == 'stacks':
                 r = self.transition(key, 'processing',
                                     worker=worker, latency=latency)
 
@@ -2422,6 +2433,19 @@ class Scheduler(Server):
             if worker in self.saturated:
                 self.saturated.remove(worker)
             self._check_idle(worker)
+
+    def put_key_in_stealable(self, key):
+        ratio, loc = self.steal_time_ratio(key)
+        if ratio is not None:
+            self.stealable[loc].add(key)
+
+    def remove_key_from_stealable(self, key):
+        ratio, loc = self.steal_time_ratio(key)
+        if ratio is not None:
+            try:
+                self.stealable[loc].remove(key)
+            except:
+                pass
 
     def ensure_occupied_queue(self, worker, count):
         """
@@ -2443,7 +2467,7 @@ class Scheduler(Server):
 
         self._check_idle(worker)
 
-    def work_steal(self, bandwidth=None):
+    def work_steal(self):
         """ Steal tasks from saturated workers to idle workers
 
         This moves tasks from the bottom of the stacks of over-occupied workers
@@ -2453,87 +2477,75 @@ class Scheduler(Server):
         --------
         Scheduler.ensure_occupied
         """
-        bandwidth = bandwidth if bandwidth is not None else BANDWIDTH
-        if not self.idle or not self.saturated:
-            return
+        with log_errors(pdb=True):
+            thieves = set()
+            for level, stealable in enumerate(self.stealable[:-1]):
+                if not stealable:
+                    continue
+                if len(self.idle) == len(self.ncores):  # no stacks
+                    stealable.clear()
+                    continue
+                # Enough idleness to continue?
+                ratio = 2 ** (level - 3)
+                n_saturated = len(self.ncores) - len(self.idle)
+                duration_if_hold = len(stealable) / n_saturated
+                duration_if_steal = ratio
+                if level > 1 and duration_if_hold < duration_if_steal:
+                    break
+                while stealable and self.idle:
+                    for w in list(self.idle):
+                        try:
+                            key = stealable.pop()
+                        except:
+                            break
+                        else:
+                            if self.task_state.get(key, 'stacks'):
+                                self.stacks[w].append(key)
+                                thieves.add(w)
+                                if (self.ncores[w] <=
+                                    len(self.processing[w]) + len(self.stacks[w])):
+                                    self.idle.remove(w)
 
-        thieves = set()  # Output list
+                if stealable:
+                    break
+            logger.debug('Stolen tasks for %d workers', len(thieves))
+            return thieves
 
-        idle = iter(self.idle)  # we will walk down these two sequences
-        remove_idle = set()
-        saturated = iter(self.saturated)
-        remove_saturated = set()
+    def steal_time_ratio(self, key, bandwidth=BANDWIDTH):
+        """ The compute to communication time ratio of a key
 
-        thief = next(idle)
-        victim = next(saturated)
-        try:
-            while True:
-                if victim == thief:
-                    raise ValueError()
-                thieves.add(thief)  # add to output
-                n = (self.ncores[thief]  # number of tasks to consume
-                  - len(self.processing[thief])
-                  - len(self.stacks[thief]))
-                stack = self.stacks[victim]
-                while n > 0 and stack:
-                    key = stack.popleft()
-                    if key not in self.tasks:
-                        continue
-                    if self.should_steal(key):
-                        self.stacks[thief].append(key)
-                        n -= 1
-                    else:
-                        stack.appendleft(key)  # replace task in victim's stack
-                        remove_saturated.add(victim)
-                        victim = next(saturated)
-                        break
+        Returns
+        -------
 
-                if not stack:
-                    remove_saturated.add(victim)
-                    victim = next(saturated)
-
-                if n <= 0:
-                    remove_idle.add(thief)
-                    thief = next(idle)
-        except StopIteration:
-            pass
-        for worker in remove_saturated:
-            self.saturated.remove(worker)
-        for worker in remove_idle:
-            self.idle.remove(worker)
-        logger.debug('Stolen tasks for %d workers', len(thieves))
-        return thieves
-
-    def should_steal(self, key, bandwidth=None):
-        """ Is a key good for stealing from its chosen worker?
-
-        It must have the following attributes
-
-        1.  Not have too many dependencies
-        2.  Not be restricted to run on that worker
-        3   Take less time to transfer than to compute
-
-        See also
-        --------
-        Scheduler.work_steal
+        ratio: The compute/communication time ratio of the task
+        loc: The self.stealable bin into which this key should go
         """
-        bandwidth = bandwidth if bandwidth is not None else BANDWIDTH
-        if len(self.dependencies[key]) > 10:
-            return False
         if key in self.restrictions and key not in self.loose_restrictions:
-            return False
+            return None, None  # don't steal
 
         nbytes = sum(self.nbytes.get(k, 1000) for k in self.dependencies[key])
         transfer_time = nbytes / bandwidth
         try:
             compute_time = self.task_duration[key_split(key)]
-            return transfer_time < compute_time
         except KeyError:
-            return False
+            self.stealable_unknown_durations[key_split(key)].add(key)
+            return None, None
+        else:
+            if transfer_time:
+                ratio = compute_time / transfer_time
+            else:
+                ratio = 10000
+            if ratio > 8:
+                loc = 0
+            elif ratio < 2**-8:
+                loc = -1
+            else:
+                loc = int(-round(log(ratio) / log(2), 0) + 3)
+            return ratio, loc
 
     def issaturated(self, worker, latency=5e-3):
         """
-        Determin if a worker has enough work to avoid being idle
+        Determine if a worker has enough work to avoid being idle
 
         A worker is saturated if the following criteria are met
 
