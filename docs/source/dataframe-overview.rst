@@ -119,6 +119,9 @@ or distributed scheduler.
 
 See :doc:`scheduler docs<scheduler-overview>` for more information.
 
+Exporting to Disk
+---------
+``dask.dataframe`` supports a variety of output methods to write your data to disk include ``to_csv()`` ``to_castra`` ``to_hdf()``. Please consult the API for a complete list. To maximise the opportunity for parallel execution users should provide a glob based file name e.g ``DataExport-*.csv`` to generate a sequential list of files instead of a single monolith file. Single file names are prone to performance and usability issues including write permission based errors.
 
 Limitations
 -----------
