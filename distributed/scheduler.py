@@ -1051,47 +1051,51 @@ class Scheduler(Server):
         logger.info("Starting worker compute stream, %s", worker)
 
         try:
-            with log_errors(pdb=LOG_PDB):
-                while True:
-                    msgs = yield read(stream)
-                    if not isinstance(msgs, list):
-                        msgs = [msgs]
+            while True:
+                msgs = yield read(stream)
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
 
-                    if worker in self.worker_info:
-                        recommendations = OrderedDict()
-                        for msg in msgs:
-                            logger.debug("Compute response from worker %s, %s",
-                                         worker, msg)
+                if worker in self.worker_info:
+                    recommendations = OrderedDict()
+                    for msg in msgs:
+                        logger.debug("Compute response from worker %s, %s",
+                                     worker, msg)
 
-                            if msg == 'OK':  # from close
-                                break
+                        if msg == 'OK':  # from close
+                            break
 
-                            self.correct_time_delay(worker, msg)
+                        self.correct_time_delay(worker, msg)
 
-                            key = msg['key']
-                            if msg['status'] == 'OK':
-                                r = self.stimulus_task_finished(worker=worker, **msg)
-                                recommendations.update(r)
-                            elif msg['status'] == 'error':
-                                r = self.stimulus_task_erred(worker=worker, **msg)
-                                recommendations.update(r)
-                            elif msg['status'] == 'missing-data':
-                                r = self.stimulus_missing_data(worker=worker,
-                                        ensure=False, **msg)
-                                recommendations.update(r)
-                            else:
-                                logger.warn("Unknown message type, %s, %s",
-                                        msg['status'], msg)
+                        key = msg['key']
+                        if msg['status'] == 'OK':
+                            r = self.stimulus_task_finished(worker=worker, **msg)
+                            recommendations.update(r)
+                        elif msg['status'] == 'error':
+                            r = self.stimulus_task_erred(worker=worker, **msg)
+                            recommendations.update(r)
+                        elif msg['status'] == 'missing-data':
+                            r = self.stimulus_missing_data(worker=worker,
+                                    ensure=False, **msg)
+                            recommendations.update(r)
+                        else:
+                            logger.warn("Unknown message type, %s, %s",
+                                    msg['status'], msg)
 
-                        self.transitions(recommendations)
+                    self.transitions(recommendations)
 
-                        if self.validate:
-                            logger.info("Messages: %s\nRecommendations: %s",
-                                        msgs, recommendations)
-                    self.ensure_occupied()
+                    if self.validate:
+                        logger.info("Messages: %s\nRecommendations: %s",
+                                    msgs, recommendations)
+                self.ensure_occupied()
 
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", worker)
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
         finally:
             if not stream.closed():
                 stream.close()
