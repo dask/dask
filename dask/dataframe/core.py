@@ -890,6 +890,11 @@ class _Frame(Base):
     def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+        """ Export dataframe to csv file
+
+        Recommend to use glob based filename e.g. '/foo/output_*.csv' to create multiple files 
+        as parallel execution makes writing to a single csv file problematic.  
+        """
 
     def to_imperative(self):
         warnings.warn("Deprecation warning: moved to to_delayed")
