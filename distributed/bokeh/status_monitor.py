@@ -52,12 +52,9 @@ def task_stream_plot(sizing_mode='scale_width', **kwargs):
     hover = fig.select(HoverTool)
     hover.tooltips = """
     <div>
-        <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-    </div>
-    <div>
-        <span style="font-size: 14px; font-weight: bold;">Duration:</span>&nbsp;
+        <span style="font-size: 12px; font-weight: bold;">@name:</span>&nbsp;
         <span style="font-size: 10px; font-family: Monaco, monospace;">@duration</span>
+        <span style="font-size: 10px;">ms</span>&nbsp;
     </div>
     """
     hover.point_policy = 'follow_mouse'

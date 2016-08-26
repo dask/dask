@@ -7,7 +7,7 @@ from concurrent.futures import CancelledError
 from datetime import timedelta
 import itertools
 from multiprocessing import Process
-from random import random
+from random import random, choice
 import sys
 from threading import Thread
 from time import sleep, time
@@ -16,7 +16,7 @@ import traceback
 import mock
 import pytest
 from toolz import (identity, isdistinct, first, concat, pluck, valmap,
-        partition_all, partial)
+        partition_all, partial, sliding_window)
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
@@ -1651,7 +1651,7 @@ def test_forget_complex(e, s, A, B):
     assert set(s.tasks) == {f.key for f in [ab,ac,cd,acab]}
 
     s.client_releases_keys(keys=[b.key], client=e.id)
-    assert set(s.tasks) == {f.key for f in [ab,ac,cd,acab]}
+    assert set(s.tasks) == {f.key for f in [ac,cd,acab]}
 
     s.client_releases_keys(keys=[acab.key], client=e.id)
     assert set(s.tasks) == {f.key for f in [ac,cd]}
@@ -3476,6 +3476,23 @@ def test_synchronize_worker_data_callback():
     yield a._close()
     s.stop()
 
+
+@gen_cluster(executor=True)
+def test_synchronize_missing_data_on_one_worker(e, s, a, b):
+    s.synchronize_worker_interval = 10
+    np = pytest.importorskip('numpy')
+    [f] = yield e._scatter([1], broadcast=True)
+    assert a.data and b.data
+
+    del a.data[f.key]
+
+    yield s.synchronize_worker_data()
+
+    assert s.task_state[f.key] == 'memory'
+    assert b.data
+    # assert set(s.has_what[b.address]) == set(a.data)
+
+
 from distributed.utils_test import popen
 def test_reconnect(loop):
     w = Worker('127.0.0.1', 9393, loop=loop)
@@ -3633,3 +3650,159 @@ def test_threaded_get_within_distributed(loop):
 
                 future = e.submit(f)
                 assert future.result() == 1
+
+@gen_cluster(executor=True)
+def test_lose_scattered_data(e, s, a, b):
+    [x] = yield e._scatter([1], workers=a.address)
+
+    yield a._close()
+    yield gen.sleep(0.1)
+
+    assert x.status == 'cancelled'
+    assert x.key not in s.task_state
+
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 3)
+def test_partially_lose_scattered_data(e, s, a, b, c):
+    [x] = yield e._scatter([1], workers=a.address)
+    yield e._replicate(x, n=2)
+
+    yield a._close()
+    yield gen.sleep(0.1)
+
+    assert x.status == 'finished'
+    assert s.task_state[x.key] == 'memory'
+
+
+@gen_cluster(executor=True)
+def test_scatter_compute_lose(e, s, a, b):
+    [x] = yield e._scatter([[1, 2, 3, 4]], workers=a.address)
+    y = e.submit(inc, 1)
+
+    z = e.submit(slowadd, x, y, delay=0.2)
+    yield gen.sleep(0.1)
+
+    yield a._close()
+
+    assert x.status == 'cancelled'
+    assert y.status == 'finished'
+    assert z.status == 'cancelled'
+
+    with pytest.raises(CancelledError):
+        yield _wait(z)
+
+
+@gen_cluster(executor=True)
+def test_scatter_compute_store_lose(e, s, a, b):
+    """
+    Create irreplacable data on one machine,
+    cause a dependent computation to occur on another and complete
+
+    Kill the machine with the irreplacable data.  What happens to the complete
+    result?  How about after it GCs and tries to come back?
+    """
+    [x] = yield e._scatter([1], workers=a.address)
+    xx = e.submit(inc, x, workers=a.address)
+    y = e.submit(inc, 1)
+
+    z = e.submit(slowadd, xx, y, delay=0.2, workers=b.address)
+    yield _wait(z)
+
+    yield a._close()
+
+    start = time()
+    while x.status == 'finished':
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+    # assert xx.status == 'finished'
+    assert y.status == 'finished'
+    assert z.status == 'finished'
+
+    zz = e.submit(inc, z)
+    yield _wait(zz)
+
+    zkey = z.key
+    del z
+
+    start = time()
+    while s.task_state[zkey] != 'released':
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+    xxkey = xx.key
+    del xx
+
+    start = time()
+    while (x.key in s.task_state and
+           zkey not in s.task_state and
+           xxkey not in s.task_state):
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+
+@gen_cluster(executor=True)
+def test_scatter_compute_store_lose_processing(e, s, a, b):
+    """
+    Create irreplacable data on one machine,
+    cause a dependent computation to occur on another and complete
+
+    Kill the machine with the irreplacable data.  What happens to the complete
+    result?  How about after it GCs and tries to come back?
+    """
+    [x] = yield e._scatter([1], workers=a.address)
+
+    y = e.submit(slowinc, x, delay=0.2)
+    z = e.submit(inc, y)
+    yield gen.sleep(0.1)
+    yield a._close()
+
+    start = time()
+    while x.status == 'finished':
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+    assert y.status == 'cancelled'
+    assert z.status == 'cancelled'
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)] * 10, executor=True, timeout=60)
+def test_stress_scatter_death(e, s, *workers):
+    import random
+    np = pytest.importorskip('numpy')
+    L = yield e._scatter([np.random.random(10000) for i in range(len(workers))])
+    yield e._replicate(L, n=2)
+
+    adds = [delayed(slowadd, pure=True)(random.choice(L),
+                                        random.choice(L),
+                                        delay=0.05)
+            for i in range(50)]
+
+    adds = [delayed(slowadd, pure=True)(a, b, delay=0.02)
+            for a, b in sliding_window(2, adds)]
+
+    futures = e.compute(adds)
+
+    alive = list(workers)
+
+    from distributed.scheduler import logger
+
+    for i in range(7):
+        yield gen.sleep(0.1)
+        try:
+            s.validate_state()
+        except Exception as e:
+            logger.exception(e)
+            import pdb; pdb.set_trace()
+        w = random.choice(alive)
+        yield w._close()
+        alive.remove(w)
+
+    try:
+        yield gen.with_timeout(timedelta(seconds=10), e._gather(futures))
+    except gen.TimeoutError:
+        import pdb; pdb.set_trace()
+    except CancelledError:
+        pass
+

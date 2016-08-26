@@ -119,9 +119,9 @@ def randominc(x, scale=1):
     return x + 1
 
 
-def slowadd(x, y):
+def slowadd(x, y, delay=0.02):
     from time import sleep
-    sleep(0.02)
+    sleep(delay)
     return x + y
 
 

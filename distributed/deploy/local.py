@@ -71,7 +71,7 @@ class LocalCluster(object):
                 threads_per_worker = _ncores
         if n_workers is None and threads_per_worker is not None:
             n_workers = max(1, _ncores // threads_per_worker)
-        if n_workers is not None and threads_per_worker is None:
+        if n_workers and threads_per_worker is None:
             threads_per_worker = max(1, _ncores // n_workers)
 
         self.loop = loop or IOLoop()
