@@ -1315,7 +1315,7 @@ def test_read_csv_of_modified_file_has_different_name():
             os.fsync(f)
         b = dd.read_csv(fn)
 
-        assert sorted(a.dask) != sorted(b.dask)
+        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
 
 
 def test_to_bag():
