@@ -10,15 +10,15 @@ define a ``dask.dataframe`` object with the following components:
   as ``'x'``.
 - An empty pandas object containing appropriate metadata (e.g.  column names,
   dtypes, etc...).
-- A sequence of partition boundaries along the index.
+- A sequence of partition boundaries along the index, called ``divisions``.
 
 Metadata
 --------
 
 Many dataframe operations rely on knowing the name and dtype of columns. To
 keep track of this information, all ``dask.dataframe`` objects have a ``_meta``
-attribute which contains an empty object with the same dtypes and names. For
-example:
+attribute which contains an empty pandas object with the same dtypes and names.
+For example:
 
 .. code-block:: python
 
@@ -33,10 +33,10 @@ example:
    b    object
    dtype: object
 
-Internally dask does its best to propogate this information through all
-operations, so most of the time a user shouldn't have to worry about this.
-Usually this is done by evaluating the operation on a small sample of fake
-data, which can be found on the ``_meta_nonempty`` attribute:
+Internally ``dask.dataframe`` does its best to propagate this information
+through all operations, so most of the time a user shouldn't have to worry
+about this.  Usually this is done by evaluating the operation on a small sample
+of fake data, which can be found on the ``_meta_nonempty`` attribute:
 
 .. code-block:: python
 
@@ -45,10 +45,11 @@ data, which can be found on the ``_meta_nonempty`` attribute:
    0  1  foo
    1  1  foo
 
-Sometimes though this operation may fail, or may be prohibitively expensive.
-For these cases, many functions support an optionally ``meta`` keyword, which
-allows specifying the metadata directly, avoiding the the infererence step. For
-convenience, this supports several options:
+Sometimes this operation may fail in user defined functions (e.g. when using
+``DataFrame.apply``), or may be prohibitively expensive.  For these cases, many
+functions support an optionally ``meta`` keyword, which allows specifying the
+metadata directly, avoiding the the inference step. For convenience, this
+supports several options:
 
 - A pandas object with appropriate dtypes and names. If not empty, an empty
   slice will be taken:
@@ -71,10 +72,11 @@ well as many creation functions (e.g. ``dd.from_delayed``).
 Partitions
 ----------
 
-Internally a dask dataframe is split into many partitions, and each partition is
-one pandas dataframe.  These dataframes are split vertically along the index.
-When our index is sorted and we know the values of the divisions of our
-partitions, then we can be clever and efficient.
+Internally a dask dataframe is split into many partitions, and each partition
+is one pandas dataframe.  These dataframes are split vertically along the
+index.  When our index is sorted and we know the values of the divisions of our
+partitions, then we can be clever and efficient with expensive algorithms (e.g.
+groupby's, joins, etc...).
 
 For example, if we have a time-series index then our partitions might be
 divided by month.  All of January will live in one partition while all of
