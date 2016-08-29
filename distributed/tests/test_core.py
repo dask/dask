@@ -3,13 +3,14 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 from multiprocessing import Process
 import socket
+from time import time
 
 from tornado import gen, ioloop
 from tornado.iostream import StreamClosedError
 import pytest
 
 from distributed.core import (read, write, pingpong, Server, rpc, connect,
-        coerce_to_rpc, send_recv, coerce_to_address)
+        coerce_to_rpc, send_recv, coerce_to_address, ConnectionPool)
 from distributed.utils_test import slow, loop, gen_test
 
 def test_server(loop):
@@ -219,3 +220,44 @@ def test_coerce_to_address():
                 ('127.0.0.1', 8786),
                 ('127.0.0.1', '8786')]:
         assert coerce_to_address(arg) == '127.0.0.1:8786'
+
+
+@gen_test()
+def test_connection_pool():
+
+    @gen.coroutine
+    def ping(stream=None, delay=0.1):
+        yield gen.sleep(delay)
+        raise gen.Return('pong')
+
+    servers = [Server({'ping': ping}) for i in range(10)]
+    for server in servers:
+        server.listen(0)
+
+    rpc = ConnectionPool(limit=5)
+
+    # Reuse connections
+    yield [rpc(ip='127.0.0.1', port=s.port).ping() for s in servers[:5]]
+    yield [rpc(ip='127.0.0.1', port=s.port).ping() for s in servers[:5]]
+    yield [rpc(ip='127.0.0.1', port=s.port).ping() for s in servers[:5]]
+    yield [rpc(ip='127.0.0.1', port=s.port).ping() for s in servers[:5]]
+    assert sum(map(len, rpc.available.values())) == 5
+    assert sum(map(len, rpc.occupied.values())) == 0
+    assert rpc.active == 0
+    assert rpc.open == 5
+
+    # Clear out connections to make room for more
+    yield [rpc(ip='127.0.0.1', port=s.port).ping() for s in servers[5:]]
+    assert rpc.active == 0
+    assert rpc.open == 5
+
+    s = servers[0]
+    yield [rpc(ip='127.0.0.1', port=s.port).ping(delay=0.1) for i in range(3)]
+    assert len(rpc.available['127.0.0.1', s.port]) == 3
+
+    # Explicitly clear out connections
+    rpc.collect()
+    start = time()
+    while any(rpc.available.values()):
+        yield gen.sleep(0.01)
+        assert time() < start + 2

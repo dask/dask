@@ -629,15 +629,6 @@ def test_delete_data(e, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster()
-def test_rpc(s, a, b):
-    aa = s.rpc(ip=a.ip, port=a.port)
-    aa2 = s.rpc(ip=a.ip, port=a.port)
-    bb = s.rpc(ip=b.ip, port=b.port)
-    assert aa is aa2
-    assert aa is not bb
-
-
 @gen_cluster(executor=True)
 def test_delete_callback(e, s, a, b):
     d = yield e._scatter({'x': 1}, workers=a.address)

@@ -3781,3 +3781,22 @@ def test_stress_scatter_death(e, s, *workers):
     except CancelledError:
         pass
 
+
+def vsum(*args):
+    return sum(args)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 80, timeout=1000)
+def test_stress_communication(e, s, *workers):
+    s.validate = False # very slow otherwise
+    da = pytest.importorskip('dask.array')
+
+    n = 40
+    xs = [da.random.random((100, 100), chunks=(5, 5)) for i in range(n)]
+    ys = [x + x.T for x in xs]
+    z = da.atop(vsum, 'ij', *concat(zip(ys, ['ij'] * n)))
+
+    future = e.compute(z.sum())
+
+    result = yield future._result()
+    assert isinstance(result, float)

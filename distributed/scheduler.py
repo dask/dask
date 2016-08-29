@@ -1761,7 +1761,7 @@ class Scheduler(Server):
                 self.task_duration[ks] = avg_duration
                 if ks in self.stealable_unknown_durations:
                     for k in self.stealable_unknown_durations.pop(ks, ()):
-                        if self.task_state[k] == 'stacks':
+                        if self.task_state.get(k) == 'stacks':
                             self.put_key_in_stealable(k)
 
                 info['last-task'] = compute_stop

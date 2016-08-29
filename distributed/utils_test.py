@@ -471,6 +471,8 @@ def start_cluster(ncores, loop, Worker=Worker):
     done = s.start(0)
     workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop)
                 for i, (k, v) in enumerate(ncores)]
+    for w in workers:
+        w.rpc = workers[0].rpc
 
     yield [w._start() for w in workers]
 

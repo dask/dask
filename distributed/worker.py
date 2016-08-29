@@ -301,7 +301,7 @@ class Worker(Server):
         local = {k: self.data[k] for k in who_has if k in self.data}
         who_has = {k: v for k, v in who_has.items() if k not in local}
         remote, bad_data = yield gather_from_workers(who_has,
-                permissive=True, rpc=self.rpc, close=False)
+                permissive=True)
         if remote:
             self.data.update(remote)
             yield self.scheduler.add_keys(address=self.address, keys=list(remote))
@@ -462,6 +462,7 @@ class Worker(Server):
     def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
                     report=False, task=None):
         logger.debug("Compute one on %s", key)
+        self.active.add(key)
         diagnostics = dict()
         try:
             start = default_timer()
@@ -474,7 +475,6 @@ class Worker(Server):
             emsg['key'] = key
             raise Return(emsg)
 
-        self.active.add(key)
         # Fill args with data
         args2 = pack_data(args, data)
         kwargs2 = pack_data(kwargs, data)
