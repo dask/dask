@@ -32,6 +32,9 @@ def tsqr(data, name=None, compute_svd=False):
     Singular Value Decomposition.  It requires that the input array have a
     single column of blocks, each of which fit in memory.
 
+    If blocks are of size ``(n, k)`` then this algorithm has memory use that
+    scales as ``n**2 * k * nthreads``.
+
     Parameters
     ----------
 
