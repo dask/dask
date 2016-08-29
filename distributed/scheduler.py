@@ -191,7 +191,7 @@ class Scheduler(Server):
         self.streams = dict()
         self.coroutines = []
         self._worker_coroutines = []
-
+        self._ipython_kernel = None
 
         # Task state
         self.tasks = dict()
@@ -260,7 +260,8 @@ class Scheduler(Server):
                          'nbytes': self.get_nbytes,
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
-                         'replicate': self.replicate}
+                         'replicate': self.replicate,
+                         'start_ipython': self.start_ipython}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -2613,6 +2614,20 @@ class Scheduler(Server):
             else:
                 out.update({ww for ww in self.ncores if w in ww}) # TODO: quadratic
         return list(out)
+
+    def start_ipython(self, stream=None):
+        """Start an IPython kernel
+
+        Returns Jupyter connection info dictionary.
+        """
+        from ._ipython_utils import start_ipython
+        if self._ipython_kernel is None:
+            self._ipython_kernel = start_ipython(
+                ip=self.ip,
+                ns={'scheduler': self},
+                log=logger,
+            )
+        return self._ipython_kernel.get_connection_info()
 
 
 def decide_worker(dependencies, stacks, processing, who_has, has_what, restrictions,
