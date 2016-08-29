@@ -266,6 +266,9 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Indices missing in the output but present in the inputs results in many
     inputs being sent to one function (see examples).
 
+    Indices present in the output but missing in the inputs result in new axes
+    consisting of a single block.
+
     Examples
     --------
 
@@ -335,15 +338,18 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     assert set(numblocks) == set(pluck(0, argpairs))
 
     all_indices = pipe(argpairs, pluck(1), concat, set)
-    dummy_indices = all_indices - set(out_indices)
+    set_out_indices = set(out_indices)
+    dummy_indices = all_indices - set_out_indices
+    new_out_indices = set_out_indices - all_indices
+    old_out_indices = [i for i in out_indices if i not in new_out_indices]
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
-    keytups = list(product(*[range(dims[i]) for i in out_indices]))
+    keytups = list(product(*[range(dims[i]) for i in old_out_indices]))
     # {i: 0, j: 0}, {i: 0, j: 1}, ...
-    keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
+    keydicts = [dict(zip(old_out_indices, tup)) for tup in keytups]
 
     # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
     dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
@@ -359,7 +365,8 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         valtups.append(tuple(args))
 
     # Add heads to tuples
-    keys = [(output,) + kt for kt in keytups]
+    keys = [(output,) + tuple(kd.get(i, 0) for i in out_indices)
+            for kd in keydicts]
     if kwargs:
         vals = [(apply, func, list(vt), kwargs) for vt in valtups]
     else:
@@ -1681,6 +1688,11 @@ def atop(func, out_ind, *args, **kwargs):
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
+    out_chunks: dict, optional
+        Keyword only argument mapping output indices to chunks in the
+        result, e.g., {'m': 2, 'n': 1}. Chunk sizes can be given as either a
+        scalar (applied to add chunks) or a tuple. Any output chunks not
+        provided are copied from the inputs.
     **kwargs: dict
         Extra keyword arguments to pass to function
 
@@ -1728,6 +1740,10 @@ def atop(func, out_ind, *args, **kwargs):
 
     >>> z = atop(sequence_dot, '', x, 'i', y, 'i')  # doctest: +SKIP
 
+    Insert a new axes in the result:
+
+    >>> z = atop(lambda x: x[..., None], 'ij', x, 'i', out_chunks={'i': 1})  # doctest: +SKIP
+
     Many dask.array operations are special cases of atop.  These tensor
     operations cover a broad subset of NumPy and this function has been battle
     tested, supporting tricky concepts like broadcasting.
@@ -1739,10 +1755,32 @@ def atop(func, out_ind, *args, **kwargs):
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
+    out_chunks = kwargs.pop('out_chunks', {})
 
     chunkss, arrays = unify_chunks(*args)
-    arginds = list(zip(arrays, args[1::2]))
+    for ind, new_chunk in out_chunks.items():
+        expected_num_blocks = len(chunkss[ind]) if ind in chunkss else 1
+        if isinstance(new_chunk, tuple):
+            if len(new_chunk) != expected_num_blocks:
+                if ind in chunkss:
+                    msg = ('has a different number of blocks on the inputs '
+                           'than on out_chunks: %d vs %d'
+                           % (expected_num_blocks, len(new_chunk)))
+                else:
+                    msg = ('not found on the inputs but consists of more than '
+                           'one block: {}'.format(new_chunk))
+                raise ValueError('axis corresponding to index %r %s'
+                                 % (ind, msg))
+            chunkss[ind] = new_chunk
+        else:
+            chunkss[ind] = (new_chunk,) * expected_num_blocks
 
+    missing_out_ind = set(out_ind) - set(chunkss)
+    if missing_out_ind:
+        raise ValueError('output pattern includes new indices without '
+                         'entries in new_chunks: %r' % missing_out_ind)
+
+    arginds = list(zip(arrays, args[1::2]))
     numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
