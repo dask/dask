@@ -50,7 +50,10 @@ def _concat(args, **kwargs):
     if isinstance(args[0], (pd.Index)):
         args = [arg for arg in args if len(arg)]
         return args[0].append(args[1:])
-    return args
+    try:
+        return pd.Series(args)
+    except:
+        return args
 
 
 def _get_return_type(meta):
@@ -2621,6 +2624,10 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
+    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = _concat([meta])
 
     if isinstance(meta, pd.DataFrame):
         columns = meta.columns

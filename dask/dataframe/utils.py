@@ -367,9 +367,11 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
-def eq(a, b, check_names=True, check_dtypes=True, **kwargs):
-    assert_divisions(a)
-    assert_divisions(b)
+def eq(a, b, check_names=True, check_dtypes=True, check_divisions=True,
+       **kwargs):
+    if check_divisions:
+        assert_divisions(a)
+        assert_divisions(b)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
