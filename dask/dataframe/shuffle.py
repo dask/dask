@@ -13,7 +13,7 @@ from .core import DataFrame, Series, _Frame, _concat
 
 from ..base import tokenize
 from ..context import _globals
-from ..utils import digit, insert
+from ..utils import digit, insert, M
 
 
 def set_index(df, index, npartitions=None, shuffle=None, compute=True,
@@ -101,7 +101,7 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
 
     df4.divisions = divisions
 
-    return df4.map_partitions(pd.DataFrame.sort_index)
+    return df4.map_partitions(M.sort_index)
 
 
 def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,

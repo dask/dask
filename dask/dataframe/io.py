@@ -26,12 +26,11 @@ from ..context import _globals
 from ..delayed import Delayed, delayed
 import dask.multiprocessing
 
-from . import methods
 from .core import DataFrame, Series, new_dd_object
 from .shuffle import set_partition
 from .utils import insert_meta_param_description
 
-from ..utils import build_name_function
+from ..utils import build_name_function, M
 from ..bytes.core import write_bytes
 
 lock = Lock()
@@ -720,7 +719,7 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     name = 'to-castra-' + uuid.uuid1().hex
 
     if sorted_index_column:
-        func = lambda part: (methods.set_index, part, sorted_index_column)
+        func = lambda part: (M.set_index, part, sorted_index_column)
     else:
         func = lambda part: part
 

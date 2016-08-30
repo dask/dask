@@ -65,6 +65,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
+from ..utils import M
 from .core import (_Frame, DataFrame, map_partitions,
                    Index, _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
@@ -217,7 +218,7 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
         if b is None and how in ('left', 'outer'):
             b = right_empty
 
-        dsk[(name, i)] = (pd.DataFrame.join, a, b, None, how,
+        dsk[(name, i)] = (M.join, a, b, None, how,
                           lsuffix, rsuffix)
 
     # dummy result

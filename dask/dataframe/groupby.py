@@ -5,11 +5,10 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from . import methods
 from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description
-from ..utils import derived_from
+from ..utils import derived_from, M
 
 
 def _maybe_slice(grouped, columns):
@@ -231,20 +230,20 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
-        return self._aca_agg(token='sum', func=methods.sum)
+        return self._aca_agg(token='sum', func=M.sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self):
-        return self._aca_agg(token='min', func=methods.min)
+        return self._aca_agg(token='min', func=M.min)
 
     @derived_from(pd.core.groupby.GroupBy)
     def max(self):
-        return self._aca_agg(token='max', func=methods.max)
+        return self._aca_agg(token='max', func=M.max)
 
     @derived_from(pd.core.groupby.GroupBy)
     def count(self):
-        return self._aca_agg(token='count', func=methods.count,
-                             aggfunc=methods.sum)
+        return self._aca_agg(token='count', func=M.count,
+                             aggfunc=M.sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self):

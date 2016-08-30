@@ -1,4 +1,5 @@
 import os
+import pickle
 
 import numpy as np
 import pytest
@@ -6,7 +7,8 @@ import pytest
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, different_seeds, file_size,
-                        infer_storage_options, eq_strict, memory_repr)
+                        infer_storage_options, eq_strict, memory_repr,
+                        methodcaller, M)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -180,3 +182,13 @@ def test_eq_strict():
 def test_memory_repr():
     for power, mem_repr in enumerate(['1.0 bytes', '1.0 KB', '1.0 MB', '1.0 GB']):
         assert memory_repr(1024 ** power) == mem_repr
+
+
+def test_method_caller():
+    a = [1, 2, 3, 3, 3]
+    f = methodcaller('count')
+    assert f(a, 3) == a.count(3)
+    assert methodcaller('count') is f
+    assert M.count is f
+    assert pickle.loads(pickle.dumps(f)) is f
+    assert 'count' in dir(M)

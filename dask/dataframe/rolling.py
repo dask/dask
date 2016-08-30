@@ -6,7 +6,7 @@ from toolz import merge
 import pandas as pd
 
 from ..base import tokenize
-from . import methods
+from ..utils import M
 
 
 def rolling_chunk(func, part1, part2, window, *args):
@@ -146,7 +146,7 @@ class Rolling(object):
             # First chunk, only look after (if necessary)
             if after > 0:
                 next_partition = (head_name, 1)
-                dsk[next_partition] = (methods.head, (old_name, 1), after)
+                dsk[next_partition] = (M.head, (old_name, 1), after)
             else:
                 # Either we are only looking backward or this was the
                 # only chunk.
@@ -158,10 +158,10 @@ class Rolling(object):
             # All the middle chunks
             for i in range(1, self.obj.npartitions-1):
                 # Get just the needed values from the previous partition
-                dsk[tail_name, i-1] = (methods.tail, (old_name, i-1), before)
+                dsk[tail_name, i-1] = (M.tail, (old_name, i-1), before)
                 if after:
                     next_partition = (head_name, i+1)
-                    dsk[next_partition] = (methods.head, (old_name, i+1), after)
+                    dsk[next_partition] = (M.head, (old_name, i+1), after)
 
                 dsk[new_name, i] = (
                     call_pandas_rolling_method_with_neighbors,
@@ -171,7 +171,7 @@ class Rolling(object):
             # The last chunk
             if self.obj.npartitions > 1: # if the first wasn't the only partition
                 end = self.obj.npartitions - 1
-                dsk[tail_name, end-1] = (methods.tail, (old_name, end-1), before)
+                dsk[tail_name, end-1] = (M.tail, (old_name, end-1), before)
 
                 dsk[new_name, end] = (
                     call_pandas_rolling_method_with_neighbors,
