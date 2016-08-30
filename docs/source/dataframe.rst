@@ -18,5 +18,5 @@ Other topics
 .. toctree::
    :maxdepth: 1
 
-   dataframe-partitions.rst
+   dataframe-design.rst
    dataframe-groupby.rst

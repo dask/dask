@@ -14,8 +14,8 @@ Design
    :align: right
    :width: 50%
 
-Dask dataframes coordinate many Pandas arrays arranged along an index.  These
-Pandas dataframes may live on disk or on other machines.
+Dask dataframes coordinate many Pandas DataFrames/Series arranged along an
+index. These Pandas objects may live on disk or on other machines.
 
 
 Common Uses
