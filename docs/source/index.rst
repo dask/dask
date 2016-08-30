@@ -92,6 +92,7 @@ Contents
    manage-computation
    memory
    joblib
+   ipython
    queues
    submitting-applications
    api

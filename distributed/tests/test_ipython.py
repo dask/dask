@@ -15,7 +15,7 @@ def test_start_ipython_workers(loop, zmq_ctx):
 
     with cluster(1) as (s, [a]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            info_dict = e.start_ipython()
+            info_dict = e.start_ipython_workers()
             info = first(info_dict.values())
             key = info.pop('key')
             kc = BlockingKernelClient(**info)
@@ -69,7 +69,7 @@ def test_start_ipython_workers_magic(loop, zmq_ctx):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
             workers = list(e.ncores())[:2]
             names = [ 'magic%i' % i for i in range(len(workers)) ]
-            info_dict = e.start_ipython(workers, magic_names=names)
+            info_dict = e.start_ipython_workers(workers, magic_names=names)
 
         expected = [
             {'magic_kind': 'line', 'magic_name': 'remote'},
@@ -93,7 +93,7 @@ def test_start_ipython_remote(loop, zmq_ctx):
     with cluster(1) as (s, [a]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
             worker = first(e.ncores())
-            ip.user_ns['info'] = e.start_ipython(worker)[worker]
+            ip.user_ns['info'] = e.start_ipython_workers(worker)[worker]
             remote_magic('info 1') # line magic
             remote_magic('info', 'worker') # cell magic
 
@@ -111,8 +111,8 @@ def test_start_ipython_qtconsole(loop):
     with cluster() as (s, [a, b]):
         with mock.patch('distributed._ipython_utils.Popen', Popen), Executor(('127.0.0.1', s['port']), loop=loop) as e:
             worker = first(e.ncores())
-            e.start_ipython(worker, qtconsole=True)
-            e.start_ipython(worker, qtconsole=True, qtconsole_args=['--debug'])
+            e.start_ipython_workers(worker, qtconsole=True)
+            e.start_ipython_workers(worker, qtconsole=True, qtconsole_args=['--debug'])
     assert Popen.call_count == 2
     (cmd,), kwargs = Popen.call_args_list[0]
     assert cmd[:3] == [ 'jupyter', 'qtconsole', '--existing' ]

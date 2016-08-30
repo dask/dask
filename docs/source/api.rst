@@ -1,7 +1,6 @@
 API
 ===
 
-
 .. currentmodule:: distributed.executor
 
 **Executor**
@@ -22,6 +21,8 @@ API
    Executor.run
    Executor.scatter
    Executor.shutdown
+   Executor.start_ipython_workers
+   Executor.start_ipython_scheduler
    Executor.submit
    Executor.upload_file
    Executor.who_has
