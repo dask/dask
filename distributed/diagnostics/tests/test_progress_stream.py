@@ -20,6 +20,8 @@ def test_progress_quads():
            'released': {'inc': 1, 'dec': 0, 'add': 1}}
 
     d = progress_quads(msg, nrows=2)
+    color = d.pop('color')
+    assert len(set(color)) == 3
     assert d == {'name': ['inc', 'add', 'dec'],
                  'show-name': ['inc', 'add', 'dec'],
                  'left': [0, 0, 1],

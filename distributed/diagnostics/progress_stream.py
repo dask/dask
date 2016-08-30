@@ -126,7 +126,8 @@ def progress_quads(msg, nrows=8, ncols=3):
     d['right'] = [i // nrows + width for i in range(n)]
     d['top'] = [-(i % nrows) for i in range(n)]
     d['bottom'] = [-(i % nrows) - 0.8 for i in range(n)]
-
+    d['color'] = [task_stream_palette[incrementing_index(name)]
+                    for name in names]
 
     d['released-loc'] = []
     d['memory-loc'] = []
