@@ -1,8 +1,8 @@
 Internal Design
 ===============
 
-Dask dataframes coordinate many Pandas arrays arranged along an index. We
-define a ``dask.dataframe`` object with the following components:
+Dask dataframes coordinate many Pandas DataFrames/Series arranged along an
+index. We define a ``dask.dataframe`` object with the following components:
 
 - A dask graph with a special set of keys designating partitions, such as
   ``('x', 0), ('x', 1), ...``.
@@ -47,9 +47,9 @@ of fake data, which can be found on the ``_meta_nonempty`` attribute:
 
 Sometimes this operation may fail in user defined functions (e.g. when using
 ``DataFrame.apply``), or may be prohibitively expensive.  For these cases, many
-functions support an optionally ``meta`` keyword, which allows specifying the
-metadata directly, avoiding the the inference step. For convenience, this
-supports several options:
+functions support an optional ``meta`` keyword, which allows specifying the
+metadata directly, avoiding the inference step. For convenience, this supports
+several options:
 
 - A pandas object with appropriate dtypes and names. If not empty, an empty
   slice will be taken:
