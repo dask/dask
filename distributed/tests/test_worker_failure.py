@@ -11,7 +11,8 @@ from tornado import gen
 
 from distributed.executor import _wait
 from distributed.utils import sync
-from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div)
+from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
+        slowinc, slowadd)
 from distributed import Executor, Nanny, wait
 
 
@@ -251,3 +252,20 @@ def test_broken_worker_during_computation(e, s, a, b):
     assert isinstance(result[0], int)
 
     yield n._close()
+
+
+@gen_cluster(executor=True, Worker=Nanny)
+def test_restart_during_computation(e, s, a, b):
+    xs = [delayed(slowinc)(i, delay=0.01) for i in range(50)]
+    ys = [delayed(slowinc)(i, delay=0.01) for i in xs]
+    zs = [delayed(slowadd)(x, y, delay=0.01) for x, y in zip(xs, ys)]
+    total = delayed(sum)(zs)
+    result = e.compute(total)
+
+    yield gen.sleep(0.5)
+    assert s.rprocessing
+    yield e._restart()
+    assert not s.rprocessing
+
+    assert len(s.ncores) == 2
+    assert not s.task_state
