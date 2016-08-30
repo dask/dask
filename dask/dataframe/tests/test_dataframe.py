@@ -453,6 +453,13 @@ def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
     assert eq(result, full.sum(axis=1))
+    assert eq(d.map_partitions(lambda df: 1), pd.Series([1, 1, 1]),
+              check_divisions=False)
+    x = Scalar({('x', 0): 1}, 'x', int)
+    result = dd.map_partitions(lambda x: 2, x)
+    assert result.dtype in (np.int32, np.int64) and result.compute() == 2
+    result = dd.map_partitions(lambda x: 4.0, x)
+    assert result.dtype == np.float64 and result.compute() == 4.0
 
 
 def test_map_partitions_names():
