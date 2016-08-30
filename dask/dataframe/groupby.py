@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from . import methods
 from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description
@@ -51,28 +52,16 @@ def _groupby_get_group(df, by_key, get_key, columns):
 # Aggregation
 ###############################################################
 
+def _groupby_aggregate(df, aggfunc=None, levels=None):
+    return aggfunc(df.groupby(level=levels))
+
+
 def _apply_chunk(df, index, func, columns):
     if isinstance(df, pd.Series):
         return func(df.groupby(index))
     else:
         columns = columns if isinstance(columns, str) else list(columns)
         return func(df.groupby(index)[columns])
-
-
-def _sum(g):
-    return g.sum()
-
-
-def _min(g):
-    return g.min()
-
-
-def _max(g):
-    return g.max()
-
-
-def _count(g):
-    return g.count()
 
 
 def _var_chunk(df, index):
@@ -117,6 +106,10 @@ def _nunique_df_chunk(df, index):
     return grouped
 
 
+def _nunique_df_aggregate(df, name):
+    return df.groupby(level=0)[name].nunique()
+
+
 def _nunique_series_chunk(df, index):
     assert isinstance(df, pd.Series)
     if isinstance(index, np.ndarray):
@@ -124,6 +117,10 @@ def _nunique_series_chunk(df, index):
         index = pd.Series(index, index=df.index)
     grouped = pd.concat([df, index], axis=1).drop_duplicates()
     return grouped
+
+
+def _nunique_series_aggregate(df):
+    return df.groupby(df.columns[1])[df.columns[0]].nunique()
 
 
 class _GroupBy(object):
@@ -227,28 +224,27 @@ class _GroupBy(object):
         else:
             levels = 0
 
-        agg = lambda df: aggfunc(df.groupby(level=levels))
-
         return aca([self.obj, self.index, func, columns],
-                   chunk=_apply_chunk, aggregate=agg,
-                   meta=meta, token=token)
+                   chunk=_apply_chunk, aggregate=_groupby_aggregate,
+                   meta=meta, token=token,
+                   aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels))
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
-        return self._aca_agg(token='sum', func=_sum)
+        return self._aca_agg(token='sum', func=methods.sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self):
-        return self._aca_agg(token='min', func=_min)
+        return self._aca_agg(token='min', func=methods.min)
 
     @derived_from(pd.core.groupby.GroupBy)
     def max(self):
-        return self._aca_agg(token='max', func=_max)
+        return self._aca_agg(token='max', func=methods.max)
 
     @derived_from(pd.core.groupby.GroupBy)
     def count(self):
-        return self._aca_agg(token='count', func=_count,
-                             aggfunc=_sum)
+        return self._aca_agg(token='count', func=methods.count,
+                             aggfunc=methods.sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self):
@@ -446,18 +442,13 @@ class SeriesGroupBy(_GroupBy):
                          name=name)
 
         if isinstance(self.obj, DataFrame):
-
-            def agg(df):
-                return df.groupby(level=0)[name].nunique()
-
             return aca([self.obj, self.index],
-                       chunk=_nunique_df_chunk, aggregate=agg,
-                       meta=meta, token='series-groupby-nunique')
+                       chunk=_nunique_df_chunk,
+                       aggregate=_nunique_df_aggregate,
+                       meta=meta, token='series-groupby-nunique',
+                       aggregate_kwargs={'name': name})
         else:
-
-            def agg(df):
-                return df.groupby(df.columns[1])[df.columns[0]].nunique()
-
             return aca([self.obj, self.index],
-                       chunk=_nunique_series_chunk, aggregate=agg,
+                       chunk=_nunique_series_chunk,
+                       aggregate=_nunique_series_aggregate,
                        meta=meta, token='series-groupby-nunique')

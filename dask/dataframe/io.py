@@ -26,6 +26,7 @@ from ..context import _globals
 from ..delayed import Delayed, delayed
 import dask.multiprocessing
 
+from . import methods
 from .core import DataFrame, Series, new_dd_object
 from .shuffle import set_partition
 from .utils import insert_meta_param_description
@@ -719,8 +720,7 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     name = 'to-castra-' + uuid.uuid1().hex
 
     if sorted_index_column:
-        set_index = lambda x: x.set_index(sorted_index_column)
-        func = lambda part: (set_index, part)
+        func = lambda part: (methods.set_index, part, sorted_index_column)
     else:
         func = lambda part: part
 
@@ -738,22 +738,23 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return delayed([Delayed(key, [dsk]) for key in keys])[0]
 
 
+@delayed
+def _to_csv_chunk(df, **kwargs):
+    if PY2:
+        out = io.BytesIO()
+    else:
+        out = io.StringIO()
+    df.to_csv(out, **kwargs)
+    out.seek(0)
+    if PY2:
+        return out.getvalue()
+    encoding = kwargs.get('encoding', sys.getdefaultencoding())
+    return out.getvalue().encode(encoding)
+
+
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
            **kwargs):
-
-    def func(df, **kwargs):
-        if PY2:
-            out = io.BytesIO()
-        else:
-            out = io.StringIO()
-        df.to_csv(out, **kwargs)
-        out.seek(0)
-        if PY2:
-            return out.getvalue()
-        return out.getvalue().encode(encoding)
-
-    encoding = kwargs.get('encoding', sys.getdefaultencoding())
-    values = [delayed(func)(d, **kwargs) for d in df.to_delayed()]
+    values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
     values = write_bytes(values, filename, name_function, compression,
                          encoding=None)
 
