@@ -78,7 +78,7 @@ from toolz import merge, merge_sorted, take
 
 from ..utils import different_seeds
 from ..base import tokenize
-from .core import Index, Series
+from .core import Series
 from dask.compatibility import zip
 
 
@@ -419,17 +419,11 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     """ Approximate quantiles of Series used for repartitioning
     """
     assert isinstance(df, Series)
-
-    qs = np.linspace(0, 1, npartitions + 1)
     # currently, only Series has quantile method
     # Index.quantile(list-like) must be pd.Series, not pd.Index
-    df_name = df.name
-    merge_type = lambda v: pd.Series(v, index=qs, name=df_name)
-    return_type = df._constructor
-    if issubclass(return_type, Index):
-        return_type = Series
+    return_type = Series
 
-    new_divisions = [0.0, 1.0]
+    qs = np.linspace(0, 1, npartitions + 1)
     token = tokenize(df, qs, upsample)
     if random_state is None:
         random_state = hash(token) % np.iinfo(np.int32).max
@@ -454,8 +448,9 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     merged_key = max(merge_dsk)
 
     name3 = 're-quantiles-3-' + token
-    last_dsk = {(name3, 0): (merge_type, (process_val_weights, merged_key,
-                                          npartitions, (name0, 0)))}
+    last_dsk = {(name3, 0): (pd.Series, (process_val_weights, merged_key,
+                                         npartitions, (name0, 0)), qs, None, df.name)}
 
     dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
+    new_divisions = [0.0, 1.0]
     return return_type(dsk, name3, df._meta, new_divisions)
