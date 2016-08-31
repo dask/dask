@@ -1220,6 +1220,19 @@ class _Frame(Base):
     def mask(self, cond, other=np.nan):
         return map_partitions(M.mask, self, cond, other)
 
+    @derived_from(pd.DataFrame)
+    def notnull(self):
+        return self.map_partitions(M.notnull)
+
+    @derived_from(pd.DataFrame)
+    def isnull(self):
+        return self.map_partitions(M.isnull)
+
+    @derived_from(pd.DataFrame)
+    def astype(self, dtype):
+        return self.map_partitions(M.astype, dtype=dtype,
+                                   meta=self._meta.astype(dtype))
+
     @derived_from(pd.Series)
     def append(self, other):
         # because DataFrame.append will override the method,
@@ -1508,11 +1521,6 @@ class Series(_Frame):
         return Series(dsk, name, meta, self.divisions)
 
     @derived_from(pd.Series)
-    def astype(self, dtype):
-        return self.map_partitions(M.astype, dtype=dtype,
-                                   meta=self._meta.astype(dtype))
-
-    @derived_from(pd.Series)
     def dropna(self):
         return self.map_partitions(M.dropna)
 
@@ -1524,14 +1532,6 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def clip(self, lower=None, upper=None):
         return self.map_partitions(M.clip, lower=lower, upper=upper)
-
-    @derived_from(pd.Series)
-    def notnull(self):
-        return self.map_partitions(M.notnull)
-
-    @derived_from(pd.Series)
-    def isnull(self):
-        return self.map_partitions(M.isnull)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag.
@@ -1844,14 +1844,6 @@ class DataFrame(_Frame):
     def dtypes(self):
         """ Return data types """
         return self._meta.dtypes
-
-    @derived_from(pd.DataFrame)
-    def notnull(self):
-        return self.map_partitions(M.notnull)
-
-    @derived_from(pd.DataFrame)
-    def isnull(self):
-        return self.map_partitions(M.isnull)
 
     def set_index(self, other, drop=True, sorted=False, **kwargs):
         """ Set the DataFrame index (row labels) using an existing column
@@ -2247,11 +2239,6 @@ class DataFrame(_Frame):
             raise NotImplementedError("Only Pearson correlation has been "
                                       "implemented")
         return cov_corr(self, min_periods, True)
-
-    @derived_from(pd.DataFrame)
-    def astype(self, dtype):
-        meta = self._meta.astype(dtype)
-        return self.map_partitions(M.astype, meta=meta, dtype=dtype)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
