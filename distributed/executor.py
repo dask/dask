@@ -1327,7 +1327,7 @@ class Executor(object):
     @gen.coroutine
     def _rebalance(self, futures=None, workers=None):
         yield _wait(futures)
-        keys = list({f.key for f in self.futures_of(futures)})
+        keys = list({tokey(f.key) for f in self.futures_of(futures)})
         result = yield self.scheduler.rebalance(keys=keys, workers=workers)
         assert result['status'] == 'OK'
 
@@ -1355,7 +1355,7 @@ class Executor(object):
     def _replicate(self, futures, n=None, workers=None, branching_factor=2):
         futures = self.futures_of(futures)
         yield _wait(futures)
-        keys = {f.key for f in futures}
+        keys = {tokey(f.key) for f in futures}
         yield self.scheduler.replicate(keys=list(keys), n=n, workers=workers,
                 branching_factor=branching_factor)
 

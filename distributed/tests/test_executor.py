@@ -2462,6 +2462,15 @@ def test_replicate(e, s, *workers):
     assert sum(b.key in w.data for w in workers) == 5
 
 
+@gen_cluster(executor=True)
+def test_replicate_tuple_keys(e, s, a, b):
+    x = delayed(inc)(1, dask_key_name=('x', 1))
+    f = e.persist(x)
+    yield e._replicate(f, n=5)
+    assert a.data and b.data
+
+    yield e._rebalance(f)
+
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_replicate_workers(e, s, *workers):
 
