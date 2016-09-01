@@ -273,14 +273,18 @@ def write(stream, msg):
             logger.exception(e)
             raise
 
+        futures = []
+
         lengths = ([struct.pack('Q', len(frames))] +
                    [struct.pack('Q', len(frame)) for frame in frames])
-        stream.write(b''.join(lengths))
+        futures.append(stream.write(b''.join(lengths)))
 
         for frame in frames[:-1]:
-            stream.write(frame)
+            futures.append(stream.write(frame))
 
-        yield stream.write(frames[-1])
+        futures.append(stream.write(frames[-1]))
+
+        yield futures
 
 
 def pingpong(stream):
