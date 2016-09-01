@@ -25,7 +25,7 @@ logger = logging.getLogger('distributed.scheduler')
 @click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
-@click.option('--bokeh-port', type=int, default=8787, help="HTTP port")
+@click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=None,

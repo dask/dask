@@ -8,7 +8,11 @@ import sys
 
 import bokeh
 import distributed.bokeh
+from toolz import get_in
+
 from ..utils import ignoring
+from ..compatibility import logging_names
+from ..config import config
 
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
@@ -23,10 +27,13 @@ dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
 if not os.path.exists(dask_dir):
     os.mkdir(dask_dir)
 
+logging_level = get_in(['logging', 'bokeh'], config, 'critical')
+logging_level = logging_names[logging_level.upper()]
+
 
 class BokehWebInterface(object):
     def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
-                 bokeh_port=8787, bokeh_whitelist=[], log_level='critical',
+                 bokeh_port=8787, bokeh_whitelist=[], log_level=logging_level,
                  show=False, prefix=None, use_xheaders=False, quiet=True):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
@@ -48,8 +55,7 @@ class BokehWebInterface(object):
         hosts.extend(map(str, bokeh_whitelist))
 
         args = ([binname, 'serve'] + paths +
-                ['--log-level', 'warning',
-                 '--check-unused-sessions=50',
+                ['--check-unused-sessions=50',
                  '--unused-session-lifetime=1',
                  '--port', str(bokeh_port)] +
                  sum([['--host', h] for h in hosts], []))
@@ -111,6 +117,4 @@ class BokehWebInterface(object):
 
 def bokeh_main(args):
     from bokeh.command.bootstrap import main
-    import logging
-    logger = logging.getLogger('bokeh').setLevel(logging.CRITICAL)
     main(args)

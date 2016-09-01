@@ -1,0 +1,13 @@
+logging: 
+  distributed: info
+  distributed.executor: warning
+  bokeh: critical
+
+compression: auto
+
+# Scheduler options
+bandwidth: 100000000    # 100 MB/s estimated worker-worker bandwidth
+allowed-failures: 3     # number of retries before a task is considered bad
+pdb-on-err: False       # enter debug mode on scheduling error
+transition-log-length: 100000 
+

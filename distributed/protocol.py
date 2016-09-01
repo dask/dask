@@ -63,6 +63,17 @@ with ignoring(ImportError):
     default_compression = 'lz4'
 
 
+from .config import config
+default = config.get('compression', 'auto')
+if default != 'auto':
+    if default in compressions:
+        default_compression = default
+    else:
+        raise ValueError("Default compression '%s' not found.\n"
+                "Choices include auto, %s" % (
+                    default, ', '.join(sorted(map(str, compressions)))))
+
+
 BIG_BYTES_SIZE = 2**20
 BIG_BYTES_SHARD_SIZE = 2**28
 

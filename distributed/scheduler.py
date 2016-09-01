@@ -33,14 +33,15 @@ from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, log_errors, key_split, mean, divide_n_among_bins)
+from .config import config
 
 
 logger = logging.getLogger(__name__)
 
-BANDWIDTH = 100e6
-ALLOWED_FAILURES = 3
+BANDWIDTH = config.get('bandwidth', 100e6)
+ALLOWED_FAILURES = config.get('allowed-failures', 3)
 
-LOG_PDB = os.environ.get('DASK_ERROR_PDB', False)
+LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
 
 
 class Scheduler(Server):
@@ -236,7 +237,8 @@ class Scheduler(Server):
         self.occupancy = dict()
 
         self.plugins = []
-        self.transition_log = deque(maxlen=100000)
+        self.transition_log = deque(maxlen=config.get('transition-log-length',
+                                                      100000))
 
         self.compute_handlers = {'update-graph': self.update_graph,
                                  'update-data': self.update_data,
