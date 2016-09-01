@@ -3222,11 +3222,14 @@ def test_publish_simple(s, a, b):
     yield f._start()
 
     data = yield e._scatter(range(3))
-    out = yield e._publish_dataset(data, 'data')
+    out = yield e._publish_dataset(data=data)
     assert 'data' in s.datasets
 
-    with pytest.raises(KeyError):
-        out = yield e._publish_dataset(data, 'data')
+    with pytest.raises(KeyError) as exc_info:
+        out = yield e._publish_dataset(data=data)
+
+    assert "exists" in str(exc_info.value)
+    assert "data" in str(exc_info.value)
 
     result = yield e.scheduler.list_datasets()
     assert result == ['data']
@@ -3243,7 +3246,7 @@ def test_publish_roundtrip(s, a, b):
     yield f._start()
 
     data = yield e._scatter([0, 1, 2])
-    yield e._publish_dataset(data, 'data')
+    yield e._publish_dataset(data=data)
 
     assert 'published-data' in s.who_wants[data[0].key]
     result = yield f._get_dataset(name='data')
@@ -3252,14 +3255,17 @@ def test_publish_roundtrip(s, a, b):
     out = yield f._gather(result)
     assert out == [0, 1, 2]
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as exc_info:
         result = yield f._get_dataset(name='nonexistent')
+
+    assert "not found" in str(exc_info.value)
+    assert "nonexistent" in str(exc_info.value)
 
 
 @gen_cluster(executor=True)
 def test_unpublish(e, s, a, b):
     data = yield e._scatter([0, 1, 2])
-    yield e._publish_dataset(data, 'data')
+    yield e._publish_dataset(data=data)
 
     key = data[0].key
     del data
@@ -3273,8 +3279,21 @@ def test_unpublish(e, s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as exc_info:
         result = yield e._get_dataset(name='data')
+
+    assert "not found" in str(exc_info.value)
+    assert "data" in str(exc_info.value)
+
+
+@gen_cluster(executor=True)
+def test_publish_multiple_datasets(e, s, a, b):
+    x = delayed(inc)(1)
+    y = delayed(inc)(2)
+
+    yield e._publish_dataset(x=x, y=y)
+    datasets = yield e.scheduler.list_datasets()
+    assert set(datasets) == {'x', 'y'}
 
 
 @gen_cluster(executor=False)
@@ -3292,7 +3311,7 @@ def test_publish_bag(s, a, b):
     keys = {f.key for f in futures_of(bagp)}
     assert keys == set(bag.dask)
 
-    yield e._publish_dataset(bagp, 'data')
+    yield e._publish_dataset(data=bagp)
 
     # check that serialization didn't affect original bag's dask
     assert len(futures_of(bagp)) == 3

@@ -93,6 +93,7 @@ Contents
    memory
    joblib
    ipython
+   publish
    queues
    submitting-applications
    api

@@ -987,58 +987,101 @@ class Executor(object):
         return sync(self.loop, self._cancel, futures)
 
     @gen.coroutine
-    def _publish_dataset(self, data, name):
-        keys = [tokey(f.key) for f in futures_of(data)]
-        out = yield self.scheduler.publish_dataset(keys=keys, name=tokey(name),
-                                             data=dumps(data),
-                                             client=self.id)
-        if out['status'] != "OK":
-            raise KeyError(name)
+    def _publish_dataset(self, **kwargs):
+        coroutines = []
+        for name, data in kwargs.items():
+            keys = [tokey(f.key) for f in futures_of(data)]
+            coroutines.append(self.scheduler.publish_dataset(keys=keys,
+                name=tokey(name), data=dumps(data), client=self.id))
 
-    def publish_dataset(self, data, name):
+        outs = yield coroutines
+
+    def publish_dataset(self, **kwargs):
         """
-        Store a named reference to the data in the scheduler for other executors
+        Publish named datasets to scheduler
+
+        This stores a named reference to a dask collection or list of futures
+        on the scheduler.  These references are available to other executors
+        which can download the collection or futures with ``get_dataset``.
+
+        Datasets are not immediately computed.  You may wish to call
+        ``Executor.persist`` prior to publishing a dataset.
 
         Parameters
         ----------
-        data: list of futures or dask collection
-        name: str or container
-            handle by which the stored data should be known.
+        kwargs: dict
+            named collections to publish on the scheduler
+
+        Examples
+        --------
+        Publishing client:
+        >>> df = dd.read_csv('s3://...')  # doctest: +SKIP
+        >>> df = e.persist(df) # doctest: +SKIP
+        >>> e.publish_dataset(my_dataset=df)  # doctest: +SKIP
+
+        Receiving client:
+        >>> e.list_datasets()  # doctest: +SKIP
+        ['my_dataset']
+        >>> df2 = e.get_dataset('my_dataset')  # doctest: +SKIP
 
         Returns
         -------
         None
+
+        See Also
+        --------
+        Executor.list_datasets
+        Executor.get_dataset
+        Executor.unpublish_dataset
+        Executor.persist
         """
-        sync(self.loop, self._publish_dataset, data, name)
+        return sync(self.loop, self._publish_dataset, **kwargs)
 
     def unpublish_dataset(self, name):
         """
-        Remove reference to data on the scheduler
+        Remove named datasets from scheduler
+
+        Examples
+        --------
+        >>> e.list_datasets()  # doctest: +SKIP
+        ['my_dataset']
+        >>> e.unpublish_datasets('my_dataset')  # doctest: +SKIP
+        >>> e.list_datasets()  # doctest: +SKIP
+        []
+
+        See Also
+        --------
+        Executor.publish_dataset
         """
-        sync(self.loop, self.scheduler.unpublish_dataset, name=name)
+        return sync(self.loop, self.scheduler.unpublish_dataset, name=name)
 
     def list_datasets(self):
-        """ Returns list of named datasets referenced in the scheduler
+        """
+        List named datasets available on the scheduler
 
-        See publish_dataset()
+        See Also
+        --------
+        Executor.publish_dataset
+        Executor.get_dataset
         """
         return sync(self.loop, self.scheduler.list_datasets)
 
     @gen.coroutine
     def _get_dataset(self, name):
         out = yield self.scheduler.get_dataset(name=name, client=self.id)
-        data, keys = out['data'], out['keys']
 
-        if not data:
-            raise KeyError(name)
         with temp_default_executor(self):
-            data = loads(data)
+            data = loads(out['data'])
         raise Return(data)
 
     def get_dataset(self, name):
-        """ Fetch named dataset from the scheduler.
+        """
+        Get named dataset from the scheduler
 
-        See publish_dataset()
+        See Also
+        --------
+        Executor.publish_dataset
+        Executor.list_datasets
         """
         return sync(self.loop, self._get_dataset, tokey(name))
 

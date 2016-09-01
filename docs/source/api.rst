@@ -11,10 +11,13 @@ API
    Executor.compute
    Executor.gather
    Executor.get
+   Executor.get_dataset
    Executor.has_what
+   Executor.list_datasets
    Executor.map
    Executor.ncores
    Executor.persist
+   Executor.publish_dataset
    Executor.rebalance
    Executor.replicate
    Executor.restart
@@ -24,6 +27,7 @@ API
    Executor.start_ipython_workers
    Executor.start_ipython_scheduler
    Executor.submit
+   Executor.unpublish_dataset
    Executor.upload_file
    Executor.who_has
 

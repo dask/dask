@@ -1600,10 +1600,10 @@ class Scheduler(Server):
     def publish_dataset(self, stream=None, keys=None, data=None, name=None,
                         client=None):
         if name in self.datasets:
-            return {'status': 'failed'}
+            raise KeyError("Dataset %s already exists" % name)
         self.client_wants_keys(keys, 'published-%s' % name)
         self.datasets[name] = {'data': data, 'keys': keys}
-        return {'status':  'OK'}
+        return {'status':  'OK', 'name': name}
 
     def unpublish_dataset(self, stream=None, name=None):
         out = self.datasets.pop(name, {'keys': []})
@@ -1613,7 +1613,10 @@ class Scheduler(Server):
         return list(sorted(self.datasets.keys()))
 
     def get_dataset(self, stream, name=None, client=None):
-        return self.datasets.get(name, {'data': [], 'keys': []})
+        if name in self.datasets:
+            return self.datasets[name]
+        else:
+            raise KeyError("Dataset '%s' not found" % name)
 
     #####################
     # State Transitions #
