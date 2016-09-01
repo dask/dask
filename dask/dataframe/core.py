@@ -890,6 +890,10 @@ class _Frame(Base):
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
+    def to_bcolz(self, outfile, compute=True):
+        from .io import to_bcolz
+        return to_bcolz(self, outfile, compute=True)
+
     @derived_from(pd.DataFrame)
     def to_csv(self, filename, **kwargs):
         from .io import to_csv

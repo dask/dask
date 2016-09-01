@@ -417,8 +417,7 @@ def _link(token, result):
     don't explicitly pass around a shared resource
     """
     return None
-
-
+    
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""
 
@@ -432,6 +431,45 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
 
     return None
 
+
+def _pd_to_bcolz(pd_to_bcolz, ctable, ddf_block, outfile, kwargs=None):
+
+    if kwargs['mode']=='w':
+        pd_to_bcolz(ddf_block, rootdir=outfile, mode='w') # if worth, add expectedlen=outfile_Nrows
+    else: 
+        ctable(rootdir=outfile, mode='a').append(pd_to_bcolz(ddf_block))
+
+    return None
+
+
+def to_bcolz(df, outfile, compute=True):
+
+    from bcolz import ctable
+    name = 'to-bcolz-' + uuid.uuid1().hex
+    pd_to_bcolz = ctable.fromdataframe 
+
+    dsk = dict()
+    dsk[(name, 0)] = (_pd_to_bcolz, pd_to_bcolz, ctable, 
+                      (df._name, 0), outfile, 
+                      {'mode':'w'})
+
+    for i in range(1, df.npartitions):
+        task = (_pd_to_bcolz, pd_to_bcolz, ctable, 
+                (df._name, i), outfile,
+                {'mode':'a'})
+
+        link_dep = i - 1
+        task = (_link, (name, link_dep), task)
+        dsk[(name, i)] = task
+
+    dsk = merge(df.dask, dsk)
+    keys = [(name, df.npartitions - 1)]
+
+    if compute:
+        return DataFrame._get(dsk, keys, get=dask.async.get_sync) # run serially to protect against potential memory blowup
+    else:
+        return delayed([Delayed(key, [dsk]) for key in keys])
+    
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
@@ -506,6 +544,10 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
 
     dsk = dict()
 
+    kwargs.update({'format': 'table', 'complevel': complevel,
+                   'complib': complib, 'fletcher32': fletcher32,
+                   'mode': mode, 'append': append})
+
     i_name = name_function(0)
     dsk[(name, 0)] = (_pd_to_hdf, pd_to_hdf, lock,
                       [(df._name, 0), fmt_obj(path_or_buf, i_name),
@@ -516,7 +558,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
         kwargs2['mode'] = 'a'
     if single_node:
         kwargs2['append'] = True
-
+    
     for i in range(1, df.npartitions):
         i_name = name_function(i)
         task = (_pd_to_hdf, pd_to_hdf, lock,
@@ -526,7 +568,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
             link_dep = i - 1 if single_node else 0
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
-
+    
     dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]
