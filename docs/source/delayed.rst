@@ -12,5 +12,4 @@ directly with a light annotation of normal python code.
 
    delayed-overview.rst
    delayed-api.rst
-   delayed-examples.rst
    delayed-collections.rst
