@@ -11,7 +11,6 @@ the complete pandas interface.
    dataframe-overview.rst
    dataframe-create.rst
    dataframe-api.rst
-   dataframe-examples.rst
 
 Other topics
 

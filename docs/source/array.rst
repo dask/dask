@@ -10,7 +10,6 @@ blocked algorithms and task scheduling.
    array-overview.rst
    array-creation.rst
    array-api.rst
-   array-examples.rst
 
 Other topics
 
