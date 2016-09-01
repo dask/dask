@@ -223,6 +223,7 @@ class Scheduler(Server):
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
+        self.datasets = dict()
         self.stealable = [set() for i in range(12)]
         self.stealable_unknown_durations = defaultdict(set)
 
@@ -261,7 +262,11 @@ class Scheduler(Server):
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
-                         'start_ipython': self.start_ipython}
+                         'start_ipython': self.start_ipython,
+                         'list_datasets': self.list_datasets,
+                         'get_dataset': self.get_dataset,
+                         'publish_dataset': self.publish_dataset,
+                         'unpublish_dataset': self.unpublish_dataset}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -932,7 +937,7 @@ class Scheduler(Server):
         """
         The master client coroutine.  Handles all inbound messages from clients.
 
-        This runs once per Cleint IOStream or Queue.
+        This runs once per Client IOStream or Queue.
 
         See Also
         --------
@@ -1589,6 +1594,24 @@ class Scheduler(Server):
                 result = out
 
             return result
+
+    def publish_dataset(self, stream=None, keys=None, data=None, name=None,
+                        client=None):
+        if name in self.datasets:
+            return {'status': 'failed'}
+        self.client_wants_keys(keys, 'published-%s' % name)
+        self.datasets[name] = {'data': data, 'keys': keys}
+        return {'status':  'OK'}
+
+    def unpublish_dataset(self, stream=None, name=None):
+        out = self.datasets.pop(name, {'keys': []})
+        self.client_releases_keys(out['keys'], 'published-%s' % name)
+
+    def list_datasets(self, *args):
+        return list(sorted(self.datasets.keys()))
+
+    def get_dataset(self, stream, name=None, client=None):
+        return self.datasets.get(name, {'data': [], 'keys': []})
 
     #####################
     # State Transitions #

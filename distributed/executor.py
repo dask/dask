@@ -2,12 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, Iterator, Iterable
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
+from contextlib import contextmanager
 import copy
 from datetime import timedelta
 from functools import partial
 import logging
 import os
 import sys
+import pickle
 from time import sleep
 import uuid
 from threading import Thread
@@ -191,6 +193,15 @@ class Future(WrappedKey):
         if not self._cleared and self.executor.generation == self._generation:
             self._cleared = True
             self.executor._dec_ref(tokey(self.key))
+
+    def __getstate__(self):
+        return self.key
+
+    def __setstate__(self, key):
+        e = default_executor()
+        Future.__init__(self, key, e)
+        e._send_to_scheduler({'op': 'update-graph', 'tasks': {},
+                              'keys': [tokey(self.key)], 'client': e.id})
 
     def __del__(self):
         self.release()
@@ -974,6 +985,62 @@ class Executor(object):
         futures: list of Futures
         """
         return sync(self.loop, self._cancel, futures)
+
+    @gen.coroutine
+    def _publish_dataset(self, data, name):
+        keys = [tokey(f.key) for f in futures_of(data)]
+        out = yield self.scheduler.publish_dataset(keys=keys, name=tokey(name),
+                                             data=dumps(data),
+                                             client=self.id)
+        if out['status'] != "OK":
+            raise KeyError(name)
+
+    def publish_dataset(self, data, name):
+        """
+        Store a named reference to the data in the scheduler for other executors
+
+        Parameters
+        ----------
+        data: list of futures or dask collection
+        name: str or container
+            handle by which the stored data should be known.
+
+        Returns
+        -------
+        None
+        """
+        sync(self.loop, self._publish_dataset, data, name)
+
+    def unpublish_dataset(self, name):
+        """
+        Remove reference to data on the scheduler
+        """
+        sync(self.loop, self.scheduler.unpublish_dataset, name=name)
+
+    def list_datasets(self):
+        """ Returns list of named datasets referenced in the scheduler
+
+        See publish_dataset()
+        """
+        return sync(self.loop, self.scheduler.list_datasets)
+
+    @gen.coroutine
+    def _get_dataset(self, name):
+        out = yield self.scheduler.get_dataset(name=name, client=self.id)
+        data, keys = out['data'], out['keys']
+
+        if not data:
+            raise KeyError(name)
+        with temp_default_executor(self):
+            data = loads(data)
+        raise Return(data)
+
+    def get_dataset(self, name):
+        """ Fetch named dataset from the scheduler.
+
+        See publish_dataset()
+        """
+        return sync(self.loop, self._get_dataset, tokey(name))
 
     @gen.coroutine
     def _run(self, function, *args, **kwargs):
@@ -1904,3 +1971,20 @@ def futures_of(o, executor=None):
             raise CancelledError(bad)
 
     return list(futures)
+
+
+@contextmanager
+def temp_default_executor(e):
+    """ Set the default executor for the duration of the context
+
+    Parameters
+    ----------
+    e : Executor
+        This is what default_executor() will return within the with-block.
+    """
+    old_exec = default_executor()
+    _global_executor[0] = e
+    try:
+        yield
+    finally:
+        _global_executor[0] = old_exec
