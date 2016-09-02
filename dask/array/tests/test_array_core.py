@@ -97,6 +97,13 @@ def test_top_supports_broadcasting_rules():
          ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
+def test_top_new_axes():
+    new_axes = lambda x: x[None, ..., None]
+    assert top(new_axes, 'z', 'ijk', 'x', 'j', numblocks={'x': (2,)}) == \
+        {('z', 0, 0, 0): (new_axes, ('x', 0)),
+         ('z', 0, 1, 0): (new_axes, ('x', 1))}
+
+
 def test_concatenate3_on_scalars():
     assert_eq(concatenate3([1, 2]), np.array([1, 2]))
 
@@ -2048,6 +2055,28 @@ def test_atop_kwargs():
     x = da.ones(5, chunks=(2,))
     y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
     assert_eq(y, np.ones(5) + 10)
+
+
+def test_atop_new_chunks():
+    stack_odds_evens = lambda x: np.array([x[1::2], x[::2]]).T
+    x = np.arange(30)
+    y = stack_odds_evens(x)
+    a = da.from_array(x, 10)
+    b = atop(stack_odds_evens, 'ij', a, 'i', out_chunks={'i': 5, 'j': 2})
+    assert_eq(b, y)
+
+    b = atop(stack_odds_evens, 'ij', a, 'i',
+             out_chunks={'i': (5, 5, 5), 'j': (2,)})
+    assert_eq(b, y)
+
+
+def test_atop_invalid_new_chunks():
+    x = da.ones(5, chunks=(2,))
+    assert raises(ValueError,
+                  lambda: atop(identity, 'i', x, 'i', out_chunks={'i': (1, 1)}))
+    assert raises(ValueError,
+                  lambda: atop(identity, 'j', x, 'i', out_chunks={'j': (1, 1)}))
+    assert raises(ValueError, lambda: atop(identity, 'j', x, 'i'))
 
 
 def test_from_delayed():
