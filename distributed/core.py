@@ -205,8 +205,8 @@ class Server(TCPServer):
                 try:
                     handler = self.handlers[op]
                 except KeyError:
-                    result = 'No handler found: ' + op.encode()
-                    logger.warn(result)
+                    result = "No handler found: %s" % op
+                    logger.warn(result, exc_info=True)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
@@ -400,6 +400,10 @@ class rpc(object):
         self.status = 'running'
         assert self.ip
         assert self.port
+
+    @property
+    def address(self):
+        return '%s:%d' % (self.ip, self.port)
 
     @gen.coroutine
     def live_stream(self):

@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from concurrent.futures import ThreadPoolExecutor
+from .threadpoolexecutor import ThreadPoolExecutor
 from datetime import timedelta
 from importlib import import_module
 import logging
@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
-from threading import current_thread
+from threading import current_thread, Lock, local
 from time import time
 from timeit import default_timer
 import shutil
@@ -35,6 +35,7 @@ from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
 
 _ncores = ThreadPool()._processes
 
+local_state = local()
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,9 @@ class Worker(Server):
         self.name = name
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
+        self.execution_state = {'scheduler': self.scheduler.address,
+                                'ioloop': self.loop,
+                                'worker': self}
         self._last_disk_io = None
         self._last_net_io = None
         self._ipython_kernel = None
@@ -481,7 +485,8 @@ class Worker(Server):
 
         # Log and compute in separate thread
         result = yield self.executor_submit(key, apply_function, function,
-                                            args2, kwargs2)
+                                            args2, kwargs2,
+                                            self.execution_state)
 
         result['key'] = key
         result.update(diagnostics)
@@ -533,7 +538,7 @@ class Worker(Server):
 
         # Log and compute in separate thread
         result = yield self.executor_submit(key, apply_function, function,
-                                            args, kwargs)
+                                            args, kwargs, self.execution_state)
 
         result['key'] = key
         result.update(msg['diagnostics'])
@@ -771,13 +776,14 @@ def dumps_task(task):
     return {'task': dumps(task)}
 
 
-def apply_function(function, args, kwargs):
+def apply_function(function, args, kwargs, execution_state):
     """ Run a function, collect information
 
     Returns
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
+    local_state.execution_state = execution_state
     start = time()
     try:
         result = function(*args, **kwargs)

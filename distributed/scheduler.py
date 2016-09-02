@@ -268,7 +268,9 @@ class Scheduler(Server):
                          'list_datasets': self.list_datasets,
                          'get_dataset': self.get_dataset,
                          'publish_dataset': self.publish_dataset,
-                         'unpublish_dataset': self.unpublish_dataset}
+                         'unpublish_dataset': self.unpublish_dataset,
+                         'update_data': self.update_data,
+                         'change_worker_cores': self.change_worker_cores}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -1470,7 +1472,7 @@ class Scheduler(Server):
                 # TODO: delete key from worker
         return 'OK'
 
-    def update_data(self, who_has=None, nbytes=None, client=None):
+    def update_data(self, stream=None, who_has=None, nbytes=None, client=None):
         """
         Learn that new data has entered the network from an external source
 
@@ -1478,30 +1480,31 @@ class Scheduler(Server):
         --------
         Scheduler.mark_key_in_memory
         """
-        who_has = {k: [self.coerce_address(vv) for vv in v]
-                   for k, v in who_has.items()}
-        logger.debug("Update data %s", who_has)
-        if client:
-            self.client_wants_keys(keys=list(who_has), client=client)
+        with log_errors():
+            who_has = {k: [self.coerce_address(vv) for vv in v]
+                       for k, v in who_has.items()}
+            logger.debug("Update data %s", who_has)
+            if client:
+                self.client_wants_keys(keys=list(who_has), client=client)
 
-        # for key, workers in who_has.items():  # TODO
-        #     self.mark_key_in_memory(key, workers)
+            # for key, workers in who_has.items():  # TODO
+            #     self.mark_key_in_memory(key, workers)
 
-        self.nbytes.update(nbytes)
+            self.nbytes.update(nbytes)
 
-        for key, workers in who_has.items():
-            if key not in self.dependents:
-                self.dependents[key] = set()
-            if key not in self.dependencies:
-                self.dependencies[key] = set()
-            self.task_state[key] = 'memory'
-            self.who_has[key] = set(workers)
-            for w in workers:
-                self.has_what[w].add(key)
-            self.waiting_data[key] = set()
-            self.report({'op': 'key-in-memory',
-                         'key': key,
-                         'workers': list(workers)})
+            for key, workers in who_has.items():
+                if key not in self.dependents:
+                    self.dependents[key] = set()
+                if key not in self.dependencies:
+                    self.dependencies[key] = set()
+                self.task_state[key] = 'memory'
+                self.who_has[key] = set(workers)
+                for w in workers:
+                    self.has_what[w].add(key)
+                self.waiting_data[key] = set()
+                self.report({'op': 'key-in-memory',
+                             'key': key,
+                             'workers': list(workers)})
 
     def report_on_key(self, key):
         if key not in self.task_state:
@@ -1617,6 +1620,15 @@ class Scheduler(Server):
             return self.datasets[name]
         else:
             raise KeyError("Dataset '%s' not found" % name)
+
+    def change_worker_cores(self, stream=None, worker=None, diff=0):
+        """ Add or remove cores from a worker
+
+        This is used when a worker wants to spin off a long-running task
+        """
+        self.ncores[worker] += diff
+        self.maybe_idle.add(worker)
+        self.ensure_occupied()
 
     #####################
     # State Transitions #

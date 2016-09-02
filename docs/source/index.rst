@@ -95,6 +95,7 @@ Contents
    ipython
    publish
    queues
+   task-launch
    submitting-applications
    api
    faq

@@ -12,6 +12,7 @@ from .nanny import Nanny
 from .scheduler import Scheduler
 from .utils import sync
 from .worker import Worker
+from .worker_executor import local_executor
 
 try:
     from .collections import futures_to_collection
