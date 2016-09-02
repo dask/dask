@@ -71,6 +71,10 @@ def nbytes_bar(nbytes):
          'color': [],
          'percent': [],
          'MB': []}
+
+    if not total:
+        return d
+
     right = 0
     for name in names:
         left = right

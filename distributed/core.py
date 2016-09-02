@@ -24,7 +24,7 @@ from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
-from .compatibility import PY3, unicode
+from .compatibility import PY3, unicode, WINDOWS
 from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
@@ -283,7 +283,10 @@ def write(stream, msg):
 
         futures.append(stream.write(frames[-1]))
 
-        yield futures
+        if WINDOWS:
+            yield futures[-1]
+        else:
+            yield futures
 
 
 def pingpong(stream):

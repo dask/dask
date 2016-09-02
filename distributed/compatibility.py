@@ -53,6 +53,10 @@ if sys.version_info[0] == 3:
     logging_names = logging._levelToName.copy()
     logging_names.update(logging._nameToLevel)
 
+
+WINDOWS = sys.platform.startswith('win')
+
+
 try:
     from functools import singledispatch
 except ImportError:
