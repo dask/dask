@@ -190,7 +190,7 @@ def test_errors():
 
 @gen_test()
 def test_connect_raises():
-    with pytest.raises((gen.TimeoutError, StreamClosedError)):
+    with pytest.raises((gen.TimeoutError, StreamClosedError, IOError)):
         yield connect('127.0.0.1', 58259, timeout=0.01)
 
 

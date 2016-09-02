@@ -606,14 +606,15 @@ class Worker(Server):
 
     @gen.coroutine
     def delete_data(self, stream, keys=None, report=True):
-        for key in keys:
-            if key in self.data:
-                del self.data[key]
-        logger.info("Deleted %d keys", len(keys))
-        if report:
-            logger.debug("Reporting loss of keys to scheduler")
-            yield self.scheduler.remove_keys(address=self.address,
-                                          keys=list(keys))
+        if keys:
+            for key in keys:
+                if key in self.data:
+                    del self.data[key]
+            logger.info("Deleted %d keys", len(keys))
+            if report:
+                logger.debug("Reporting loss of keys to scheduler")
+                yield self.scheduler.remove_keys(address=self.address,
+                                              keys=list(keys))
         raise Return('OK')
 
     def get_data(self, stream, keys=None):
