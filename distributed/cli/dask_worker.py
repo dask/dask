@@ -102,7 +102,8 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     @gen.coroutine
     def f():
-        scheduler = rpc(ip=nannies[0].center.ip, port=nannies[0].center.port)
+        scheduler = rpc(ip=nannies[0].scheduler.ip,
+                        port=nannies[0].scheduler.port)
         yield gen.with_timeout(timedelta(seconds=2),
                 All([scheduler.unregister(address=n.worker_address, close=True)
                     for n in nannies if n.process]), io_loop=loop2)

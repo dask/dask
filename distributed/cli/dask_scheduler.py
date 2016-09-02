@@ -22,7 +22,6 @@ logger = logging.getLogger('distributed.scheduler')
 
 
 @click.command()
-@click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
@@ -37,7 +36,7 @@ logger = logging.getLogger('distributed.scheduler')
               help="Prefix for the bokeh app")
 @click.option('--use-xheaders', type=bool, default=False, show_default=True,
               help="User xheaders in bokeh app for ssl termination in header")
-def main(center, host, port, http_port, bokeh_port, show, _bokeh,
+def main(host, port, http_port, bokeh_port, show, _bokeh,
          bokeh_whitelist, prefix, use_xheaders):
     given_host = host
     host = host or get_ip()
@@ -46,9 +45,8 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh,
         port = int(port)
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
-    scheduler = Scheduler(center, ip=ip,
-                          services={('http', http_port): HTTPScheduler},
-                          loop=loop)
+    scheduler = Scheduler(ip=ip, loop=loop,
+                          services={('http', http_port): HTTPScheduler})
     scheduler.start(port)
 
     bokeh_proc = None

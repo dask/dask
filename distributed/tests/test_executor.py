@@ -35,8 +35,7 @@ from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
-        _test_scheduler, loop, inc, dec, div, throws, gen_cluster, gen_test,
-        double, deep)
+        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep)
 
 
 @gen_cluster(executor=True, timeout=None)

@@ -18,7 +18,6 @@ except ImportError:
     import pickle
 import cloudpickle
 from tornado import gen
-from tornado.gen import Return
 from tornado.locks import Event
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
@@ -99,7 +98,7 @@ def handle_signal(sig, frame):
 class Server(TCPServer):
     """ Distributed TCP Server
 
-    Superclass for both Worker and Center objects.
+    Superclass for both Worker and Scheduler objects.
     Inherits from ``tornado.tcpserver.TCPServer``, adding a protocol for RPC.
 
     **Handlers**
@@ -240,7 +239,7 @@ def read(stream):
     """ Read a message from a stream """
     if isinstance(stream, BatchedStream):
         msg = yield stream.recv()
-        raise Return(msg)
+        raise gen.Return(msg)
     else:
         n_frames = yield stream.read_bytes(8)
         n_frames = struct.unpack('Q', n_frames)[0]
@@ -257,7 +256,7 @@ def read(stream):
             frames.append(frame)
 
         msg = protocol.loads(frames)
-        raise Return(msg)
+        raise gen.Return(msg)
 
 
 @gen.coroutine
@@ -300,7 +299,7 @@ def connect(ip, port, timeout=3):
         try:
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             stream.set_nodelay(True)
-            raise Return(stream)
+            raise gen.Return(stream)
         except StreamClosedError:
             if time() - start < timeout:
                 yield gen.sleep(0.01)
@@ -348,7 +347,8 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
         response = None
     if kwargs.get('close'):
         stream.close()
-    raise Return(response)
+    raise gen.Return(response)
+
 
 def ip_port_from_args(arg=None, addr=None, ip=None, port=None):
     if arg:
@@ -366,6 +366,7 @@ def ip_port_from_args(arg=None, addr=None, ip=None, port=None):
         ip = ip.decode()
 
     return ip, port
+
 
 class rpc(object):
     """ Conveniently interact with a remote server
@@ -438,7 +439,7 @@ class rpc(object):
         for s in to_clear:
             del self.streams[s]
         self.streams[stream] = False     # mark as taken
-        raise Return(stream)
+        raise gen.Return(stream)
 
     def close_streams(self):
         for stream in self.streams:
@@ -454,7 +455,7 @@ class rpc(object):
             stream = yield self.live_stream()
             result = yield send_recv(stream=stream, op=key, **kwargs)
             self.streams[stream] = True  # mark as open
-            raise Return(result)
+            raise gen.Return(result)
         return send_recv_from_rpc
 
     def __del__(self):

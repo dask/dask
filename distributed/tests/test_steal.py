@@ -10,8 +10,7 @@ import dask
 from dask import delayed
 from distributed.executor import Executor, _wait, wait
 from distributed.utils_test import (cluster, slowinc, slowadd, randominc,
-        _test_scheduler, loop, inc, dec, div, throws, gen_cluster, gen_test,
-        double, deep)
+        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep)
 
 import pytest
 

@@ -181,10 +181,6 @@ class Worker(Server):
         else:
             logger.debug("Heartbeat skipped: channel busy")
 
-    @property
-    def center(self):
-        return self.scheduler
-
     @gen.coroutine
     def _start(self, port=0):
         self.listen(port)

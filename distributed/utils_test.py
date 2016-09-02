@@ -145,32 +145,7 @@ def slowadd(x, y, delay=0.02):
     return x + y
 
 
-def run_center(q):
-    from distributed import Center
-    from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
-    # IOLoop.clear_instance()
-    loop = IOLoop(); loop.make_current()
-    PeriodicCallback(lambda: None, 500).start()
-    logging.getLogger("tornado").setLevel(logging.CRITICAL)
-    center = Center('127.0.0.1')
-
-    while True:
-        try:
-            center.listen(0)
-            break
-        except Exception as e:
-            logging.info("Could not start center on port.  Retrying",
-                    exc_info=True)
-
-    q.put(center.port)
-    try:
-        loop.start()
-    finally:
-        loop.close(all_fds=True)
-
-
-def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
+def run_scheduler(q, scheduler_port=0, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -179,8 +154,7 @@ def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
     PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
-    center = ('127.0.0.1', center_port) if center_port else None
-    scheduler = Scheduler(center=center, loop=loop, validate=True, **kwargs)
+    scheduler = Scheduler(loop=loop, validate=True, **kwargs)
     done = scheduler.start(scheduler_port)
 
     q.put(scheduler.port)
@@ -190,7 +164,7 @@ def run_scheduler(q, scheduler_port=0, center_port=None, **kwargs):
         loop.close(all_fds=True)
 
 
-def run_worker(q, center_port, **kwargs):
+def run_worker(q, scheduler_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -199,7 +173,8 @@ def run_worker(q, center_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
-        worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', loop=loop, **kwargs)
+        worker = Worker('127.0.0.1', scheduler_port, ip='127.0.0.1',
+                        loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -208,7 +183,7 @@ def run_worker(q, center_port, **kwargs):
             loop.close(all_fds=True)
 
 
-def run_nanny(q, center_port, **kwargs):
+def run_nanny(q, scheduler_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -217,7 +192,8 @@ def run_nanny(q, center_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
-        worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', loop=loop, **kwargs)
+        worker = Nanny('127.0.0.1', scheduler_port, ip='127.0.0.1',
+                       loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -288,60 +264,6 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}):
         loop.close(all_fds=True)
 
 
-@contextmanager
-def cluster_center(nworkers=2, nanny=False):
-    if nanny:
-        _run_worker = run_nanny
-    else:
-        _run_worker = run_worker
-    center_q = Queue()
-    center = Process(target=run_center, args=(center_q,))
-    center.daemon = True
-    center.start()
-    cport = center_q.get()
-
-    workers = []
-    for i in range(nworkers):
-        q = Queue()
-        fn = '_test_worker-%s' % uuid.uuid1()
-        proc = Process(target=_run_worker, args=(q, cport),
-                        kwargs={'ncores': 1, 'local_dir': fn})
-        workers.append({'proc': proc, 'queue': q, 'dir': fn})
-
-    for worker in workers:
-        worker['proc'].start()
-
-    for worker in workers:
-        worker['port'] = worker['queue'].get()
-
-    loop = IOLoop()
-    c = rpc(ip='127.0.0.1', port=cport)
-    start = time()
-    try:
-        while True:
-            ncores = loop.run_sync(c.ncores)
-            if len(ncores) == nworkers:
-                break
-            if time() - start > 5:
-                raise Exception("Timeout on cluster creation")
-
-        yield {'proc': center, 'port': cport}, workers
-    finally:
-        logger.debug("Closing out test cluster")
-        for port in [cport] + [w['port'] for w in workers]:
-            with ignoring(socket.error, TimeoutError, StreamClosedError):
-                loop.run_sync(lambda: disconnect('127.0.0.1', port),
-                              timeout=0.5)
-        for proc in [center] + [w['proc'] for w in workers]:
-            with ignoring(Exception):
-                proc.terminate()
-        for proc in [center] + [w['proc'] for w in workers]:
-            with ignoring(Exception):
-                proc.join(timeout=5)
-        for fn in glob('_test_worker-*'):
-            shutil.rmtree(fn)
-
-
 @gen.coroutine
 def disconnect(ip, port):
     stream = yield connect(ip, port)
@@ -364,78 +286,6 @@ except AttributeError:
 
 from tornado import gen
 from tornado.ioloop import IOLoop
-
-def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
-    from .center import Center
-    from .worker import Worker
-    from .executor import _global_executor
-    @gen.coroutine
-    def g():
-        c = Center('127.0.0.1')
-        c.listen(0)
-        a = Worker(c.ip, c.port, ncores=2, ip='127.0.0.1')
-        yield a._start()
-        b = Worker(c.ip, c.port, ncores=1, ip=b_ip)
-        yield b._start()
-
-        start = time()
-        try:
-            while len(c.ncores) < 2:
-                yield gen.sleep(0.01)
-                if time() - start > 5:
-                    raise Exception("Cluster creation timeout")
-
-            yield f(c, a, b)
-        except Exception as e:
-            logger.exception(e)
-            raise
-        finally:
-            logger.debug("Closing out test cluster")
-            for w in [a, b]:
-                with ignoring(TimeoutError, StreamClosedError, OSError):
-                    yield w._close()
-                if os.path.exists(w.local_dir):
-                    shutil.rmtree(w.local_dir)
-            c.stop()
-
-    loop = loop or IOLoop.current()
-    loop.run_sync(g)
-    _global_executor[0] = None
-
-
-def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
-    from .scheduler import Scheduler
-    from .worker import Worker
-    from .executor import _global_executor
-    @gen.coroutine
-    def g():
-        s = Scheduler(ip='127.0.0.1', validate=True)
-        done = s.start(0)
-        a = Worker('127.0.0.1', s.port, ncores=2, ip='127.0.0.1')
-        yield a._start()
-        b = Worker('127.0.0.1', s.port, ncores=1, ip=b_ip)
-        yield b._start()
-
-        start = time()
-        try:
-            while len(s.ncores) < 2:
-                yield gen.sleep(0.01)
-                if time() - start > 5:
-                    raise Exception("Cluster creation timeout")
-
-            yield f(s, a, b)
-        finally:
-            logger.debug("Closing out test cluster")
-            yield s.close()
-            for w in [a, b]:
-                with ignoring(TimeoutError, StreamClosedError, OSError):
-                    yield w._close()
-                if os.path.exists(w.local_dir):
-                    shutil.rmtree(w.local_dir)
-
-    loop = loop or IOLoop.current()
-    loop.run_sync(g)
-    _global_executor[0] = None
 
 
 def gen_test(timeout=10):
@@ -482,6 +332,7 @@ def start_cluster(ncores, loop, Worker=Worker):
         if time() - start > 5:
             raise Exception("Cluster creation timeout")
     raise gen.Return((s, workers))
+
 
 @gen.coroutine
 def end_cluster(s, workers):

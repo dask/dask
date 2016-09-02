@@ -21,60 +21,6 @@ from .utils import ignore_exceptions, All, log_errors, tokey, sync
 no_default = '__no_default__'
 
 
-def gather(center, needed):
-    """ Gather data from distributed workers
-
-    This operates by first asking the center who has all of the state keys and
-    then trying those workers directly.
-
-    Keys not found on the network will not appear in the output.  You should
-    check the length of the output against the input if concerned about missing
-    data.
-
-    Parameters
-    ----------
-    center:
-        (ip, port) tuple or Stream, or rpc object designating the Center
-    needed: iterable
-        A list of required keys
-
-    Returns
-    -------
-    result: dict
-        A mapping of the given keys to data values
-
-    Examples
-    --------
-    >>> remote_data = scatter('127.0.0.1:8787', [1, 2, 3])  # doctest: +SKIP
-    >>> local_data = gather('127.0.0.1:8787', remote_data)  # doctest: +SKIP
-
-    See also
-    --------
-    distributed.client.scatter:
-    distributed.client._gather:
-    distributed.client.gather_from_workers:
-    """
-    func = lambda: _gather(center, needed)
-    result = IOLoop().run_sync(func)
-    return result
-
-
-@gen.coroutine
-def _gather(center, needed=[]):
-    center = coerce_to_rpc(center)
-
-    needed = [n.key if isinstance(n, WrappedKey) else n for n in needed]
-    who_has = yield center.who_has(keys=needed)
-
-    if not isinstance(who_has, dict):
-        raise TypeError('Bad response from who_has: %s' % who_has)
-
-    result = yield gather_from_workers(who_has)
-    raise Return([result[tokey(key)] for key in needed])
-
-_gather.__doc__ = gather.__doc__
-
-
 @gen.coroutine
 def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
                         permissive=False):
@@ -146,47 +92,6 @@ class WrappedKey(object):
         self.key = key
 
 
-def scatter(center, data, serialize=True):
-    """ Scatter data to workers
-
-    Parameters
-    ----------
-    center:
-        (ip, port) tuple or Stream, or rpc object designating the Center
-    data: dict or iterable
-        either a dictionary of key: value pairs or an iterable of values
-    key:
-        if data is an iterable of values then we use the key to generate keys
-        as key-0, key-1, key-2, ...
-
-    Examples
-    --------
-    >>> remote_data = scatter('127.0.0.1:8787', [1, 2, 3])  # doctest: +SKIP
-    >>> local_data = gather('127.0.0.1:8787', remote_data)  # doctest: +SKIP
-
-    See Also
-    --------
-    distributed.client.gather:
-    distributed.client._scatter:
-    distributed.client.scatter_to_workers:
-    """
-    return sync(IOLoop(), _scatter, center, data, serialize=serialize)
-
-
-@gen.coroutine
-def _scatter(center, data, serialize=True):
-    with log_errors():
-        center = coerce_to_rpc(center)
-        ncores = yield center.ncores()
-
-        result, who_has, nbytes = yield scatter_to_workers(ncores, data,
-                                                           serialize=serialize)
-    raise Return(result)
-
-
-_scatter.__doc__ = scatter.__doc__
-
-
 _round_robin_counter = [0]
 
 
@@ -232,73 +137,6 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}
 
     raise Return((names, who_has, nbytes))
-
-
-@gen.coroutine
-def broadcast_to_workers(workers, data, report=False, rpc=rpc, serialize=True):
-    """ Broadcast data directly to all workers
-
-    This sends all data to every worker.
-
-    Currently this works inefficiently by sending all data out directly from
-    the scheduler.  In the future we should have the workers communicate
-    amongst themselves.
-
-    Parameters
-    ----------
-    workers: sequence of (host, port) pairs
-    data: sequence of data
-
-    See Also
-    --------
-    scatter_to_workers
-    """
-    if isinstance(data, dict):
-        names = list(data)
-    else:
-        names = []
-        for x in data:
-            try:
-                names.append(tokenize(x))
-            except:
-                names.append(uuid.uuid1())
-        data = dict(zip(names, data))
-
-    if serialize:
-        data = valmap(dumps, data)
-
-    out = yield All([rpc(address).update_data(data=data, report=report)
-                     for address in workers])
-    nbytes = merge([o['nbytes'] for o in out])
-
-    raise Return((names, nbytes))
-
-
-@gen.coroutine
-def _delete(center, keys):
-    keys = [k.key if isinstance(k, WrappedKey) else k for k in keys]
-    center = coerce_to_rpc(center)
-    yield center.delete_data(keys=keys)
-
-def delete(center, keys):
-    """ Delete keys from all workers """
-    return IOLoop().run_sync(lambda: _delete(center, keys))
-
-
-@gen.coroutine
-def _clear(center):
-    center = coerce_to_rpc(center)
-    who_has = yield center.who_has()
-    yield center.delete_data(keys=list(who_has))
-
-def clear(center):
-    """ Clear all data from all workers' memory
-
-    See Also
-    --------
-    distributed.client.delete
-    """
-    return IOLoop().run_sync(lambda: _clear(center))
 
 
 collection_types = (tuple, list, set, frozenset)

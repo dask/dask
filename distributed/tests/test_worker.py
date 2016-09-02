@@ -15,14 +15,13 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 from distributed.batched import BatchedStream
-from distributed.center import Center
 from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger
 from distributed.utils import ignoring
-from distributed.utils_test import (loop, _test_cluster, inc, gen_cluster,
-        slow, slowinc, throws, current_loop)
+from distributed.utils_test import (loop, inc, gen_cluster,
+        slow, slowinc, throws, current_loop, gen_test)
 
 
 
@@ -58,198 +57,184 @@ def test_health():
         assert 'network-send' in d
 
 
-def test_worker_bad_args(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        aa = rpc(ip=a.ip, port=a.port)
-        bb = rpc(ip=b.ip, port=b.port)
+@gen_cluster()
+def test_worker_bad_args(c, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+    bb = rpc(ip=b.ip, port=b.port)
 
-        class NoReprObj(object):
-            """ This object cannot be properly represented as a string. """
-            def __str__(self):
-                raise ValueError("I have no str representation.")
-            def __repr__(self):
-                raise ValueError("I have no repr representation.")
+    class NoReprObj(object):
+        """ This object cannot be properly represented as a string. """
+        def __str__(self):
+            raise ValueError("I have no str representation.")
+        def __repr__(self):
+            raise ValueError("I have no repr representation.")
 
-        response = yield aa.compute(key='x',
-                                    function=dumps(NoReprObj),
-                                    args=dumps(()),
-                                    who_has={})
-        assert not a.active
-        assert response['status'] == 'OK'
-        assert a.data['x']
-        assert c.who_has['x'] == {a.address}
-        assert isinstance(response['compute_start'], float)
-        assert isinstance(response['compute_stop'], float)
-        assert isinstance(response['thread'], Integral)
+    response = yield aa.compute(key='x',
+                                function=dumps(NoReprObj),
+                                args=dumps(()),
+                                who_has={})
+    assert not a.active
+    assert response['status'] == 'OK'
+    assert a.data['x']
+    assert isinstance(response['compute_start'], float)
+    assert isinstance(response['compute_stop'], float)
+    assert isinstance(response['thread'], Integral)
 
-        def bad_func(*args, **kwargs):
-            1 / 0
+    def bad_func(*args, **kwargs):
+        1 / 0
 
-        class MockLoggingHandler(logging.Handler):
-            """Mock logging handler to check for expected logs."""
+    class MockLoggingHandler(logging.Handler):
+        """Mock logging handler to check for expected logs."""
 
-            def __init__(self, *args, **kwargs):
-                self.reset()
-                logging.Handler.__init__(self, *args, **kwargs)
+        def __init__(self, *args, **kwargs):
+            self.reset()
+            logging.Handler.__init__(self, *args, **kwargs)
 
-            def emit(self, record):
-                self.messages[record.levelname.lower()].append(record.getMessage())
+        def emit(self, record):
+            self.messages[record.levelname.lower()].append(record.getMessage())
 
-            def reset(self):
-                self.messages = {
-                    'debug': [],
-                    'info': [],
-                    'warning': [],
-                    'error': [],
-                    'critical': [],
-                }
+        def reset(self):
+            self.messages = {
+                'debug': [],
+                'info': [],
+                'warning': [],
+                'error': [],
+                'critical': [],
+            }
 
-        hdlr = MockLoggingHandler()
-        old_level = logger.level
-        logger.setLevel(logging.DEBUG)
-        logger.addHandler(hdlr)
-        response = yield bb.compute(key='y',
-                                    function=dumps(bad_func),
-                                    args=dumps(['x']),
-                                    kwargs=dumps({'k': 'x'}),
-                                    who_has={'x': [a.address]})
-        assert not b.active
-        assert response['status'] == 'error'
-        # Make sure job died because of bad func and not because of bad
-        # argument.
-        assert isinstance(loads(response['exception']), ZeroDivisionError)
-        if sys.version_info[0] >= 3:
-            assert any('1 / 0' in line
-                      for line in pluck(3, traceback.extract_tb(
-                          loads(response['traceback'])))
-                      if line)
-        assert hdlr.messages['warning'][0] == " Compute Failed\n" \
-            "Function: bad_func\n" \
-            "args:     (< could not convert arg to str >)\n" \
-            "kwargs:   {'k': < could not convert arg to str >}\n"
-        assert re.match(r"^Send compute response to scheduler: y, " \
-            "\{.*'args': \(< could not convert arg to str >\), .*" \
-            "'kwargs': \{'k': < could not convert arg to str >\}.*\}",
-            hdlr.messages['debug'][0]) or \
-            re.match("^Send compute response to scheduler: y, " \
-            "\{.*'kwargs': \{'k': < could not convert arg to str >\}, .*" \
-            "'args': \(< could not convert arg to str >\).*\}",
-            hdlr.messages['debug'][0])
-        logger.setLevel(old_level)
+    hdlr = MockLoggingHandler()
+    old_level = logger.level
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(hdlr)
+    response = yield bb.compute(key='y',
+                                function=dumps(bad_func),
+                                args=dumps(['x']),
+                                kwargs=dumps({'k': 'x'}),
+                                who_has={'x': [a.address]})
+    assert not b.active
+    assert response['status'] == 'error'
+    # Make sure job died because of bad func and not because of bad
+    # argument.
+    assert isinstance(loads(response['exception']), ZeroDivisionError)
+    if sys.version_info[0] >= 3:
+        assert any('1 / 0' in line
+                  for line in pluck(3, traceback.extract_tb(
+                      loads(response['traceback'])))
+                  if line)
+    assert hdlr.messages['warning'][0] == " Compute Failed\n" \
+        "Function: bad_func\n" \
+        "args:     (< could not convert arg to str >)\n" \
+        "kwargs:   {'k': < could not convert arg to str >}\n"
+    assert re.match(r"^Send compute response to scheduler: y, " \
+        "\{.*'args': \(< could not convert arg to str >\), .*" \
+        "'kwargs': \{'k': < could not convert arg to str >\}.*\}",
+        hdlr.messages['debug'][0]) or \
+        re.match("^Send compute response to scheduler: y, " \
+        "\{.*'kwargs': \{'k': < could not convert arg to str >\}, .*" \
+        "'args': \(< could not convert arg to str >\).*\}",
+        hdlr.messages['debug'][0])
+    logger.setLevel(old_level)
 
-        # Now we check that both workers are still alive.
+    # Now we check that both workers are still alive.
 
-        assert not a.active
-        response = yield aa.compute(key='z',
-                                    function=dumps(add),
-                                    args=dumps([1, 2]),
-                                    who_has={},
-                                    close=True)
-        assert not a.active
-        assert response['status'] == 'OK'
-        assert a.data['z'] == 3
-        assert c.who_has['z'] == {a.address}
-        assert isinstance(response['compute_start'], float)
-        assert isinstance(response['compute_stop'], float)
-        assert isinstance(response['thread'], Integral)
+    assert not a.active
+    response = yield aa.compute(key='z',
+                                function=dumps(add),
+                                args=dumps([1, 2]),
+                                who_has={},
+                                close=True)
+    assert not a.active
+    assert response['status'] == 'OK'
+    assert a.data['z'] == 3
+    assert isinstance(response['compute_start'], float)
+    assert isinstance(response['compute_stop'], float)
+    assert isinstance(response['thread'], Integral)
 
-        assert not b.active
-        response = yield bb.compute(key='w',
-                                    function=dumps(add),
-                                    args=dumps([1, 2]),
-                                    who_has={},
-                                    close=True)
-        assert not b.active
-        assert response['status'] == 'OK'
-        assert b.data['w'] == 3
-        assert c.who_has['w'] == {b.address}
-        assert isinstance(response['compute_start'], float)
-        assert isinstance(response['compute_stop'], float)
-        assert isinstance(response['thread'], Integral)
+    assert not b.active
+    response = yield bb.compute(key='w',
+                                function=dumps(add),
+                                args=dumps([1, 2]),
+                                who_has={},
+                                close=True)
+    assert not b.active
+    assert response['status'] == 'OK'
+    assert b.data['w'] == 3
+    assert isinstance(response['compute_start'], float)
+    assert isinstance(response['compute_stop'], float)
+    assert isinstance(response['thread'], Integral)
 
-        aa.close_streams()
-        yield a._close()
+    aa.close_streams()
 
-        bb.close_streams()
-        yield b._close()
-
-    _test_cluster(f)
+    bb.close_streams()
 
 
-def test_worker(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        aa = rpc(ip=a.ip, port=a.port)
-        bb = rpc(ip=b.ip, port=b.port)
+@gen_cluster()
+def test_worker(c, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+    bb = rpc(ip=b.ip, port=b.port)
 
-        result = yield aa.identity()
-        assert not a.active
-        response = yield aa.compute(key='x',
-                                    function=dumps(add),
-                                    args=dumps([1, 2]),
-                                    who_has={},
-                                    close=True)
-        assert not a.active
-        assert response['status'] == 'OK'
-        assert a.data['x'] == 3
-        assert c.who_has['x'] == {a.address}
-        assert isinstance(response['compute_start'], float)
-        assert isinstance(response['compute_stop'], float)
-        assert isinstance(response['thread'], Integral)
+    result = yield aa.identity()
+    assert not a.active
+    response = yield aa.compute(key='x',
+                                function=dumps(add),
+                                args=dumps([1, 2]),
+                                who_has={},
+                                close=True)
+    assert not a.active
+    assert response['status'] == 'OK'
+    assert a.data['x'] == 3
+    assert isinstance(response['compute_start'], float)
+    assert isinstance(response['compute_stop'], float)
+    assert isinstance(response['thread'], Integral)
 
-        response = yield bb.compute(key='y',
-                                    function=dumps(add),
-                                    args=dumps(['x', 10]),
-                                    who_has={'x': [a.address]})
-        assert response['status'] == 'OK'
-        assert b.data['y'] == 13
-        assert c.who_has['y'] == {b.address}
-        assert response['nbytes'] == sizeof(b.data['y'])
-        assert isinstance(response['transfer_start'], float)
-        assert isinstance(response['transfer_stop'], float)
+    response = yield bb.compute(key='y',
+                                function=dumps(add),
+                                args=dumps(['x', 10]),
+                                who_has={'x': [a.address]})
+    assert response['status'] == 'OK'
+    assert b.data['y'] == 13
+    assert response['nbytes'] == sizeof(b.data['y'])
+    assert isinstance(response['transfer_start'], float)
+    assert isinstance(response['transfer_stop'], float)
 
-        def bad_func():
-            1 / 0
+    def bad_func():
+        1 / 0
 
-        response = yield bb.compute(key='z',
-                                    function=dumps(bad_func),
-                                    args=dumps(()),
-                                    close=True)
-        assert not b.active
-        assert response['status'] == 'error'
-        assert isinstance(loads(response['exception']), ZeroDivisionError)
-        if sys.version_info[0] >= 3:
-            assert any('1 / 0' in line
-                      for line in pluck(3, traceback.extract_tb(
-                          loads(response['traceback'])))
-                      if line)
+    response = yield bb.compute(key='z',
+                                function=dumps(bad_func),
+                                args=dumps(()),
+                                close=True)
+    assert not b.active
+    assert response['status'] == 'error'
+    assert isinstance(loads(response['exception']), ZeroDivisionError)
+    if sys.version_info[0] >= 3:
+        assert any('1 / 0' in line
+                  for line in pluck(3, traceback.extract_tb(
+                      loads(response['traceback'])))
+                  if line)
 
-        aa.close_streams()
-        yield a._close()
+    aa.close_streams()
+    yield a._close()
 
-        assert a.address not in c.ncores and b.address in c.ncores
+    assert a.address not in c.ncores and b.address in c.ncores
 
-        assert list(c.ncores.keys()) == [b.address]
+    assert list(c.ncores.keys()) == [b.address]
 
-        assert isinstance(b.address, str)
-        assert b.ip in b.address
-        assert str(b.port) in b.address
+    assert isinstance(b.address, str)
+    assert b.ip in b.address
+    assert str(b.port) in b.address
 
-        bb.close_streams()
-        yield b._close()
-
-    _test_cluster(f)
+    bb.close_streams()
 
 
 def test_compute_who_has(current_loop):
     @gen.coroutine
     def f():
-        c = Center(ip='127.0.0.1')
-        c.listen(0)
-        x = Worker(c.ip, c.port, ip='127.0.0.1')
-        y = Worker(c.ip, c.port, ip='127.0.0.1')
-        z = Worker(c.ip, c.port, ip='127.0.0.1')
+        s = Scheduler()
+        s.listen(0)
+        x = Worker(s.ip, s.port, ip='127.0.0.1')
+        y = Worker(s.ip, s.port, ip='127.0.0.1')
+        z = Worker(s.ip, s.port, ip='127.0.0.1')
         x.data['a'] = 1
         y.data['a'] = 2
         yield [x._start(), y._start(), z._start()]
@@ -275,145 +260,128 @@ def test_compute_who_has(current_loop):
     current_loop.run_sync(f, timeout=5)
 
 
-def test_workers_update_center(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        aa = rpc(ip=a.ip, port=a.port)
+@gen_cluster()
+def dont_test_workers_update_center(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
 
-        response = yield aa.update_data(data={'x': dumps(1), 'y': dumps(2)})
-        assert response['status'] == 'OK'
-        assert response['nbytes'] == {'x': sizeof(1), 'y': sizeof(2)}
+    response = yield aa.update_data(data={'x': dumps(1), 'y': dumps(2)})
+    assert response['status'] == 'OK'
+    assert response['nbytes'] == {'x': sizeof(1), 'y': sizeof(2)}
 
-        assert a.data == {'x': 1, 'y': 2}
-        assert c.who_has == {'x': {a.address},
-                             'y': {a.address}}
-        assert c.has_what[a.address] == {'x', 'y'}
+    assert a.data == {'x': 1, 'y': 2}
+    assert s.who_has == {'x': {a.address},
+                         'y': {a.address}}
+    assert s.has_what[a.address] == {'x', 'y'}
 
-        yield aa.delete_data(keys=['x'], close=True)
-        assert not c.who_has['x']
-        assert all('x' not in s for s in c.has_what.values())
+    yield aa.delete_data(keys=['x'], close=True)
+    assert not s.who_has['x']
+    assert all('x' not in s for s in c.has_what.values())
 
-        aa.close_streams()
-
-    _test_cluster(f)
+    aa.close_streams()
 
 
 @slow
-def dont_test_delete_data_with_missing_worker(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        bad = '127.0.0.1:9001'  # this worker doesn't exist
-        c.who_has['z'].add(bad)
-        c.who_has['z'].add(a.address)
-        c.has_what[bad].add('z')
-        c.has_what[a.address].add('z')
-        a.data['z'] = 5
+@gen_cluster()
+def dont_test_delete_data_with_missing_worker(c, a, b):
+    bad = '127.0.0.1:9001'  # this worker doesn't exist
+    c.who_has['z'].add(bad)
+    c.who_has['z'].add(a.address)
+    c.has_what[bad].add('z')
+    c.has_what[a.address].add('z')
+    a.data['z'] = 5
 
-        cc = rpc(ip=c.ip, port=c.port)
+    cc = rpc(ip=c.ip, port=c.port)
 
-        yield cc.delete_data(keys=['z'])  # TODO: this hangs for a while
-        assert 'z' not in a.data
-        assert not c.who_has['z']
-        assert not c.has_what[bad]
-        assert not c.has_what[a.address]
+    yield cc.delete_data(keys=['z'])  # TODO: this hangs for a while
+    assert 'z' not in a.data
+    assert not c.who_has['z']
+    assert not c.has_what[bad]
+    assert not c.has_what[a.address]
 
-        cc.close_streams()
-
-    _test_cluster(f)
+    cc.close_streams()
 
 
-def test_upload_file(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
-        assert not os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
-        assert a.local_dir != b.local_dir
+@gen_cluster()
+def test_upload_file(s, a, b):
+    assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+    assert not os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
+    assert a.local_dir != b.local_dir
 
-        aa = rpc(ip=a.ip, port=a.port)
-        bb = rpc(ip=b.ip, port=b.port)
-        yield [aa.upload_file(filename='foobar.py', data=b'x = 123'),
-               bb.upload_file(filename='foobar.py', data='x = 123')]
+    aa = rpc(ip=a.ip, port=a.port)
+    bb = rpc(ip=b.ip, port=b.port)
+    yield [aa.upload_file(filename='foobar.py', data=b'x = 123'),
+           bb.upload_file(filename='foobar.py', data='x = 123')]
 
-        assert os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
-        assert os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
+    assert os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+    assert os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
 
-        def g():
-            import foobar
-            return foobar.x
+    def g():
+        import foobar
+        return foobar.x
 
-        yield aa.compute(function=dumps(g),
-                         key='x')
-        result = yield aa.get_data(keys=['x'])
-        assert result == {'x': dumps(123)}
+    yield aa.compute(function=dumps(g),
+                     key='x')
+    result = yield aa.get_data(keys=['x'])
+    assert result == {'x': dumps(123)}
 
-        yield a._close()
-        yield b._close()
-        aa.close_streams()
-        bb.close_streams()
-        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
-
-    _test_cluster(f)
+    yield a._close()
+    yield b._close()
+    aa.close_streams()
+    bb.close_streams()
+    assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
 
 
-def test_upload_egg(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        eggname = 'mytestegg-1.0.0-py3.4.egg'
-        local_file = __file__.replace('test_worker.py', eggname)
-        assert not os.path.exists(os.path.join(a.local_dir, eggname))
-        assert not os.path.exists(os.path.join(b.local_dir, eggname))
-        assert a.local_dir != b.local_dir
+@gen_cluster()
+def test_upload_egg(s, a, b):
+    eggname = 'mytestegg-1.0.0-py3.4.egg'
+    local_file = __file__.replace('test_worker.py', eggname)
+    assert not os.path.exists(os.path.join(a.local_dir, eggname))
+    assert not os.path.exists(os.path.join(b.local_dir, eggname))
+    assert a.local_dir != b.local_dir
 
-        aa = rpc(ip=a.ip, port=a.port)
-        bb = rpc(ip=b.ip, port=b.port)
-        with open(local_file, 'rb') as f:
-            payload = f.read()
-        yield [aa.upload_file(filename=eggname, data=payload),
-               bb.upload_file(filename=eggname, data=payload)]
+    aa = rpc(ip=a.ip, port=a.port)
+    bb = rpc(ip=b.ip, port=b.port)
+    with open(local_file, 'rb') as f:
+        payload = f.read()
+    yield [aa.upload_file(filename=eggname, data=payload),
+           bb.upload_file(filename=eggname, data=payload)]
 
-        assert os.path.exists(os.path.join(a.local_dir, eggname))
-        assert os.path.exists(os.path.join(b.local_dir, eggname))
+    assert os.path.exists(os.path.join(a.local_dir, eggname))
+    assert os.path.exists(os.path.join(b.local_dir, eggname))
 
-        def g(x):
-            import testegg
-            return testegg.inc(x)
+    def g(x):
+        import testegg
+        return testegg.inc(x)
 
-        yield aa.compute(function=dumps(g), key='x', args=dumps((10,)))
-        result = yield aa.get_data(keys=['x'])
-        assert result == {'x': dumps(10 + 1)}
+    yield aa.compute(function=dumps(g), key='x', args=dumps((10,)))
+    result = yield aa.get_data(keys=['x'])
+    assert result == {'x': dumps(10 + 1)}
 
-        yield a._close()
-        yield b._close()
-        aa.close_streams()
-        bb.close_streams()
-        assert not os.path.exists(os.path.join(a.local_dir, eggname))
-
-    _test_cluster(f)
+    yield a._close()
+    yield b._close()
+    aa.close_streams()
+    bb.close_streams()
+    assert not os.path.exists(os.path.join(a.local_dir, eggname))
 
 
-def test_broadcast(current_loop):
-    @gen.coroutine
-    def f(c, a, b):
-        cc = rpc(ip=c.ip, port=c.port)
-        results = yield cc.broadcast(msg={'op': 'ping'})
-        assert results == {a.address: b'pong', b.address: b'pong'}
+@gen_cluster()
+def test_broadcast(s, a, b):
+    cc = rpc(ip=s.ip, port=s.port)
+    results = yield cc.broadcast(msg={'op': 'ping'})
+    assert results == {a.address: b'pong', b.address: b'pong'}
 
-        cc.close_streams()
-
-    _test_cluster(f)
+    cc.close_streams()
 
 
-def test_worker_with_port_zero(current_loop):
-    @gen.coroutine
-    def f():
-        c = Center('127.0.0.1')
-        c.listen(8007)
-        w = Worker(c.ip, c.port, ip='127.0.0.1')
-        yield w._start()
-        assert isinstance(w.port, int)
-        assert w.port > 1024
+@gen_test()
+def test_worker_with_port_zero():
+    s = Scheduler()
+    s.listen(8007)
+    w = Worker(s.ip, s.port, ip='127.0.0.1')
+    yield w._start()
+    assert isinstance(w.port, int)
+    assert w.port > 1024
 
-    current_loop.run_sync(f)
 
 @slow
 def test_worker_waits_for_center_to_come_up(current_loop):
