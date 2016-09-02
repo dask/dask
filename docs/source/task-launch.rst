@@ -77,6 +77,9 @@ and so this only added a few milliseconds to our total processing time.
 Submit tasks from worker
 ------------------------
 
+*Note: this interface is new and experimental.  It may be changed without
+warning in future versions.*
+
 Alternatively we submit tasks from other tasks.  This allows us to make
 decisions while on worker nodes.  To do this we will make a new client object
 on the worker itself.  There is a convenience function for this that will

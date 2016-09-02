@@ -20,6 +20,9 @@ from .worker import local_state
 def local_executor():
     """ Get executor for this thread
 
+    Note: This interface is new and experimental.  It may change without
+    notice.
+
     This context manager is intended to be called within functions that we run
     on workers.  When run as a context manager it delivers a client
     ``Executor`` object that can submit other tasks directly from that worker.
