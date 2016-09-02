@@ -15,6 +15,8 @@ from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
 
+logger = logging.getLogger(__file__)
+
 
 class LocalCluster(object):
     """ Create local Scheduler and Workers
@@ -168,12 +170,17 @@ class LocalCluster(object):
 
             http://localhost:8787/status/
         """
+        try:
+            from distributed.bokeh.application import BokehWebInterface
+        except ImportError:
+            logger.info("To start diagnostics web server please install Bokeh")
+            return
+
         assert self.diagnostics is None
         if 'http' not in self.scheduler.services:
             self.scheduler.services['http'] = HTTPScheduler(self.scheduler,
                     io_loop=self.scheduler.loop)
             self.scheduler.services['http'].listen(0)
-        from distributed.bokeh.application import BokehWebInterface
         self.diagnostics = BokehWebInterface(
                 tcp_port=self.scheduler.port,
                 http_port=self.scheduler.services['http'].port,
