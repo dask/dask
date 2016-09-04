@@ -893,14 +893,61 @@ class _Frame(Base):
     def to_csv(self, filename, **kwargs):
         """Write DataFrame to a series of comma-separated values (csv) files
 
-        One filename per partition will be written.
+        One filename per partition will be created. You can specify the
+        filenames in a variety of ways.
+
+        Use a globstring::
+
+        >>> df.to_csv('/path/to/data/export-*.csv')  # doctest: +SKIP
+
+        The * will be replaced by the increasing sequence 0, 1, 2, ...
+
+        ::
+
+            /path/to/data/export-0.csv
+            /path/to/data/export-1.csv
+
+        Use a globstring and a ``name_function=`` keyword argument.  The
+        name_function function should expect an integer and produce a string.
+        Strings produced by name_function must preserve the order of their
+        respective partition indices.
+
+        >>> from datetime import date, timedelta
+        >>> def name(i):
+        ...     return str(date(2015, 1, 1) + i * timedelta(days=1))
+
+        >>> name(0)
+        '2015-01-01'
+        >>> name(15)
+        '2015-01-16'
+
+        >>> df.to_csv('/path/to/data/export-*.csv', name_function=name)  # doctest: +SKIP
+
+        ::
+
+            /path/to/data/export-2015-01-01.csv
+            /path/to/data/export-2015-01-02.csv
+            ...
+
+        You can also provide an explicit list of paths::
+
+        >>> paths = ['/path/to/data/alice.csv', '/path/to/data/bob.csv', ...]  # doctest: +SKIP
+        >>> df.to_csv(paths) # doctest: +SKIP
 
         Parameters
         ----------
         filename : string
             Path glob indicating the naming scheme for the output files
+        name_function : callable, default None
+            Function accepting an integer (partition index) and producing a
+            string to replace the asterisk in the given filename globstring.
+            Should preserve the lexicographic order of partitions
+        compression : string or None
+            String like 'gzip' or 'xz'.  Must support efficient random access.
+            Filenames with extensions corresponding to known compression
+            algorithms (gz, bz2) will be compressed accordingly automatically
         sep : character, default ','
-            Field delimiter for the output file.
+            Field delimiter for the output file
         na_rep : string, default ''
             Missing data representation
         float_format : string, default None
@@ -950,10 +997,6 @@ class _Frame(Base):
         decimal: string, default '.'
             Character recognized as decimal separator. E.g. use ',' for
             European data
-
-        Examples
-        --------
-        >>> df.to_csv('/path/to/data/export-*.csv')  # doctest: +SKIP
         """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
