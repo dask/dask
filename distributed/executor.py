@@ -1237,18 +1237,28 @@ class Executor(object):
         results2 = pack_data(keys, results)
         return results2
 
-    def compute(self, args, sync=False, optimize_graph=True, **kwargs):
+    def compute(self, collections, sync=False, optimize_graph=True,
+            workers=None, allow_other_workers=False, **kwargs):
         """ Compute dask collections on cluster
 
         Parameters
         ----------
-        args: iterable of dask objects or single dask object
+        collections: iterable of dask objects or single dask object
             Collections like dask.array or dataframe or dask.value objects
         sync: bool (optional)
             Returns Futures if False (default) or concrete values if True
         optimize_graph: bool
             Whether or not to optimize the underlying graphs
-        kwargs:
+        workers: str, list, dict
+            Which workers can run which parts of the computation
+            If a string a list then the output collections will run on the listed
+                workers, but other sub-computations can run anywhere
+            If a dict then keys should be (tuples of) collections and values
+                should be addresses or lists.
+        allow_other_workers: bool, list
+            If True then all restrictions in workers= are considered loose
+            If a list then only the keys for the listed collections are loose
+        **kwargs:
             Options to pass to the graph optimize calls
 
         Returns
@@ -1277,13 +1287,13 @@ class Executor(object):
         --------
         Executor.get: Normal synchronous dask.get function
         """
-        if isinstance(args, (list, tuple, set, frozenset)):
+        if isinstance(collections, (list, tuple, set, frozenset)):
             singleton = False
         else:
-            args = [args]
+            collections = [collections]
             singleton = True
 
-        variables = [a for a in args if isinstance(a, Base)]
+        variables = [a for a in collections if isinstance(a, Base)]
 
         if optimize_graph:
             groups = groupby(lambda x: x._optimize, variables)
@@ -1296,11 +1306,16 @@ class Executor(object):
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
-        futures_dict = self._graph_to_futures(merge(dsk2, dsk), names)
+
+        restrictions, loose_restrictions = get_restrictions(collections,
+                workers, allow_other_workers)
+
+        futures_dict = self._graph_to_futures(merge(dsk2, dsk), names,
+                                              restrictions, loose_restrictions)
 
         i = 0
         futures = []
-        for arg in args:
+        for arg in collections:
             if isinstance(arg, Base):
                 futures.append(futures_dict[names[i]])
                 i += 1
@@ -1317,7 +1332,8 @@ class Executor(object):
         else:
             return result
 
-    def persist(self, collections, optimize_graph=True, **kwargs):
+    def persist(self, collections, optimize_graph=True, workers=None,
+                allow_other_workers=None, **kwargs):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -1330,6 +1346,15 @@ class Executor(object):
             Collections like dask.array or dataframe or dask.value objects
         optimize_graph: bool
             Whether or not to optimize the underlying graphs
+        workers: str, list, dict
+            Which workers can run which parts of the computation
+            If a string a list then the output collections will run on the listed
+                workers, but other sub-computations can run anywhere
+            If a dict then keys should be (tuples of) collections and values
+                should be addresses or lists.
+        allow_other_workers: bool, list
+            If True then all restrictions in workers= are considered loose
+            If a list then only the keys for the listed collections are loose
         kwargs:
             Options to pass to the graph optimize calls
 
@@ -1364,11 +1389,15 @@ class Executor(object):
 
         names = {k for c in collections for k in flatten(c._keys())}
 
-        futures = self._graph_to_futures(dsk, names)
+        restrictions, loose_restrictions = get_restrictions(collections,
+                workers, allow_other_workers)
+
+        futures = self._graph_to_futures(dsk, names, restrictions,
+                loose_restrictions)
 
         result = [redict_collection(c, {k: futures[k]
                                         for k in flatten(c._keys())})
-                for c in collections]
+                  for c in collections]
         if singleton:
             return first(result)
         else:
@@ -2031,3 +2060,31 @@ def temp_default_executor(e):
         yield
     finally:
         _global_executor[0] = old_exec
+
+def get_restrictions(collections, workers, allow_other_workers):
+    """ Get restrictions from inputs to compute/persist """
+    if isinstance(workers, (str, tuple, list)):
+        workers = {tuple(collections): workers}
+    if isinstance(workers, dict):
+        restrictions = {}
+        for colls, ws in workers.items():
+            if isinstance(ws, str):
+                ws = [ws]
+            if hasattr(colls, '._keys'):
+                keys = flatten(colls._keys())
+            else:
+                keys = list({k for c in flatten(colls)
+                                for k in flatten(c._keys())})
+            restrictions.update({k: ws for k in keys})
+    else:
+        restrictions = {}
+
+    if allow_other_workers is True:
+        loose_restrictions = list(restrictions)
+    elif allow_other_workers:
+        loose_restrictions = list({k for c in flatten(allow_other_workers)
+                                     for k in c._keys()})
+    else:
+        loose_restrictions = []
+
+    return restrictions, loose_restrictions

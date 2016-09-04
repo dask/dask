@@ -107,4 +107,93 @@ And then use this name when specifying workers instead.
 
    e.map(func, sequence, workers='worker_1')
 
+
+Specify workers with Compute/Persist
+------------------------------------
+
+The ``workers=`` keyword in ``scatter``, ``submit``, and ``map`` is fairly
+straightforward, taking either a worker hostname, host:port pair or a sequence
+of those as valid inputs:
+
+.. code-block:: python
+
+   e.submit(f, x, workers='127.0.0.1')
+   e.submit(f, x, workers='127.0.0.1:55852')
+   e.submit(f, x, workers=['192.168.1.101', '192.168.1.100'])
+
+For more complex computations, such as occur with dask collections like
+dask.dataframe or dask.delayed, we sometimes want to specify that certain parts
+of the computation run on certain workers while other parts run on other
+workers.
+
+.. code-block:: python
+
+   x = delayed(f)(1)
+   y = delayed(f)(2)
+   z = delayed(g)(x, y)
+
+   future = e.compute(z, workers={z: '127.0.0.1',
+                                  x: '192.168.0.1'})
+
+Here the values of the dictionary are of the same form as before, a host, a
+host:port pair, or a list of these.  The keys in this case are either dask
+collections or tuples of dask collections.  All of the *final* keys of these
+collections will run on the specified machines; dependencies can run anywhere
+unless they are also listed in ``workers=``.  We explore this through a set of
+examples:
+
+The computation ``z = f(x, y)`` runs on the host ``127.0.0.1``.  The other
+two computations for ``x`` and ``y`` can run anywhere.
+
+.. code-block:: python
+
+   future = e.compute(z, workers={z: '127.0.0.1'})
+
+
+The computations for both ``z`` and ``x`` must run on ``127.0.0.1``
+
+.. code-block:: python
+
+   future = e.compute(z, workers={z: '127.0.0.1',
+                                  x: '127.0.0.1'})
+
+Use a tuple to group collections.  This is shorthand for the above.
+
+.. code-block:: python
+
+   future = e.compute(z, workers={(x, y): '127.0.0.1'})
+
+Recall that all options for ``workers=`` in ``scatter/submit/map`` hold here as
+well.
+
+.. code-block:: python
+
+   future = e.compute(z, workers={(x, y): ['192.168.1.100', '192.168.1.101:9999']})
+
+Set ``allow_other_workers=True`` to make these loose restrictions rather than
+hard requirements.
+
+.. code-block:: python
+
+   future = e.compute(z, workers={(x, y): '127.0.0.1'},
+                      allow_other_workers=True)
+
+Set provide a list of collection to ``allow_other_workers=[...]`` to say that
+the keys for only some of the collections are loose.  In the case below ``z``
+*must* run on ``127.0.0.1`` while ``x`` *should* run on ``127.0.0.1`` but can
+run elsewhere if necessary:
+
+.. code-block:: python
+
+   future = e.compute(z, workers={(x, y): '127.0.0.1'},
+                      allow_other_workers=[x])
+
+This works fine with ``persist`` and with any dask collection (any object with
+a ``._keys()`` method):
+
+.. code-block:: python
+
+   df = dd.read_csv('s3://...')
+   df = e.persist(df, workers={df: ...})
+
 See the :doc:`efficiency <efficiency>` page to learn about best practices.

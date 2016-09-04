@@ -30,7 +30,7 @@ from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
         default_executor, _first_completed, ensure_default_get, futures_of,
-        temp_default_executor)
+        temp_default_executor, get_restrictions)
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All
@@ -3471,3 +3471,67 @@ def test_temp_executor(s, a, b):
     with temp_default_executor(f):
         assert default_executor() is f
         assert default_executor(e) is e
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)] * 3, executor=True)
+def test_persist_workers(e, s, a, b, c):
+    L1 = [delayed(inc)(i) for i in range(4)]
+    total = delayed(sum)(L1)
+    L2 = [delayed(add)(i, total) for i in L1]
+
+    out = e.persist(L1 + L2 + [total],
+                    workers={tuple(L1): a.address,
+                             total: b.address,
+                             tuple(L2): [c.address]},
+                    allow_other_workers=L1 + [total])
+
+    yield _wait(out)
+    assert all(v.key in a.data for v in L1)
+    assert total.key in b.data
+    assert all(v.key in c.data for v in L2)
+
+    assert s.loose_restrictions == {total.key} | {v.key for v in L1}
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)] * 3, executor=True)
+def test_compute_workers(e, s, a, b, c):
+    L1 = [delayed(inc)(i) for i in range(4)]
+    total = delayed(sum)(L1)
+    L2 = [delayed(add)(i, total) for i in L1]
+
+    out = e.compute(L1 + L2 + [total],
+                    workers={tuple(L1): a.address,
+                             total: b.address,
+                             tuple(L2): [c.address]},
+                    allow_other_workers=L1 + [total])
+
+    yield _wait(out)
+    for v in L1:
+        assert s.restrictions[v.key] == {a.address}
+    for v in L2:
+        assert s.restrictions[v.key] == {c.address}
+    assert s.restrictions[total.key] == {b.address}
+
+    assert s.loose_restrictions == {total.key} | {v.key for v in L1}
+
+
+def test_get_restrictions():
+    L1 = [delayed(inc)(i) for i in range(4)]
+    total = delayed(sum)(L1)
+    L2 = [delayed(add)(i, total) for i in L1]
+
+    r1, loose = get_restrictions(L2, '127.0.0.1', False)
+    assert r1 == {d.key: ['127.0.0.1'] for d in L2}
+    assert not loose
+
+    r1, loose = get_restrictions(L2, ['127.0.0.1'], True)
+    assert r1 == {d.key: ['127.0.0.1'] for d in L2}
+    assert set(loose) == {d.key for d in L2}
+
+    r1, loose = get_restrictions(L2, {total: '127.0.0.1'}, True)
+    assert r1 == {total.key: ['127.0.0.1']}
+    assert loose == [total.key]
+
+    r1, loose = get_restrictions(L2, {(total,): '127.0.0.1'}, True)
+    assert r1 == {total.key: ['127.0.0.1']}
+    assert loose == [total.key]
