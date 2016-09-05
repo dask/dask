@@ -292,6 +292,12 @@ def progress(*futures, **kwargs):
     complete: bool (optional)
         Track all keys (True) or only keys that have not yet run (False)
         (defaults to True)
+        
+    Notes
+    -----
+    In the notebook, the output of `progress` must be the last statement
+    in the cell. Typically, this means calling `progress` at the end of a
+    cell.
 
     Examples
     --------
