@@ -1,6 +1,41 @@
 Changelog
 =========
 
+Development
+-----------
+
+DataFrame
++++++++++
+- Return a series when functions given to ``dataframe.map_partitions`` return
+  scalars (:pr:`1514`)
+- Fix type size inference for series (:pr:`1513`)
+- Fix head parser error in ``dataframe.read_csv`` when some lines have quotes
+  (:pr:`1495`)
+- Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
+  row-wise reduction to dataframes and series (:pr:`1483`)
+
+Distributed
++++++++++++
+
+- Create new threadpool when operating from thread (:pr:`1487`)
+
+Array
++++++
+- Add information about how ``dask.array`` ``chunks`` argument work (:pr:`1504`)
+- Fix field access with non-scalar fields in ``dask.array`` (:pr:`1484`)
+
+Bag
+++++
+- Fix issue with callables in ``bag.from_sequence`` being interpreted as
+  tasks (:pr:`1491`)
+
+Documentation
++++++++++++++
+
+- Added changelog (:pr:`1526`)
+- Unify example documentation pages into one (:pr:`1520`)
+
+
 0.11.0 / 2016-08-24
 -------------------
 
@@ -32,8 +67,8 @@ Breaking Changes
 
 - More Dataframe shuffles now work in distributed settings, ranging from
   setting-index to hash joins, to sorted joins and groupbys.
-- Dask passes the full test suite when run when under in Python's optimized
-  -OO mode.
+- Dask passes the full test suite when run when under in Python's
+  optimized-OO mode.
 - On-disk shuffles were found to produce wrong results in some
   highly-concurrent situations, especially on Windows.  This has been resolved
   by a fix to the partd library.
