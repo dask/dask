@@ -2,8 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
 import logging
-from sys import argv, exit
+import shutil
 import socket
+from sys import argv, exit
 
 import click
 from distributed import Nanny, Worker, sync, rpc
@@ -16,11 +17,17 @@ from tornado import gen
 
 logger = logging.getLogger('distributed.dask_worker')
 
-import signal
+global_nannies = []
 
+import signal
 
 def handle_signal(sig, frame):
     loop = IOLoop.instance()
+    for nanny in global_nannies:
+        try:
+            shutil.rmtree(nanny.worker_dir)
+        except (OSError, IOError):
+            pass
     if loop._running:
         loop.add_callback(loop.stop)
     else:
@@ -45,9 +52,11 @@ def handle_signal(sig, frame):
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='', help="Alias")
+@click.option('--memory-limit', default=False,
+              help="Number of bytes before spilling data to disk")
 @click.option('--no-nanny', is_flag=True)
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        no_nanny, name, port):
+        no_nanny, name, port, memory_limit):
     if port:
         logger.info("--port is deprecated, use --nanny-port instead")
         assert not nanny_port
@@ -74,6 +83,14 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     loop = IOLoop.current()
 
+    if memory_limit == 'auto':
+        import psutil
+        memory_limit = psutil.virtual_memory().total * 0.75
+
+    if memory_limit:
+        memory_limit = int(float(memory_limit))
+        memory_limit /= nprocs
+
     if no_nanny:
         kwargs = {}
         t = Worker
@@ -88,11 +105,14 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         # reach the scheduler
         ip = get_ip(scheduler_ip, scheduler_port)
     nannies = [t(scheduler_ip, scheduler_port, ncores=nthreads, ip=ip,
-                 services=services, name=name, loop=loop, **kwargs)
+                 services=services, name=name, loop=loop,
+                 memory_limit=memory_limit, **kwargs)
                for i in range(nprocs)]
 
     for nanny in nannies:
         nanny.start(nanny_port)
+        if t is Nanny:
+            global_nannies.append(nanny)
 
     loop.start()
     logger.info("End worker")

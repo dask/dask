@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from .threadpoolexecutor import ThreadPoolExecutor
 from datetime import timedelta
 from importlib import import_module
 import logging
@@ -31,6 +30,7 @@ from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
         error_message, read, RPCClosed)
 from .sizeof import sizeof
+from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
 
 _ncores = ThreadPool()._processes
@@ -52,9 +52,9 @@ class Worker(Server):
     scheduler to gather data from other workers when necessary to perform a
     computation.
 
-    You can start a worker with the ``dworker`` command line application::
+    You can start a worker with the ``dask-worker`` command line application::
 
-        $ dworker scheduler-ip:port
+        $ dask-worker scheduler-ip:port
 
     **State**
 
@@ -102,14 +102,25 @@ class Worker(Server):
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
-                 name=None, heartbeat_interval=1000, **kwargs):
+                 name=None, heartbeat_interval=1000, memory_limit=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
-        self.data = dict()
+        self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
+        if not os.path.exists(self.local_dir):
+            os.mkdir(self.local_dir)
+        if memory_limit:
+            try:
+                from zict import Buffer, File, Func
+            except ImportError:
+                raise ImportError("Please `pip install zict` for spill-to-disk workers")
+            path = os.path.join(self.local_dir, 'storage')
+            storage = Func(dumps_to_disk, loads_from_disk, File(path))
+            self.data = Buffer({}, storage, int(float(memory_limit)), weight)
+        else:
+            self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
-        self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.active = set()
@@ -122,9 +133,6 @@ class Worker(Server):
         self._last_disk_io = None
         self._last_net_io = None
         self._ipython_kernel = None
-
-        if not os.path.exists(self.local_dir):
-            os.mkdir(self.local_dir)
 
         if self.local_dir not in sys.path:
             sys.path.insert(0, self.local_dir)
@@ -297,14 +305,28 @@ class Worker(Server):
         data: The scope in which to run tasks
         len(remote): the number of new keys we've gathered
         """
+        diagnostics = {}
         who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
+
+        start = time()
         local = {k: self.data[k] for k in who_has if k in self.data}
+        stop = time()
+        if stop - start > 0.005:
+            diagnostics['disk_load_start'] = start
+            diagnostics['disk_load_stop'] = stop
+
         who_has = {k: v for k, v in who_has.items() if k not in local}
+        start = time()
         remote, bad_data = yield gather_from_workers(who_has,
                 permissive=True)
         if remote:
             self.data.update(remote)
             yield self.scheduler.add_keys(address=self.address, keys=list(remote))
+        stop = time()
+
+        if remote:
+            diagnostics['transfer_start'] = start
+            diagnostics['transfer_stop'] = stop
 
         data = merge(local, remote)
 
@@ -315,14 +337,21 @@ class Worker(Server):
             good = [msg for msg in msgs if not missing.get(msg['key'])]
         else:
             good, bad = msgs, {}
-        raise Return([good, bad, data, len(remote)])
+        raise Return([good, bad, data, len(remote), diagnostics])
 
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
                     task=None, who_has=None):
         who_has = who_has or {}
         diagnostics = {}
+        start = time()
         data = {k: self.data[k] for k in who_has if k in self.data}
+        stop = time()
+
+        if stop - start > 0.005:
+            diagnostics['disk_load_start'] = start
+            diagnostics['disk_load_stop'] = stop
+
         who_has = {k: set(map(coerce_to_address, v))
                    for k, v in who_has.items()
                    if k not in self.data}
@@ -431,9 +460,7 @@ class Worker(Server):
 
     @gen.coroutine
     def compute_many(self, bstream, msgs, report=False):
-        transfer_start = time()
-        good, bad, data, num_transferred = yield self.gather_many(msgs)
-        transfer_end = time()
+        good, bad, data, num_transferred, diagnostics = yield self.gather_many(msgs)
 
         for msg in msgs:
             msg.pop('who_has', None)
@@ -450,9 +477,8 @@ class Worker(Server):
                                      for msg in good]
             wait_iterator = gen.WaitIterator(*futures)
             result = yield wait_iterator.next()
-            if num_transferred:
-                result['transfer_start'] = transfer_start
-                result['transfer_stop'] = transfer_end
+            if diagnostics:
+                result.update(diagnostics)
             bstream.send(result)
             while not wait_iterator.done():
                 msg = yield wait_iterator.next()
@@ -855,3 +881,21 @@ def convert_kwargs_to_str(kwargs, max_len=None):
             return "{{{}".format(", ".join(strs[:i+1]))[:max_len]
     else:
         return "{{{}}}".format(", ".join(strs))
+
+
+from .protocol import compressions, default_compression
+
+# TODO: use protocol.maybe_compress and proper file/memoryview objects
+
+def dumps_to_disk(x):
+    b = dumps(x)
+    c = compressions[default_compression]['compress'](b)
+    return c
+
+def loads_from_disk(c):
+    b = compressions[default_compression]['decompress'](c)
+    x = loads(b)
+    return x
+
+def weight(k, v):
+    return sizeof(v)

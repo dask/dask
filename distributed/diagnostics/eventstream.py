@@ -46,6 +46,7 @@ def eventstream(address, interval):
         {'key': 'mykey', 'worker': 'host:port', 'status': status,
          'compute_start': time(), 'compute_stop': time(),
          'transfer_start': time(), 'transfer_stop': time(),
+         'disk_load_start': time(), 'disk_load_stop': time(),
          'other': 'junk'}
 
     Where ``status`` is either 'OK', or 'error'

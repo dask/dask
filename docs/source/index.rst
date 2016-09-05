@@ -107,7 +107,7 @@ Contents
    develop
    foundations
    clients
-   worker-center
+   worker
    scheduler
    resilience
    journey

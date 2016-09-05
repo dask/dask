@@ -35,4 +35,4 @@ def test_no_nanny(loop):
     with popen(['dask-scheduler']) as sched:
         with popen(['dask-worker', '127.0.0.1:8786', '--no-nanny']) as worker:
             assert any(b'Registered' in worker.stderr.readline()
-                        for i in range(10))
+                       for i in range(10))

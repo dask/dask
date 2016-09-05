@@ -24,7 +24,7 @@ class Nanny(Server):
     """
     def __init__(self, scheduler_ip, scheduler_port, ip=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, **kwargs):
+                 name=None, memory_limit=None, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self._given_worker_port = worker_port
@@ -37,6 +37,7 @@ class Nanny(Server):
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.services = services
         self.name = name
+        self.memory_limit = memory_limit
 
         handlers = {'instantiate': self.instantiate,
                     'kill': self._kill,
@@ -122,7 +123,8 @@ class Nanny(Server):
                                args=(q, self.ip, self.scheduler.ip,
                                      self.scheduler.port, self.ncores,
                                      self.port, self._given_worker_port,
-                                     self.local_dir, self.services, self.name))
+                                     self.local_dir, self.services, self.name,
+                                     self.memory_limit))
         self.process.daemon = True
         self.process.start()
         while True:
@@ -131,8 +133,8 @@ class Nanny(Server):
                 if isinstance(msg, Exception):
                     raise msg
                 self.worker_port = msg['port']
-                assert self.worker_port
                 self.worker_dir = msg['dir']
+                assert self.worker_port
                 break
             except queues.Empty:
                 yield gen.sleep(0.1)
@@ -210,7 +212,7 @@ class Nanny(Server):
 
 
 def run_worker(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
-        worker_port, local_dir, services, name):
+        worker_port, local_dir, services, name, memory_limit):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker  # pragma: no cover
     from tornado.ioloop import IOLoop  # pragma: no cover
@@ -219,7 +221,8 @@ def run_worker(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
     loop.make_current()  # pragma: no cover
     worker = Worker(scheduler_ip, scheduler_port, ncores=ncores, ip=ip,
                     service_ports={'nanny': nanny_port}, local_dir=local_dir,
-                    services=services, name=name, loop=loop)  # pragma: no cover
+                    services=services, name=name, memory_limit=memory_limit,
+                    loop=loop)  # pragma: no cover
 
     @gen.coroutine  # pragma: no cover
     def start():

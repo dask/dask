@@ -55,6 +55,8 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
                         index.append(i); i += 1
                         if msg.get('transfer_start') is not None:
                             index.append(i); i += 1
+                        if msg.get('disk_load_start') is not None:
+                            index.append(i); i += 1
                         task_stream_append(rectangles, msg, workers)
 
 

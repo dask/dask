@@ -417,6 +417,18 @@ def popen(*args, **kwargs):
     proc = Popen(*args, **kwargs)
     try:
         yield proc
+    except Exception:
+        line = '\n\nPrint from stderr\n=================\n'
+        while line:
+            print(line)
+            line = proc.stderr.readline()
+
+        line = '\n\nPrint from stdout\n=================\n'
+        while line:
+            print(line)
+            line = proc.stdout.readline()
+        raise
+
     finally:
         os.kill(proc.pid, signal.SIGINT)
         if sys.version_info[0] == 3:

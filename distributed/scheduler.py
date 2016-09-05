@@ -1129,7 +1129,8 @@ class Scheduler(Server):
         if 'time-delay' in self.worker_info[worker]:
             delay = self.worker_info[worker]['time-delay']
             for key in ['transfer_start', 'transfer_stop', 'time',
-                        'compute_start', 'compute_stop']:
+                        'compute_start', 'compute_stop', 'disk_load_start',
+                        'disk_load_stop']:
                 if key in msg:
                     msg[key] += delay
 

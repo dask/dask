@@ -8,3 +8,4 @@ six
 tblib
 psutil
 locket
+zict

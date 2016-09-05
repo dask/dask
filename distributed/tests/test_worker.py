@@ -16,6 +16,7 @@ from tornado.ioloop import TimeoutError
 
 from distributed.batched import BatchedStream
 from distributed.core import rpc, dumps, loads, connect, read, write
+from distributed.executor import _wait
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger
@@ -494,3 +495,28 @@ def test_io_loop(loop):
     assert s.io_loop is loop
     w = Worker(s.ip, s.port, loop=loop)
     assert w.io_loop is loop
+
+
+@gen_cluster(executor=True, ncores=[])
+def test_spill_to_disk(e, s):
+    np = pytest.importorskip('numpy')
+    w = Worker(s.ip, s.port, loop=s.loop, memory_limit=1000)
+    yield w._start()
+
+    x = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='x')
+    yield _wait(x)
+    y = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='y')
+    yield _wait(y)
+
+    assert set(w.data) == {x.key, y.key}
+    assert set(w.data.fast) == {x.key, y.key}
+
+    z = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='z')
+    yield _wait(z)
+    assert set(w.data) == {x.key, y.key, z.key}
+    assert set(w.data.fast) == {y.key, z.key}
+    assert set(w.data.slow) == {x.key}
+
+    yield x._result()
+    assert set(w.data.fast) == {x.key, z.key}
+    assert set(w.data.slow) == {y.key}

@@ -1,3 +1,10 @@
+1.12.3
+------
+
+*  Add `--memory-limit` option to `dask-worker`, enabling spill-to-disk
+   behavior when running out of memory
+
+
 1.12.2
 ------
 

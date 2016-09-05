@@ -38,7 +38,7 @@ def test_task_stream_append():
     assert len(workers) == 3
     assert set(workers) == set(lists['worker_thread'])
     assert set(workers.values()) == set(range(len(workers)))
-    assert lists['color'][-1] == 'red'
+    assert lists['color'][-1] == '#FF0020'
     L = lists['color']
     assert L[0] == L[1]
     assert L[2] == 'black'

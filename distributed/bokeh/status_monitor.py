@@ -93,7 +93,20 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
         lists['key'].append(key)
         lists['name'].append('transfer-to-' + name)
         lists['worker'].append(msg['worker'])
-        lists['color'].append('red')
+        lists['color'].append('#FF0020')
+        lists['alpha'].append('0.8')
+        lists['worker_thread'].append(worker_thread)
+        lists['y'].append(workers[worker_thread])
+
+    if msg.get('disk_load_start') is not None:
+        start, stop = msg['disk_load_start'], msg['disk_load_stop']
+        lists['start'].append((start + stop) / 2 * 1000)
+        lists['duration'].append(1000 * (stop - start))
+
+        lists['key'].append(key)
+        lists['name'].append('disk-load-' + name)
+        lists['worker'].append(msg['worker'])
+        lists['color'].append('#FF2000')
         lists['alpha'].append('0.8')
         lists['worker_thread'].append(worker_thread)
         lists['y'].append(workers[worker_thread])
