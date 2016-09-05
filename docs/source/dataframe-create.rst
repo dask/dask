@@ -1,9 +1,9 @@
-Create Dask DataFrames
-======================
+Create and Store Dask DataFrames
+================================
 
-Dask can create dataframes objects from various data storage formats.  Dask dataframes are commonly used to quickly inspect and analyze large volumes of tabular data stored in CSV, HDF5, or other tabular formats.  
+Dask can create dataframes objects from various data storage formats.  Dask dataframes are commonly used to quickly inspect and analyze large volumes of tabular data stored in CSV, HDF5, or other tabular formats.
 
-See the `Overview section <http://dask.pydata.org/en/latest/dataframe-overview.html>`_ for an in depth discussion of ``dask.dataframe`` scope, use, limitations.    
+See the `Overview section <http://dask.pydata.org/en/latest/dataframe-overview.html>`_ for an in depth discussion of ``dask.dataframe`` scope, use, limitations.
 
 From CSV files
 --------------
@@ -15,7 +15,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.*.csv') 
+   >>> df = dd.read_csv('data.*.csv')
 
 2.  You can specify the size of each block of data in bytes of uncompressed
     data.  Note that, especially for text data the size on disk may be much
@@ -23,7 +23,7 @@ that function's options.  Additionally it gains two new functionalities
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks 
+   >>> df = dd.read_csv('data.csv', chunkbytes=1000000)  # 1MB chunks
 
 For a detailed example of the ``dask.dataframe.read_csv`` method, :doc:`visit the CSV examples section</examples/dataframe-csv>`
 
@@ -37,22 +37,22 @@ From HDF5
 .. code-block:: Python
 
    >>> import dask.dataframe as dd
-   >>> dd.read_hdf('myfile1.hdf5', '/x', chunksize=1000000) 
+   >>> dd.read_hdf('myfile1.hdf5', '/x', chunksize=1000000)
 
 It is also possible to create a DataFrame object from multiple HDF5 files in a directory with similar group keys by using a wildcard character (\*).  The ``dask.dataframe`` syntax for this task is:
 
 .. code-block:: Python
 
    >>> import dask.dataframe as dd
-   >>> dd.read_hdf('myfile*.hdf5', '/x', chunksize=1000000) 
-   
+   >>> dd.read_hdf('myfile*.hdf5', '/x', chunksize=1000000)
+
 Finally, ``dask.dataframe`` can load multiple datasets from a single HDF5 file using this syntax:
 
 .. code-block:: Python
-   
-   >>> import dask.dataframe as dd 
-   >>> dd.read_hdf('myfile1.hdf5', '/*', chunksize=1000000) 
-   
+
+   >>> import dask.dataframe as dd
+   >>> dd.read_hdf('myfile1.hdf5', '/*', chunksize=1000000)
+
 From an Array
 -------------
 
@@ -62,7 +62,7 @@ instruction on creating dask arrays, see the `Array Overview <http://dask.pydata
 
 .. code-block:: Python
 
-   >>> dd.from_array(x, chunksize=1000000) 
+   >>> dd.from_array(x, chunksize=1000000)
 
 From BColz
 ----------
@@ -73,7 +73,7 @@ it.  There is a special ``from_bcolz`` function.
 
 .. code-block:: Python
 
-   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000) 
+   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000)
 
 In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
 will only read the necessary columns from disk.  This can provide dramatic
@@ -81,27 +81,10 @@ performance improvements.
 
 .. _BColz: http://bcolz.blosc.org/
 
-From Castra
------------
-
-Castra_ is a tiny, experimental partitioned on-disk data structure designed to
-fit the ``dask.dataframe`` model.  It provides columnstore access and range
-queries along the index.  It is also a very small project (roughly 400 lines)
-and not actively maintained; use at your own risk.
-
-.. code-block:: Python
-
-   >>> from castra import Castra 
-   >>> c = Castra(path='/my/castra/file') 
-   >>> df = c.to_dask() 
-
-.. _Castra: http://github.com/blaze/castra
-
-
 From Bags
 ---------
 
-You can create a dask.dataframe from a dask bag.
+You can create a dask.dataframe from a :doc:`dask bag <bag>`
 
 .. autosummary:: dask.bag.core.Bag.to_dataframe
 
@@ -120,7 +103,8 @@ From Raw Dask Graphs
 --------------------
 
 This section is for developer information and discusses internal API.  You
-should never need to create a dataframe object by hand.
+should never need to create a dataframe object by hand.  Instead you should use
+:doc:`dask.delayed <delayed>`
 
 To construct a DataFrame manually from a dask graph you need the following
 information:
@@ -154,3 +138,40 @@ have a datetime index separated by day.  Note, you should never do this.  The
                 Timestamp('2000-01-03 23:59:59')]
 
    df = dd.DataFrame(dsk, name, columns, divisions)
+
+
+Read from Distributed Stores
+----------------------------
+
+Functions like ``read_csv`` can operate from distributed data stores like the
+Hadoop File System and S3.  To read from these stores prepend the protocol to
+your path:
+
+.. code-block:: python
+
+   >>> df = dd.read_csv('/path/to/2015-*-*.csv')  # local files
+   >>> df = dd.read_csv('hdfs:///path/to/2015-*-*.csv')  # HDFS
+   >>> df = dd.read_csv('s3://bucket/key/2015-*-*.csv')  # Amazon's S3
+
+These functions are more useful if you are connected to a `dask.distributed
+<http://distributed.readthedocs.io/en/latest/>`_ cluster.
+
+
+Write DataFrames to Disk
+------------------------
+
+The reading functions above typically have writing equivalents.  For example
+for ``read_csv`` there is also a ``to_csv`` and for ``read_hdf`` there is also
+a ``to_hdf``.  Please see the :doc:`dataframe API<dataframe-api>` for a
+complete list.  These functions typically follow the Pandas interfaces and
+should be familiar to users coming from that tradition.
+
+These functions prefer to receive a globstring with an asterix ``'*'``
+
+.. code-block:: python
+
+   >>> df.to_csv('out.*.csv')
+
+This maximize the throughput during parallel execution and generates a
+sequential list of files instead of a single file.  See the docstrings of these
+functions for more information on how to tailor the output files.
