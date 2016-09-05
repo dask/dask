@@ -206,6 +206,14 @@ Style
 Dask adheres loosely to PEP8 with rule-breaking allowed.
 
 
+Changelog
+~~~~~~~~~
+
+Every significative code contribution should be listed in the
+:doc:`changelog` under the corresponding version. When submitting a Pull
+Request in Github please add to that file explaining what was added/modified.
+
+
 Contributing to Documentation
 -----------------------------
 
