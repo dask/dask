@@ -288,11 +288,12 @@ def test_visualize():
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
     import sys
+    from textwrap import dedent
 
-    defn = """
-def inc():
-    return x
-    """
+    defn = dedent("""
+    def inc():
+        return x
+    """)
 
     __main__ = sys.modules['__main__']
     exec(compile(defn, '<test>', 'exec'), __main__.__dict__)
