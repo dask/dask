@@ -250,14 +250,15 @@ def normalize_function(func):
     else:
         try:
             result = pickle.dumps(func, protocol=0)
-            assert b'__main__' not in result  # abort on dynamic functions
-            return result
+            if b'__main__' not in result:  # abort on dynamic functions
+                return result
         except:
-            try:
-                import cloudpickle
-                return cloudpickle.dumps(func, protocol=0)
-            except:
-                return str(func)
+            pass
+        try:
+            import cloudpickle
+            return cloudpickle.dumps(func, protocol=0)
+        except:
+            return str(func)
 
 
 normalize_token = Dispatch()
