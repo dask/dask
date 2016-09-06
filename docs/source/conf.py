@@ -26,7 +26,7 @@ import sys, os
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax',
-              'sphinx.ext.autosummary', 'numpydoc']
+              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
 
 numpydoc_show_class_members = False
 
@@ -293,3 +293,8 @@ epub_copyright = u'2015, Continuum Analytics'
 
 # Allow duplicate toc entries.
 #epub_tocdup = True
+
+extlinks = {
+    'issue': ('https://github.com/dask/dask/issues/%s', 'GH#'),
+    'pr': ('https://github.com/dask/dask/pull/%s', 'GH#')
+}

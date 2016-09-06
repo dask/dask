@@ -231,6 +231,7 @@ help make debugging and profiling graph execution easier.
 
 **Help & reference**
 
+* :doc:`changelog`
 * :doc:`support`
 * :doc:`develop`
 * :doc:`faq`
@@ -244,6 +245,7 @@ help make debugging and profiling graph execution easier.
    :hidden:
    :caption: Help & reference
 
+   changelog.rst
    support.rst
    develop.rst
    faq.rst
