@@ -1,15 +1,22 @@
 Publish Datasets
 ================
 
-A *dataset* is a named reference to a Dask collection or list of futures that
-has been published to the cluster.  It is available for any client to see and
-persists beyond the scope of an individual session.
+A *published dataset* is a named reference to a Dask collection or list of
+futures that has been published to the cluster.  It is available for any client
+to see and persists beyond the scope of an individual session.
+
+Publishing datasets is useful in the following cases:
+
+*  You want to share computations with colleagues
+*  You want to persist results on the cluster between interactive sessions
 
 Motivating Example
 ------------------
 
-We load CSV data from S3, manipulate it, and then persist the data to the
-cluster.
+In this example we load a dask.dataframe from S3, manipulate it, and then
+publish the result.
+
+**Connect and Load**
 
 .. code-block:: python
 
@@ -29,12 +36,16 @@ cluster.
    3   Dennis     -400
    4    Edith     -500
 
+**Publish**
+
 To share this collection with a colleague we publish it under the name
 ``'negative_accounts'``
 
 .. code-block:: python
 
    e.publish_dataset(negative_accounts=df2)
+
+**Load published dataset from different client**
 
 Now any other client can connect to the scheduler and retrieve this published
 dataset.
