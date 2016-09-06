@@ -249,7 +249,9 @@ def normalize_function(func):
         return (normalize_function(func.func), func.args, kws)
     else:
         try:
-            return pickle.dumps(func, protocol=0)
+            result = pickle.dumps(func, protocol=0)
+            assert b'__main__' not in result  # abort on dynamic functions
+            return result
         except:
             try:
                 import cloudpickle
