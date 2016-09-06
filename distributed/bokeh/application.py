@@ -19,7 +19,7 @@ paths = [os.path.join(dirname, 'bokeh', name)
          for name in ['status', 'tasks', 'workers']]
 
 binname = 'bokeh.exe' if sys.platform.startswith('win') else 'bokeh'
-binname = os.path.join(os.path.dirname(sys.argv[0]), binname)
+binname = os.path.join(os.path.dirname(sys.executable), binname)
 
 logger = logging.getLogger(__file__)
 
