@@ -80,10 +80,14 @@ Submit tasks from worker
 *Note: this interface is new and experimental.  It may be changed without
 warning in future versions.*
 
-Alternatively we submit tasks from other tasks.  This allows us to make
-decisions while on worker nodes.  To do this we will make a new client object
-on the worker itself.  There is a convenience function for this that will
-connect you to the correct scheduler that the worker is connected to.
+We can submit tasks from other tasks.  This allows us to make decisions while
+on worker nodes.
+
+To submit new tasks from a worker that worker must first create a new client
+object that connects to the scheduler.  There is a convenience function to do
+this for you so that you don't have to pass around connection information.
+However you must use this function ``local_executor`` as a context manager to
+ensure proper cleanup on the worker.
 
 .. code-block:: python
 
@@ -99,56 +103,66 @@ connect you to the correct scheduler that the worker is connected to.
 
     analysis = e.submit(process_all, data)  # spawns many tasks
 
-This approach is more complex, but very powerful.  It allows you to spawn tasks
-that themselves act as potentially long-running clients, managing their own
-independent workloads.
+This approach is somewhat complex but very powerful.  It allows you to spawn
+tasks that themselves act as potentially long-running clients, managing their
+own independent workloads.
 
 Extended Example
 ~~~~~~~~~~~~~~~~
 
-This example computing the fibonacci numbers creates tasks that submit tasks
+This example computing the Fibonacci numbers creates tasks that submit tasks
 that submit tasks that submit other tasks, etc..
 
-```python
-In [1]: from distributed import Executor, local_executor
+.. code-block:: python
 
-In [2]: e = Executor()
+   In [1]: from distributed import Executor, local_executor
 
-In [3]: def fib(n):
-   ...:     if n < 2:
-   ...:         return n
-   ...:     else:
-   ...:         with local_executor() as ee:
-   ...:             a = ee.submit(fib, n - 1)
-   ...:             b = ee.submit(fib, n - 2)
-   ...:             a, b = ee.gather([a, b])
-   ...:             return a + b
-   ...:
+   In [2]: e = Executor()
 
-In [4]: future = e.submit(fib, 100)
+   In [3]: def fib(n):
+      ...:     if n < 2:
+      ...:         return n
+      ...:     else:
+      ...:         with local_executor() as ee:
+      ...:             a = ee.submit(fib, n - 1)
+      ...:             b = ee.submit(fib, n - 2)
+      ...:             a, b = ee.gather([a, b])
+      ...:             return a + b
+      ...:
 
-In [5]: future
-Out[5]: <Future: status: finished, type: int, key: fib-7890e9f06d5f4e0a8fc7ec5c77590ace>
+   In [4]: future = e.submit(fib, 100)
 
-In [6]: future.result()
-Out[6]: 354224848179261915075
-```
+   In [5]: future
+   Out[5]: <Future: status: finished, type: int, key: fib-7890e9f06d5f4e0a8fc7ec5c77590ace>
+
+   In [6]: future.result()
+   Out[6]: 354224848179261915075
+
+This example is a bit extreme and spends most of its time establishing client
+connections from the worker rather than doing actual work, but does demonstrate
+that even pathological cases function robustly.
+
 
 Technical details
 ~~~~~~~~~~~~~~~~~
 
-Tasks that invoke ``local_executor`` are conservatively assumed to be
-*long running*.  They can take a long time blocking, waiting for other tasks to
-finish.  In order to avoid having them take up processing slots the following
-actions occur whenever a task invokes ``local_executor``.
+Tasks that invoke ``local_executor`` are conservatively assumed to be *long
+running*.  They can take a long time blocking, waiting for other tasks to
+finish, gathering results, etc..  In order to avoid having them take up
+processing slots the following actions occur whenever a task invokes
+``local_executor``.
 
-1.  The thread on the worker that runs this functions *secedes* from the thread
+1.  The thread on the worker running this function *secedes* from the thread
     pool and goes off on its own.  This allows the thread pool to populate that
-    slot with a new thread and continue processing tasks without counting this
-    long running task against its normal quota.
+    slot with a new thread and continue processing additional tasks without
+    counting this long running task against its normal quota.
 2.  The Worker sends a message back to the scheduler temporarily increasing its
     allowed number of tasks by one.  This likewise lets the scheduler allocate
     more tasks to this worker, not counting this long running task against it.
 
 Because of this behavior you can happily launch long running control tasks that
 manage worker-side clients happily, without fear of deadlocking the cluster.
+
+Establishing a connection to the scheduler takes on the order of 10-20 ms and
+so it is wise for computations that use this feature to be at least a few times
+longer in duration than this.
