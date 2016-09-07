@@ -117,3 +117,18 @@ def test_dont_fuse_different_slices():
     y = x.rechunk((1, 10))
     dsk = optimize(y.dask, y._keys())
     assert len(dsk) > 100
+
+
+def test_dont_fuse_lists_in_getarray():
+    dsk = {'a': (getitem, (getarray, 'x', (slice(10, 20, None), slice(100, 200, None))),
+                 ([1, 3], slice(50, 60, None)))}
+    res = optimize_slices(dsk)
+    sol = {'a': (getarray, (getarray, 'x', (slice(10, 20, None), slice(100, 200, None))),
+                 ([1, 3], slice(50, 60, None)))}
+    assert res == sol
+
+    dsk = {'a': (getitem, (getitem, 'x', (slice(10, 20, None), slice(100, 200, None))),
+                 ([1, 3], slice(50, 60, None)))}
+    res = optimize_slices(dsk)
+    sol = {'a': (getitem, 'x', ([11, 13], slice(150, 160, None)))}
+    assert res == sol

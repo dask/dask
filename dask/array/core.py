@@ -76,7 +76,7 @@ def slices_from_chunks(chunks):
                 for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, shape=None, out_name=None):
+def getem(arr, chunks, shape=None, out_name=None, is_numpy=False, lock=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -95,8 +95,13 @@ def getem(arr, chunks, shape=None, out_name=None):
     chunks = normalize_chunks(chunks, shape)
 
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
+    slices = slices_from_chunks(chunks)
 
-    values = [(getarray, arr, x) for x in slices_from_chunks(chunks)]
+    if lock is None:
+        getter = getitem if is_numpy else getarray
+        values = [(getter, arr, x) for x in slices]
+    else:
+        values = [(getarray, arr, x, lock) for x in slices]
 
     return dict(zip(keys, values))
 
@@ -1538,11 +1543,10 @@ def from_array(x, chunks, name=None, lock=False):
     token = tokenize(x, chunks)
     original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
-    dsk = getem(original_name, chunks, out_name=name)
+    is_numpy = type(x) in (np.ndarray, np.memmap)
     if lock is True:
         lock = Lock()
-    if lock:
-        dsk = dict((k, v + (lock,)) for k, v in dsk.items())
+    dsk = getem(original_name, chunks, out_name=name, is_numpy=is_numpy, lock=lock)
     return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
 
 

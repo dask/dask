@@ -36,27 +36,34 @@ def optimize_slices(dsk):
     See also:
         fuse_slice_dict
     """
+    # Slicing using these from backends that require `getarray` may
+    # be unsafe
+    unsafe_ind_types = (list, np.ndarray)
     getters = (getarray, getitem)
     dsk = dsk.copy()
     for k, v in dsk.items():
         if type(v) is tuple:
             if v[0] in getters:
-                try:
+                if len(v) == 3:
                     func, a, a_index = v
                     use_getarray = func is getarray
-                except ValueError:  # has four elements, includes a lock
+                else:  # has four elements, includes a lock
                     continue
-                while type(a) is tuple and a[0] in getters:
-                    try:
-                        f2, b, b_index = a
-                        use_getarray |= f2 is getarray
-                    except ValueError:  # has four elements, includes a lock
-                        break
+                while type(a) is tuple and a[0] in getters and len(a) == 3:
+                    f2, b, b_index = a
+                    use_getarray |= f2 is getarray
                     if (type(a_index) is tuple) != (type(b_index) is tuple):
                         break
-                    if ((type(a_index) is tuple) and
-                            (len(a_index) != len(b_index)) and
-                            any(i is None for i in b_index + a_index)):
+                    if type(a_index) is tuple:
+                        indices = b_index + a_index
+                        if ((len(a_index) != len(b_index)) and
+                                any(i is None for i in indices)):
+                            break
+                        if (use_getarray and any(isinstance(i, unsafe_ind_types)
+                                                 for i in indices)):
+                            break
+                    elif (type(a_index) in unsafe_ind_types or
+                          type(b_index) in unsafe_ind_types):
                         break
                     try:
                         c_index = fuse_slice(b_index, a_index)
