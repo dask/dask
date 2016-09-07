@@ -1,7 +1,7 @@
 Setup Network
 =============
 
-A ``distributed`` network consists of one ``Scheduler`` node and several
+A ``dask.distributed`` network consists of one ``Scheduler`` node and several
 ``Worker`` nodes.  One can set these up in a variety of ways
 
 
@@ -40,9 +40,6 @@ SGE/SLURM/Torque or Yarn/Mesos.
 Using SSH
 ---------
 
-For this functionality, `paramiko` library must be installed (e.g. by
-running `pip install paramiko`).
-
 The convenience script ``dask-ssh`` opens several SSH connections to your
 target computers and initializes the network accordingly. You can
 give it a list of hostnames or IP addresses::
@@ -62,6 +59,10 @@ Or you can specify a hostfile that includes a list of hosts::
    192.168.0.4
 
    $ dask-ssh --hostfile hostfile.txt
+
+The ``dask-ssh`` utility depends on the ``paramiko``::
+
+    pip install paramiko
 
 
 Using the Python API

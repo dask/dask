@@ -10,8 +10,6 @@ See :doc:`the quickstart <quickstart>` to get started.
 Motivation
 ----------
 
-Why build yet-another-distributed-system?
-
 ``Distributed`` serves to complement the existing PyData analysis stack.
 In particular it meets the following needs:
 
@@ -49,7 +47,7 @@ multiple workers.  The event-driven and asynchronous nature makes it flexible
 to concurrently handle a variety of workloads coming from multiple users at the
 same time while also handling a fluid worker population with failures and
 additions.  Workers communicate amongst each other for bulk data transfer over
-sockets.
+TCP.
 
 Internally the scheduler tracks all work as a constantly changing directed
 acyclic graph of tasks.  A task is a Python function operating on Python
@@ -59,13 +57,16 @@ shrinks as users leave or become disinterested in previous results.
 
 Users interact by connecting a local Python session to the scheduler and
 submitting work, either by individual calls to the simple interface
-``e.submit(function, *args, **kwargs)`` or by using the large data collections
-and parallel algorithms of the parent ``dask`` library.  The collections in the
-``dask`` library like ``dask.array`` and ``dask.dataframe`` provide easy access
-to sophisticated algorithms and familiar APIs like NumPy and Pandas, while the
-simple ``e.submit`` interface provides users with custom control when they want
-to break out of canned "big data" abstractions and submit fully custom
-workloads.
+``client.submit(function, *args, **kwargs)`` or by using the large data
+collections and parallel algorithms of the parent ``dask`` library.  The
+collections in the dask_ library like dask.array_ and dask.dataframe_
+provide easy access to sophisticated algorithms and familiar APIs like NumPy
+and Pandas, while the simple ``client.submit`` interface provides users with
+custom control when they want to break out of canned "big data" abstractions
+and submit fully custom workloads.
+
+.. _dask.array: http://dask.pydata.org/en/latest/array.html
+.. _dask.dataframe: http://dask.pydata.org/en/latest/dataframe.html
 
 Contents
 --------

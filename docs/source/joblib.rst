@@ -1,13 +1,17 @@
-Joblib Frontend
-===============
+Joblib Integration
+==================
+
+Dask.distributed integrates with Joblib_ by providing an alternative
+cluster-computing backend, alongside Joblib's builtin threading and
+multiprocessing backends.
 
 Joblib_ is a library for simple parallel programming primarily developed and
 used by the Scikit Learn community.  As of version 0.10.0 it contains a plugin
 mechanism to allow Joblib code to use other parallel frameworks to execute
-computations.  The ``distributed`` scheduler implements such a plugin in the
-``distributed.joblib`` module and registers it appropriately with Joblib.  As a
-result, any joblib code (including many scikit-learn algorithms) will run on
-the distributed scheduler if you enclose it in a context manager as follows:
+computations.  The ``dask.distributed`` scheduler implements such a plugin in
+the ``distributed.joblib`` module and registers it appropriately with Joblib.
+As a result, any joblib code (including many scikit-learn algorithms) will run
+on the distributed scheduler if you enclose it in a context manager as follows:
 
 .. code-block:: python
 
@@ -16,7 +20,6 @@ the distributed scheduler if you enclose it in a context manager as follows:
 
    with parallel_backend('distributed', scheduler_host='HOST:PORT'):
        # normal Joblib code
-
 
 Note that scikit-learn bundles joblib internally, so if you want to specify the
 joblib backend you'll need to import ``parallel_backend`` from scikit-learn
@@ -49,4 +52,4 @@ validated parameter search as follows.
    with parallel_backend('distributed', scheduler_host='localhost:8786'):
        search.fit(digits.data, digits.target)
 
-.. _`Joblib`: https://pythonhosted.org/joblib/
+.. _Joblib: https://pythonhosted.org/joblib/

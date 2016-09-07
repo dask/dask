@@ -10,6 +10,7 @@ Install
 
 See :doc:`installation <install>` document for more information.
 
+
 Setup Dask.distributed the Hard Way
 -----------------------------------
 
@@ -33,6 +34,7 @@ Launch an Client and point it to the IP/port of the scheduler.
    >>> client = Client('127.0.0.1:8786')
 
 See :doc:`setup <setup>` for advanced use.
+
 
 Setup Dask.distributed the Easy Way
 -----------------------------------
@@ -70,6 +72,7 @@ run remotely in the background.
    >>> total = client.submit(sum, B)
    >>> total.result()
    -285
+
 
 Gather
 ~~~~~~

@@ -3,7 +3,7 @@ Data Locality
 
 *Data movement often needlessly limits performance.*
 
-This is especially true for analytic computations.  ``Distributed`` minimizes
+This is especially true for analytic computations.  Dask.distributed minimizes
 data movement when possible and enables the user to take control when
 necessary.  This document describes current scheduling policies and user API
 around data locality.

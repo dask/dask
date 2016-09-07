@@ -2,7 +2,7 @@ Resilience
 ==========
 
 Software fails, Hardware fails, network connections fail, user code fails.
-This document describes how ``distributed`` responds in the face of these
+This document describes how ``dask.distributed`` responds in the face of these
 failures and other known bugs.
 
 User code failures
@@ -46,10 +46,13 @@ This has some fail cases.
     (although still entirely accurate) result
 2.  If the worker failed due to a bad function, for example a function that
     causes a segmentation fault, then that bad function will repeatedly be
-    called on other workers, and proceed to kill the distributed system, one
-    worker at a time.
+    called on other workers.  This function will be marked as "bad" after it
+    kills a fixed number of workers (defaults to three).
 3.  Data ``scatter``ed out to the workers is not kept in the scheduler (it is
-    often quite large) and so the loss of this data is irreparable.
+    often quite large) and so the loss of this data is irreparable.  You may
+    wish to call ``Client.replicate`` on the data with a suitable replication
+    factor to ensure that it remains long-lived or else back the data off of
+    some resilient store, like a file system.
 
 
 Hardware Failures
@@ -65,8 +68,10 @@ Scheduler Failure
 -----------------
 
 The process containing the scheduler might die.  There is currently no
-persistence mechanism to record and recover the scheduler state.  The data will
-remain on the cluster until cleared.
+persistence mechanism to record and recover the scheduler state.
+
+The workers and clients will all reconnect to the scheduler after it comes back
+online but records of ongoing computations will be lost.
 
 
 Restart and Nanny Processes
@@ -75,25 +80,5 @@ Restart and Nanny Processes
 The client provides a mechanism to restart all of the workers in the cluster.
 This is convenient if, during the course of experimentation, you find your
 workers in an inconvenient state that makes them unresponsive.  The
-``Client.restart`` method does the following process:
-
-1.  Sends a soft shutdown signal to all of the coroutines watching workers
-2.  Sends a hard kill signal to each worker's Nanny process, which oversees
-    that worker.  This Nanny process terminates the worker process
-    ungracefully and unregisters that worker from the Scheduler.
-3.  Clears out all scheduler state and sets all Future's status to
-    ``'cancelled'``
-4.  Sends a restart signal to all Nanny processes, which in turn restart clean
-    Worker processes and register these workers with the Scheduler.  New workers
-    may not have the same port as their previous iterations.  The
-    ``.nannies`` dictionary on the Client serves as an accurate set of
-    aliases if necessary.
-5.  Restarts the scheduler, with clean and empty state
-
-This effectively removes all data and clears out all computations from the
-scheduler.  Any data or computations not saved to persistent storage are
-lost.  This process is very robust to a number of failure modes, including
-non-responsive or swamped workers but not including full hardware failures.
-
-Currently the user may experience a few error logging messages from
-Tornado upon closing their session.  These can safely be ignored.
+``Client.restart`` method kills all workers, flushes all scheduler state, and
+then brings all workers back online, resulting in a clean cluster.

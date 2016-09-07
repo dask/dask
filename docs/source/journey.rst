@@ -43,7 +43,7 @@ A few milliseconds later, the scheduler receives this message on an open socket.
 The scheduler updates its state with this little graph that shows how to compute
 ``z``.::
 
-    scheduler.tasks.update[msg['tasks']]
+    scheduler.tasks.update(msg['tasks'])
 
 The scheduler also updates *a lot* of other state.  Notably, it has to identify
 that ``x`` and ``y`` are themselves variables, and connect all of those

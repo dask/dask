@@ -4,13 +4,13 @@ Managing Computation
 Data and Computation in Dask.distributed are always in one of three states
 
 1.  Concrete values in local memory.  Example include the integer ``1`` or a
-    numpy array.
+    numpy array in the local process.
 2.  Lazy computations in a dask graph, perhaps stored in a ``dask.delayed`` or
     ``dask.dataframe`` object.
-3.  Running computations or remote data, pointed to by ``Future`` objects
+3.  Running computations or remote data, represented by ``Future`` objects
     pointing to computations currently in flight.
 
-All three of these forms are important and there are functions the convert
+All three of these forms are important and there are functions that convert
 between all three states.
 
 

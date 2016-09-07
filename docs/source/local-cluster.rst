@@ -11,9 +11,15 @@ For convenience you can start a local cluster from your Python session.
    >>> client = Client(cluster)
    <Client: scheduler=127.0.0.1:8786 processes=8 cores=8>
 
+You can dynamically scale this cluster up and down:
+
+.. code-block:: python
+
+   >>> worker = cluster.add_worker()
+   >>> cluster.remove_worker(worker)
 
 Alternatively, a ``LocalCluster`` is made for you automatically if you create
-an ``Client`` with no arguments.
+an ``Client`` with no arguments:
 
 .. code-block:: python
 
@@ -22,6 +28,8 @@ an ``Client`` with no arguments.
    >>> client
    <Client: scheduler=127.0.0.1:8786 processes=8 cores=8>
 
+API
+---
 
 .. currentmodule:: distributed.deploy.local
 

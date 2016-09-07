@@ -1,7 +1,7 @@
 Client
 ========
 
-The Client is the primary entry point for users of ``distributed``.
+The Client is the primary entry point for users of ``dask.distributed``.
 
 After you :doc:`setup a cluster <setup>`, initialize an ``Client`` by
 pointing it to the address of a ``Scheduler``:
@@ -102,9 +102,23 @@ this through two methods, ``get`` (synchronous) and ``compute`` (asynchronous).
 
 .. _dask: http://dask.pydata.org/en/latest/
 
+Clients register themselves as the default execution mechanism for Dask when
+they start, so simply creating a Client is sufficient to change all
+``dask.compute`` calls to use the distributed system.
+
+.. code-block:: python
+
+   client = Client('scheduler:8786')
+
+   my_dataframe.sum().compute()  # Now uses the distributed system by default
+
+You can stop this behavior by using the ``set_as_default=False`` keyword
+argument when starting the Client.
+
 **get**
 
-We provide dask graph dictionaries to the scheduler:
+For people familiar with low-level dask graphs, the client provides a fully
+compliant ``get`` method:
 
 .. code-block:: python
 
@@ -140,6 +154,8 @@ values) to the client with the ``compute`` method.
 
 This immediately returns standard ``Future`` objects as would be returned by
 ``submit`` or ``map``.
+
+For more information see the page on :doc:`Managing Computation<managing-computation>`.
 
 
 ``restart``
