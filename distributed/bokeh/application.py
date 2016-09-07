@@ -85,8 +85,7 @@ class BokehWebInterface(object):
             self.process.start()
         else:
             import subprocess
-            self.process = subprocess.Popen(args, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
+            self.process = subprocess.Popen(args)
 
         if not quiet:
             logger.info(" Bokeh UI at:  http://%s:%d/status/"
