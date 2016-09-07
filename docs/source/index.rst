@@ -77,28 +77,38 @@ Contents
    install
    quickstart
    setup
-   ec2
-   web
-   examples-overview
+   client
+   api
+   faq
 
 .. toctree::
    :maxdepth: 1
-   :caption: Using Distributed
+   :caption: Build Understanding
 
-   client
-   local-cluster
    efficiency
    locality
    manage-computation
    memory
+   resilience
+   scheduler
+   worker
+   work-stealing
+   related-work
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Additional Features
+
+   local-cluster
+   ec2
+   web
    joblib
    ipython
    publish
    queues
    task-launch
    submitting-applications
-   api
-   faq
+
 
 .. toctree::
    :maxdepth: 1
@@ -106,12 +116,6 @@ Contents
 
    develop
    foundations
-   clients
-   worker
-   scheduler
-   resilience
    journey
    protocol
-   work-stealing
    plugins
-   related-work
