@@ -91,8 +91,7 @@ Each of the following is a dictionary keyed by task name (described below):
 
     The ``task_state`` dictionary holds the current state of every key.
     Current valid states include released, waiting, queue, stacks, no-worker,
-    processing, memory, and erred.  These states will be explained further in
-    TODO_
+    processing, memory, and erred.  These states are explained further below.
 
 * **priority:** ``{key: tuple}``:
 
@@ -102,7 +101,8 @@ Each of the following is a dictionary keyed by task name (described below):
     precedence.  The second part is determined by the client, and is a way to
     prioritize tasks within a large graph that may be important, such as if
     they are on the critical path, or good to run in order to release many
-    dependencies.  This will be explained further in TODO_.
+    dependencies.  This is explained further in :doc:`Scheduling Policy
+    <scheduling-policies>`
 
     A key's priority is only used to break ties, when many keys are being
     considered for execution.  The priority does *not* determine running order,
@@ -164,8 +164,6 @@ Each of the following is a dictionary keyed by task name (described below):
     certain hosts.  These restrictions don't include a worker port.  Any
     worker on that hostname is deemed valid.
 
-    Restrictions are described further in TODO_
-
 * **loose_retrictions:** ``{key}``:
 
     Set of keys for which we are allowed to violate restrictions (see above) if
@@ -216,7 +214,7 @@ Each of the following is a dictionary keyed by task name (described below):
 * **stealable:** ``[[key]]``
 
     A list of stacks of stealable keys, ordered by stealability.  For more
-    information see TODO_
+    information see :doc:`Work Stealing <work-stealing>`
 
 
 Example Event and Reponse

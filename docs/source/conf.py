@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# distributed documentation build configuration file, created by
+# Dask.distributed documentation build configuration file, created by
 # sphinx-quickstart on Tue Oct  6 14:42:44 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -55,7 +55,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'distributed'
+project = u'Dask.distributed'
 copyright = u'2016, Continuum Analytics'
 author = u'Continuum Analytics'
 
@@ -237,7 +237,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'distributed.tex', u'distributed Documentation',
+  (master_doc, 'distributed.tex', u'Dask.distributed Documentation',
    u'Matthew Rocklin', 'manual'),
 ]
 
@@ -267,7 +267,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'distributed', u'distributed Documentation',
+    (master_doc, 'Dask.distributed', u'Dask.distributed Documentation',
      [author], 1)
 ]
 
@@ -281,8 +281,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'distributed', u'distributed Documentation',
-   author, 'distributed', 'One line description of project.',
+  (master_doc, 'Dask.distributed', u'Dask.distributed Documentation',
+   author, 'Dask.distributed', 'One line description of project.',
    'Miscellaneous'),
 ]
 

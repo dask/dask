@@ -1287,6 +1287,7 @@ class Client(object):
 
         >>> xx = client.compute(x)  # doctest: +SKIP
 
+
         See Also
         --------
         Client.get: Normal synchronous dask.get function
@@ -1370,6 +1371,7 @@ class Client(object):
         --------
         >>> xx = client.persist(x)  # doctest: +SKIP
         >>> xx, yy = client.persist([x, y])  # doctest: +SKIP
+
 
         See Also
         --------

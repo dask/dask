@@ -1,5 +1,5 @@
-distributed
-===========
+Dask.distributed
+================
 
 Dask.distributed is a lightweight library for distributed computing in Python.
 It extends both the ``concurrent.futures`` and ``dask`` APIs to moderate sized
