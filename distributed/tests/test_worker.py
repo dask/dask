@@ -16,7 +16,7 @@ from tornado.ioloop import TimeoutError
 
 from distributed.batched import BatchedStream
 from distributed.core import rpc, dumps, loads, connect, read, write
-from distributed.executor import _wait
+from distributed.client import _wait
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger
@@ -475,7 +475,7 @@ def test_compute_stream(s, a, b):
     yield write(stream, {'op': 'close'})
 
 
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)])
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
 def test_active_holds_tasks(e, s, w):
     future = e.submit(slowinc, 1, delay=0.2)
     yield gen.sleep(0.1)
@@ -497,7 +497,7 @@ def test_io_loop(loop):
     assert w.io_loop is loop
 
 
-@gen_cluster(executor=True, ncores=[])
+@gen_cluster(client=True, ncores=[])
 def test_spill_to_disk(e, s):
     np = pytest.importorskip('numpy')
     w = Worker(s.ip, s.port, loop=s.loop, memory_limit=1000)

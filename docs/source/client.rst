@@ -1,15 +1,15 @@
-Executor
+Client
 ========
 
-The Executor is the primary entry point for users of ``distributed``.
+The Client is the primary entry point for users of ``distributed``.
 
-After you :doc:`setup a cluster <setup>`, initialize an ``Executor`` by
+After you :doc:`setup a cluster <setup>`, initialize an ``Client`` by
 pointing it to the address of a ``Scheduler``:
 
 .. code-block:: python
 
-   >>> from distributed import Executor
-   >>> executor = Executor('127.0.0.1:8786')
+   >>> from distributed import Client
+   >>> client = Client('127.0.0.1:8786')
 
 Usage
 -----
@@ -17,14 +17,14 @@ Usage
 ``submit``
 ~~~~~~~~~~
 
-You can submit individual function calls with the ``executor.submit`` method
+You can submit individual function calls with the ``client.submit`` method
 
 .. code-block:: python
 
    >>> def inc(x):
            return x + 1
 
-   >>> x = executor.submit(inc, 10)
+   >>> x = client.submit(inc, 10)
    >>> x
    <Future - key: inc-e4853cffcc2f51909cdb69d16dacd1a5>
 
@@ -35,7 +35,7 @@ in further calls to ``submit``:
 
    >>> type(x)
    Future
-   >>> y = executor.submit(inc, x)
+   >>> y = client.submit(inc, x)
 
 Gather results
 ~~~~~~~~~~~~~~
@@ -48,11 +48,11 @@ We can collect results in a variety of ways.  First, we can use the
    >>> x.result()
    2
 
-Second, we can use the gather method on the executor
+Second, we can use the gather method on the client
 
 .. code-block:: python
 
-   >>> executor.gather([x, y])
+   >>> client.gather([x, y])
    (2, 3)
 
 Third, we can use the ``as_completed`` function to iterate over results as soon
@@ -80,7 +80,7 @@ We can map a function over many inputs at once
 
 .. code-block:: python
 
-   >>> L = executor.map(inc, range(10))
+   >>> L = client.map(inc, range(10))
 
 The ``map`` method returns a list of futures.  This is a break with the
 ``concurrent.futures`` API, which returns the results directly.  We keep the
@@ -88,7 +88,7 @@ results as futures so that they can stay on the distributed cluster.
 
 Additionally, we don't do any kind of batching so every function application
 will be a new task which will have a couple milliseconds of overhead.  It is
-unwise to use ``executor.map`` for small, fast functions where scheduling
+unwise to use ``client.map`` for small, fast functions where scheduling
 overhead is likely to be more expensive than the cost of the function itself.
 For example, our function ``inc`` is actually a *terrible* function to
 parallelize in practice.
@@ -109,7 +109,7 @@ We provide dask graph dictionaries to the scheduler:
 .. code-block:: python
 
    >>> dsk = {'x': 1, 'y': (inc, 'x')}
-   >>> executor.get(dsk, 'y')
+   >>> client.get(dsk, 'y')
    2
 
 This function pulls results back by default.  This is so that it can integrate
@@ -121,13 +121,13 @@ with existing dask code.
    >>> x = da.random.random(1000000000, chunks=(1000000,))
    >>> x.sum().compute()  # use local threads
    499999359.23511785
-   >>> x.sum().compute(get=executor.get)  # use distributed cluster
+   >>> x.sum().compute(get=client.get)  # use distributed cluster
    499999359.23511785
 
 **compute**
 
 We can also provide dask collections (arrays, bags, dataframes, delayed
-values) to the executor with the ``compute`` method.
+values) to the client with the ``compute`` method.
 
 .. code-block:: python
 
@@ -136,7 +136,7 @@ values) to the executor with the ``compute`` method.
    >>> type(df)
    dask.dataframe.DataFrame
 
-   >>> x_future, df_future = executor.compute(x, df)
+   >>> x_future, df_future = client.compute(x, df)
 
 This immediately returns standard ``Future`` objects as would be returned by
 ``submit`` or ``map``.
@@ -149,7 +149,7 @@ When things go wrong, restart the cluster with the ``.restart()`` method.
 
 .. code-block:: python
 
-   >>> executor.restart()
+   >>> client.restart()
 
 This both resets the scheduler state and all of the worker processes.  All
 current data and computations will be lost.  All existing futures set their
@@ -164,13 +164,13 @@ Internals
 Data Locality
 ~~~~~~~~~~~~~
 
-By default the executor does not bring results back to your local computer but
+By default the client does not bring results back to your local computer but
 leaves them on the distributed network.  As a result, computations on returned
 results like the following don't require any data transfer.
 
 .. code-block:: python
 
-   >>> y = executor.submit(inc, x)  # no data transfer required
+   >>> y = client.submit(inc, x)  # no data transfer required
 
 In addition, the internal scheduler endeavors to run functions on worker
 nodes that already have the necessary input data.  It avoids worker-to-worker
@@ -182,13 +182,13 @@ Pure Functions by Default
 By default we assume that all functions are pure_.  If this is not the case you
 should use the ``pure=False`` keyword argument.
 
-The executor associates a key to all computations.  This key is accessible on
+The client associates a key to all computations.  This key is accessible on
 the Future object.
 
 .. code-block:: python
 
    >>> from operator import add
-   >>> x = executor.submit(add, 1, 2)
+   >>> x = client.submit(add, 1, 2)
    >>> x.key
    'add-ebf39f96ad7174656f97097d658f3fa2'
 
@@ -208,9 +208,9 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
 .. code-block:: python
 
    >>> import numpy as np
-   >>> executor.submit(np.random.random, 1000, pure=False).key
+   >>> client.submit(np.random.random, 1000, pure=False).key
    'random_sample-fc814a39-ee00-42f3-8b6f-cac65bcb5556'
-   >>> executor.submit(np.random.random, 1000, pure=False).key
+   >>> client.submit(np.random.random, 1000, pure=False).key
    'random_sample-a24e7220-a113-47f2-a030-72209439f093'
 
 
@@ -220,9 +220,9 @@ Garbage Collection
 ~~~~~~~~~~~~~~~~~~
 
 Prolonged use of ``distributed`` may allocate a lot of remote data.  The
-executor can clean up unused results by reference counting.
+client can clean up unused results by reference counting.
 
-The executor reference counts ``Future`` objects.  When a particular key no
+The client reference counts ``Future`` objects.  When a particular key no
 longer has any Future objects pointing to it it will be released from
 distributed memory if no active computations still require it.
 
@@ -234,8 +234,8 @@ dictionaries:
 
 .. code-block:: python
 
-   >>> executor.futures
-   >>> executor.refcount
+   >>> client.futures
+   >>> client.refcount
 
 The scheduler also cleans up intermediate results when provided full dask
 graphs.  You can always use the lower level ``delete`` or ``clear`` functions

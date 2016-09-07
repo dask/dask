@@ -154,7 +154,7 @@ embarrassingly parallel work (the bulk of applications) but has not been used
 extensively for more sophisticated algorithms that require non-trivial
 communication patterns.
 
-The distributed executor includes a dynamic task scheduler capable of managing
+The distributed client includes a dynamic task scheduler capable of managing
 deep data dependencies between tasks.  The IPython parallel docs include `a
 recipe`_ for executing task graphs with data dependencies.  This same idea is
 core to all of ``distributed``, which uses a dynamic task scheduler for all
@@ -163,9 +163,9 @@ operations.  Notably, ``distributed.Future`` objects can be used within
 
 .. code-block:: python
 
-   >>> x = executor.submit(f, 1)  # returns a future
-   >>> y = executor.submit(f, 2)  # returns a future
-   >>> z = executor.submit(add, x, y)  # consumes futures
+   >>> x = client.submit(f, 1)  # returns a future
+   >>> y = client.submit(f, 2)  # returns a future
+   >>> z = client.submit(add, x, y)  # consumes futures
 
 The ability to use futures cheaply within ``submit`` and ``map`` methods
 enables the construction of very sophisticated data pipelines with simple code.
@@ -197,7 +197,7 @@ IPython Parallel has the following advantages over ``distributed``
 concurrent.futures
 ~~~~~~~~~~~~~~~~~~
 
-The ``distributed.Executor`` API is modeled after ``concurrent.futures`` and
+The ``distributed.Client`` API is modeled after ``concurrent.futures`` and
 PEP-3184_.  It has a few notable differences:
 
 *  ``distributed`` accepts ``Future`` objects within calls to ``submit/map``.
@@ -209,8 +209,8 @@ PEP-3184_.  It has a few notable differences:
    possible please raise an issue if this is of concrete importance to you.)
 *  Distributed generally does not support timeouts or callbacks
 
-``distributed.CompatibleExecutor`` is a subclass of ``distributed.Executor``
-that does conform to the ``concurrent.futures`` API,
-allowing it to be used as a drop-in replacement for other Executors using the common API.
+``distributed.CompatibleExecutor`` is a subclass of ``distributed.Client`` that
+does conform to the ``concurrent.futures`` API, allowing it to be used as a
+drop-in replacement for other Executors using the common API.
 
 .. _PEP-3184: https://www.python.org/dev/peps/pep-3148/

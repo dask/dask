@@ -5,7 +5,7 @@ from time import sleep, time
 import pytest
 pytest.importorskip('paramiko')
 
-from distributed import Executor
+from distributed import Client
 from distributed.deploy.ssh import SSHCluster
 from distributed.utils_test import slow
 from distributed.utils_test import loop
@@ -15,7 +15,7 @@ def test_cluster(loop):
     with SSHCluster(scheduler_addr = '127.0.0.1',
                     scheduler_port = 7437,
                     worker_addrs = ['127.0.0.1', '127.0.0.1']) as c:
-        with Executor(c, loop=loop) as e:
+        with Client(c, loop=loop) as e:
             start = time()
             while len(e.ncores()) != 2:
                 sleep(0.01)

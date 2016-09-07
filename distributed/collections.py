@@ -10,7 +10,7 @@ from dask.base import tokenize
 import numpy as np
 from tornado import gen
 
-from .executor import (default_executor, Future, _first_completed,
+from .client import (default_client, Future, _first_completed,
         ensure_default_get)
 from .utils import sync
 
@@ -25,14 +25,14 @@ def get_empty(df):
     return df.iloc[0:0]
 
 @gen.coroutine
-def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
-    executor = default_executor(executor)
+def _futures_to_dask_dataframe(futures, divisions=None, client=None):
+    client = default_client(client)
     f = yield _first_completed(futures)
-    empty = executor.submit(get_empty, f)
+    empty = client.submit(get_empty, f)
     if divisions is True:
-        divisions = executor.map(index_min, futures)
-        divisions.append(executor.submit(index_max, futures[-1]))
-        divisions2 = yield executor._gather(divisions)
+        divisions = client.map(index_min, futures)
+        divisions.append(client.submit(index_max, futures[-1]))
+        divisions2 = yield client._gather(divisions)
         if sorted(divisions2) != divisions2:
             divisions2 = [None] * (len(futures) + 1)
     elif divisions in (None, False):
@@ -44,26 +44,26 @@ def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
 
-    ensure_default_get(executor)
+    ensure_default_get(client)
 
     raise gen.Return(dd.DataFrame(dsk, name, empty, divisions2))
 
 
-def futures_to_dask_dataframe(futures, divisions=None, executor=None):
+def futures_to_dask_dataframe(futures, divisions=None, client=None):
     """ Convert a list of futures into a dask.dataframe
 
     Parameters
     ----------
-    executor: Executor
-        Executor through which we access the remote dataframes
+    client: Client
+        Client through which we access the remote dataframes
     futures: iterable of Futures
         Futures that create dataframes to form the divisions
     divisions: bool
         Set to True if the data is cleanly partitioned along the index
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _futures_to_dask_dataframe, futures,
-                divisions=divisions, executor=executor)
+    client = default_client(client)
+    return sync(client.loop, _futures_to_dask_dataframe, futures,
+                divisions=divisions, client=client)
 
 
 def get_shape(x):
@@ -76,17 +76,17 @@ def get_dtype(x):
     return x.dtype
 
 @gen.coroutine
-def _futures_to_dask_array(futures, executor=None):
-    executor = default_executor(executor)
+def _futures_to_dask_array(futures, client=None):
+    client = default_client(client)
     futures = np.array(futures, dtype=object)
 
     slices = [((0,) * i + (slice(None, None),) + (0,) * (futures.ndim - i - 1))
               for i in range(futures.ndim)]
-    chunks = [[executor.submit(get_dim, x, i) for x in futures[slc]]
+    chunks = [[client.submit(get_dim, x, i) for x in futures[slc]]
               for i, slc in enumerate(slices)]
-    dtype = executor.submit(get_dtype, futures.flat[0])
+    dtype = client.submit(get_dtype, futures.flat[0])
 
-    chunks, dtype = yield executor._gather([chunks, dtype])
+    chunks, dtype = yield client._gather([chunks, dtype])
     chunks = tuple(map(tuple, chunks))
 
     name = 'array-from-futures-' + tokenize(*futures.flat)
@@ -94,12 +94,12 @@ def _futures_to_dask_array(futures, executor=None):
     values = list(futures.flat)
     dsk = dict(zip(keys, values))
 
-    ensure_default_get(executor)
+    ensure_default_get(client)
 
     raise gen.Return(da.Array(dsk, name, chunks, dtype))
 
 
-def futures_to_dask_array(futures, executor=None):
+def futures_to_dask_array(futures, client=None):
     """ Convert a nested list of futures into a dask.array
 
     The futures must satisfy the following:
@@ -116,27 +116,27 @@ def futures_to_dask_array(futures, executor=None):
     ----------
     futures: iterable of Futures
         Futures that create arrays
-    executor: Executor (optional)
-        Executor through which we access the remote dataframes
+    client: Client (optional)
+        Client through which we access the remote dataframes
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _futures_to_dask_array, futures,
-                executor=executor)
+    client = default_client(client)
+    return sync(client.loop, _futures_to_dask_array, futures,
+                client=client)
 
 
 @gen.coroutine
-def _futures_to_dask_bag(futures, executor=None):
-    executor = default_executor(executor)
+def _futures_to_dask_bag(futures, client=None):
+    client = default_client(client)
 
     name = 'bag-from-futures-' + tokenize(*futures)
     dsk = {(name, i): future for i, future in enumerate(futures)}
 
-    ensure_default_get(executor)
+    ensure_default_get(client)
 
     raise gen.Return(db.Bag(dsk, name, len(futures)))
 
 
-def futures_to_dask_bag(futures, executor=None):
+def futures_to_dask_bag(futures, client=None):
     """ Convert a list of futures into a dask.bag
 
     The futures should be point to Python iterables
@@ -144,20 +144,20 @@ def futures_to_dask_bag(futures, executor=None):
     Parameters
     ----------
     futures: iterable of Futures
-    executor: Executor (optional)
+    client: Client (optional)
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _futures_to_dask_bag, futures,
-                executor=executor)
+    client = default_client(client)
+    return sync(client.loop, _futures_to_dask_bag, futures,
+                client=client)
 
 @gen.coroutine
-def _futures_to_collection(futures, executor=None, **kwargs):
-    executor = default_executor(executor)
+def _futures_to_collection(futures, client=None, **kwargs):
+    client = default_client(client)
     element = futures
     while not isinstance(element, Future):
         element = element[0]
 
-    typ = yield executor.submit(type, element)._result()
+    typ = yield client.submit(type, element)._result()
     if 'pandas' in typ.__module__:
         func = _futures_to_dask_dataframe
     elif 'numpy' in typ.__module__:
@@ -168,11 +168,11 @@ def _futures_to_collection(futures, executor=None, **kwargs):
         raise NotImplementedError("First future of type %s.  Expected "
                 "numpy or pandas object" % typ.__name__)
 
-    result = yield func(futures, executor=executor, **kwargs)
+    result = yield func(futures, client=client, **kwargs)
     raise gen.Return(result)
 
 
-def futures_to_collection(futures, executor=None, **kwargs):
+def futures_to_collection(futures, client=None, **kwargs):
     """ Convert futures into a dask collection
 
     Convert a list of futures pointing to a pandas dataframe into one logical
@@ -185,14 +185,14 @@ def futures_to_collection(futures, executor=None, **kwargs):
     futures_to_dask_array
     futures_to_dask_dataframe
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _futures_to_collection, futures,
-                executor=executor, **kwargs)
+    client = default_client(client)
+    return sync(client.loop, _futures_to_collection, futures,
+                client=client, **kwargs)
 
 
 @gen.coroutine
-def _future_to_dask_array(future, executor=None):
-    e = default_executor(executor)
+def _future_to_dask_array(future, client=None):
+    e = default_client(client)
 
     name = 'array-' + str(future.key)
 
@@ -206,7 +206,7 @@ def _future_to_dask_array(future, executor=None):
     raise gen.Return(da.Array(dsk, name, chunks, dtype))
 
 
-def future_to_dask_array(future, executor=None):
+def future_to_dask_array(future, client=None):
     """
     Convert a single future to a single-chunked dask.array
 
@@ -216,14 +216,14 @@ def future_to_dask_array(future, executor=None):
         futures_to_dask_array
         futures_to_dask_arrays
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _future_to_dask_array, future,
-                executor=executor)
+    client = default_client(client)
+    return sync(client.loop, _future_to_dask_array, future,
+                client=client)
 
 
 @gen.coroutine
-def _futures_to_dask_arrays(futures, executor=None):
-    e = default_executor(executor)
+def _futures_to_dask_arrays(futures, client=None):
+    e = default_client(client)
 
     names = ['array-' + str(future.key) for future in futures]
 
@@ -240,7 +240,7 @@ def _futures_to_dask_arrays(futures, executor=None):
             for dsk, name, chunks, dtype in zip(dsks, names, chunkss, dtypes)])
 
 
-def futures_to_dask_arrays(futures, executor=None):
+def futures_to_dask_arrays(futures, client=None):
     """
     Convert a list of futures into a list of dask arrays
 
@@ -252,6 +252,6 @@ def futures_to_dask_arrays(futures, executor=None):
         future_to_dask_array
         futures_to_dask_array
     """
-    executor = default_executor(executor)
-    return sync(executor.loop, _futures_to_dask_arrays, futures,
-                executor=executor)
+    client = default_client(client)
+    return sync(client.loop, _futures_to_dask_arrays, futures,
+                client=client)

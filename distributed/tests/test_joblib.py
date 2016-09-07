@@ -37,7 +37,7 @@ def test_simple(loop, joblib):
             assert seq == [inc(i) for i in range(10)]
 
             ba, _ = joblib.parallel.get_active_backend()
-            ba.executor.shutdown()
+            ba.client.shutdown()
 
 
 def random2():
@@ -58,4 +58,4 @@ def test_dont_assume_function_purity(loop, joblib):
             assert x != y
 
             ba, _ = joblib.parallel.get_active_backend()
-            ba.executor.shutdown()
+            ba.client.shutdown()

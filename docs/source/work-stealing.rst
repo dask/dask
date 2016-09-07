@@ -31,8 +31,8 @@ and giving up on parallelism.
 
 .. code-block:: python
 
-   [data] = e.scatter([np.arange(1000000000)])
-   x = e.submit(np.sum, data)
+   [data] = client.scatter([np.arange(1000000000)])
+   x = client.submit(np.sum, data)
 
 
 **Good example**
@@ -42,8 +42,8 @@ especially when the computation time is expensive (here 100 seconds.)
 
 .. code-block:: python
 
-   [data] = e.scatter([100])
-   x = e.submit(sleep, data)
+   [data] = client.scatter([100])
+   x = client.submit(sleep, data)
 
 Fortunately we often know both the number of bytes of dependencies (as
 reported by calling ``sys.getsizeof`` on the workers) and the runtime cost of

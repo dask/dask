@@ -33,7 +33,7 @@ This is possible with the Client.become_distributed_ method::
 
    >>> e = c.become_distributed()  # start dask on top of IPyParallel
    >>> e
-   <Executor: scheduler="127.0.0.1:59683" processes=8 cores=8>
+   <Client: scheduler="127.0.0.1:59683" processes=8 cores=8>
 
 .. _Client.become_distributed: http://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_distributed
 
@@ -46,11 +46,11 @@ interactively.  Fortunately IPython gives us a way to launch interactive
 sessions within Python processes.  This is available through the following
 methods:
 
-.. currentmodule:: distributed.executor
+.. currentmodule:: distributed.client
 
 .. autosummary::
-   Executor.start_ipython_workers
-   Executor.start_ipython_scheduler
+   Client.start_ipython_workers
+   Client.start_ipython_scheduler
 
 These methods start IPython kernels running in a separate thread within the
 specified Worker or Schedulers.  These kernels are accessible either through

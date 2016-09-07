@@ -4,10 +4,10 @@ from tornado import gen
 
 from distributed.utils_test import gen_cluster, div
 from distributed.diagnostics.scheduler import tasks, workers
-from distributed.executor import _wait
+from distributed.client import _wait
 
-@gen_cluster(executor=True)
-def test_tasks(e, s, a, b):
+@gen_cluster(client=True)
+def test_tasks(c, s, a, b):
     d = tasks(s)
 
     assert d['failed'] == 0
@@ -16,7 +16,7 @@ def test_tasks(e, s, a, b):
     assert d['total'] == 0
     assert d['waiting'] == 0
 
-    L = e.map(div, range(10), range(10))
+    L = c.map(div, range(10), range(10))
     yield _wait(L)
 
     d = tasks(s)
@@ -27,8 +27,8 @@ def test_tasks(e, s, a, b):
     assert d['waiting'] == 0
 
 
-@gen_cluster(executor=True)
-def test_workers(e, s, a, b):
+@gen_cluster(client=True)
+def test_workers(c, s, a, b):
     d = workers(s)
 
     assert json.loads(json.dumps(d)) == d
@@ -40,7 +40,7 @@ def test_workers(e, s, a, b):
     assert d[a.ip]['processing'] == {}
     # assert d[a.ip]['last-seen'] > 0
 
-    L = e.map(div, range(10), range(10))
+    L = c.map(div, range(10), range(10))
     yield _wait(L)
 
     assert 0 <= d[a.ip]['cpu'] <= 100

@@ -25,7 +25,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 
 from .batched import BatchedSend
-from .client import pack_data, gather_from_workers
+from .utils_comm import pack_data, gather_from_workers
 from .compatibility import reload, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
         error_message, read, RPCClosed)

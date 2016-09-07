@@ -27,14 +27,14 @@ Creating Futures
 
 The following functions produce Futures
 
-.. currentmodule:: distributed.executor
+.. currentmodule:: distributed.client
 
 .. autosummary::
-   Executor.submit
-   Executor.map
-   Executor.compute
-   Executor.persist
-   Executor.scatter
+   Client.submit
+   Client.map
+   Client.compute
+   Client.persist
+   Client.scatter
 
 Submit and map handle raw Python functions.  Compute and persist handle Dask
 collections like arrays, bags, delayed values, and dataframes.  Scatter sends
@@ -43,7 +43,7 @@ data directly from the local process.
 Persisting Collections
 ----------------------
 
-Calls to ``Executor.compute`` or ``Executor.persist`` submit task graphs to the
+Calls to ``Client.compute`` or ``Client.persist`` submit task graphs to the
 cluster and return ``Future`` objects that point to particular output tasks.
 
 Compute returns a single future per input, persist returns a copy of the
@@ -61,7 +61,7 @@ Persist is more common and is often used as follows with collections:
    >>> df = df.assign(z = df.x + df.y)
 
    >>> # Pin data in distributed ram, this triggers computation
-   >>> df = e.persist(df)
+   >>> df = client.persist(df)
 
    >>> # continue operating on df
 
@@ -73,7 +73,7 @@ In this example we build a computation by parsing CSV data, filtering rows, and
 then adding a new column.  Up until this point all work is lazy; we've just
 built up a recipe to perform the work as a graph in the ``df`` object.
 
-When we call ``df = e.persist(df)`` we cut this graph off of the ``df`` object,
+When we call ``df = client.persist(df)`` we cut this graph off of the ``df`` object,
 send it up to the scheduler, receive ``Future`` objects in return and create a
 new dataframe with a very shallow graph that points directly to these futures.
 This happens more or less immediately (as long as it takes to serialize and
@@ -84,7 +84,7 @@ cluster works to evaluate the graph in the background.
 Difference with dask.compute
 ----------------------------
 
-The operations ``e.persist(df)`` and ``e.compute(df)`` are asynchronous and so differ
+The operations ``client.persist(df)`` and ``client.compute(df)`` are asynchronous and so differ
 from the traditional ``df.compute()`` method or ``dask.compute`` function, which
 blocks until a result is available.  The ``.compute()`` method does not persist
 any data on the cluster.  The ``.compute()`` method also brings the entire
@@ -92,15 +92,15 @@ result back to the local machine, so it is unwise to use it on large datasets.
 However, ``.compute()`` is very convenient for smaller results particularly
 because it does return concrete results in a way that most other tools expect.
 
-Typically we use asynchronous methods like ``e.persist`` to set up large
+Typically we use asynchronous methods like ``client.persist`` to set up large
 collections and then use ``df.compute()`` for fast analyses.
 
 .. code-block:: python
 
    >>> # df.compute()  # This is bad and would likely flood local memory
-   >>> df = e.persist(df)    # This is good and asynchronously pins df
+   >>> df = client.persist(df)    # This is good and asynchronously pins df
    >>> df.x.sum().compute()  # This is good because the result is small
-   >>> future = e.compute(df.x.sum())  # This is also good but less intuitive
+   >>> future = client.compute(df.x.sum())  # This is also good but less intuitive
 
 
 Clearing data
@@ -133,7 +133,7 @@ can always ``cancel`` the futures/collection.
 
 .. code-block:: python
 
-   >>> e.cancel(df)  # kills df, df2, and every other dependent computation
+   >>> client.cancel(df)  # kills df, df2, and every other dependent computation
 
 Alternatively, if you want a clean slate, you can restart the cluster.  This
 clears all state and does a hard restart of all worker processes.  It generally
@@ -141,7 +141,7 @@ completes in around a second.
 
 .. code-block:: python
 
-   >>> e.restart()
+   >>> client.restart()
 
 
 Resilience
@@ -172,9 +172,9 @@ data has become particularly imbalanced, or that they want certain pieces of
 data to live on certain parts of their network.  These considerations are not
 usually necessary.
 
-.. currentmodule:: distributed.executor
+.. currentmodule:: distributed.client
 
 .. autosummary::
-   Executor.rebalance
-   Executor.replicate
-   Executor.scatter
+   Client.rebalance
+   Client.replicate
+   Client.scatter

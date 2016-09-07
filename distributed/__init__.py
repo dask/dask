@@ -4,13 +4,13 @@ from .config import config
 from .core import connect, read, write, rpc
 from .deploy import LocalCluster
 from .diagnostics import progress
-from .executor import (Executor, CompatibleExecutor, wait, as_completed,
-        default_executor)
+from .client import (Client, Executor, CompatibleExecutor, wait, as_completed,
+        default_client)
 from .nanny import Nanny
 from .scheduler import Scheduler
 from .utils import sync
 from .worker import Worker
-from .worker_executor import local_executor
+from .worker_client import local_client
 
 try:
     from .collections import futures_to_collection

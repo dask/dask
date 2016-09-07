@@ -56,10 +56,10 @@ command.  The involve the following::
 
 .. code-block:: python
 
-   >>> from distributed import Executor, s3, progress
-   >>> e = Executor('127.0.0.1:8786')
+   >>> from distributed import Client, s3, progress
+   >>> c = Client('127.0.0.1:8786')
 
-This executor now has access to all the cores of your cluster.
+This client now has access to all the cores of your cluster.
 
 
 Destroy

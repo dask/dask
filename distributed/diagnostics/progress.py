@@ -14,7 +14,6 @@ from tornado import gen
 
 from .plugin import SchedulerPlugin
 from ..utils import sync, key_split, tokey
-from ..executor import default_executor
 
 
 logger = logging.getLogger(__name__)

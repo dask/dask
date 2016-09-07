@@ -12,8 +12,8 @@ from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, make_hdfs
 from distributed.utils import get_ip
 from distributed.utils_test import loop
-from distributed import Executor
-from distributed.executor import _wait, Future
+from distributed import Client
+from distributed.client import _wait, Future
 
 hdfs3 = pytest.importorskip('hdfs3')
 from distributed.hdfs import read_bytes, get_block_locations
@@ -47,7 +47,7 @@ def test_get_block_locations():
         assert L[2]['filename'] == L[3]['filename']
 
 
-@gen_cluster([(ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1)], timeout=60, client=True)
 def dont_test_dataframes(e, s, a):  # slow
     pytest.importorskip('pandas')
     n = 3000000
@@ -88,7 +88,7 @@ def test_get_block_locations_nested():
         assert len(L) == 6
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_read_bytes(e, s, a, b):
     with make_hdfs() as hdfs:
         data = b'a' * int(1e8)
@@ -126,14 +126,14 @@ def test_read_bytes_sync(loop):
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
-            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(('127.0.0.1', s['port']), loop=loop) as e:
                 sample, values = read_bytes('/tmp/test/file.*')
                 futures = e.compute(values)
                 results = e.gather(futures)
                 assert b''.join(results) == 100 * data
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_get_block_locations_nested_2(e, s, a, b):
     with make_hdfs() as hdfs:
         data = b'a'
@@ -155,7 +155,7 @@ def test_get_block_locations_nested_2(e, s, a, b):
         assert all(x == b'a' for x in results)
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_lazy_values(e, s, a, b):
     with make_hdfs() as hdfs:
         data = b'a'
@@ -180,7 +180,7 @@ def test_lazy_values(e, s, a, b):
         assert all(x == b'a' for x in results)
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_write_bytes(e, s, a, b):
     with make_hdfs() as hdfs:
         data = [b'123', b'456', b'789']
@@ -210,7 +210,7 @@ def test_read_csv_sync(loop):
             with hdfs.open('/tmp/test/2.csv', 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(('127.0.0.1', s['port']), loop=loop) as e:
                 values = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n',
                                    collection=False, header=0)
                 futures = e.compute(values)
@@ -234,12 +234,12 @@ def test_read_csv_sync_compute(loop):
             with hdfs.open('/tmp/test/2.csv', 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(('127.0.0.1', s['port']), loop=loop) as e:
                 df = dd.read_csv('hdfs:///tmp/test/*.csv', collection=True)
                 assert df.amount.sum().compute(get=e.get) == 1000
 
 
-@gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv(e, s, a, b):
     with make_hdfs() as hdfs:
         with hdfs.open('/tmp/test/1.csv', 'wb') as f:
@@ -254,7 +254,7 @@ def test_read_csv(e, s, a, b):
         assert result == 1 + 2 + 3 + 4
 
 
-@gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv_with_names(e, s, a, b):
     with make_hdfs() as hdfs:
         with hdfs.open('/tmp/test/1.csv', 'wb') as f:
@@ -265,7 +265,7 @@ def test_read_csv_with_names(e, s, a, b):
         assert list(df.columns) == ['amount', 'name']
 
 
-@gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv_lazy(e, s, a, b):
     with make_hdfs() as hdfs:
         with hdfs.open('/tmp/test/1.csv', 'wb') as f:
@@ -282,7 +282,7 @@ def test_read_csv_lazy(e, s, a, b):
         assert result == 1 + 2 + 3 + 4
 
 
-@gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test__read_text(e, s, a, b):
     with make_hdfs() as hdfs:
         with hdfs.open('/tmp/test/text.1.txt', 'wb') as f:
@@ -317,7 +317,7 @@ def test__read_text(e, s, a, b):
         assert all(isinstance(x, Delayed) for x in L)
 
 
-@gen_cluster([(ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1)], timeout=60, client=True)
 def test__read_text_json_endline(e, s, a):
     import json
     with make_hdfs() as hdfs:
@@ -331,7 +331,7 @@ def test__read_text_json_endline(e, s, a):
 
 
 
-@gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test__read_text_unicode(e, s, a, b):
     fn = '/tmp/test/data.txt'
     data = b'abcd\xc3\xa9'
@@ -352,12 +352,12 @@ def test_read_text_sync(loop):
             f.write(b'hello\nworld')
 
         with cluster(nworkers=3) as (s, [a, b, c]):
-            with Executor(('127.0.0.1', s['port']), loop=loop):
+            with Client(('127.0.0.1', s['port']), loop=loop):
                 b = db.read_text('hdfs:///tmp/test/*.txt')
                 assert list(b.str.strip().str.upper()) == ['HELLO', 'WORLD']
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_deterministic_key_names(e, s, a, b):
     with make_hdfs() as hdfs:
         data = b'abc\n' * int(1e3)
@@ -374,7 +374,7 @@ def test_deterministic_key_names(e, s, a, b):
         assert [f.key for f in x] != [f.key for f in z]
 
 
-@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_write_bytes(e, s, a, b):
     from dask.bytes.core import write_bytes, read_bytes
     with make_hdfs() as hdfs:

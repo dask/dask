@@ -26,7 +26,7 @@ Import ``distributed``, ``hdfs3``, and other standard libraries used in this exa
 
    >>> import hdfs3
    >>> from collections import defaultdict, Counter
-   >>> from distributed import Executor, progress
+   >>> from distributed import Client, progress
 
 Initalize a connection to HDFS, replacing ``NAMENODE_HOSTNAME`` and
 ``NAMENODE_PORT`` with the hostname and port (default: 8020) of the HDFS
@@ -36,13 +36,13 @@ namenode.
 
    >>> hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
 
-Initalize a connection to the ``distributed`` executor, replacing
-``EXECUTOR_IP`` and ``EXECUTOR_PORT`` with the IP address and port of the
+Initalize a connection to the ``distributed`` client, replacing
+``SCHEDULER_IP`` and ``SCHEDULER_PORT`` with the IP address and port of the
 ``distributed`` scheduler.
 
 .. code-block:: python
 
-   >>> e = Executor('EXECUTOR_IP:EXECUTOR_PORT')
+   >>> client = Client('SCHEDULER_IP:SCHEDULER_PORT')
 
 Generate a list of filenames from the text data in HDFS:
 
@@ -52,10 +52,10 @@ Generate a list of filenames from the text data in HDFS:
    >>> print(filenames[:5])
 
    ['/tmp/enron/edrm-enron-v2_nemec-g_xml.zip/merged.txt',
-   '/tmp/enron/edrm-enron-v2_ring-r_xml.zip/merged.txt',
-   '/tmp/enron/edrm-enron-v2_bailey-s_xml.zip/merged.txt',
-   '/tmp/enron/edrm-enron-v2_fischer-m_xml.zip/merged.txt',
-   '/tmp/enron/edrm-enron-v2_geaccone-t_xml.zip/merged.txt']
+    '/tmp/enron/edrm-enron-v2_ring-r_xml.zip/merged.txt',
+    '/tmp/enron/edrm-enron-v2_bailey-s_xml.zip/merged.txt',
+    '/tmp/enron/edrm-enron-v2_fischer-m_xml.zip/merged.txt',
+    '/tmp/enron/edrm-enron-v2_geaccone-t_xml.zip/merged.txt']
 
 Print the first 1024 bytes of the first text file:
 
@@ -69,7 +69,7 @@ Print the first 1024 bytes of the first text file:
     Finalize ECS/EES Master Agreement\r\nX-SDOC: 161476\r\nX-ZLID: zl-edrm-enro
    n-v2-nemec-g-2802.eml\r\n\r\nPlease plan to attend a meeting to finalize the
     ECS/EES  Master Agreement \r\ntomorrow 11/30/00 at 1:30 pm CST.\r\n\r\nI wi
-   ll email everyone tomorrow with location.\r\n\r\nDave-I will also email you 
+   ll email everyone tomorrow with location.\r\n\r\nDave-I will also email you
    the call in number tomorrow.\r\n\r\nThanks\r\nXochitl\r\n\r\n***********\r\n
    EDRM Enron Email Data Set has been produced in EML, PST and NSF format by ZL
     Technologies, Inc. This Data Set is licensed under a Creative Commons Attri
@@ -112,12 +112,12 @@ file:
     (b'is', 30055)]
 
 We can perform the same operation of counting the words in the first text file,
-except we will use ``e.submit`` to execute the computation on a ``distributed``
+except we will use ``client.submit`` to execute the computation on a ``distributed``
 worker:
 
 .. code-block:: python
 
-   >>> future = e.submit(count_words, filenames[0])
+   >>> future = client.submit(count_words, filenames[0])
    >>> counts = future.result()
    >>> print(sorted(counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
 
@@ -139,7 +139,7 @@ are running.
 
 .. code-block:: python
 
-   >>> futures = e.map(count_words, filenames)
+   >>> futures = client.map(count_words, filenames)
 
 We can check the status of some ``futures`` while all of the text files are
 being processed:
@@ -188,14 +188,14 @@ using futures:
 
 .. code-block:: python
 
-   >>> futures2 = e.map(top_items, futures)
+   >>> futures2 = client.map(top_items, futures)
 
 We can ``gather`` the resulting culled word count data for each text file to
 the local process:
 
 .. code-block:: python
 
-   >>> results = e.gather(iter(futures2))
+   >>> results = client.gather(iter(futures2))
 
 To sum the word counts for all of the text files, we can iterate over the
 results in ``futures2`` and update a local dictionary that contains all of the
@@ -233,14 +233,14 @@ The complete Python script for this example is shown below:
 
 .. code-block:: python
 
-   # word-count.py   
+   # word-count.py
 
    import hdfs3
    from collections import defaultdict, Counter
-   from distributed import Executor, progress
+   from distributed import Client, progress
 
    hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
-   e = Executor('EXECUTOR_IP:EXECUTOR_PORT')
+   client = Client('SCHEDULER_IP:SCHEDULER:PORT')
 
    filenames = hdfs.glob('/tmp/enron/*/*')
    print(filenames[:5])
@@ -258,11 +258,11 @@ The complete Python script for this example is shown below:
    counts = count_words(filenames[0])
    print(sorted(counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
 
-   future = e.submit(count_words, filenames[0])
+   future = client.submit(count_words, filenames[0])
    counts = future.result()
    print(sorted(counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
 
-   futures = e.map(count_words, filenames)
+   futures = client.map(count_words, filenames)
    len(futures)
    futures[:5]
    progress(futures)
@@ -272,8 +272,8 @@ The complete Python script for this example is shown below:
        items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)[:10000]
        return dict(items)
 
-   futures2 = e.map(top_items, futures)
-   results = e.gather(iter(futures2))
+   futures2 = client.map(top_items, futures)
+   results = client.gather(iter(futures2))
 
    all_counts = Counter()
    for result in results:

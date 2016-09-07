@@ -4,7 +4,7 @@ import pytest
 
 from tornado import gen
 
-from distributed import Executor, Scheduler, Worker
+from distributed import Client, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, gen_cluster)
@@ -14,10 +14,10 @@ from time import time, sleep
 
 def test_text_progressbar(capsys, loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            futures = e.map(inc, range(10))
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            futures = c.map(inc, range(10))
             p = TextProgressBar(futures, interval=0.01, complete=True)
-            e.gather(futures)
+            c.gather(futures)
 
             start = time()
             while p.status != 'finished':
@@ -31,9 +31,9 @@ def test_text_progressbar(capsys, loop):
             assert p.stream.closed()
 
 
-@gen_cluster(executor=True)
-def test_TextProgressBar_error(e, s, a, b):
-    x = e.submit(div, 1, 0)
+@gen_cluster(client=True)
+def test_TextProgressBar_error(c, s, a, b):
+    x = c.submit(div, 1, 0)
 
     progress = TextProgressBar([x.key], scheduler=(s.ip, s.port),
                                start=False, interval=0.01)
@@ -81,9 +81,9 @@ def check_bar_completed(capsys, width=40):
 
 def test_progress_function(loop, capsys):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            f = e.submit(lambda: 1)
-            g = e.submit(lambda: 2)
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            f = c.submit(lambda: 1)
+            g = c.submit(lambda: 2)
 
             progress([[f], [[g]]], notebook=False)
             check_bar_completed(capsys)

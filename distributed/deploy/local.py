@@ -10,7 +10,7 @@ from tornado import gen
 
 from ..http.scheduler import HTTPScheduler
 from ..utils import sync, ignoring, All
-from ..executor import Executor
+from ..client import Client
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -42,7 +42,7 @@ class LocalCluster(object):
     >>> c  # doctest: +SKIP
     LocalCluster("127.0.0.1:8786", workers=8, ncores=8)
 
-    >>> e = Executor(c)  # connect to local cluster  # doctest: +SKIP
+    >>> c = Client(c)  # connect to local cluster  # doctest: +SKIP
 
     Add a new worker to the cluster
     >>> w = c.start_worker(ncores=2)  # doctest: +SKIP

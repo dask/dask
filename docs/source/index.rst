@@ -85,7 +85,7 @@ Contents
    :maxdepth: 1
    :caption: Using Distributed
 
-   executor
+   client
    local-cluster
    efficiency
    locality

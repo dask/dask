@@ -9,55 +9,55 @@ import pytest
 from toolz import partition_all
 from tornado import gen
 
-from distributed.executor import _wait
+from distributed.client import _wait
 from distributed.utils import sync
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
-from distributed import Executor, Nanny, wait
+from distributed import Client, Nanny, wait
 
 
 def test_submit_after_failed_worker(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = e.map(inc, range(10))
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = c.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
-            total = e.submit(sum, L)
+            total = c.submit(sum, L)
             assert total.result() == sum(map(inc, range(10)))
 
 
 def test_gather_after_failed_worker(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = e.map(inc, range(10))
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = c.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
-            result = e.gather(L)
+            result = c.gather(L)
             assert result == list(map(inc, range(10)))
 
 
 @slow
 def test_gather_then_submit_after_failed_workers(loop):
     with cluster(nworkers=4) as (s, [w, x, y, z]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = e.map(inc, range(20))
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = c.map(inc, range(20))
             wait(L)
             w['proc'].terminate()
-            total = e.submit(sum, L)
+            total = c.submit(sum, L)
             wait([total])
 
-            (_, port) = first(e.scheduler.who_has[total.key])
+            (_, port) = first(c.scheduler.who_has[total.key])
             for d in [x, y, z]:
                 if d['port'] == port:
                     d['proc'].terminate()
 
-            result = e.gather([total])
+            result = c.gather([total])
             assert result == [sum(map(inc, range(20)))]
 
 
-@gen_cluster(Worker=Nanny, timeout=60, executor=True)
-def test_failed_worker_without_warning(e, s, a, b):
-    L = e.map(inc, range(10))
+@gen_cluster(Worker=Nanny, timeout=60, client=True)
+def test_failed_worker_without_warning(c, s, a, b):
+    L = c.map(inc, range(10))
     yield _wait(L)
 
     a.process.terminate()
@@ -75,33 +75,33 @@ def test_failed_worker_without_warning(e, s, a, b):
 
     yield _wait(L)
 
-    L2 = e.map(inc, range(10, 20))
+    L2 = c.map(inc, range(10, 20))
     yield _wait(L2)
     assert all(len(keys) > 0 for keys in s.has_what.values())
     ncores2 = s.ncores.copy()
 
-    yield e._restart()
+    yield c._restart()
 
-    L = e.map(inc, range(10))
+    L = c.map(inc, range(10))
     yield _wait(L)
     assert all(len(keys) > 0 for keys in s.has_what.values())
 
     assert not (set(ncores2) & set(s.ncores))  # no overlap
 
 
-@gen_cluster(Worker=Nanny, executor=True)
-def test_restart(e, s, a, b):
+@gen_cluster(Worker=Nanny, client=True)
+def test_restart(c, s, a, b):
     assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
-    x = e.submit(inc, 1)
-    y = e.submit(inc, x)
-    z = e.submit(div, 1, 0)
+    x = c.submit(inc, 1)
+    y = c.submit(inc, x)
+    z = c.submit(div, 1, 0)
     yield y._result()
 
     assert set(s.who_has) == {x.key, y.key}
 
-    f = yield e._restart()
-    assert f is e
+    f = yield c._restart()
+    assert f is c
 
     assert len(s.stacks) == 2
     assert len(s.processing) == 2
@@ -117,14 +117,14 @@ def test_restart(e, s, a, b):
     assert not s.wants_what
 
 
-@gen_cluster(Worker=Nanny, executor=True)
-def test_restart_cleared(e, s, a, b):
+@gen_cluster(Worker=Nanny, client=True)
+def test_restart_cleared(c, s, a, b):
     x = 2 * delayed(1) + 1
-    f = e.compute(x)
+    f = c.compute(x)
     yield _wait([f])
     assert s.released
 
-    yield e._restart()
+    yield c._restart()
 
     for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
             s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
@@ -135,70 +135,70 @@ def test_restart_cleared(e, s, a, b):
 
 def test_restart_sync_no_center(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            x = e.submit(inc, 1)
-            e.restart()
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            x = c.submit(inc, 1)
+            c.restart()
             assert x.cancelled()
-            y = e.submit(inc, 2)
+            y = c.submit(inc, 2)
             assert y.result() == 3
-            assert len(e.ncores()) == 2
+            assert len(c.ncores()) == 2
 
 
 def test_restart_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            x = e.submit(div, 1, 2)
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            x = c.submit(div, 1, 2)
             x.result()
 
-            assert sync(loop, e.scheduler.who_has)
-            e.restart()
-            assert not sync(loop, e.scheduler.who_has)
+            assert sync(loop, c.scheduler.who_has)
+            c.restart()
+            assert not sync(loop, c.scheduler.who_has)
             assert x.cancelled()
-            assert len(e.ncores()) == 2
+            assert len(c.ncores()) == 2
 
             with pytest.raises(CancelledError):
                 x.result()
 
-            y = e.submit(div, 1, 3)
+            y = c.submit(div, 1, 3)
             assert y.result() == 1 / 3
 
 
 def test_restart_fast(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = e.map(sleep, range(10))
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = c.map(sleep, range(10))
 
             start = time()
-            e.restart()
+            c.restart()
             assert time() - start < 5
-            assert len(e.ncores()) == 2
+            assert len(c.ncores()) == 2
 
             assert all(x.status == 'cancelled' for x in L)
 
-            x = e.submit(inc, 1)
+            x = c.submit(inc, 1)
             assert x.result() == 2
 
 
-@gen_cluster(Worker=Nanny, executor=True)
-def test_fast_kill(e, s, a, b):
-    L = e.map(sleep, range(10))
+@gen_cluster(Worker=Nanny, client=True)
+def test_fast_kill(c, s, a, b):
+    L = c.map(sleep, range(10))
 
     start = time()
-    yield e._restart()
+    yield c._restart()
     assert time() - start < 5
 
     assert all(x.status == 'cancelled' for x in L)
 
-    x = e.submit(inc, 1)
+    x = c.submit(inc, 1)
     result = yield x._result()
     assert result == 2
 
 
 @gen_cluster(Worker=Nanny)
-def test_multiple_executors_restart(s, a, b):
-    e1 = Executor((s.ip, s.port), start=False)
+def test_multiple_clients_restart(s, a, b):
+    e1 = Client((s.ip, s.port), start=False)
     yield e1._start()
-    e2 = Executor((s.ip, s.port), start=False)
+    e2 = Client((s.ip, s.port), start=False)
     yield e2._start()
 
     x = e1.submit(inc, 1)
@@ -217,19 +217,19 @@ def test_multiple_executors_restart(s, a, b):
     yield e2._shutdown(fast=True)
 
 
-@gen_cluster(Worker=Nanny, executor=True)
-def test_forgotten_futures_dont_clean_up_new_futures(e, s, a, b):
-    x = e.submit(inc, 1)
-    yield e._restart()
-    y = e.submit(inc, 1)
+@gen_cluster(Worker=Nanny, client=True)
+def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
+    x = c.submit(inc, 1)
+    yield c._restart()
+    y = c.submit(inc, 1)
     del x
     import gc; gc.collect()
     yield gen.sleep(0.1)
     yield y._result()
 
 
-@gen_cluster(executor=True, timeout=60)
-def test_broken_worker_during_computation(e, s, a, b):
+@gen_cluster(client=True, timeout=60)
+def test_broken_worker_during_computation(c, s, a, b):
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     n.start(0)
 
@@ -238,9 +238,9 @@ def test_broken_worker_during_computation(e, s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    L = e.map(inc, range(256))
+    L = c.map(inc, range(256))
     for i in range(8):
-        L = e.map(add, *zip(*partition_all(2, L)))
+        L = c.map(add, *zip(*partition_all(2, L)))
 
     from random import random
     yield gen.sleep(random() / 2)
@@ -248,23 +248,23 @@ def test_broken_worker_during_computation(e, s, a, b):
     yield gen.sleep(random() / 2)
     n.process.terminate()
 
-    result = yield e._gather(L)
+    result = yield c._gather(L)
     assert isinstance(result[0], int)
 
     yield n._close()
 
 
-@gen_cluster(executor=True, Worker=Nanny)
-def test_restart_during_computation(e, s, a, b):
+@gen_cluster(client=True, Worker=Nanny)
+def test_restart_during_computation(c, s, a, b):
     xs = [delayed(slowinc)(i, delay=0.01) for i in range(50)]
     ys = [delayed(slowinc)(i, delay=0.01) for i in xs]
     zs = [delayed(slowadd)(x, y, delay=0.01) for x, y in zip(xs, ys)]
     total = delayed(sum)(zs)
-    result = e.compute(total)
+    result = c.compute(total)
 
     yield gen.sleep(0.5)
     assert s.rprocessing
-    yield e._restart()
+    yield c._restart()
     assert not s.rprocessing
 
     assert len(s.ncores) == 2

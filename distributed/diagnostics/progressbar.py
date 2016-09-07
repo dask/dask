@@ -12,7 +12,7 @@ from tornado.ioloop import IOLoop
 from .progress import format_time, Progress, MultiProgress
 
 from ..core import connect, read, write, dumps
-from ..executor import default_executor, futures_of
+from ..client import default_client, futures_of
 from ..utils import sync, ignoring, key_split, is_kernel
 
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def get_scheduler(scheduler):
     if scheduler is None:
-        scheduler = default_executor().scheduler
+        scheduler = default_client().scheduler
         return scheduler.ip, scheduler.port
     if isinstance(scheduler, str):
         scheduler = scheduler.split(':')
@@ -292,7 +292,7 @@ def progress(*futures, **kwargs):
     complete: bool (optional)
         Track all keys (True) or only keys that have not yet run (False)
         (defaults to True)
-        
+
     Notes
     -----
     In the notebook, the output of `progress` must be the last statement

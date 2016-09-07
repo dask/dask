@@ -12,14 +12,14 @@ import sys
 from time import sleep, time
 
 
-from distributed import Scheduler, Executor
+from distributed import Scheduler, Client
 from distributed.utils import get_ip, ignoring
 from distributed.utils_test import loop, popen
 
 
 def test_defaults(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as proc:
-        with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+        with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             response = requests.get('http://127.0.0.1:9786/info.json')
             assert response.ok
             assert response.json()['status'] == 'running'
@@ -31,14 +31,14 @@ def test_defaults(loop):
 
 def test_hostport(loop):
     with popen(['dask-scheduler', '--no-bokeh', '--host', '127.0.0.1:8978']):
-        with Executor('127.0.0.1:8978', loop=loop) as e:
-            assert len(e.ncores()) == 0
+        with Client('127.0.0.1:8978', loop=loop) as c:
+            assert len(c.ncores()) == 0
 
 
 def test_no_bokeh(loop):
     pytest.importorskip('bokeh')
     with popen(['dask-scheduler', '--no-bokeh']) as proc:
-        with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+        with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             for i in range(3):
                 line = proc.stderr.readline()
                 assert b'bokeh' not in line.lower()
@@ -50,7 +50,7 @@ def test_bokeh(loop):
     pytest.importorskip('bokeh')
 
     with popen(['dask-scheduler']) as proc:
-        with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+        with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             pass
 
         while True:
@@ -80,7 +80,7 @@ def test_bokeh_non_standard_ports(loop):
                 '--port', '3448',
                 '--http-port', '4824',
                 '--bokeh-port', '4832']) as proc:
-        with Executor('127.0.0.1:3448', loop=loop) as e:
+        with Client('127.0.0.1:3448', loop=loop) as c:
             pass
 
         while True:
@@ -110,7 +110,7 @@ def test_bokeh_whitelist(loop):
 
     with popen(['dask-scheduler', '--bokeh-whitelist', '127.0.0.2:8787',
                                   '--bokeh-whitelist', '127.0.0.3:8787']) as proc:
-        with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+        with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             pass
 
         while True:
@@ -135,8 +135,8 @@ def test_multiple_workers(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as s:
         with popen(['dask-worker', 'localhost:8786']) as a:
             with popen(['dask-worker', 'localhost:8786']) as b:
-                with Executor('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as e:
+                with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
                     start = time()
-                    while len(e.ncores()) < 2:
+                    while len(c.ncores()) < 2:
                         sleep(0.1)
                         assert time() < start + 10

@@ -1,7 +1,7 @@
 Data Streams with Queues
 ========================
 
-The ``Executor`` methods ``scatter``, ``map``, and ``gather`` can consume and
+The ``Client`` methods ``scatter``, ``map``, and ``gather`` can consume and
 produce standard Python ``Queue`` objects.  This is useful for processing
 continuous streams of data.  However, it does not constitute a full streaming
 data processing pipeline like Storm.
@@ -18,14 +18,14 @@ data processing pipeline like Storm.
 Example
 -------
 
-We connect to a local Executor.
+We connect to a local Client.
 
 .. code-block:: python
 
-   >>> from distributed import Executor
-   >>> e = Executor('127.0.0.1:8786')
-   >>> e
-   <Executor: scheduler=127.0.0.1:8786 workers=1 threads=4>
+   >>> from distributed import Client
+   >>> client = Client('127.0.0.1:8786')
+   >>> client
+   <Client: scheduler=127.0.0.1:8786 workers=1 threads=4>
 
 We build a couple of toy data processing functions:
 
@@ -50,9 +50,9 @@ And we set up an input Queue and map our functions across it.
 
    >>> from queue import Queue
    >>> input_q = Queue()
-   >>> remote_q = e.scatter(input_q)
-   >>> inc_q = e.map(inc, remote_q)
-   >>> double_q = e.map(double, inc_q)
+   >>> remote_q = client.scatter(input_q)
+   >>> inc_q = client.map(inc, remote_q)
+   >>> double_q = client.map(double, inc_q)
 
 We will fill the ``input_q`` with local data from some stream, and then
 ``remote_q``, ``inc_q`` and ``double_q`` will fill with ``Future`` objects as
@@ -63,7 +63,7 @@ data in the local process.
 
 .. code-block:: python
 
-   >>> result_q = e.gather(double_q)
+   >>> result_q = client.gather(double_q)
 
 Insert Data Manually
 ~~~~~~~~~~~~~~~~~~~~

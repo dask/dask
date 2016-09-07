@@ -4,8 +4,8 @@ from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin
 
 
-@gen_cluster(executor=True)
-def test_diagnostic(e, s, a, b):
+@gen_cluster(client=True)
+def test_diagnostic(c, s, a, b):
     class Counter(SchedulerPlugin):
         def start(self, scheduler):
             self.scheduler = scheduler
@@ -22,9 +22,9 @@ def test_diagnostic(e, s, a, b):
 
     assert counter.count == 0
 
-    x = e.submit(inc, 1)
-    y = e.submit(inc, x)
-    z = e.submit(inc, y)
+    x = c.submit(inc, 1)
+    y = c.submit(inc, x)
+    z = c.submit(inc, y)
 
     yield z._result()
 

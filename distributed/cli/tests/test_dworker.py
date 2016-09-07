@@ -9,7 +9,7 @@ from subprocess import Popen, PIPE
 import signal
 from time import time, sleep
 
-from distributed import Scheduler, Executor
+from distributed import Scheduler, Client
 from distributed.core import rpc
 from distributed.utils import sync, ignoring
 from distributed.utils_test import loop, popen
@@ -19,10 +19,10 @@ def test_nanny_worker_ports(loop):
     with popen(['dask-scheduler', '--port', '8989']) as sched:
         with popen(['dask-worker', '127.0.0.1:8989', '--host', '127.0.0.1',
                     '--worker-port', '8788', '--nanny-port', '8789']) as worker:
-            with Executor('127.0.0.1:8989', loop=loop) as e:
+            with Client('127.0.0.1:8989', loop=loop) as c:
                 start = time()
                 while True:
-                    d = sync(e.loop, e.scheduler.identity)
+                    d = sync(c.loop, c.scheduler.identity)
                     if d['workers']:
                         break
                     else:

@@ -82,15 +82,15 @@ using the ``@gen_cluster`` style of test
 
 .. code-block:: python
 
-   @gen_cluster(executor=True)
-   def test_submit(e, s, a, b):
-       assert isinstance(e, Executor)
-       assert isinstance(e, Scheduler)
+   @gen_cluster(client=True)
+   def test_submit(c, s, a, b):
+       assert isinstance(c, Client)
+       assert isinstance(c, Scheduler)
        assert isinstance(a, Worker)
        assert isinstance(b, Worker)
 
-       future = e.submit(inc, 1)
-       assert future.key in e.futures
+       future = c.submit(inc, 1)
+       assert future.key in c.futures
 
        # result = future.result()  # This synchronous API call would block
        result = yield future._result()
@@ -99,7 +99,7 @@ using the ``@gen_cluster`` style of test
        assert future.key in s.tasks
        assert future.key in a.data or future.key in b.data
 
-The ``@gen_cluster`` decorator sets up a scheduler, executor, and workers for
+The ``@gen_cluster`` decorator sets up a scheduler, client, and workers for
 you and cleans them up after the test.  It also allows you to directly inspect
 the state of every element of the cluster directly.  However, you can not use
 the normal synchronous API (doing so will cause the test to wait forever) and
@@ -116,9 +116,9 @@ processes:
 
    def test_submit_sync(loop):
        with cluster() as (s, [a, b]):
-           with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-               future = e.submit(inc, 1)
-               assert future.key in e.futures
+           with Client(('127.0.0.1', s['port']), loop=loop) as c:
+               future = c.submit(inc, 1)
+               assert future.key in c.futures
 
                result = future.result()  # use the synchronous/blocking API here
                assert result == 2

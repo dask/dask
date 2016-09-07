@@ -49,19 +49,19 @@ Dask Collections to Futures
 ---------------------------
 
 You can asynchronously submit lazy dask graphs to run on the cluster with the
-``e.compute`` and ``e.persist`` methods.  These functions return Future objects
+``client.compute`` and ``client.persist`` methods.  These functions return Future objects
 immediately.  These futures can then be queried to determine the state of the
 computation.
 
-e.compute
-~~~~~~~~~
+client.compute
+~~~~~~~~~~~~~~
 
 The ``.compute`` method takes a collection and returns a single future.
 
 .. code-block:: python
 
    >>> df = dd.read_csv('s3://...')
-   >>> total = e.compute(df.sum())  # Return a single future
+   >>> total = client.compute(df.sum())  # Return a single future
    >>> total
    Future(..., status='pending')
 
@@ -69,17 +69,17 @@ The ``.compute`` method takes a collection and returns a single future.
    100000000
 
 Because this is a single future the result must fit on a single worker machine.
-Like ``dask.compute`` above, the ``e.compute`` method is only appropriate when
+Like ``dask.compute`` above, the ``client.compute`` method is only appropriate when
 results are small and should fit in memory.  The following would likely fail:
 
 .. code-block:: python
 
-   >>> future = e.compute(df)       # Blows up memory
+   >>> future = client.compute(df)       # Blows up memory
 
-Instead, you should use ``e.persist``
+Instead, you should use ``client.persist``
 
-e.persist
-~~~~~~~~~
+client.persist
+~~~~~~~~~~~~~~
 
 The ``.persist`` method submits the task graph behind the Dask collection to
 the scheduler, obtaining Futures for all of the top-most tasks (for example one
@@ -100,7 +100,7 @@ the collection you will see the Future objects directly:
     ...
    }
 
-   >>> df = e.persist(df)               # Start computation
+   >>> df = client.persist(df)               # Start computation
    >>> df.dask                          # Now points to running futures
    {('parse', 0): Future(..., status='finished'),
     ('parse', 1): Future(..., status='pending'),
@@ -123,13 +123,13 @@ Concrete Values to Futures
 
 We obtain futures through a few different ways.  One is the mechanism above, by
 wrapping Futures within Dask collections.  Another is by submitting data or
-tasks directly to the cluster with ``e.scatter``, ``e.submit`` or ``e.map``.
+tasks directly to the cluster with ``client.scatter``, ``client.submit`` or ``client.map``.
 
 .. code-block:: python
 
-   futures = e.scatter(args)                        # Send data
-   future = e.submit(function, *args, **kwrags)     # Send single task
-   futures = e.map(function, sequence, **kwargs)    # Send many tasks
+   futures = client.scatter(args)                        # Send data
+   future = client.submit(function, *args, **kwrags)     # Send single task
+   futures = client.map(function, sequence, **kwargs)    # Send many tasks
 
 In this case ``*args`` or ``**kwargs`` can be normal Python objects, like ``1``
 or ``'hello'``, or they can be other ``Future`` objects if you want to link
@@ -145,14 +145,14 @@ Futures to Concrete Values
 
 You can turn an individual ``Future`` into a concrete value in the local
 process by calling the ``Future.result()`` method.  You can convert a
-collection of futures into concrete values by calling the ``e.gather`` method.
+collection of futures into concrete values by calling the ``client.gather`` method.
 
 .. code-block:: python
 
    >>> future.result()
    1
 
-   >>> e.gather(futures)
+   >>> client.gather(futures)
    [1, 2, 3, 4, ...]
 
 
@@ -168,7 +168,7 @@ with dask.delayed workflows on custom computations:
 
    >>> x = delayed(sum)(futures)
    >>> y = delayed(product)(futures)
-   >>> future = e.compute(x + y)
+   >>> future = client.compute(x + y)
 
 Mixing the two forms allow you to build and submit a computation in stages like
 ``sum(...) + product(...)``.  This is often valuable if you want to wait to see

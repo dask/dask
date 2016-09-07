@@ -6,7 +6,7 @@ from tornado import gen
 
 from dask import do
 from distributed.core import read
-from distributed.executor import _wait
+from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
         nbytes_bar, progress_stream)
 from distributed.utils_test import inc, div, dec, gen_cluster
@@ -49,14 +49,14 @@ def test_progress_quads_too_many():
     assert len(d['name']) == 6 * 3
 
 
-@gen_cluster(executor=True, timeout=None)
-def test_progress_stream(e, s, a, b):
-    futures = e.map(div, [1] * 10, range(10))
+@gen_cluster(client=True, timeout=None)
+def test_progress_stream(c, s, a, b):
+    futures = c.map(div, [1] * 10, range(10))
 
     x = 1
     for i in range(5):
         x = do(inc)(x)
-    future = e.compute(x)
+    future = c.compute(x)
 
     yield _wait(futures + [future])
 

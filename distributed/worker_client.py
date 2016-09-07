@@ -9,7 +9,7 @@ import uuid
 from dask.base import tokenize
 from tornado import gen
 
-from .executor import Executor, Future, pack_data, unpack_remotedata
+from .client import Client, Future, pack_data, unpack_remotedata
 from .sizeof import sizeof
 from .threadpoolexecutor import secede
 from .utils import log_errors, sync, tokey, ignoring
@@ -17,21 +17,21 @@ from .worker import local_state
 
 
 @contextmanager
-def local_executor():
-    """ Get executor for this thread
+def local_client():
+    """ Get client for this thread
 
     Note: This interface is new and experimental.  It may change without
     notice.
 
     This context manager is intended to be called within functions that we run
     on workers.  When run as a context manager it delivers a client
-    ``Executor`` object that can submit other tasks directly from that worker.
+    ``Client`` object that can submit other tasks directly from that worker.
 
     Examples
     --------
 
     >>> def func(x):
-    ...     with local_executor() as e:  # connect from worker back to scheduler
+    ...     with local_client() as e:  # connect from worker back to scheduler
     ...         a = e.submit(inc, x)     # this task can submit more tasks
     ...         b = e.submit(dec, x)
     ...         result = e.gather([a, b])  # and gather results
@@ -42,7 +42,7 @@ def local_executor():
     address = local_state.execution_state['scheduler']
     secede()  # have this thread secede from the thread pool
               # so that it doesn't take up a fixed resource while waiting
-    with WorkerExecutor(address) as e:
+    with WorkerClient(address) as e:
         e.worker.loop.add_callback(e.worker.scheduler.change_worker_cores,
                                    worker=e.worker.address, diff=+1)
         try:
@@ -56,16 +56,16 @@ def get_worker():
     return local_state.execution_state['worker']
 
 
-class WorkerExecutor(Executor):
-    """ An Executor designed to operate from a Worker process
+class WorkerClient(Client):
+    """ An Client designed to operate from a Worker process
 
-    This executor has had a few methods altered to make it more efficient for
+    This client has had a few methods altered to make it more efficient for
     working directly from the worker nodes.  In particular scatter/gather first
     look to the local data dictionary rather than sending data over the network
     """
     def __init__(self, *args, **kwargs):
         self.worker = get_worker()
-        Executor.__init__(self, *args, **kwargs)
+        Client.__init__(self, *args, **kwargs)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
@@ -131,7 +131,7 @@ class WorkerExecutor(Executor):
     def _gather(self, futures, errors='raise'):
         """
 
-        Exactly like Executor._gather, but get data directly from the local
+        Exactly like Client._gather, but get data directly from the local
         workrer data dictionary directly rather than through the scheduler.
 
         TODO: avoid scheduler for other communications, and assume that we can
@@ -164,5 +164,5 @@ class WorkerExecutor(Executor):
         if not futures3:
             raise gen.Return(futures4)
 
-        result = yield Executor._gather(self, futures4, errors=errors)
+        result = yield Client._gather(self, futures4, errors=errors)
         raise gen.Return(result)

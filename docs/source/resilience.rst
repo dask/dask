@@ -9,7 +9,7 @@ User code failures
 ------------------
 
 When a function raises an error that error is kept and transmitted to the
-executor on request.  Any attempt to gather that result *or any dependent
+client on request.  Any attempt to gather that result *or any dependent
 result* will raise that exception.
 
 .. code-block:: python
@@ -17,11 +17,11 @@ result* will raise that exception.
    >>> def div(a, b):
    ...     return a / b
 
-   >>> x = executor.submit(div, 1, 0)
+   >>> x = client.submit(div, 1, 0)
    >>> x.result()
    ZeroDivisionError: division by zero
 
-   >>> y = executor.submit(add, x, 10)
+   >>> y = client.submit(add, x, 10)
    >>> y.result()  # same error as above
    ZeroDivisionError: division by zero
 
@@ -72,10 +72,10 @@ remain on the cluster until cleared.
 Restart and Nanny Processes
 ---------------------------
 
-The executor provides a mechanism to restart all of the workers in the cluster.
+The client provides a mechanism to restart all of the workers in the cluster.
 This is convenient if, during the course of experimentation, you find your
 workers in an inconvenient state that makes them unresponsive.  The
-``Executor.restart`` method does the following process:
+``Client.restart`` method does the following process:
 
 1.  Sends a soft shutdown signal to all of the coroutines watching workers
 2.  Sends a hard kill signal to each worker's Nanny process, which oversees
@@ -86,7 +86,7 @@ workers in an inconvenient state that makes them unresponsive.  The
 4.  Sends a restart signal to all Nanny processes, which in turn restart clean
     Worker processes and register these workers with the Scheduler.  New workers
     may not have the same port as their previous iterations.  The
-    ``.nannies`` dictionary on the Executor serves as an accurate set of
+    ``.nannies`` dictionary on the Client serves as an accurate set of
     aliases if necessary.
 5.  Restarts the scheduler, with clean and empty state
 

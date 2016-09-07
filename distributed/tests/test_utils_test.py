@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from distributed.utils_test import (cluster, loop, gen_cluster,
         gen_test)
 from distributed.core import rpc
-from distributed import Scheduler, Worker, Executor
+from distributed import Scheduler, Worker, Client
 from tornado import gen
 
 def test_cluster(loop):
@@ -14,16 +14,16 @@ def test_cluster(loop):
         assert len(ident['workers']) == 2
 
 
-@gen_cluster(executor=True)
+@gen_cluster(client=True)
 def test_gen_cluster(e, s, a, b):
-    assert isinstance(e, Executor)
+    assert isinstance(e, Client)
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
 
-@gen_cluster(executor=False)
-def test_gen_cluster_without_executor(s, a, b):
+@gen_cluster(client=False)
+def test_gen_cluster_without_client(s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)

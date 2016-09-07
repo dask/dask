@@ -1,6 +1,6 @@
 logging: 
   distributed: info
-  distributed.executor: warning
+  distributed.client: warning
   bokeh: critical
 
 compression: auto

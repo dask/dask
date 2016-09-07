@@ -5,12 +5,6 @@ pytest.importorskip('bokeh')
 
 from distributed.bokeh.status_monitor import (
         task_stream_plot, task_stream_append, progress_plot)
-from distributed.diagnostics.scheduler import workers, tasks
-
-from distributed.utils_test import gen_cluster, inc
-from distributed.executor import _wait
-
-from tornado import gen
 
 
 def test_task_stream_plot():

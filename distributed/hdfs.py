@@ -11,7 +11,7 @@ from dask.delayed import delayed
 from toolz import merge
 from hdfs3 import HDFileSystem
 
-from .executor import default_executor, ensure_default_get
+from .client import default_client, ensure_default_get
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def open_file_write_direct(path, hdfs=None, **kwargs):
 dask.bytes.core._open_files_write['hdfs'] = open_file_write_direct
 
 
-def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
+def read_bytes(path, client=None, hdfs=None, lazy=True, delimiter=None,
                not_zero=False, sample=True, blocksize=None, compression=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
@@ -64,8 +64,8 @@ def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
     ----------
     path: string
         location in HDFS
-    executor: Executor (optional)
-        defaults to most recently created executor
+    client: Client (optional)
+        defaults to most recently created client
     hdfs: HDFileSystem (optional)
     lazy: boolean (optional)
         If True then return lazily evaluated dask Values
@@ -83,7 +83,7 @@ def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
     if compression:
         raise NotImplementedError("hdfs compression")
     hdfs = hdfs or HDFileSystem(**hdfs_auth)
-    executor = default_executor(executor)
+    client = default_client(client)
     blocks = get_block_locations(hdfs, path)
     filenames = [d['filename'] for d in blocks]
     offsets = [d['offset'] for d in blocks]
@@ -108,13 +108,13 @@ def read_bytes(path, executor=None, hdfs=None, lazy=True, delimiter=None,
 
     restrictions = {v.key: w for v, w in zip(values, workers)}
 
-    executor._send_to_scheduler({'op': 'update-graph',
+    client._send_to_scheduler({'op': 'update-graph',
                                  'tasks': {},
                                  'dependencies': [],
                                  'keys': [],
                                  'restrictions': restrictions,
                                  'loose_restrictions': list(restrictions),
-                                 'client': executor.id})
+                                 'client': client.id})
 
     return sample, values
 
@@ -140,7 +140,7 @@ dask.bytes.core._open_files['hdfs'] = open_files
 
 
 def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
-               executor=None, hdfs=None, lazy=True, collection=True):
+               client=None, hdfs=None, lazy=True, collection=True):
     """ Read text lines from HDFS
 
     Parameters
@@ -161,30 +161,30 @@ def read_text(path, encoding='utf-8', errors='strict', lineterminator='\n',
     result = db.read_text('hdfs://' + path, encoding=encoding, errors=errors,
             linedelimiter=lineterminator, hdfs=hdfs, collection=collection)
 
-    executor = default_executor(executor)
-    ensure_default_get(executor)
+    client = default_client(client)
+    ensure_default_get(client)
     if not lazy:
         if collection:
-            result = executor.persist(result)
+            result = client.persist(result)
         else:
-            result = executor.compute(result)
+            result = client.compute(result)
 
     return result
 
 
-def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
+def read_csv(path, client=None, hdfs=None, lazy=True, collection=True,
         **kwargs):
     warn("hdfs.read_csv moved to dask.dataframe.read_csv('hdfs://...')")
     import dask.dataframe as dd
     result = dd.read_csv('hdfs://' + path, hdfs=hdfs, collection=collection,
             **kwargs)
 
-    executor = default_executor(executor)
-    ensure_default_get(executor)
+    client = default_client(client)
+    ensure_default_get(client)
     if not lazy:
         if collection:
-            result = executor.persist(result)
+            result = client.persist(result)
         else:
-            result = executor.compute(result)
+            result = client.compute(result)
 
     return result

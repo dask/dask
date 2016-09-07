@@ -70,7 +70,7 @@ import re
 
 from toolz import valmap
 
-from distributed.executor import Executor, wait
+from distributed.client import Client, wait
 from distributed.worker import dumps_task
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, throws, gen_cluster)
@@ -155,8 +155,8 @@ def test_multi_progressbar_widget_after_close(s, a, b):
 
 def test_values(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = [e.submit(inc, i) for i in range(5)]
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = [c.submit(inc, i) for i in range(5)]
             wait(L)
             p = MultiProgressWidget(L)
             sync(loop, p.listen)
@@ -166,7 +166,7 @@ def test_values(loop):
             assert '5 / 5' in p.bar_texts['inc'].value
             assert p.bars['inc'].value == 1.0
 
-            x = e.submit(throws, 1)
+            x = c.submit(throws, 1)
             p = MultiProgressWidget([x])
             sync(loop, p.listen)
             assert p.status == 'error'
@@ -174,8 +174,8 @@ def test_values(loop):
 
 def test_progressbar_done(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = [e.submit(inc, i) for i in range(5)]
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = [c.submit(inc, i) for i in range(5)]
             wait(L)
             p = ProgressWidget(L)
             sync(loop, p.listen)
@@ -183,7 +183,7 @@ def test_progressbar_done(loop):
             assert p.bar.value == 1.0
             assert p.bar.bar_style == 'success'
 
-            f = e.submit(throws, L)
+            f = c.submit(throws, L)
             wait([f])
 
             p = ProgressWidget([f])
@@ -195,9 +195,9 @@ def test_progressbar_done(loop):
 
 def test_progressbar_cancel(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
             import time
-            L = [e.submit(lambda: time.sleep(0.3), i) for i in range(5)]
+            L = [c.submit(lambda: time.sleep(0.3), i) for i in range(5)]
             p = ProgressWidget(L)
             sync(loop, p.listen)
             L[-1].cancel()
@@ -231,10 +231,10 @@ def test_multibar_complete(s, a, b):
 
 def test_fast(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            L = e.map(inc, range(100))
-            L2 = e.map(dec, L)
-            L3 = e.map(add, L, L2)
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            L = c.map(inc, range(100))
+            L2 = c.map(dec, L)
+            L3 = c.map(add, L, L2)
             p = progress(L3, multi=True, complete=True, notebook=True)
             sync(loop, p.listen)
             assert set(p._last_response['all']) == {'inc', 'dec', 'add'}

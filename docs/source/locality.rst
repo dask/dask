@@ -34,7 +34,7 @@ cores and we scatter out the list ``range(10)`` as follows:
 
 .. code-block:: python
 
-   futures = e.scatter(range(10))
+   futures = client.scatter(range(10))
 
 Then Alice and Bob receive the following data
 
@@ -56,7 +56,7 @@ as follows:
 
 .. code-block:: python
 
-   future = e.submit(func, *args, workers=['Alice'])
+   future = client.submit(func, *args, workers=['Alice'])
 
 *  Alice: ``[0, 1, 4, 5, 8, 9, new_result]``
 *  Bob: ``[2, 3, 6, 7]``
@@ -69,8 +69,8 @@ used.
 
 .. code-block:: python
 
-   future = e.submit(func, *args, workers=['Alice'],
-                     allow_other_workers=True)
+   future = client.submit(func, *args, workers=['Alice'],
+                          allow_other_workers=True)
 
 Additionally the ``scatter`` function supports a ``broadcast=`` keyword
 argument to enforce that the all data is sent to all workers rather than
@@ -79,7 +79,7 @@ data.
 
 .. code-block:: python
 
-    futures = e.scatter([1, 2, 3], broadcast=True)  # send data to all workers
+    futures = client.scatter([1, 2, 3], broadcast=True)  # send data to all workers
 
 *  Alice: ``[1, 2, 3]``
 *  Bob: ``[1, 2, 3]``
@@ -105,7 +105,7 @@ And then use this name when specifying workers instead.
 
 .. code-block:: python
 
-   e.map(func, sequence, workers='worker_1')
+   client.map(func, sequence, workers='worker_1')
 
 
 Specify workers with Compute/Persist
@@ -117,9 +117,9 @@ of those as valid inputs:
 
 .. code-block:: python
 
-   e.submit(f, x, workers='127.0.0.1')
-   e.submit(f, x, workers='127.0.0.1:55852')
-   e.submit(f, x, workers=['192.168.1.101', '192.168.1.100'])
+   client.submit(f, x, workers='127.0.0.1')
+   client.submit(f, x, workers='127.0.0.1:55852')
+   client.submit(f, x, workers=['192.168.1.101', '192.168.1.100'])
 
 For more complex computations, such as occur with dask collections like
 dask.dataframe or dask.delayed, we sometimes want to specify that certain parts
@@ -132,8 +132,8 @@ workers.
    y = delayed(f)(2)
    z = delayed(g)(x, y)
 
-   future = e.compute(z, workers={z: '127.0.0.1',
-                                  x: '192.168.0.1'})
+   future = client.compute(z, workers={z: '127.0.0.1',
+                                       x: '192.168.0.1'})
 
 Here the values of the dictionary are of the same form as before, a host, a
 host:port pair, or a list of these.  The keys in this case are either dask
@@ -147,36 +147,36 @@ two computations for ``x`` and ``y`` can run anywhere.
 
 .. code-block:: python
 
-   future = e.compute(z, workers={z: '127.0.0.1'})
+   future = client.compute(z, workers={z: '127.0.0.1'})
 
 
 The computations for both ``z`` and ``x`` must run on ``127.0.0.1``
 
 .. code-block:: python
 
-   future = e.compute(z, workers={z: '127.0.0.1',
-                                  x: '127.0.0.1'})
+   future = client.compute(z, workers={z: '127.0.0.1',
+                                       x: '127.0.0.1'})
 
 Use a tuple to group collections.  This is shorthand for the above.
 
 .. code-block:: python
 
-   future = e.compute(z, workers={(x, y): '127.0.0.1'})
+   future = client.compute(z, workers={(x, y): '127.0.0.1'})
 
 Recall that all options for ``workers=`` in ``scatter/submit/map`` hold here as
 well.
 
 .. code-block:: python
 
-   future = e.compute(z, workers={(x, y): ['192.168.1.100', '192.168.1.101:9999']})
+   future = client.compute(z, workers={(x, y): ['192.168.1.100', '192.168.1.101:9999']})
 
 Set ``allow_other_workers=True`` to make these loose restrictions rather than
 hard requirements.
 
 .. code-block:: python
 
-   future = e.compute(z, workers={(x, y): '127.0.0.1'},
-                      allow_other_workers=True)
+   future = client.compute(z, workers={(x, y): '127.0.0.1'},
+                           allow_other_workers=True)
 
 Set provide a list of collection to ``allow_other_workers=[...]`` to say that
 the keys for only some of the collections are loose.  In the case below ``z``
@@ -185,8 +185,8 @@ run elsewhere if necessary:
 
 .. code-block:: python
 
-   future = e.compute(z, workers={(x, y): '127.0.0.1'},
-                      allow_other_workers=[x])
+   future = client.compute(z, workers={(x, y): '127.0.0.1'},
+                           allow_other_workers=[x])
 
 This works fine with ``persist`` and with any dask collection (any object with
 a ``._keys()`` method):
@@ -194,6 +194,6 @@ a ``._keys()`` method):
 .. code-block:: python
 
    df = dd.read_csv('s3://...')
-   df = e.persist(df, workers={df: ...})
+   df = client.persist(df, workers={df: ...})
 
 See the :doc:`efficiency <efficiency>` page to learn about best practices.

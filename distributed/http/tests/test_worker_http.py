@@ -9,7 +9,7 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
 from distributed.utils_test import gen_cluster, gen_test
-from distributed import Worker, Executor
+from distributed import Worker
 from distributed.http.worker import HTTPWorker
 from distributed.sizeof import sizeof
 

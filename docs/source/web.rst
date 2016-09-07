@@ -39,7 +39,7 @@ The following plots show a trace of the following computation:
 
 .. code-block:: python
 
-   from distributed import Executor
+   from distributed import Client
    from time import sleep
    import random
 
@@ -56,12 +56,12 @@ The following plots show a trace of the following computation:
        return x + y
 
 
-   e = Executor('127.0.0.1:8786')
+   client = Client('127.0.0.1:8786')
 
-   incs = e.map(inc, range(100))
-   decs = e.map(dec, range(100))
-   adds = e.map(add, incs, decs)
-   total = e.submit(sum, adds)
+   incs = client.map(inc, range(100))
+   decs = client.map(dec, range(100))
+   adds = client.map(add, incs, decs)
+   total = client.submit(sum, adds)
 
    del incs, decs, adds
    total.result()

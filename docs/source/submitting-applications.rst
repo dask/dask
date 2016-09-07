@@ -36,14 +36,14 @@ For example, given the following dask application saved in a file called
 
 .. code-block:: python
 
-   from distributed import Executor
+   from distributed import Client
 
    def inc(x):
         return x + 1
 
    if __name__=='__main__':
-        executor = Executor('127.0.0.1:8786')
-        x = executor.submit(inc, 10)
+        client = Client('127.0.0.1:8786')
+        x = client.submit(inc, 10)
         print(x.result())
 
 

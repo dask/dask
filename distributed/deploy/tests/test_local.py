@@ -7,7 +7,7 @@ import unittest
 import pytest
 
 from distributed.deploy.local import LocalCluster
-from distributed import Executor, Worker, Nanny
+from distributed import Client, Worker, Nanny
 from distributed.utils_test import inc, loop, raises
 from distributed.utils import ignoring
 
@@ -16,7 +16,7 @@ from distributed.deploy.utils_test import ClusterTest
 def test_simple(loop):
     with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False,
             diagnostic_port=None, loop=loop) as c:
-        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             x = e.submit(inc, 1)
             x.result()
             assert x.key in c.scheduler.tasks
@@ -29,7 +29,7 @@ def test_procs(loop):
             diagnostic_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
-        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             assert all(w.ncores == 3 for w in c.workers)
         repr(c)
 
@@ -37,7 +37,7 @@ def test_procs(loop):
             diagnostic_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
-        with Executor((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             assert all(v == 3 for v in e.ncores().values())
 
             c.start_worker(nanny=False)
@@ -50,24 +50,24 @@ class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = partial(LocalCluster, silence_logs=False, diagnostic_port=None)
 
 
-def test_Executor_with_local(loop):
+def test_Client_with_local(loop):
     with LocalCluster(1, scheduler_port=0, silence_logs=False,
             diagnostic_port=None, loop=loop) as c:
-        with Executor(c, loop=loop) as e:
+        with Client(c, loop=loop) as e:
             assert len(e.ncores()) == len(c.workers)
-            assert c.scheduler_address in repr(e)
+            assert c.scheduler_address in repr(c)
 
 
-def test_Executor_solo(loop):
-    with Executor(loop=loop) as e:
+def test_Client_solo(loop):
+    with Client(loop=loop) as c:
         pass
-    assert e.cluster.status == 'closed'
+    assert c.cluster.status == 'closed'
 
 
-def test_Executor_twice(loop):
-    with Executor(loop=loop) as e:
-        with Executor(loop=loop) as f:
-            assert e.cluster.scheduler.port != f.cluster.scheduler.port
+def test_Client_twice(loop):
+    with Client(loop=loop) as c:
+        with Client(loop=loop) as f:
+            assert c.cluster.scheduler.port != f.cluster.scheduler.port
 
 
 def test_defaults():

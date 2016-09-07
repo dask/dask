@@ -1,35 +1,35 @@
 API
 ===
 
-.. currentmodule:: distributed.executor
+.. currentmodule:: distributed.client
 
-**Executor**
+**Client**
 
 .. autosummary::
-   Executor
-   Executor.cancel
-   Executor.compute
-   Executor.gather
-   Executor.get
-   Executor.get_dataset
-   Executor.has_what
-   Executor.list_datasets
-   Executor.map
-   Executor.ncores
-   Executor.persist
-   Executor.publish_dataset
-   Executor.rebalance
-   Executor.replicate
-   Executor.restart
-   Executor.run
-   Executor.scatter
-   Executor.shutdown
-   Executor.start_ipython_workers
-   Executor.start_ipython_scheduler
-   Executor.submit
-   Executor.unpublish_dataset
-   Executor.upload_file
-   Executor.who_has
+   Client
+   Client.cancel
+   Client.compute
+   Client.gather
+   Client.get
+   Client.get_dataset
+   Client.has_what
+   Client.list_datasets
+   Client.map
+   Client.ncores
+   Client.persist
+   Client.publish_dataset
+   Client.rebalance
+   Client.replicate
+   Client.restart
+   Client.run
+   Client.scatter
+   Client.shutdown
+   Client.start_ipython_workers
+   Client.start_ipython_scheduler
+   Client.submit
+   Client.unpublish_dataset
+   Client.upload_file
+   Client.who_has
 
 **Future**
 
@@ -54,20 +54,20 @@ Asynchronous methods
 
 If you desire Tornado coroutines rather than typical functions these can
 commonly be found as underscore-prefixed versions of the functions above.  For
-example the ``e.restart()`` method can be replaced in an asynchronous workflow
-with ``yield e._restart()``.  Many methods like ``e.compute`` are non-blocking
+example the ``client.restart()`` method can be replaced in an asynchronous workflow
+with ``yield client._restart()``.  Many methods like ``client.compute`` are non-blocking
 regardless; these do not have a coroutine-equivalent.
 
 .. code-block:: python
 
-   e.restart()  # synchronous
-   yield e._restart()  # non-blocking
+   client.restart()  # synchronous
+   yield client._restart()  # non-blocking
 
 
-Executor
+Client
 --------
 
-.. autoclass:: Executor
+.. autoclass:: Client
    :members:
 
 CompatibleExecutor

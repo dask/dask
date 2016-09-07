@@ -20,13 +20,13 @@ publish the result.
 
 .. code-block:: python
 
-   from dask.distributed import Executor
-   e = Executor('scheduler-address:8786')
+   from dask.distributed import Client
+   client = Client('scheduler-address:8786')
 
    import dask.dataframe as dd
    df = dd.read_csv('s3://my-bucket/*.csv')
    df2 = df[df.balance < 0]
-   df2 = e.persist(df2)
+   df2 = client.persist(df2)
 
    >>> df2.head()
          name  balance
@@ -43,7 +43,7 @@ To share this collection with a colleague we publish it under the name
 
 .. code-block:: python
 
-   e.publish_dataset(negative_accounts=df2)
+   client.publish_dataset(negative_accounts=df2)
 
 **Load published dataset from different client**
 
@@ -52,13 +52,13 @@ dataset.
 
 .. code-block:: python
 
-   >>> from dask.distributed import Executor
-   >>> e = Executor('scheduler-address:8786')
+   >>> from dask.distributed import Client
+   >>> client = Client('scheduler-address:8786')
 
-   >>> e.list_datasets()
+   >>> client.list_datasets()
    ['negative_accounts']
 
-   >>> df = e.get_dataset('negative_accounts')
+   >>> df = client.get_dataset('negative_accounts')
    >>> df.head()
          name  balance
    0    Alice     -100
@@ -89,10 +89,10 @@ Publishing too many large datasets can quickly consume a cluster's RAM.
 API
 ---
 
-.. currentmodule:: distributed.executor
+.. currentmodule:: distributed.client
 
 .. autosummary::
-   Executor.publish_dataset
-   Executor.list_datasets
-   Executor.get_dataset
-   Executor.unpublish_dataset
+   Client.publish_dataset
+   Client.list_datasets
+   Client.get_dataset
+   Client.unpublish_dataset

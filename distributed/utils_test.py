@@ -33,9 +33,9 @@ def valid_python_script(tmpdir_factory):
     return local_file
 
 @pytest.fixture(scope='session')
-def executor_contract_script(tmpdir_factory):
+def client_contract_script(tmpdir_factory):
     local_file = tmpdir_factory.mktemp('data').join('distributed_script.py')
-    lines = ("from distributed import Executor", "e = Executor('127.0.0.1:8989')",
+    lines = ("from distributed import Client", "e = Client('127.0.0.1:8989')",
      'print(e)')
     local_file.write('\n'.join(lines))
     return local_file
@@ -313,7 +313,7 @@ def gen_test(timeout=10):
 
 from .scheduler import Scheduler
 from .worker import Worker
-from .executor import Executor
+from .client import Client
 
 @gen.coroutine
 def start_cluster(ncores, loop, Worker=Worker):
@@ -346,8 +346,8 @@ def end_cluster(s, workers):
 
 
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
-        Worker=Worker, executor=False):
-    from distributed import Executor
+        Worker=Worker, client=False):
+    from distributed import Client
     """ Coroutine test with small cluster
 
     @gen_cluster()
@@ -370,14 +370,14 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                                                              Worker=Worker))
             args = [s] + workers
 
-            if executor:
-                e = Executor((s.ip, s.port), loop=loop, start=False)
+            if client:
+                e = Client((s.ip, s.port), loop=loop, start=False)
                 loop.run_sync(e._start)
                 args = [e] + args
             try:
                 loop.run_sync(lambda: cor(*args), timeout=timeout)
             finally:
-                if executor:
+                if client:
                     loop.run_sync(e._shutdown)
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()

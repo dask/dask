@@ -28,7 +28,7 @@ from dask.core import reverse_dict
 from dask.order import order
 
 from .batched import BatchedSend
-from .client import (scatter_to_workers, gather_from_workers)
+from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
@@ -67,15 +67,15 @@ class Scheduler(Server):
          $ dask-scheduler
          Scheduler started at 127.0.0.1:8786
 
-    Or within a LocalCluster a Executor starts up without connection
+    Or within a LocalCluster a Client starts up without connection
     information::
 
-        >>> e = Executor()  # doctest: +SKIP
-        >>> e.cluster.scheduler  # doctest: +SKIP
+        >>> c = Client()  # doctest: +SKIP
+        >>> c.cluster.scheduler  # doctest: +SKIP
         Scheduler(...)
 
     Users typically do not interact with the scheduler directly but rather with
-    the client object ``Executor``.
+    the client object ``Client``.
 
     **State**
 
@@ -519,7 +519,7 @@ class Scheduler(Server):
         """
         Add new computations to the internal dask graph
 
-        This happens whenever the Executor calls submit, map, get, or compute.
+        This happens whenever the Client calls submit, map, get, or compute.
         """
         for k in list(tasks):
             if tasks[k] is k:

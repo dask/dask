@@ -23,7 +23,7 @@ shape we might choose one of the following options:
 
 .. code-block:: python
 
-   >>> x = executor.submit(np.random.random, (1000, 1000))
+   >>> x = client.submit(np.random.random, (1000, 1000))
    >>> type(x)
    Future
 
@@ -38,7 +38,7 @@ shape we might choose one of the following options:
 
 .. code-block:: python
 
-   >>> executor.submit(lambda a: a.shape, x).result()  # fast
+   >>> client.submit(lambda a: a.shape, x).result()  # fast
    (1000, 1000)
 
 
@@ -56,7 +56,7 @@ A common solution is to batch your input into larger chunks.
 
 .. code-block:: python
 
-   >>> futures = executor.map(f, seq)
+   >>> futures = client.map(f, seq)
    >>> len(futures)  # avoid large numbers of futures
    1000000000
 
@@ -70,7 +70,7 @@ A common solution is to batch your input into larger chunks.
    >>> from toolz import partition_all
    >>> chunks = partition_all(1000000, seq)  # Collect into groups of size 1000
 
-   >>> futures = executor.map(f_many, chunks)
+   >>> futures = client.map(f_many, chunks)
    >>> len(futures)  # Compute on larger pieces of your data at once
    1000
 

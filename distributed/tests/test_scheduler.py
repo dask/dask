@@ -21,10 +21,9 @@ import pytest
 from distributed import Nanny, Worker
 from distributed.batched import BatchedStream
 from distributed.core import connect, read, write, rpc, dumps
-from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, decide_worker,
         Scheduler)
-from distributed.executor import _wait
+from distributed.client import _wait
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop)
@@ -133,18 +132,18 @@ def test_update_state_with_processing(s):
     assert s.wants_what == {'client': {'b', 'c', 'z'}}
 
 
-@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)])
-def test_update_state_respects_data_in_memory(e, s, a):
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_update_state_respects_data_in_memory(c, s, a):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
-    f = e.persist(y)
+    f = c.persist(y)
     yield _wait([f])
 
     assert s.released == {x.key}
     assert s.who_has == {y.key: {a.address}}
 
     z = delayed(add)(x, y)
-    f2 = e.persist(z)
+    f2 = c.persist(z)
     while not f2.key in s.who_has:
         assert y.key in s.who_has
         yield gen.sleep(0.0001)
@@ -612,9 +611,9 @@ def test_scheduler_as_center():
     yield s.close()
 
 
-@gen_cluster(executor=True)
-def test_delete_data(e, s, a, b):
-    d = yield e._scatter({'x': 1, 'y': 2, 'z': 3})
+@gen_cluster(client=True)
+def test_delete_data(c, s, a, b):
+    d = yield c._scatter({'x': 1, 'y': 2, 'z': 3})
 
     assert set(s.who_has) == {'x', 'y', 'z'}
     assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
@@ -629,14 +628,14 @@ def test_delete_data(e, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster(executor=True)
-def test_delete_callback(e, s, a, b):
-    d = yield e._scatter({'x': 1}, workers=a.address)
+@gen_cluster(client=True)
+def test_delete_callback(c, s, a, b):
+    d = yield c._scatter({'x': 1}, workers=a.address)
 
     assert s.who_has['x'] == {a.address}
     assert s.has_what[a.address] == {'x'}
 
-    s.client_releases_keys(client=e.id, keys=['x'])
+    s.client_releases_keys(client=c.id, keys=['x'])
 
     assert 'x' not in s.who_has
     assert 'x' not in s.has_what[a.address]
@@ -671,22 +670,22 @@ def test_self_aliases(s, a, b):
 
 @gen_cluster()
 def test_filtered_communication(s, a, b):
-    e = yield connect(ip=s.ip, port=s.port)
+    c = yield connect(ip=s.ip, port=s.port)
     f = yield connect(ip=s.ip, port=s.port)
-    yield write(e, {'op': 'register-client', 'client': 'e'})
+    yield write(c, {'op': 'register-client', 'client': 'c'})
     yield write(f, {'op': 'register-client', 'client': 'f'})
-    yield read(e)
+    yield read(c)
     yield read(f)
-    e = BatchedStream(e, 0)
+    c = BatchedStream(c, 0)
     f = BatchedStream(f, 0)
 
-    assert set(s.streams) == {'e', 'f'}
+    assert set(s.streams) == {'c', 'f'}
 
-    yield write(e, {'op': 'update-graph',
+    yield write(c, {'op': 'update-graph',
                     'tasks': {'x': dumps_task((inc, 1)),
                               'y': dumps_task((inc, 'x'))},
                     'dependencies': {'x': [], 'y': ['x']},
-                    'client': 'e',
+                    'client': 'c',
                     'keys': ['y']})
 
     yield write(f, {'op': 'update-graph',
@@ -696,7 +695,7 @@ def test_filtered_communication(s, a, b):
                     'client': 'f',
                     'keys': ['z']})
 
-    msg = yield read(e)
+    msg = yield read(c)
     assert msg['op'] == 'key-in-memory'
     assert msg['key'] == 'y'
     msg = yield read(f)
@@ -942,11 +941,11 @@ def test_io_loop(loop):
     assert s.io_loop is loop
 
 
-@gen_cluster(executor=True)
-def test_transition_story(e, s, a, b):
+@gen_cluster(client=True)
+def test_transition_story(c, s, a, b):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
-    f = e.persist(y)
+    f = c.persist(y)
     yield _wait([f])
 
     assert s.transition_log

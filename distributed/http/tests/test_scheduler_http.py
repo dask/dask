@@ -8,8 +8,8 @@ from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
-from distributed import Scheduler, Executor
-from distributed.executor import _wait
+from distributed import Scheduler, Client
+from distributed.client import _wait
 from distributed.sizeof import getsizeof
 from distributed.utils_test import gen_cluster, gen_test, inc, div
 from distributed.http.scheduler import HTTPScheduler
@@ -113,7 +113,7 @@ def test_services_with_port():
     assert s.services['http'].port == 9999
 
 
-@gen_cluster(executor=True)
+@gen_cluster(client=True)
 def test_with_data(e, s, a, b):
     ss = HTTPScheduler(s)
     ss.listen(0)
@@ -146,7 +146,7 @@ def test_with_data(e, s, a, b):
     ss.stop()
 
 
-@gen_cluster(executor=True)
+@gen_cluster(client=True)
 def test_with_status(e, s, a, b):
     ss = HTTPScheduler(s)
     ss.listen(0)
@@ -179,7 +179,7 @@ def test_with_status(e, s, a, b):
 
 
 
-@gen_cluster(executor=True)
+@gen_cluster(client=True)
 def test_basic(e, s, a, b):
     ss = HTTPScheduler(s)
     ss.listen(0)

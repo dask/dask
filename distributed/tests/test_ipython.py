@@ -5,7 +5,7 @@ import mock
 import pytest
 from toolz import first
 
-from distributed import Executor
+from distributed import Client
 from distributed.utils_test import zmq_ctx, mock_ipython, cluster, loop
 
 
@@ -14,7 +14,7 @@ def test_start_ipython_workers(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
     with cluster(1) as (s, [a]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+        with Client(('127.0.0.1', s['port']), loop=loop) as e:
             info_dict = e.start_ipython_workers()
             info = first(info_dict.values())
             key = info.pop('key')
@@ -34,7 +34,7 @@ def test_start_ipython_scheduler(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
     with cluster(1) as (s, [a]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+        with Client(('127.0.0.1', s['port']), loop=loop) as e:
             info = e.start_ipython_scheduler()
             key = info.pop('key')
             kc = BlockingKernelClient(**info)
@@ -48,7 +48,7 @@ def test_start_ipython_scheduler(loop, zmq_ctx):
 @pytest.mark.ipython
 def test_start_ipython_scheduler_magic(loop, zmq_ctx):
     with cluster(1) as (s, [a]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
+        with Client(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
             info = e.start_ipython_scheduler()
 
         expected = [
@@ -66,7 +66,7 @@ def test_start_ipython_scheduler_magic(loop, zmq_ctx):
 def test_start_ipython_workers_magic(loop, zmq_ctx):
     with cluster(2) as (s, [a, b]):
 
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
+        with Client(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
             workers = list(e.ncores())[:2]
             names = [ 'magic%i' % i for i in range(len(workers)) ]
             info_dict = e.start_ipython_workers(workers, magic_names=names)
@@ -91,7 +91,7 @@ def test_start_ipython_workers_magic(loop, zmq_ctx):
 def test_start_ipython_remote(loop, zmq_ctx):
     from distributed._ipython_utils import remote_magic
     with cluster(1) as (s, [a]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
+        with Client(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
             worker = first(e.ncores())
             ip.user_ns['info'] = e.start_ipython_workers(worker)[worker]
             remote_magic('info 1') # line magic
@@ -109,7 +109,7 @@ def test_start_ipython_remote(loop, zmq_ctx):
 def test_start_ipython_qtconsole(loop):
     Popen = mock.Mock()
     with cluster() as (s, [a, b]):
-        with mock.patch('distributed._ipython_utils.Popen', Popen), Executor(('127.0.0.1', s['port']), loop=loop) as e:
+        with mock.patch('distributed._ipython_utils.Popen', Popen), Client(('127.0.0.1', s['port']), loop=loop) as e:
             worker = first(e.ncores())
             e.start_ipython_workers(worker, qtconsole=True)
             e.start_ipython_workers(worker, qtconsole=True, qtconsole_args=['--debug'])

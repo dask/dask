@@ -8,7 +8,6 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 
 from ..core import rpc
 from ..utils import is_kernel, log_errors, key_split
-from ..executor import default_executor
 from ..scheduler import Scheduler
 from ..diagnostics.progress_stream import (task_stream_palette,
         incrementing_index)
