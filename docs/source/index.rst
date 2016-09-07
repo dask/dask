@@ -90,7 +90,8 @@ Contents
    manage-computation
    memory
    resilience
-   scheduler
+   scheduling-policies
+   scheduling-state
    worker
    work-stealing
    related-work
