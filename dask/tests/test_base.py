@@ -284,3 +284,20 @@ def test_visualize():
         dsk = {'a': 1, 'b': (add, 'a', 2), 'c': (mul, 'a', 1)}
         visualize(x, dsk, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+
+
+def test_use_cloudpickle_to_tokenize_functions_in__main__():
+    import sys
+    from textwrap import dedent
+
+    defn = dedent("""
+    def inc():
+        return x
+    """)
+
+    __main__ = sys.modules['__main__']
+    exec(compile(defn, '<test>', 'exec'), __main__.__dict__)
+    f = __main__.inc
+
+    t = normalize_token(f)
+    assert b'__main__' not in t
