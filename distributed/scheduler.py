@@ -1223,6 +1223,7 @@ class Scheduler(Server):
     @gen.coroutine
     def restart(self):
         """ Restart all workers.  Reset local state. """
+        n = len(self.ncores)
         with log_errors():
             logger.debug("Send shutdown signal to workers")
 

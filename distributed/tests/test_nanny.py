@@ -23,14 +23,15 @@ def test_nanny(s):
 
     yield n._start(0)
     nn = rpc(ip=n.ip, port=n.port)
-    assert n.process.is_alive()
+    assert n.process.poll() is None  # alive
     assert s.ncores[n.worker_address] == 2
+
     assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
     yield nn.kill()
+    assert not n.process
     assert n.worker_address not in s.ncores
     assert n.worker_address not in s.worker_info
-    assert not n.process
 
     yield nn.kill()
     assert n.worker_address not in s.ncores
@@ -38,7 +39,7 @@ def test_nanny(s):
     assert not n.process
 
     yield nn.instantiate()
-    assert n.process.is_alive()
+    assert n.process.poll() is None
     assert s.ncores[n.worker_address] == 2
     assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
@@ -48,7 +49,7 @@ def test_nanny(s):
     yield n._close()
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(ncores=[], timeout=20)
 def test_nanny_process_failure(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
     yield n._start()
@@ -57,6 +58,7 @@ def test_nanny_process_failure(s):
 
     assert os.path.exists(first_dir)
 
+    original_process = n.process
     ww = rpc(ip=n.ip, port=n.worker_port)
     yield ww.update_data(data=valmap(dumps, {'x': 1, 'y': 2}))
     with ignoring(StreamClosedError):
@@ -65,19 +67,19 @@ def test_nanny_process_failure(s):
                          key='z')
 
     start = time()
-    while n.process.is_alive():  # wait while process dies
+    while n.process is original_process:  # wait while process dies
         yield gen.sleep(0.01)
-        assert time() - start < 2
+        assert time() - start < 5
 
     start = time()
-    while not n.process.is_alive():  # wait while process comes back
+    while not n.process.poll() is None:  # wait while process comes back
         yield gen.sleep(0.01)
-        assert time() - start < 2
+        assert time() - start < 5
 
     start = time()
     while n.worker_address not in s.ncores or n.worker_dir is None:
         yield gen.sleep(0.01)
-        assert time() - start < 2
+        assert time() - start < 5
 
     second_dir = n.worker_dir
 
@@ -96,7 +98,7 @@ def test_monitor_resources(s):
 
     yield n._start()
     nn = rpc(ip=n.ip, port=n.port)
-    assert n.process.is_alive()
+    assert n.process.poll() is None
     d = n.resource_collect()
     assert {'cpu_percent', 'memory_percent'}.issubset(d)
 

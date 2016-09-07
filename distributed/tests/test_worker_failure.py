@@ -60,9 +60,10 @@ def test_failed_worker_without_warning(c, s, a, b):
     L = c.map(inc, range(10))
     yield _wait(L)
 
+    original_process = a.process
     a.process.terminate()
     start = time()
-    while not a.process.is_alive():
+    while a.process is original_process and a.process.poll() is not None:
         yield gen.sleep(0.01)
         assert time() - start < 10
 
@@ -163,7 +164,23 @@ def test_restart_sync(loop):
             assert y.result() == 1 / 3
 
 
-def test_restart_fast(loop):
+@gen_cluster(Worker=Nanny, client=True)
+def test_restart_fast(c, s, a, b):
+    L = c.map(sleep, range(10))
+
+    start = time()
+    yield c._restart()
+    assert time() - start < 10
+    assert len(s.ncores) == 2
+
+    assert all(x.status == 'cancelled' for x in L)
+
+    x = c.submit(inc, 1)
+    result = yield x._result()
+    assert result == 2
+
+
+def test_restart_fast_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
             L = c.map(sleep, range(10))

@@ -1,16 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import datetime, timedelta
+import json
 import logging
 from multiprocessing import Process, Queue, queues
 import os
 import shutil
+import subprocess
+import sys
+from time import time, sleep
 
 from tornado.ioloop import IOLoop
 from tornado import gen
 
 from .core import Server, rpc, write
-from .utils import get_ip, ignoring, log_errors
+from .utils import get_ip, ignoring, log_errors, tmpfile
 from .worker import _ncores
 
 
@@ -103,7 +107,11 @@ class Nanny(Server):
 
             if self.process:
                 self.process.terminate()
-                self.process.join(timeout=timeout)
+
+                start = time()
+                while self.process.poll() is None and time() < start + timeout:
+                    sleep(0.01)
+
                 self.process = None
                 self.cleanup()
                 logger.info("Nanny %s:%d kills worker process %s:%d",
@@ -116,37 +124,40 @@ class Nanny(Server):
 
         Blocks until the process is up and the scheduler is properly informed
         """
-        if self.process and self.process.is_alive():
-            raise ValueError("Existing process still alive. Please kill first")
-        q = Queue()
-        self.process = Process(target=run_worker,
-                               args=(q, self.ip, self.scheduler.ip,
-                                     self.scheduler.port, self.ncores,
-                                     self.port, self._given_worker_port,
-                                     self.local_dir, self.services, self.name,
-                                     self.memory_limit))
-        self.process.daemon = True
-        self.process.start()
-        while True:
-            try:
-                msg = q.get_nowait()
-                if isinstance(msg, Exception):
-                    raise msg
-                self.worker_port = msg['port']
-                self.worker_dir = msg['dir']
-                assert self.worker_port
-                break
-            except queues.Empty:
-                yield gen.sleep(0.1)
-        logger.info("Nanny %s:%d starts worker process %s:%d",
-                    self.ip, self.port, self.ip, self.worker_port)
-        q.close()
-        raise gen.Return('OK')
+        with log_errors():
+            if self.process and self.process.poll() is None:
+                raise ValueError("Existing process still alive. Please kill first")
+            with tmpfile() as fn:
+                self.process = run_worker(self.ip, self.scheduler.ip,
+                        self.scheduler.port, self.ncores, self.port,
+                        self._given_worker_port, self.name, self.memory_limit,
+                        self.loop, fn)
+
+                while not os.path.exists(fn):
+                    yield gen.sleep(0.01)
+
+                while True:
+                    try:
+                        with open(fn) as f:
+                            msg = json.load(f)
+                        self.worker_port = msg['port']
+                        self.worker_dir = msg['local_directory']
+                        break
+                    except json.decoder.JSONDecodeError:
+                        yield gen.sleep(0.01)
+
+            logger.info("Receive message %s", msg)
+
+            logger.info("Nanny %s:%d starts worker process %s:%d",
+                        self.ip, self.port, self.ip, self.worker_port)
+            raise gen.Return('OK')
 
     def cleanup(self):
         if self.worker_dir and os.path.exists(self.worker_dir):
             shutil.rmtree(self.worker_dir)
         self.worker_dir = None
+        if self.process:
+            self.process.terminate()
 
     @gen.coroutine
     def _watch(self, wait_seconds=0.10):
@@ -155,8 +166,9 @@ class Nanny(Server):
             if closing[0] or self.status == 'closed':
                 yield self._close()
                 break
-            elif self.process and not self.process.is_alive():
-                logger.warn("Discovered failed worker.  Restarting.  Status: %s", self.status)
+            elif self.process and self.process.poll() is not None:
+                logger.warn("Discovered failed worker.  Restarting. Status: %s",
+                            self.status)
                 self.cleanup()
                 yield self.scheduler.unregister(address=self.worker_address)
                 yield self.instantiate()
@@ -241,6 +253,35 @@ def run_worker(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
     finally:
         loop.stop()
         loop.close(all_fds=True)
+
+
+def run_worker(ip, scheduler_ip, scheduler_port, ncores, nanny_port,
+        worker_port, name, memory_limit, io_loop, fn):
+
+    executable = os.path.join(os.path.dirname(sys.executable),
+                              'dask-worker')
+    args = ['%s:%d' %(scheduler_ip, scheduler_port),
+            '--no-nanny',
+            '--host', ip,
+            '--worker-port', worker_port,
+            '--nanny-port', nanny_port,
+            '--nthreads', ncores,
+            '--nprocs', 1,
+            '--temp-filename', fn]
+
+    if name:
+        args.extend(['--name', name])
+
+    if memory_limit:
+        args.extend(['--memory-limit', memory_limit])
+
+    logger.info("Starting worker %s: %s", executable, args)
+    proc = subprocess.Popen([executable] + list(map(str, args)),
+            stderr=subprocess.PIPE)
+
+    atexit.register(proc.terminate)
+
+    return proc
 
 
 import atexit
