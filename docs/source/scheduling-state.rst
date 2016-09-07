@@ -271,7 +271,7 @@ are useful in testing.
 
 Tasks fall into the following states with the following allowed transitions
 
-.. image:: ../images/task-state.svg
+.. image:: images/task-state.svg
     :alt: Dask scheduler task states
 
 *  Released: known but not actively computing or in memory
