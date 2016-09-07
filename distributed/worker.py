@@ -599,6 +599,12 @@ class Worker(Server):
         if kwargs:
             kwargs = loads(kwargs)
         try:
+            import inspect
+            if 'dask_worker' in inspect.getargspec(function).args:
+                kwargs['dask_worker'] = self
+        except:
+            pass
+        try:
             result = function(*args, **kwargs)
         except Exception as e:
             logger.warn(" Run Failed\n"

@@ -7,6 +7,7 @@ from concurrent.futures import CancelledError
 from datetime import timedelta
 import itertools
 from multiprocessing import Process
+import os
 import pickle
 from random import random, choice
 import sys
@@ -1085,6 +1086,21 @@ def test_upload_file(c, s, a, b):
     y = c.submit(g, pure=False)
     result = yield y._result()
     assert result == 456
+
+
+@gen_cluster(client=True)
+def test_upload_large_file(c, s, a, b):
+    assert a.local_dir
+    assert b.local_dir
+    with tmp_text('myfile', 'abc') as fn:
+        yield c._upload_large_file(fn, remote_filename='x')
+        yield c._upload_large_file(fn)
+
+        for w in [a, b]:
+            assert os.path.exists(os.path.join(w.local_dir, 'x'))
+            assert os.path.exists(os.path.join(w.local_dir, 'myfile'))
+            with open(os.path.join(w.local_dir, 'x')) as f:
+                assert f.read() == 'abc'
 
 
 def test_upload_file_sync(loop):

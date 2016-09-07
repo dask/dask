@@ -1446,6 +1446,31 @@ class Client(object):
 
         assert all(len(data) == v['nbytes'] for v in d.values())
 
+    @gen.coroutine
+    def _upload_large_file(self, local_filename, remote_filename=None):
+        if remote_filename is None:
+            remote_filename = os.path.split(local_filename)[1]
+
+        with open(local_filename, 'rb') as f:
+            data = f.read()
+
+        [future] = yield self._scatter([data])
+        key = future.key
+        yield self._replicate(future)
+
+        def dump_to_file(dask_worker=None):
+            nonlocal remote_filename
+            if not os.path.isabs(remote_filename):
+                remote_filename = os.path.join(dask_worker.local_dir, remote_filename)
+            with open(remote_filename, 'wb') as f:
+                f.write(dask_worker.data[key])
+
+            return len(dask_worker.data[key])
+
+        response = yield self._run(dump_to_file)
+
+        assert all(len(data) == v for v in response.values())
+
     def upload_file(self, filename):
         """ Upload local package to workers
 
