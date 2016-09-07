@@ -12,7 +12,7 @@ from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from distributed import Nanny, rpc, Scheduler
-from distributed.core import connect, read, write, dumps
+from distributed.core import connect, read, write, dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster
 
@@ -115,3 +115,16 @@ def test_monitor_resources(s):
     stream.close()
     yield n._close()
     s.stop()
+
+
+@gen_cluster(ncores=[])
+def test_run(s):
+    pytest.importorskip('psutil')
+    n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
+    yield n._start()
+
+    nn = rpc(n.address)
+
+    response = yield nn.run(function=dumps(lambda: 1))
+    assert response['status'] == 'OK'
+    assert loads(response['result']) == 1

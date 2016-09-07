@@ -46,7 +46,8 @@ class Nanny(Server):
         handlers = {'instantiate': self.instantiate,
                     'kill': self._kill,
                     'terminate': self._close,
-                    'monitor_resources': self.monitor_resources}
+                    'monitor_resources': self.monitor_resources,
+                    'run': self.run}
 
         super(Nanny, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
@@ -151,6 +152,8 @@ class Nanny(Server):
             logger.info("Nanny %s:%d starts worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
             raise gen.Return('OK')
+
+    run = Worker.run
 
     def cleanup(self):
         if self.worker_dir and os.path.exists(self.worker_dir):
