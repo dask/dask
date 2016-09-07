@@ -812,6 +812,22 @@ def test_broadcast(s, a, b):
     assert result == {a.address: b'pong', b.address: b'pong'}
 
 
+@gen_cluster(Worker=Nanny)
+def test_broadcast_nanny(s, a, b):
+    result1 = yield s.broadcast(msg={'op': 'identity'}, nanny=True)
+    assert all(d['type'] == 'Nanny' for d in result1.values())
+
+    result2 = yield s.broadcast(msg={'op': 'identity'},
+                               workers=[a.worker_address],
+                               nanny=True)
+    assert len(result2) == 1
+    assert first(result2.values())['id'] == a.id
+
+    result3 = yield s.broadcast(msg={'op': 'identity'}, hosts=[a.ip],
+                                nanny=True)
+    assert result1 == result3
+
+
 @gen_test()
 def test_worker_name():
     s = Scheduler(validate=True)
