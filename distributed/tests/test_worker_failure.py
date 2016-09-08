@@ -10,8 +10,9 @@ import pytest
 from toolz import partition_all
 from tornado import gen
 
+from distributed.compatibility import PY3
 from distributed.client import _wait
-from distributed.utils import sync
+from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
 from distributed import Client, Nanny, wait
@@ -165,7 +166,7 @@ def test_restart_sync(loop):
             assert y.result() == 1 / 3
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=20)
 def test_restart_fast(c, s, a, b):
     L = c.map(sleep, range(10))
 
@@ -188,7 +189,7 @@ def test_restart_fast_sync(loop):
 
             start = time()
             c.restart()
-            assert time() - start < 5
+            assert time() - start < 10
             assert len(c.ncores()) == 2
 
             assert all(x.status == 'cancelled' for x in L)
@@ -197,13 +198,13 @@ def test_restart_fast_sync(loop):
             assert x.result() == 2
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=20)
 def test_fast_kill(c, s, a, b):
     L = c.map(sleep, range(10))
 
     start = time()
     yield c._restart()
-    assert time() - start < 5
+    assert time() - start < 10
 
     assert all(x.status == 'cancelled' for x in L)
 
@@ -262,9 +263,11 @@ def test_broken_worker_during_computation(c, s, a, b):
 
     from random import random
     yield gen.sleep(random() / 2)
-    n.process.terminate()
+    with ignoring(OSError):
+        n.process.terminate()
     yield gen.sleep(random() / 2)
-    n.process.terminate()
+    with ignoring(OSError):
+        n.process.terminate()
 
     result = yield c._gather(L)
     assert isinstance(result[0], int)
@@ -289,9 +292,26 @@ def test_restart_during_computation(c, s, a, b):
     assert not s.task_state
 
 
-@gen_cluster(client=True, Worker=Nanny, timeout=1000)
+@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
+                    reason='Depends on large local file')
+@gen_cluster(client=True, Worker=Nanny, timeout=120)
 def test_upload_environment(c, s, a, b):
-    responses = yield c._upload_environment('copyenv',
-            '/home/mrocklin/workspace/play/copyenv.zip')
-    assert os.path.exists(os.path.join(a.local_dir, 'copyenv'))
-    assert os.path.exists(os.path.join(b.local_dir, 'copyenv'))
+    responses = yield c._upload_environment('myenv.zip')
+    assert os.path.exists(os.path.join(a.local_dir, 'myenv'))
+    assert os.path.exists(os.path.join(b.local_dir, 'myenv'))
+
+
+@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
+                    reason='Depends on large local file')
+@gen_cluster(client=True, Worker=Nanny, timeout=120)
+def test_restart_environment(c, s, a, b):
+    yield c._restart(environment='myenv.zip')
+
+    def get_executable():
+        import sys
+        return sys.executable
+
+    results = yield c._run(get_executable)
+    assert results == {n.worker_address:
+                        os.path.join(n.local_dir, 'myenv', 'bin', 'python')
+                        for n in [a, b]}

@@ -8,6 +8,7 @@ import shutil
 import socket
 from sys import argv, exit
 import sys
+from time import time, sleep
 
 import click
 from distributed import Nanny, Worker, sync, rpc
@@ -29,7 +30,7 @@ def handle_signal(sig, frame):
     for nanny in global_nannies:
         try:
             shutil.rmtree(nanny.worker_dir)
-        except (OSError, IOError):
+        except (OSError, IOError, TypeError):
             pass
     if loop._running:
         loop.add_callback(loop.stop)
@@ -160,7 +161,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         if not no_nanny:
             yield gen.with_timeout(timedelta(seconds=2),
                     All([scheduler.unregister(address=n.worker_address, close=True)
-                        for n in nannies if n.process]), io_loop=loop2)
+                        for n in nannies if n.process and n.worker_port]), io_loop=loop2)
 
     loop2.run_sync(f)
 
@@ -169,8 +170,10 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
             n.process.terminate()
 
     if not no_nanny:
-        for n in nannies:
-            n.process.join(timeout=1)
+        start = time()
+        while (any(n.process.poll() is None for n in nannies)
+                and time() < start + 1):
+            sleep(0.1)
 
     for nanny in nannies:
         nanny.stop()

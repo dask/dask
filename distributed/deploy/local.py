@@ -114,6 +114,7 @@ class LocalCluster(object):
     def _start_worker(self, port=0, nanny=True, **kwargs):
         if nanny:
             W = Nanny
+            kwargs['quiet'] = True
         else:
             W = Worker
         w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop, **kwargs)

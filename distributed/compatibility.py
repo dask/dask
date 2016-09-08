@@ -58,6 +58,11 @@ WINDOWS = sys.platform.startswith('win')
 
 
 try:
+    from json.decoder import JSONDecodeError
+except (ImportError, AttributeError):
+    JSONDecodeError = ValueError
+
+try:
     from functools import singledispatch
 except ImportError:
     from singledispatch import singledispatch

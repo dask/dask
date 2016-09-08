@@ -1221,7 +1221,7 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def restart(self):
+    def restart(self, environment=None):
         """ Restart all workers.  Reset local state. """
         n = len(self.ncores)
         with log_errors():
@@ -1251,7 +1251,8 @@ class Scheduler(Server):
             logger.debug("Workers all removed.  Sending startup signal")
 
             # All quiet
-            resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
+            resps = yield All([nanny.instantiate(close=True,
+                environment=environment) for nanny in nannies])
             assert all(resp == 'OK' for resp in resps)
 
             self.start()

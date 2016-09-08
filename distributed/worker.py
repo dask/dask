@@ -591,37 +591,8 @@ class Worker(Server):
             pass
         raise Return(result)
 
-    @gen.coroutine
     def run(self, stream, function=None, args=(), kwargs={}):
-        function = loads(function)
-        if args:
-            args = loads(args)
-        if kwargs:
-            kwargs = loads(kwargs)
-        try:
-            import inspect
-            if 'dask_worker' in inspect.getargspec(function).args:
-                kwargs['dask_worker'] = self
-        except:
-            pass
-        try:
-            result = function(*args, **kwargs)
-        except Exception as e:
-            logger.warn(" Run Failed\n"
-                "Function: %s\n"
-                "args:     %s\n"
-                "kwargs:   %s\n",
-                str(funcname(function))[:1000],
-                convert_args_to_str(args, max_len=1000),
-                convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
-
-            response = error_message(e)
-        else:
-            response = {
-                'status': 'OK',
-                'result': dumps(result),
-            }
-        raise Return(response)
+        return run(self, stream, function=function, args=args, kwargs=kwargs)
 
     @gen.coroutine
     def update_data(self, stream=None, data=None, report=True, deserialize=True):
@@ -907,3 +878,36 @@ def loads_from_disk(c):
 
 def weight(k, v):
     return sizeof(v)
+
+
+@gen.coroutine
+def run(worker, stream, function=None, args=(), kwargs={}):
+    function = loads(function)
+    if args:
+        args = loads(args)
+    if kwargs:
+        kwargs = loads(kwargs)
+    try:
+        import inspect
+        if 'dask_worker' in inspect.getargspec(function).args:
+            kwargs['dask_worker'] = worker
+    except:
+        pass
+    try:
+        result = function(*args, **kwargs)
+    except Exception as e:
+        logger.warn(" Run Failed\n"
+            "Function: %s\n"
+            "args:     %s\n"
+            "kwargs:   %s\n",
+            str(funcname(function))[:1000],
+            convert_args_to_str(args, max_len=1000),
+            convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
+
+        response = error_message(e)
+    else:
+        response = {
+            'status': 'OK',
+            'result': dumps(result),
+        }
+    raise Return(response)

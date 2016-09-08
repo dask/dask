@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import copy
 from datetime import timedelta
 from functools import partial
+from glob import glob
 import logging
 import os
 import sys
@@ -788,7 +789,7 @@ class Client(object):
                 break
 
         if bad_data and errors == 'skip' and isinstance(futures2, list):
-            futures2 = [f for f in futures2 if f not in exceptions]
+            futures2 = [f for f in futures2 if f not in bad_data]
 
         data = valmap(loads, response['data'])
         result = pack_data(futures2, merge(data, bad_data))
@@ -1411,34 +1412,41 @@ class Client(object):
             return result
 
     @gen.coroutine
-    def _upload_environment(self, name, zipfile):
-        yield self._upload_large_file(zipfile, name + '.zip')
+    def _upload_environment(self, zipfile):
+        name = os.path.split(zipfile)[1]
+        yield self._upload_large_file(zipfile, name)
 
         def unzip(dask_worker=None):
             from distributed.utils import log_errors
             import zipfile
             import shutil
             with log_errors():
-                a = os.path.join(dask_worker.worker_dir, name + '.zip')
-                b = os.path.join(dask_worker.local_dir, name + '.zip')
+                a = os.path.join(dask_worker.worker_dir, name)
+                b = os.path.join(dask_worker.local_dir, name)
                 c = os.path.dirname(b)
                 shutil.move(a, b)
 
                 with zipfile.ZipFile(b) as f:
                     f.extractall(path=c)
 
-                assert os.path.exists(name)
+                for fn in glob(os.path.join(c, name[:-4], 'bin', '*')):
+                    st = os.stat(fn)
+                    os.chmod(fn, st.st_mode | 64)  # chmod u+x fn
+
+                assert os.path.exists(os.path.join(c, name[:-4]))
                 return c
 
         responses = yield self._run(unzip, nanny=True)
-        raise gen.Return(responses)
+        raise gen.Return(name[:-4])
 
     def upload_environment(self, name, zipfile):
         return sync(self.loop, self._upload_environment, name, zipfile)
 
     @gen.coroutine
     def _restart(self, environment=None):
-        self._send_to_scheduler({'op': 'restart'})
+        if environment:
+            environment = yield self._upload_environment(environment)
+        self._send_to_scheduler({'op': 'restart', 'environment': environment})
         self._restart_event = Event()
         yield self._restart_event.wait()
         self.generation += 1
@@ -1446,13 +1454,13 @@ class Client(object):
 
         raise gen.Return(self)
 
-    def restart(self):
+    def restart(self, environment=None):
         """ Restart the distributed network
 
         This kills all active work, deletes all data on the network, and
         restarts the worker processes.
         """
-        return sync(self.loop, self._restart)
+        return sync(self.loop, self._restart, environment=environment)
 
     @gen.coroutine
     def _upload_file(self, filename, raise_on_error=True):
@@ -1486,10 +1494,11 @@ class Client(object):
         yield self._replicate(future)
 
         def dump_to_file(dask_worker=None):
-            nonlocal remote_filename
             if not os.path.isabs(remote_filename):
-                remote_filename = os.path.join(dask_worker.local_dir, remote_filename)
-            with open(remote_filename, 'wb') as f:
+                fn = os.path.join(dask_worker.local_dir, remote_filename)
+            else:
+                fn = remote_filename
+            with open(fn, 'wb') as f:
                 f.write(dask_worker.data[key])
 
             return len(dask_worker.data[key])
