@@ -55,6 +55,15 @@ def getarray(a, b, lock=None):
     return c
 
 
+def getarray_nofancy(a, b, lock=None):
+    """ A simple wrapper around ``getarray``.
+
+    Used to indicate to the optimization passes that the backend doesn't
+    support "fancy indexing"
+    """
+    return getarray(a, b, lock=lock)
+
+
 from .optimization import optimize
 
 
@@ -76,7 +85,7 @@ def slices_from_chunks(chunks):
                 for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, shape=None, out_name=None, is_numpy=False, lock=None):
+def getem(arr, chunks, shape=None, out_name=None, fancy=True, lock=False):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -96,12 +105,12 @@ def getem(arr, chunks, shape=None, out_name=None, is_numpy=False, lock=None):
 
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
+    getter = getarray if fancy else getarray_nofancy
 
-    if lock is None:
-        getter = getitem if is_numpy else getarray
-        values = [(getter, arr, x) for x in slices]
+    if lock:
+        values = [(getter, arr, x, lock) for x in slices]
     else:
-        values = [(getarray, arr, x, lock) for x in slices]
+        values = [(getter, arr, x) for x in slices]
 
     return dict(zip(keys, values))
 
@@ -1509,17 +1518,28 @@ def normalize_chunks(chunks, shape=None):
     return tuple(map(tuple, chunks))
 
 
-def from_array(x, chunks, name=None, lock=False):
+def from_array(x, chunks, name=None, lock=False, fancy=True):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
 
-    The ``chunks`` argument must be one of the following forms:
-
-    -   a blocksize like 1000
-    -   a blockshape like (1000, 1000)
-    -   explicit sizes of all blocks along all dimensions
-        like ((1000, 1000, 500), (400, 400)).
+    Parameters
+    ----------
+    x : array_like
+    chunks : int, tuple
+        How to chunk the array. Must be one of the following forms:
+        - A blocksize like 1000.
+        - A blockshape like (1000, 1000).
+        - Explicit sizes of all blocks along all dimensions
+          like ((1000, 1000, 500), (400, 400)).
+    name : str, optional
+        The key name to use for the array. Defaults to a hash of ``x``.
+    lock : bool or Lock, optional
+        If ``x`` doesn't support concurrent reads then provide a lock here, or
+        pass in True to have dask.array create one for you.
+    fancy : bool, optional
+        If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
+        arrays) then set to False. Default is True.
 
     Examples
     --------
@@ -1543,10 +1563,9 @@ def from_array(x, chunks, name=None, lock=False):
     token = tokenize(x, chunks)
     original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
-    is_numpy = type(x) in (np.ndarray, np.memmap)
     if lock is True:
         lock = Lock()
-    dsk = getem(original_name, chunks, out_name=name, is_numpy=is_numpy, lock=lock)
+    dsk = getem(original_name, chunks, out_name=name, fancy=fancy, lock=lock)
     return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
 
 

@@ -7,7 +7,7 @@ from dask.array.optimization import (getitem, optimize, optimize_slices,
         fuse_slice)
 
 from dask.utils import raises
-from dask.array.core import getarray
+from dask.array.core import getarray, getarray_nofancy
 
 
 def test_fuse_getitem():
@@ -18,12 +18,20 @@ def test_fuse_getitem():
                         (slice(15, 20), slice(50, 60))),
               (getarray, 'x', (slice(1015, 1020), slice(150, 160)))),
 
+             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), slice(100, 200))),
+                        (slice(15, 20), slice(50, 60))),
+              (getarray_nofancy, 'x', (slice(1015, 1020), slice(150, 160)))),
+
              ((getarray, (getarray, 'x', slice(1000, 2000)), 10),
               (getarray, 'x', 1010)),
 
              ((getitem, (getarray, 'x', (slice(1000, 2000), 10)),
                         (slice(15, 20),)),
               (getarray, 'x', (slice(1015, 1020), 10))),
+
+             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), 10)),
+                        (slice(15, 20),)),
+              (getarray_nofancy, 'x', (slice(1015, 1020), 10))),
 
              ((getarray, (getarray, 'x', (10, slice(1000, 2000))),
                         (slice(15, 20),)),
@@ -119,16 +127,10 @@ def test_dont_fuse_different_slices():
     assert len(dsk) > 100
 
 
-def test_dont_fuse_lists_in_getarray():
-    dsk = {'a': (getitem, (getarray, 'x', (slice(10, 20, None), slice(100, 200, None))),
+def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
+    dsk = {'a': (getitem, (getarray_nofancy, 'x', (slice(10, 20, None), slice(100, 200, None))),
                  ([1, 3], slice(50, 60, None)))}
-    res = optimize_slices(dsk)
-    sol = {'a': (getarray, (getarray, 'x', (slice(10, 20, None), slice(100, 200, None))),
-                 ([1, 3], slice(50, 60, None)))}
-    assert res == sol
+    assert optimize_slices(dsk) == dsk
 
-    dsk = {'a': (getitem, (getitem, 'x', (slice(10, 20, None), slice(100, 200, None))),
-                 ([1, 3], slice(50, 60, None)))}
-    res = optimize_slices(dsk)
-    sol = {'a': (getitem, 'x', ([11, 13], slice(150, 160, None)))}
-    assert res == sol
+    dsk = {'a': (getitem, (getarray_nofancy, 'x', [1, 2, 3]), 0)}
+    assert optimize_slices(dsk) == dsk

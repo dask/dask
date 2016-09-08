@@ -4,7 +4,7 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray
+from .core import getarray, getarray_nofancy
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
 
@@ -18,7 +18,7 @@ def optimize(dsk, keys, **kwargs):
     """
     keys = list(flatten(keys))
     fast_functions = kwargs.get('fast_functions',
-                                set([getarray, np.transpose]))
+                                set([getarray, getarray_nofancy, np.transpose]))
     dsk2, dependencies = cull(dsk, keys)
     dsk4, dependencies = fuse(dsk2, keys, dependencies)
     dsk5 = optimize_slices(dsk4)
@@ -36,55 +36,53 @@ def optimize_slices(dsk):
     See also:
         fuse_slice_dict
     """
-    # Slicing using these from backends that require `getarray` may
-    # be unsafe
-    unsafe_ind_types = (list, np.ndarray)
-    getters = (getarray, getitem)
+    fancy_ind_types = (list, np.ndarray)
+    getters = (getarray_nofancy, getarray, getitem)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple:
-            if v[0] in getters:
-                if len(v) == 3:
-                    func, a, a_index = v
-                    use_getarray = func is getarray
-                else:  # has four elements, includes a lock
-                    continue
-                while type(a) is tuple and a[0] in getters and len(a) == 3:
-                    f2, b, b_index = a
-                    use_getarray |= f2 is getarray
-                    if (type(a_index) is tuple) != (type(b_index) is tuple):
+        if type(v) is tuple and v[0] in getters and len(v) == 3:
+            f, a, a_index = v
+            getter = f
+            while type(a) is tuple and a[0] in getters and len(a) == 3:
+                f2, b, b_index = a
+                if (type(a_index) is tuple) != (type(b_index) is tuple):
+                    break
+                if type(a_index) is tuple:
+                    indices = b_index + a_index
+                    if (len(a_index) != len(b_index) and
+                            any(i is None for i in indices)):
                         break
-                    if type(a_index) is tuple:
-                        indices = b_index + a_index
-                        if ((len(a_index) != len(b_index)) and
-                                any(i is None for i in indices)):
-                            break
-                        if (use_getarray and any(isinstance(i, unsafe_ind_types)
-                                                 for i in indices)):
-                            break
-                    elif (type(a_index) in unsafe_ind_types or
-                          type(b_index) in unsafe_ind_types):
+                    if (f2 is getarray_nofancy and
+                            any(isinstance(i, fancy_ind_types) for i in indices)):
                         break
-                    try:
-                        c_index = fuse_slice(b_index, a_index)
-                    except NotImplementedError:
-                        break
-                    (a, a_index) = (b, c_index)
-                if use_getarray:
-                    dsk[k] = (getarray, a, a_index)
-                elif (type(a_index) is slice and
-                      not a_index.start and
-                      a_index.stop is None and
-                      a_index.step is None):
-                    dsk[k] = a
-                elif type(a_index) is tuple and all(type(s) is slice and
-                                                    not s.start and
-                                                    s.stop is None and
-                                                    s.step is None
-                                                    for s in a_index):
-                    dsk[k] = a
-                else:
-                    dsk[k] = (getitem, a, a_index)
+                elif (f2 is getarray_nofancy and
+                        (type(a_index) in fancy_ind_types or
+                         type(b_index) in fancy_ind_types)):
+                    break
+                try:
+                    c_index = fuse_slice(b_index, a_index)
+                    # rely on fact that nested gets never decrease in
+                    # strictness e.g. `(getarray, (getitem, ...))` never
+                    # happens
+                    getter = f2
+                except NotImplementedError:
+                    break
+                a, a_index = b, c_index
+            if getter is not getitem:
+                dsk[k] = (getter, a, a_index)
+            elif (type(a_index) is slice and
+                    not a_index.start and
+                    a_index.stop is None and
+                    a_index.step is None):
+                dsk[k] = a
+            elif type(a_index) is tuple and all(type(s) is slice and
+                                                not s.start and
+                                                s.stop is None and
+                                                s.step is None
+                                                for s in a_index):
+                dsk[k] = a
+            else:
+                dsk[k] = (getitem, a, a_index)
     return dsk
 
 
