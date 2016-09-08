@@ -13,7 +13,7 @@ from time import sleep, time
 
 
 from distributed import Scheduler, Client
-from distributed.utils import get_ip, ignoring
+from distributed.utils import get_ip, ignoring, tmpfile
 from distributed.utils_test import loop, popen
 
 
@@ -140,3 +140,32 @@ def test_multiple_workers(loop):
                     while len(c.ncores()) < 2:
                         sleep(0.1)
                         assert time() < start + 10
+
+
+def test_pid_file(loop):
+    with tmpfile() as s:
+        with popen(['dask-scheduler', '--pid-file', s]) as sched:
+            while not os.path.exists(s):
+                sleep(0.01)
+            text = False
+            while not text:
+                sleep(0.01)
+                with open(s) as f:
+                    text = f.read()
+            pid = int(text)
+
+            assert sched.pid == pid
+
+        with tmpfile() as w:
+            with popen(['dask-worker', '127.0.0.1:8786', '--pid-file', w]) as worker:
+                while not os.path.exists(w):
+                    sleep(0.01)
+                text = False
+                while not text:
+                    sleep(0.01)
+                    with open(w) as f:
+                        text = f.read()
+
+                pid = int(text)
+
+                assert worker.pid == pid

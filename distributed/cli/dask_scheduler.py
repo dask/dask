@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 import json
 import logging
 import multiprocessing
@@ -36,8 +37,20 @@ logger = logging.getLogger('distributed.scheduler')
               help="Prefix for the bokeh app")
 @click.option('--use-xheaders', type=bool, default=False, show_default=True,
               help="User xheaders in bokeh app for ssl termination in header")
+@click.option('--pid-file', type=str, default='',
+              help="File to write the process PID")
 def main(host, port, http_port, bokeh_port, show, _bokeh,
-         bokeh_whitelist, prefix, use_xheaders):
+         bokeh_whitelist, prefix, use_xheaders, pid_file):
+
+    if pid_file:
+        with open(pid_file, 'w') as f:
+            f.write(str(os.getpid()))
+
+        def del_pid_file():
+            if os.path.exists(pid_file):
+                os.remove(pid_file)
+        atexit.register(del_pid_file)
+
     given_host = host
     host = host or get_ip()
     if ':' in host and port == 8786:

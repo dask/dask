@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 from datetime import timedelta
 import logging
+import os
 import shutil
 import socket
 from sys import argv, exit
@@ -55,8 +57,10 @@ def handle_signal(sig, frame):
 @click.option('--memory-limit', default=False,
               help="Number of bytes before spilling data to disk")
 @click.option('--no-nanny', is_flag=True)
+@click.option('--pid-file', type=str, default='',
+              help="File to write the process PID")
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        no_nanny, name, port, memory_limit):
+        no_nanny, name, port, memory_limit, pid_file):
     if port:
         logger.info("--port is deprecated, use --nanny-port instead")
         assert not nanny_port
@@ -78,6 +82,15 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     if not nthreads:
         nthreads = _ncores // nprocs
+
+    if pid_file:
+        with open(pid_file, 'w') as f:
+            f.write(str(os.getpid()))
+
+        def del_pid_file():
+            if os.path.exists(pid_file):
+                os.remove(pid_file)
+        atexit.register(del_pid_file)
 
     services = {('http', http_port): HTTPWorker}
 

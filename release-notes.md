@@ -3,6 +3,7 @@
 
 *  Add `--memory-limit` option to `dask-worker`, enabling spill-to-disk
    behavior when running out of memory
+*  Add `--pid-file` option to dask-worker and `--dask-scheduler` #496
 
 
 1.12.2
