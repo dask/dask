@@ -55,7 +55,8 @@ def handle_signal(sig, frame):
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='', help="Alias")
 @click.option('--memory-limit', default=False,
-              help="Number of bytes before spilling data to disk")
+              help="Number of bytes before spilling data to disk. "
+              "This can be an integer (nbytes) float (fraction of total memory) or auto")
 @click.option('--no-nanny', is_flag=True)
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
@@ -98,11 +99,15 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     if memory_limit == 'auto':
         import psutil
-        memory_limit = psutil.virtual_memory().total * 0.75
+        memory_limit = psutil.virtual_memory().total * 0.60
 
     if memory_limit:
-        memory_limit = int(float(memory_limit))
+        memory_limit = float(memory_limit)
+        if memory_limit < 1.0:
+            import psutil
+            memory_limit = psutil.virtual_memory().total * memory_limit
         memory_limit /= nprocs
+        memory_limit = int(memory_limit)
 
     if no_nanny:
         kwargs = {}
