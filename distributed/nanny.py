@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from time import time, sleep
 
 from tornado.ioloop import IOLoop
@@ -15,7 +16,7 @@ from tornado import gen
 
 from .core import Server, rpc, write
 from .utils import get_ip, ignoring, log_errors, tmpfile
-from .worker import _ncores
+from .worker import _ncores, Worker
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class Nanny(Server):
         self.worker_port = None
         self._given_worker_port = worker_port
         self.ncores = ncores or _ncores
-        self.local_dir = local_dir
+        self.local_dir = local_dir or tempfile.mkdtemp(prefix='nanny-')
         self.worker_dir = ''
         self.status = None
         self.process = None

@@ -1091,12 +1091,13 @@ class Client(object):
 
     @gen.coroutine
     def _run(self, function, *args, **kwargs):
+        nanny = kwargs.pop('nanny', False)
         workers = kwargs.pop('workers', None)
         responses = yield self.scheduler.broadcast(msg=dict(op='run',
                                                 function=dumps(function),
                                                 args=dumps(args),
                                                 kwargs=dumps(kwargs)),
-                                                workers=workers)
+                                                workers=workers, nanny=nanny)
         results = {}
         for key, resp in responses.items():
             if resp['status'] == 'OK':
@@ -1410,7 +1411,33 @@ class Client(object):
             return result
 
     @gen.coroutine
-    def _restart(self):
+    def _upload_environment(self, name, zipfile):
+        yield self._upload_large_file(zipfile, name + '.zip')
+
+        def unzip(dask_worker=None):
+            from distributed.utils import log_errors
+            import zipfile
+            import shutil
+            with log_errors():
+                a = os.path.join(dask_worker.worker_dir, name + '.zip')
+                b = os.path.join(dask_worker.local_dir, name + '.zip')
+                c = os.path.dirname(b)
+                shutil.move(a, b)
+
+                with zipfile.ZipFile(b) as f:
+                    f.extractall(path=c)
+
+                assert os.path.exists(name)
+                return c
+
+        responses = yield self._run(unzip, nanny=True)
+        raise gen.Return(responses)
+
+    def upload_environment(self, name, zipfile):
+        return sync(self.loop, self._upload_environment, name, zipfile)
+
+    @gen.coroutine
+    def _restart(self, environment=None):
         self._send_to_scheduler({'op': 'restart'})
         self._restart_event = Event()
         yield self._restart_event.wait()

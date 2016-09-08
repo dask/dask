@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import CancelledError
 from operator import add
+import os
 from time import time, sleep
 
 from dask import delayed
@@ -286,3 +287,11 @@ def test_restart_during_computation(c, s, a, b):
 
     assert len(s.ncores) == 2
     assert not s.task_state
+
+
+@gen_cluster(client=True, Worker=Nanny, timeout=1000)
+def test_upload_environment(c, s, a, b):
+    responses = yield c._upload_environment('copyenv',
+            '/home/mrocklin/workspace/play/copyenv.zip')
+    assert os.path.exists(os.path.join(a.local_dir, 'copyenv'))
+    assert os.path.exists(os.path.join(b.local_dir, 'copyenv'))

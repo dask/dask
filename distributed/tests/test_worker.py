@@ -531,3 +531,12 @@ def test_access_key(c, s, a, b):
     futures = [c.submit(f, i, key='x-%d' % i) for i in range(20)]
     results = yield c._gather(futures)
     assert list(results) == ['x-%d' % i for i in range(20)]
+
+
+@gen_cluster(client=True)
+def test_run_dask_worker(c, s, a, b):
+    def f(dask_worker=None):
+        return dask_worker.id
+
+    response = yield c._run(f)
+    assert response == {a.address: a.id, b.address: b.id}
