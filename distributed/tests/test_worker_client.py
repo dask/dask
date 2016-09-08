@@ -7,7 +7,6 @@ from tornado import gen
 
 from distributed import local_client
 from distributed.utils_test import gen_cluster, inc, double
-from distributed.worker_client import local_state
 
 
 @gen_cluster(client=True)

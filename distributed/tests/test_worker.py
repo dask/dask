@@ -520,3 +520,14 @@ def test_spill_to_disk(e, s):
     yield x._result()
     assert set(w.data.fast) == {x.key, z.key}
     assert set(w.data.slow) == {y.key}
+
+
+@gen_cluster(client=True)
+def test_access_key(c, s, a, b):
+    def f(i):
+        from distributed.worker import thread_state
+        return thread_state.key
+
+    futures = [c.submit(f, i, key='x-%d' % i) for i in range(20)]
+    results = yield c._gather(futures)
+    assert list(results) == ['x-%d' % i for i in range(20)]

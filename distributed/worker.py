@@ -35,7 +35,7 @@ from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
 
 _ncores = ThreadPool()._processes
 
-local_state = local()
+thread_state = local()
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +508,7 @@ class Worker(Server):
         # Log and compute in separate thread
         result = yield self.executor_submit(key, apply_function, function,
                                             args2, kwargs2,
-                                            self.execution_state)
+                                            self.execution_state, key)
 
         result['key'] = key
         result.update(diagnostics)
@@ -560,7 +560,8 @@ class Worker(Server):
 
         # Log and compute in separate thread
         result = yield self.executor_submit(key, apply_function, function,
-                                            args, kwargs, self.execution_state)
+                                            args, kwargs, self.execution_state,
+                                            key)
 
         result['key'] = key
         result.update(msg['diagnostics'])
@@ -799,14 +800,15 @@ def dumps_task(task):
     return {'task': dumps(task)}
 
 
-def apply_function(function, args, kwargs, execution_state):
+def apply_function(function, args, kwargs, execution_state, key):
     """ Run a function, collect information
 
     Returns
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
-    local_state.execution_state = execution_state
+    thread_state.execution_state = execution_state
+    thread_state.key = key
     start = time()
     try:
         result = function(*args, **kwargs)

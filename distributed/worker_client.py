@@ -13,7 +13,7 @@ from .client import Client, Future, pack_data, unpack_remotedata
 from .sizeof import sizeof
 from .threadpoolexecutor import secede
 from .utils import log_errors, sync, tokey, ignoring
-from .worker import local_state
+from .worker import thread_state
 
 
 @contextmanager
@@ -39,7 +39,7 @@ def local_client():
 
     >>> future = e.submit(func, 1)  # submit func(1) on cluster
     """
-    address = local_state.execution_state['scheduler']
+    address = thread_state.execution_state['scheduler']
     secede()  # have this thread secede from the thread pool
               # so that it doesn't take up a fixed resource while waiting
     with WorkerClient(address) as e:
@@ -53,7 +53,7 @@ def local_client():
 
 
 def get_worker():
-    return local_state.execution_state['worker']
+    return thread_state.execution_state['worker']
 
 
 class WorkerClient(Client):
