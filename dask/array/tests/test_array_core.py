@@ -21,10 +21,10 @@ from dask.utils import raises, ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
-from dask.array.core import (getem, getarray, top, dotmany, concatenate3,
-                             broadcast_dimensions, Array, stack, concatenate,
-                             from_array, take, elemwise, isnull, notnull,
-                             broadcast_shapes, partial_by_order, exp,
+from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
+                             concatenate3, broadcast_dimensions, Array, stack,
+                             concatenate, from_array, take, elemwise, isnull,
+                             notnull, broadcast_shapes, partial_by_order, exp,
                              tensordot, choose, where, coarsen, insert,
                              broadcast_to, reshape, fromfunction,
                              blockdims_from_blockshape, store, optimize,
@@ -51,11 +51,12 @@ def same_keys(a, b):
 
 
 def test_getem():
-    assert getem('X', (2, 3), shape=(4, 6)) == \
-    {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
+    for fancy, getter in [(True, getarray), (False, getarray_nofancy)]:
+        sol = {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
+               ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
+               ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
+               ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+        assert getem('X', (2, 3), shape=(4, 6), fancy=fancy) == sol
 
 
 def test_top():
