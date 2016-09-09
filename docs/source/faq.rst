@@ -1,6 +1,18 @@
 Frequently Asked Questions
 ==========================
 
+How do I use external modules?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``client.upload_file``. For more detail, see the `API docs`_ and a 
+StackOverflow question
+`"Can I use functions imported from .py files in Dask/Distributed?"`__
+This function supports both standalone file and setuptools's ``.egg`` files
+for larger modules.
+
+__ http://stackoverflow.com/questions/39295200/can-i-use-functions-imported-from-py-files-in-dask-distributed
+.. _API docs: http://distributed.readthedocs.io/en/latest/api.html#distributed.executor.Executor.upload_file
+
 Too many open file descriptors?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
