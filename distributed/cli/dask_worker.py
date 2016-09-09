@@ -7,6 +7,8 @@ import os
 import shutil
 import socket
 from sys import argv, exit
+import sys
+from time import time, sleep
 
 import click
 from distributed import Nanny, Worker, sync, rpc
@@ -28,7 +30,7 @@ def handle_signal(sig, frame):
     for nanny in global_nannies:
         try:
             shutil.rmtree(nanny.worker_dir)
-        except (OSError, IOError):
+        except (OSError, IOError, TypeError):
             pass
     if loop._running:
         loop.add_callback(loop.stop)
@@ -44,8 +46,6 @@ def handle_signal(sig, frame):
               help="Serving http port, defaults to randomly assigned")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to randomly assigned")
-@click.option('--port', type=int, default=0,
-              help="Deprecated, see --nanny-port")
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the scheduler network.")
@@ -60,12 +60,14 @@ def handle_signal(sig, frame):
 @click.option('--no-nanny', is_flag=True)
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
+@click.option('--temp-filename', default=None, help="Internal use only")
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        no_nanny, name, port, memory_limit, pid_file):
-    if port:
-        logger.info("--port is deprecated, use --nanny-port instead")
-        assert not nanny_port
-        nanny_port = port
+        no_nanny, name, memory_limit, pid_file, temp_filename):
+    if no_nanny:
+        port = worker_port
+    else:
+        port = nanny_port
+
     try:
         scheduler_host, scheduler_port = scheduler.split(':')
         scheduler_ip = socket.gethostbyname(scheduler_host)
@@ -111,6 +113,8 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     if no_nanny:
         kwargs = {}
+        if nanny_port:
+            kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
     else:
         kwargs = {'worker_port': worker_port}
@@ -128,9 +132,21 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                for i in range(nprocs)]
 
     for nanny in nannies:
-        nanny.start(nanny_port)
+        nanny.start(port)
         if t is Nanny:
             global_nannies.append(nanny)
+
+    if temp_filename:
+        @gen.coroutine
+        def f():
+            while nannies[0].status != 'running':
+                yield gen.sleep(0.01)
+            import json
+            msg = {'port': nannies[0].port,
+                   'local_directory': nannies[0].local_dir}
+            with open(temp_filename, 'w') as f:
+                json.dump(msg, f)
+        loop.add_callback(f)
 
     loop.start()
     logger.info("End worker")
@@ -142,17 +158,22 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
     def f():
         scheduler = rpc(ip=nannies[0].scheduler.ip,
                         port=nannies[0].scheduler.port)
-        yield gen.with_timeout(timedelta(seconds=2),
-                All([scheduler.unregister(address=n.worker_address, close=True)
-                    for n in nannies if n.process]), io_loop=loop2)
+        if not no_nanny:
+            yield gen.with_timeout(timedelta(seconds=2),
+                    All([scheduler.unregister(address=n.worker_address, close=True)
+                        for n in nannies if n.process and n.worker_port]), io_loop=loop2)
 
     loop2.run_sync(f)
 
-    for n in nannies:
-        n.process.terminate()
+    if not no_nanny:
+        for n in nannies:
+            n.process.terminate()
 
-    for n in nannies:
-        n.process.join(timeout=1)
+    if not no_nanny:
+        start = time()
+        while (any(n.process.poll() is None for n in nannies)
+                and time() < start + 1):
+            sleep(0.1)
 
     for nanny in nannies:
         nanny.stop()

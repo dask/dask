@@ -1221,8 +1221,9 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def restart(self):
+    def restart(self, environment=None):
         """ Restart all workers.  Reset local state. """
+        n = len(self.ncores)
         with log_errors():
             logger.debug("Send shutdown signal to workers")
 
@@ -1250,7 +1251,8 @@ class Scheduler(Server):
             logger.debug("Workers all removed.  Sending startup signal")
 
             # All quiet
-            resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
+            resps = yield All([nanny.instantiate(close=True,
+                environment=environment) for nanny in nannies])
             assert all(resp == 'OK' for resp in resps)
 
             self.start()
@@ -1265,7 +1267,8 @@ class Scheduler(Server):
                     logger.exception(e)
 
     @gen.coroutine
-    def broadcast(self, stream=None, msg=None, workers=None, hosts=None):
+    def broadcast(self, stream=None, msg=None, workers=None, hosts=None,
+            nanny=False):
         """ Broadcast message to workers, return all results """
         if workers is None:
             if hosts is None:
@@ -1277,9 +1280,19 @@ class Scheduler(Server):
                 if host in self.host_info:
                     workers.extend([host + ':' + port
                             for port in self.host_info[host]['ports']])
+        # TODO replace with worker_list
+
+        if nanny:
+            addresses = []
+            for addr in workers:
+                ip = addr.split(':')[0]
+                port = self.worker_info[addr]['services']['nanny']
+                addresses.append('%s:%d' % (ip, port))
+        else:
+            addresses = workers
 
         results = yield All([send_recv(arg=address, close=True, **msg)
-                             for address in workers])
+                             for address in addresses])
 
         raise Return(dict(zip(workers, results)))
 

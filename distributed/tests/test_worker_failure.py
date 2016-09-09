@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import CancelledError
 from operator import add
+import os
 from time import time, sleep
 
 from dask import delayed
@@ -9,8 +10,9 @@ import pytest
 from toolz import partition_all
 from tornado import gen
 
+from distributed.compatibility import PY3
 from distributed.client import _wait
-from distributed.utils import sync
+from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
 from distributed import Client, Nanny, wait
@@ -60,9 +62,10 @@ def test_failed_worker_without_warning(c, s, a, b):
     L = c.map(inc, range(10))
     yield _wait(L)
 
+    original_process = a.process
     a.process.terminate()
     start = time()
-    while not a.process.is_alive():
+    while a.process is original_process and a.process.poll() is not None:
         yield gen.sleep(0.01)
         assert time() - start < 10
 
@@ -163,14 +166,30 @@ def test_restart_sync(loop):
             assert y.result() == 1 / 3
 
 
-def test_restart_fast(loop):
+@gen_cluster(Worker=Nanny, client=True, timeout=20)
+def test_restart_fast(c, s, a, b):
+    L = c.map(sleep, range(10))
+
+    start = time()
+    yield c._restart()
+    assert time() - start < 10
+    assert len(s.ncores) == 2
+
+    assert all(x.status == 'cancelled' for x in L)
+
+    x = c.submit(inc, 1)
+    result = yield x._result()
+    assert result == 2
+
+
+def test_restart_fast_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
             L = c.map(sleep, range(10))
 
             start = time()
             c.restart()
-            assert time() - start < 5
+            assert time() - start < 10
             assert len(c.ncores()) == 2
 
             assert all(x.status == 'cancelled' for x in L)
@@ -179,13 +198,13 @@ def test_restart_fast(loop):
             assert x.result() == 2
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=20)
 def test_fast_kill(c, s, a, b):
     L = c.map(sleep, range(10))
 
     start = time()
     yield c._restart()
-    assert time() - start < 5
+    assert time() - start < 10
 
     assert all(x.status == 'cancelled' for x in L)
 
@@ -244,9 +263,11 @@ def test_broken_worker_during_computation(c, s, a, b):
 
     from random import random
     yield gen.sleep(random() / 2)
-    n.process.terminate()
+    with ignoring(OSError):
+        n.process.terminate()
     yield gen.sleep(random() / 2)
-    n.process.terminate()
+    with ignoring(OSError):
+        n.process.terminate()
 
     result = yield c._gather(L)
     assert isinstance(result[0], int)
@@ -269,3 +290,28 @@ def test_restart_during_computation(c, s, a, b):
 
     assert len(s.ncores) == 2
     assert not s.task_state
+
+
+@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
+                    reason='Depends on large local file')
+@gen_cluster(client=True, Worker=Nanny, timeout=120)
+def test_upload_environment(c, s, a, b):
+    responses = yield c._upload_environment('myenv.zip')
+    assert os.path.exists(os.path.join(a.local_dir, 'myenv'))
+    assert os.path.exists(os.path.join(b.local_dir, 'myenv'))
+
+
+@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
+                    reason='Depends on large local file')
+@gen_cluster(client=True, Worker=Nanny, timeout=120)
+def test_restart_environment(c, s, a, b):
+    yield c._restart(environment='myenv.zip')
+
+    def get_executable():
+        import sys
+        return sys.executable
+
+    results = yield c._run(get_executable)
+    assert results == {n.worker_address:
+                        os.path.join(n.local_dir, 'myenv', 'bin', 'python')
+                        for n in [a, b]}

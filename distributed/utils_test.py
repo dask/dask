@@ -279,7 +279,7 @@ try:
     slow = pytest.mark.skipif(
                 not pytest.config.getoption("--runslow"),
                 reason="need --runslow option to run")
-except AttributeError:
+except (AttributeError, ValueError):
     def slow(*args):
         pass
 
