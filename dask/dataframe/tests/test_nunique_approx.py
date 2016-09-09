@@ -21,6 +21,9 @@ rs = np.random.RandomState(96)
     pd.DataFrame({
         'x': rs.randint(0, 1000000, (10000,))}),
     pd.DataFrame({
+        'x': rs.randint(0, 1000000, (7,)),
+        'y': ['a', 'bet', 'is', 'a', 'tax', 'on', 'bs']}),
+    pd.DataFrame({
         'w': np.zeros((20000,)),
         'x': np.zeros((20000,)),
         'y': np.zeros((20000,)) + 4803592,

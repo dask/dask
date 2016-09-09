@@ -1615,10 +1615,14 @@ class _Frame(Base):
         ----------
         b : integer, default 16
             The number of bits of the hash to use for approximating
-            the number of unique elements. Large numbers require more
-            resources to compute. b should be between 8 and 16 (inclusive)
-            for the current implementation. The error in the cardinality
-            is approximated by 1.04 / sqrt(2**b)
+            the number of unique elements. Large values of b require more
+            time and memory to compute. b should be between 8 and 16 (inclusive)
+            for the current implementation. The relative error in the
+            number of elements is approximated by 1.04 / sqrt(2**b)
+
+        Returns
+        -------
+        a float representing the approximate number of elements
         """
 
         from . import _hyperloglog # here to avoid circular import issues

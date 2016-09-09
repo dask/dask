@@ -24,37 +24,6 @@ def compute_first_bit(a):
     bits = bits.cumsum(axis=1).astype(np.bool)
     return 33 - bits.sum(axis=1)
 
-def mueller_hash_32_32(a):
-    "Hash a 32-bit uint to a 32-bit uint"
-    # http://stackoverflow.com/a/12996028 is a totally reasonable source
-
-    a ^= a >> 16
-    a *= 0x45d9f3b
-    a ^= a >> 16
-    a *= 0x45d9f3b
-    a ^= a >> 16
-    return a
-
-def mueller_hash_64_64(a):
-    a ^= a >> 30
-    a *= np.uint64(0xbf58476d1ce4e5b9)
-    a ^= a >> 27
-    a *= np.uint64(0x94d049bb133111eb)
-    a ^= a >> 31
-    return a
-
-def redistribute_hash_values(a):
-    "Take an integral array and redistribute the hash values in uint32 space."
-
-    # Suppose we got something less than 32 bits -- upcast it
-    if a.dtype.itemsize < 4:
-        a.astype(np.uint32)
-
-    if a.dtype.itemsize == 4:
-        return mueller_hash_32_32(a)
-    elif a.dtype.itemsize == 8:
-        return mueller_hash_64_64(a).astype(np.uint32)
-
 def compute_hll_array(obj, b):
     # b is the number of bits
 
@@ -63,13 +32,8 @@ def compute_hll_array(obj, b):
     num_bits_discarded = 32 - b
     m = 1 << b
 
-    # Get an array of the hashes--note, this might be a bad hash so far, such
-    # as the fact ints' hashes are themselves. This array is probably 64-bit
-    # ints but might be one of several other things.
-    hashes = hash_pandas_object(obj)
-
-    # Get well-distributed hash values
-    hashes = redistribute_hash_values(hashes)
+    # Get an array of the hashes
+    hashes = hash_pandas_object(obj).astype(np.uint32)
 
     # Of the first b bits, which is the first nonzero?
     j = hashes >> num_bits_discarded
