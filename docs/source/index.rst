@@ -167,30 +167,6 @@ then you should start here.
    dataframe.rst
    delayed.rst
 
-**Graphs**
-
-Dask graphs encode algorithms in a simple format involving Python dicts,
-tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  Working directly with dask graphs is an excellent way to
-implement and test new algorithms in fields such as linear algebra,
-optimization, and machine learning.  If you are a *developer*, you should start
-here.
-
-* :doc:`graphs`
-* :doc:`spec`
-* :doc:`custom-graphs`
-* :doc:`optimize`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Graphs
-
-   graphs.rst
-   spec.rst
-   custom-graphs.rst
-   optimize.rst
-
 **Scheduling**
 
 Schedulers execute task graphs.  Dask currently has two main schedulers, one
@@ -228,6 +204,29 @@ help make debugging and profiling graph execution easier.
 
    inspect.rst
    diagnostics.rst
+
+**Graphs**
+
+Internally Dask encodes algorithms in a simple format involving Python dicts,
+tuples, and functions.  This graph format can be used in isolation from the
+dask collections.  Working directly with dask graphs is rare unless you intend
+to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
+often a better choice.  If you are a *core developer*, then you should start here.
+
+* :doc:`graphs`
+* :doc:`spec`
+* :doc:`custom-graphs`
+* :doc:`optimize`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Graphs
+
+   graphs.rst
+   spec.rst
+   custom-graphs.rst
+   optimize.rst
 
 **Help & reference**
 

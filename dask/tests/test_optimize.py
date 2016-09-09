@@ -386,3 +386,14 @@ def test_fuse_selections():
     dsk2 = fuse_selections(dsk, getitem, load, merge)
     dsk2, dependencies = cull(dsk2, 'y')
     assert dsk2 == {'y': (load, 'store', 'part', 'a')}
+
+
+def test_inline_cull_dependencies():
+    d = {'a': 1,
+         'b': 'a',
+         'c': 'b',
+         'd': ['a', 'b', 'c'],
+         'e': (add, (len, 'd'), 'a')}
+
+    d2, dependencies = cull(d, ['d', 'e'])
+    inline(d2, {'b'}, dependencies=dependencies)

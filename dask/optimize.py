@@ -176,6 +176,9 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
+    if dependencies and isinstance(next(iter(dependencies.values())), list):
+        dependencies = {k: set(v) for k, v in dependencies.items()}
+
     keys = _flat_set(keys)
 
     if dependencies is None:
