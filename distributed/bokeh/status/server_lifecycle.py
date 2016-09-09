@@ -123,8 +123,7 @@ def on_server_loaded(server_context):
                          'times': deque(maxlen=100)}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
 
-    messages['progress'] = {'all': {}, 'memory': {},
-                            'erred': {}, 'released': {}}
+    messages['progress'] = {}
 
     messages['processing'] = {'stacks': {}, 'processing': {},
                               'memory': 0, 'waiting': 0, 'ready': 0}

@@ -52,6 +52,8 @@ progress_source, progress_plot = progress_plot(sizing_mode=SIZING_MODE,
 def progress_update():
     with log_errors():
         msg = messages['progress']
+        if not msg:
+            return
         d = progress_quads(msg)
         progress_source.data.update(d)
         progress_plot.title.text = ("Progress -- total: %(total)s, "
