@@ -1,9 +1,20 @@
-1.12.3
+1.13.0
 ------
 
-*  Add `--memory-limit` option to `dask-worker`, enabling spill-to-disk
-   behavior when running out of memory
-*  Add `--pid-file` option to dask-worker and `--dask-scheduler` #496
+*   Rename Executor to Client #492
+*   Add `--memory-limit` option to `dask-worker`, enabling spill-to-disk
+    behavior when running out of memory #485
+*   Add `--pid-file` option to dask-worker and `--dask-scheduler` #496
+*   Add ``upload_environment`` function to distribute conda environments.
+    This is experimental, undocumented, and may change without notice.  # 494
+*   Add `workers=` keyword argument to `Client.compute` and `Client.persist`,
+    supporting location-restricted workloads with Dask collections #484
+*   Add ``upload_environment`` function to distribute conda environments.
+    This is experimental, undocumented, and may change without notice.  # 494
+    *   Add optional `dask_worker=` keyword to `client.run` functions that gets
+        provided the worker or nanny object
+    *   Add `nanny=False` keyword to `Client.run`, allowing for the execution
+        of arbitrary functions on the nannies as well as normal workers
 
 
 1.12.2
