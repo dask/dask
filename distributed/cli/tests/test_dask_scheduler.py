@@ -58,10 +58,14 @@ def test_bokeh(loop):
             if b'Bokeh UI' in line:
                 break
 
+        names = ['localhost', '127.0.0.1', get_ip()]
+        if 'linux' in sys.platform:
+            names.append(socket.gethostname())
+
         start = time()
         while True:
             try:
-                for name in [socket.gethostname(), 'localhost', '127.0.0.1', get_ip()]:
+                for name in names:
                     response = requests.get('http://%s:8787/status/' % name)
                     assert response.ok
                 break
