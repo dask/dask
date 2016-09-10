@@ -679,7 +679,7 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     urlpath: str or unicode
         Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
     storage_options: dict (optional)
-        Its contents will get merged with the infered information from the
+        Its contents will get merged with the inferred information from the
         given path
 
     Returns

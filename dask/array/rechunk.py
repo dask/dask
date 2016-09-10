@@ -18,7 +18,7 @@ from .core import concatenate3, Array, normalize_chunks
 
 
 def cumdims_label(chunks, const):
-    """ Interal utility for cumulative sum with label.
+    """ Internal utility for cumulative sum with label.
 
     >>> cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')  # doctest: +NORMALIZE_WHITESPACE
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),

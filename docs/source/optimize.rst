@@ -64,7 +64,7 @@ Suppose you had a custom dask graph for doing a word counting task:
    :width: 65 %
    :alt: The original dask graph
 
-Here we're counting the occurence of the words ``'orange``, ``'apple'``, and
+Here we're counting the occurrence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
 results, printing the output, then returning the output string.
 
@@ -170,7 +170,7 @@ Putting it all together:
 
 In summary, the above operations accomplish the following:
 
-1. Removed tasks unncessary for the desired output using ``cull``.
+1. Removed tasks unnecessary for the desired output using ``cull``.
 2. Inlined constants using ``inline``.
 3. Inlined cheap computations using ``inline_functions``, improving parallelism.
 4. Fused linear tasks together to ensure they run on the same worker using ``fuse``.

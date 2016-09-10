@@ -187,7 +187,7 @@ Distributed
 - Adaptively oversubscribe workers for very fast tasks
 - Improve PyPy support
 - Improve work stealing for unbalanced workers
-- Scatter data efficienctly with tree-scatters
+- Scatter data efficiently with tree-scatters
 
 Other
 +++++

@@ -283,8 +283,8 @@ class RuleSet(object):
     def iter_matches(self, term):
         """A generator that lazily finds matchings for term from the RuleSet.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         term : task
 
         Yields

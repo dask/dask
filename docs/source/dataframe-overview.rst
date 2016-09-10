@@ -34,7 +34,7 @@ Dask.dataframe is particularly useful in the following situations:
    (HDFS), S3, or other parallel file systems.
 *  Parallel groupby, join, or time series computations
 
-However in the following siutations Dask.dataframe may not be the best choice:
+However in the following situations Dask.dataframe may not be the best choice:
 
 *  If your dataset fits comfortably into RAM on your laptop then you may be
    better off just using Pandas_.  There may be simpler ways to improve

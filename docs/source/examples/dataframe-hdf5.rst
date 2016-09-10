@@ -61,7 +61,7 @@ The first order of ``dask.dataframe`` business is creating a dask DataFrame usin
 Load multiple datasets from single HDF5 file
 ------------------------------------------------- 
 
-Loading multiple datasets from a single file requires a small tweak and use of the wildcard charater:
+Loading multiple datasets from a single file requires a small tweak and use of the wildcard character:
 
 .. code-block:: python
 

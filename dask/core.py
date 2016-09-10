@@ -81,7 +81,7 @@ def _get_nonrecursive(d, x, maxdepth=1000):
     # Non-recursive. DAG property is checked upon reaching maxdepth.
     _list = lambda *args: list(args)
 
-    # We construct a nested heirarchy of tuples to mimic the execution stack
+    # We construct a nested hierarchy of tuples to mimic the execution stack
     # of frames that Python would maintain for a recursive implementation.
     # A frame is associated with a single task from a Dask.
     # A frame tuple has three elements:
