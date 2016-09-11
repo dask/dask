@@ -23,14 +23,5 @@ http://www.cyberciti.biz/faq/linux-increase-the-maximum-number-of-open-files/
 Error when running dask-worker about ``OMP_NUM_THREADS``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When relying on NumPy/BLAS, sometimes dask-workers can throw an error about
-``OMP_NUM_THREADS`` and fail. To fix this, try either
-
-1. Defining the variable ``OMP_NUM_THREADS=1`` before launching a dask-worker.
-   This may mean running ``export OMP_NUM_THREADS=1``.
-2. Launching ``dask-worker`` with the option ``--nthreads 1``.
-
-For more detail see the StackOverflow question 
-`"Error with OMP_NUM_THREADS when using dask distributed"`__.
-
-__ http://stackoverflow.com/questions/39422092/error-with-omp-num-threads-when-using-dask-distributed
+For more problems with OMP_NUM_THREADS, see
+http://stackoverflow.com/questions/39422092/error-with-omp-num-threads-when-using-dask-distributed
