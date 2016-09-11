@@ -1,6 +1,8 @@
 Frequently Asked Questions
 ==========================
 
+More questions can be found on StackOverflow at http://stackoverflow.com/search?tab=votes&q=dask%20distributed
+
 How do I use external modules?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
