@@ -132,7 +132,7 @@ class WorkerClient(Client):
         """
 
         Exactly like Client._gather, but get data directly from the local
-        workrer data dictionary directly rather than through the scheduler.
+        worker data dictionary directly rather than through the scheduler.
 
         TODO: avoid scheduler for other communications, and assume that we can
         communicate directly with the other workers.

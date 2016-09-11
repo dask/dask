@@ -115,12 +115,12 @@ class Scheduler(Server):
         Set of keys that are known, but released from memory
     * **unrunnable:** ``{key}``
         Keys that we are unable to run
-    * **retrictions:** ``{key: {hostnames}}``:
+    * **restrictions:** ``{key: {hostnames}}``:
         A set of hostnames per key of where that key can be run.  Usually this
         is empty unless a key has been specifically restricted to only run on
         certain hosts.  These restrictions don't include a worker port.  Any
         worker on that hostname is deemed valid.
-    * **loose_retrictions:** ``{key}``:
+    * **loose_restrictions:** ``{key}``:
         Set of keys for which we are allow to violate restrictions (see above)
         if not valid workers are present.
     *  **exceptions:** ``{key: Exception}``:
@@ -155,7 +155,7 @@ class Scheduler(Server):
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like HTTP
     *  **loop:** ``IOLoop``:
-        The running Torando IOLoop
+        The running Tornado IOLoop
     * **streams:** ``[IOStreams]``:
         A list of Tornado IOStreams from which we both accept stimuli and
         report results
@@ -1140,7 +1140,7 @@ class Scheduler(Server):
 
         This watches the ``.deleted_keys`` attribute, which stores a set of
         keys to be deleted from each worker.  This function is run periodically
-        by the ``._delete_periodic_callback`` to actually remove tha data.
+        by the ``._delete_periodic_callback`` to actually remove the data.
 
         This runs every ``self.delete_interval`` milliseconds.
         """
@@ -2818,7 +2818,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
     @memoize
     def check_key(key):
-        """ Validate a single key, recurse downards """
+        """ Validate a single key, recurse downwards """
         vals = ([key in waiting,
                  key in ready,
                  key in in_stacks,

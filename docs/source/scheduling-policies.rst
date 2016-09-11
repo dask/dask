@@ -2,7 +2,7 @@ Scheduling Policies
 ===================
 
 This document describes the policies used to select the preference of tasks and
-to select the preferenece of workers used by Dask's distributed scheduler.  For
+to select the preference of workers used by Dask's distributed scheduler.  For
 more information on how this these policies are enacted efficiently see
 :doc:`Scheduling State<scheduling-state>`.
 

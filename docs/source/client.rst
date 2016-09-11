@@ -208,7 +208,7 @@ the Future object.
    >>> x.key
    'add-ebf39f96ad7174656f97097d658f3fa2'
 
-This key should be the same accross all computations with the same inputs and
+This key should be the same across all computations with the same inputs and
 across all machines.  If you run the computation above on any computer with the
 same environment then you should get the exact same key.
 

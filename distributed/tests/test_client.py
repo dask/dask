@@ -3384,10 +3384,10 @@ def test_scatter_compute_lose(c, s, a, b):
 @gen_cluster(client=True)
 def test_scatter_compute_store_lose(c, s, a, b):
     """
-    Create irreplacable data on one machine,
+    Create irreplaceable data on one machine,
     cause a dependent computation to occur on another and complete
 
-    Kill the machine with the irreplacable data.  What happens to the complete
+    Kill the machine with the irreplaceable data.  What happens to the complete
     result?  How about after it GCs and tries to come back?
     """
     [x] = yield c._scatter([1], workers=a.address)
@@ -3433,10 +3433,10 @@ def test_scatter_compute_store_lose(c, s, a, b):
 @gen_cluster(client=True)
 def test_scatter_compute_store_lose_processing(c, s, a, b):
     """
-    Create irreplacable data on one machine,
+    Create irreplaceable data on one machine,
     cause a dependent computation to occur on another and complete
 
-    Kill the machine with the irreplacable data.  What happens to the complete
+    Kill the machine with the irreplaceable data.  What happens to the complete
     result?  How about after it GCs and tries to come back?
     """
     [x] = yield c._scatter([1], workers=a.address)

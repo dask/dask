@@ -621,7 +621,7 @@ def error_message(e, status='error'):
     This does the following:
 
     1.  Gets the traceback
-    2.  Trunctes the exception and the traceback
+    2.  Truncates the exception and the traceback
     3.  Serializes the exception and traceback or
     4.  If they can't be serialized send string versions
     5.  Format a message and return

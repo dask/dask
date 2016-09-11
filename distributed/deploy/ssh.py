@@ -108,7 +108,7 @@ def async_ssh(cmd_dict):
         # Read stdout stream, time out if necessary.
         try:
             line = stdout.readline()
-            while len(line) > 0:    # Loops until a timout exception occurs
+            while len(line) > 0:    # Loops until a timeout exception occurs
                 cmd_dict['output_queue'].put('[ {label} ] : {output}'.format(label = cmd_dict['label'],
                                                                              output = line.rstrip()))
                 line = stdout.readline()
@@ -236,7 +236,7 @@ class SSHCluster(object):
         import datetime
         if logdir is not None:
             logdir = os.path.join(logdir, "dask-ssh_" + datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
-            print(bcolors.WARNING + 'Output will be redirected to logfiles stored locally on individual woker nodes under "{logdir}".'.format(logdir=logdir) + bcolors.ENDC)
+            print(bcolors.WARNING + 'Output will be redirected to logfiles stored locally on individual worker nodes under "{logdir}".'.format(logdir=logdir) + bcolors.ENDC)
         self.logdir = logdir
 
         # Keep track of all running threads

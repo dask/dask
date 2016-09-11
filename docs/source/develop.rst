@@ -3,7 +3,7 @@ Development Guidelines
 
 This repository is part of the Dask_ projects.  General development guidelines
 including where to ask for help, a layout of repositories, testing practices,
-and documentation and style standards are avaialble at the `Dask developer
+and documentation and style standards are available at the `Dask developer
 guidelines`_ in the main documentation.
 
 .. _Dask: http://dask.pydata.org/en/latest/
@@ -38,7 +38,7 @@ asynchronous coroutines, similar to asyncio.  You can make modest changes to
 the policies within this library without understanding much about Tornado,
 however moderate changes will probably require you to understand Tornado
 IOLoops, coroutines, and a little about non-blocking communication..  The
-Tornado API docuemntation is quite good and we recommend that you read the
+Tornado API documentation is quite good and we recommend that you read the
 following resources:
 
 *  http://www.tornadoweb.org/en/stable/gen.html

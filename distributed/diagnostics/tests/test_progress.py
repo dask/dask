@@ -27,7 +27,7 @@ def test_dependent_keys():
     stacks = {'bob': [d]}
     exceptions = {}
     dsk = {a: 1, b: 2, c: (add, a, b), d: (inc, a), e: (add, c, d), f: (inc, e)}
-    dependencies, dependeents = get_deps(dsk)
+    dependencies, dependents = get_deps(dsk)
 
     assert dependent_keys(f, who_has, processing, stacks, dependencies,
             exceptions, complete=False)[0] == {f, e, c, d}

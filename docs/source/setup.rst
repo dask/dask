@@ -33,7 +33,7 @@ node that hosts ``dask-scheduler``::
    Registered with center at:  192.168.0.1:8786
 
 There are various mechanisms to deploy these executables on a cluster, ranging
-from manualy SSH-ing into all of the nodes to more automated systems like
+from manually SSH-ing into all of the nodes to more automated systems like
 SGE/SLURM/Torque or Yarn/Mesos.
 
 

@@ -17,7 +17,7 @@ A typical conversation between a scheduler and two workers Alice and Bob may
 look like the following::
 
    Scheduler -> Alice:  Compute ``x <- add(1, 2)``!
-   Alice -> Scheudler:  I've computed x and am holding on to it!
+   Alice -> Scheduler:  I've computed x and am holding on to it!
 
    Scheduler -> Bob:    Compute ``y <- add(x, 10)``!
                         You will need x.  Alice has x.

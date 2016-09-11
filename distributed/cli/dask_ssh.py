@@ -17,7 +17,7 @@ from distributed.cli.utils import check_python_3
 @click.option('--scheduler-port', default=8786, type=int,
               help="Specify scheduler port number.  Defaults to port 8786.")
 @click.option('--nthreads', default=0, type=int,
-              help="Number of threads per worker process. Defaults to number of cores divided by the number of proceses per host.")
+              help="Number of threads per worker process. Defaults to number of cores divided by the number of processes per host.")
 @click.option('--nprocs', default=1, type=int,
               help="Number of worker processes per host.  Defaults to one.")
 @click.argument('hostnames', nargs=-1, type=str)

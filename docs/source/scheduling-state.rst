@@ -157,14 +157,14 @@ Each of the following is a dictionary keyed by task name (described below):
     that is not met by any available worker.  These keys are waiting for an
     appropriate worker to join the network before computing.
 
-* **retrictions:** ``{key: {hostnames}}``:
+* **restrictions:** ``{key: {hostnames}}``:
 
     A set of hostnames per key of where that key can be run.  Usually this
     is empty unless a key has been specifically restricted to only run on
     certain hosts.  These restrictions don't include a worker port.  Any
     worker on that hostname is deemed valid.
 
-* **loose_retrictions:** ``{key}``:
+* **loose_restrictions:** ``{key}``:
 
     Set of keys for which we are allowed to violate restrictions (see above) if
     not valid workers are present and the task would otherwise go into the
@@ -217,8 +217,8 @@ Each of the following is a dictionary keyed by task name (described below):
     information see :doc:`Work Stealing <work-stealing>`
 
 
-Example Event and Reponse
--------------------------
+Example Event and Response
+--------------------------
 
 Whenever an event happens, like when a client sends up more tasks, or when a
 worker finishes a task, the scheduler changes the state above.  For example

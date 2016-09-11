@@ -12,7 +12,7 @@ class SchedulerPlugin(object):
     ``task_finished``, ``update_graph``, ``task_erred``, etc..
 
     A plugin enables custom code to run at each of those same events.  The
-    scheduler will run the analagous methods on this class when each event is
+    scheduler will run the analogous methods on this class when each event is
     triggered.  This runs user code within the scheduler thread that can
     perform arbitrary operations in synchrony with the scheduler itself.
 

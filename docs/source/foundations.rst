@@ -12,7 +12,7 @@ Distributed computing is hard for two reasons:
 
 The foundations of ``dask.distributed`` provide abstractions to hide some
 complexity of concurrent network programming (#2).  These abstractions ease the
-construction of sophisticated parallel systems (#1) in a safer envirotnment.
+construction of sophisticated parallel systems (#1) in a safer environment.
 However, as with all layered abstractions, ours has flaws.  Critical feedback
 is welcome.
 

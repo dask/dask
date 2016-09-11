@@ -28,7 +28,7 @@ Import ``distributed``, ``hdfs3``, and other standard libraries used in this exa
    >>> from collections import defaultdict, Counter
    >>> from distributed import Client, progress
 
-Initalize a connection to HDFS, replacing ``NAMENODE_HOSTNAME`` and
+Initialize a connection to HDFS, replacing ``NAMENODE_HOSTNAME`` and
 ``NAMENODE_PORT`` with the hostname and port (default: 8020) of the HDFS
 namenode.
 
@@ -36,7 +36,7 @@ namenode.
 
    >>> hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
 
-Initalize a connection to the ``distributed`` client, replacing
+Initialize a connection to the ``distributed`` client, replacing
 ``SCHEDULER_IP`` and ``SCHEDULER_PORT`` with the IP address and port of the
 ``distributed`` scheduler.
 

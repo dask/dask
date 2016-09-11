@@ -38,7 +38,7 @@ def resource_profile_plot(sizing_mode='fixed', **kwargs):
 
     plot_props = dict(
         tools='xpan,xwheel_zoom,box_zoom,reset',
-        toolbar_location=None,  # Becaues we're making a joing toolbar
+        toolbar_location=None,  # Because we're making a joint toolbar
         sizing_mode=sizing_mode,
         x_axis_type='datetime',
         x_range=DataRange1d(follow='end', follow_interval=30000, range_padding=0)
