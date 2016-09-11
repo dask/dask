@@ -52,7 +52,7 @@ def tsqr(data, name=None, compute_svd=False):
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.chunks[1]) == 1):         # Only one column block
         raise ValueError(
-            "Input must have the following properites:\n"
+            "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks")
 

@@ -2187,7 +2187,7 @@ def broadcast_shapes(*shapes):
     Raises
     ------
     ValueError
-        If the input shapes cannot be succesfully broadcast together.
+        If the input shapes cannot be successfully broadcast together.
     """
     if len(shapes) == 1:
         return shapes[0]

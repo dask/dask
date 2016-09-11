@@ -18,7 +18,7 @@ Briefly, the current options are as follows:
     scheduler for ``dask.bag`` and sometimes useful with ``dask.dataframe``.
 *   ``dask.async.get_sync``: Uses the single main thread.  Good for profiling
     and debugging because all code is run sequentially
-*   ``distributed.Exectuor.get``:  Uses multiple machines connected over
+*   ``distributed.Executor.get``:  Uses multiple machines connected over
     sockets.  Good for larger work but also a viable alternative to
     ``dask.multiprocessing`` on a single machine.  Also sometimes used for its
     improved diagnostic tools.

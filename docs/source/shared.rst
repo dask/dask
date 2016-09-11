@@ -26,7 +26,7 @@ scalable to very many tasks on a single machine.
 .. image:: images/async-embarrassing.gif
    :width: 50 %
    :align: right
-   :alt: Embarassingly parallel dask flow
+   :alt: Embarrassingly parallel dask flow
 
 To keep the memory footprint small, we choose to keep ready-to-run tasks in a
 LIFO stack such that the most recently made available tasks get priority.  This

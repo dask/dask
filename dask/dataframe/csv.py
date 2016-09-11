@@ -206,7 +206,7 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
 
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
-             "Please ensure that each individiaul file can fit in memory and\n"
+             "Please ensure that each individual file can fit in memory and\n"
              "use the keyword ``blocksize=None to remove this message``\n"
              "Setting ``blocksize=None``" % compression)
         blocksize = None

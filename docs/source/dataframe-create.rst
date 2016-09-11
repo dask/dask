@@ -166,7 +166,7 @@ a ``to_hdf``.  Please see the :doc:`dataframe API<dataframe-api>` for a
 complete list.  These functions typically follow the Pandas interfaces and
 should be familiar to users coming from that tradition.
 
-These functions prefer to receive a globstring with an asterix ``'*'``
+These functions prefer to receive a globstring with an asterisk ``'*'``
 
 .. code-block:: python
 

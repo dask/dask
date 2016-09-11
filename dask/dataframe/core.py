@@ -397,7 +397,7 @@ class _Frame(Base):
 
         >>> res = ddf.map_partitions(myadd, 1, b=2, meta=(None, 'f8'))
 
-        Here we map a funtion that takes in a DataFrame, and returns a
+        Here we map a function that takes in a DataFrame, and returns a
         DataFrame with a new column:
 
         >>> res = ddf.map_partitions(lambda df: df.assign(z=df.x * df.y))
@@ -2017,7 +2017,7 @@ class DataFrame(_Frame):
 
     def categorize(self, columns=None, **kwargs):
         """
-        Convert columns of the DataFrame to catefory dtype
+        Convert columns of the DataFrame to category dtype
 
         Parameters
         ----------

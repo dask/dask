@@ -20,7 +20,7 @@ Common Uses
 -----------
 
 Today Dask array is commonly used in the sort of gridded data analysis that
-arises in weather, climate modeling, or oceanograhy, especially when data
+arises in weather, climate modeling, or oceanography, especially when data
 sizes become inconveniently large.  Dask array complements large on-disk array
 stores like HDF5, NetCDF, and BColz.  Additionally Dask.array is commonly used
 to speed up expensive in-memory computations using multiple cores, such as you

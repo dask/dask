@@ -67,7 +67,7 @@ Development Environment
 Download code
 ~~~~~~~~~~~~~
 
-Clone the main dask git repostory (or whatever repository you're working on.)::
+Clone the main dask git repository (or whatever repository you're working on.)::
 
    git clone git@github.com:dask/dask.git
 
@@ -158,7 +158,7 @@ Docstrings
 ~~~~~~~~~~
 
 User facing functions should roughly follow the numpydoc_ standard, including
-sections for ``Parameteters``, ``Examples`` and general explanatory prose.
+sections for ``Parameters``, ``Examples`` and general explanatory prose.
 
 By default examples will be doc-tested.  Reproducible examples in documentation
 is valuable both for testing and, more importantly, for communication of common

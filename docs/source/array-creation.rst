@@ -284,7 +284,7 @@ slice assignment like ``h5py.Dataset``, or ``bcolz.carray``:
 You can store several arrays in one computation by passing lists of sources and
 destinations:
 
-   >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
+   >>> da.store([array1, array2], [output1, output2])  # doctest: +SKIP
 
 
 On-Disk Storage

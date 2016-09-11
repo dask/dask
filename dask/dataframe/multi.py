@@ -202,7 +202,7 @@ required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 
 def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
-    """ Join two partitiond dataframes along their index """
+    """ Join two partitioned dataframes along their index """
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
@@ -360,7 +360,7 @@ def _pdconcat(dfs, axis=0, join='outer'):
 
 def concat_and_check(dfs):
     if len(set(map(len, dfs))) != 1:
-        raise ValueError("Concattenated DataFrames of different lengths")
+        raise ValueError("Concatenated DataFrames of different lengths")
     return pd.concat(dfs, axis=1)
 
 
@@ -627,7 +627,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
           len(dasks) == len(dfs) and
           all(not df.known_divisions for df in dfs) and
           len({df.npartitions for df in dasks}) == 1):
-        warn("Concattenating dataframes with unknown divisions.\n"
+        warn("Concatenating dataframes with unknown divisions.\n"
              "We're assuming that the indexes of each dataframes are aligned\n."
              "This assumption is not generally safe.")
         return concat_unindexed_dataframes(dfs)
