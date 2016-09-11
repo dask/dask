@@ -432,7 +432,7 @@ def popen(*args, **kwargs):
     finally:
         os.kill(proc.pid, signal.SIGINT)
         if sys.version_info[0] == 3:
-            proc.wait(5)
+            proc.wait(10)
         else:
             proc.wait()
         with ignoring(OSError):

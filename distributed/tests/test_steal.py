@@ -50,7 +50,7 @@ def test_steal_cheap_data_slow_computation(c, s, a, b):
     futures = c.map(slowinc, range(10), delay=0.01, workers=a.address,
                     allow_other_workers=True)
     yield _wait(futures)
-    assert abs(len(a.data) - len(b.data)) < 3
+    assert abs(len(a.data) - len(b.data)) <= 3
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
