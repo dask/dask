@@ -12,6 +12,7 @@ from tornado import gen
 
 from distributed.compatibility import PY3
 from distributed.client import _wait
+from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
@@ -65,7 +66,7 @@ def test_failed_worker_without_warning(c, s, a, b):
     original_process = a.process
     a.process.terminate()
     start = time()
-    while a.process is original_process and a.process.poll() is not None:
+    while a.process is original_process and not isalive(a.process):
         yield gen.sleep(0.01)
         assert time() - start < 10
 

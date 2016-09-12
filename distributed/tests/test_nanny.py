@@ -15,6 +15,7 @@ from distributed import Nanny, rpc, Scheduler
 from distributed.core import connect, read, write, dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster
+from distributed.nanny import isalive
 
 
 @gen_cluster(ncores=[])
@@ -23,7 +24,7 @@ def test_nanny(s):
 
     yield n._start(0)
     nn = rpc(ip=n.ip, port=n.port)
-    assert n.process.poll() is None  # alive
+    assert isalive(n.process)  # alive
     assert s.ncores[n.worker_address] == 2
 
     assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
@@ -39,7 +40,7 @@ def test_nanny(s):
     assert not n.process
 
     yield nn.instantiate()
-    assert n.process.poll() is None
+    assert isalive(n.process)
     assert s.ncores[n.worker_address] == 2
     assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
@@ -72,7 +73,7 @@ def test_nanny_process_failure(s):
         assert time() - start < 5
 
     start = time()
-    while not n.process.poll() is None:  # wait while process comes back
+    while not isalive(n.process):  # wait while process comes back
         yield gen.sleep(0.01)
         assert time() - start < 5
 
@@ -98,7 +99,7 @@ def test_monitor_resources(s):
 
     yield n._start()
     nn = rpc(ip=n.ip, port=n.port)
-    assert n.process.poll() is None
+    assert isalive(n.process)
     d = n.resource_collect()
     assert {'cpu_percent', 'memory_percent'}.issubset(d)
 
