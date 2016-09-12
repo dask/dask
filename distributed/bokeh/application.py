@@ -1,4 +1,5 @@
 
+import atexit
 import json
 import logging
 import multiprocessing
@@ -17,9 +18,6 @@ from ..config import config
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
          for name in ['status', 'tasks', 'workers']]
-
-binname = 'bokeh.exe' if sys.platform.startswith('win') else 'bokeh'
-binname = os.path.join(os.path.dirname(sys.executable), binname)
 
 logger = logging.getLogger(__file__)
 
@@ -54,7 +52,7 @@ class BokehWebInterface(object):
 
         hosts.extend(map(str, bokeh_whitelist))
 
-        args = ([binname, 'serve'] + paths +
+        args = ([sys.executable, '-m', 'bokeh', 'serve'] + paths +
                 ['--check-unused-sessions=50',
                  '--unused-session-lifetime=1',
                  '--port', str(bokeh_port)] +
@@ -79,30 +77,23 @@ class BokehWebInterface(object):
         with open(os.path.join(dask_dir, '.dask-web-ui.json'), 'w') as f:
             json.dump(bokeh_options, f, indent=2)
 
-        if sys.version_info[0] >= 3:
-            ctx = multiprocessing.get_context('spawn')
-            self.process = ctx.Process(target=bokeh_main, args=(args,), daemon=True)
-            self.process.start()
-        else:
-            import subprocess
-            self.process = subprocess.Popen(args)
+        import subprocess
+        process = subprocess.Popen(args)
+        self.process = process
+        def cleanup_process():
+            try:
+                process.terminate()
+            except OSError():
+                pass
+        atexit.register(cleanup_process)
 
         if not quiet:
             logger.info(" Bokeh UI at:  http://%s:%d/status/"
                          % (ip, bokeh_port))
 
     def close(self, join=True, timeout=None):
-        if sys.version_info[0] >= 3:
-            try:
-                if self.process.is_alive():
-                    self.process.terminate()
-            except AssertionError:
-                self.process.terminate()
-            if join:
-                self.process.join(timeout=timeout)
-        else:
-            if self.process.returncode is None:
-                self.process.terminate()
+        if self.process.poll() is None:
+            self.process.terminate()
 
     def __del__(self):
         self.close()

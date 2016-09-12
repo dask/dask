@@ -42,10 +42,7 @@ def test_bokeh_shutsdown_without_cluster___del__(loop):
     del c
     start = time()
     while True:
-        if sys.version_info[0] >= 3:
-            if not proc.is_alive():
-                break
-        elif proc.poll() is not None:
+        if proc.poll() is not None:
             break
         assert time() < start + 5
         sleep(0.01)
