@@ -23,7 +23,7 @@ def test_simple(loop, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('distributed', loop=loop,
+        with joblib.parallel_backend('dask.distributed', loop=loop,
                 scheduler_host=('127.0.0.1', s['port'])):
 
             seq = Parallel()(delayed(inc)(i) for i in range(10))
@@ -51,7 +51,7 @@ def test_dont_assume_function_purity(loop, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('distributed', loop=loop,
+        with joblib.parallel_backend('dask.distributed', loop=loop,
                 scheduler_host=('127.0.0.1', s['port'])):
 
             x, y = Parallel()(delayed(random2)() for i in range(2))

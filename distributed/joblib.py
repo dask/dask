@@ -33,7 +33,7 @@ else:
                        " or `sklearn` > '0.17.1'. Please install or upgrade")
 
 
-class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
+class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     MIN_IDEAL_BATCH_DURATION = 0.2
     MAX_IDEAL_BATCH_DURATION = 1.0
 
@@ -71,8 +71,13 @@ class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         self.futures.clear()
 
 
+DistributedBackend = DaskDistributedBackend
+
+
 # Register the backend with any available versions of joblib
 if joblib:
-    joblib.register_parallel_backend('distributed', DistributedBackend)
+    joblib.register_parallel_backend('distributed', DaskDistributedBackend)
+    joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)
 if sk_joblib:
-    sk_joblib.register_parallel_backend('distributed', DistributedBackend)
+    sk_joblib.register_parallel_backend('distributed', DaskDistributedBackend)
+    sk_joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)

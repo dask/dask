@@ -18,7 +18,7 @@ on the distributed scheduler if you enclose it in a context manager as follows:
    import distributed.joblib
    from joblib import Parallel, parallel_backend
 
-   with parallel_backend('distributed', scheduler_host='HOST:PORT'):
+   with parallel_backend('dask.distributed', scheduler_host='HOST:PORT'):
        # normal Joblib code
 
 Note that scikit-learn bundles joblib internally, so if you want to specify the
@@ -49,7 +49,7 @@ validated parameter search as follows.
    model = SVC(kernel='rbf')
    search = RandomizedSearchCV(model, param_space, cv=3, n_iter=50, verbose=10)
 
-   with parallel_backend('distributed', scheduler_host='localhost:8786'):
+   with parallel_backend('dask.distributed', scheduler_host='localhost:8786'):
        search.fit(digits.data, digits.target)
 
 .. _Joblib: https://pythonhosted.org/joblib/
