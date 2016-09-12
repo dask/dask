@@ -295,11 +295,10 @@ processes_to_close = []
 
 def _closing():
     for proc in processes_to_close:
-        if proc.poll() is not None:
-            try:
-                proc.terminate()
-            except OSError:
-                pass
+        try:
+            proc.terminate()
+        except OSError:
+            pass
 
     closing[0] = True
 
