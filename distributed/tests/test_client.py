@@ -2995,7 +2995,7 @@ def test_persist_optimize_graph(c, s, a, b):
 
 @gen_cluster(client=True, ncores=[])
 def test_scatter_raises_if_no_workers(c, s):
-    with pytest.raises(ValueError):
+    with pytest.raises(gen.TimeoutError):
         yield c._scatter([1])
 
 

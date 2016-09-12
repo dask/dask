@@ -1177,15 +1177,19 @@ class Scheduler(Server):
 
     @gen.coroutine
     def scatter(self, stream=None, data=None, workers=None, client=None,
-            broadcast=False):
+            broadcast=False, timeout=2):
         """ Send data out to workers
 
         See also
         --------
         Scheduler.broadcast:
         """
-        if not self.ncores:
-            raise ValueError("No workers yet found.")
+        start = time()
+        while not self.ncores:
+            yield gen.sleep(0.2)
+            if time() > start + timeout:
+                raise gen.TimeoutError("No workers found")
+
         if workers is not None:
             workers = [self.coerce_address(w) for w in workers]
         ncores = workers if workers is not None else self.ncores

@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
+from datetime import timedelta
 from operator import add
 import sys
 from time import time, sleep
@@ -986,3 +987,16 @@ def test_launch_without_blocked_services():
     assert not s2.services
 
     yield [s.close(), s2.close()]
+
+
+@gen_cluster(ncores=[])
+def test_scatter_no_workers(s):
+    with pytest.raises(gen.TimeoutError):
+        yield gen.with_timeout(timedelta(seconds=0.1),
+                              s.scatter(data={'x': dumps(1)}, client='alice'))
+
+    w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
+    yield [s.scatter(data={'x': dumps(1)}, client='alice'),
+           w._start()]
+
+    assert w.data['x'] == 1
