@@ -3551,3 +3551,12 @@ def test_get_restrictions():
     r1, loose = get_restrictions(L2, {(total,): '127.0.0.1'}, True)
     assert r1 == {total.key: ['127.0.0.1']}
     assert loose == [total.key]
+
+
+@gen_cluster(client=True)
+def test_scatter_type(c, s, a, b):
+    [future] = yield c._scatter([1])
+    assert future.type == int
+
+    d = yield c._scatter({'x': 1.0})
+    assert d['x'].type == float

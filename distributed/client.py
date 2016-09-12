@@ -862,14 +862,18 @@ class Client(object):
 
         if isinstance(data, dict):
             data2 = valmap(dumps, data)
+            types = valmap(type, data)
         elif isinstance(data, (list, tuple, set, frozenset)):
             data2 = list(map(dumps, data))
+            types = list(map(type, data))
         elif isinstance(data, (Iterable, Iterator)):
             data2 = list(map(dumps, data))
+            types = list(map(type, data))
         else:
             raise TypeError("Don't know how to scatter %s" % type(data))
         keys = yield self.scheduler.scatter(data=data2, workers=workers,
-                                            client=self.id, broadcast=broadcast)
+                                            client=self.id,
+                                            broadcast=broadcast)
         if isinstance(data, dict):
             out = {k: Future(k, self) for k in keys}
         elif isinstance(data, (tuple, list, set, frozenset)):
@@ -883,6 +887,13 @@ class Client(object):
         for key in keys:
             self.futures[key]['status'] = 'finished'
             self.futures[key]['event'].set()
+
+        if isinstance(types, list):
+            for key, typ in zip(keys, types):
+                self.futures[key]['type'] = typ
+        elif isinstance(types, dict):
+            for key in keys:
+                self.futures[key]['type'] = types[key]
 
         raise gen.Return(out)
 
