@@ -65,7 +65,10 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
     except Exception as e:
         logger.exception(e)
     finally:
-        sys.exit(0)
+        try:
+            sys.exit(0)
+        except:
+            pass
 
 
 n = 100000

@@ -12,6 +12,7 @@ from time import time, sleep
 
 import click
 from distributed import Nanny, Worker, sync, rpc
+from distributed.nanny import isalive
 from distributed.utils import get_ip, All
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
@@ -171,7 +172,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     if not no_nanny:
         start = time()
-        while (any(n.process.poll() is None for n in nannies)
+        while (any(isalive(n.process) for n in nannies)
                 and time() < start + 1):
             sleep(0.1)
 

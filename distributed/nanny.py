@@ -19,7 +19,7 @@ from .core import Server, rpc, write
 from .utils import get_ip, ignoring, log_errors, tmpfile
 from .worker import _ncores, Worker, run
 
-environment = os.path.dirname(sys.executable)
+nanny_environment = os.path.dirname(sys.executable)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class Nanny(Server):
     """
     def __init__(self, scheduler_ip, scheduler_port, ip=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, memory_limit=None, environment=environment,
+                 name=None, memory_limit=None, environment=nanny_environment,
                  quiet=False, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
@@ -124,10 +124,11 @@ class Nanny(Server):
             if self.process:
                 with ignoring(OSError):
                     self.process.terminate()
-                processes_to_close.remove(self.process)
+                if self.process in processes_to_close:
+                    processes_to_close.remove(self.process)
 
                 start = time()
-                while self.process.poll() is None and time() < start + timeout:
+                while isalive(self.process) and time() < start + timeout:
                     sleep(0.01)
 
                 self.process = None
@@ -148,26 +149,51 @@ class Nanny(Server):
             self.environment = environment
 
         with log_errors():
-            if self.process and self.process.poll() is None:
+            if self.process and isalive(self.process):
                 raise ValueError("Existing process still alive. Please kill first")
-            with tmpfile() as fn:
-                self.process = run_worker(self.environment, self.ip,
-                        self.scheduler.ip, self.scheduler.port, self.ncores,
-                        self.port, self._given_worker_port, self.name,
-                        self.memory_limit, self.loop, fn, self.quiet)
 
-                while not os.path.exists(fn):
-                    yield gen.sleep(0.01)
+            if self.environment != nanny_environment:
+                with tmpfile() as fn:
+                    self.process = run_worker_subprocess(self.environment, self.ip,
+                            self.scheduler.ip, self.scheduler.port, self.ncores,
+                            self.port, self._given_worker_port, self.name,
+                            self.memory_limit, self.loop, fn, self.quiet)
 
+                    while not os.path.exists(fn):
+                        yield gen.sleep(0.01)
+
+                    while True:
+                        try:
+                            with open(fn) as f:
+                                msg = json.load(f)
+                            self.worker_port = msg['port']
+                            self.worker_dir = msg['local_directory']
+                            break
+                        except JSONDecodeError:
+                            yield gen.sleep(0.01)
+            else:
+                q = Queue()
+                self.process = Process(target=run_worker_fork,
+                                       args=(q, self.ip, self.scheduler.ip,
+                                             self.scheduler.port, self.ncores,
+                                             self.port, self._given_worker_port,
+                                             self.local_dir, self.services, self.name,
+                                             self.memory_limit))
+                self.process.daemon = True
+                self.process.start()
                 while True:
                     try:
-                        with open(fn) as f:
-                            msg = json.load(f)
+                        msg = q.get_nowait()
+                        if isinstance(msg, Exception):
+                            raise msg
                         self.worker_port = msg['port']
-                        self.worker_dir = msg['local_directory']
+                        self.worker_dir = msg['dir']
+                        assert self.worker_port
                         break
-                    except JSONDecodeError:
-                        yield gen.sleep(0.01)
+                    except queues.Empty:
+                        yield gen.sleep(0.1)
+
+
 
             logger.info("Nanny %s:%d starts worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
@@ -196,7 +222,7 @@ class Nanny(Server):
             if closing[0] or self.status == 'closed':
                 yield self._close()
                 break
-            elif self.process and self.process.poll() is not None:
+            elif self.process and not isalive(self.process):
                 logger.warn("Discovered failed worker.  Restarting. Status: %s",
                             self.status)
                 self.cleanup()
@@ -253,7 +279,7 @@ class Nanny(Server):
             yield gen.sleep(interval)
 
 
-def run_worker(environment, ip, scheduler_ip, scheduler_port, ncores,
+def run_worker_subprocess(environment, ip, scheduler_ip, scheduler_port, ncores,
         nanny_port, worker_port, name, memory_limit, io_loop, fn, quiet):
 
     if environment.endswith('python'):
@@ -285,6 +311,45 @@ def run_worker(environment, ip, scheduler_ip, scheduler_port, ncores,
     processes_to_close.append(proc)
 
     return proc
+
+
+def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
+        worker_port, local_dir, services, name, memory_limit):
+    """ Function run by the Nanny when creating the worker """
+    from distributed import Worker  # pragma: no cover
+    from tornado.ioloop import IOLoop  # pragma: no cover
+    IOLoop.clear_instance()  # pragma: no cover
+    loop = IOLoop()  # pragma: no cover
+    loop.make_current()  # pragma: no cover
+    worker = Worker(scheduler_ip, scheduler_port, ncores=ncores, ip=ip,
+                    service_ports={'nanny': nanny_port}, local_dir=local_dir,
+                    services=services, name=name, memory_limit=memory_limit,
+                    loop=loop)  # pragma: no cover
+
+    @gen.coroutine  # pragma: no cover
+    def start():
+        try:  # pragma: no cover
+            yield worker._start(worker_port)  # pragma: no cover
+        except Exception as e:  # pragma: no cover
+            logger.exception(e)  # pragma: no cover
+            q.put(e)  # pragma: no cover
+        else:
+            assert worker.port  # pragma: no cover
+            q.put({'port': worker.port, 'dir': worker.local_dir})  # pragma: no cover
+
+    loop.add_callback(start)  # pragma: no cover
+    try:
+        loop.start()  # pragma: no cover
+    finally:
+        loop.stop()
+        loop.close(all_fds=True)
+
+
+def isalive(proc):
+    if isinstance(proc, subprocess.Popen):
+        return proc.poll() is None
+    else:
+        return proc.is_alive()
 
 
 import atexit
