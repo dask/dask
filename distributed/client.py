@@ -340,6 +340,9 @@ class Client(object):
                 self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
                                             start=False)
             self._start_arg = self.cluster.scheduler_address
+            while (not self.cluster.workers or
+               len(self.cluster.scheduler.ncores) < len(self.cluster.workers)):
+                yield gen.sleep(0.01)
 
         self.scheduler = coerce_to_rpc(self._start_arg, timeout=timeout)
         self.scheduler_stream = None

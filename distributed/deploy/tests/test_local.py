@@ -169,3 +169,8 @@ def test_start_diagnostics(loop):
                     break
             assert time() < start + 20
             sleep(0.01)
+
+
+def test_blocks_until_full(loop):
+    with Client(loop=loop) as c:
+        assert len(c.ncores()) > 0
