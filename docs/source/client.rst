@@ -3,21 +3,30 @@ Client
 
 The Client is the primary entry point for users of ``dask.distributed``.
 
-After you :doc:`setup a cluster <setup>`, initialize an ``Client`` by
-pointing it to the address of a ``Scheduler``:
+After we :doc:`setup a cluster <setup>`, we initialize a ``Client`` by pointing
+it to the address of a ``Scheduler``:
 
 .. code-block:: python
 
    >>> from distributed import Client
    >>> client = Client('127.0.0.1:8786')
 
-Usage
------
+There are a few different ways to interact with the cluster through the client:
 
-``submit``
-~~~~~~~~~~
+1.  The Client satisfies most of the standard concurrent.futures_ - PEP-3148_
+    interface with ``.submit``, ``.map`` functions and ``Future`` objects,
+    allowing the immediate and direct submission of tasks.
+2.  The Client registers itself as the default Dask_ scheduler, and so runs all
+    dask collections like dask.array_, dask.bag_, dask.dataframe_ and dask.delayed_
+3.  The Client has additional methods for manipulating data remotely.  See the
+    full :doc:`API <api>` for a thorough list.
 
-You can submit individual function calls with the ``client.submit`` method
+
+Concurrent.futures
+------------------
+
+We can submit individual function calls with the ``client.submit`` method or
+many function calls with the ``client.map`` method
 
 .. code-block:: python
 
@@ -28,44 +37,33 @@ You can submit individual function calls with the ``client.submit`` method
    >>> x
    <Future - key: inc-e4853cffcc2f51909cdb69d16dacd1a5>
 
-The result is on one of the distributed workers.  We can continue using ``x``
-in further calls to ``submit``:
+   >>> L = client.map(inc, range(1000))
+   >>> L
+   [<Future - key: inc-e4853cffcc2f51909cdb69d16dacd1a5>,
+    <Future - key: inc-...>,
+    <Future - key: inc-...>,
+    <Future - key: inc-...>, ...]
+
+These results live on distributed workers.
+
+We can submit tasks on futures.  The function will go to the machine where the
+futures are stored and run on the result once it has completed.
 
 .. code-block:: python
 
-   >>> type(x)
-   Future
-   >>> y = client.submit(inc, x)
+   >>> y = client.submit(inc, x)      # Submit on x, a Future
+   >>> total = client.submit(sum, L)  # Map on L, a list of Futures
 
-Gather results
-~~~~~~~~~~~~~~
-
-We can collect results in a variety of ways.  First, we can use the
-``.result()`` method on futures
+We gather back the results using either the ``Future.result`` method for single
+futures or ``client.gather`` method for many futures at once.
 
 .. code-block:: python
 
    >>> x.result()
-   2
+   11
 
-Second, we can use the gather method on the client
-
-.. code-block:: python
-
-   >>> client.gather([x, y])
-   (2, 3)
-
-Third, we can use the ``as_completed`` function to iterate over results as soon
-as they become available.
-
-.. code-block:: python
-
-   >>> from distributed import as_completed
-   >>> seq = as_completed([x, y])
-   >>> next(seq).result()
-   2
-   >>> next(seq).result()
-   3
+   >>> client.gather(L)
+   [1, 2, 3, 4, 5, ...]
 
 But, as always, we want to minimize communicating results back to the local
 process.  It's often best to leave data on the cluster and operate on it
@@ -73,38 +71,18 @@ remotely with functions like ``submit``, ``map``, ``get`` and ``compute``.
 See :doc:`efficiency <efficiency>` for more information on efficient use of
 distributed.
 
-``map``
-~~~~~~~
 
-We can map a function over many inputs at once
+Dask
+----
 
-.. code-block:: python
+The parent library Dask_ contains objects like dask.array_, dask.dataframe_,
+dask.bag_, and dask.delayed_, which automatically produce parallel algorithms
+on larger datasets.  All dask collections work smoothly with the distributed
+scheduler.
 
-   >>> L = client.map(inc, range(10))
-
-The ``map`` method returns a list of futures.  This is a break with the
-``concurrent.futures`` API, which returns the results directly.  We keep the
-results as futures so that they can stay on the distributed cluster.
-
-Additionally, we don't do any kind of batching so every function application
-will be a new task which will have a couple milliseconds of overhead.  It is
-unwise to use ``client.map`` for small, fast functions where scheduling
-overhead is likely to be more expensive than the cost of the function itself.
-For example, our function ``inc`` is actually a *terrible* function to
-parallelize in practice.
-
-
-``dask``
-~~~~~~~~
-
-Distributed provides a dask_ compliant task scheduling interface.  It provides
-this through two methods, ``get`` (synchronous) and ``compute`` (asynchronous).
-
-.. _dask: http://dask.pydata.org/en/latest/
-
-Clients register themselves as the default execution mechanism for Dask when
-they start, so simply creating a Client is sufficient to change all
-``dask.compute`` calls to use the distributed system.
+When we create a ``Client`` object it registers itself as the default Dask
+scheduler.  All ``.compute()`` methods will automatically start using the
+distributed system.
 
 .. code-block:: python
 
@@ -112,90 +90,29 @@ they start, so simply creating a Client is sufficient to change all
 
    my_dataframe.sum().compute()  # Now uses the distributed system by default
 
-You can stop this behavior by using the ``set_as_default=False`` keyword
+We can stop this behavior by using the ``set_as_default=False`` keyword
 argument when starting the Client.
 
-**get**
-
-For people familiar with low-level dask graphs, the client provides a fully
-compliant ``get`` method:
-
-.. code-block:: python
-
-   >>> dsk = {'x': 1, 'y': (inc, 'x')}
-   >>> client.get(dsk, 'y')
-   2
-
-This function pulls results back by default.  This is so that it can integrate
-with existing dask code.
+Dask's normal ``.compute()`` methods are *synchronous*, meaning that they block
+the interpreter until they complete.  Dask.distributed allows the new ability
+of *asynchronous* computing, we can trigger computations to occur in the
+background and persist in memory while we continue doing other work.  This is
+typically handled with the ``Client.persist`` and ``Client.compute`` methods
+which are used for larger and smaller result sets respectively.
 
 .. code-block:: python
 
-   >>> import dask.array as da
-   >>> x = da.random.random(1000000000, chunks=(1000000,))
-   >>> x.sum().compute()  # use local threads
-   499999359.23511785
-   >>> x.sum().compute(get=client.get)  # use distributed cluster
-   499999359.23511785
-
-**compute**
-
-We can also provide dask collections (arrays, bags, dataframes, delayed
-values) to the client with the ``compute`` method.
-
-.. code-block:: python
-
-   >>> type(x)
-   dask.array.Array
+   >>> df = client.persist(df)  # trigger all computations, keep df in memory
    >>> type(df)
-   dask.dataframe.DataFrame
-
-   >>> x_future, df_future = client.compute(x, df)
-
-This immediately returns standard ``Future`` objects as would be returned by
-``submit`` or ``map``.
+   dask.DataFrame
 
 For more information see the page on :doc:`Managing Computation<managing-computation>`.
 
 
-``restart``
-~~~~~~~~~~~
-
-When things go wrong, restart the cluster with the ``.restart()`` method.
-
-.. code-block:: python
-
-   >>> client.restart()
-
-This both resets the scheduler state and all of the worker processes.  All
-current data and computations will be lost.  All existing futures set their
-status to ``'cancelled'``.
-
-See :doc:`resilience <resilience>` for more information.
-
-
-Internals
----------
-
-Data Locality
-~~~~~~~~~~~~~
-
-By default the client does not bring results back to your local computer but
-leaves them on the distributed network.  As a result, computations on returned
-results like the following don't require any data transfer.
-
-.. code-block:: python
-
-   >>> y = client.submit(inc, x)  # no data transfer required
-
-In addition, the internal scheduler endeavors to run functions on worker
-nodes that already have the necessary input data.  It avoids worker-to-worker
-communication when convenient.
-
 Pure Functions by Default
-~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
-By default we assume that all functions are pure_.  If this is not the case you
+By default we assume that all functions are pure_.  If this is not the case we
 should use the ``pure=False`` keyword argument.
 
 The client associates a key to all computations.  This key is accessible on
@@ -209,8 +126,8 @@ the Future object.
    'add-ebf39f96ad7174656f97097d658f3fa2'
 
 This key should be the same across all computations with the same inputs and
-across all machines.  If you run the computation above on any computer with the
-same environment then you should get the exact same key.
+across all machines.  If we run the computation above on any computer with the
+same environment then we should get the exact same key.
 
 The scheduler avoids redundant computations.  If the result is already in
 memory from a previous call then that old result will be used rather than
@@ -229,41 +146,36 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
    >>> client.submit(np.random.random, 1000, pure=False).key
    'random_sample-a24e7220-a113-47f2-a030-72209439f093'
 
-
 .. _pure: http://toolz.readthedocs.io/en/latest/purity.html
 
-Garbage Collection
-~~~~~~~~~~~~~~~~~~
 
-Prolonged use of ``distributed`` may allocate a lot of remote data.  The
-client can clean up unused results by reference counting.
+Tornado Coroutines
+------------------
 
-The client reference counts ``Future`` objects.  When a particular key no
-longer has any Future objects pointing to it it will be released from
-distributed memory if no active computations still require it.
-
-In this way garbage collection in the distributed memory space of your cluster
-mirrors garbage collection within your local Python session.
-
-Known future keys and reference counts can be found in the following
-dictionaries:
-
-.. code-block:: python
-
-   >>> client.futures
-   >>> client.refcount
-
-The scheduler also cleans up intermediate results when provided full dask
-graphs.  You can always use the lower level ``delete`` or ``clear`` functions
-in ``distributed.client`` to manage data manually.
-
-Coroutines
-~~~~~~~~~~
-
-If you are operating in an asynchronous environment then all blocking functions
+If we are operating in an asynchronous environment then all blocking functions
 listed above have asynchronous equivalents.  Currently these have the exact
 same name but are prepended with an underscore (``_``) so, ``.result`` is
 synchronous while ``._result`` is asynchronous.  If a function has no
 asynchronous counterpart then that means it does not significantly block.  The
 ``.submit`` and ``.map`` functions are examples of this; they return
 immediately in either case.
+
+
+Additional Links
+----------------
+
+For more information on how to use dask.distributed you may want to look at the
+following pages:
+
+*  :doc:`Managing Memory <memory>`
+*  :doc:`Managing Computation <manage-computation>`
+*  :doc:`Data Locality <locality>`
+*  :doc:`API <api>`
+
+.. _concurrent.futures:  https://docs.python.org/3/library/concurrent.futures.html
+.. _PEP-3148: https://www.python.org/dev/peps/pep-3148/
+.. _dask.array: http://dask.pydata.org/en/latest/array.html
+.. _dask.bag: http://dask.pydata.org/en/latest/bag.html
+.. _dask.dataframe: http://dask.pydata.org/en/latest/dataframe.html
+.. _dask.delayed: http://dask.pydata.org/en/latest/delayed.html
+.. _Dask: http://dask.pydata.org/en/latest/
