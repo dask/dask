@@ -401,21 +401,13 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [[1, 5, 9], [2, 19], [5]]
     """
-    seq = list(seq)
-    n = len(seq)
-    pretotal = 0
-    total = 0
-    i = 0
-    result = list()
-    for s in sizes:
-        total += s
-        L = list()
-        while i < n and seq[i] < total:
-            L.append(seq[i] - pretotal)
-            i += 1
-        result.append(L)
-        pretotal += s
-    return result
+    seq = np.array(seq)
+    right = np.cumsum(sizes)
+    locations = np.searchsorted(seq, right)
+    locations = [0] + locations.tolist()
+    left = [0] + right.tolist()
+    return [(seq[locations[i]:locations[i+1]] - left[i]).tolist()
+            for i in range(len(locations) - 1)]
 
 
 def issorted(seq):
@@ -652,7 +644,8 @@ def check_index(ind, dimension):
     >>> check_index(slice(0, 3), 5)
     """
     if isinstance(ind, list):
-        if not all(-dimension < i < dimension for i in ind):
+        x = np.array(ind)
+        if (x >= dimension).any() or (x <= -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
