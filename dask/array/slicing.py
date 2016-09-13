@@ -402,6 +402,7 @@ def partition_by_size(sizes, seq):
     [[1, 5, 9], [2, 19], [5]]
     """
     seq = list(seq)
+    n = len(seq)
     pretotal = 0
     total = 0
     i = 0
@@ -409,7 +410,7 @@ def partition_by_size(sizes, seq):
     for s in sizes:
         total += s
         L = list()
-        while i < len(seq) and seq[i] < total:
+        while i < n and seq[i] < total:
             L.append(seq[i] - pretotal)
             i += 1
         result.append(L)
@@ -560,7 +561,7 @@ def posify_index(shape, ind):
         else:
             return ind
     if isinstance(ind, list):
-        return [posify_index(shape, i) for i in ind]
+        return [i + shape if i < 0 else i for i in ind]
     return ind
 
 
@@ -651,8 +652,8 @@ def check_index(ind, dimension):
     >>> check_index(slice(0, 3), 5)
     """
     if isinstance(ind, list):
-        for i in ind:
-            check_index(i, dimension)
+        if not all(-dimension < i < dimension for i in ind):
+            raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
 
