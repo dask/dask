@@ -1,3 +1,15 @@
+1.13.2
+------
+
+*   Revert dask_worker to use fork rather than subprocess by default
+*   Scatter retains type information
+*   Bokeh always uses subprocess rather than spawn
+
+1.13.1
+------
+
+*   Fix critical Windows error with dask_worker executable
+
 1.13.0
 ------
 
