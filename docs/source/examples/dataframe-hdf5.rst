@@ -56,7 +56,7 @@ The first order of ``dask.dataframe`` business is creating a dask DataFrame usin
 .. code-block:: python
 
     import dask.dataframe as dd
-    df = dd.read_hdf(path='my86.h5', key='/c')
+    df = dd.read_hdf('my86.h5', key='/c')
     
 Load multiple datasets from single HDF5 file
 ------------------------------------------------- 
@@ -66,7 +66,7 @@ Loading multiple datasets from a single file requires a small tweak and use of t
 .. code-block:: python
 
     import dask.dataframe as dd
-    df = dd.read_hdf(path='my86.h5', key='/*')
+    df = dd.read_hdf('my86.h5', key='/*')
     
 Learn more about ``dask.dataframe`` methods by visiting the :doc:`API documentation<../dataframe-api>`.
 
@@ -78,6 +78,6 @@ The next example is a natural progression from the previous example (e.g. using 
 .. code-block:: python
 
     import dask.dataframe as dd
-    df = dd.read_hdf(path='./*.h5', key='/*')
+    df = dd.read_hdf('./*.h5', key='/*')
     
 These exercises cover the basics of using ``dask.dataframe`` to work with HDF5 data.  For more information on the user functions to manipulate and explore dataframes (visualize, describe, compute, etc.) see :doc:`API documentation<../dataframe-api>`.  To explore the other data formats supported by ``dask.dataframe``, visit the :doc:`section on creating dataframes<../dataframe-create>` .
