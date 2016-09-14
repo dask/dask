@@ -185,8 +185,8 @@ def test_nout():
     assert len(x) == 2
     a, b = x
     assert compute(a, b) == (1, -1)
-    assert a._n is None
-    assert b._n is None
+    assert a._length is None
+    assert b._length is None
     pytest.raises(TypeError, lambda: len(a))
     pytest.raises(TypeError, lambda: list(a))
 
@@ -195,8 +195,9 @@ def test_nout():
 
     func = delayed(add, nout=1)
     a = func(1)
-    assert a._n == 1
+    assert a._length is None
     pytest.raises(TypeError, lambda: list(a))
+    pytest.raises(TypeError, lambda: len(a))
 
 
 def test_kwargs():
@@ -257,7 +258,7 @@ def test_delayed_picklable():
     y = pickle.loads(pickle.dumps(x))
     assert x.dask == y.dask
     assert x._key == y._key
-    assert x._n == y._n
+    assert x._length == y._length
     # DelayedLeaf
     x = delayed(1j + 2)
     y = pickle.loads(pickle.dumps(x))

@@ -304,15 +304,15 @@ class Delayed(base.Base):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_key', '_dasks', '_n')
+    __slots__ = ('_key', '_dasks', '_length')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
     _optimize = staticmethod(lambda d, k, **kwds: d)
 
-    def __init__(self, key, dasks, n=None):
+    def __init__(self, key, dasks, length=None):
         self._key = key
         self._dasks = dasks
-        self._n = n
+        self._length = length
 
     def __getstate__(self):
         return tuple(getattr(self, i) for i in self.__slots__)
@@ -356,19 +356,17 @@ class Delayed(base.Base):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        n = getattr(self, '_n', None)
-        if n is None or n < 2:
+        if getattr(self, '_length', None) is None:
             raise TypeError("Delayed objects of unspecified length are "
                             "not iterable")
-        for i in range(self._n):
+        for i in range(self._length):
             yield self[i]
 
     def __len__(self):
-        n = getattr(self, '_n', None)
-        if n is None or n < 2:
+        if getattr(self, '_length', None) is None:
             raise TypeError("Delayed objects of unspecified length have "
                             "no len()")
-        return self._n
+        return self._length
 
     def __call__(self, *args, **kwargs):
         pure = kwargs.pop('pure', False)
@@ -411,7 +409,8 @@ def call_function(func, args, kwargs, pure=False, nout=None):
 
     dasks = flat_unique(dasks)
     dasks.append({name: task})
-    return Delayed(name, dasks, n=nout)
+    nout = nout if nout and nout > 1 else None
+    return Delayed(name, dasks, length=nout)
 
 
 class DelayedLeaf(Delayed):
