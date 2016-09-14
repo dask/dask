@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from copy import copy
+from distutils.version import LooseVersion
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -1219,15 +1220,19 @@ class _Frame(Base):
             0 or 'index' for row-wise, 1 or 'columns' for column-wise
         """
         axis = self._validate_axis(axis)
-        name = 'quantiles-concat--' + tokenize(self, q, axis)
+        keyname = 'quantiles-concat--' + tokenize(self, q, axis)
 
         if axis == 1:
             if isinstance(q, list):
                 # Not supported, the result will have current index as columns
                 raise ValueError("'q' must be scalar when axis=1 is specified")
-            meta = pd.Series([], dtype='f8')
+            if LooseVersion(pd.__version__) >= '0.19':
+                name = q
+            else:
+                name = None
+            meta = pd.Series([], dtype='f8', name=name)
             return map_partitions(M.quantile, self, q, axis,
-                                  token=name, meta=meta)
+                                  token=keyname, meta=meta)
         else:
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
@@ -1238,13 +1243,13 @@ class _Frame(Base):
             qnames = [(_q._name, 0) for _q in quantiles]
 
             if isinstance(quantiles[0], Scalar):
-                dask[(name, 0)] = (pd.Series, (list, qnames), num.columns)
+                dask[(keyname, 0)] = (pd.Series, (list, qnames), num.columns)
                 divisions = (min(num.columns), max(num.columns))
-                return Series(dask, name, meta, divisions)
+                return Series(dask, keyname, meta, divisions)
             else:
                 from .multi import _pdconcat
-                dask[(name, 0)] = (_pdconcat, (list, qnames), 1)
-                return DataFrame(dask, name, meta, quantiles[0].divisions)
+                dask[(keyname, 0)] = (_pdconcat, (list, qnames), 1)
+                return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
     def describe(self):
