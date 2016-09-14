@@ -864,29 +864,29 @@ def test_bag_compute_forward_kwargs():
 
 
 def test_to_delayed():
-    from dask.delayed import Value
+    from dask.delayed import Delayed
 
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     a, b, c = b.map(inc).to_delayed()
-    assert all(isinstance(x, Value) for x in [a, b, c])
+    assert all(isinstance(x, Delayed) for x in [a, b, c])
     assert b.compute() == [4, 5]
 
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     t = b.sum().to_delayed()
-    assert isinstance(t, Value)
+    assert isinstance(t, Delayed)
     assert t.compute() == 21
 
 
 def test_from_delayed():
-    from dask.delayed import value, do
-    a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
+    from dask.delayed import delayed
+    a, b, c = delayed([1, 2, 3]), delayed([4, 5, 6]), delayed([7, 8, 9])
     bb = from_delayed([a, b, c])
     assert bb.name == from_delayed([a, b, c]).name
 
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    asum_value = do(lambda X: sum(X))(a)
+    asum_value = delayed(lambda X: sum(X))(a)
     asum_item = db.Item.from_delayed(asum_value)
     assert asum_value.compute() == asum_item.compute() == 6
 

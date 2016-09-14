@@ -201,7 +201,7 @@ def unpack_kwargs(kwargs):
         if isinstance(val, Item):
             dsk.update(val.dask)
             val = val.key
-        # TODO elif isinstance(val, Value):
+        # TODO elif isinstance(val, Delayed):
         elif isinstance(val, Base):
             raise NotImplementedError(
                 '%s not supported as kwarg value to Bag.map_partitions'
@@ -279,18 +279,13 @@ class Item(Base):
     _finalize = staticmethod(finalize_item)
 
     @staticmethod
-    def from_imperative(value):
-        warn("Deprecation warning: moved to from_delayed")
-        return from_delayed(value)
-
-    @staticmethod
     def from_delayed(value):
         """ Create bag item from a dask.delayed value
 
         See ``dask.bag.from_delayed`` for details
         """
-        from dask.delayed import Value
-        assert isinstance(value, Value)
+        from dask.delayed import Delayed
+        assert isinstance(value, Delayed)
         return Item(value.dask, value.key)
 
     def __init__(self, dsk, key):
@@ -318,17 +313,13 @@ class Item(Base):
 
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
-    def to_imperative(self):
-        warn("Deprecation warning: moved to to_delayed")
-        return self.to_delayed()
-
     def to_delayed(self):
-        """ Convert bag item to dask Value
+        """ Convert bag item to dask Delayed
 
         Returns a single value.
         """
-        from dask.delayed import Value
-        return Value(self.key, [self.dask])
+        from dask.delayed import Delayed
+        return Delayed(self.key, [self.dask])
 
 
 class Bag(Base):
@@ -1118,17 +1109,13 @@ class Bag(Base):
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
                             name, meta, divisions)
 
-    def to_imperative(self):
-        warn("Deprecation warning: moved to to_delayed")
-        return self.to_delayed()
-
     def to_delayed(self):
-        """ Convert bag to dask Values
+        """ Convert bag to list of dask Delayed
 
-        Returns list of values, one value per partition.
+        Returns list of Delayed, one per partition.
         """
-        from dask.delayed import Value
-        return [Value(k, [self.dask]) for k in self._keys()]
+        from dask.delayed import Delayed
+        return [Delayed(k, [self.dask]) for k in self._keys()]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
@@ -1416,11 +1403,6 @@ def reify(seq):
     return seq
 
 
-def from_imperative(values):
-    warn("Deprecation warning: moved to from_delayed")
-    return from_delayed(values)
-
-
 def from_delayed(values):
     """ Create bag from many dask.delayed objects
 
@@ -1446,8 +1428,8 @@ def from_delayed(values):
     --------
     dask.delayed
     """
-    from dask.delayed import Value
-    if isinstance(values, Value):
+    from dask.delayed import Delayed
+    if isinstance(values, Delayed):
         values = [values]
     dsk = merge(v.dask for v in values)
 
