@@ -782,11 +782,6 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
-def from_imperative(*args, **kwargs):
-    warn("Deprecation warning: moved to from_delayed")
-    return from_delayed(*args, **kwargs)
-
-
 @insert_meta_param_description
 def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
                  metadata=None):
@@ -794,7 +789,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
 
     Parameters
     ----------
-    dfs : list of Values
+    dfs : list of Delayed
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
         ``dask.delayed`` These comprise the individual partitions of the
         resulting dataframe.

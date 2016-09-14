@@ -13,7 +13,6 @@ import os
 import pickle
 from threading import Lock
 import uuid
-from warnings import warn
 
 from toolz.curried import (pipe, partition, concat, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
@@ -694,7 +693,7 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         Pass True (lock each file individually), False (don't lock) or a
         particular ``threading.Lock`` object to be shared among all writes.
     compute: boolean, optional
-        If true compute immediately, return lazy Value object otherwise
+        If true compute immediately, return ``dask.delayed.Delayed`` otherwise
 
     Examples
     --------
@@ -731,10 +730,10 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
     if compute:
         Array._get(dsk, keys, **kwargs)
     else:
-        from ..delayed import Value
+        from ..delayed import Delayed
         name = 'store-' + tokenize(*keys)
         dsk[name] = keys
-        return Value(name, [dsk])
+        return Delayed(name, [dsk])
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1436,17 +1435,13 @@ class Array(Base):
         """
         return self
 
-    def to_imperative(self):
-        warn("Deprecation warning: moved to to_delayed")
-        return self.to_delayed()
-
     def to_delayed(self):
         """ Convert Array into dask Values
 
         Returns an array of values, one value per chunk.
         """
-        from ..delayed import Value
-        return np.array(deepmap(lambda k: Value(k, [self.dask]), self._keys()),
+        from ..delayed import Delayed
+        return np.array(deepmap(lambda k: Delayed(k, [self.dask]), self._keys()),
                         dtype=object)
 
 
@@ -1544,11 +1539,6 @@ def from_array(x, chunks, name=None, lock=False):
     if lock:
         dsk = dict((k, v + (lock,)) for k, v in dsk.items())
     return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
-
-
-def from_imperative(*args, **kwargs):
-    warn("Deprecation warning: moved to from_delayed")
-    return from_delayed(*args, **kwargs)
 
 
 def from_delayed(value, shape, dtype=None, name=None):

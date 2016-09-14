@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from itertools import chain
-from warnings import warn
 import operator
 import uuid
 
@@ -50,8 +49,8 @@ def to_task_dasks(expr, **kwargs):
     Examples
     --------
 
-    >>> a = value(1, 'a')
-    >>> b = value(2, 'b')
+    >>> a = delayed(1, 'a')
+    >>> b = delayed(2, 'b')
     >>> task, dasks = to_task_dasks([a, b, 3])
     >>> task # doctest: +SKIP
     (list, ['a', 'b', 3])
@@ -281,7 +280,7 @@ def compute(*args, **kwargs):
 
     Examples
     --------
-    >>> a = value(1)
+    >>> a = delayed(1)
     >>> b = a + 2
     >>> c = a + 3
     >>> compute(b, c)  # Compute both simultaneously
@@ -461,10 +460,3 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
 
 
 base.normalize_token.register(Delayed, lambda a: a.key)
-
-Value = Delayed
-
-
-def value(val, name=None):
-    warn("``dask.imperative.value`` is renamed to ``delayed``")
-    return delayed(val, name=name)
