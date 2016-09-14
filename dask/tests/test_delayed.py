@@ -8,13 +8,6 @@ import pytest
 
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dasks, compute, Delayed
-from dask.utils import raises
-
-
-def test_value():
-    v = delayed(1)
-    assert v.compute() == 1
-    assert 1 in v.dask.values()
 
 
 def test_to_task_dasks():
@@ -38,6 +31,19 @@ def test_to_task_dasks():
     task, dasks = to_task_dasks(x)
     assert task == x
     assert dasks == []
+
+
+def test_delayed():
+    add2 = delayed(add)
+    assert add2(1, 2).compute() == 3
+    assert (add2(1, 2) + 3).compute() == 6
+    assert add2(add2(1, 2), 3).compute() == 6
+
+    a = delayed(1)
+    assert a.compute() == 1
+    assert 1 in a.dask.values()
+    b = add2(add2(a, 2), 3)
+    assert a.key in b.dask
 
 
 def test_operators():
@@ -66,39 +72,29 @@ def test_attributes():
     a = delayed(2 + 1j)
     assert a.real.compute() == 2
     assert a.imag.compute() == 1
+    assert (a.real + a.imag).compute() == 3
 
 
-def test_attr_optimize():
-    # Check that attribute access is inlined
+def test_method_getattr_optimize():
     a = delayed([1, 2, 3])
     o = a.index(1)
     dsk = o._optimize(o.dask, o._keys())
+    # Don't getattr the method, then call in separate task
     assert getattr not in set(v[0] for v in dsk.values())
 
 
-def test_value_errors():
+def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
-    assert raises(TypeError, lambda: setattr(a, 'foo', 1))
-    assert raises(TypeError, lambda: setattr(a, '_key', 'test'))
-    assert raises(TypeError, lambda: setitem(a, 1, 0))
+    pytest.raises(TypeError, lambda: setattr(a, 'foo', 1))
+    pytest.raises(TypeError, lambda: setitem(a, 1, 0))
     # Can't iterate, or check if contains
-    assert raises(TypeError, lambda: 1 in a)
-    assert raises(TypeError, lambda: list(a))
-    # No dynamic generation of magic methods
-    assert raises(AttributeError, lambda: a.__len__())
-    # Truth of values forbidden
-    assert raises(TypeError, lambda: bool(a))
-
-
-def test_delayed():
-    add2 = delayed(add)
-    assert add2(1, 2).compute() == 3
-    assert (add2(1, 2) + 3).compute() == 6
-    assert add2(add2(1, 2), 3).compute() == 6
-    a = delayed(1)
-    b = add2(add2(a, 2), 3)
-    assert a.key in b.dask
+    pytest.raises(TypeError, lambda: 1 in a)
+    pytest.raises(TypeError, lambda: list(a))
+    # No dynamic generation of magic/hidden methods
+    pytest.raises(AttributeError, lambda: a._hidden())
+    # Truth of delayed forbidden
+    pytest.raises(TypeError, lambda: bool(a))
 
 
 def test_compute():
@@ -108,10 +104,6 @@ def test_compute():
     assert compute(b, c) == (7, 8)
     assert compute(b) == (7,)
     assert compute([a, b], c) == ([6, 7], 8)
-
-
-def test_named_value():
-    assert 'X' in delayed(1, name='X').dask
 
 
 def test_common_subexpressions():
@@ -187,6 +179,26 @@ def test_pure():
     assert myrand().key != myrand().key
 
 
+def test_nout():
+    func = delayed(lambda x: (x, -x), nout=2, pure=True)
+    x = func(1)
+    assert len(x) == 2
+    a, b = x
+    assert compute(a, b) == (1, -1)
+    assert a._n is None
+    assert b._n is None
+    pytest.raises(TypeError, lambda: len(a))
+    pytest.raises(TypeError, lambda: list(a))
+
+    pytest.raises(ValueError, lambda: delayed(add, nout=-1))
+    pytest.raises(ValueError, lambda: delayed(add, nout=True))
+
+    func = delayed(add, nout=1)
+    a = func(1)
+    assert a._n == 1
+    pytest.raises(TypeError, lambda: list(a))
+
+
 def test_kwargs():
     def mysum(a, b, c=(), **kwargs):
         return a + b + sum(c) + sum(kwargs.values())
@@ -239,20 +251,26 @@ def test_array_bag_delayed():
     assert out.compute() == 2*arr1.sum() + 2*arr2.sum() + sum([1, 2, 3])
 
 
-def test_key_names_include_function_names():
-    def myfunc(x):
-        return x + 1
-    assert delayed(myfunc)(1).key.startswith('myfunc')
-
-
-def test_key_names_include_type_names():
-    assert delayed(1).key.startswith('int')
-
-
 def test_delayed_picklable():
-    x = delayed(1)
+    # Delayed
+    x = delayed(divmod, nout=2, pure=True)(1, 2)
     y = pickle.loads(pickle.dumps(x))
     assert x.dask == y.dask
+    assert x._key == y._key
+    assert x._n == y._n
+    # DelayedLeaf
+    x = delayed(1j + 2)
+    y = pickle.loads(pickle.dumps(x))
+    assert x.dask == y.dask
+    assert x._key == y._key
+    assert x._nout == y._nout
+    assert x._pure == y._pure
+    # DelayedAttr
+    x = x.real
+    y = pickle.loads(pickle.dumps(x))
+    assert x._obj._key == y._obj._key
+    assert x._obj.dask == y._obj.dask
+    assert x._attr == y._attr
     assert x._key == y._key
 
 
@@ -261,7 +279,7 @@ def test_delayed_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-def test_do_method_descriptor():
+def test_delayed_method_descriptor():
     delayed(bytes.decode)(b'')  # does not err
 
 
@@ -299,17 +317,17 @@ def test_name_consitent_across_instances():
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
     if PY2:
-        assert func(data)._key == 'identity-69e6d664a9054dce0e4dcaf48b919b8b'
+        assert func(data)._key == 'identity-777036d61a8334229dc0eda4454830d7'
     if PY3:
-        assert func(data)._key == 'identity-6611a0dc9183f09b04a35db23d14fb7d'
+        assert func(data)._key == 'identity-1de4057b4cfa0ba7faed76b9c383cc99'
 
     data = {'x': 1, 1: 'x'}
     assert func(data)._key == func(data)._key
 
     if PY2:
-        assert func(1)._key == 'identity-9ed591b193ff79d4909cc7ae58786091'
+        assert func(1)._key == 'identity-d3eda9ebeead15c7e491960e89605b7f'
     if PY3:
-        assert func(1)._key == 'identity-1b6bde2fbd96b2278a4d2e7514366606'
+        assert func(1)._key == 'identity-5390b9efe3ddb6ea0557139003eef253'
 
 
 def test_sensitive_to_partials():
@@ -317,9 +335,15 @@ def test_sensitive_to_partials():
             delayed(partial(add, 20), pure=True)(2)._key)
 
 
-def test_value_name():
+def test_delayed_name():
     assert delayed(1)._key.startswith('int-')
     assert delayed(1, pure=True)._key.startswith('int-')
+    assert delayed(1, name='X')._key == 'X'
+
+    def myfunc(x):
+        return x + 1
+
+    assert delayed(myfunc)(1).key.startswith('myfunc')
 
 
 def test_finalize_name():

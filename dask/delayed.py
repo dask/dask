@@ -8,12 +8,10 @@ import uuid
 
 from toolz import merge, unique, curry, first
 
-from .utils import concrete, funcname
+from .utils import concrete, funcname, methodcaller
 from . import base
 from .compatibility import apply
 from . import threaded
-from .optimize import inline_functions
-from .core import flatten
 
 __all__ = ['compute', 'do', 'Delayed', 'delayed']
 
@@ -112,7 +110,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=False):
+def delayed(obj, name=None, pure=False, nout=None):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -129,6 +127,11 @@ def delayed(obj, name=None, pure=False):
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
         deterministic keys. Default is False.
+    nout : int, optional
+        The number of outputs returned from calling the resulting ``Delayed``
+        object. If provided, the ``Delayed`` output of the call can be iterated
+        into ``nout`` objects, allowing for unpacking of results. By default
+        iteration over ``Delayed`` objects will error.
 
     Examples
     --------
@@ -248,7 +251,17 @@ def delayed(obj, name=None, pure=False):
     task, dasks = to_task_dasks(obj)
 
     if not dasks:
-        return DelayedLeaf(obj, pure=pure, name=name)
+        if not (nout is None or (type(nout) is int and nout >= 0)):
+            raise ValueError("nout must be None or a positive integer,"
+                             " got %s" % nout)
+        if not name:
+            try:
+                prefix = obj.__name__
+            except AttributeError:
+                prefix = type(obj).__name__
+            token = tokenize(obj, nout, pure=pure)
+            name = '%s-%s' % (prefix, token)
+        return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
@@ -292,24 +305,22 @@ class Delayed(base.Base):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_key', '_dasks')
+    __slots__ = ('_key', '_dasks', '_n')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
+    _optimize = staticmethod(lambda d, k, **kwds: d)
 
-    @staticmethod
-    def _optimize(dsk, keys, **kwargs):
-        return inline_functions(dsk, list(flatten(keys)), [getattr])
-
-    def __init__(self, name, dasks):
-        object.__setattr__(self, '_key', name)
-        object.__setattr__(self, '_dasks', dasks)
-
-    def __setstate__(self, state):
-        self.__init__(*state)
-        return self
+    def __init__(self, key, dasks, n=None):
+        self._key = key
+        self._dasks = dasks
+        self._n = n
 
     def __getstate__(self):
-        return (self._key, self._dasks)
+        return tuple(getattr(self, i) for i in self.__slots__)
+
+    def __setstate__(self, state):
+        for k, v in zip(self.__slots__, state):
+            setattr(self, k, v)
 
     @property
     def dask(self):
@@ -332,19 +343,33 @@ class Delayed(base.Base):
         return dir(type(self))
 
     def __getattr__(self, attr):
-        if not attr.startswith('_'):
-            return delayed(getattr, pure=True)(self, attr)
-        else:
+        if attr.startswith('_'):
             raise AttributeError("Attribute {0} not found".format(attr))
+        return DelayedAttr(self, attr, 'getattr-%s' % tokenize(self, attr))
 
     def __setattr__(self, attr, val):
-        raise TypeError("Delayed objects are immutable")
+        if attr in self.__slots__:
+            object.__setattr__(self, attr, val)
+        else:
+            raise TypeError("Delayed objects are immutable")
 
     def __setitem__(self, index, val):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        raise TypeError("Delayed objects are not iterable")
+        n = getattr(self, '_n', None)
+        if n is None or n < 2:
+            raise TypeError("Delayed objects of unspecified length are "
+                            "not iterable")
+        for i in range(self._n):
+            yield self[i]
+
+    def __len__(self):
+        n = getattr(self, '_n', None)
+        if n is None or n < 2:
+            raise TypeError("Delayed objects of unspecified length have "
+                            "no len()")
+        return self._n
 
     def __call__(self, *args, **kwargs):
         pure = kwargs.pop('pure', False)
@@ -367,52 +392,63 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
+def call_function(func, args, kwargs, pure=False, nout=None):
+    dask_key_name = kwargs.pop('dask_key_name', None)
+    pure = kwargs.pop('pure', pure)
+
+    if dask_key_name is None:
+        name = '%s-%s' % (funcname(func), tokenize(func, *args,
+                                                   pure=pure, **kwargs))
+    else:
+        name = dask_key_name
+
+    args, dasks = unzip(map(to_task_dasks, args), 2)
+    if kwargs:
+        dask_kwargs, dasks2 = to_task_dasks(kwargs)
+        dasks = dasks + (dasks2,)
+        task = (apply, func, list(args), dask_kwargs)
+    else:
+        task = (func,) + args
+
+    dasks = flat_unique(dasks)
+    dasks.append({name: task})
+    return Delayed(name, dasks, n=nout)
+
+
 class DelayedLeaf(Delayed):
-    def __init__(self, obj, name=None, pure=False):
-        if name is None:
-            try:
-                name = obj.__name__ + tokenize(obj, pure=pure)
-            except AttributeError:
-                name = '%s-%s' % (type(obj).__name__, tokenize(obj, pure=pure))
-        object.__setattr__(self, '_dasks', [{name: obj}])
-        object.__setattr__(self, 'pure', pure)
-
-    def __setstate__(self, state):
-        self.__init__(*state)
-        return self
-
-    def __getstate__(self):
-        return (self._data, self._key, self.pure)
+    __slots__ = ('_obj', '_key', '_pure', '_nout')
+    def __init__(self, obj, key, pure=False, nout=None):
+        self._obj = obj
+        self._key = key
+        self._pure = pure
+        self._nout = nout
 
     @property
-    def _key(self):
-        return first(self._dasks[0])
+    def dask(self):
+        return {self._key: self._obj}
 
     @property
-    def _data(self):
-        return first(self._dasks[0].values())
+    def _dasks(self):
+        return [self.dask]
 
     def __call__(self, *args, **kwargs):
-        dask_key_name = kwargs.pop('dask_key_name', None)
-        pure = kwargs.pop('pure', self.pure)
+        return call_function(self._obj, args, kwargs,
+                             pure=self._pure, nout=self._nout)
 
-        if dask_key_name is None:
-            name = (funcname(self._data) + '-' +
-                    tokenize(self._key, *args, pure=pure, **kwargs))
-        else:
-            name = dask_key_name
 
-        args, dasks = unzip(map(to_task_dasks, args), 2)
-        if kwargs:
-            dask_kwargs, dasks2 = to_task_dasks(kwargs)
-            dasks = dasks + (dasks2,)
-            task = (apply, self._data, list(args), dask_kwargs)
-        else:
-            task = (self._data,) + args
+class DelayedAttr(Delayed):
+    __slots__ = ('_obj', '_attr', '_key')
+    def __init__(self, obj, attr, key):
+        self._obj = obj
+        self._attr = attr
+        self._key = key
 
-        dasks = flat_unique(dasks)
-        dasks.append({name: task})
-        return Delayed(name, dasks)
+    @property
+    def _dasks(self):
+        return [{self._key: (getattr, self._obj._key, self._attr)}] + self._obj._dasks
+
+    def __call__(self, *args, **kwargs):
+        return call_function(methodcaller(self._attr), (self._obj,) + args, kwargs)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
