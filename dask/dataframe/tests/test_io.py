@@ -1264,7 +1264,7 @@ def test_to_csv_simple():
         df.to_csv(dir)
         assert os.listdir(dir)
         result = dd.read_csv(os.path.join(dir, '*')).compute()
-    assert (result.x == df0.x).all()
+    assert (result.x.values == df0.x.values).all()
 
 
 def test_to_csv_series():

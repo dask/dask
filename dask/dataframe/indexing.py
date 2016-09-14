@@ -80,7 +80,6 @@ def _maybe_partial_time_string(index, indexer, kind):
     Convert indexer for partial string selection
     if data has DatetimeIndex/PeriodIndex
     """
-
     # do not pass dd.Index
     assert isinstance(index, pd.Index)
 

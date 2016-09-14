@@ -114,6 +114,10 @@ def strip_categories(df):
                               else df.index)
 
 
+def iscategorical(dt):
+    return isinstance(dt, pd.types.dtypes.CategoricalDtype)
+
+
 def get_categories(df):
     """
     Get Categories of dataframe

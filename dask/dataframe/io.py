@@ -144,16 +144,16 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     ...                   index=pd.date_range(start='20100101', periods=6))
     >>> ddf = from_pandas(df, npartitions=3)
     >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
-    (Timestamp('2010-01-01 00:00:00', offset='D'),
-     Timestamp('2010-01-03 00:00:00', offset='D'),
-     Timestamp('2010-01-05 00:00:00', offset='D'),
-     Timestamp('2010-01-06 00:00:00', offset='D'))
+    (Timestamp('2010-01-01 00:00:00', freq='D'),
+     Timestamp('2010-01-03 00:00:00', freq='D'),
+     Timestamp('2010-01-05 00:00:00', freq='D'),
+     Timestamp('2010-01-06 00:00:00', freq='D'))
     >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
     >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
-    (Timestamp('2010-01-01 00:00:00', offset='D'),
-     Timestamp('2010-01-03 00:00:00', offset='D'),
-     Timestamp('2010-01-05 00:00:00', offset='D'),
-     Timestamp('2010-01-06 00:00:00', offset='D'))
+    (Timestamp('2010-01-01 00:00:00', freq='D'),
+     Timestamp('2010-01-03 00:00:00', freq='D'),
+     Timestamp('2010-01-05 00:00:00', freq='D'),
+     Timestamp('2010-01-06 00:00:00', freq='D'))
 
     Raises
     ------
@@ -559,7 +559,8 @@ dataset."""
 
 
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
-                     chunksize=int(1e6), sorted_index=False, lock=None, mode=None):
+                     chunksize=int(1e6), sorted_index=False, lock=None,
+                     mode='a'):
     """
     Read a single hdf file into a dask.dataframe. Used for each file in
     read_hdf.
@@ -657,7 +658,7 @@ def _pd_read_hdf(path, key, lock, kwargs):
 
 @wraps(pd.read_hdf)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
-             chunksize=1000000, sorted_index=False, lock=True, mode=None):
+             chunksize=1000000, sorted_index=False, lock=True, mode='a'):
     """
     Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
     can read multiple files, and read multiple keys from the same file by using
