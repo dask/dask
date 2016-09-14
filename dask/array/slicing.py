@@ -639,7 +639,7 @@ def check_index(ind, dimension):
     >>> check_index([6, 3], 5)
     Traceback (most recent call last):
     ...
-    IndexError: Index is not smaller than dimension 6 >= 5
+    IndexError: Index out of bounds 5
 
     >>> check_index(slice(0, 3), 5)
     """
