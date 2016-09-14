@@ -173,10 +173,10 @@ Schedulers execute task graphs.  Dask currently has two main schedulers, one
 for single machine processing using threads or processes, and one for
 distributed memory clusters.
 
+* :doc:`distributed`
 * :doc:`scheduler-overview`
 * :doc:`scheduler-choice`
 * :doc:`Single machine scheduler<shared>`
-* `Distributed scheduler`_  (separate webpage)
 * :doc:`scheduling-policy`
 
 .. toctree::
@@ -184,6 +184,7 @@ distributed memory clusters.
    :hidden:
    :caption: Scheduling
 
+   distributed.rst
    scheduler-overview.rst
    scheduler-choice.rst
    shared.rst
@@ -277,4 +278,3 @@ license`_.
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
 .. _`distributed scheduler`: http://distributed.readthedocs.org/en/latest/
-.. _`Distributed scheduler`: http://distributed.readthedocs.org/en/latest/
