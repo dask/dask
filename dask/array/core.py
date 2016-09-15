@@ -3087,11 +3087,17 @@ def ndimlist(seq):
 
 
 def concatenate3(arrays):
-    """ Recursive np.concatenate
+    """ Concatenates array chunks into a complete array
 
     Input should be a nested list of numpy arrays arranged in the order they
-    should appear in the array itself.  Each array should have the same number
-    of dimensions as the desired output and the nesting of the lists.
+    should appear in the complete array itself. The nesting argument `arrays` represents
+    chunks in the dask array.
+
+    All of the numpy arrays in the nesting must have the same number of dimensions. If the
+    dimension of the arrays is equal to the dimension of the nesting, the elements of the
+    numpy arrays are placed directly to the resulting array. This is the default case
+    where the result will have the shape defined by the nesting, i.e. the result will
+    match the size of the underlying dask array.
 
     >>> x = np.array([[1, 2]])
     >>> concatenate3([[x, x, x], [x, x, x]])
@@ -3102,6 +3108,16 @@ def concatenate3(arrays):
     array([[1, 2, 1, 2],
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
+
+    If the dimension of the numpy arrays is larger than the dimension of the nesting, the
+    leftover dimensions must have the same shape and are placed as sub arrays to the
+    resulting array. This is the case when dask array holds constant shape arrays as
+    elements.
+
+    >>> concatenate3([x, x])
+    array([[1, 2],
+           [1, 2]])
+
     """
     arrays = concrete(arrays)
     ndim = ndimlist(arrays)
@@ -3118,10 +3134,23 @@ def concatenate3(arrays):
         except AttributeError:
             return type(x)
 
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+    def concrete_shape(x):
+        try:
+            # Check if the array elements are numpy arrays themselves and extend the
+            # shape accordingly. Note that the element arrays are required to have
+            # a constant shape, so the shape of the leftover dimensions is constant.
+            if x.ndim > ndim:
+                return shape + x.shape[ndim:]
+        except AttributeError:
+            pass
+        return shape
+
+    darr = deepfirst(arrays)
+    result = np.empty(shape=concrete_shape(darr), dtype=dtype(darr))
 
     for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
         if hasattr(arr, 'ndim'):
+            # FIXME: the while loop seems redundant as `chunks_from_arrays` above seems to fail if arr.ndim < ndim
             while arr.ndim < ndim:
                 arr = arr[None, ...]
         result[idx] = arr
