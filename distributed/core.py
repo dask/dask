@@ -131,11 +131,12 @@ class Server(TCPServer):
     """
     default_port = 0
 
-    def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
+    def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE,
+            connection_limit=512, **kwargs):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
-        self.rpc = ConnectionPool()
+        self.rpc = ConnectionPool(limit=connection_limit)
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     @property

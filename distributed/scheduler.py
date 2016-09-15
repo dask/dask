@@ -8,6 +8,7 @@ from math import log
 import os
 import pickle
 import random
+import resource
 import socket
 from time import time
 from timeit import default_timer
@@ -307,8 +308,11 @@ class Scheduler(Server):
                  ('released', 'erred'): self.transition_released_erred
         }
 
+        connection_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0] / 2
+
         super(Scheduler, self).__init__(handlers=self.handlers,
-                max_buffer_size=max_buffer_size, io_loop=self.loop, **kwargs)
+                max_buffer_size=max_buffer_size, io_loop=self.loop,
+                connection_limit=connection_limit, **kwargs)
 
     ##################
     # Administration #
