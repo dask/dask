@@ -115,3 +115,13 @@ def test_large_messages():
     big_header = msgpack.loads(b[2], encoding='utf8')
     assert len(big_header['shards']) == 2
     assert len(big_header['keys']) + 2 + 1 == len(b)
+
+    msg = [big_bytes, {'x': big_bytes, 'y': b'small_bytes'}]
+    b = dumps(msg)
+    msg2 = loads(b)
+    assert msg == msg2
+
+    assert len(b) >= 2
+    big_header = msgpack.loads(b[2], encoding='utf8')
+    assert len(big_header['shards']) == 2
+    assert len(big_header['keys']) + 2 + 1 == len(b)

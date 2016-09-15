@@ -110,8 +110,8 @@ def _extract_big_bytes(x, big, path=()):
 def dumps(msg):
     """ Transform Python value to bytestream suitable for communication """
     big = {}
-    # Only dicts can contain big values
-    if isinstance(msg, dict):
+    # Only lists and dicts can contain big values
+    if isinstance(msg, (list, dict)):
         msg, big = extract_big_bytes(msg)
     small_header, small_payload = dumps_msgpack(msg)
     if not big:
