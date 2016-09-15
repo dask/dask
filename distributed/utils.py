@@ -184,7 +184,10 @@ def key_split(s):
         s = s[0]
     try:
         words = s.split('-')
-        result = words[0].lstrip("'(\"")
+        if not words[0][0].isalpha():
+            result = words[0].lstrip("'(\"")
+        else:
+            result = words[0]
         for word in words[1:]:
             if word.isalpha() and not (len(word) == 8 and
                                        hex_pattern.match(word) is not None):

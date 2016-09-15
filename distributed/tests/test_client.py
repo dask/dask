@@ -1935,7 +1935,7 @@ def test_Future_exception_sync_2(loop, capsys):
 
 @gen_cluster(timeout=60, client=True)
 def test_async_persist(c, s, a, b):
-    from dask.imperative import delayed, Delayed
+    from dask.delayed import delayed, Delayed
     x = delayed(1)
     y = delayed(inc)(x)
     z = delayed(dec)(x)

@@ -12,6 +12,7 @@ import tempfile
 from time import time, sleep
 
 from tornado.ioloop import IOLoop
+from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from .compatibility import JSONDecodeError
@@ -99,6 +100,8 @@ class Nanny(Server):
                             io_loop=self.loop)
             except gen.TimeoutError:
                 logger.info("Worker non-responsive.  Terminating.")
+            except StreamClosedError:
+                pass
             except Exception as e:
                 logger.exception(e)
 
@@ -118,6 +121,8 @@ class Nanny(Server):
                 logger.info("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
+            except StreamClosedError:
+                pass
             except Exception as e:
                 logger.exception(e)
 

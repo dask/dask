@@ -226,6 +226,7 @@ class Scheduler(Server):
         self.exceptions_blame = dict()
         self.datasets = dict()
         self.stealable = [set() for i in range(12)]
+        self.key_stealable = dict()
         self.stealable_unknown_durations = defaultdict(set)
 
         # Worker state
@@ -614,7 +615,7 @@ class Scheduler(Server):
 
     def stimulus_task_finished(self, key=None, worker=None, **kwargs):
         """ Mark that a task has finished execution on a particular worker """
-        logger.debug("Stimulus task finished %s, %s", key, worker)
+        # logger.debug("Stimulus task finished %s, %s", key, worker)
         self.maybe_idle.add(worker)
 
         if key not in self.task_state:
@@ -802,7 +803,7 @@ class Scheduler(Server):
         assert key not in self.waiting_data
         assert key not in self.who_has
         assert key not in self.rprocessing
-        assert key not in self.ready
+        # assert key not in self.ready
         assert key not in self.waiting
         assert not any(key in self.waiting_data.get(dep, ())
                        for dep in self.dependencies[key])
@@ -905,7 +906,7 @@ class Scheduler(Server):
         for s in streams:
             try:
                 s.send(msg)
-                logger.debug("Scheduler sends message to client %s", msg)
+                # logger.debug("Scheduler sends message to client %s", msg)
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
 
@@ -981,7 +982,7 @@ class Scheduler(Server):
                     msgs = [msgs]
 
                 for msg in msgs:
-                    logger.debug("scheduler receives message %s", msg)
+                    # logger.debug("scheduler receives message %s", msg)
                     try:
                         op = msg.pop('op')
                     except Exception as e:
@@ -1073,8 +1074,8 @@ class Scheduler(Server):
                 if worker in self.worker_info:
                     recommendations = OrderedDict()
                     for msg in msgs:
-                        logger.debug("Compute response from worker %s, %s",
-                                     worker, msg)
+                        # logger.debug("Compute response from worker %s, %s",
+                        #              worker, msg)
 
                         if msg == 'OK':  # from close
                             break
@@ -1768,7 +1769,7 @@ class Scheduler(Server):
             self.task_state[key] = 'processing'
             self.remove_key_from_stealable(key)
 
-            logger.debug("Send job to worker: %s, %s", worker, key)
+            # logger.debug("Send job to worker: %s, %s", worker, key)
 
             try:
                 self.send_task_to_worker(worker, key)
@@ -2059,9 +2060,7 @@ class Scheduler(Server):
                 assert key not in self.who_has
                 assert self.task_state[key] in ('stacks', 'queue', 'no-worker')
 
-            if self.task_state[key] == 'queue':  # TODO: expensive
-                self.ready.remove(key)
-            if self.task_state[key] == 'no-worker':  # TODO: expensive
+            if self.task_state[key] == 'no-worker':
                 self.unrunnable.remove(key)
             if self.task_state[key] == 'stacks':
                 for v in self.stacks.values():
@@ -2184,7 +2183,7 @@ class Scheduler(Server):
                 assert key in self.waiting_data
                 assert key in self.who_has
                 assert key not in self.rprocessing
-                assert key not in self.ready
+                # assert key not in self.ready
                 assert key not in self.waiting
 
             recommendations = {}
@@ -2244,7 +2243,7 @@ class Scheduler(Server):
                                    for dep in self.dependencies[key])
                 assert key not in self.who_has
                 assert key not in self.rprocessing
-                assert key not in self.ready
+                # assert key not in self.ready
                 assert key not in self.waiting
 
             recommendations = {}
@@ -2445,6 +2444,8 @@ class Scheduler(Server):
                         tasks = []
                         while self.ready and total_free_time > 0:
                             task = self.ready.pop()
+                            if self.task_state.get(task) != 'queue':
+                                continue
                             total_free_time -= self.task_duration.get(key_split(task), 1)
                             tasks.append(task)
 
@@ -2497,10 +2498,11 @@ class Scheduler(Server):
         ratio, loc = self.steal_time_ratio(key)
         if ratio is not None:
             self.stealable[loc].add(key)
+            self.key_stealable[key] = loc
 
     def remove_key_from_stealable(self, key):
-        ratio, loc = self.steal_time_ratio(key)
-        if ratio is not None:
+        loc = self.key_stealable.pop(key, None)
+        if loc is not None:
             try:
                 self.stealable[loc].remove(key)
             except:
@@ -2518,7 +2520,9 @@ class Scheduler(Server):
         for i in range(count):
             try:
                 key = self.ready.pop()
-            except KeyError:
+                while self.task_state.get(key) != 'queue':
+                    key = self.ready.pop()
+            except (IndexError, KeyError):
                 break
 
             if self.task_state[key] == 'queue':
@@ -2584,15 +2588,16 @@ class Scheduler(Server):
 
         nbytes = sum(self.nbytes.get(k, 1000) for k in self.dependencies[key])
         transfer_time = nbytes / bandwidth
+        split = key_split(key)
         try:
-            compute_time = self.task_duration[key_split(key)]
+            compute_time = self.task_duration[split]
         except KeyError:
-            self.stealable_unknown_durations[key_split(key)].add(key)
+            self.stealable_unknown_durations[split].add(key)
             return None, None
         else:
-            if transfer_time:
+            try:
                 ratio = compute_time / transfer_time
-            else:
+            except ZeroDivisionError:
                 ratio = 10000
             if ratio > 8:
                 loc = 0
@@ -2736,42 +2741,41 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
     ...               {}, set(), nbytes, 'c')
     'bob:8000'
     """
-    with log_errors(): # removeme
-        deps = dependencies[key]
-        assert all(d in who_has for d in deps)
-        workers = frequencies([w for dep in deps
-                                 for w in who_has[dep]])
+    deps = dependencies[key]
+    assert all(d in who_has for d in deps)
+    workers = frequencies([w for dep in deps
+                             for w in who_has[dep]])
+    if not workers:
+        workers = stacks
+    if key in restrictions:
+        r = restrictions[key]
+        workers = {w for w in workers if w in r or w.split(':')[0] in r}  # TODO: nonlinear
         if not workers:
-            workers = stacks
-        if key in restrictions:
-            r = restrictions[key]
-            workers = {w for w in workers if w in r or w.split(':')[0] in r}  # TODO: nonlinear
+            workers = {w for w in stacks if w in r or w.split(':')[0] in r}
             if not workers:
-                workers = {w for w in stacks if w in r or w.split(':')[0] in r}
-                if not workers:
-                    if key in loose_restrictions:
-                        return decide_worker(dependencies, stacks, processing,
-                                who_has, has_what, {}, set(), nbytes, key)
-                    else:
-                        return None
-        if not workers or not stacks:
-            return None
+                if key in loose_restrictions:
+                    return decide_worker(dependencies, stacks, processing,
+                            who_has, has_what, {}, set(), nbytes, key)
+                else:
+                    return None
+    if not workers or not stacks:
+        return None
 
-        if len(workers) == 1:
-            return first(workers)
+    if len(workers) == 1:
+        return first(workers)
 
-        commbytes = {w: sum([nbytes.get(k, 1000) for k in dependencies[key]
-                                       if w not in who_has[k]])
-                     for w in workers}
+    commbytes = {w: sum([nbytes.get(k, 1000) for k in dependencies[key]
+                                   if w not in who_has[k]])
+                 for w in workers}
 
-        minbytes = min(commbytes.values())
-        workers = {w for w, nb in commbytes.items() if nb == minbytes}
+    minbytes = min(commbytes.values())
+    workers = {w for w, nb in commbytes.items() if nb == minbytes}
 
-        def objective(w):
-            return (len(stacks[w]) + len(processing[w]),
-                    len(has_what.get(w, ())))
-        worker = min(workers, key=objective)
-        return worker
+    def objective(w):
+        return (len(stacks[w]) + len(processing[w]),
+                len(has_what.get(w, ())))
+    worker = min(workers, key=objective)
+    return worker
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data, ready,

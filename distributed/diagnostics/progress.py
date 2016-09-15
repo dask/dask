@@ -273,7 +273,10 @@ class AllProgress(SchedulerPlugin):
             self.all[k].remove(key)
             if not self.all[k]:
                 del self.all[k]
-                del self.nbytes[k]
+                try:
+                    del self.nbytes[k]
+                except KeyError:
+                    pass
                 for v in self.state.values():
                     try:
                         del v[k]
