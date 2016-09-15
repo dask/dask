@@ -1501,7 +1501,7 @@ class Series(_Frame):
                                                        (key._name, i)))
                         for i in range(self.npartitions))
             return Series(merge(self.dask, key.dask, dsk), name,
-                          self.name, self.divisions)
+                          self._meta, self.divisions)
         raise NotImplementedError()
 
     @derived_from(pd.DataFrame)

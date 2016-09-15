@@ -1988,3 +1988,14 @@ def test_idxmaxmin(idx, skipna):
     assert eq(pdf.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
     assert eq(pdf.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
     assert eq(pdf.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+
+
+def test_getitem_meta():
+    data = {'col1': ['a', 'a', 'b'],
+            'col2': [0, 1, 0]}
+
+    df = pd.DataFrame(data=data, columns=['col1', 'col2'])
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    eq(df.col2[df.col1 == 'a'],
+       ddf.col2[ddf.col1 == 'a'])
