@@ -229,6 +229,17 @@ class _Frame(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
+    def __init__(self, dsk, _name, meta, divisions):
+        self.dask = dsk
+        self._name = _name
+        meta = make_meta(meta)
+        if not isinstance(meta, self._partition_type):
+            raise ValueError("Expected meta to specify type {0}, got type "
+                             "{1}".format(self._partition_type.__name__,
+                                          type(meta).__name__))
+        self._meta = meta
+        self.divisions = tuple(divisions)
+
     # constructor properties
     # http://pandas.pydata.org/pandas-docs/stable/internals.html#override-constructor-properties
 
@@ -1400,13 +1411,6 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
-    def __init__(self, dsk, _name, meta, divisions):
-        super(Series, self).__init__()
-        self.dask = dsk
-        self._name = _name
-        self._meta = make_meta(meta)
-        self.divisions = tuple(divisions)
-
     @property
     def _constructor_sliced(self):
         return Scalar
@@ -1841,13 +1845,6 @@ class DataFrame(_Frame):
 
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
-
-    def __init__(self, dsk, name, meta, divisions):
-        super(DataFrame, self).__init__()
-        self.dask = dsk
-        self._name = name
-        self._meta = make_meta(meta)
-        self.divisions = tuple(divisions)
 
     @property
     def _constructor_sliced(self):
