@@ -11,8 +11,24 @@ Install
 See :doc:`installation <install>` document for more information.
 
 
+Setup Dask.distributed the Easy Way
+-----------------------------------
+
+If you create an client without providing an address it will start up a local
+scheduler and worker for you.
+
+.. code-block:: python
+
+   >>> from distributed import Client
+   >>> client = Client()
+   >>> client
+   <Client: scheduler="127.0.0.1:8786" processes=8 cores=8>
+   
+   
+
 Setup Dask.distributed the Hard Way
 -----------------------------------
+This allows dask.distributed to use multiple machines as workers.
 
 Set up scheduler and worker processes on your local computer::
 
@@ -35,19 +51,6 @@ Launch an Client and point it to the IP/port of the scheduler.
 
 See :doc:`setup <setup>` for advanced use.
 
-
-Setup Dask.distributed the Easy Way
------------------------------------
-
-If you create an client without providing an address it will start up a local
-scheduler and worker for you.
-
-.. code-block:: python
-
-   >>> from distributed import Client
-   >>> client = Client()
-   >>> client
-   <Client: scheduler="127.0.0.1:8786" processes=8 cores=8>
 
 
 Map and Submit Functions
