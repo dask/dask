@@ -33,8 +33,11 @@ node that hosts ``dask-scheduler``::
    Registered with center at:  192.168.0.1:8786
 
 There are various mechanisms to deploy these executables on a cluster, ranging
-from manually SSH-ing into all of the nodes to more automated systems like
-SGE/SLURM/Torque or Yarn/Mesos.
+from manualy SSH-ing into all of the nodes to more automated systems like
+SGE/SLURM/Torque or Yarn/Mesos. Additionally, cluster SSH tools exist to
+send the same commands to many machines. One example is `tmux-cssh`__.
+
+__ https://github.com/dennishafemann/tmux-cssh
 
 
 Using SSH
