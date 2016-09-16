@@ -173,7 +173,7 @@ class Scheduler(Server):
 
     def __init__(self, center=None, loop=None,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            synchronize_worker_interval=5000,
+            synchronize_worker_interval=60000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
             validate=False, **kwargs):
 
@@ -1157,7 +1157,8 @@ class Scheduler(Server):
                                    keys=list(keys - self.has_what.get(worker,
                                                                       set())),
                                    report=False)
-                          for worker, keys in d.items()]
+                          for worker, keys in d.items()
+                          if keys]
             for worker, keys in d.items():
                 logger.debug("Remove %d keys from worker %s", len(keys), worker)
             yield ignore_exceptions(coroutines, socket.error, StreamClosedError)

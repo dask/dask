@@ -107,7 +107,7 @@ def processing():
 
 def on_server_loaded(server_context):
     n = 60
-    messages['workers'] = {'interval': 500,
+    messages['workers'] = {'interval': 1000,
                            'deque': deque(maxlen=n),
                            'times': deque(maxlen=n),
                            'index': deque(maxlen=n),
@@ -118,7 +118,7 @@ def on_server_loaded(server_context):
                                          'network-recv': deque(maxlen=n)}}
     server_context.add_periodic_callback(workers, 500)
 
-    messages['tasks'] = {'interval': 100,
+    messages['tasks'] = {'interval': 150,
                          'deque': deque(maxlen=100),
                          'times': deque(maxlen=100)}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
