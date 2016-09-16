@@ -109,6 +109,7 @@ class Worker(Server):
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
+        self.memory_limit = memory_limit
         if memory_limit:
             try:
                 from zict import Buffer, File, Func
@@ -180,7 +181,6 @@ class Worker(Server):
                 yield self.scheduler.register(address=self.address, name=self.name,
                                         ncores=self.ncores,
                                         now=time(),
-                                        info=self.process_health(),
                                         host_info=self.host_health(),
                                         services=self.service_ports,
                                         **self.process_health())
@@ -211,6 +211,7 @@ class Worker(Server):
                         now=time(),
                         host_info=self.host_health(),
                         services=self.service_ports,
+                        memory_limit=self.memory_limit,
                         **self.process_health())
                 break
             except (OSError, StreamClosedError):

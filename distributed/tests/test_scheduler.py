@@ -1000,3 +1000,11 @@ def test_scatter_no_workers(s):
            w._start()]
 
     assert w.data['x'] == 1
+
+
+@gen_cluster(ncores=[])
+def test_scheduler_sees_memory_limits(s):
+    w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1', memory_limit=12345)
+    yield w._start(0)
+
+    assert s.worker_info[w.address]['memory_limit'] == 12345
