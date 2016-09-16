@@ -401,20 +401,13 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [[1, 5, 9], [2, 19], [5]]
     """
-    seq = list(seq)
-    pretotal = 0
-    total = 0
-    i = 0
-    result = list()
-    for s in sizes:
-        total += s
-        L = list()
-        while i < len(seq) and seq[i] < total:
-            L.append(seq[i] - pretotal)
-            i += 1
-        result.append(L)
-        pretotal += s
-    return result
+    seq = np.array(seq)
+    right = np.cumsum(sizes)
+    locations = np.searchsorted(seq, right)
+    locations = [0] + locations.tolist()
+    left = [0] + right.tolist()
+    return [(seq[locations[i]:locations[i+1]] - left[i]).tolist()
+            for i in range(len(locations) - 1)]
 
 
 def issorted(seq):
@@ -560,7 +553,7 @@ def posify_index(shape, ind):
         else:
             return ind
     if isinstance(ind, list):
-        return [posify_index(shape, i) for i in ind]
+        return [i + shape if i < 0 else i for i in ind]
     return ind
 
 
@@ -646,13 +639,14 @@ def check_index(ind, dimension):
     >>> check_index([6, 3], 5)
     Traceback (most recent call last):
     ...
-    IndexError: Index is not smaller than dimension 6 >= 5
+    IndexError: Index out of bounds 5
 
     >>> check_index(slice(0, 3), 5)
     """
     if isinstance(ind, list):
-        for i in ind:
-            check_index(i, dimension)
+        x = np.array(ind)
+        if (x >= dimension).any() or (x <= -dimension).any():
+            raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
 
