@@ -150,6 +150,8 @@ class Scheduler(Server):
         Information about each worker
     * **host_info:** ``{hostname: dict}``:
         Information about each worker host
+    * **worker_bytes:** ``{worker: int}``:
+        Number of bytes in memory on each worker
     * **occupancy:** ``{worker: time}``
         Expected runtime for all tasks currently processing on a worker
 
@@ -204,6 +206,7 @@ class Scheduler(Server):
         self.released = set()
         self.priority = dict()
         self.nbytes = dict()
+        self.worker_bytes = dict()
         self.processing = dict()
         self.rprocessing = defaultdict(set)
         self.task_duration = {prefix: 0.00001 for prefix in fast_task_prefixes}
@@ -349,7 +352,7 @@ class Scheduler(Server):
         collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.released, self.priority,
                 self.nbytes, self.restrictions, self.loose_restrictions,
-                self.ready, self.who_wants, self.wants_what]
+                self.ready, self.who_wants, self.wants_what, self.worker_bytes]
         for collection in collections:
             collection.clear()
 
@@ -491,6 +494,7 @@ class Scheduler(Server):
 
             if address not in self.processing:
                 self.has_what[address] = set()
+                self.worker_bytes[address] = 0
                 self.processing[address] = dict()
                 self.occupancy[address] = 0
                 self.stacks[address] = deque()
@@ -633,6 +637,8 @@ class Scheduler(Server):
 
         if self.task_state[key] == 'memory':
             self.who_has[key].add(worker)
+            if key not in self.has_what[worker]:
+                self.worker_bytes[worker] += self.nbytes.get(key, 1000)
             self.has_what[worker].add(key)
 
         return recommendations
@@ -667,6 +673,7 @@ class Scheduler(Server):
                 for w in set(self.who_has[k]):
                     self.has_what[w].remove(k)
                     self.who_has[k].remove(w)
+                    self.worker_bytes[w] -= self.nbytes.get(k, 1000)
                 recommendations[k] = 'released'
 
         if key:
@@ -736,6 +743,7 @@ class Scheduler(Server):
                     recommendations[k] = 'waiting'
 
             del self.occupancy[address]
+            del self.worker_bytes[address]
 
             for key in self.has_what.pop(address):
                 self.who_has[key].remove(address)
@@ -887,6 +895,9 @@ class Scheduler(Server):
                 set(self.worker_info) == \
                 set(self.worker_streams)):
             raise ValueError("Workers not the same in all collections")
+
+        assert self.worker_bytes == {w: sum(self.nbytes[k] for k in keys)
+                                     for w, keys in self.has_what.items()}
 
     ###################
     # Manage Messages #
@@ -1370,6 +1381,7 @@ class Scheduler(Server):
             for sender, recipient, key in msgs:
                 self.who_has[key].add(recipient)
                 self.has_what[recipient].add(key)
+                self.worker_bytes[recipient] += self.nbytes.get(key, 1000)
 
             result = yield {r: self.rpc(addr=r).delete_data(keys=v, report=False)
                             for r, v in to_senders.items()}
@@ -1377,6 +1389,7 @@ class Scheduler(Server):
             for sender, recipient, key in msgs:
                 self.who_has[key].remove(sender)
                 self.has_what[sender].remove(key)
+                self.worker_bytes[sender] -= self.nbytes.get(key, 1000)
 
             raise Return({'status': 'OK'})
 
@@ -1428,6 +1441,7 @@ class Scheduler(Server):
                 self.has_what[worker] -= keys
                 for key in keys:
                     self.who_has[key].remove(worker)
+                    self.worker_bytes[worker] -= self.nbytes.get(key, 1000)
 
             keys = {k for k in keys if len(self.who_has[k] & workers) < n}
             # Copy not-yet-filled data
@@ -1490,6 +1504,8 @@ class Scheduler(Server):
         address = coerce_to_address(address)
         for key in keys:
             if key in self.who_has:
+                if key not in self.has_what[address]:
+                    self.worker_bytes[address] += self.nbytes.get(key, 1000)
                 self.has_what[address].add(key)
                 self.who_has[key].add(address)
             # else:
@@ -1524,6 +1540,8 @@ class Scheduler(Server):
                 self.task_state[key] = 'memory'
                 self.who_has[key] = set(workers)
                 for w in workers:
+                    if key not in self.has_what[w]:
+                        self.worker_bytes[w] += self.nbytes.get(key, 1000)
                     self.has_what[w].add(key)
                 self.waiting_data[key] = set()
                 self.report({'op': 'key-in-memory',
@@ -1805,6 +1823,9 @@ class Scheduler(Server):
 
                 assert self.task_state[key] == 'processing'
 
+            if worker not in self.processing:
+                return {key: 'released'}
+
             #############################
             # Update Timing Information #
             #############################
@@ -1841,6 +1862,7 @@ class Scheduler(Server):
             if worker:
                 self.who_has[key].add(worker)
                 self.has_what[worker].add(key)
+                self.worker_bytes[worker] += self.nbytes.get(key, 1000)
 
             if nbytes:
                 self.nbytes[key] = nbytes
@@ -1917,6 +1939,7 @@ class Scheduler(Server):
             for w in workers:
                 if w in self.worker_info:  # in case worker has died
                     self.has_what[w].remove(key)
+                    self.worker_bytes[w] -= self.nbytes.get(key, 1000)
                     self.deleted_keys[w].add(key)
 
             self.released.add(key)
@@ -2214,6 +2237,7 @@ class Scheduler(Server):
             for w in workers:
                 if w in self.worker_info:  # in case worker has died
                     self.has_what[w].remove(key)
+                    self.worker_bytes[w] -= self.nbytes.get(key, 1000)
                     self.deleted_keys[w].add(key)
 
             if self.validate:
