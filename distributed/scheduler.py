@@ -1319,7 +1319,16 @@ class Scheduler(Server):
 
     @gen.coroutine
     def rebalance(self, stream=None, keys=None, workers=None):
-        """ Rebalance keys so that each worker stores roughly equal bytes """
+        """ Rebalance keys so that each worker stores roughly equal bytes
+
+        **Policy**
+
+        This orders the workers by what fraction of bytes of the existing keys
+        they have.  It walks down this list from most-to-least.  At each worker
+        it sends the largest results it can find and sends them to the least
+        occupied worker until either the sender or the recipient are at the
+        average expected load.
+        """
         with log_errors():
             keys = set(keys or self.who_has)
             workers = set(workers or self.ncores)
@@ -1345,13 +1354,15 @@ class Scheduler(Server):
             recipient = next(recipients)
             msgs = []  # (sender, recipient, key)
             for sender in sorted_workers[:len(workers) // 2]:
-                sender_keys = {k: self.nbytes.get(k, 1000) for k in keys_by_worker[sender]}
+                sender_keys = {k: self.nbytes.get(k, 1000)
+                                for k in keys_by_worker[sender]}
                 sender_keys = iter(sorted(sender_keys.items(),
                                           key=second, reverse=True))
 
                 try:
                     while worker_bytes[sender] > avg:
-                        while worker_bytes[recipient] < avg and worker_bytes[sender] > avg:
+                        while (worker_bytes[recipient] < avg and
+                               worker_bytes[sender] > avg):
                             k, nb = next(sender_keys)
                             if k not in keys_by_worker[recipient]:
                                 keys_by_worker[recipient].add(k)
@@ -1394,7 +1405,8 @@ class Scheduler(Server):
             raise Return({'status': 'OK'})
 
     @gen.coroutine
-    def replicate(self, stream=None, keys=None, n=None, workers=None, branching_factor=2):
+    def replicate(self, stream=None, keys=None, n=None, workers=None,
+            branching_factor=2, delete=True):
         """ Replicate data throughout cluster
 
         This performs a tree copy of the data throughout the network
@@ -1428,20 +1440,20 @@ class Scheduler(Server):
                               'keys': list(keys - set(self.who_has))})
 
             # Delete extraneous data
-            del_keys = {k: random.sample(self.who_has[k] & workers,
-                                         len(self.who_has[k] & workers) - n)
-                        for k in keys
-                        if len(self.who_has[k] & workers) > n}
-            del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
-            yield [self.rpc(addr=worker).delete_data(keys=list(keys),
-                                                     report=False)
-                    for worker, keys in del_workers.items()]
+            if delete:
+                del_keys = {k: random.sample(self.who_has[k] & workers,
+                                             len(self.who_has[k] & workers) - n)
+                            for k in keys
+                            if len(self.who_has[k] & workers) > n}
+                del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
+                yield [self.rpc(addr=worker).delete_data(keys=list(keys),
+                                                         report=False)
+                        for worker, keys in del_workers.items()]
 
-            for worker, keys in del_workers.items():
-                self.has_what[worker] -= keys
-                for key in keys:
-                    self.who_has[key].remove(worker)
-                    self.worker_bytes[worker] -= self.nbytes.get(key, 1000)
+                for worker, keys in del_workers.items():
+                    self.has_what[worker] -= keys
+                    for key in keys:
+                        self.who_has[key].remove(worker)
 
             keys = {k for k in keys if len(self.who_has[k] & workers) < n}
             # Copy not-yet-filled data
@@ -1463,6 +1475,20 @@ class Scheduler(Server):
                 for w, v in results.items():
                     if v['status'] == 'OK':
                         self.add_keys(address=w, keys=list(gathers[w]))
+
+    @gen.coroutine
+    def retire_workers(self, stream=None, workers=None):
+        workers = set(workers)
+        keys = set.union(*[self.has_what[w] for w in workers])
+        keys = {k for k in keys if self.who_has[k].issubset(workers)}
+
+        other_workers = set(self.worker_info) - workers
+
+        yield self.replicate(keys=keys, workers=other_workers, n=1,
+                             delete=False)
+
+        for w in workers:
+            self.remove_worker(address=w)
 
     @gen.coroutine
     def synchronize_worker_data(self, stream=None, worker=None):

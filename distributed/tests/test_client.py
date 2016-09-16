@@ -3571,3 +3571,29 @@ def test_scatter_type(c, s, a, b):
 
     d = yield c._scatter({'x': 1.0})
     assert d['x'].type == float
+
+
+@gen_cluster(client=True)
+def test_retire_workers(c, s, a, b):
+    [x] = yield c._scatter([1], workers=a.address)
+
+    yield s.retire_workers(workers=[a.address])
+    assert b.data == {x.key: 1}
+    assert s.who_has == {x.key: {b.address}}
+    assert s.has_what == {b.address: {x.key}}
+
+    assert a.address not in s.worker_info
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_retire_many_workers(c, s, *workers):
+    futures = yield c._scatter(list(range(100)))
+
+    yield s.retire_workers(workers=[w.address for w in workers[:7]])
+
+    results = yield c._gather(futures)
+    assert results == list(range(100))
+
+    assert len(s.has_what) == len(s.ncores) == 3
+    for w, keys in s.has_what.items():
+        assert 20 < len(keys) < 50

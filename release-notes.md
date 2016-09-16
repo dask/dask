@@ -1,3 +1,8 @@
+1.13.3
+------
+
+*  Schedulers can retire workers cleanly
+
 1.13.2
 ------
 
