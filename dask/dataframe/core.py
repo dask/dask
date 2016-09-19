@@ -1944,6 +1944,11 @@ class DataFrame(_Frame):
         """ Return data types """
         return self._meta.dtypes
 
+    @derived_from(pd.DataFrame)
+    def select_dtypes(self, include=None, exclude=None):
+        cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
+        return self[list(cs)]
+
     def set_index(self, other, drop=True, sorted=False, **kwargs):
         """ Set the DataFrame index (row labels) using an existing column
 
