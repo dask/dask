@@ -1398,6 +1398,25 @@ def test_eval():
                 d.eval('z = x + y', inplace=None)
 
 
+@pytest.mark.parametrize('include, exclude', [
+    ([int], None),
+    (None, [int]),
+    ([np.number, object], [float]),
+    (['datetime'], None)
+])
+def test_select_dtypes(include, exclude):
+    n = 10
+    df = pd.DataFrame({'cint': [1] * n,
+                       'cstr': ['a'] * n,
+                       'clfoat': [1.] * n,
+                       'cdt': pd.date_range('2016-01-01', periods=n)
+        })
+    a = dd.from_pandas(df, npartitions=2)
+    result = a.select_dtypes(include=include, exclude=exclude)
+    expected = df.select_dtypes(include=include, exclude=exclude)
+    assert eq(result, expected)
+
+
 def test_deterministic_arithmetic_names():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
