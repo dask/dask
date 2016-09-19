@@ -18,7 +18,7 @@ from tornado import gen
 from .compatibility import JSONDecodeError
 from .core import Server, rpc, write
 from .utils import get_ip, ignoring, log_errors, tmpfile
-from .worker import _ncores, Worker, run
+from .worker import _ncores, Worker, run, TOTAL_MEMORY
 
 nanny_environment = os.path.dirname(sys.executable)
 
@@ -32,8 +32,8 @@ class Nanny(Server):
     """
     def __init__(self, scheduler_ip, scheduler_port, ip=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, memory_limit=None, environment=nanny_environment,
-                 quiet=False, **kwargs):
+                 name=None, memory_limit=TOTAL_MEMORY,
+                 environment=nanny_environment, quiet=False, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self._given_worker_port = worker_port

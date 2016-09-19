@@ -39,6 +39,12 @@ thread_state = local()
 
 logger = logging.getLogger(__name__)
 
+try:
+    import psutil
+    TOTAL_MEMORY = psutil.virtual_memory().total
+except ImportError:
+    logger.warn("Please install psutil to estimate worker memory use")
+    TOTAL_MEMORY = 8e9
 
 class Worker(Server):
     """ Worker Node
@@ -102,7 +108,8 @@ class Worker(Server):
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
-                 name=None, heartbeat_interval=5000, memory_limit=None, **kwargs):
+                 name=None, heartbeat_interval=5000, memory_limit=TOTAL_MEMORY,
+                 **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
@@ -183,6 +190,7 @@ class Worker(Server):
                                         now=time(),
                                         host_info=self.host_health(),
                                         services=self.service_ports,
+                                        memory_limit=self.memory_limit,
                                         **self.process_health())
             finally:
                 self.heartbeat_active = False
@@ -228,7 +236,9 @@ class Worker(Server):
 
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id,
-                'scheduler': (self.scheduler.ip, self.scheduler.port)}
+                'scheduler': (self.scheduler.ip, self.scheduler.port),
+                'ncores': self.ncores,
+                'memory_limit': self.memory_limit}
 
     @gen.coroutine
     def _close(self, report=True, timeout=10):
