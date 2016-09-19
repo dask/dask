@@ -1,3 +1,4 @@
+from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import sys

@@ -58,6 +58,7 @@ class LocalCluster(object):
             silence_logs=logging.CRITICAL, diagnostics_port=8787,
             services={'http': HTTPScheduler}, **kwargs):
         self.status = None
+        self.nanny = nanny
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',
@@ -111,7 +112,9 @@ class LocalCluster(object):
     __repr__ = __str__
 
     @gen.coroutine
-    def _start_worker(self, port=0, nanny=True, **kwargs):
+    def _start_worker(self, port=0, nanny=None, **kwargs):
+        if nanny is None:
+            nanny = self.nanny
         if nanny:
             W = Nanny
             kwargs['quiet'] = True
@@ -119,7 +122,12 @@ class LocalCluster(object):
             W = Worker
         w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop, **kwargs)
         yield w._start(port)
+
         self.workers.append(w)
+
+        while w.worker_address not in self.scheduler.worker_info:
+            yield gen.sleep(0.01)
+
         raise gen.Return(w)
 
     def start_worker(self, port=0, ncores=0, **kwargs):

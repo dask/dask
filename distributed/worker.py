@@ -179,6 +179,11 @@ class Worker(Server):
                                                    io_loop=self.loop)
         self.loop.add_callback(self.heartbeat_callback.start)
 
+    @property
+    def worker_address(self):
+        """ For API compatibility with Nanny """
+        return self.address
+
     @gen.coroutine
     def heartbeat(self):
         if not self.heartbeat_active:

@@ -352,7 +352,7 @@ class Scheduler(Server):
         collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.released, self.priority,
                 self.nbytes, self.restrictions, self.loose_restrictions,
-                self.ready, self.who_wants, self.wants_what, self.worker_bytes]
+                self.ready, self.who_wants, self.wants_what]
         for collection in collections:
             collection.clear()
 
@@ -686,7 +686,7 @@ class Scheduler(Server):
 
         return {}
 
-    def remove_worker(self, stream=None, address=None):
+    def remove_worker(self, stream=None, address=None, safe=False):
         """
         Remove worker from cluster
 
@@ -727,13 +727,13 @@ class Scheduler(Server):
 
             in_flight = set(self.processing.pop(address))
             for k in list(in_flight):
-                self.suspicious_tasks[k] += 1
                 self.rprocessing[k].remove(address)
-                if self.suspicious_tasks[k] > self.allowed_failures:
+                if not safe:
+                    self.suspicious_tasks[k] += 1
+                if not safe and self.suspicious_tasks[k] > self.allowed_failures:
                     e = pickle.dumps(KilledWorker(k, address))
                     r = self.transition(k, 'erred', exception=e, cause=k)
                     recommendations.update(r)
-                    # TODO: add to recommendations
                     in_flight.remove(k)
                 elif not self.rprocessing[k]:
                     recommendations[k] = 'released'
@@ -1425,70 +1425,109 @@ class Scheduler(Server):
         --------
         Scheduler.rebalance
         """
-        with log_errors():
-            workers = set(self.workers_list(workers))
-            if n is None:
-                n = len(workers)
-            n = min(n, len(workers))
-            keys = set(keys)
+        workers = set(self.workers_list(workers))
+        if n is None:
+            n = len(workers)
+        n = min(n, len(workers))
+        keys = set(keys)
 
-            if n == 0:
-                raise ValueError("Can not use replicate to delete data")
+        if n == 0:
+            raise ValueError("Can not use replicate to delete data")
 
-            if not keys.issubset(self.who_has):
-                raise Return({'status': 'missing-data',
-                              'keys': list(keys - set(self.who_has))})
+        if not keys.issubset(self.who_has):
+            raise Return({'status': 'missing-data',
+                          'keys': list(keys - set(self.who_has))})
 
-            # Delete extraneous data
-            if delete:
-                del_keys = {k: random.sample(self.who_has[k] & workers,
-                                             len(self.who_has[k] & workers) - n)
-                            for k in keys
-                            if len(self.who_has[k] & workers) > n}
-                del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
-                yield [self.rpc(addr=worker).delete_data(keys=list(keys),
-                                                         report=False)
-                        for worker, keys in del_workers.items()]
+        # Delete extraneous data
+        if delete:
+            del_keys = {k: random.sample(self.who_has[k] & workers,
+                                         len(self.who_has[k] & workers) - n)
+                        for k in keys
+                        if len(self.who_has[k] & workers) > n}
+            del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
+            yield [self.rpc(addr=worker).delete_data(keys=list(keys),
+                                                     report=False)
+                    for worker, keys in del_workers.items()]
 
-                for worker, keys in del_workers.items():
-                    self.has_what[worker] -= keys
-                    for key in keys:
-                        self.who_has[key].remove(worker)
+            for worker, keys in del_workers.items():
+                self.has_what[worker] -= keys
+                for key in keys:
+                    self.who_has[key].remove(worker)
+                    self.worker_bytes[worker] -= self.nbytes.get(key, 1000)
 
-            keys = {k for k in keys if len(self.who_has[k] & workers) < n}
-            # Copy not-yet-filled data
-            while keys:
-                gathers = defaultdict(dict)
-                for k in list(keys):
-                    missing = workers - self.who_has[k]
-                    count = min(max(n - len(self.who_has[k] & workers), 0),
-                                branching_factor * len(self.who_has[k]))
-                    if not count:
-                        keys.remove(k)
-                    else:
-                        sample = random.sample(missing, count)
-                        for w in sample:
-                            gathers[w][k] = list(self.who_has[k])
+        keys = {k for k in keys if len(self.who_has[k] & workers) < n}
+        # Copy not-yet-filled data
+        while keys:
+            gathers = defaultdict(dict)
+            for k in list(keys):
+                missing = workers - self.who_has[k]
+                count = min(max(n - len(self.who_has[k] & workers), 0),
+                            branching_factor * len(self.who_has[k]))
+                if not count:
+                    keys.remove(k)
+                else:
+                    sample = random.sample(missing, count)
+                    for w in sample:
+                        gathers[w][k] = list(self.who_has[k])
 
-                results = yield {w: self.rpc(addr=w).gather(who_has=who_has)
-                                    for w, who_has in gathers.items()}
-                for w, v in results.items():
-                    if v['status'] == 'OK':
-                        self.add_keys(address=w, keys=list(gathers[w]))
+            results = yield {w: self.rpc(addr=w).gather(who_has=who_has)
+                                for w, who_has in gathers.items()}
+            for w, v in results.items():
+                if v['status'] == 'OK':
+                    self.add_keys(address=w, keys=list(gathers[w]))
+
+    def workers_to_close(self, memory_ratio=2):
+        if not self.idle or self.ready:
+            return []
+
+        limit_bytes = {w: self.worker_info[w]['memory_limit']
+                        for w in self.worker_info}
+        worker_bytes = self.worker_bytes
+
+        limit = sum(limit_bytes.values())
+        total = sum(worker_bytes.values())
+        idle = sorted(self.idle, key=worker_bytes.get, reverse=True)
+
+        to_close = []
+
+        while idle:
+            w = idle.pop()
+            limit -= limit_bytes[w]
+            if limit >= memory_ratio * total:  # still plenty of space
+                to_close.append(w)
+            else:
+                break
+
+        return to_close
 
     @gen.coroutine
-    def retire_workers(self, stream=None, workers=None):
+    def retire_workers(self, stream=None, workers=None, remove=True):
+        if workers is None:
+            while True:
+                try:
+                    workers = self.workers_to_close()
+                    if workers:
+                        yield self.retire_workers(workers=workers, remove=remove)
+                    raise gen.Return(list(workers))
+                except KeyError:  # keys left during replicate
+                    pass
+
         workers = set(workers)
         keys = set.union(*[self.has_what[w] for w in workers])
         keys = {k for k in keys if self.who_has[k].issubset(workers)}
 
         other_workers = set(self.worker_info) - workers
+        if keys:
+            if other_workers:
+                yield self.replicate(keys=keys, workers=other_workers, n=1,
+                                    delete=False)
+            else:
+                raise gen.Return([])
 
-        yield self.replicate(keys=keys, workers=other_workers, n=1,
-                             delete=False)
-
-        for w in workers:
-            self.remove_worker(address=w)
+        if remove:
+            for w in workers:
+                self.remove_worker(address=w, safe=True)
+        raise gen.Return(list(workers))
 
     @gen.coroutine
     def synchronize_worker_data(self, stream=None, worker=None):
@@ -1528,6 +1567,8 @@ class Scheduler(Server):
         reasons.
         """
         address = coerce_to_address(address)
+        if address not in self.worker_info:
+            return 'not found'
         for key in keys:
             if key in self.who_has:
                 if key not in self.has_what[address]:
@@ -2868,10 +2909,11 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         for vv in v:
             if vv in released:
                 raise ValueError('dependent not in play', k, vv)
-            assert (vv in ready_set or
+            if not (vv in ready_set or
                     vv in waiting or
                     vv in in_stacks or
-                    vv in in_processing), ('dependent not in play2', k, vv)
+                    vv in in_processing):
+                raise ValueError('dependent not in play2', k, vv)
 
     for v in concat(processing.values()):
         assert v in dependencies, "all processing keys in dependencies"
