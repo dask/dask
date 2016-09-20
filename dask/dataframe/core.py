@@ -3178,13 +3178,15 @@ class Accessor(object):
         self._series = series
 
     def _property_map(self, key):
-        out = self.getattr(self._series._meta, key)
-        meta = pd.Series([], dtype=out.dtype, name=getattr(out, 'name', None))
+        out = self.getattr(self._series._meta_nonempty, key)
+        meta = self._series._partition_type([], dtype=out.dtype,
+                name=getattr(out, 'name', None))
         return map_partitions(self.getattr, self._series, key, meta=meta)
 
     def _function_map(self, key, *args):
-        out = self.call(self._series._meta, key, *args)
-        meta = pd.Series([], dtype=out.dtype, name=getattr(out, 'name', None))
+        out = self.call(self._series._meta_nonempty, key, *args)
+        meta = self._series._partition_type([], dtype=out.dtype,
+                name=getattr(out, 'name', None))
         return map_partitions(self.call, self._series, key, *args, meta=meta)
 
     def __dir__(self):

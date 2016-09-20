@@ -419,15 +419,17 @@ def assert_divisions(ddf):
     if not ddf.known_divisions:
         return
 
+    index = lambda x: x if isinstance(x, pd.Index) else x.index
+
     results = get_sync(ddf.dask, ddf._keys())
     for i, df in enumerate(results[:-1]):
         if len(df):
-            assert df.index.min() >= ddf.divisions[i]
-            assert df.index.max() < ddf.divisions[i + 1]
+            assert index(df).min() >= ddf.divisions[i]
+            assert index(df).max() < ddf.divisions[i + 1]
 
     if len(results[-1]):
-        assert results[-1].index.min() >= ddf.divisions[-2]
-        assert results[-1].index.max() <= ddf.divisions[-1]
+        assert index(results[-1]).min() >= ddf.divisions[-2]
+        assert index(results[-1]).max() <= ddf.divisions[-1]
 
 
 def assert_sane_keynames(ddf):

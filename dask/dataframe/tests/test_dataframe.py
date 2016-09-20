@@ -1349,15 +1349,17 @@ def test_datetime_accessor():
 
 
 def test_str_accessor():
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']}, index=['e', 'f', 'g', 'H'])
 
-    a = dd.from_pandas(df, 2)
+    a = dd.from_pandas(df, 2, sort=False)
 
     assert 'upper' in dir(a.x.str)
-
     assert eq(a.x.str.upper(), df.x.str.upper())
-
     assert a.x.str.upper().dask == a.x.str.upper().dask
+
+    assert 'upper' in dir(a.index.str)
+    assert eq(a.index.str.upper(), df.index.str.upper())
+    assert a.index.str.upper().dask == a.index.str.upper().dask
 
 
 def test_empty_max():
