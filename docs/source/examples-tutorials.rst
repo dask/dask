@@ -18,7 +18,7 @@ Array
 Bag
 ---
 
-:doc:`Bag documentation<array>`
+:doc:`Bag documentation<bag>`
 
 .. toctree::
    :maxdepth: 1
@@ -29,7 +29,7 @@ Bag
 DataFrame
 ----------
 
-:doc:`DataFrame documentation<array>`
+:doc:`DataFrame documentation<dataframe>`
 
 .. toctree::
    :maxdepth: 1
@@ -46,7 +46,7 @@ DataFrame
 Delayed
 -------
 
-:doc:`Delayed documentation<array>`
+:doc:`Delayed documentation<delayed>`
 
 .. toctree::
    :maxdepth: 1
