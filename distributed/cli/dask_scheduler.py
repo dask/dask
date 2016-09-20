@@ -52,9 +52,10 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
                 os.remove(pid_file)
         atexit.register(del_pid_file)
 
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    limit = max(soft, hard // 2)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+    if sys.platform.startswith('linux'):
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        limit = max(soft, hard // 2)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
 
     given_host = host
     host = host or get_ip()
