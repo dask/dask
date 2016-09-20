@@ -157,7 +157,7 @@ def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key)
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
-        cmd = 'mkdir -p {logdir} && ' + cmd
+        cmd = 'mkdir -p {logdir} && '.format(logdir=logdir) + cmd
         cmd += '&> {logdir}/dask_scheduler_{addr}:{port}.log'.format(addr=addr,
                 port=port, logdir=logdir)
 
@@ -195,7 +195,7 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
 
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
-        cmd = 'mkdir -p {logdir} && ' + cmd
+        cmd = 'mkdir -p {logdir} && '.format(logdir=logdir) + cmd
         cmd += '&> {logdir}/dask_scheduler_{addr}.log'.format(
             addr = worker_addr, logdir = logdir)
 
