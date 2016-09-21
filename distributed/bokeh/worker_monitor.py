@@ -48,7 +48,8 @@ def resource_profile_plot(sizing_mode='fixed', **kwargs):
 
     y_range = Range1d(0, 1)
 
-    p1 = figure(title=None, y_range=y_range, **plot_props)
+    p1 = figure(title=None, y_range=y_range, id='bk-resource-profile-plot',
+                **plot_props)
     p1.line(y='memory_percent', color="#33a02c", legend='Memory', **line_props)
     p1.line(y='cpu', color="#1f78b4", legend='CPU', **line_props)
     p1 = _format_resource_profile_plot(p1)
@@ -58,7 +59,8 @@ def resource_profile_plot(sizing_mode='fixed', **kwargs):
     p1.min_border_bottom = 10
 
     y_range = DataRange1d(start=0)
-    p2 = figure(title=None, y_range=y_range, **plot_props)
+    p2 = figure(title=None, y_range=y_range, id='bk-network-profile-plot',
+                **plot_props)
     p2.line(y='network-send', color="#a6cee3", legend='Network Send', **line_props)
     p2.line(y='network-recv', color="#b2df8a", legend='Network Recv', **line_props)
     p2 = _format_resource_profile_plot(p2)
@@ -149,16 +151,16 @@ def worker_table_plot(**kwargs):
                       'net-recv': NumberFormatter(format='0 b')}
 
         table = DataTable(source=source, columns=[columns[n] for n in cnames],
-                          **kwargs)
+                          id='bk-worker-table', **kwargs)
         for name in cnames:
             if name in formatters:
                 table.columns[cnames.index(name)].formatter = formatters[name]
 
         x_range = Range1d(0, 1)
         y_range = Range1d(-.1, .1)
-        mem_plot = figure(title="Memory Usage (%)",
-                          tools='box_select', height=90, width=600,
-                          x_range=x_range, y_range=y_range, toolbar_location=None)
+        mem_plot = figure(title="Memory Usage (%)", tools='box_select',
+                          height=90, width=600, x_range=x_range, y_range=y_range,
+                          toolbar_location=None, id='bk-memory-usage-plot')
         mem_plot.circle(source=source, x='memory_percent', y=0, size=10,
                         alpha=0.5)
         mem_plot.yaxis.visible = False
@@ -209,7 +211,7 @@ def processing_plot(**kwargs):
 
     x_range = Range1d(-1, 1)
     fig = figure(title='Processing and Pending', tools='resize',
-                 x_range=x_range, **kwargs)
+                 x_range=x_range, id='bk-processing-plot', **kwargs)
     fig.quad(source=source, left=0, right='right', color=Spectral9[0],
              top='top', bottom='bottom')
     fig.quad(source=source, left='left', right=0, color=Spectral9[1],

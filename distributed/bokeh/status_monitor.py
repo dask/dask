@@ -32,7 +32,8 @@ def task_stream_plot(sizing_mode='scale_width', **kwargs):
     fig = figure(
         x_axis_type='datetime', title="Task stream",
         tools='xwheel_zoom,xpan,reset,box_zoom', toolbar_location='above',
-        sizing_mode=sizing_mode, x_range=x_range, **kwargs
+        sizing_mode=sizing_mode, x_range=x_range, id='bk-task-stream-plot',
+        **kwargs
     )
     fig.rect(
         x='start', y='y', width='duration', height=0.8,
@@ -115,9 +116,12 @@ def nbytes_plot(**kwargs):
     data = {'name': [], 'left': [], 'right': [], 'center': [], 'color': [],
             'percent': [], 'MB': [], 'text': []}
     source = ColumnDataSource(data)
-    fig = figure(title='Memory Use', tools='', toolbar_location=None, **kwargs)
+    fig = figure(title='Memory Use', tools='', toolbar_location=None,
+                 id='bk-nbytes-plot', **kwargs
+    )
     fig.quad(source=source, top=1, bottom=0,
-             left='left', right='right', color='color', alpha=1)
+             left='left', right='right', color='color', alpha=1
+    )
 
     fig.grid.grid_line_color = None
     fig.grid.grid_line_color = None
@@ -154,7 +158,8 @@ def progress_plot(**kwargs):
 
         y_range = Range1d(-8, 0)
         source = ColumnDataSource(data)
-        fig = figure(tools='', toolbar_location=None, y_range=y_range, **kwargs)
+        fig = figure(tools='', toolbar_location=None, y_range=y_range,
+                     id='bk-progress-plot', **kwargs)
         fig.quad(source=source, top='top', bottom='bottom',
                  left='left', right='right', color='#aaaaaa', alpha=0.2)
         fig.quad(source=source, top='top', bottom='bottom',
