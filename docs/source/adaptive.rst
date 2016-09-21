@@ -48,25 +48,59 @@ Adaptive class interface
 ------------------------
 
 The ``distributed.deploy.Adaptive`` class contains the logic about when to ask
-for new workers, and when to close idle ones.  This class is incomplete and
-needs to have two methods filled in by subclassing to start and stop workers.
+for new workers, and when to close idle ones.  This class requires both a
+scheduler and a cluster object
+``scale_down(workers)``.
 
-.. currentmodule:: distributed.deploy.adaptive
+The cluster object must support two methods, ``scale_up(n)``, which takes in a
+target number of total workers for the cluster and ``scale_down(workers)``,
+which takes in a list of addresses to remove from the cluster.  The Adaptive
+class will call these methods with the correct values at the correct times.
 
-.. autoclass:: Adaptive
-   :members: scale_up, scale_down
+.. code-block:: python
+
+   class MyCluster(object):
+       @gen.coroutine
+       def scale_up(n):
+           """
+           Bring the total count of workers up to ``n``
+
+           This function/coroutine should bring the total number of workers up to
+           the number ``n``.
+
+           This can be implemented either as a function or as a Tornado coroutine.
+           """
+       raise NotImplementedError()
+
+       @gen.coroutine
+       def scale_down(self, workers):
+           """
+           Remove ``workers`` from the cluster
+
+           Given a list of worker addresses this function should remove those
+           workers from the cluster.  This may require tracking which jobs are
+           associated to which worker address.
+
+           This can be implemented either as a function or as a Tornado coroutine.
+           """
+
+   from distributed.deploy import Adaptive
+
+   scheduler = Scheduler()
+   cluster = MyCluster()
+   adapative_cluster = Adaptive(scheduler, cluster)
 
 Implementing these ``scale_up`` and ``scale_down`` functions depends strongly
-on the cluster management system.
+on the cluster management system.  See :doc:`LocalCluster <local-cluster>` for
+an example.
 
 
 Marathon: an example
 --------------------
 
-We now present an example project that implements this ``Adaptive`` class to
-create an adaptive Dask cluster backed by the Marathon cluster management
-tool backed by Mesos.  Full source code and testing apparatus is available
-here: http://github.com/mrocklin/dask-marathon
+We now present an example project that implements this cluster interface backed
+by the Marathon cluster management tool on Mesos.  Full source code and testing
+apparatus is available here: http://github.com/mrocklin/dask-marathon
 
 The implementation is small.  It uses the Marathon HTTP API through the
 `marathon Python client library <https://github.com/thefactory/marathon-python>`_.
@@ -74,17 +108,17 @@ We reproduce the full body of the implementation below as an example:
 
 .. code-block:: python
 
-   from distributed.deploy import Adaptive
-
    from marathon import MarathonClient, MarathonApp
    from marathon.models.container import MarathonContainer
 
-
-   class AdaptiveCluster(Adaptive):
+   class MarathonCluster(object):
        def __init__(self, scheduler,
                     executable='dask-worker',
                     docker_image='mrocklin/dask-distributed',
-                    marathon_address='http://localhost:8080', **kwargs):
+                    marathon_address='http://localhost:8080',
+                    name=None, **kwargs):
+           self.scheduler = scheduler
+
            # Create Marathon App to run dask-worker
            args = [executable, scheduler.address,
                    '--name', '$MESOS_TASK_ID']  # use Mesos task ID as worker name
@@ -93,14 +127,12 @@ We reproduce the full body of the implementation below as an example:
                             str(int(kwargs['mem'] * 0.6 * 1e6))])
            kwargs['cmd'] = ' '.join(args)
            container = MarathonContainer({'image': docker_image})
+
            app = MarathonApp(instances=0, container=container, **kwargs)
 
            # Connect and register app
-           self.marathon_client = MarathonClient(marathon_address)
-           self.app = self.marathon_client.create_app('dask-%s' % uuid.uuid4(), app)
-
-           self.scheduler = scheduler
-           super(AdaptiveCluster, self).__init__()
+           self.client = MarathonClient(marathon_address)
+           self.app = self.client.create_app(name or 'dask-%s' % uuid.uuid4(), app)
 
        def scale_up(self, instances):
            self.marathon_client.scale_app(self.app.id, instances=instances)

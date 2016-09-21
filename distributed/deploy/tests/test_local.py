@@ -5,11 +5,13 @@ import sys
 from time import sleep, time
 import unittest
 
+from tornado.ioloop import IOLoop
+from tornado import gen
 import pytest
 
 from distributed.deploy.local import LocalCluster
 from distributed import Client, Worker, Nanny
-from distributed.utils_test import inc, loop, raises
+from distributed.utils_test import inc, loop, raises, gen_test
 from distributed.utils import ignoring
 
 from distributed.deploy.utils_test import ClusterTest
@@ -175,3 +177,26 @@ def test_start_diagnostics(loop):
 def test_blocks_until_full(loop):
     with Client(loop=loop) as c:
         assert len(c.ncores()) > 0
+
+@gen_test()
+def test_scale_up_and_down():
+    loop = IOLoop.current()
+    cluster = LocalCluster(0, scheduler_port=0, nanny=False, silence_logs=False,
+                           diagnostic_port=None, loop=loop, start=False)
+    c = Client(cluster, start=False, loop=loop)
+    yield c._start()
+
+    assert not cluster.workers
+
+    yield cluster.scale_up(2)
+    assert len(cluster.workers) == 2
+    assert len(cluster.scheduler.ncores) == 2
+
+    addr = cluster.workers[0].address
+    yield cluster.scale_down([addr])
+
+    assert len(cluster.workers) == 1
+    assert addr not in cluster.scheduler.ncores
+
+    yield c._shutdown()
+    yield cluster._close()
