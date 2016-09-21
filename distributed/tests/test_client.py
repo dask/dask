@@ -56,6 +56,7 @@ def test_submit(c, s, a, b):
 
     result = yield z._result()
     assert result == 11 + 21
+    s.validate_state()
 
 
 @gen_cluster(client=True)
@@ -100,6 +101,7 @@ def test_map(c, s, a, b):
     L6 = c.map(f, range(5), y=y)
     results = yield c._gather(L6)
     assert results == list(range(20, 25))
+    s.validate_state()
 
 
 @gen_cluster()
@@ -2338,7 +2340,9 @@ def test_rebalance(c, s, a, b):
     assert len(a.data) == 2
     assert len(b.data) == 0
 
+    s.validate_state()
     yield c._rebalance()
+    s.validate_state()
 
     assert len(b.data) == 1
     assert s.has_what[b.address] == set(b.data)
@@ -2370,6 +2374,7 @@ def test_rebalance_workers(e, s, a, b, c, d):
     assert len(b.data) == 1
     assert len(c.data) == 1
     assert len(d.data) == 1
+    s.validate_state()
 
 
 @gen_cluster(client=True)
@@ -2377,6 +2382,7 @@ def test_rebalance_execution(c, s, a, b):
     futures = c.map(inc, range(10), workers=a.address)
     yield c._rebalance(futures)
     assert len(a.data) == len(b.data) == 5
+    s.validate_state()
 
 
 def test_rebalance_sync(loop):
@@ -2471,6 +2477,7 @@ def test_submit_on_cancelled_future(c, s, a, b):
 def test_replicate(c, s, *workers):
     [a, b] = yield c._scatter([1, 2])
     yield s.replicate(keys=[a.key, b.key], n=5)
+    s.validate_state()
 
     assert len(s.who_has[a.key]) == 5
     assert len(s.who_has[b.key]) == 5
@@ -2484,9 +2491,11 @@ def test_replicate_tuple_keys(c, s, a, b):
     x = delayed(inc)(1, dask_key_name=('x', 1))
     f = c.persist(x)
     yield c._replicate(f, n=5)
+    s.validate_state()
     assert a.data and b.data
 
     yield c._rebalance(f)
+    s.validate_state()
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_replicate_workers(c, s, *workers):
@@ -2523,6 +2532,7 @@ def test_replicate_workers(c, s, *workers):
     assert sum(b.key in w.data for w in workers[:5]) == 1
     assert sum(a.key in w.data for w in workers[5:]) == 5
     assert sum(b.key in w.data for w in workers[5:]) == 5
+    s.validate_state()
 
 
 class CountSerialization(object):
@@ -2561,6 +2571,7 @@ def test_client_replicate(c, s, *workers):
     assert len(s.who_has[y.key]) == 3
 
     yield c._replicate([x, y])
+    s.validate_state()
 
     assert len(s.who_has[x.key]) == 10
     assert len(s.who_has[y.key]) == 10
@@ -3560,3 +3571,29 @@ def test_scatter_type(c, s, a, b):
 
     d = yield c._scatter({'x': 1.0})
     assert d['x'].type == float
+
+
+@gen_cluster(client=True)
+def test_retire_workers(c, s, a, b):
+    [x] = yield c._scatter([1], workers=a.address)
+
+    yield s.retire_workers(workers=[a.address])
+    assert b.data == {x.key: 1}
+    assert s.who_has == {x.key: {b.address}}
+    assert s.has_what == {b.address: {x.key}}
+
+    assert a.address not in s.worker_info
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_retire_many_workers(c, s, *workers):
+    futures = yield c._scatter(list(range(100)))
+
+    yield s.retire_workers(workers=[w.address for w in workers[:7]])
+
+    results = yield c._gather(futures)
+    assert results == list(range(100))
+
+    assert len(s.has_what) == len(s.ncores) == 3
+    for w, keys in s.has_what.items():
+        assert 20 < len(keys) < 50

@@ -1000,3 +1000,30 @@ def test_scatter_no_workers(s):
            w._start()]
 
     assert w.data['x'] == 1
+
+
+@gen_cluster(ncores=[])
+def test_scheduler_sees_memory_limits(s):
+    w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1', memory_limit=12345)
+    yield w._start(0)
+
+    assert s.worker_info[w.address]['memory_limit'] == 12345
+
+
+@gen_cluster(client=True, timeout=1000)
+def test_retire_workers(c, s, a, b):
+    [x] = yield c._scatter([1], workers=a.address)
+    [y] = yield c._scatter([list(range(1000))], workers=b.address)
+
+    assert s.workers_to_close() == [a.address]
+
+    workers = yield s.retire_workers()
+    assert workers == [a.address]
+    assert list(s.ncores) == [b.address]
+
+    assert s.workers_to_close() == []
+
+    assert s.has_what[b.address] == {x.key, y.key}
+
+    workers = yield s.retire_workers()
+    assert not workers

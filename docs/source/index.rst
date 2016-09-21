@@ -109,6 +109,7 @@ Contents
    publish
    queues
    task-launch
+   adaptive
    submitting-applications
 
 

@@ -36,7 +36,7 @@ def test_scatter_from_worker(c, s, a, b):
             assert isinstance(futures, (list, tuple))
             assert len(futures) == 5
 
-            x = c.worker.data.copy()
+            x = dict(c.worker.data)
             y = {f.key: i for f, i in zip(futures, [1, 2, 3, 4, 5])}
             assert x == y
 

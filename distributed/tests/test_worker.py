@@ -40,6 +40,8 @@ def test_identity():
     ident = w.identity(None)
     assert ident['type'] == 'Worker'
     assert ident['scheduler'] == ('127.0.0.1', 8019)
+    assert isinstance(ident['ncores'], int)
+    assert isinstance(ident['memory_limit'], int)
 
 
 def test_health():
