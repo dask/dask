@@ -121,6 +121,19 @@ def test_tokenize_numpy_memmap():
     assert y != z
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_memmap_no_filename():
+    # GH 1562:
+    with tmpfile('.npy') as fn1, tmpfile('.npy') as fn2:
+        x = np.arange(5)
+        np.save(fn1, x)
+        np.save(fn2, x)
+
+        a = np.load(fn1, mmap_mode='r')
+        b = a + a
+        assert tokenize(b) == tokenize(b)
+
+
 def test_normalize_base():
     for i in [1, 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
