@@ -30,6 +30,7 @@ def test_read_bytes():
         sample, values = read_bytes('.test.accounts.*')
         assert isinstance(sample, bytes)
         assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample.endswith(b'\n')
 
         assert isinstance(values, (list, tuple))
         assert isinstance(values[0], (list, tuple))
@@ -38,6 +39,19 @@ def test_read_bytes():
         assert sum(map(len, values)) >= len(files)
         results = compute(*concat(values))
         assert set(results) == set(files.values())
+
+
+def test_read_bytes_sample_delimiter():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*',
+                                    sample=80, delimiter=b'\n')
+        assert sample.endswith(b'\n')
+        sample, values = read_bytes('.test.accounts.1.json',
+                                    sample=80, delimiter=b'\n')
+        assert sample.endswith(b'\n')
+        sample, values = read_bytes('.test.accounts.1.json',
+                                    sample=2, delimiter=b'\n')
+        assert sample.endswith(b'\n')
 
 
 def test_read_bytes_blocksize_none():
@@ -103,6 +117,7 @@ def test_compression(fmt, blocksize):
         sample, values = read_bytes('.test.accounts.*.json',
                 blocksize=blocksize, delimiter=b'\n', compression=fmt)
         assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample.endswith(b'\n')
 
         results = compute(*concat(values))
         assert (b''.join(results) ==

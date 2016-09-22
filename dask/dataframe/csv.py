@@ -232,12 +232,7 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
     else:
         header = sample.split(b_lineterminator)[0] + b_lineterminator
 
-    try:
-        head = pd.read_csv(BytesIO(sample), **kwargs)
-    except:
-        # Remove the last row from the sample due to buffer row split:
-        sample = sample[:(sample.rfind(b_lineterminator))]
-        head = pd.read_csv(BytesIO(sample), **kwargs)
+    head = pd.read_csv(BytesIO(sample), **kwargs)
 
     df = read_csv_from_bytes(values, header, head, kwargs,
                              collection=collection, enforce=enforce)

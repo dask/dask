@@ -248,6 +248,19 @@ def test_auto_blocksize_csv(monkeypatch):
 
 
 def test_head_partial_line_fix():
-    with filetexts({'.overflow.csv': 'a,b\n0,"abcdefghijklmnopqrstuvwxyz"\n1,"abcdefghijklmnopqrstuvwxyz"'}):
+    files = {'.overflow1.csv': ('a,b\n'
+                                '0,"abcdefghijklmnopqrstuvwxyz"\n'
+                                '1,"abcdefghijklmnopqrstuvwxyz"'),
+             '.overflow2.csv': ('a,b\n'
+                                '111111,-11111\n'
+                                '222222,-22222\n'
+                                '333333,-33333\n')}
+    with filetexts(files):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.
-        read_csv('.overflow.csv', sample=52)
+        read_csv('.overflow1.csv', sample=52)
+
+        # 35 characters is cuts off before the second number on the last line
+        # Should sample to end of line, otherwise pandas will infer `b` to be
+        # a float dtype
+        df = read_csv('.overflow2.csv', sample=35)
+        assert (df.dtypes == 'i8').all()

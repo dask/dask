@@ -80,7 +80,7 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
         if not filenames:
             raise IOError("No such files: '%s'" % s3_path)
         sample, first = read_bytes(filenames[0], s3, delimiter, not_zero,
-                                   blocksize, sample=True,
+                                   blocksize, sample=sample,
                                    compression=compression)
         rest = [read_bytes(f, s3, delimiter, not_zero, blocksize,
                        sample=False, compression=compression)[1]

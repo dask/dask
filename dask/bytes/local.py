@@ -31,7 +31,7 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
     if '*' in path:
         filenames = list(map(os.path.abspath, sorted(glob(path))))
         sample, first = read_bytes(filenames[0], delimiter, not_zero,
-                                   blocksize, sample=True,
+                                   blocksize, sample=sample,
                                    compression=compression)
         rest = [read_bytes(f, delimiter, not_zero, blocksize, sample=False,
                            compression=compression)[1]
@@ -65,7 +65,7 @@ def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
                 nbytes = sample
             else:
                 nbytes = 10000
-            sample = read_block_from_file(path, 0, nbytes, None, compression)
+            sample = read_block_from_file(path, 0, nbytes, delimiter, compression)
 
         return sample, values
 
