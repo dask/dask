@@ -2,7 +2,7 @@
 
 from os.path import exists
 from setuptools import setup
-import dask
+import versioneer
 
 extras_require = {
   'array': ['numpy', 'toolz >= 0.7.2'],
@@ -21,7 +21,8 @@ tests = [p + '.tests' for p in packages]
 
 
 setup(name='dask',
-      version=dask.__version__,
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description='Minimal task scheduling abstraction',
       url='http://github.com/dask/dask/',
       maintainer='Matthew Rocklin',
