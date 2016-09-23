@@ -44,17 +44,15 @@ result in reductions with little data moving between workers.
 Shuffle
 ~~~~~~~
 
-Some operations, like full ``groupby`` and bag-to-bag ``join`` do require
-substantial inter-worker communication.  These are handled specially by shuffle
-operations that use disk and a central memory server as a central point of
-communication.
+Some operations, like ``groupby``, require substantial inter-worker
+communication. On a single machine, dask uses partd_ to perform efficient,
+parallel, spill-to-disk shuffles. When working in a cluster, dask uses a task
+based shuffle.
 
-Shuffle operations are expensive and better handled by projects like
-``dask.dataframe``.  It is best to use ``dask.bag`` to clean and process data,
+These shuffle operations are expensive and better handled by projects like
+``dask.dataframe``. It is best to use ``dask.bag`` to clean and process data,
 then transform it into an array or dataframe before embarking on the more
 complex operations that require shuffle steps.
-
-Dask uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
 
 .. _partd: https://github.com/mrocklin/partd
 
