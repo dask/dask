@@ -1541,6 +1541,17 @@ def test_reduction_method():
     assert eq(res, pd.DataFrame({'sum': df.sum(), 'count': df.count()}))
 
 
+def test_pipe():
+    df = pd.DataFrame({'x': range(50), 'y': range(50, 100)})
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    def f(x, y, z=0):
+        return x + y + z
+
+    assert eq(ddf.pipe(f, 1, z=2), f(ddf, 1, z=2))
+    assert eq(ddf.x.pipe(f, 1, z=2), f(ddf.x, 1, z=2))
+
+
 def test_gh_517():
     arr = np.random.randn(100, 2)
     df = pd.DataFrame(arr, columns=['a', 'b'])

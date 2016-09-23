@@ -531,6 +531,20 @@ class _Frame(Base):
                    meta=meta, token=token, chunk_kwargs=chunk_kwargs,
                    aggregate_kwargs=aggregate_kwargs, **kwargs)
 
+    @derived_from(pd.DataFrame)
+    def pipe(self, func, *args, **kwargs):
+        # Taken from pandas:
+        # https://github.com/pydata/pandas/blob/master/pandas/core/generic.py#L2698-L2707
+        if isinstance(func, tuple):
+            func, target = func
+            if target in kwargs:
+                raise ValueError('%s is both the pipe target and a keyword '
+                                 'argument' % target)
+            kwargs[target] = self
+            return func(*args, **kwargs)
+        else:
+            return func(self, *args, **kwargs)
+
     def random_split(self, p, random_state=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
