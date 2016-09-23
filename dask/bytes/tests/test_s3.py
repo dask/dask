@@ -90,6 +90,7 @@ def test_read_bytes(s3):
     sample, values = read_bytes(test_bucket_name+'/test/accounts.*', s3=s3)
     assert isinstance(sample, bytes)
     assert sample[:5] == files[sorted(files)[0]][:5]
+    assert sample.endswith(b'\n')
 
     assert isinstance(values, (list, tuple))
     assert isinstance(values[0], (list, tuple))
@@ -99,9 +100,23 @@ def test_read_bytes(s3):
     results = compute(*concat(values))
     assert set(results) == set(files.values())
 
+
+def test_read_bytes_sample_delimiter(s3):
+    sample, values = read_bytes(test_bucket_name+'/test/accounts.*', s3=s3,
+                                sample=80, delimiter=b'\n')
+    assert sample.endswith(b'\n')
+    sample, values = read_bytes(test_bucket_name+'/test/accounts.1.json', s3=s3,
+                                sample=80, delimiter=b'\n')
+    assert sample.endswith(b'\n')
+    sample, values = read_bytes(test_bucket_name+'/test/accounts.1.json', s3=s3,
+                                sample=2, delimiter=b'\n')
+    assert sample.endswith(b'\n')
+
+
 def test_read_bytes_non_existing_glob(s3):
     with pytest.raises(IOError):
         read_bytes(test_bucket_name+'/non-existing/*', s3=s3)
+
 
 def test_read_bytes_blocksize_none(s3):
     _, values = read_bytes(test_bucket_name+'/test/accounts.*', blocksize=None,
@@ -204,6 +219,7 @@ def test_compression(s3, fmt, blocksize):
         sample, values = read_bytes('compress/test/accounts.*', s3=s3,
                                     compression=fmt, blocksize=blocksize)
         assert sample.startswith(files[sorted(files)[0]][:10])
+        assert sample.endswith(b'\n')
 
         results = compute(*concat(values))
         assert b''.join(results) == b''.join([files[k] for k in sorted(files)])
