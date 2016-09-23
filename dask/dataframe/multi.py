@@ -65,7 +65,6 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from ..utils import M
 from .core import (_Frame, DataFrame, map_partitions,
                    Index, _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
@@ -201,15 +200,17 @@ def require(divisions, parts, required=None):
 required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 
-def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
+def merge_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix='',
+                            indicator=False):
     """ Join two partitioned dataframes along their index """
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._meta_nonempty
-    right_empty = rhs._meta_nonempty
+    left_empty = lhs._meta
+    right_empty = rhs._meta
 
-    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
+    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix,
+                                      indicator)
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -218,38 +219,38 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
         if b is None and how in ('left', 'outer'):
             b = right_empty
 
-        dsk[(name, i)] = (M.join, a, b, None, how,
-                          lsuffix, rsuffix)
+        dsk[(name, i)] = (_pdmerge, a, b, how, None, None, True, True,
+                          indicator, (lsuffix, rsuffix), left_empty,
+                          right_empty)
 
-    # dummy result
-    meta = left_empty.join(right_empty, on=None, how=how,
-                           lsuffix=lsuffix, rsuffix=rsuffix)
+    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how=how,
+                    left_index=True, right_index=True,
+                    suffixes=(lsuffix, rsuffix), indicator=indicator)
     return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk),
                      name, meta, divisions)
 
 
 def _pdmerge(left, right, how, left_on, right_on,
-             left_index, right_index, suffixes,
-             default_left_columns, default_right_columns):
+             left_index, right_index, indicator, suffixes,
+             default_left, default_right):
 
     if not len(left):
-        left = pd.DataFrame(columns=default_left_columns)
+        left = default_left
 
     if not len(right):
-        right = pd.DataFrame(columns=default_right_columns)
+        right = default_right
 
-    result = pd.merge(left, right, how=how,
-                      left_on=left_on, right_on=right_on,
-                      left_index=left_index, right_index=right_index,
-                      suffixes=suffixes)
-    return result
+    return pd.merge(left, right, how=how, left_on=left_on, right_on=right_on,
+                    left_index=left_index, right_index=right_index,
+                    suffixes=suffixes, indicator=indicator)
 
 
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
 def hash_join(lhs, left_on, rhs, right_on, how='inner',
-              npartitions=None, suffixes=('_x', '_y'), shuffle=None):
+              npartitions=None, suffixes=('_x', '_y'), shuffle=None,
+              indicator=False):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -276,14 +277,14 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # dummy result
-    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how, None,
+    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how=how,
                     left_on=left_on, right_on=right_on,
                     left_index=left_index, right_index=right_index,
-                    suffixes=suffixes)
+                    suffixes=suffixes, indicator=indicator)
 
     merger = partial(_pdmerge, suffixes=suffixes,
-                     default_left_columns=list(lhs.columns),
-                     default_right_columns=list(rhs.columns))
+                     default_left=lhs._meta,
+                     default_right=rhs._meta)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -291,12 +292,12 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_on = (list, tuple(right_on))
 
     token = tokenize(lhs2, left_on, rhs2, right_on, left_index, right_index,
-                     how, npartitions, suffixes, shuffle)
+                     how, npartitions, suffixes, shuffle, indicator)
     name = 'hash-join-' + token
 
     dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
                             how, left_on, right_on,
-                            left_index, right_index))
+                            left_index, right_index, indicator))
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
@@ -403,7 +404,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None, shuffle=None, max_branch=None):
+          indicator=False, npartitions=None, shuffle=None, max_branch=None):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -421,7 +422,8 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             isinstance(right, (pd.Series, pd.DataFrame))):
         return pd.merge(left, right, how=how, on=on, left_on=left_on,
                         right_on=right_on, left_index=left_index,
-                        right_index=right_index, suffixes=suffixes)
+                        right_index=right_index, suffixes=suffixes,
+                        indicator=indicator)
 
     # Transform pandas objects into dask.dataframe objects
     if isinstance(left, (pd.Series, pd.DataFrame)):
@@ -443,15 +445,18 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # Both sides indexed
     if (left_index and left.known_divisions and
             right_index and right.known_divisions):  # Do indexed join
-        return join_indexed_dataframes(left, right, how=how,
-                                       lsuffix=suffixes[0], rsuffix=suffixes[1])
+        return merge_indexed_dataframes(left, right, how=how,
+                                       lsuffix=suffixes[0],
+                                       rsuffix=suffixes[1],
+                                       indicator=indicator)
 
     # Single partition on one side
     elif (left.npartitions == 1 and how in ('inner', 'right') or
           right.npartitions == 1 and how in ('inner', 'left')):
         return single_partition_join(left, right, how=how, right_on=right_on,
-                left_on=left_on, left_index=left_index,
-                right_index=right_index, suffixes=suffixes)
+                                     left_on=left_on, left_index=left_index,
+                                     right_index=right_index,
+                                     suffixes=suffixes, indicator=indicator)
 
     # One side is indexed, the other not
     elif (left_index and left.known_divisions and not right_index or
@@ -461,23 +466,25 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         meta = pd.merge(left_empty, right_empty, how=how, on=on,
                         left_on=left_on, right_on=right_on,
                         left_index=left_index, right_index=right_index,
-                        suffixes=suffixes)
+                        suffixes=suffixes, indicator=indicator)
         if left_index and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
-                    max_branch, shuffle=shuffle)
+                                           max_branch, shuffle=shuffle)
             left = left.clear_divisions()
         elif right_index and right.known_divisions:
             left = rearrange_by_divisions(left, left_on, right.divisions,
-                    max_branch, shuffle=shuffle)
+                                          max_branch, shuffle=shuffle)
             right = right.clear_divisions()
         return map_partitions(pd.merge, left, right, meta=meta, how=how, on=on,
-                left_on=left_on, right_on=right_on, left_index=left_index,
-                right_index=right_index, suffixes=suffixes)
+                              left_on=left_on, right_on=right_on,
+                              left_index=left_index, right_index=right_index,
+                              suffixes=suffixes, indicator=indicator)
     # Catch all hash join
     else:
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
-                         how, npartitions, suffixes, shuffle=shuffle)
+                         how, npartitions, suffixes, shuffle=shuffle,
+                         indicator=indicator)
 
 
 ###############################################################

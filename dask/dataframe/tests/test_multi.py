@@ -1,7 +1,7 @@
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
+from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
         hash_join, concat_indexed_dataframes, _maybe_align_partitions)
 import pandas.util.testing as tm
 from dask.async import get_sync
@@ -147,7 +147,7 @@ def test__maybe_align_partitions():
         _maybe_align_partitions([ddf, ddf2])
 
 
-def test_join_indexed_dataframe_to_indexed_dataframe():
+def test_merge_indexed_dataframe_to_indexed_dataframe():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]},
                      index=[1, 2, 3, 4, 6, 7])
     a = dd.repartition(A, [1, 4, 7])
@@ -156,30 +156,30 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    c = join_indexed_dataframes(a, b, how='left')
+    c = merge_indexed_dataframes(a, b, how='left')
     assert c.divisions[0] == a.divisions[0]
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert eq(c, A.join(B))
 
-    c = join_indexed_dataframes(a, b, how='right')
+    c = merge_indexed_dataframes(a, b, how='right')
     assert c.divisions[0] == b.divisions[0]
     assert c.divisions[-1] == b.divisions[-1]
     assert eq(c, A.join(B, how='right'))
 
-    c = join_indexed_dataframes(a, b, how='inner')
+    c = merge_indexed_dataframes(a, b, how='inner')
     assert c.divisions[0] == 1
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert eq(c.compute(), A.join(B, how='inner'))
 
-    c = join_indexed_dataframes(a, b, how='outer')
+    c = merge_indexed_dataframes(a, b, how='outer')
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
     assert eq(c.compute(), A.join(B, how='outer'))
 
-    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) == \
-           sorted(join_indexed_dataframes(a, b, how='inner').dask)
-    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) != \
-           sorted(join_indexed_dataframes(a, b, how='outer').dask)
+    assert sorted(merge_indexed_dataframes(a, b, how='inner').dask) == \
+           sorted(merge_indexed_dataframes(a, b, how='inner').dask)
+    assert sorted(merge_indexed_dataframes(a, b, how='inner').dask) != \
+           sorted(merge_indexed_dataframes(a, b, how='outer').dask)
 
 
 def list_eq(aa, bb):
@@ -193,18 +193,13 @@ def list_eq(aa, bb):
         b = bb
     tm.assert_index_equal(a.columns, b.columns)
 
-    # ToDo: As of pandas 0,17, tm.assert_numpy_array_equal can
-    # compare arrays include NaN. This logic can be replaced
-    for c in a.columns:
-        if a[c].dtype in (int, float):
-            a[c] = a[c].fillna(100)
-            b[c] = b[c].fillna(100)
-        else:
-            a[c] = a[c].fillna('NAN')
-            b[c] = b[c].fillna('NAN')
-    av = sorted(a.values.tolist())
-    bv = sorted(b.values.tolist())
-    assert av == bv, (av, bv)
+    if isinstance(a, pd.DataFrame):
+        av = a.sort_values(list(a.columns)).values
+        bv = b.sort_values(list(b.columns)).values
+    else:
+        av = a.sort_values().values
+        bv = b.sort_values().values
+    tm.assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.parametrize('how', ['inner', 'left', 'right', 'outer'])
@@ -301,8 +296,8 @@ def test_merge(how, shuffle):
     B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
-    eq(dd.merge(a, b, left_index=True, right_index=True, shuffle=shuffle),
-       pd.merge(A, B, left_index=True, right_index=True))
+    eq(dd.merge(a, b, left_index=True, right_index=True, how=how, shuffle=shuffle),
+       pd.merge(A, B, left_index=True, right_index=True, how=how))
 
     result = dd.merge(a, b, on='y', how=how)
     list_eq(result, pd.merge(A, B, on='y', how=how))
@@ -421,6 +416,15 @@ def test_merge_by_index_patterns(how, shuffle):
                         shuffle=shuffle),
                pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True,
+                        shuffle=shuffle, indicator=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True,
+                        indicator=True))
+            eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True,
+                        shuffle=shuffle, indicator=True),
+               pd.merge(pdr, pdl, how=how, left_index=True, right_index=True,
+                        indicator=True))
+
             eq(ddr.merge(ddl, how=how, left_index=True, right_index=True,
                          shuffle=shuffle),
                pdr.merge(pdl, how=how, left_index=True, right_index=True))
@@ -435,6 +439,15 @@ def test_merge_by_index_patterns(how, shuffle):
             list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='d',
                              shuffle=shuffle),
                     pd.merge(pdl, pdr, how=how, left_on='b', right_on='d'))
+
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='c', right_on='a',
+                             shuffle=shuffle, indicator=True),
+                    pd.merge(pdr, pdl, how=how, left_on='c', right_on='a',
+                             indicator=True))
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='b',
+                             shuffle=shuffle, indicator=True),
+                    pd.merge(pdr, pdl, how=how, left_on='d', right_on='b',
+                             indicator=True))
 
             list_eq(dd.merge(ddr, ddl, how=how, left_on='c', right_on='a',
                              shuffle=shuffle),
