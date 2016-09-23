@@ -85,7 +85,8 @@ def nbytes_bar(nbytes):
         d['left'].append(left)
         d['right'].append(right)
         d['center'].append(center)
-        d['color'].append(task_stream_palette[incrementing_index(name)])
+        d['color'].append(task_stream_palette[incrementing_index(name)
+                                            % len(task_stream_palette)])
         d['name'].append(name)
         if right - left > 0.1:
             d['text'].append(name)
@@ -130,7 +131,8 @@ def progress_quads(msg, nrows=8, ncols=3):
     d['right'] = [i // nrows + width for i in range(n)]
     d['top'] = [-(i % nrows) for i in range(n)]
     d['bottom'] = [-(i % nrows) - 0.8 for i in range(n)]
-    d['color'] = [task_stream_palette[incrementing_index(name)]
+    d['color'] = [task_stream_palette[incrementing_index(name)
+                                    % len(task_stream_palette)]
                     for name in names]
 
     d['released-loc'] = []

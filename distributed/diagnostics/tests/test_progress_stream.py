@@ -89,3 +89,15 @@ def test_nbytes_bar():
     color = result.pop('color')
     assert len(set(color)) == 2
     assert result == expected
+
+
+def test_progress_quads_many_functions():
+    funcnames = ['fn%d' % i for i in range(1000)]
+    msg = {'all': {fn: 1 for fn in funcnames},
+           'memory': {fn: 1 for fn in funcnames},
+           'erred': {fn: 0 for fn in funcnames},
+           'released': {fn: 0 for fn in funcnames}}
+
+    d = progress_quads(msg, nrows=2)
+    color = d.pop('color')
+    assert len(set(color)) < 100
