@@ -318,7 +318,7 @@ with ignoring(ImportError):
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)
-        if hasattr(x, 'mode') and hasattr(x, 'filename'):
+        if hasattr(x, 'mode') and getattr(x, 'filename', None):
             return x.filename, os.path.getmtime(x.filename), x.dtype, x.shape
         if x.dtype.hasobject:
             try:
