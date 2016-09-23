@@ -1,3 +1,4 @@
+import operator
 import warnings
 
 import pandas as pd
@@ -9,7 +10,13 @@ from dask.async import get_sync
 import dask.dataframe as dd
 from dask.dataframe.categorical import (is_categorical_dtype,
                                         _get_categorical_columns)
-from dask.dataframe.utils import make_meta
+from dask.dataframe.utils import make_meta, eq
+
+
+@pytest.fixture(params=[True, False])
+def cat_series(request):
+    ordered = request.param
+    return pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
 
 
 def test_is_categorical_dtype():
@@ -105,3 +112,37 @@ def test_categorize_nan():
     with warnings.catch_warnings(record=True) as record:
         df.categorize().compute()
     assert len(record) == 0
+
+
+class TestCategoricalAccessor:
+
+    @pytest.mark.parametrize('prop, compare', [
+        ('categories', tm.assert_index_equal),
+        ('ordered', eq),
+        ('codes', eq),
+    ])
+    def test_properties(self, cat_series, prop, compare):
+        a = dd.from_pandas(cat_series, npartitions=2)
+        expected = getattr(cat_series.cat, prop)
+        result = getattr(a.cat, prop)
+        compare(result, expected)
+
+    @pytest.mark.parametrize('method, kwargs', [
+        ('add_categories', dict(new_categories=['d', 'e'])),
+        ('as_ordered', {}),
+        ('as_unordered', {}),
+        ('as_ordered', {}),
+        ('remove_categories', dict(removals=['a'])),
+        ('rename_categories', dict(new_categories=['d', 'e', 'f'])),
+        ('reorder_categories', dict(new_categories=['a', 'b', 'c'])),
+        ('set_categories', dict(new_categories=['a', 'e', 'b'])),
+        ('remove_unused_categories', {}),
+    ])
+    def test_callable(self, cat_series, method, kwargs):
+        a = dd.from_pandas(cat_series, npartitions=2)
+        op = operator.methodcaller(method, **kwargs)
+        expected = op(cat_series.cat)
+        result = op(a.cat)
+        eq(result, expected)
+        eq(result._meta.cat.categories, expected.cat.categories)
+        eq(result._meta.cat.ordered, expected.cat.ordered)
