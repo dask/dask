@@ -31,7 +31,7 @@ def categorize(df, columns=None, **kwargs):
     if not isinstance(columns, (list, tuple)):
         columns = [columns]
 
-    distincts = [df[col].drop_duplicates() for col in columns]
+    distincts = [df[col].dropna().drop_duplicates() for col in columns]
     values = compute(*distincts, **kwargs)
 
     func = partial(_categorize_block, categories=dict(zip(columns, values)))
