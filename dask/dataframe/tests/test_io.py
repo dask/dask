@@ -1085,31 +1085,38 @@ def test_to_fmt_warns():
             a.to_csv(fn, name_function=str)
 
 
-def test_read_hdf():
+@pytest.mark.parametrize('data, compare', [
+    (pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                   'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.]),
+     tm.assert_frame_equal),
+    (pd.Series([1, 2, 3, 4], name='a'),
+     tm.assert_series_equal),
+])
+def test_read_hdf(data, compare):
     pytest.importorskip('tables')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     with tmpfile('h5') as fn:
-        df.to_hdf(fn, '/data')
+        data.to_hdf(fn, '/data')
         try:
-            dd.read_hdf(fn, 'data', chunksize=2)
+            dd.read_hdf(fn, 'data', chunksize=2, mode='r')
             assert False
         except TypeError as e:
             assert "format='table'" in str(e)
 
     with tmpfile('h5') as fn:
-        df.to_hdf(fn, '/data', format='table')
-        a = dd.read_hdf(fn, '/data', chunksize=2)
+        data.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2, mode='r')
         assert a.npartitions == 2
 
-        tm.assert_frame_equal(a.compute(), df)
+        compare(a.compute(), data)
 
-        tm.assert_frame_equal(
-              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
+        compare(
+              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
+                          mode='r').compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
 
-        assert (sorted(dd.read_hdf(fn, '/data').dask) ==
-                sorted(dd.read_hdf(fn, '/data').dask))
+        assert (sorted(dd.read_hdf(fn, '/data', mode='r').dask) ==
+                sorted(dd.read_hdf(fn, '/data', mode='r').dask))
+
 
 def test_read_hdf_multiply_open():
     """Test that we can read from a file that's already opened elsewhere in

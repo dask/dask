@@ -601,6 +601,10 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         token = tokenize((path, os.path.getmtime(path), key, start,
                           stop, empty, chunksize, division))
         name = 'read-hdf-' + token
+        if empty.ndim == 1:
+            base = {'name': empty.name, 'mode': mode}
+        else:
+            base = {'columns': empty.columns, 'mode': mode}
 
         if start >= stop:
             raise ValueError("Start row number ({}) is above or equal to stop "
@@ -608,21 +612,22 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
 
         if division:
             dsk = {(name, 0): (_pd_read_hdf, path, key, lock,
-                                 {'mode': mode,
-                                  'columns': empty.columns})}
+                               base)}
 
             divisions = division
         else:
+            def update(s):
+                new = base.copy()
+                new.update({'start': s, 'stop': s + chunksize})
+                return new
+
             dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
-                                     {'mode': mode,
-                                      'start': s,
-                                      'stop': s + chunksize,
-                                      'columns': empty.columns}))
-                        for i, s in enumerate(range(start, stop, chunksize)))
+                                    update(s)))
+                       for i, s in enumerate(range(start, stop, chunksize)))
 
             divisions = [None] * (len(dsk) + 1)
 
-        return DataFrame(dsk, name, empty, divisions)
+        return new_dd_object(dsk, name, empty, divisions)
 
     keys, stops, divisions = get_keys_stops_divisions(path, key, stop, sorted_index)
     if (start != 0 or stop is not None) and len(keys) > 1:
