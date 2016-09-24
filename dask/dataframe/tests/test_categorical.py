@@ -1,3 +1,5 @@
+import warnings
+
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
@@ -78,3 +80,11 @@ def test_categories():
 
     df3 = dd.categorical._categorize(categories, df2)
     tm.assert_frame_equal(df, df3)
+
+
+def test_categorize_nan():
+    df = dd.from_pandas(pd.DataFrame({"A": ['a', 'b', 'a', float('nan')]}),
+                        npartitions=2)
+    with warnings.catch_warnings(record=True) as record:
+        df.categorize().compute()
+    assert len(record) == 0

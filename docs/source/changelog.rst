@@ -9,6 +9,8 @@ DataFrame
 - Return a series when functions given to ``dataframe.map_partitions`` return
   scalars (:pr:`1514`)
 - Fix type size inference for series (:pr:`1513`)
+- ``dataframe.DataFrame.categorize`` no longer includes missing values
+  in the ``categories``. This is for compatibility with a `pandas change<https://github.com/pydata/pandas/pull/10929>` (:pr:`1565`)
 - Fix head parser error in ``dataframe.read_csv`` when some lines have quotes
   (:pr:`1495`)
 - Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
