@@ -132,14 +132,34 @@ See the :doc:`EC2 quickstart <ec2>` for information on the ``dask-ec2`` easy
 setup script to launch a canned cluster on EC2.
 
 
-Cleanup
--------
+Cluster Resource Managers
+-------------------------
 
-It is common and safe to terminate the cluster by just killing the processes.
-The workers and scheduler have no persistent state.
+Dask.distributed has been deployed on dozens of different cluster resource
+managers.  This section contains links to some external projects, scripts, and
+instructions that may serve as useful starting points.
 
-Programmatically you can use the client interface (``rpc``) to call the
-``terminate`` methods on the workers and schedulers.
+Kubernetes
+~~~~~~~~~~
+
+*  https://github.com/ogrisel/docker-distributed
+*  https://github.com/hammerlab/dask-distributed-on-kubernetes/
+
+Marathon
+~~~~~~~~
+
+*  https://github.com/mrocklin/dask-marathon
+
+DRMAA (SGE, SLURM, Torque, etc..)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*  https://github.com/mfouesneau/dasksge
+
+YARN
+~~~~
+
+*   http://knit.readthedocs.io/en/latest/
+
 
 Software Environment
 --------------------
