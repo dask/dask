@@ -209,7 +209,7 @@ class Scheduler(Server):
         self.worker_bytes = dict()
         self.processing = dict()
         self.rprocessing = defaultdict(set)
-        self.task_duration = {prefix: 0.00001 for prefix in fast_task_prefixes}
+        self.task_duration = {prefix: 0.00001 for prefix in fast_tasks}
         self.restrictions = dict()
         self.loose_restrictions = set()
         self.suspicious_tasks = defaultdict(lambda: 0)
@@ -2685,6 +2685,8 @@ class Scheduler(Server):
         nbytes = sum(self.nbytes.get(k, 1000) for k in self.dependencies[key])
         transfer_time = nbytes / bandwidth
         split = key_split(key)
+        if split in fast_tasks:
+            return None, None
         try:
             compute_time = self.task_duration[split]
         except KeyError:
@@ -2979,7 +2981,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 _round_robin = [0]
 
 
-fast_task_prefixes = {'rechunk-split'}
+fast_tasks = {'rechunk-split', 'shuffle-split'}
 
 
 class KilledWorker(Exception):

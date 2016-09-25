@@ -94,7 +94,7 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
         lists['name'].append('transfer-to-' + name)
         lists['worker'].append(msg['worker'])
         lists['color'].append('#FF0020')
-        lists['alpha'].append('0.8')
+        lists['alpha'].append('0.4')
         lists['worker_thread'].append(worker_thread)
         lists['y'].append(workers[worker_thread])
 
@@ -107,7 +107,7 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
         lists['name'].append('disk-load-' + name)
         lists['worker'].append(msg['worker'])
         lists['color'].append('#FF2000')
-        lists['alpha'].append('0.8')
+        lists['alpha'].append('0.4')
         lists['worker_thread'].append(worker_thread)
         lists['y'].append(workers[worker_thread])
 
