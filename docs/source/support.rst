@@ -1,5 +1,5 @@
-Support
-=======
+Contact and Support
+===================
 
 Where to ask for help
 ---------------------
@@ -7,13 +7,13 @@ Where to ask for help
 Dask conversation happens in the following places:
 
 1.  `StackOverflow #dask tag`_: for usage questions
-2.  `Github Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+2.  `Github Issue Tracker`_: for new features or established bugs
+3.  `Gitter chat`_: for real-time discussion among developers
 
 For usage questions and bug reports we strongly prefer the use of StackOverflow
-and Github issues respectively over gitter chat.  Github and StackOverflow are
+and Github issues respectively over Gitter chat.  Github and StackOverflow are
 more easily searchable by future users and so is more efficient for everyone's
-time.  Gitter chat is generally reserved for community discussion.
+time.  Gitter chat is strictly reserved for developer and community discussion.
 
 .. _`StackOverflow #dask tag`: http://stackoverflow.com/questions/tagged/dask
 .. _`Github Issue Tracker`: https://github.com/dask/dask/issues/
