@@ -2172,17 +2172,18 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
-              left_index=False, right_index=False,
-              suffixes=('_x', '_y'), npartitions=None, shuffle=None):
+              left_index=False, right_index=False, suffixes=('_x', '_y'),
+              indicator=False, npartitions=None, shuffle=None):
 
         if not isinstance(right, (DataFrame, pd.DataFrame)):
             raise ValueError('right must be DataFrame')
 
         from .multi import merge
-        return merge(self, right, how=how, on=on,
-                     left_on=left_on, right_on=right_on,
-                     left_index=left_index, right_index=right_index,
-                     suffixes=suffixes, npartitions=npartitions, shuffle=shuffle)
+        return merge(self, right, how=how, on=on, left_on=left_on,
+                     right_on=right_on, left_index=left_index,
+                     right_index=right_index, suffixes=suffixes,
+                     npartitions=npartitions, indicator=indicator,
+                     shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
