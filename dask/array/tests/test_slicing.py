@@ -505,3 +505,5 @@ def test_oob_check():
         x[6]
     with pytest.raises(IndexError):
         x[[6]]
+    with pytest.raises(IndexError):
+        x[0, 0]
