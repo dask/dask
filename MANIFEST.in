@@ -7,3 +7,5 @@ include LICENSE.txt
 include MANIFEST.in
 
 prune docs/_build
+include versioneer.py
+include dask/_version.py
