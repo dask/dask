@@ -181,7 +181,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     """
     shape = tuple(map(sum, blockdims))
     assert all(isinstance(i, (slice, list, int, long)) for i in index)
-    assert len(blockdims) == len(index)
+    if not len(blockdims) == len(index):
+        raise IndexError("Too many indices for array")
     for bd, i in zip(blockdims, index):
         check_index(i, sum(bd))
 
