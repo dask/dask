@@ -230,8 +230,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
 
 def _pdmerge(left, right, how, left_on, right_on,
              left_index, right_index, suffixes,
-             default_left_columns, default_right_columns):
-
+             default_left_columns, default_right_columns, indicator=False):
+    #print ('started _pdmerge, indicator = ', indicator)
     if not len(left):
         left = pd.DataFrame(columns=default_left_columns)
 
@@ -241,7 +241,7 @@ def _pdmerge(left, right, how, left_on, right_on,
     result = pd.merge(left, right, how=how,
                       left_on=left_on, right_on=right_on,
                       left_index=left_index, right_index=right_index,
-                      suffixes=suffixes)
+                      suffixes=suffixes, indicator=indicator)
     return result
 
 
@@ -249,7 +249,7 @@ shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
 def hash_join(lhs, left_on, rhs, right_on, how='inner',
-              npartitions=None, suffixes=('_x', '_y'), shuffle=None):
+              npartitions=None, suffixes=('_x', '_y'), shuffle=None, indicator=False):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -257,6 +257,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
 
     >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
+    print ('started hash_join, indicator = ', indicator)
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
@@ -279,11 +280,11 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how, None,
                     left_on=left_on, right_on=right_on,
                     left_index=left_index, right_index=right_index,
-                    suffixes=suffixes)
+                    suffixes=suffixes, indicator=indicator)
 
     merger = partial(_pdmerge, suffixes=suffixes,
                      default_left_columns=list(lhs.columns),
-                     default_right_columns=list(rhs.columns))
+                     default_right_columns=list(rhs.columns), indicator=indicator)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -403,7 +404,8 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
-          npartitions=None, shuffle=None, max_branch=None):
+          npartitions=None, shuffle=None, max_branch=None, indicator=False):
+    print ('here we are!!!')
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -419,9 +421,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 
     if (isinstance(left, (pd.Series, pd.DataFrame)) and
             isinstance(right, (pd.Series, pd.DataFrame))):
+        print ('indeed both are pandas df, no hash_join in this case!')
         return pd.merge(left, right, how=how, on=on, left_on=left_on,
                         right_on=right_on, left_index=left_index,
-                        right_index=right_index, suffixes=suffixes)
+                        right_index=right_index, suffixes=suffixes, indicator=indicator)
 
     # Transform pandas objects into dask.dataframe objects
     if isinstance(left, (pd.Series, pd.DataFrame)):
@@ -429,6 +432,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = left.set_index(left[left_on])
             left_on = False
             left_index = True
+        print ('indeed only left is pandas df!')
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
     if isinstance(right, (pd.Series, pd.DataFrame)):
@@ -436,6 +440,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             right = right.set_index(right[right_on])
             right_on = False
             right_index = True
+        print ('indeed only right is pandas df!')
         right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
     # Both sides are now dd.DataFrame or dd.Series objects
@@ -443,12 +448,14 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # Both sides indexed
     if (left_index and left.known_divisions and
             right_index and right.known_divisions):  # Do indexed join
+        print ('indeed both sides indexed!')
         return join_indexed_dataframes(left, right, how=how,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
     # Single partition on one side
     elif (left.npartitions == 1 and how in ('inner', 'right') or
           right.npartitions == 1 and how in ('inner', 'left')):
+        print ('indeed Single partition on one side!')
         return single_partition_join(left, right, how=how, right_on=right_on,
                 left_on=left_on, left_index=left_index,
                 right_index=right_index, suffixes=suffixes)
@@ -456,6 +463,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # One side is indexed, the other not
     elif (left_index and left.known_divisions and not right_index or
           right_index and right.known_divisions and not left_index):
+        print ('Only One side is indexed, the other not!')
         left_empty = left._meta_nonempty
         right_empty = right._meta_nonempty
         meta = pd.merge(left_empty, right_empty, how=how, on=on,
@@ -475,9 +483,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                 right_index=right_index, suffixes=suffixes)
     # Catch all hash join
     else:
+        print ('Catch all hash join!')
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
-                         how, npartitions, suffixes, shuffle=shuffle)
+                         how, npartitions, suffixes, shuffle=shuffle, indicator=indicator)
 
 
 ###############################################################
