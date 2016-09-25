@@ -1268,14 +1268,6 @@ def test_to_csv_series():
     assert (result.x == df0).all()
 
 
-def test_read_csv_with_nrows():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, nrows=3)
-        assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions == 1
-        assert eq(dd.read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
-
-
 def test_read_csv_raises_on_no_files():
     fn = '.not.a.real.file.csv'
     try:

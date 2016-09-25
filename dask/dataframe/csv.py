@@ -199,6 +199,10 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
             raise ValueError("%s not supported for dd.read_csv" % kw)
+    if kwargs.get('nrows', None):
+        raise ValueError("The 'nrows' keyword is not supported by "
+                         "`dd.read_csv`. To achieve the same behavior, it's "
+                         "recommended to use `dd.read_csv(...).head(n=nrows)`")
     if isinstance(kwargs.get('skiprows'), list):
         raise TypeError("List of skiprows not supported for dd.read_csv")
     if isinstance(kwargs.get('header'), list):
@@ -223,9 +227,6 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
-
-    if 'nrows' in kwargs:
-        values = [[values[0][0]]]
 
     if kwargs.get('header', 'infer') is None:
         header = b''
