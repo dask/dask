@@ -3597,3 +3597,41 @@ def test_retire_many_workers(c, s, *workers):
     assert len(s.has_what) == len(s.ncores) == 3
     for w, keys in s.has_what.items():
         assert 20 < len(keys) < 50
+
+
+@gen_cluster(client=True,
+             scheduler_kwargs={'steal': False},
+             ncores=[('127.0.0.1', 3)] * 2)
+def test_weight_occupancy_against_data_movement(c, s, a, b):
+    s.task_duration['f'] = 0.01
+    def f(x, y=0, z=0):
+        sleep(0.01)
+        return x
+
+    y = yield c._scatter([[1, 2, 3, 4]], workers=[a.address])
+    z = yield c._scatter([1], workers=[b.address])
+
+    futures = c.map(f, [1, 2, 3, 4], y=y, z=z)
+
+    yield _wait(futures)
+
+    assert sum(f.key in a.data for f in futures) >= 2
+    assert sum(f.key in b.data for f in futures) >= 1
+
+
+@gen_cluster(client=True,
+             scheduler_kwargs={'steal': False},
+             ncores=[('127.0.0.1', 1), ('127.0.0.1', 10)])
+def test_distribute_tasks_by_ncores(c, s, a, b):
+    s.task_duration['f'] = 0.01
+    def f(x, y=0):
+        sleep(0.01)
+        return x
+
+    y = yield c._scatter([1], broadcast=True)
+
+    futures = c.map(f, range(20), y=y)
+
+    yield _wait(futures)
+
+    assert len(b.data) > 2 * len(a.data)

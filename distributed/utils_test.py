@@ -316,8 +316,8 @@ from .worker import Worker
 from .client import Client
 
 @gen.coroutine
-def start_cluster(ncores, loop, Worker=Worker):
-    s = Scheduler(ip='127.0.0.1', loop=loop, validate=True)
+def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={}):
+    s = Scheduler(ip='127.0.0.1', loop=loop, validate=True, **scheduler_kwargs)
     done = s.start(0)
     workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop)
                 for i, (k, v) in enumerate(ncores)]
@@ -346,7 +346,7 @@ def end_cluster(s, workers):
 
 
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
-        Worker=Worker, client=False):
+        Worker=Worker, client=False, scheduler_kwargs={}):
     from distributed import Client
     """ Coroutine test with small cluster
 
@@ -367,7 +367,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
             loop.make_current()
 
             s, workers = loop.run_sync(lambda: start_cluster(ncores, loop,
-                                                             Worker=Worker))
+                            Worker=Worker, scheduler_kwargs=scheduler_kwargs))
             args = [s] + workers
 
             if client:

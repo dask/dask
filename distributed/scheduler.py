@@ -106,6 +106,10 @@ class Scheduler(Server):
     * **processing:** ``{worker: {key: cost}}``:
         Set of keys currently in execution on each worker and their expected
         duration
+    * **stack_durations:** ``{worker: [ints]}``:
+        Expected durations of stacked tasks
+    * **stacks_duration:** ``{worker: int}``:
+        Total duration of all tasks in each workers stack
     * **rprocessing:** ``{key: {worker}}``:
         Set of workers currently executing a particular task
     * **who_has:** ``{key: {worker}}``:
@@ -177,7 +181,7 @@ class Scheduler(Server):
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
             synchronize_worker_interval=60000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
-            validate=False, **kwargs):
+            validate=False, steal=True, **kwargs):
 
         # Attributes
         self.ip = ip or get_ip()
@@ -186,6 +190,7 @@ class Scheduler(Server):
         self.status = None
         self.delete_interval = delete_interval
         self.synchronize_worker_interval = synchronize_worker_interval
+        self.steal = steal
 
         # Communication state
         self.loop = loop or IOLoop.current()
@@ -214,6 +219,8 @@ class Scheduler(Server):
         self.loose_restrictions = set()
         self.suspicious_tasks = defaultdict(lambda: 0)
         self.stacks = dict()
+        self.stack_durations = dict()
+        self.stack_duration = dict()
         self.waiting = dict()
         self.waiting_data = dict()
         self.ready = deque()
@@ -498,6 +505,8 @@ class Scheduler(Server):
                 self.processing[address] = dict()
                 self.occupancy[address] = 0
                 self.stacks[address] = deque()
+                self.stack_durations[address] = deque()
+                self.stack_duration[address] = 0
 
             if nbytes:
                 self.nbytes.update(nbytes)
@@ -741,6 +750,8 @@ class Scheduler(Server):
             for k in self.stacks.pop(address):
                 if k in self.tasks:
                     recommendations[k] = 'waiting'
+            del self.stack_durations[address]
+            del self.stack_duration[address]
 
             del self.occupancy[address]
             del self.worker_bytes[address]
@@ -898,6 +909,9 @@ class Scheduler(Server):
 
         assert self.worker_bytes == {w: sum(self.nbytes[k] for k in keys)
                                      for w, keys in self.has_what.items()}
+        for w in self.stacks:
+            assert abs(sum(self.stack_durations[w]) - self.stack_duration[w]) < 1e-8
+            assert len(self.stack_durations[w]) == len(self.stacks[w])
 
     ###################
     # Manage Messages #
@@ -1818,14 +1832,17 @@ class Scheduler(Server):
 
             if self.dependencies.get(key, None) or key in self.restrictions:
                 new_worker = decide_worker(self.dependencies, self.stacks,
-                        self.processing, self.who_has, self.has_what,
-                        self.restrictions, self.loose_restrictions, self.nbytes,
-                        key)
+                        self.stack_duration, self.processing, self.who_has,
+                        self.has_what, self.restrictions,
+                        self.loose_restrictions, self.nbytes, self.ncores, key)
                 if not new_worker:
                     self.unrunnable.add(key)
                     self.task_state[key] = 'no-worker'
                 else:
                     self.stacks[new_worker].append(key)
+                    duration = self.task_duration.get(key_split(key), 0.5)
+                    self.stack_durations[new_worker].append(duration)
+                    self.stack_duration[new_worker] += duration
                     self.maybe_idle.add(new_worker)
                     self.put_key_in_stealable(key)
                     self.task_state[key] = 'stacks'
@@ -2157,10 +2174,16 @@ class Scheduler(Server):
 
             if self.task_state[key] == 'no-worker':
                 self.unrunnable.remove(key)
-            if self.task_state[key] == 'stacks':
-                for v in self.stacks.values():
-                    if key in v:
-                        v.remove(key)
+            if self.task_state[key] == 'stacks':  # TODO: non-linear
+                for w in self.stacks:
+                    if key in self.stacks[w]:
+                        for i, k in enumerate(self.stacks[w]):
+                            if k == key:
+                                del self.stacks[w][i]
+                                duration = self.stack_durations[w][i]
+                                del self.stack_durations[w][i]
+                                self.stack_duration[w] -= duration
+                            break
 
             self.released.add(key)
             self.task_state[key] = 'released'
@@ -2576,6 +2599,8 @@ class Scheduler(Server):
                (self.ncores[worker] > len(self.processing[worker]) or
                 self.occupancy[worker] < latency * self.ncores[worker])):
             key = stack.pop()
+            duration = self.stack_durations[worker].pop()
+            self.stack_duration[worker] -= duration
 
             if self.task_state.get(key) == 'stacks':
                 r = self.transition(key, 'processing',
@@ -2636,7 +2661,9 @@ class Scheduler(Server):
         --------
         Scheduler.ensure_occupied
         """
-        with log_errors(pdb=True):
+        if not self.steal:
+            return []
+        with log_errors():
             thieves = set()
             for level, stealable in enumerate(self.stealable[:-1]):
                 if not stealable:
@@ -2660,6 +2687,10 @@ class Scheduler(Server):
                         else:
                             if self.task_state.get(key, 'stacks'):
                                 self.stacks[w].append(key)
+                                duration = self.task_duration.get(key_split(key), 0.5)
+                                self.stack_durations[w].append(duration)
+                                self.stack_duration[w] += duration
+
                                 thieves.add(w)
                                 if (self.ncores[w] <=
                                     len(self.processing[w]) + len(self.stacks[w])):
@@ -2791,8 +2822,9 @@ class Scheduler(Server):
         return self._ipython_kernel.get_connection_info()
 
 
-def decide_worker(dependencies, stacks, processing, who_has, has_what, restrictions,
-                  loose_restrictions, nbytes, key):
+def decide_worker(dependencies, stacks, stack_duration, processing, who_has,
+        has_what, restrictions, loose_restrictions, nbytes, ncores, key):
+
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
@@ -2801,13 +2833,14 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
     >>> who_has = {'a': {'alice:8000'}}
     >>> has_what = {'alice:8000': {'a'}}
     >>> nbytes = {'a': 100}
+    >>> ncores = {'alice:8000': 1, 'bob:8000': 1}
     >>> restrictions = {}
     >>> loose_restrictions = set()
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
     >>> decide_worker(dependencies, stacks, processing, who_has, has_what,
-    ...               restrictions, loose_restrictions, nbytes, 'b')
+    ...               restrictions, loose_restrictions, nbytes, ncores, 'b')
     'alice:8000'
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
@@ -2815,14 +2848,14 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
     >>> who_has = {'a': {'alice:8000', 'bob:8000'}}
     >>> has_what = {'alice:8000': {'a'}, 'bob:8000': {'a'}}
     >>> decide_worker(dependencies, stacks, processing, who_has, has_what,
-    ...               restrictions, loose_restrictions, nbytes, 'b')
+    ...               restrictions, loose_restrictions, nbytes, ncores, 'b')
     'bob:8000'
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charlie'}}
     >>> decide_worker(dependencies, stacks, processing, who_has, has_what,
-    ...               restrictions, loose_restrictions, nbytes, 'b')
+    ...               restrictions, loose_restrictions, nbytes, ncores, 'b')
     'alice:8000'
 
     If the task requires data communication, then we choose to minimize the
@@ -2836,7 +2869,7 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
     >>> stacks = {'alice:8000': [], 'bob:8000': []}
 
     >>> decide_worker(dependencies, stacks, processing, who_has, has_what,
-    ...               {}, set(), nbytes, 'c')
+    ...               {}, set(), nbytes, ncores, 'c')
     'bob:8000'
     """
     deps = dependencies[key]
@@ -2852,8 +2885,9 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
             workers = {w for w in stacks if w in r or w.split(':')[0] in r}
             if not workers:
                 if key in loose_restrictions:
-                    return decide_worker(dependencies, stacks, processing,
-                            who_has, has_what, {}, set(), nbytes, key)
+                    return decide_worker(dependencies, stacks, stack_duration,
+                            processing, who_has, has_what, {}, set(), nbytes,
+                            ncores, key)
                 else:
                     return None
     if not workers or not stacks:
@@ -2862,18 +2896,15 @@ def decide_worker(dependencies, stacks, processing, who_has, has_what, restricti
     if len(workers) == 1:
         return first(workers)
 
-    commbytes = {w: sum([nbytes.get(k, 1000) for k in dependencies[key]
-                                   if w not in who_has[k]])
-                 for w in workers}
-
-    minbytes = min(commbytes.values())
-    workers = {w for w, nb in commbytes.items() if nb == minbytes}
-
+    # Select worker that will finish task first
     def objective(w):
-        return (len(stacks[w]) + len(processing[w]),
-                len(has_what.get(w, ())))
-    worker = min(workers, key=objective)
-    return worker
+        comm_bytes = sum([nbytes.get(k, 1000) for k in dependencies[key]
+                          if w not in who_has[k]])
+        stack_time = stack_duration[w] / ncores[w]
+        start_time = comm_bytes / BANDWIDTH + stack_time
+        return start_time
+
+    return min(workers, key=objective)
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data, ready,
