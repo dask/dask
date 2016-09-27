@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
-from warnings import warn
+from warnings import warn, catch_warnings, simplefilter
 
 try:
     import psutil
@@ -128,9 +128,11 @@ def auto_blocksize(total_memory, cpu_count):
 
 # guess blocksize if psutil is installed or use acceptable default one if not
 if psutil is not None:
-    TOTAL_MEM = psutil.virtual_memory().total
-    CPU_COUNT = psutil.cpu_count()
-    AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
+    with catch_warnings():
+        simplefilter("ignore", RuntimeWarning)
+        TOTAL_MEM = psutil.virtual_memory().total
+        CPU_COUNT = psutil.cpu_count()
+        AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
 else:
     AUTO_BLOCKSIZE = 2**25
 
