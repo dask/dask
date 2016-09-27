@@ -41,7 +41,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
 
     # Determine bins to apply `how` to. Disregard labeling scheme.
     divs = pd.Series(range(len(divisions)), index=divisions)
-    temp = divs.resample(rule, how='count', closed=closed, label='left')
+    temp = divs.resample(rule, closed=closed, label='left').count()
     tempdivs = temp.loc[temp > 0].index
 
     # Cleanup closed == 'right' and label == 'right'
