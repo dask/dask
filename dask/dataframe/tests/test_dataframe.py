@@ -2003,6 +2003,26 @@ def test_columns_assignment():
     eq(df, ddf)
 
 
+def test_attribute_assignment():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [1., 2., 3., 4., 5.]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf.y = ddf.x + ddf.y
+    eq(ddf, df.assign(y=df.x + df.y))
+
+
+def test_inplace_operators():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [1., 2., 3., 4., 5.]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf.y **= 0.5
+
+    eq(ddf.y, df.y ** 0.5)
+    eq(ddf, df.assign(y=df.y ** 0.5))
+
+
 @pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("idx", [
     np.arange(100),

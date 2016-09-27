@@ -1930,6 +1930,17 @@ class DataFrame(_Frame):
         self._name = df._name
         self._meta = df._meta
 
+    def __setattr__(self, key, value):
+        try:
+            columns = object.__getattribute__(self, '_meta').columns
+        except AttributeError:
+            columns = ()
+
+        if key in columns:
+            self[key] = value
+        else:
+            object.__setattr__(self, key, value)
+
     def __getattr__(self, key):
         if key in self.columns:
             meta = self._meta[key]
