@@ -36,7 +36,7 @@ def _resample_series(series, start, end, reindex_closed, rule,
 
 
 def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
-    rule = pd.datetools.to_offset(rule)
+    rule = pd.tseries.frequencies.to_offset(rule)
     g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
 
     # Determine bins to apply `how` to. Disregard labeling scheme.
@@ -82,8 +82,8 @@ class Resampler(object):
                     "\nSee dask.pydata.io/en/latest/dataframe-partitions.html"
                     "\nfor more information.")
         self.obj = obj
-        rule = pd.datetools.to_offset(rule)
-        day_nanos = pd.datetools.Day().nanos
+        rule = pd.tseries.frequencies.to_offset(rule)
+        day_nanos = pd.tseries.frequencies.Day().nanos
 
         if getnanos(rule) and day_nanos % rule.nanos:
             raise NotImplementedError('Resampling frequency %s that does'
