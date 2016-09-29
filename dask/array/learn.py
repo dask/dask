@@ -36,7 +36,7 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     --------
     >>> import dask.array as da
     >>> X = da.random.random((10, 3), chunks=(5, 3))
-    >>> y = da.random.random(10, chunks=(5,))
+    >>> y = da.random.randint(0, 2, 10, chunks=(5,))
 
     >>> from sklearn.linear_model import SGDClassifier
     >>> sgd = SGDClassifier()
