@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import dask.dataframe as dd
-from dask.dataframe.utils import shard_df_on_index, meta_nonempty, make_meta
+from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
+                                  raise_on_meta_error)
 
 import pytest
 
@@ -187,3 +188,19 @@ def test_meta_nonempty_scalar():
     x = pd.Timestamp(2000, 1, 1)
     meta = meta_nonempty(x)
     assert meta is x
+
+
+def test_raise_on_meta_error():
+    try:
+        with raise_on_meta_error():
+            raise RuntimeError("Bad stuff")
+    except Exception as e:
+        assert e.args[0].startswith("Metadata inference failed.\n")
+        assert 'RuntimeError' in e.args[0]
+
+    try:
+        with raise_on_meta_error("myfunc"):
+            raise RuntimeError("Bad stuff")
+    except Exception as e:
+        assert e.args[0].startswith("Metadata inference failed in `myfunc`.\n")
+        assert 'RuntimeError' in e.args[0]

@@ -5,6 +5,8 @@ from distutils.version import LooseVersion
 
 from collections import Iterator
 import sys
+import traceback
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -128,6 +130,33 @@ def insert_meta_param_description(*args, **kwargs):
         descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
         f.__doc__ = f.__doc__.replace('$META', descr)
     return f
+
+
+@contextmanager
+def raise_on_meta_error(funcname=None):
+    """Reraise errors in this block to show metadata inference failure.
+
+    Parameters
+    ----------
+    funcname : str, optional
+        If provided, will be added to the error message to indicate the
+        name of the method that failed.
+    """
+    try:
+        yield
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
+        msg = ("Metadata inference failed{0}.\n\n"
+               "Original error is below:\n"
+               "------------------------\n"
+               "{1}\n\n"
+               "Traceback:\n"
+               "---------\n"
+               "{2}"
+               ).format(" in `{0}`".format(funcname) if funcname else "",
+                        repr(e), tb)
+        raise ValueError(msg)
 
 
 def make_meta(x, index=None):

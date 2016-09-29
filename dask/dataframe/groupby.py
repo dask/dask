@@ -7,8 +7,8 @@ import pandas as pd
 
 from .core import DataFrame, Series, Index, aca, map_partitions, no_default
 from .shuffle import shuffle
-from .utils import make_meta, insert_meta_param_description
-from ..utils import derived_from, M
+from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
+from ..utils import derived_from, M, funcname
 
 
 def _maybe_slice(grouped, columns):
@@ -324,11 +324,8 @@ class _GroupBy(object):
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            try:
+            with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
                 meta = self._meta_nonempty.apply(func)
-            except:
-                raise ValueError("Metadata inference failed, please provide "
-                                 "`meta` keyword")
         else:
             meta = make_meta(meta)
 

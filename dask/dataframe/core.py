@@ -31,7 +31,8 @@ from ..async import get_sync
 from . import methods
 from .indexing import (_partition_of_index_value, _loc, _try_loc,
                        _coerce_loc_index, _maybe_partial_time_string)
-from .utils import meta_nonempty, make_meta, insert_meta_param_description
+from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
+                    raise_on_meta_error)
 
 no_default = '__no_default__'
 
@@ -157,11 +158,7 @@ class Scalar(Base):
         def f(self):
             name = funcname(op) + '-' + tokenize(self)
             dsk = {(name, 0): (op, (self._name, 0))}
-            try:
-                meta = op(self._meta_nonempty)
-            except:
-                raise ValueError("Metadata inference failed in operator "
-                                 "{0}.".format(funcname(op)))
+            meta = op(self._meta_nonempty)
             return Scalar(merge(dsk, self.dask), name, meta)
         return f
 
@@ -189,16 +186,12 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         dsk.update({(name, 0): (op, (self._name, 0), other_key)})
 
-    try:
-        other_meta = make_meta(other)
-        other_meta_nonempty = meta_nonempty(other_meta)
-        if inv:
-            meta = op(other_meta_nonempty, self._meta_nonempty)
-        else:
-            meta = op(self._meta_nonempty, other_meta_nonempty)
-    except:
-        raise ValueError("Metadata inference failed in operator "
-                         "{0}.".format(funcname(op)))
+    other_meta = make_meta(other)
+    other_meta_nonempty = meta_nonempty(other_meta)
+    if inv:
+        meta = op(other_meta_nonempty, self._meta_nonempty)
+    else:
+        meta = op(self._meta_nonempty, other_meta_nonempty)
 
     if return_type is not Scalar:
         return return_type(dsk, name, meta,
@@ -1631,11 +1624,7 @@ class Series(_Frame):
                    enumerate(self._keys()))
         dsk.update(self.dask)
         if meta is no_default:
-            try:
-                meta = self._meta_nonempty.map(arg, na_action=na_action)
-            except Exception:
-                raise ValueError("Metadata inference failed, please provide "
-                                 "`meta` keyword")
+            meta = _emulate(M.map, self, arg, na_action=na_action)
         else:
             meta = make_meta(meta)
 
@@ -1761,13 +1750,9 @@ class Series(_Frame):
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            try:
-                meta = _emulate(M.apply, self._meta_nonempty, func,
-                                convert_dtype=convert_dtype,
-                                args=args, **kwds)
-            except Exception:
-                raise ValueError("Metadata inference failed, please provide "
-                                 "`meta` keyword")
+            meta = _emulate(M.apply, self._meta_nonempty, func,
+                            convert_dtype=convert_dtype,
+                            args=args, **kwds)
 
         return map_partitions(M.apply, self, func,
                               convert_dtype, args, meta=meta, **kwds)
@@ -2350,12 +2335,8 @@ class DataFrame(_Frame):
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg)
 
-            try:
-                meta = _emulate(M.apply, self._meta_nonempty, func,
-                                axis=axis, args=args, **kwds)
-            except Exception:
-                raise ValueError("Metadata inference failed, please provide "
-                                 "`meta` keyword")
+            meta = _emulate(M.apply, self._meta_nonempty, func,
+                            axis=axis, args=args, **kwds)
 
         return map_partitions(M.apply, self, func, axis,
                               False, False, None, args, meta=meta, **kwds)
@@ -2605,13 +2586,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
         dsk2 = {(b, 0): (apply, aggregate, [conc], aggregate_kwargs)}
 
     if meta is no_default:
-        try:
-            meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
-            meta = _emulate(apply, aggregate, [_concat([meta_chunk])],
-                            aggregate_kwargs)
-        except Exception:
-            raise ValueError("Metadata inference failed, please provide "
-                             "`meta` keyword")
+        meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
+        meta = _emulate(apply, aggregate, [_concat([meta_chunk])],
+                        aggregate_kwargs)
     meta = make_meta(meta)
 
     dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
@@ -2645,7 +2622,8 @@ def _emulate(func, *args, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
+    with raise_on_meta_error(funcname(func)):
+        return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
 @insert_meta_param_description
@@ -2678,11 +2656,7 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        try:
-            meta = _emulate(func, *args, **kwargs)
-        except Exception:
-            raise ValueError("Metadata inference failed, please provide "
-                             "`meta` keyword")
+        meta = _emulate(func, *args, **kwargs)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
