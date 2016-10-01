@@ -150,7 +150,7 @@ def test_meta_from_array():
     np.random.seed(42)
     x = np.random.rand(201, 2)
     x = from_array(x, chunksize=50, columns=['a', 'b'])
-    assert len(x.divisions) == 6 # Should be 5 partitions and the end
+    assert len(x.divisions) == 6   # Should be 5 partitions and the end
 
 
 def test_meta_from_1darray():
@@ -176,7 +176,7 @@ def test_meta_from_1darray():
 
 
 def test_meta_from_recarray():
-    x = np.array([(i, i*10) for i in range(10)],
+    x = np.array([(i, i * 10) for i in range(10)],
                  dtype=[('a', np.float64), ('b', np.int64)])
     res = dd.io._meta_from_array(x)
     assert isinstance(res, pd.DataFrame)
@@ -213,7 +213,7 @@ def test_from_array():
 
 
 def test_from_array_with_record_dtype():
-    x = np.array([(i, i*10) for i in range(10)],
+    x = np.array([(i, i * 10) for i in range(10)],
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
@@ -402,7 +402,7 @@ def test_from_pandas_dataframe():
     ddf = dd.from_pandas(df, 3)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert type(ddf.divisions[0]) == type(df.index[0])
+    assert isinstance(ddf.divisions[0], type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
     ddf = dd.from_pandas(df, chunksize=8)
     msg = 'Exactly one of npartitions and chunksize must be specified.'
@@ -412,7 +412,7 @@ def test_from_pandas_dataframe():
         dd.from_pandas(df)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert type(ddf.divisions[0]) == type(df.index[0])
+    assert isinstance(ddf.divisions[0], type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
 
 
@@ -455,13 +455,13 @@ def test_from_pandas_series():
     ds = dd.from_pandas(s, 3)
     assert len(ds.dask) == 3
     assert len(ds.divisions) == len(ds.dask) + 1
-    assert type(ds.divisions[0]) == type(s.index[0])
+    assert isinstance(ds.divisions[0], type(s.index[0]))
     tm.assert_series_equal(s, ds.compute())
 
     ds = dd.from_pandas(s, chunksize=8)
     assert len(ds.dask) == 3
     assert len(ds.divisions) == len(ds.dask) + 1
-    assert type(ds.divisions[0]) == type(s.index[0])
+    assert isinstance(ds.divisions[0], type(s.index[0]))
     tm.assert_series_equal(s, ds.compute())
 
 
@@ -730,9 +730,12 @@ def test_to_hdf_multiple_nodes():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                               'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                               14, 15, 16]},
+                        index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11.,
+                               12., 13., 14., 15., 16.])
     b = dd.from_pandas(df16, 16)
 
     # saving to multiple nodes
@@ -771,9 +774,12 @@ def test_to_hdf_multiple_files():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                               'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                               15, 16]},
+                        index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11.,
+                               12., 13., 14., 15., 16.])
     b = dd.from_pandas(df16, 16)
 
     # saving to multiple files
@@ -902,9 +908,12 @@ def test_to_hdf_modes_multiple_files():
 def test_to_hdf_link_optimizations():
     """testing dask link levels is correct by calculating the depth of the dask graph"""
     pytest.importorskip('tables')
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                               'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                               15, 16]},
+                        index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11.,
+                               12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # saving to multiple hdf files, no links are needed
@@ -932,16 +941,19 @@ def test_to_hdf_link_optimizations():
 @pytest.mark.slow
 def test_to_hdf_lock_delays():
     pytest.importorskip('tables')
-    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+    df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                               'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                               15, 16]},
+                        index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11.,
+                               12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # adding artifichial delays to make sure last tasks finish first
     # that's a way to simulate last tasks finishing last
     def delayed_nop(i):
         if i[1] < 10:
-            sleep(0.1*(10-i[1]))
+            sleep(0.1 * (10 - i[1]))
         return i
 
     # saving to multiple hdf nodes
@@ -1061,16 +1073,16 @@ def test_to_hdf_process():
         eq(df, out)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3),
-    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+@pytest.mark.skipif(sys.version_info[:2] == (3, 3),
+                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_fmt_warns():
     pytest.importorskip('tables')
     df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
                                'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
-                             10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
-                                   10., 11., 12., 13., 14., 15., 16.])
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                               10, 11, 12, 13, 14, 15, 16]},
+                        index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                               10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df16, 16)
 
     # testing warning when breaking order
@@ -1109,10 +1121,9 @@ def test_read_hdf(data, compare):
 
         compare(a.compute(), data)
 
-        compare(
-              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
-                          mode='r').compute(),
-              pd.read_hdf(fn, '/data', start=1, stop=3))
+        compare(dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
+                            mode='r').compute(),
+                pd.read_hdf(fn, '/data', start=1, stop=3))
 
         assert (sorted(dd.read_hdf(fn, '/data', mode='r').dask) ==
                 sorted(dd.read_hdf(fn, '/data', mode='r').dask))
@@ -1203,8 +1214,8 @@ def test_to_csv_multiple_files_cornercases():
 
     df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
                                'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
-                             10, 11, 12, 13, 14, 15, 16]})
+                         'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
+                               10, 11, 12, 13, 14, 15, 16]})
     a = dd.from_pandas(df16, 16)
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.csv')
@@ -1540,7 +1551,7 @@ def test_read_csv_slash_r():
     data = b'0,my\n1,data\n' * 1000 + b'2,foo\rbar'
     with filetext(data, mode='wb') as fn:
         dd.read_csv(fn, header=None, sep=',', lineterminator='\n',
-                    names=['a','b'], blocksize=200).compute(get=dask.get)
+                    names=['a', 'b'], blocksize=200).compute(get=dask.get)
 
 
 def test_read_csv_singleton_dtype():

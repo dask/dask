@@ -78,9 +78,10 @@ def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
 class Resampler(object):
     def __init__(self, obj, rule, **kwargs):
         if not obj.known_divisions:
-            raise ValueError("Can only resample dataframes with known divisions"
-                    "\nSee dask.pydata.io/en/latest/dataframe-partitions.html"
-                    "\nfor more information.")
+            msg = ("Can only resample dataframes with known divisions\n"
+                   "See dask.pydata.io/en/latest/dataframe-partitions.html\n"
+                   "for more information.")
+            raise ValueError(msg)
         self.obj = obj
         rule = pd.tseries.frequencies.to_offset(rule)
         day_nanos = pd.tseries.frequencies.Day().nanos
@@ -107,7 +108,7 @@ class Resampler(object):
         keys = partitioned._keys()
         dsk = partitioned.dask
 
-        args = zip(keys, outdivs, outdivs[1:], ['left']*(len(keys)-1) + [None])
+        args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])
         for i, (k, s, e, c) in enumerate(args):
             dsk[(name, i)] = (_resample_series, k, s, e, c,
                               rule, kwargs, how, fill_value)

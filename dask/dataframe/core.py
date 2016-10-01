@@ -324,7 +324,7 @@ class _Frame(Base):
         if 0 <= n < self.npartitions:
             name = 'get-partition-%s-%s' % (str(n), self._name)
             dsk = {(name, 0): (self._name, n)}
-            divisions = self.divisions[n:n+2]
+            divisions = self.divisions[n:n + 2]
             return self._constructor(merge(self.dask, dsk), name,
                                      self._meta, divisions)
         else:
@@ -575,7 +575,7 @@ class _Frame(Base):
         seeds = different_seeds(self.npartitions, random_state)
         dsk_full = dict(((self._name + '-split-full', i),
                          (pd_split, (self._name, i), p, seed))
-                       for i, seed in enumerate(seeds))
+                        for i, seed in enumerate(seeds))
 
         dsks = [dict(((self._name + '-split-%d' % i, j),
                       (getitem, (self._name + '-split-full', j), i))
@@ -604,8 +604,8 @@ class _Frame(Base):
         if npartitions <= -1:
             npartitions = self.npartitions
         if npartitions > self.npartitions:
-            raise ValueError("only {} partitions, head "
-                "received {}".format(self.npartitions, npartitions))
+            msg = "only {} partitions, head received {}"
+            raise ValueError(msg.format(self.npartitions, npartitions))
 
         name = 'head-%d-%d-%s' % (npartitions, n, self._name)
 
@@ -689,17 +689,18 @@ class _Frame(Base):
             dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
             divisions = [istart, istop]
         else:
-            dsk = merge(
-              {(name, 0): (_loc, (self._name, start), ind.start, None)},
-              dict(((name, i), (self._name, start + i))
-                  for i in range(1, stop - start)),
-              {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+            dsk = merge({(name, 0): (_loc, (self._name, start),
+                                     ind.start, None)},
+                        dict(((name, i), (self._name, start + i))
+                             for i in range(1, stop - start)),
+                        {(name, stop - start): (_loc, (self._name, stop),
+                                                None, ind.stop)})
 
             divisions = ((max(istart, self.divisions[start])
                           if ind.start is not None
                           else self.divisions[0],) +
-                         self.divisions[start+1:stop+1] +
-                         (min(istop, self.divisions[stop+1])
+                         self.divisions[start + 1:stop + 1] +
+                         (min(istop, self.divisions[stop + 1])
                           if ind.stop is not None
                           else self.divisions[-1],))
 
@@ -1209,8 +1210,8 @@ class _Frame(Base):
                                   axis=axis, skipna=skipna, ddof=ddof)
         else:
             v = self.var(skipna=skipna, ddof=ddof)
-            name = self._token_prefix + 'std-finish--%s' % tokenize(self, axis,
-                                                            skipna, ddof)
+            token = tokenize(self, axis, skipna, ddof)
+            name = self._token_prefix + 'std-finish--%s' % token
             return map_partitions(np.sqrt, v, meta=meta, token=name)
 
     def quantile(self, q=0.5, axis=0):
@@ -1263,7 +1264,7 @@ class _Frame(Base):
 
         name = 'describe--' + tokenize(self)
         dsk = merge(num.dask, *(s.dask for s in stats))
-        dsk[(name, 0)] = (methods.describe_aggregate,(list, stats_names))
+        dsk[(name, 0)] = (methods.describe_aggregate, (list, stats_names))
 
         return self._constructor(dsk, name, num._meta, divisions=[None, None])
 
@@ -1634,7 +1635,7 @@ class Series(_Frame):
                 meta = self._meta_nonempty.map(arg, na_action=na_action)
             except Exception:
                 raise ValueError("Metadata inference failed, please provide "
-                                "`meta` keyword")
+                                 "`meta` keyword")
         else:
             meta = make_meta(meta)
 
@@ -2118,7 +2119,7 @@ class DataFrame(_Frame):
     def eval(self, expr, inplace=None, **kwargs):
         if '=' in expr and inplace in (True, None):
             raise NotImplementedError("Inplace eval not supported."
-            " Please use inplace=False")
+                                      " Please use inplace=False")
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
@@ -2332,9 +2333,9 @@ class DataFrame(_Frame):
         axis = self._validate_axis(axis)
 
         if axis == 0:
-            raise NotImplementedError(
-                    "dd.DataFrame.apply only supports axis=1\n"
-                    "  Try: df.apply(func, axis=1)")
+            msg = ("dd.DataFrame.apply only supports axis=1\n"
+                   "  Try: df.apply(func, axis=1)")
+            raise NotImplementedError(msg)
 
         if columns is not no_default:
             warnings.warn("`columns` is deprecated, please use `meta` instead")
@@ -2594,7 +2595,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
                                             if isinstance(x, _Frame)
                                             else x for x in args],
                              chunk_kwargs))
-               for i in range(args[0].npartitions))
+                   for i in range(args[0].npartitions))
 
     b = '{0}-{1}'.format(token or funcname(aggregate), token_key)
     conc = (_concat, (list, [(a, i) for i in range(args[0].npartitions)]))
@@ -2889,7 +2890,7 @@ def cov_corr_chunk(df, corr=False):
     cov = df.cov().values
     dtype = [('sum', sums.dtype), ('count', counts.dtype), ('cov', cov.dtype)]
     if corr:
-        m = np.nansum((x - sums/np.where(counts, counts, np.nan))**2, 0)
+        m = np.nansum((x - sums / np.where(counts, counts, np.nan)) ** 2, 0)
         dtype.append(('m', m.dtype))
 
     out = np.empty(counts.shape, dtype=dtype)
@@ -2914,8 +2915,8 @@ def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     s2 = sums[1:]
     n1 = cum_counts[:-1]
     n2 = counts[1:]
-    d = (s2/n2) - (s1/n1)
-    C = (np.nansum((n1 * n2)/(n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
+    d = (s2 / n2) - (s1 / n1)
+    C = (np.nansum((n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
          np.nansum(data['cov'], 0))
 
     C[cum_counts[-1] < min_periods] = np.nan
@@ -2923,11 +2924,12 @@ def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     if corr:
         mu = cum_sums[-1] / nobs
         counts_na = np.where(counts, counts, np.nan)
-        m2 = np.nansum(data['m'] + counts*(sums/counts_na - mu)**2, axis=0)
+        m2 = np.nansum(data['m'] + counts * (sums / counts_na - mu) ** 2,
+                       axis=0)
         den = np.sqrt(m2 * m2.T)
     else:
         den = nobs - 1
-    mat = C/den
+    mat = C / den
     if scalar:
         return mat[0, 1]
     return pd.DataFrame(mat, columns=meta.columns, index=meta.columns)
@@ -3206,13 +3208,13 @@ class Accessor(object):
     def _property_map(self, key):
         out = self.getattr(self._series._meta_nonempty, key)
         meta = self._series._partition_type([], dtype=out.dtype,
-                name=getattr(out, 'name', None))
+                                            name=getattr(out, 'name', None))
         return map_partitions(self.getattr, self._series, key, meta=meta)
 
     def _function_map(self, key, *args):
         out = self.call(self._series._meta_nonempty, key, *args)
         meta = self._series._partition_type([], dtype=out.dtype,
-                name=getattr(out, 'name', None))
+                                            name=getattr(out, 'name', None))
         return map_partitions(self.call, self._series, key, *args, meta=meta)
 
     def __dir__(self):
@@ -3353,7 +3355,8 @@ def idxmaxmin_agg(x, fn, skipna=True, **kwargs):
 def safe_head(df, n):
     r = df.head(n=n)
     if len(r) != n:
-        warnings.warn("Insufficient elements for `head`. {0} elements "
-             "requested, only {1} elements available. Try passing larger "
-             "`npartitions` to `head`.".format(n, len(r)))
+        msg = ("Insufficient elements for `head`. {0} elements "
+               "requested, only {1} elements available. Try passing larger "
+               "`npartitions` to `head`.")
+        warnings.warn(msg.format(n, len(r)))
     return r

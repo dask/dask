@@ -2,7 +2,8 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
-        hash_join, concat_indexed_dataframes, _maybe_align_partitions)
+                                  hash_join, concat_indexed_dataframes,
+                                  _maybe_align_partitions)
 import pandas.util.testing as tm
 from dask.async import get_sync
 from dask.dataframe.utils import eq
@@ -402,9 +403,9 @@ def test_merge_by_index_patterns(how, shuffle):
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
 
-        for lpart, rpart in [(2, 2),  # same partition
-                             (3, 2),  # left npartition > right npartition
-                             (2, 3)]: # left npartition < right npartition
+        for lpart, rpart in [(2, 2),    # same partition
+                             (3, 2),    # left npartition > right npartition
+                             (2, 3)]:   # left npartition < right npartition
 
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
@@ -605,10 +606,10 @@ def test_merge_by_multiple_columns(how, shuffle):
             eq(ddr.join(ddl, how=how, shuffle=shuffle), pdr.join(pdl, how=how))
 
             eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True,
-                shuffle=shuffle),
+                        shuffle=shuffle),
                pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
             eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True,
-                shuffle=shuffle),
+                        shuffle=shuffle),
                pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
             # hash join

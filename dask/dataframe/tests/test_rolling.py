@@ -35,7 +35,9 @@ def rolling_functions_tests(p, d):
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
 
 
-def basic_rolling_tests(p, d): # Works for series or df
+def basic_rolling_tests(p, d):
+    # Works for series or df
+
     # New rolling API
     eq(p.rolling(3).count(), d.rolling(3).count())
     eq(p.rolling(3).sum(), d.rolling(3).sum())
@@ -98,13 +100,13 @@ def test_rolling_functions_dataframe():
     ('max', (), False),
     ('std', (), False),
     ('var', (), False),
-    ('skew', (), True), # here and elsewhere, results for kurt and skew are
-    ('kurt', (), True), # checked with check_less_precise=True so that we are
-                        # only looking at 3ish decimal places for the equality check
-                        # rather than 5ish. I have encountered a case where a test
-                        # seems to have failed due to numerical problems with kurt.
-                        # So far, I am only weakening the check for kurt and skew,
-                        # as they involve third degree powers and higher
+    ('skew', (), True),   # here and elsewhere, results for kurt and skew are
+    ('kurt', (), True),   # checked with check_less_precise=True so that we are
+                          # only looking at 3ish decimal places for the equality check
+                          # rather than 5ish. I have encountered a case where a test
+                          # seems to have failed due to numerical problems with kurt.
+                          # So far, I am only weakening the check for kurt and skew,
+                          # as they involve third degree powers and higher
     ('quantile', (.38,), False),
     ('apply', (np.sum,), False),
 ])
@@ -206,7 +208,7 @@ def test_rolling_partition_size():
 
 
 def test_rolling_repr():
-    ddf = dd.from_pandas(pd.DataFrame([10]*30), npartitions=3)
+    ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     assert repr(ddf.rolling(4)) in ['Rolling [window=4,center=False,axis=0]',
                                     'Rolling [window=4,axis=0,center=False]',
                                     'Rolling [center=False,axis=0,window=4]',

@@ -48,7 +48,7 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=True,
 
 
 def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
-        compute=None):
+                  compute=None):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -82,22 +82,25 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
     """
     if np.isscalar(index):
         partitions = df[index].map_partitions(set_partitions_pre,
-                divisions=divisions, meta=pd.Series([0]))
+                                              divisions=divisions,
+                                              meta=pd.Series([0]))
         df2 = df.assign(_partitions=partitions)
     else:
         partitions = index.map_partitions(set_partitions_pre,
-                divisions=divisions, meta=pd.Series([0]))
+                                          divisions=divisions,
+                                          meta=pd.Series([0]))
         df2 = df.assign(_partitions=partitions, _index=index)
 
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
-            npartitions=len(divisions) - 1, shuffle=shuffle, compute=compute)
+                              npartitions=len(divisions) - 1, shuffle=shuffle,
+                              compute=compute)
 
     if np.isscalar(index):
         df4 = df3.map_partitions(set_index_post_scalar, index_name=index,
-                drop=drop, column_dtype=df.columns.dtype)
+                                 drop=drop, column_dtype=df.columns.dtype)
     else:
         df4 = df3.map_partitions(set_index_post_series, index_name=index.name,
-                drop=drop, column_dtype=df.columns.dtype)
+                                 drop=drop, column_dtype=df.columns.dtype)
 
     df4.divisions = divisions
 
@@ -105,7 +108,7 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
 
 
 def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
-        compute=None):
+            compute=None):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -140,7 +143,8 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
     """ Shuffle dataframe so that column separates along divisions """
     partitions = df[column].map_partitions(set_partitions_pre,
-                divisions=divisions, meta=pd.Series([0]))
+                                           divisions=divisions,
+                                           meta=pd.Series([0]))
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)
@@ -148,7 +152,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
-        shuffle=None, compute=None):
+                        shuffle=None, compute=None):
     shuffle = shuffle or _globals.get('shuffle', 'disk')
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
@@ -247,9 +251,9 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
 
         join = dict((('shuffle-join-' + token, stage, inp),
                      (_concat,
-                        [('shuffle-split-' + token, stage, inp[stage-1],
-                          insert(inp, stage - 1, j)) for j in range(k)]))
-                     for inp in inputs)
+                      [('shuffle-split-' + token, stage, inp[stage - 1],
+                       insert(inp, stage - 1, j)) for j in range(k)]))
+                    for inp in inputs)
         groups.append(group)
         splits.append(split)
         joins.append(join)

@@ -10,7 +10,7 @@ from ..utils import M
 
 
 def rolling_chunk(func, part1, part2, window, *args):
-    if part1.shape[0] < window-1:
+    if part1.shape[0] < window - 1:
         raise NotImplementedError("Window larger than partition size")
     if window > 1:
         extra = window - 1
@@ -61,15 +61,17 @@ rolling_window = wrap_rolling(pd.rolling_window)
 
 
 def call_pandas_rolling_method_single(this_partition, rolling_kwargs,
-        method_name, method_args, method_kwargs):
+                                      method_name, method_args, method_kwargs):
     # used for the start of the df/series (or for rolling through columns)
     method = getattr(this_partition.rolling(**rolling_kwargs), method_name)
     return method(*method_args, **method_kwargs)
 
 
-def call_pandas_rolling_method_with_neighbors(
-        prev_partition, this_partition, next_partition, before, after,
-        rolling_kwargs, method_name, method_args, method_kwargs):
+def call_pandas_rolling_method_with_neighbors(prev_partition, this_partition,
+                                              next_partition, before, after,
+                                              rolling_kwargs, method_name,
+                                              method_args, method_kwargs):
+
     if prev_partition.shape[0] != before or next_partition.shape[0] != after:
         raise NotImplementedError("Window requires larger inter-partition view than partition size")
 
@@ -91,10 +93,10 @@ class Rolling(object):
     def __init__(self, obj, window=None, min_periods=None, freq=None,
                  center=False, win_type=None, axis=0):
         if freq is not None:
-            raise NotImplementedError(
-                'The deprecated freq argument is not supported.')
+            msg = 'The deprecated freq argument is not supported.'
+            raise NotImplementedError(msg)
 
-        self.obj = obj # dataframe or series
+        self.obj = obj     # dataframe or series
 
         self.window = window
         self.min_periods = min_periods
@@ -114,7 +116,8 @@ class Rolling(object):
             'axis': self.axis}
 
     def _call_method(self, method_name, *args, **kwargs):
-        args = list(args) # make sure dask does not mistake this for a task
+        # make sure dask does not mistake this for a task
+        args = list(args)
 
         old_name = self.obj._name
         new_name = 'rolling-' + tokenize(
@@ -152,41 +155,44 @@ class Rolling(object):
                 # only chunk.
                 next_partition = self.obj._meta
             dsk[new_name, 0] = (call_pandas_rolling_method_with_neighbors,
-                self.obj._meta, (old_name, 0), next_partition, 0, after,
-                self._rolling_kwargs(), method_name, args, kwargs)
+                                self.obj._meta, (old_name, 0),
+                                next_partition, 0, after,
+                                self._rolling_kwargs(), method_name,
+                                args, kwargs)
 
             # All the middle chunks
-            for i in range(1, self.obj.npartitions-1):
+            for i in range(1, self.obj.npartitions - 1):
                 # Get just the needed values from the previous partition
-                dsk[tail_name, i-1] = (M.tail, (old_name, i-1), before)
-                if after:
-                    next_partition = (head_name, i+1)
-                    dsk[next_partition] = (M.head, (old_name, i+1), after)
+                dsk[tail_name, i - 1] = (M.tail, (old_name, i - 1), before)
 
-                dsk[new_name, i] = (
-                    call_pandas_rolling_method_with_neighbors,
-                    (tail_name, i-1), (old_name, i), next_partition, before, after,
-                    self._rolling_kwargs(), method_name, args, kwargs)
+                if after:
+                    next_partition = (head_name, i + 1)
+                    dsk[next_partition] = (M.head, (old_name, i + 1), after)
+
+                dsk[new_name, i] = (call_pandas_rolling_method_with_neighbors,
+                                    (tail_name, i - 1), (old_name, i),
+                                    next_partition, before, after,
+                                    self._rolling_kwargs(), method_name,
+                                    args, kwargs)
 
             # The last chunk
-            if self.obj.npartitions > 1: # if the first wasn't the only partition
+            if self.obj.npartitions > 1:
+                # if the first wasn't the only partition
                 end = self.obj.npartitions - 1
-                dsk[tail_name, end-1] = (M.tail, (old_name, end-1), before)
+                dsk[tail_name, end - 1] = (M.tail, (old_name, end - 1), before)
 
                 dsk[new_name, end] = (
                     call_pandas_rolling_method_with_neighbors,
-                    (tail_name, end-1), (old_name, end), self.obj._meta, before, 0,
-                    self._rolling_kwargs(), method_name, args, kwargs)
+                    (tail_name, end - 1), (old_name, end), self.obj._meta,
+                    before, 0, self._rolling_kwargs(), method_name, args,
+                    kwargs)
 
         # Do the pandas operation to get the appropriate thing for metadata
         pd_rolling = self.obj._meta.rolling(**self._rolling_kwargs())
         metadata = getattr(pd_rolling, method_name)(*args, **kwargs)
 
-        return self.obj._constructor(
-            merge(self.obj.dask, dsk),
-            new_name,
-            metadata,
-            self.obj.divisions)
+        return self.obj._constructor(merge(self.obj.dask, dsk),
+                                     new_name, metadata, self.obj.divisions)
 
     def count(self, *args, **kwargs):
         return self._call_method('count', *args, **kwargs)
