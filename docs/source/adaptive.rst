@@ -49,8 +49,7 @@ Adaptive class interface
 
 The ``distributed.deploy.Adaptive`` class contains the logic about when to ask
 for new workers, and when to close idle ones.  This class requires both a
-scheduler and a cluster object
-``scale_down(workers)``.
+scheduler and a cluster object.
 
 The cluster object must support two methods, ``scale_up(n)``, which takes in a
 target number of total workers for the cluster and ``scale_down(workers)``,
