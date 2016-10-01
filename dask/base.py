@@ -266,13 +266,16 @@ normalize_token.register((int, float, str, unicode, bytes, type(None), type,
                           slice),
                          identity)
 
+
 @partial(normalize_token.register, dict)
 def normalize_dict(d):
     return normalize_token(sorted(d.items(), key=str))
 
+
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
+
 
 @partial(normalize_token.register, object)
 def normalize_object(o):
@@ -280,6 +283,7 @@ def normalize_object(o):
         return normalize_function(o)
     else:
         return uuid.uuid4().hex
+
 
 @partial(normalize_token.register, Base)
 def normalize_base(b):
@@ -314,6 +318,7 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     import numpy as np
+
     @partial(normalize_token.register, np.ndarray)
     def normalize_array(x):
         if not x.shape:
@@ -338,6 +343,7 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     from collections import OrderedDict
+
     @partial(normalize_token.register, OrderedDict)
     def normalize_ordered_dict(d):
         return type(d).__name__, normalize_token(list(d.items()))

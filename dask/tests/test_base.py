@@ -26,10 +26,13 @@ pd = import_or_none('pandas')
 
 
 def test_normalize_function():
+
     def f1(a, b, c=1):
         pass
+
     def f2(a, b=1, c=2):
         pass
+
     def f3(a):
         pass
 

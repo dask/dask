@@ -9,6 +9,7 @@ from skimage.io import imsave
 
 from dask.utils import tmpdir
 
+
 @contextmanager
 def random_images(n, shape):
     with tmpdir() as dirname:

@@ -53,6 +53,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
 
+
 @curry
 def wrap(wrap_func, func, **kwargs):
     f = partial(wrap_func, func, **kwargs)

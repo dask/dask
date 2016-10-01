@@ -79,8 +79,10 @@ def order(dsk, dependencies=None):
 
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
+
     def key(x):
         return -maxes.get(x, 0), str(x)
+
     return dfs(dependencies, dependents, key=key)
 
 

@@ -45,7 +45,7 @@ def test_rechunk_internals_1():
 
 def test_intersect_1():
     """ Convert 1 D chunks"""
-    old=((10, 10, 10, 10, 10),)
+    old = ((10, 10, 10, 10, 10), )
     new = ((25, 5, 20), )
     answer = ((((0, slice(0, 10, None)),),
               ((1, slice(0, 10, None)),),
@@ -72,37 +72,37 @@ def test_intersect_2():
 
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
-    a = np.random.uniform(0,1,300)
-    x = da.from_array(a, chunks=((100,)*3,))
-    new = ((50,)*6,)
-    x2 =rechunk(x, chunks=new)
+    a = np.random.uniform(0, 1, 300)
+    x = da.from_array(a, chunks=((100, ) * 3, ))
+    new = ((50, ) * 6,)
+    x2 = rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
 def test_rechunk_2d():
     """Try rechunking a random 2d matrix"""
-    a = np.random.uniform(0,1,300).reshape((10,30))
-    x = da.from_array(a, chunks=((1,2,3,4),(5,)*6))
-    new = ((5,5), (15,)*2)
-    x2 =rechunk(x, chunks=new)
+    a = np.random.uniform(0, 1, 300).reshape((10, 30))
+    x = da.from_array(a, chunks=((1, 2, 3, 4), (5, ) * 6))
+    new = ((5, 5), (15, ) * 2)
+    x2 = rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
 def test_rechunk_4d():
     """Try rechunking a random 4d matrix"""
-    old = ((5,5),)*4
-    a = np.random.uniform(0,1,10000).reshape((10,) * 4)
+    old = ((5, 5), ) * 4
+    a = np.random.uniform(0, 1, 10000).reshape((10, ) * 4)
     x = da.from_array(a, chunks=old)
-    new = ((10,),)* 4
-    x2 =rechunk(x, chunks=new)
+    new = ((10, ), ) * 4
+    x2 = rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
 def test_rechunk_expand():
-    a = np.random.uniform(0,1,100).reshape((10, 10))
+    a = np.random.uniform(0, 1, 100).reshape((10, 10))
     x = da.from_array(a, chunks=(5, 5))
     y = x.rechunk(chunks=((3, 3, 3, 1), (3, 3, 3, 1)))
     assert np.all(y.compute() == a)
@@ -112,21 +112,21 @@ def test_rechunk_expand2():
     (a, b) = (3, 2)
     orig = np.random.uniform(0, 1, a ** b).reshape((a,) * b)
     for off, off2 in product(range(1, a - 1), range(1, a - 1)):
-        old = ((a - off, off) ,)* b
+        old = ((a - off, off), ) * b
         x = da.from_array(orig, chunks=old)
-        new = ((a - off2, off2) ,)* b
+        new = ((a - off2, off2), ) * b
         assert np.all(x.rechunk(chunks=new).compute() == orig)
         if a - off - off2 > 0:
-            new = ((off, a - off2 - off, off2) ,)* b
+            new = ((off, a - off2 - off, off2), ) * b
             y = x.rechunk(chunks=new).compute()
             assert np.all(y == orig)
 
 
 def test_rechunk_method():
     """ Test rechunking can be done as a method of dask array."""
-    old = ((5, 2, 3),) * 4
-    new = ((3, 3, 3, 1),) * 4
-    a = np.random.uniform(0, 1, 10000).reshape((10,) * 4)
+    old = ((5, 2, 3), ) * 4
+    new = ((3, 3, 3, 1), ) * 4
+    a = np.random.uniform(0, 1, 10000).reshape((10, ) * 4)
     x = da.from_array(a, chunks=old)
     x2 = x.rechunk(chunks=new)
     assert x2.chunks == new

@@ -862,7 +862,7 @@ def test_concat2():
     assert dd.concat([a]) is a
     for case in cases:
         result = dd.concat(case)
-        pdcase = [c.compute() for c in case]
+        pdcase = [_c.compute() for _c in case]
 
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None, ) * (result.npartitions + 1)
@@ -1814,7 +1814,7 @@ def test_from_delayed():
     f = lambda x: pd.Series([len(x)])
     assert list(df.map_partitions(f).compute()) == [1, 2, 3, 4]
 
-    ss = [df.A for df in dfs]
+    ss = [d.A for d in dfs]
     s = dd.from_delayed(ss, meta=meta.A)
 
     assert s.compute().name == s.name

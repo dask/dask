@@ -97,10 +97,13 @@ def apply_func(sfunc, may_fail, wont_fail, loads=None):
         # Need a new reference for the exception, as `e` falls out of scope in
         # python 3
         exception = e
+
         def serialization_failure():
             raise exception
+
         task = (serialization_failure,)
         data = {}
+
     return func(key, task, data, queue, get_id,
                 raise_on_exception=raise_on_exception)
 

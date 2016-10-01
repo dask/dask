@@ -109,6 +109,7 @@ def test_cache_options():
     except ImportError:
         return
     cache = Chest()
+
     def inc2(x):
         assert 'y' in cache
         return x + 1
@@ -194,6 +195,7 @@ def test_remote_exception():
 
 def test_ordering():
     L = []
+
     def append(i):
         L.append(i)
 

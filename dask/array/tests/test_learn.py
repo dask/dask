@@ -27,6 +27,7 @@ X = da.from_array(x, chunks=(3, 2))
 Y = da.from_array(y, chunks=(3,))
 Z = da.from_array(z, chunks=(2, 2))
 
+
 def test_fit():
     sgd = SGDClassifier()
 

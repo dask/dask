@@ -16,6 +16,7 @@ else:
 from dask.utils import ensure_not_exists
 from IPython.display import Image, SVG
 
+
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
 def get_label(line):
@@ -69,6 +70,7 @@ def test_to_graphviz():
     funcs = set(('add', 'sum', 'neg'))
     assert set(labels).difference(dsk) == funcs
     assert set(labels).difference(funcs) == set(dsk)
+
 
 def test_to_graphviz_attributes():
     assert to_graphviz(dsk).graph_attr['rankdir'] == 'BT'

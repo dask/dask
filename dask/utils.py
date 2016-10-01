@@ -141,6 +141,7 @@ class IndexCallable(object):
     4
     """
     __slots__ = 'fn',
+
     def __init__(self, fn):
         self.fn = fn
 
@@ -573,6 +574,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
         except AttributeError:
             module_name = original_klass.__module__.split('.')[0]
+
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
                 msg = "Base package doesn't support '{0}'.".format(method_name)
@@ -824,6 +826,7 @@ def key_split(s):
 
 
 _method_cache = {}
+
 
 class methodcaller(object):
     """Return a callable object that calls the given method on its operand.

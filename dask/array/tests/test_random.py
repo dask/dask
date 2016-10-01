@@ -134,7 +134,7 @@ def test_random_all():
     da.random.logistic(size=5, chunks=3).compute()
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
-    da.random.multinomial(20, [1/6.]*6, size=5, chunks=3).compute()
+    da.random.multinomial(20, [1 / 6.] * 6, size=5, chunks=3).compute()
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 
@@ -161,8 +161,9 @@ def test_random_all():
     da.random.standard_normal(size=5, chunks=3).compute()
     da.random.standard_t(2, size=5, chunks=3).compute()
 
+
 @pytest.mark.skipif(not hasattr(np,'broadcast_to'),
-                    reason='requires numpy 1.10 method "broadcast_to"' )
+                    reason='requires numpy 1.10 method "broadcast_to"')
 def test_array_broadcasting():
     arr = np.arange(6).reshape((2, 3))
     daones = da.ones((2, 3, 4), chunks=3)
@@ -198,9 +199,10 @@ def test_array_broadcasting():
 
     assert 0.8 < z.mean().compute() / x.mean() < 1.2
 
+
 def test_multinomial():
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
-        x = da.random.multinomial(20, [1/6.]*6, size=size, chunks=chunks)
-        y = np.random.multinomial(20, [1/6.]*6, size=size)
+        x = da.random.multinomial(20, [1 / 6.] * 6, size=size, chunks=chunks)
+        y = np.random.multinomial(20, [1 / 6.] * 6, size=size)
 
         assert x.shape == y.shape == x.compute().shape

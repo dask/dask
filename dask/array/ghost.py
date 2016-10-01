@@ -198,7 +198,7 @@ def reflect(x, axis, depth):
                 (slice(depth - 1, None, -1),) +
                 (slice(None, None, None),) * (x.ndim - axis - 1))
     right = ((slice(None, None, None),) * axis +
-             (slice(-1, -depth-1, -1),) +
+             (slice(-1, -depth - 1, -1),) +
              (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
@@ -350,7 +350,7 @@ def ghost(x, depth, boundary):
                              (d, min(c)))
     x2 = boundaries(x, depth2, boundary2)
     x3 = ghost_internal(x2, depth2)
-    trim = dict((k, v*2 if boundary2.get(k, 'none') != 'none' else 0)
+    trim = dict((k, v * 2 if boundary2.get(k, 'none') != 'none' else 0)
                 for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4

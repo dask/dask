@@ -11,6 +11,7 @@ except ImportError:
 from .core import Array
 from ..base import tokenize
 
+
 def add_leading_dimension(x):
     return x[None, ...]
 
@@ -58,13 +59,13 @@ def imread(filename, imread=None, preprocess=None):
 
     keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
     if preprocess:
-        values = [(add_leading_dimension, (preprocess, (imread, filename)))
-                  for filename in filenames]
+        values = [(add_leading_dimension, (preprocess, (imread, fn)))
+                  for fn in filenames]
     else:
-        values = [(add_leading_dimension, (imread, filename))
-                  for filename in filenames]
+        values = [(add_leading_dimension, (imread, fn))
+                  for fn in filenames]
     dsk = dict(zip(keys, values))
 
-    chunks = ((1,) * len(filenames),) + tuple((d,) for d in sample.shape)
+    chunks = ((1, ) * len(filenames), ) + tuple((d, ) for d in sample.shape)
 
     return Array(dsk, name, chunks, sample.dtype)

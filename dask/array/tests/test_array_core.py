@@ -67,14 +67,14 @@ def test_top():
          ('z', 1, 1): (inc, ('x', 1, 1))}
 
     assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
-                numblocks={'x': (2, 2), 'y': (2, 2)}) == \
+               numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
          ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
          ('z', 1, 0): (add, ('x', 1, 0), ('y', 1, 0)),
          ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
 
     assert top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk',
-                    numblocks={'x': (2, 2), 'y': (2, 2)}) == \
+               numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
                                 [('y', 0, 0), ('y', 1, 0)]),
          ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
@@ -91,7 +91,7 @@ def test_top():
 
 def test_top_supports_broadcasting_rules():
     assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
-                numblocks={'x': (1, 2), 'y': (2, 1)}) == \
+               numblocks={'x': (1, 2), 'y': (2, 1)}) == \
         {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
          ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 0)),
          ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
@@ -188,7 +188,7 @@ def test_numblocks_suppoorts_singleton_block_dims():
     dsk = merge({name: 'some-array'}, getem(name, shape=shape, chunks=chunks))
     a = Array(dsk, name, chunks, shape=shape)
 
-    assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100//10)])
+    assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100 // 10)])
 
 
 def test_keys():
@@ -598,7 +598,7 @@ def test_coarsen_with_excess():
     assert_eq(coarsen(np.min, x, {0: 3}, trim_excess=True),
               np.array([0, 5]))
     assert_eq(coarsen(np.sum, x, {0: 3}, trim_excess=True),
-              np.array([0+1+2, 5+6+7]))
+              np.array([0 + 1 + 2, 5 + 6 + 7]))
 
 
 def test_insert():
@@ -827,6 +827,7 @@ def test_repr():
     assert str(d.shape) in repr(d)
     assert str(d._dtype) in repr(d)
 
+
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
     d = da.from_array(x, chunks=((2, 2, 2, 2)))
@@ -854,8 +855,8 @@ def test_dtype():
 def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
     assert raises(TypeError, lambda: blockdims_from_blockshape((10,), None))
-    assert blockdims_from_blockshape((1e2, 3), [1e1, 3]) == ((10,)*10, (3,))
-    assert blockdims_from_blockshape((np.int8(10),), (5,)) == ((5, 5),)
+    assert blockdims_from_blockshape((1e2, 3), [1e1, 3]) == ((10, ) * 10, (3, ))
+    assert blockdims_from_blockshape((np.int8(10), ), (5, )) == ((5, 5), )
 
 
 def test_coerce():
@@ -1162,17 +1163,17 @@ def test_arithmetic():
     assert_eq(da.sin(a), np.sin(x))
     assert_eq(da.cos(b), np.cos(y))
     assert_eq(da.tan(a), np.tan(x))
-    assert_eq(da.arcsin(b/10), np.arcsin(y/10))
-    assert_eq(da.arccos(b/10), np.arccos(y/10))
-    assert_eq(da.arctan(b/10), np.arctan(y/10))
-    assert_eq(da.arctan2(b*10, a), np.arctan2(y*10, x))
+    assert_eq(da.arcsin(b / 10), np.arcsin(y / 10))
+    assert_eq(da.arccos(b / 10), np.arccos(y / 10))
+    assert_eq(da.arctan(b / 10), np.arctan(y / 10))
+    assert_eq(da.arctan2(b * 10, a), np.arctan2(y * 10, x))
     assert_eq(da.hypot(b, a), np.hypot(y, x))
     assert_eq(da.sinh(a), np.sinh(x))
     assert_eq(da.cosh(b), np.cosh(y))
     assert_eq(da.tanh(a), np.tanh(x))
-    assert_eq(da.arcsinh(b*10), np.arcsinh(y*10))
-    assert_eq(da.arccosh(b*10), np.arccosh(y*10))
-    assert_eq(da.arctanh(b/10), np.arctanh(y/10))
+    assert_eq(da.arcsinh(b * 10), np.arcsinh(y * 10))
+    assert_eq(da.arccosh(b * 10), np.arccosh(y * 10))
+    assert_eq(da.arctanh(b / 10), np.arctanh(y / 10))
     assert_eq(da.deg2rad(a), np.deg2rad(x))
     assert_eq(da.rad2deg(a), np.rad2deg(x))
 
@@ -1407,6 +1408,7 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
     else:
         assert False
 
+
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
                     reason="NumPy doesn't yet support nd digitize")
 def test_digitize():
@@ -1532,19 +1534,18 @@ def test_map_blocks3():
     d = da.from_array(x, chunks=5)
     e = da.from_array(y, chunks=5)
 
-    assert_eq(da.core.map_blocks(lambda a, b: a+2*b, d, e, dtype=d.dtype),
-              x + 2*y)
+    assert_eq(da.core.map_blocks(lambda a, b: a + 2 * b, d, e, dtype=d.dtype),
+              x + 2 * y)
 
     z = np.arange(100).reshape((10, 10))
     f = da.from_array(z, chunks=5)
 
-    func = lambda a, b: a + 2*b
+    func = lambda a, b: a + 2 * b
     res = da.core.map_blocks(func, d, f, dtype=d.dtype)
-    assert_eq(res, x + 2*z)
+    assert_eq(res, x + 2 * z)
     assert same_keys(da.core.map_blocks(func, d, f, dtype=d.dtype), res)
 
-    assert_eq(da.map_blocks(func, f, d, dtype=d.dtype),
-              z + 2*x)
+    assert_eq(da.map_blocks(func, f, d, dtype=d.dtype), z + 2 * x)
 
 
 def test_from_array_with_missing_chunks():
@@ -1648,7 +1649,7 @@ def test_point_slicing():
 
 def test_point_slicing_with_full_slice():
     from dask.array.core import _vindex_transpose, _get_axis
-    x = np.arange(4*5*6*7).reshape((4, 5, 6, 7))
+    x = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
 
     inds = [
@@ -1772,7 +1773,7 @@ def test_memmap():
 
 
 def test_to_npy_stack():
-    x = np.arange(5*10*10).reshape((5, 10, 10))
+    x = np.arange(5 * 10 * 10).reshape((5, 10, 10))
     d = da.from_array(x, chunks=(2, 4, 4))
 
     with tmpdir() as dirname:
@@ -2015,8 +2016,8 @@ def test_diag():
 
 def test_tril_triu():
     A = np.random.randn(20, 20)
-    for chunk in [5, 4]:
-        dA = da.from_array(A, (chunk, chunk))
+    for chk in [5, 4]:
+        dA = da.from_array(A, (chk, chk))
 
         assert np.allclose(da.triu(dA).compute(), np.triu(A))
         assert np.allclose(da.tril(dA).compute(), np.tril(A))
@@ -2025,6 +2026,7 @@ def test_tril_triu():
                   1, 4, 5, 6, 8, 10, 11, 15, 16, 19, 20, 21]:
             assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
             assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
 
 def test_tril_triu_errors():
     A = np.random.random_integers(0, 10, (10, 10, 10))

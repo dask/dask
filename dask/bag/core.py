@@ -830,11 +830,11 @@ class Bag(Base):
         assert isinstance(other, Bag)
         name = 'product-' + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
-        dsk = dict(((name, i*m + j),
+        dsk = dict(((name, i * m + j),
                    (list, (itertools.product, (self.name, i),
                                               (other.name, j))))
                    for i in range(n) for j in range(m))
-        return type(self)(merge(self.dask, other.dask, dsk), name, n*m)
+        return type(self)(merge(self.dask, other.dask, dsk), name, n * m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default):
@@ -1577,7 +1577,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
         join = dict((('shuffle-join-' + token, stage, inp),
                      (list, (toolz.concat,
-                        [('shuffle-split-' + token, stage, inp[stage-1],
+                        [('shuffle-split-' + token, stage, inp[stage - 1],
                           insert(inp, stage - 1, j)) for j in range(k)])))
                      for inp in inputs)
         groups.append(group)

@@ -228,7 +228,7 @@ class _Tracker(Process):
                 ps = self._update_pids(pid)
                 while not self.child_conn.poll():
                     tic = default_timer()
-                    mem = sum(p.memory_info().rss for p in ps)/1e6
+                    mem = sum(p.memory_info().rss for p in ps) / 1e6
                     cpu = sum(p.cpu_percent() for p in ps)
                     data.append((tic, mem, cpu))
                     sleep(self.dt)

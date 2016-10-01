@@ -195,6 +195,7 @@ def test_bad_compression():
                 sample, values = func('.test.accounts.*',
                                       compression='not-found')
 
+
 def test_not_found():
     fn = 'not-a-file'
     with pytest.raises(FileNotFoundError) as e:

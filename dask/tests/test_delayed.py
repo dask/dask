@@ -249,7 +249,7 @@ def test_array_bag_delayed():
     b = db.from_sequence([1, 2, 3])
     seq = [arr1, arr2, darr1, darr2, b]
     out = delayed(sum)([i.sum() for i in seq])
-    assert out.compute() == 2*arr1.sum() + 2*arr2.sum() + sum([1, 2, 3])
+    assert out.compute() == 2 * arr1.sum() + 2 * arr2.sum() + sum([1, 2, 3])
 
 
 def test_delayed_picklable():

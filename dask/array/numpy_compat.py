@@ -68,7 +68,6 @@ except ImportError:  # pragma: no cover
                 new_array.__array_finalize__(original_array)
         return new_array
 
-
     def _broadcast_to(array, shape, subok, readonly):
         shape = tuple(shape) if np.iterable(shape) else (shape,)
         array = np.array(array, copy=False, subok=subok)
@@ -84,7 +83,6 @@ except ImportError:  # pragma: no cover
         if not readonly and array.flags.writeable:
             result.flags.writeable = True
         return result
-
 
     def broadcast_to(array, shape, subok=False):
         """Broadcast an array to a new shape.
@@ -121,7 +119,6 @@ except ImportError:  # pragma: no cover
                [1, 2, 3]])
         """
         return _broadcast_to(array, shape, subok=subok, readonly=True)
-
 
     def _replace_nan(a, val):
         """
@@ -163,7 +160,6 @@ except ImportError:  # pragma: no cover
         mask = np.isnan(a)
         np.copyto(a, val, where=mask)
         return a, mask
-
 
     def nanprod(a, axis=None, dtype=None, out=None, keepdims=0):
         """
@@ -234,7 +230,6 @@ except ImportError:  # pragma: no cover
         a, mask = _replace_nan(a, 1)
         return np.prod(a, axis=axis, dtype=dtype, out=out, keepdims=keepdims)
 
-
     def nancumsum(a, axis=None, dtype=None, out=None):
         """
         Return the cumulative sum of array elements over a given axis treating Not a
@@ -298,7 +293,6 @@ except ImportError:  # pragma: no cover
         """
         a, mask = _replace_nan(a, 0)
         return np.cumsum(a, axis=axis, dtype=dtype, out=out)
-
 
     def nancumprod(a, axis=None, dtype=None, out=None):
         """

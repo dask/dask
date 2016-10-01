@@ -536,7 +536,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     if compute:
         return DataFrame._get(dsk, keys, get=get, **dask_kwargs)
     else:
-        return delayed([Delayed(key, [dsk]) for key in keys])
+        return delayed([Delayed(k, [dsk]) for k in keys])
 
 
 dont_use_fixed_error_message = """

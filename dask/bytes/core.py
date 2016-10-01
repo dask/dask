@@ -56,7 +56,7 @@ def write_block_to_file(data, f, compression, encoding):
             # file-like
             out = '1'
             while out:
-                out = data.read(64*2**10)
+                out = data.read(64 * 2 ** 10)
                 if encoding:
                     f.write(out.encode(encoding=encoding))
                 else:
@@ -143,8 +143,8 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
         raise NotImplementedError("Unknown protocol for writing %s (%s)" %
                                   (protocol, urlpath))
 
-    keys = ['write-block-%s' % tokenize(d.key, path, storage_options,
-            compression, encoding) for (d, path) in zip(data, paths)]
+    keys = ['write-block-%s' % tokenize(d.key, p, storage_options,
+            compression, encoding) for (d, p) in zip(data, paths)]
     return [Delayed(key, dasks=[{key: (write_block_to_file, v.key,
                                        (apply, open_files_write, (p,),
                                         storage_options),
