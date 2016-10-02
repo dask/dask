@@ -277,7 +277,7 @@ class _Frame(Base):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def __repr__(self):
+    def _repr_header(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + '...'
         if self.known_divisions:
             div_text = ', divisions=%s' % repr_long_list(self.divisions)
@@ -298,6 +298,28 @@ class _Frame(Base):
     @property
     def _elemwise(self):
         return elemwise
+
+    @property
+    def _repr_data(self):
+        raise NotImplementedError
+
+    @property
+    def _repr_divisions(self):
+        if self.known_divisions:
+            divisions = pd.Index(self.divisions, name='divisions')
+        else:
+            # avoid to be converted to NaN
+            divisions = pd.Index(['None'] * (self.npartitions + 1),
+                                 name='divisions')
+        return divisions
+
+    def __repr__(self):
+        return """{name}
+
+Dask {klass} Structure:
+{data}""".format(name=self._repr_header(),
+                 klass=self.__class__.__name__,
+                 data=repr(self._repr_data))
 
     @property
     def index(self):
@@ -1596,6 +1618,27 @@ class Series(_Frame):
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
 
+    @cache_readonly
+    def _repr_data(self):
+        values = [str(self.dtype)] + ['...'] * self.npartitions
+        return pd.Series(values, index=self._repr_divisions, name=self.name)
+
+    def __repr__(self):
+        """ have to overwrite footer """
+        if self.name is not None:
+            footer = "Name: {name}, dtype: {dtype}".format(name=self.name,
+                                                           dtype=self.dtype)
+        else:
+            footer = "dtype: {dtype}".format(dtype=self.dtype)
+        return """{name}
+
+Dask {klass} Structure:
+{data}
+{footer}""".format(name=self._repr_header(),
+                   klass=self.__class__.__name__,
+                   data=self._repr_data.to_string(),
+                   footer=footer)
+
     @derived_from(pd.Series)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
@@ -1760,6 +1803,10 @@ class Series(_Frame):
     def to_frame(self, name=None):
         return self.map_partitions(M.to_frame, name,
                                    meta=self._meta.to_frame(name))
+
+    @derived_from(pd.Series)
+    def to_string(self):
+        return self._repr_data.to_string()
 
     @classmethod
     def _bind_operator_method(cls, name, op):
@@ -2338,6 +2385,10 @@ class DataFrame(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
+    @derived_from(pd.DataFrame)
+    def to_string(self):
+        return self._repr_data.to_string()
+
     def _get_numeric_data(self, how='any', subset=None):
         # calculate columns to avoid unnecessary calculation
         numerics = self._meta._get_numeric_data()
@@ -2649,9 +2700,33 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
+
     def to_records(self, index=False):
         from .io import to_records
         return to_records(self)
+
+    @derived_from(pd.DataFrame)
+    def to_html(self):
+        # pd.Series doesn't have html repr
+        return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
+                                     data=self._repr_data.to_html())
+
+    @cache_readonly
+    def _repr_data(self):
+        dtypes = self.dtypes
+        values = {key: [value] + ['...'] * self.npartitions for key, value
+                  in zip(dtypes.index, dtypes.values)}
+        return pd.DataFrame(values,
+                            index=self._repr_divisions,
+                            columns=self.columns)
+
+    _HTML_FMT = """{name}
+<div><strong>Dask DataFrame Structure:</strong></div>
+{data}"""
+
+    def _repr_html_(self):
+        return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
+                                     data=self._repr_data._repr_html_())
 
 
 # bind operators
@@ -3679,6 +3754,10 @@ def to_delayed(df):
     """
     from ..delayed import Delayed
     return [Delayed(k, [df.dask]) for k in df._keys()]
+
+
+def _escape_html_tag(s):
+    return s.replace('<', r'&lt;', 1).replace('>', r'&gt;', 1)
 
 
 if PY3:

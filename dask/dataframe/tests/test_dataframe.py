@@ -111,17 +111,6 @@ def test_Series():
     assert repr(d.a).startswith('dd.Series')
 
 
-def test_repr():
-    df = pd.DataFrame({'x': list(range(100))})
-    ddf = dd.from_pandas(df, 3)
-
-    for x in [ddf, ddf.index, ddf.x]:
-        assert type(x).__name__ in repr(x)
-        assert x._name[:5] in repr(x)
-        assert str(x.npartitions) in repr(x)
-        assert len(repr(x)) < 80
-
-
 def test_Index():
     for case in [pd.DataFrame(np.random.randn(10, 5), index=list('abcdefghij')),
                  pd.DataFrame(np.random.randn(10, 5),
