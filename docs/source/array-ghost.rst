@@ -148,12 +148,9 @@ given to ``ghost``.
    >>> x.chunks
    ((10, 10, 10, 10), (10, 10, 10, 10))
 
-   >>> da.ghost.trim_internal(x, {0: 2, 1: 1})
+   >>> y = da.ghost.trim_internal(x, {0: 2, 1: 1})
+   >>> y.chunks
    ((6, 6, 6, 6), (8, 8, 8, 8))
-
-
-*Note: at the moment ``trim`` cuts indiscriminately from the boundaries as
-well.  If you don't specify a boundary kind then this may not be desired.*
 
 
 Full Workflow
@@ -169,7 +166,6 @@ and ``trim_internal``
    ...                       boundary={0: 'periodic', 1: 'periodic'})
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.ghost.trim_internal(g2, {0: 2, 1: 2})
-
 
 .. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
 .. _Numba: http://numba.pydata.org/

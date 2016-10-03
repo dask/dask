@@ -32,6 +32,9 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
     -------
     samples : dask array
 
+    See Also
+    --------
+    dask.array.arange
     """
     num = int(num)
 
@@ -86,6 +89,9 @@ def arange(*args, **kwargs):
     -------
     samples : dask array
 
+    See Also
+    --------
+    dask.array.linspace
     """
     if len(args) == 1:
         start = 0

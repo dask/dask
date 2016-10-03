@@ -106,7 +106,7 @@ def ghost_internal(x, axes):
     axes: dict
         The size of the shared boundary per axis
 
-    The axes dict informs how many cells to overlap between neighboring blocks
+    The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
     dims = list(map(len, x.chunks))
@@ -149,8 +149,9 @@ def trim_internal(x, axes):
     each block
 
     See also
-        chunk.trim
-        map_blocks
+    --------
+    dask.array.chunk.trim
+    dask.array.map_blocks
     """
     olist = []
     for i, bd in enumerate(x.chunks):
@@ -256,7 +257,6 @@ def boundaries(x, depth=None, kind=None):
 
     See Also
     --------
-
     periodic
     constant
     """
@@ -297,14 +297,15 @@ def ghost(x, depth, boundary):
         The size of the shared boundary per axis
     boundary: dict
         The boundary condition on each axis. Options are 'reflect', 'periodic',
-        'nearest', 'none', an integer will fill the boundary with that integer.
+        'nearest', 'none', or an array value.  Such a value will fill the
+        boundary with that value.
 
-    The axes dict informs how many cells to overlap between neighboring blocks
-    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
+    The depth input informs how many cells to overlap between neighboring
+    blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
+    Axes missing from this input will not be overlapped.
 
     Examples
     --------
-
     >>> import numpy as np
     >>> import dask.array as da
 

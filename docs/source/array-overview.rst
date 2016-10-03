@@ -3,8 +3,8 @@ Overview
 
 Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us
-compute on arrays larger than memory using all of our cores. We coordinate these
-blocked algorithms using dask graphs.
+compute on arrays larger than memory using all of our cores.  We coordinate
+these blocked algorithms using dask graphs.
 
 Design
 ------
@@ -58,17 +58,20 @@ Limitations
 Dask.array does not implement the entire numpy interface.  Users expecting this
 will be disappointed.  Notably, dask.array has the following limitations:
 
-1.  Dask does not implement all of ``np.linalg``.  This has been done by a
+1.  Dask.arrays are immutable.  You can not change elements within a dask
+    array.
+2.  Dask.array does not implement all of ``np.linalg``.  This has been done by a
     number of excellent BLAS/LAPACK implementations, and is the focus of
     numerous ongoing academic research projects.
-2.  Dask.array does not support any operation where the resulting shape
+3.  Dask.array does not support any operation where the resulting shape
     depends on the values of the array.  In order to form the dask graph we
     must be able to infer the shape of the array before actually executing the
     operation.  This precludes operations like indexing one dask array with
     another or operations like ``np.where``.
-3.  Dask.array does not attempt operations like ``sort`` which are notoriously
+4.  Dask.array does not attempt operations like ``sort`` which are notoriously
     difficult to do in parallel, and are of somewhat diminished value on very
     large data (you rarely actually need a full sort).
     Often we include parallel-friendly alternatives like ``topk``.
-4.  Dask development is driven by immediate need, and so many lesser used
+5.  It is very inefficient to iterate over a Dask.array with for loops.
+6.  Dask development is driven by immediate need, and so many lesser used
     functions have not been implemented. Community contributions are encouraged.

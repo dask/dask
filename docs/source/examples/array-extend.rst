@@ -1,13 +1,13 @@
-Extend Dask Array
-=================
+Build Custom Dask.Array Function
+================================
 
 As discussed in the :doc:`array design document <array-design>` to create a
-dask `Array` object you need the following:
+dask ``Array`` object we need the following:
 
 1.  A dask graph
 2.  A name specifying a set of keys within that graph
 3.  A ``chunks`` tuple giving chunk shape information
-4.  A ``dtype``
+4.  A NumPy dtype
 
 Often ``dask.array`` functions take other ``Array`` objects as inputs along
 with parameters, add tasks to a new dask dictionary, create a new ``chunks``
@@ -23,13 +23,13 @@ Consider this simple example with the ``eye`` function.
 
 .. code-block:: python
 
-   from dask.array.core import tokens
+   from dask.base import tokenize
 
    def eye(n, blocksize):
        chunks = ((blocksize,) * n // blocksize,
                  (blocksize,) * n // blocksize)
 
-       name = 'eye' + next(tokens)  # unique identifier
+       name = 'eye-' + tokenize(n, blocksize)  # unique identifier
 
        dsk = {(name, i, j): (np.eye, blocksize)
                             if i == j else
@@ -61,11 +61,14 @@ where the ith block along the diagonal of the output is the result of calling
 
 .. code-block:: python
 
+   from dask.base import tokenize
+
    def diag(v):
        """Construct a diagonal array, with ``v`` on the diagonal."""
+       assert v.ndim == 1
        chunks = (v.chunks[0], v.chunks[0])  # repeat chunks twice
 
-       name = 'diag' + next(tokens)  # unique identifier
+       name = 'diag-' + tokenize(v)  # unique identifier
 
        dsk = {(name, i, j): (np.diag, (v.name, i))
                             if i == j else

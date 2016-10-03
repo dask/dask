@@ -192,7 +192,6 @@ def zero_broadcast_dimensions(lol, nblocks):
 
     See Also
     --------
-
     lol_tuples
     """
     f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
@@ -659,13 +658,16 @@ def topk(k, x):
     Returns the k greatest elements of the array in sorted order.  Only works
     on arrays of a single dimension.
 
+    This assumes that ``k`` is small.  All results will be returned in a single
+    chunk.
+
+    Examples
+    --------
+
     >>> x = np.array([5, 1, 3, 6])
     >>> d = from_array(x, chunks=2)
     >>> d.topk(2).compute()
     array([6, 5])
-
-    Runs in near linear time, returns all results in a single chunk so
-    all k elements must fit in memory.
     """
     if x.ndim != 1:
         raise ValueError("Topk only works on arrays of one dimension")
@@ -708,7 +710,6 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
 
     Examples
     --------
-
     >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
@@ -780,7 +781,12 @@ def finalize(results):
 
 
 class Array(Base):
-    """ Parallel Array
+    """ Parallel Dask Array
+
+    A parallel nd-array comprised of many numpy arrays arranged in a grid.
+
+    This constructor is for advanced uses only.  For normal use see the
+    ``da.from_array`` function.
 
     Parameters
     ----------
@@ -793,8 +799,11 @@ class Array(Base):
         Shape of the entire array
     chunks: iterable of tuples
         block sizes along each dimension
-    """
 
+    See Also
+    --------
+    dask.array.from_array
+    """
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
 
     _optimize = staticmethod(optimize)
@@ -1489,9 +1498,13 @@ class Array(Base):
         return self
 
     def to_delayed(self):
-        """ Convert Array into dask Values
+        """ Convert Array into dask Delayed objects
 
         Returns an array of values, one value per chunk.
+
+        See Also
+        --------
+        dask.array.from_delayed
         """
         from ..delayed import Delayed
         return np.array(deepmap(lambda k: Delayed(k, [self.dask]), self._keys()),
@@ -3449,14 +3462,12 @@ def to_npy_stack(dirname, x, axis=0):
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 
-    ```bash
-    $ tree data/
-    data/
-    |-- 0.npy
-    |-- 1.npy
-    |-- 2.npy
-    |-- info
-    ```
+        $ tree data/
+        data/
+        |-- 0.npy
+        |-- 1.npy
+        |-- 2.npy
+        |-- info
 
     The ``.npy`` files store numpy arrays for ``x[0:2], x[2:4], and x[4:5]``
     respectively, as is specified by the chunk size along the zeroth axis.  The

@@ -12,6 +12,7 @@ Array
    examples/array-numpy.rst
    examples/array-hdf5.rst
    examples/array-random.rst
+   examples/array-extend.rst
 
 *  `Use Dask.array to generate task graphs <https://gist.github.com/mrocklin/b61f795004ec0a70e43de350e453e97e>`_
 

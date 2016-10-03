@@ -430,7 +430,6 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
-.. autofunction:: product
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh
