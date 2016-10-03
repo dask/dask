@@ -245,6 +245,7 @@ def test_0_depth():
     result = trim_internal(constant, depth)
     assert_array_equal(result, expected)
 
+
 def test_some_0_depth():
     expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(expected, chunks=(5, 5))

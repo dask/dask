@@ -32,6 +32,7 @@ def _percentile(a, q, interpolation='linear'):
 
 names = ('percentile-%d' % i for i in count(1))
 
+
 def percentile(a, q, interpolation='linear'):
     """ Approximate percentile of 1-D array
 
@@ -150,7 +151,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
         elif interpolation == 'higher':
             rv = combined_vals[upper]
         elif interpolation == 'midpoint':
-            rv = 0.5*(combined_vals[lower] + combined_vals[upper])
+            rv = 0.5 * (combined_vals[lower] + combined_vals[upper])
         elif interpolation == 'nearest':
             lower_residual = np.abs(combined_q[lower] - desired_q)
             upper_residual = np.abs(combined_q[upper] - desired_q)

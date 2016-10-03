@@ -196,9 +196,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
-                                    if isinstance(i, list)
-                                    else i
-                                    for i in index2)
+                               if isinstance(i, list) else i
+                               for i in index2)
 
     # No lists, hooray! just use slice_slices_and_integers
     if index2 == index_without_list:
@@ -253,8 +252,8 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
     out_names = list(product([out_name],
                              *[range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
-                                 for d, i in zip(block_slices, index)
-                                 if not isinstance(i, (int, long))]))
+                               for d, i in zip(block_slices, index)
+                               if not isinstance(i, (int, long))]))
 
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
@@ -407,7 +406,7 @@ def partition_by_size(sizes, seq):
     locations = np.searchsorted(seq, right)
     locations = [0] + locations.tolist()
     left = [0] + right.tolist()
-    return [(seq[locations[i]:locations[i+1]] - left[i]).tolist()
+    return [(seq[locations[i]:locations[i + 1]] - left[i]).tolist()
             for i in range(len(locations) - 1)]
 
 
@@ -466,7 +465,7 @@ def take_sorted(outname, inname, blockdims, index, axis=0):
 
     outdims = list(dims)
     outdims[axis] = where_index
-    slices = [[colon]*len(bd) for bd in blockdims]
+    slices = [[colon] * len(bd) for bd in blockdims]
     slices[axis] = index_lists
     slices = list(product(*slices))
     inkeys = list(product([inname], *outdims))
@@ -512,21 +511,20 @@ def take(outname, inname, blockdims, index, axis=0):
     index_lists = partition_by_size(sizes, sorted(index))
 
     dims = [[0] if axis == i else list(range(len(bd)))
-                for i, bd in enumerate(blockdims)]
+            for i, bd in enumerate(blockdims)]
     keys = list(product([outname], *dims))
 
     rev_index = list(map(sorted(index).index, index))
-    vals = [(getitem, (np.concatenate,
-                  (list, [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
-                                   ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
-                                for i, IL in enumerate(index_lists)
-                                if IL]),
-                        axis),
-                     ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
+    vals = [(getitem,
+             (np.concatenate,
+              (list, [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
+                      ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
+                      for i, IL in enumerate(index_lists) if IL]), axis),
+             ((colon, ) * axis + (rev_index, ) + (colon, ) * (n - axis - 1)))
             for d in product(*dims)]
 
     blockdims2 = list(blockdims)
-    blockdims2[axis] = (len(index),)
+    blockdims2[axis] = (len(index), )
 
     return tuple(blockdims2), dict(zip(keys, vals))
 
@@ -591,7 +589,7 @@ def new_blockdim(dim_shape, lengths, index):
     assert not isinstance(index, (int, long))
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
-                for i, slc in pairs]
+              for i, slc in pairs]
     if isinstance(index, slice) and index.step and index.step < 0:
         slices = slices[::-1]
     return [int(ceil((1. * slc.stop - slc.start) / slc.step)) for slc in slices]
@@ -609,9 +607,8 @@ def replace_ellipsis(n, index):
         return index
     else:
         loc = isellipsis[0]
-    return (index[:loc]
-          + (slice(None, None, None),) * (n - len(index) + 1)
-          + index[loc+1:])
+    return (index[:loc] + (slice(None, None, None),) * (n - len(index) + 1) +
+            index[loc + 1:])
 
 
 def check_index(ind, dimension):
@@ -652,10 +649,9 @@ def check_index(ind, dimension):
         return
 
     elif ind >= dimension:
-        raise IndexError("Index is not smaller than dimension %d >= %d"
-                % (ind, dimension))
+        raise IndexError("Index is not smaller than dimension %d >= %d" %
+                         (ind, dimension))
 
     elif ind <= -dimension:
-        raise IndexError(
-                "Negative index is not greater than negative dimension %d <= -%d"
-                % (ind, dimension))
+        msg = "Negative index is not greater than negative dimension %d <= -%d"
+        raise IndexError(msg % (ind, dimension))

@@ -143,7 +143,7 @@ def fuse_slice(a, b):
     if isinstance(a, slice) and isinstance(b, int):
         if b < 0:
             raise NotImplementedError()
-        return a.start + b*a.step
+        return a.start + b * a.step
 
     if isinstance(a, slice) and isinstance(b, slice):
         start = a.start + a.step * b.start

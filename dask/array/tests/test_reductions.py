@@ -222,11 +222,11 @@ def test_reductions_2D_nans():
 
 def test_moment():
     def moment(x, n, axis=None):
-        return ((x - x.mean(axis=axis, keepdims=True))**n).sum(
-                axis=axis)/np.ones_like(x).sum(axis=axis)
+        return (((x - x.mean(axis=axis, keepdims=True)) ** n).sum(axis=axis) /
+                np.ones_like(x).sum(axis=axis))
 
     # Poorly conditioned
-    x = np.array([1., 2., 3.]*10).reshape((3, 10)) + 1e8
+    x = np.array([1., 2., 3.] * 10).reshape((3, 10)) + 1e8
     a = da.from_array(x, chunks=5)
     assert_eq(a.moment(2), moment(x, 2))
     assert_eq(a.moment(3), moment(x, 3))

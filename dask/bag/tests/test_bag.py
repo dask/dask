@@ -30,6 +30,7 @@ L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
 
+
 def iseven(x):
     return x % 2 == 0
 
@@ -65,9 +66,11 @@ class A(object):
     def __init__(self, a, b, c):
         pass
 
+
 class B(object):
     def __init__(self, a):
         pass
+
 
 def test_map_with_constructors():
     assert db.from_sequence([[1, 2, 3]]).map(A).compute()
@@ -88,9 +91,9 @@ def test_map_with_builtins():
     assert b.map(str).map(tuple).compute() == [('0',), ('1',), ('2',)]
     assert b.map(str).map(tuple).map(any).compute() == [True, True, True]
 
-    b2 = b.map(lambda n: [(n, n+1), (2*(n-1), -n)])
+    b2 = b.map(lambda n: [(n, n + 1), (2 * (n - 1), -n)])
     assert b2.map(dict).compute() == [{0: 1, -2: 0}, {1: 2, 0: -1}, {2: -2}]
-    assert b.map(lambda n: (n, n+1)).map(pow).compute() == [0, 1, 8]
+    assert b.map(lambda n: (n, n + 1)).map(pow).compute() == [0, 1, 8]
     assert b.map(bool).compute() == [False, True, True]
     assert db.from_sequence([(1, 'real'), ('1', 'real')]).map(hasattr).compute() == \
         [True, False]
@@ -172,6 +175,7 @@ def test_fold():
     assert c2.key == b.fold(add, initial=10).key
 
     c = db.from_sequence(range(5), npartitions=3)
+
     def binop(acc, x):
         acc = acc.copy()
         acc.add(x)
@@ -417,7 +421,7 @@ def test_inline_singleton_lists():
     out = {'c': (f, (list, 'a'), 1)}
     assert inline_singleton_lists(inp) == out
 
-    out = {'c': (f,        'a' , 1)}
+    out = {'c': (f, 'a', 1)}
     assert optimize(inp, ['c']) == out
 
     inp = {'b': (list, 'a'),
@@ -441,6 +445,7 @@ def test_take_npartitions():
     assert b.take(3, npartitions=-1) == (0, 1, 2)
     with pytest.raises(ValueError):
         b.take(1, npartitions=5)
+
 
 @pytest.mark.skipif(sys.version_info[:2] == (3,3),
     reason="Python3.3 uses pytest2.7.2, w/o warns method")
@@ -721,6 +726,7 @@ def test_to_textfiles():
             assert 'xyz' in text
             f.close()
 
+
 def test_to_textfiles_name_function_preserves_order():
     seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
     b = db.from_sequence(seq, npartitions=16)
@@ -730,6 +736,7 @@ def test_to_textfiles_name_function_preserves_order():
         out = db.read_text(os.path.join(dn, "*"), encoding='ascii').map(str).map(str.strip).compute()
         assert seq == out
 
+
 @pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_textfiles_name_function_warn():
     seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
@@ -737,6 +744,7 @@ def test_to_textfiles_name_function_warn():
     with tmpdir() as dn:
         with pytest.warns(None):
             a.to_textfiles(dn, name_function=str)
+
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
@@ -921,6 +929,7 @@ def test_repartition():
         b.repartition(100)
     except NotImplementedError as e:
         assert '100' in str(e)
+
 
 @pytest.mark.skipif('not db.core._implement_accumulate')
 def test_accumulate():

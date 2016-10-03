@@ -67,7 +67,7 @@ def pprint_task(task, keys, label_size=60):
         else:
             if hasattr(func, 'funcs'):
                 head = '('.join(funcname(f) for f in func.funcs)
-                tail = ')'*len(func.funcs)
+                tail = ')' * len(func.funcs)
             else:
                 head = funcname(task[0])
                 tail = ')'
@@ -100,7 +100,7 @@ def pprint_task(task, keys, label_size=60):
             result = pprint_task(task[:3], keys, label_size)
             return result[:-1] + ', ...]'
         else:
-            label_size2 = int((label_size - 2 - 2*len(task)) // len(task))
+            label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
             args = ', '.join(pprint_task(t, keys, label_size2) for t in task)
             return '[{0}]'.format(args)
     else:
@@ -254,7 +254,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
 
         data = {}
         data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
-        data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
+        data['x'] = [w / 2 + s - left for (w, s) in zip(width, starts)]
         data['y'] = [id_lk[i] + 1 for i in ids]
         data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
         data['color'] = get_colors(palette, funcs)

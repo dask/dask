@@ -16,7 +16,7 @@ dsk = {'a': 1,
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == '[' + '#'*width + ']'
+    assert bar == '[' + '#' * width + ']'
     assert percent == '100% Completed'
 
 
@@ -38,7 +38,7 @@ def test_minimum_time(capsys):
 
 
 def test_clean_exit():
-    dsk = {'a': (lambda: 1/0,)}
+    dsk = {'a': (lambda: 1 / 0, )}
     try:
         with ProgressBar() as pbar:
             get(dsk, 'a')

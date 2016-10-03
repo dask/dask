@@ -1240,8 +1240,8 @@ class _Frame(Base):
             quantiles = tuple(quantile(self[c], q) for c in num.columns)
 
             dask = {}
-            dask = merge(dask, *[q.dask for q in quantiles])
-            qnames = [(q._name, 0) for q in quantiles]
+            dask = merge(dask, *[_q.dask for _q in quantiles])
+            qnames = [(_q._name, 0) for _q in quantiles]
 
             if isinstance(quantiles[0], Scalar):
                 dask[(name, 0)] = (pd.Series, (list, qnames), num.columns)
@@ -2613,7 +2613,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
                              "`meta` keyword")
     meta = make_meta(meta)
 
-    dasks = [a.dask for a in args if isinstance(a, _Frame)]
+    dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
     return new_dd_object(merge(dsk, dsk2, *dasks), b, meta, [None, None])
 
 

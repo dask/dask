@@ -415,6 +415,7 @@ def call_function(func, args, kwargs, pure=False, nout=None):
 
 class DelayedLeaf(Delayed):
     __slots__ = ('_obj', '_key', '_pure', '_nout')
+
     def __init__(self, obj, key, pure=False, nout=None):
         self._obj = obj
         self._key = key
@@ -436,6 +437,7 @@ class DelayedLeaf(Delayed):
 
 class DelayedAttr(Delayed):
     __slots__ = ('_obj', '_attr', '_key')
+
     def __init__(self, obj, attr, key):
         self._obj = obj
         self._attr = attr
