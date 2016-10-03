@@ -204,8 +204,9 @@ def delayed(obj, name=None, pure=False, nout=None):
     >>> a.compute()
     [1, 2, 3]
 
-    The key name of a delayed object is hashed by default. To explicitly set
-    the name, you can use the ``name`` keyword:
+    The key name of a delayed object is hashed by default if ``pure=True`` or
+    is generated randomly if ``pure=False`` (default).  To explicitly set the
+    name, you can use the ``name`` keyword:
 
     >>> a = delayed([1, 2, 3], name='mylist')
     >>> a
