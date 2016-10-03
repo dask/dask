@@ -39,6 +39,10 @@ More info: :doc:`scheduling policy <scheduling-policy>`.
 Performance
 -----------
 
+*EDIT: The experiments run in this section are now outdated.  Anecdotal testing
+shows that performance has improved significantly.  There is now about 200 us
+overhead per task and about 1 ms startup time.*
+
 **tl;dr** The threaded scheduler overhead behaves roughly as follows:
 
 *  1ms overhead per task
