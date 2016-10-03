@@ -643,7 +643,7 @@ def test_reduction_series_invalid_axis():
     pdf1 = ddf1.compute()
 
     for axis in [1, 'columns']:
-        for s in [ddf1.a, pdf1.a]: # both must behave the same
+        for s in [ddf1.a, pdf1.a]:    # both must behave the same
             assert raises(ValueError, lambda: s.sum(axis=axis))
             assert raises(ValueError, lambda: s.min(axis=axis))
             assert raises(ValueError, lambda: s.max(axis=axis))

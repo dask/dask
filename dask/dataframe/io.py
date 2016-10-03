@@ -194,7 +194,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     dsk = dict(((name, i), data.iloc[start: stop])
                for i, (start, stop) in enumerate(zip(locations[:-1],
-                   locations[1:])))
+                                                     locations[1:])))
     return new_dd_object(dsk, name, data, divisions)
 
 
@@ -321,19 +321,19 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
             chunks = [x[name][slc] for name in columns]
             if categories is not None:
                 chunks = [pd.Categorical.from_codes(
-                                    np.searchsorted(categories[name], chunk),
-                                    categories[name], True)
-                           if name in categories else chunk
-                           for name, chunk in zip(columns, chunks)]
+                    np.searchsorted(categories[name], chunk),
+                    categories[name], True)
+                    if name in categories else chunk
+                    for name, chunk in zip(columns, chunks)]
             result = pd.DataFrame(dict(zip(columns, chunks)), columns=columns,
-                                index=idx)
+                                  index=idx)
 
         elif isinstance(x, bcolz.carray):
             chunk = x[slc]
             if categories is not None and columns and columns in categories:
                 chunk = pd.Categorical.from_codes(
-                            np.searchsorted(categories[columns], chunk),
-                            categories[columns], True)
+                    np.searchsorted(categories[columns], chunk),
+                    categories[columns], True)
             result = pd.Series(chunk, name=columns, index=idx)
     finally:
         if lock:
@@ -583,7 +583,8 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     stops.append(stop)
                 if sorted_index:
                     division_start = storer.read_column('index', start=0, stop=1)[0]
-                    division_end = storer.read_column('index', start=storer.nrows-1, stop=storer.nrows)[0]
+                    division_end = storer.read_column('index', start=storer.nrows - 1,
+                                                      stop=storer.nrows)[0]
                     divisions.append([division_start, division_end])
                 else:
                     divisions.append(None)

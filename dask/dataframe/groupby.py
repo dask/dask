@@ -80,11 +80,11 @@ def _var_chunk(df, index):
 def _var_agg(g, ddof):
     g = g.groupby(level=0).sum()
     nc = len(g.columns)
-    x = g[g.columns[:nc//3]]
-    x2 = g[g.columns[nc//3:2*nc//3]].rename(columns=lambda c: c[:-3])
-    n = g[g.columns[-nc//3:]].rename(columns=lambda c: c[:-6])
+    x = g[g.columns[:nc // 3]]
+    x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
+    n = g[g.columns[-nc // 3:]].rename(columns=lambda c: c[:-6])
 
-    result = x2 - x**2 / n
+    result = x2 - x ** 2 / n
     div = (n - ddof)
     div[div < 0] = 0
     result /= div
@@ -141,14 +141,14 @@ class _GroupBy(object):
 
         # grouping key passed via groupby method
         if (isinstance(index, (DataFrame, Series, Index)) and
-                isinstance(df, DataFrame)):
+           isinstance(df, DataFrame)):
 
             if (isinstance(index, Series) and index.name in df.columns and
-                    index._name == df[index.name]._name):
+               index._name == df[index.name]._name):
                 index = index.name
             elif (isinstance(index, DataFrame) and
-                set(index.columns).issubset(df.columns) and
-                    index._name == df[index.columns]._name):
+                  set(index.columns).issubset(df.columns) and
+                  index._name == df[index.columns]._name):
                 index = list(index.columns)
 
         self.index = index
@@ -350,12 +350,12 @@ class _GroupBy(object):
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
             df4 = df3.drop(cols, axis=1, dtype=meta.columns.dtype if
-                    isinstance(meta, pd.DataFrame) else None)
+                           isinstance(meta, pd.DataFrame) else None)
         elif isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
             df4 = df3.drop('_index', axis=1, dtype=meta.columns.dtype if
-                    isinstance(meta, DataFrame) else None)
+                           isinstance(meta, DataFrame) else None)
         else:
             df4 = df3
             index2 = self.index

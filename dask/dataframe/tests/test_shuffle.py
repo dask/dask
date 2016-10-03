@@ -4,8 +4,10 @@ import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.shuffle import (shuffle, hash_series, partitioning_index,
-        rearrange_by_column, rearrange_by_divisions)
+from dask.dataframe.shuffle import (shuffle, hash_series,
+                                    partitioning_index,
+                                    rearrange_by_column,
+                                    rearrange_by_divisions)
 from dask.async import get_sync
 from dask.dataframe.utils import eq, make_meta
 
@@ -64,9 +66,12 @@ def test_index_with_non_series(method):
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
 def test_index_with_dataframe(method):
-    assert sorted(shuffle(d, d[['b']], shuffle=method).compute().values.tolist()) ==\
-           sorted(shuffle(d, ['b'], shuffle=method).compute().values.tolist()) ==\
-           sorted(shuffle(d, 'b', shuffle=method).compute().values.tolist())
+    res1 = shuffle(d, d[['b']], shuffle=method).compute()
+    res2 = shuffle(d, ['b'], shuffle=method).compute()
+    res3 = shuffle(d, 'b', shuffle=method).compute()
+
+    assert sorted(res1.values.tolist()) == sorted(res2.values.tolist())
+    assert sorted(res1.values.tolist()) == sorted(res3.values.tolist())
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -93,7 +98,7 @@ df2 = pd.DataFrame({'i32': np.array([1, 2, 3] * 3, dtype='int32'),
                     'f32': np.array([None, 2.5, 3.5] * 3, dtype='float32'),
                     'cat': pd.Series(['a', 'b', 'c'] * 3).astype('category'),
                     'obj': pd.Series(['d', 'e', 'f'] * 3),
-                    'bool': np.array([True, False, True]*3),
+                    'bool': np.array([True, False, True] * 3),
                     'dt': pd.Series(pd.date_range('20130101', periods=9)),
                     'dt_tz': pd.Series(pd.date_range('20130101', periods=9, tz='US/Eastern')),
                     'td': pd.Series(pd.timedelta_range('2000', periods=9))})
@@ -180,9 +185,9 @@ def test_set_partition_names(shuffle):
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_partition_tasks_2(shuffle):
-    df = dd.demo.make_timeseries('2000', '2004',
-            {'value': float, 'name': str, 'id': int},
-            freq='2H', partition_freq='1M', seed=1)
+    df = dd.demo.make_timeseries(
+        '2000', '2004', {'value': float, 'name': str, 'id': int},
+        freq='2H', partition_freq='1M', seed=1)
 
     df2 = df.set_index('name', shuffle=shuffle)
     df2.value.sum().compute(get=get_sync)

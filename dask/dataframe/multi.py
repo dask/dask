@@ -125,7 +125,7 @@ def align_partitions(*dfs):
                     inds[i] += 1
                 else:
                     L.append(None)
-            else: # Scalar has no divisions
+            else:    # Scalar has no divisions
                 L.append(None)
         result.append(L)
     return dfs2, tuple(divisions), result
@@ -201,8 +201,9 @@ required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 
 def merge_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix='',
-                            indicator=False):
+                             indicator=False):
     """ Join two partitioned dataframes along their index """
+
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
@@ -446,9 +447,9 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     if (left_index and left.known_divisions and
             right_index and right.known_divisions):  # Do indexed join
         return merge_indexed_dataframes(left, right, how=how,
-                                       lsuffix=suffixes[0],
-                                       rsuffix=suffixes[1],
-                                       indicator=indicator)
+                                        lsuffix=suffixes[0],
+                                        rsuffix=suffixes[1],
+                                        indicator=indicator)
 
     # Single partition on one side
     elif (left.npartitions == 1 and how in ('inner', 'right') or

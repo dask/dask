@@ -75,7 +75,7 @@ def _categorize(categories, df):
     """
     if '.index' in categories:
         index = pd.CategoricalIndex(
-                  pd.Categorical.from_codes(df.index.values, categories['.index']))
+            pd.Categorical.from_codes(df.index.values, categories['.index']))
     else:
         index = df.index
     if isinstance(df, pd.Series):
@@ -87,12 +87,10 @@ def _categorize(categories, df):
 
     else:
         return pd.DataFrame(
-                dict((col, pd.Categorical.from_codes(df[col].values, categories[col])
-                           if col in categories
-                           else df[col].values)
-                    for col in df.columns),
-                columns=df.columns,
-                index=index)
+            dict((col, pd.Categorical.from_codes(df[col].values, categories[col])
+                 if col in categories else df[col].values)
+                 for col in df.columns),
+            columns=df.columns, index=index)
 
 
 def strip_categories(df):

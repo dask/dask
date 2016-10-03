@@ -118,8 +118,8 @@ def test_groupby_dir():
 
 def test_groupby_on_index():
     full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
-                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     d = dd.from_pandas(full, npartitions=3)
 
     e = d.set_index('a')
@@ -256,28 +256,28 @@ def test_series_groupby_errors():
 
     msg = "Grouper for '1' not 1-dimensional"
     with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([1, 2])  # pandas
+        s.groupby([1, 2])    # pandas
     with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([1, 2]) # dask should raise the same error
+        ss.groupby([1, 2])   # dask should raise the same error
     msg = "Grouper for '2' not 1-dimensional"
     with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([2])  # pandas
+        s.groupby([2])    # pandas
     with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([2]) # dask should raise the same error
+        ss.groupby([2])   # dask should raise the same error
 
     msg = "No group keys passed!"
     with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([])  # pandas
+        s.groupby([])    # pandas
     with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([]) # dask should raise the same error
+        ss.groupby([])   # dask should raise the same error
 
     sss = dd.from_pandas(s, npartitions=3)
     assert raises(NotImplementedError, lambda: ss.groupby(sss))
 
     with tm.assertRaises(KeyError):
-        s.groupby('x')  # pandas
+        s.groupby('x')    # pandas
     with tm.assertRaises(KeyError):
-        ss.groupby('x') # dask should raise the same error
+        ss.groupby('x')   # dask should raise the same error
 
 
 def test_groupby_index_array():

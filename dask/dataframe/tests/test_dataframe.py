@@ -82,8 +82,9 @@ def test_head_npartitions():
     with pytest.raises(ValueError):
         d.head(2, npartitions=5)
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3),
-    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+
+@pytest.mark.skipif(sys.version_info[:2] == (3, 3),
+                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_head_npartitions_warn():
     with pytest.warns(None):
         d.head(100)
@@ -121,7 +122,8 @@ def test_repr():
 def test_Index():
     for case in [pd.DataFrame(np.random.randn(10, 5), index=list('abcdefghij')),
                  pd.DataFrame(np.random.randn(10, 5),
-                    index=pd.date_range('2011-01-01', freq='D', periods=10))]:
+                              index=pd.date_range('2011-01-01', freq='D',
+                                                  periods=10))]:
         ddf = dd.from_pandas(case, 3)
         assert eq(ddf.index, case.index)
         assert repr(ddf.index).startswith('dd.Index')
@@ -217,8 +219,8 @@ def test_set_index_interpolate():
 
 
 def test_set_index_interpolate_int():
-    L = sorted(list(range(0, 200, 10))*2)
-    df = pd.DataFrame({'x': 2*L})
+    L = sorted(list(range(0, 200, 10)) * 2)
+    df = pd.DataFrame({'x': 2 * L})
     d = dd.from_pandas(df, 2)
     d1 = d.set_index('x', npartitions=10)
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
@@ -357,9 +359,9 @@ def test_cumulative():
 
 
 def test_dropna():
-    df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
-                       'y': [1,      2, np.nan, 4, np.nan, np.nan],
-                       'z': [1,      2,      3, 4, np.nan, np.nan]},
+    df = pd.DataFrame({'x': [np.nan, 2, 3, 4, np.nan, 6],
+                       'y': [1, 2, np.nan, 4, np.nan, np.nan],
+                       'z': [1, 2, 3, 4, np.nan, np.nan]},
                       index=[10, 20, 30, 40, 50, 60])
     ddf = dd.from_pandas(df, 3)
 
@@ -1162,10 +1164,10 @@ def test_repartition():
     assert eq(a, b)
     assert eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
 
-    for div in [[20, 60], [10, 50], [1], # first / last element mismatch
-                [0, 60], [10, 70], # do not allow to expand divisions by default
-                [10, 50, 20, 60],  # not sorted
-                [10, 10, 20, 60]]: # not unique (last element can be duplicated)
+    for div in [[20, 60], [10, 50], [1],   # first / last element mismatch
+                [0, 60], [10, 70],   # do not allow to expand divisions by default
+                [10, 50, 20, 60],    # not sorted
+                [10, 10, 20, 60]]:   # not unique (last element can be duplicated)
 
         assert raises(ValueError, lambda: a.repartition(divisions=div))
 
@@ -1411,8 +1413,7 @@ def test_select_dtypes(include, exclude):
     df = pd.DataFrame({'cint': [1] * n,
                        'cstr': ['a'] * n,
                        'clfoat': [1.] * n,
-                       'cdt': pd.date_range('2016-01-01', periods=n)
-        })
+                       'cdt': pd.date_range('2016-01-01', periods=n)})
     a = dd.from_pandas(df, npartitions=2)
     result = a.select_dtypes(include=include, exclude=exclude)
     expected = df.select_dtypes(include=include, exclude=exclude)
@@ -1483,7 +1484,7 @@ def test_deterministic_apply_concat_apply_names():
                        aggregate_kwargs={'a_key': a_key},
                        both_key=0).dask))
 
-    assert eq(res, df.x.sum() + 2*(c_key + both_key) + a_key + both_key)
+    assert eq(res, df.x.sum() + 2 * (c_key + both_key) + a_key + both_key)
 
 
 def test_aca_meta_infer():
@@ -1498,7 +1499,7 @@ def test_aca_meta_infer():
         return x.head()
 
     res = aca([ddf, 2.0], chunk=chunk, aggregate=agg,
-            chunk_kwargs=dict(constant=2.0))
+              chunk_kwargs=dict(constant=2.0))
     sol = (df + 2.0 + 2.0).head()
     assert eq(res, sol)
 

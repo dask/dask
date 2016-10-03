@@ -72,7 +72,7 @@ def test_categorical_set_index(shuffle):
 
 
 def test_dataframe_categoricals():
-    df = pd.DataFrame({'x': list('a'*5 + 'b'*5 + 'c'*5),
+    df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5),
                        'y': range(15)})
     df.x = df.x.astype('category')
     ddf = dd.from_pandas(df, npartitions=2)

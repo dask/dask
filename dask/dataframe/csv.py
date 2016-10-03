@@ -68,8 +68,9 @@ def coerce_dtypes(df, dtypes):
             if (np.issubdtype(df.dtypes[c], np.floating) and
                     np.issubdtype(dtypes[c], np.integer)):
                 if (df[c] % 1).any():
-                    raise TypeError("Runtime type mismatch. "
-                    "Add {'%s': float} to dtype= keyword in read_csv" % c)
+                    msg = ("Runtime type mismatch. "
+                           "Add {'%s': float} to dtype= keyword in read_csv")
+                    raise TypeError(msg % c)
             df[c] = df[c].astype(dtypes[c])
 
 
@@ -138,8 +139,8 @@ else:
 
 
 def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
-        collection=True, lineterminator=None, compression=None,
-        sample=256000, enforce=False, storage_options=None, **kwargs):
+             collection=True, lineterminator=None, compression=None,
+             sample=256000, enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
 
     This parallelizes the ``pandas.read_csv`` file in the following ways:

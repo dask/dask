@@ -71,7 +71,7 @@ def shard_df_on_index(df, divisions):
         indices = index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
         for i in range(len(indices) - 1):
-            yield df.iloc[indices[i]: indices[i+1]]
+            yield df.iloc[indices[i]: indices[i + 1]]
         yield df.iloc[indices[-1]:]
 
 
@@ -92,7 +92,8 @@ def unique(divisions):
         return np.unique(divisions)
     if isinstance(divisions, pd.Categorical):
         return pd.Categorical.from_codes(np.unique(divisions.codes),
-            divisions.categories, divisions.ordered)
+                                         divisions.categories,
+                                         divisions.ordered)
     if isinstance(divisions, (tuple, list, Iterator)):
         return tuple(toolz.unique(divisions))
     raise NotImplementedError()
@@ -121,7 +122,7 @@ def insert_meta_param_description(*args, **kwargs):
         return lambda f: insert_meta_param_description(f, **kwargs)
     f = args[0]
     if f.__doc__:
-        indent = " "*kwargs.get('pad', 8)
+        indent = " " * kwargs.get('pad', 8)
         body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
                              subsequent_indent=indent, width=78)
         descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
@@ -235,6 +236,7 @@ _simple_fake_mapping = {
     'U': np.unicode_('foo'),
     'O': 'foo'
 }
+
 
 def _scalar_from_dtype(dtype):
     if dtype.kind in ('i', 'f', 'u'):

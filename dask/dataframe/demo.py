@@ -18,9 +18,9 @@ def make_int(n, rstate):
 
 
 names = ['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank', 'George',
-'Hannah', 'Ingrid', 'Jerry', 'Kevin', 'Laura', 'Michael', 'Norbert', 'Oliver',
-'Patricia', 'Quinn', 'Ray', 'Sarah', 'Tim', 'Ursula', 'Victor', 'Wendy',
-'Xavier', 'Yvonne', 'Zelda']
+         'Hannah', 'Ingrid', 'Jerry', 'Kevin', 'Laura', 'Michael', 'Norbert',
+         'Oliver', 'Patricia', 'Quinn', 'Ray', 'Sarah', 'Tim', 'Ursula',
+         'Victor', 'Wendy', 'Xavier', 'Yvonne', 'Zelda']
 
 
 def make_string(n, rstate):
