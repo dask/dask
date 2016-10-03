@@ -215,7 +215,7 @@ class _Frame(Base):
 
     dsk: dict
         The dask graph to compute this DataFrame
-    _name: str
+    name: str
         The key prefix that specifies which keys in the dask comprise this
         particular DataFrame / Series
     meta: pandas.DataFrame, pandas.Series, or pandas.Index
@@ -229,9 +229,9 @@ class _Frame(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __init__(self, dsk, _name, meta, divisions):
+    def __init__(self, dsk, name, meta, divisions):
         self.dask = dsk
-        self._name = _name
+        self._name = name
         meta = make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise ValueError("Expected meta to specify type {0}, got type "
@@ -545,13 +545,13 @@ class _Frame(Base):
         else:
             return func(self, *args, **kwargs)
 
-    def random_split(self, p, random_state=None):
+    def random_split(self, frac, random_state=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
         ----------
-        frac : float, optional
-            Fraction of axis items to return.
+        frac : list
+            List of floats that should sum to one.
         random_state: int or np.random.RandomState
             If int create a new RandomState with this as the seed
         Otherwise draw from the passed RandomState
@@ -569,18 +569,17 @@ class _Frame(Base):
 
         See Also
         --------
-
-            dask.DataFrame.sample
+        dask.DataFrame.sample
         """
         seeds = different_seeds(self.npartitions, random_state)
         dsk_full = dict(((self._name + '-split-full', i),
-                         (pd_split, (self._name, i), p, seed))
+                         (pd_split, (self._name, i), frac, seed))
                         for i, seed in enumerate(seeds))
 
         dsks = [dict(((self._name + '-split-%d' % i, j),
                       (getitem, (self._name + '-split-full', j), i))
                       for j in range(self.npartitions))
-                      for i in range(len(p))]
+                      for i in range(len(frac))]
         return [type(self)(merge(self.dask, dsk_full, dsk),
                            self._name + '-split-%d' % i,
                            self._meta, self.divisions)
@@ -1028,9 +1027,9 @@ class _Frame(Base):
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):
-        """ Convert dataframe into dask Values
+        """ Convert dataframe into dask Delayed objects
 
-        Returns a list of values, one value per partition.
+        Returns a list of delayed values, one value per partition.
         """
         from ..delayed import Delayed
         return [Delayed(k, [self.dask]) for k in self._keys()]
@@ -2018,7 +2017,7 @@ class DataFrame(_Frame):
 
     @property
     def column_info(self):
-        """ Return DataFrame.columns """
+        """ Return the Index of column names """
         warnings.warn('column_info is deprecated, use columns')
         return self.columns
 
@@ -2657,7 +2656,8 @@ def map_partitions(func, *args, **kwargs):
     func : function
         Function applied to each partition.
     args, kwargs :
-        Arguments and keywords to pass to the function.
+        Arguments and keywords to pass to the function.  At least one of the
+        args should be a Dask.dataframe.
     $META
     """
     meta = kwargs.pop('meta', no_default)

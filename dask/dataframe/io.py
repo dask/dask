@@ -127,6 +127,11 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         The number of partitions of the index to create.
     chunksize : int, optional
         The size of the partitions of the index.
+    sort: bool
+        Sort input first to obtain cleanly divided partitions or don't sort and
+        don't get cleanly divided partitions
+    name: string, optional
+        An optional keyname for the dataframe.  Defaults to hashing the input
 
     Returns
     -------

@@ -56,6 +56,7 @@ We proceed with hash joins in the following stages:
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect_left, bisect_right
+from functools import wraps
 from warnings import warn
 
 from toolz import merge_sorted, unique, partial, first
@@ -403,6 +404,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
                          name, meta, divisions)
 
 
+@wraps(pd.merge)
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
           indicator=False, npartitions=None, shuffle=None, max_branch=None):
