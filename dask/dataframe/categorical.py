@@ -4,6 +4,21 @@ import pandas as pd
 from toolz import partial
 
 from dask.base import compute
+from .utils import PANDAS_VERSION
+
+
+if PANDAS_VERSION >= '0.19.0':
+    from pandas.api.types import is_categorical_dtype
+else:
+    from pandas.core.common import is_categorical_dtype
+
+
+def _get_categorical_columns(df):
+
+    dtypes = df.dtypes
+    columns = [name for name, dt in zip(dtypes.index, dtypes.values)
+               if is_categorical_dtype(dt)]
+    return columns
 
 
 def _categorize_block(df, categories):
@@ -92,17 +107,13 @@ def strip_categories(df):
     2  3  0
     """
     return pd.DataFrame(dict((col, df[col].cat.codes.values
-                                   if iscategorical(df.dtypes[col])
+                                   if is_categorical_dtype(df[col])
                                    else df[col].values)
                               for col in df.columns),
                         columns=df.columns,
                         index=df.index.codes
-                              if iscategorical(df.index.dtype)
+                              if is_categorical_dtype(df.index)
                               else df.index)
-
-
-def iscategorical(dt):
-    return isinstance(dt, pd.core.common.CategoricalDtype)
 
 
 def get_categories(df):
@@ -115,7 +126,7 @@ def get_categories(df):
     {'y': Index([u'A', u'B'], dtype='object')}
     """
     result = dict((col, df[col].cat.categories) for col in df.columns
-                  if iscategorical(df.dtypes[col]))
-    if iscategorical(df.index.dtype):
+                  if is_categorical_dtype(df[col]))
+    if is_categorical_dtype(df.index):
         result['.index'] = df.index.categories
     return result

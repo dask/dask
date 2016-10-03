@@ -7,7 +7,24 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
+from dask.dataframe.categorical import (is_categorical_dtype,
+                                        _get_categorical_columns)
 from dask.dataframe.utils import make_meta
+
+
+def test_is_categorical_dtype():
+    df = pd.DataFrame({'cat': pd.Categorical([1, 2, 3, 4]),
+                       'x': [1, 2, 3, 4]})
+
+    assert is_categorical_dtype(df['cat'])
+    assert not is_categorical_dtype(df['x'])
+    assert ['cat'] == _get_categorical_columns(df)
+
+    ddf = dd.from_pandas(df, 2)
+
+    assert is_categorical_dtype(ddf['cat'])
+    assert not is_categorical_dtype(ddf['x'])
+    assert ['cat'] == _get_categorical_columns(ddf)
 
 
 def test_categorize():

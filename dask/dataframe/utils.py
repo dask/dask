@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from pandas.core.common import is_datetime64tz_dtype, is_categorical_dtype
+from pandas.core.common import is_datetime64tz_dtype
 import toolz
 
 from ..async import get_sync
@@ -56,7 +56,7 @@ def shard_df_on_index(df, divisions):
     3  30  2
     4  40  1
     """
-    from dask.dataframe.categorical import iscategorical
+    from dask.dataframe.categorical import is_categorical_dtype
 
     if isinstance(divisions, Iterator):
         divisions = list(divisions)
@@ -66,7 +66,7 @@ def shard_df_on_index(df, divisions):
         divisions = np.array(divisions)
         df = df.sort_index()
         index = df.index
-        if iscategorical(index.dtype):
+        if is_categorical_dtype(index):
             index = index.as_ordered()
         indices = index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
@@ -266,6 +266,9 @@ def is_pd_scalar(x):
 
 
 def _nonempty_series(s, idx):
+
+    from dask.dataframe.categorical import is_categorical_dtype
+
     dtype = s.dtype
     if is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
@@ -278,6 +281,7 @@ def _nonempty_series(s, idx):
     else:
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)
+
     return pd.Series(data, name=s.name, index=idx)
 
 
