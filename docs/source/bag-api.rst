@@ -47,7 +47,6 @@ Create Bags
    from_sequence
    from_delayed
    read_text
-   from_castra
    from_url
    range
    concat
@@ -72,7 +71,6 @@ Other functions
 .. autofunction:: from_sequence
 .. autofunction:: from_delayed
 .. autofunction:: read_text
-.. autofunction:: from_castra
 .. autofunction:: from_url
 .. autofunction:: range
 .. autofunction:: concat
