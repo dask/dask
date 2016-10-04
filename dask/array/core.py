@@ -260,17 +260,17 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     Applies a function, ``func``, across blocks from many different input
     dasks.  We arrange the pattern with which those blocks interact with sets
-    of matching indices.  E.g.
+    of matching indices.  E.g.::
 
-        ``top(func, 'z', 'i', 'x', 'i', 'y', 'i')``
+        top(func, 'z', 'i', 'x', 'i', 'y', 'i')
 
     yield an embarrassingly parallel communication pattern and is read as
 
         $$ z_i = func(x_i, y_i) $$
 
-    More complex patterns may emerge, including multiple indices
+    More complex patterns may emerge, including multiple indices::
 
-        ``top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')``
+        top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
 
         $$ z_{ij} = func(x_{ij}, y_{ji}) $$
 
@@ -324,6 +324,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
      ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
                             [('y', 0, 1), ('y', 1, 1)])}
 
+    Pass ``concatenate=True`` to concatenate arrays ahead of time
+
+    >>> top(f, 'z', 'i', 'x', 'ij', 'y', 'ij', concatenate=True,
+    ...     numblocks={'x': (2, 2), 'y': (2, 2,)})  # doctest: +SKIP
+    {('z', 0): (f, (concatenate_axes, [('x', 0, 0), ('x', 0, 1)], (1,)),
+                   (concatenate_axes, [('y', 0, 0), ('y', 0, 1)], (1,)))
+     ('z', 1): (f, (concatenate_axes, [('x', 1, 0), ('x', 1, 1)], (1,)),
+                   (concatenate_axes, [('y', 1, 0), ('y', 1, 1)], (1,)))}
+
     Supports Broadcasting rules
 
     >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (1, 2),
@@ -336,11 +345,16 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Support keyword arguments with apply
 
     >>> def f(a, b=0): return a + b
-    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,), b=10})  # doctest: +SKIP
+    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,)}, b=10)  # doctest: +SKIP
     {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
      ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
+
+    See Also
+    --------
+    atop
     """
     numblocks = kwargs.pop('numblocks')
+    concatenate = kwargs.pop('concatenate', None)
     argpairs = list(partition(2, arrind_pairs))
 
     assert set(numblocks) == set(pluck(0, argpairs))
@@ -366,6 +380,9 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         for arg, ind in argpairs:
             tups = lol_tuples((arg,), ind, kd, dummies)
             tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+            if concatenate and isinstance(tups2, list):
+                axes = [n for n, i in enumerate(ind) if i in dummies]
+                tups2 = (concatenate_axes, tups2, axes)
             args.append(tups2)
         valtups.append(tuple(args))
 
@@ -1731,6 +1748,8 @@ def atop(func, out_ind, *args, **kwargs):
         Function to apply to individual tuples of blocks
     out_ind: iterable
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
+    concatenate: bool
+        If true concatenate arrays along dummy indices, else provide lists
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
     **kwargs: dict
@@ -1767,8 +1786,9 @@ def atop(func, out_ind, *args, **kwargs):
     Any index, like ``i`` missing from the output index is interpreted as a
     contraction (note that this differs from Einstein convention; repeated
     indices do not imply contraction.)  In the case of a contraction the passed
-    function should expect an iterator of blocks on any array that holds that
-    index.
+    function should expect an iterable of blocks on any array that holds that
+    index.  To receive arrays concatenated along contracted dimensions instead
+    pass ``concatenate=True``.
 
     Inner product multiplying x by y, two 1-d vectors
 
@@ -2101,10 +2121,10 @@ def tensordot(lhs, rhs, axes=2):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    func = partial(np.tensordot, axes=(left_axes, right_axes))
-    intermediate = atop(func, out_index,
+    intermediate = atop(np.tensordot, out_index,
                         lhs, left_index,
-                        rhs, right_index, dtype=dt)
+                        rhs, right_index, dtype=dt,
+                        axes=(left_axes, right_axes))
 
     int_index = list(out_index)
     for l in left_axes:
@@ -3158,6 +3178,19 @@ def concatenate3(arrays):
         result[idx] = arr
 
     return result
+
+
+def concatenate_axes(arrays, axes):
+    """ Recurseively call np.concatenate along axes
+
+    TODO: This performs many copies.  We should be able to do this in one
+    TODO: Merge logic on concatenate3 with this
+    """
+    if len(axes) != ndimlist(arrays):
+        raise ValueError("Length of axes should equal depth of nested arrays")
+    if len(axes) > 1:
+        arrays = [concatenate_axes(a, axes[1:]) for a in arrays]
+    return np.concatenate(arrays, axis=axes[0])
 
 
 def to_hdf5(filename, *args, **kwargs):
