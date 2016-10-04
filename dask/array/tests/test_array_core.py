@@ -1215,6 +1215,7 @@ def test_arithmetic():
     assert_eq((a + 1j * b).conj(), (x + 1j * y).conj())
 
     assert_eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
+    assert_eq(b.clip(1, 4), y.clip(1, 4))
     assert_eq(da.fabs(b), np.fabs(y))
     assert_eq(da.sign(b - 2), np.sign(y - 2))
     assert_eq(da.absolute(b - 2), np.absolute(y - 2))
@@ -1231,6 +1232,18 @@ def test_arithmetic():
     assert_eq(l2, r2)
 
     assert_eq(da.around(a, -1), np.around(x, -1))
+
+
+def test_clip():
+    x = np.random.normal(0, 10, size=(10, 10))
+    d = da.from_array(x, chunks=(3, 4))
+
+    assert_eq(x.clip(5), d.clip(5))
+    assert_eq(x.clip(1, 5), d.clip(1, 5))
+    assert_eq(x.clip(min=5), d.clip(min=5))
+    assert_eq(x.clip(max=5), d.clip(max=5))
+    assert_eq(x.clip(max=1, min=5), d.clip(max=1, min=5))
+    assert_eq(x.clip(min=1, max=5), d.clip(min=1, max=5))
 
 
 def test_elemwise_consistent_names():
