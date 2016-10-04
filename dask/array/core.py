@@ -355,6 +355,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
+    new_axes = kwargs.pop('new_axes', {})
     argpairs = list(partition(2, arrind_pairs))
 
     assert set(numblocks) == set(pluck(0, argpairs))
@@ -364,6 +365,8 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
+    for k in new_axes:
+        dims[k] = 1
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
     keytups = list(product(*[range(dims[i]) for i in out_indices]))
@@ -1748,12 +1751,14 @@ def atop(func, out_ind, *args, **kwargs):
         Function to apply to individual tuples of blocks
     out_ind: iterable
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
-    concatenate: bool
-        If true concatenate arrays along dummy indices, else provide lists
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
     **kwargs: dict
         Extra keyword arguments to pass to function
+    concatenate: bool, keyword only
+        If true concatenate arrays along dummy indices, else provide lists
+    new_axes: dict, keyword only
+        New indexes and their dimension lengths
 
     This is best explained through example.  Consider the following examples:
 
@@ -1800,6 +1805,15 @@ def atop(func, out_ind, *args, **kwargs):
 
     >>> z = atop(sequence_dot, '', x, 'i', y, 'i')  # doctest: +SKIP
 
+    Add new single-chunk dimensions with the ``new_axes=`` keyword, including
+    the length of the new dimension.  New dimensions will always be in a single
+    chunk.
+
+    >>> def f(x):
+    ...     return x[:, None] * np.ones((1, 5))
+
+    >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5})  # doctest: +SKIP
+
     Many dask.array operations are special cases of atop.  These tensor
     operations cover a broad subset of NumPy and this function has been battle
     tested, supporting tricky concepts like broadcasting.
@@ -1811,8 +1825,11 @@ def atop(func, out_ind, *args, **kwargs):
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
+    new_axes = kwargs.get('new_axes', {})
 
     chunkss, arrays = unify_chunks(*args)
+    for k, v in new_axes.items():
+        chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
     numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
