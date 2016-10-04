@@ -36,7 +36,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
-    tmp = atop(partial(chunk, axis=axis, keepdims=True), inds, x, inds)
+    tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True)
     tmp._chunks = tuple((1, ) * len(c) if i in axis else c for (i, c)
                         in enumerate(tmp.chunks))
 

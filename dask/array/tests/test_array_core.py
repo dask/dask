@@ -29,7 +29,7 @@ from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
                              broadcast_to, reshape, fromfunction,
                              blockdims_from_blockshape, store, optimize,
                              from_func, normalize_chunks, broadcast_chunks,
-                             atop, from_delayed)
+                             atop, from_delayed, concatenate_axes)
 from dask.array.utils import assert_eq
 
 # temporary until numpy functions migrated
@@ -2119,3 +2119,60 @@ def test_from_array_raises_on_bad_chunks():
 
     with pytest.raises(ValueError):
         da.from_array(x, chunks=((5, 5, 5),))
+
+
+def test_concatenate_axes():
+    x = np.ones((2, 2, 2))
+
+    assert_eq(concatenate_axes([x, x], axes=[0]),
+              np.ones((4, 2, 2)))
+    assert_eq(concatenate_axes([x, x, x], axes=[0]),
+              np.ones((6, 2, 2)))
+    assert_eq(concatenate_axes([x, x], axes=[1]),
+              np.ones((2, 4, 2)))
+    assert_eq(concatenate_axes([[x, x], [x, x]], axes=[0, 1]),
+              np.ones((4, 4, 2)))
+    assert_eq(concatenate_axes([[x, x], [x, x]], axes=[0, 2]),
+              np.ones((4, 2, 4)))
+    assert_eq(concatenate_axes([[x, x, x], [x, x, x]], axes=[1, 2]),
+              np.ones((2, 4, 6)))
+
+    with pytest.raises(ValueError):
+        concatenate_axes([[x, x], [x, x]], axes=[0])  # not all nested lists accounted for
+    with pytest.raises(ValueError):
+        concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
+
+
+def test_atop_concatenate():
+    x = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    y = da.ones((4, 4), chunks=(2, 2))
+
+    def f(a, b):
+        assert isinstance(a, np.ndarray)
+        assert isinstance(b, np.ndarray)
+
+        assert a.shape == (2, 4, 4)
+        assert b.shape == (4, 4)
+
+        return (a + b).sum(axis=(1, 2))
+
+    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True)
+    assert_eq(z, np.ones(4) * 32)
+
+    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True)
+    assert_eq(z, np.ones((4, 4)) * 2)
+
+
+    def f(a, b, c):
+        assert isinstance(a, np.ndarray)
+        assert isinstance(b, np.ndarray)
+        assert isinstance(c, np.ndarray)
+
+        assert a.shape == (4, 2, 4)
+        assert b.shape == (4, 4)
+        assert c.shape == (4, 2)
+
+        return np.ones(5)
+
+    z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True)
+    assert_eq(z, np.ones(10))
