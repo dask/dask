@@ -1460,6 +1460,10 @@ class Array(Base):
     def conj(self):
         return conj(self)
 
+    @wraps(np.clip)
+    def clip(self, min=None, max=None):
+        return clip(self, min, max)
+
     def view(self, dtype, order='C'):
         """ Get a view of the array as a new data type
 
