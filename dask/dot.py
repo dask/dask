@@ -101,15 +101,19 @@ def label(x, cache=None):
     return s
 
 
-def to_graphviz(dsk, data_attributes=None, function_attributes=None, **kwargs):
+def to_graphviz(dsk, data_attributes=None, function_attributes=None,
+                rankdir='BT', graph_attr={}, node_attr=None, edge_attr=None, **kwargs):
     if data_attributes is None:
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
 
-    attributes = {'rankdir': 'BT'}
-    attributes.update(kwargs)
-    g = graphviz.Digraph(graph_attr=attributes)
+    graph_attr = graph_attr or {}
+    graph_attr['rankdir'] = rankdir
+    graph_attr.update(kwargs)
+    g = graphviz.Digraph(graph_attr=graph_attr,
+                         node_attr=node_attr,
+                         edge_attr=edge_attr)
 
     seen = set()
     cache = {}
