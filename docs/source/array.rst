@@ -20,5 +20,4 @@ Other topics
    array-stack.rst
    array-ghost.rst
    array-design.rst
-   array-extend.rst
    array-linear-operator.rst

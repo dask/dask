@@ -1,12 +1,12 @@
 Create Dask Bags
 ================
 
-There are several ways to create dask.bags around your data:
+There are several ways to create Dask.bags around your data:
 
 ``db.from_sequence``
 --------------------
 
-You can create a bag from an existing Python sequence:
+You can create a bag from an existing Python iterable:
 
 .. code-block:: python
 
@@ -40,9 +40,9 @@ The resulting bag will have one item per line, one file per partition:
 
 .. code-block:: python
 
-   >>> b = db.read_text('myfile.json')
-   >>> b = db.read_text(['myfile.1.json', 'myfile.2.json', ...])
-   >>> b = db.read_text('myfile.*.json')
+   >>> b = db.read_text('myfile.txt')
+   >>> b = db.read_text(['myfile.1.txt', 'myfile.2.txt', ...])
+   >>> b = db.read_text('myfile.*.txt')
 
 This handles standard compression libraries like ``gzip``, ``bz2``, ``xz``, or
 any easily installed compression library that has a File-like object.
@@ -51,22 +51,22 @@ Compression will be inferred by filename extension, or by using the
 
 .. code-block:: python
 
-   >>> b = db.read_text('myfile.*.json.gz')
+   >>> b = db.read_text('myfile.*.txt.gz')
 
-The resulting items in the bag are strings.  You may want to parse them using
-functions like ``json.loads``:
+The resulting items in the bag are strings.  If you have encoded data like JSON
+then you may want to map a decoding or load function across the bag:
 
 .. code-block:: python
 
    >>> import json
-   >>> b = db.read_text('myfile.*.json.gz', compression='gzip').map(json.loads)
+   >>> b = db.read_text('myfile.*.json').map(json.loads)
 
 Or do string munging tasks.  For convenience there is a string namespace
 attached directly to bags with ``.str.methodname``:
 
 .. code-block:: python
 
-   >>> b = db.read_text('myfile.*.csv.gz').str.strip().str.split(',')
+   >>> b = db.read_text('myfile.*.csv').str.strip().str.split(',')
 
 
 ``db.from_delayed``

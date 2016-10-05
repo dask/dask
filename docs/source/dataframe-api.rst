@@ -91,7 +91,6 @@ Rolling Operations
 
 .. autosummary::
    rolling.rolling_apply
-   rolling.rolling_chunk
    rolling.rolling_count
    rolling.rolling_kurt
    rolling.rolling_max

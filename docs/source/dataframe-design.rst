@@ -109,3 +109,5 @@ divided.  In this case ``.divisions`` will be all ``None``:
 
    >>> df.divisions
    [None, None, None, None, None]
+
+In these cases any operation that requires a cleanly partitioned dataframe with known divisions will have to perform a sort.  This can generally achieved by calling ``df.set_index(...)``.

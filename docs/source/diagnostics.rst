@@ -10,7 +10,7 @@ Scheduler Callbacks
 
 Schedulers based on ``dask.async.get_async`` (currently
 ``dask.async.get_sync``, ``dask.threaded.get``, and
-``dask.multiprocessing.get``) accept four callbacks, allowing for inspection of
+``dask.multiprocessing.get``) accept five callbacks, allowing for inspection of
 scheduler execution.
 
 The callbacks are:
@@ -42,7 +42,7 @@ The callbacks are:
    the dask graph, the scheduler state, and a boolean indicating whether or not
    the exit was due to an error.
 
-These are internally represented as tuples of length 4, stored in the order
+These are internally represented as tuples of length 5, stored in the order
 presented above. Callbacks for common use cases are provided in
 ``dask.diagnostics``.
 

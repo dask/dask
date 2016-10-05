@@ -96,7 +96,6 @@ def coarsen(reduction, x, axes, trim_excess=False):
 
     Parameters
     ----------
-
     reduction: function
         Function like np.sum, np.mean, etc...
     x: np.ndarray
@@ -106,7 +105,6 @@ def coarsen(reduction, x, axes, trim_excess=False):
 
     Examples
     --------
-
     >>> x = np.array([1, 2, 3, 4, 5, 6])
     >>> coarsen(np.sum, x, {0: 2})
     array([ 3,  7, 11])
@@ -127,6 +125,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
            [12, 15]])
 
     You must avoid excess elements explicitly
+
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
     >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
     array([1, 4])

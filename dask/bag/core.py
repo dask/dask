@@ -744,24 +744,24 @@ class Bag(Base):
         else:
             return Bag(merge(self.dask, dsk), b, 1)
 
-    @wraps(sum)
     def sum(self, split_every=None):
+        """ Sum all elements """
         return self.reduction(sum, sum, split_every=split_every)
 
-    @wraps(max)
     def max(self, split_every=None):
+        """ Maximum element """
         return self.reduction(max, max, split_every=split_every)
 
-    @wraps(min)
     def min(self, split_every=None):
+        """ Minimum element """
         return self.reduction(min, min, split_every=split_every)
 
-    @wraps(any)
     def any(self, split_every=None):
+        """ Are any of the elements truthy? """
         return self.reduction(any, any, split_every=split_every)
 
-    @wraps(all)
     def all(self, split_every=None):
+        """ Are all elements truthy? """
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
@@ -1143,7 +1143,10 @@ class Bag(Base):
         return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
-        """Repeatedly apply binary function to a sequence, accumulating results.
+        """ Repeatedly apply binary function to a sequence, accumulating results.
+
+        This assumes that the bag is ordered.  While this is typically the case
+        not all Dask.bag functions preserve this property.
 
         Examples
         --------
@@ -1341,6 +1344,8 @@ def load_castra_partition(castra, part, columns, index):
 def from_url(urls):
     """Create a dask.bag from a url
 
+    Examples
+    --------
     >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
@@ -1508,7 +1513,8 @@ def bag_zip(*bags):
     >>> list(fizzbuzzz) # doctest: +SKIP
     [(0, 0), (3, 5), (6, 10), (9, 15), (12, 20), (15, 25), (18, 30)]
 
-    When what you really wanted was more along the lines of:
+    When what you really wanted was more along the lines of the following:
+
     >>> list(fizzbuzzz) # doctest: +SKIP
     [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
     (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]

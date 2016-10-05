@@ -9,7 +9,7 @@ different choices so that users can make decisions that improve performance.
 Briefly, the current options are as follows:
 
 *   ``dask.threaded.get``: Uses multiple threads in the same process.  Good for
-    numeric code that releases the GIL (NumPy, Pandas, SKLearn, Numba) because
+    numeric code that releases the GIL_ (NumPy, Pandas, SKLearn, Numba) because
     data is free to share.  The default scheduler for ``dask.array``,
     ``dask.dataframe`` and ``dask.delayed``
 *   ``dask.multiprocessing.get``: Uses multiple processes.  Good for Python
@@ -28,7 +28,7 @@ Threads vs Processes
 
 Threads are good because they can share data back and forth in the same memory
 space without transfer costs.  Threads can pass large arrays between each other
-instantaneously.  Unfortunately due to the GIL pure Python code (like JSON
+instantaneously.  Unfortunately due to the GIL_ pure Python code (like JSON
 parsing) does not parallelize well under threads, and so when computing on pure
 Python objects, like strings or lists or our custom objects, we may prefer to
 use processes.  Threads are good when using numeric data and when the
@@ -111,3 +111,5 @@ needs to be done.  This back-and-forth communication can dominate costs and
 slow down overall performance.  The distributed scheduler does not have this
 flaw, can reason well about data-in-place, and can move small pieces of data to
 larger ones.
+
+.. _GIL: https://docs.python.org/3/glossary.html#term-gil

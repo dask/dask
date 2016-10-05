@@ -1,7 +1,7 @@
 Slicing
 =======
 
-Dask.array supports most of the NumPy slicing syntax.  In particular it
+Dask array supports most of the NumPy slicing syntax.  In particular it
 supports the following:
 
 *  Slicing by integers and slices ``x[0, :5]``
@@ -23,7 +23,7 @@ The normal dask schedulers are smart enough to compute only those blocks that
 are necessary to achieve the desired slicing.  So large operations may be cheap
 if only a small output is desired.
 
-In the example below we create a trillion element dask array in million element
+In the example below we create a trillion element Dask array in million element
 blocks.  We then operate on the entire array and finally slice out only a
 portion of the output.
 
