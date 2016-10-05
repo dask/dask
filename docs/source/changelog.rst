@@ -27,6 +27,8 @@ Array
 +++++
 - Add information about how ``dask.array`` ``chunks`` argument work (:pr:`1504`)
 - Fix field access with non-scalar fields in ``dask.array`` (:pr:`1484`)
+- Add concatenate= keyword to atop to concatenate chunks of contracted dimensions
+- Add new_axes= keyword to atop to support adding new dimensions
 
 Bag
 ++++
