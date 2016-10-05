@@ -3643,3 +3643,19 @@ def test_distribute_tasks_by_ncores(c, s, a, b):
     yield _wait(futures)
 
     assert len(b.data) > 2 * len(a.data)
+
+
+@gen_cluster(client=True)
+def test_add_done_callback(c, s, a, b):
+    x = c.submit(inc, 1)
+
+    L = []
+    def f(future):
+        L.append(future.key)
+        L.append(future.status)
+
+    x.add_done_callback(f)
+
+    yield _wait(x)
+
+    assert L == [x.key, x.status]

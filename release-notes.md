@@ -2,6 +2,7 @@
 ------
 
 *  Schedulers can retire workers cleanly
+*  Add Future.add_done_callback
 
 1.13.2
 ------

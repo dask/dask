@@ -151,6 +151,15 @@ class Future(WrappedKey):
         """
         return sync(self.client.loop, self._exception)
 
+    def add_done_callback(self, fn):
+        """ Call callback on future when callback has finished
+
+        The callback ``fn`` should take the future as its only argument.  This
+        will be called regardless of if the future completes successfully,
+        errs, or is cancelled
+        """
+        self.client.loop.add_callback(done_callback, self, fn)
+
     def cancel(self):
         """ Returns True if the future has been cancelled """
         return self.client.cancel([self])
@@ -223,6 +232,14 @@ class Future(WrappedKey):
             return '<Future: status: %s, key: %s>' % (self.status, self.key)
 
     __repr__ = __str__
+
+
+@gen.coroutine
+def done_callback(future, callback):
+    """ Wait on future, then call callback """
+    while future.status == 'pending':
+        yield future.event.wait()
+    callback(future)
 
 
 @partial(normalize_token.register, Future)

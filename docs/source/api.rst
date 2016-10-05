@@ -37,6 +37,7 @@ API
 
 .. autosummary::
    Future
+   Future.add_done_callback
    Future.cancel
    Future.cancelled
    Future.done
