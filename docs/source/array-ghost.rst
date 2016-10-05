@@ -11,7 +11,7 @@ blocks.  Example operations include the following:
 *  Evaluate a partial derivative
 *  Play the game of Life_
 
-Dask.array supports these operations by creating a new dask.array where each
+Dask array supports these operations by creating a new array where each
 block is slightly expanded by the borders of its neighbors.  This costs an
 excess copy and the communication of many small chunks but allows localized
 functions to evaluate in an embarrassing manner.  We call this process
@@ -20,7 +20,7 @@ functions to evaluate in an embarrassing manner.  We call this process
 Ghosting
 --------
 
-Consider two neighboring blocks in a dask array.
+Consider two neighboring blocks in a Dask array.
 
 .. image:: images/unghosted-neighbors.png
    :width: 30%

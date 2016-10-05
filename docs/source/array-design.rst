@@ -11,7 +11,7 @@ Overview
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be concrete, or functions that produce arrays.  We define a
-Dask.array with the following components
+Dask array with the following components
 
 *  A Dask graph with a special set of keys designating blocks
    such as ``('x', 0, 0), ('x', 0, 1), ...`` (See :doc:`Dask graph

@@ -11,7 +11,7 @@ To solve this problem we use the functions ``da.stack`` and ``da.concatenate``.
 Stack
 -----
 
-We stack many existing dask Arrays into a new array, creating a new dimension
+We stack many existing Dask arrays into a new array, creating a new dimension
 as we go.
 
 .. code-block:: python

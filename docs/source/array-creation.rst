@@ -63,9 +63,9 @@ Using ``dask.delayed``
 
 You can create a plan to arrange many numpy arrays into a grid with normal for
 loops using :doc:`dask.delayed<delayed-overview>` and then convert each of these
-Dask.delayed objects into a single-chunk Dask.array with ``da.from_delayed``.
-You can then arrange these single-chunk Dask.arrays into a larger
-multiple-chunk Dask.array using :doc:`concatenation and stacking <array-stack>`,
+Dask.delayed objects into a single-chunk Dask array with ``da.from_delayed``.
+You can then arrange these single-chunk Dask arrays into a larger
+multiple-chunk Dask array using :doc:`concatenation and stacking <array-stack>`,
 as described above.
 
 See :doc:`documentation on using dask.delayed with collections<delayed-collections>`.
