@@ -2208,10 +2208,10 @@ def test_atop_concatenate():
 
         return (a + b).sum(axis=(1, 2))
 
-    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True)
+    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x._dtype)
     assert_eq(z, np.ones(4) * 32)
 
-    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True)
+    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x._dtype)
     assert_eq(z, np.ones((4, 4)) * 2)
 
 
@@ -2226,5 +2226,6 @@ def test_atop_concatenate():
 
         return np.ones(5)
 
-    z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True)
+    z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
+             dtype=x._dtype)
     assert_eq(z, np.ones(10))

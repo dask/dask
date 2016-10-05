@@ -4,23 +4,12 @@ pytest.importorskip('numpy')
 import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-import dask
 import dask.array as da
-from dask.array.ghost import (Array, fractional_slice, getitem, trim_internal,
+from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
 from dask.core import get
-
-
-def eq(a, b):
-    if isinstance(a, Array):
-        a = a.compute(get=dask.get)
-    if isinstance(b, Array):
-        b = b.compute(get=dask.get)
-    c = a == b
-    if isinstance(c, np.ndarray):
-        c = c.all()
-    return c
+from dask.array.utils import assert_eq
 
 
 def same_keys(a, b):
@@ -66,7 +55,7 @@ def test_ghost_internal():
         [48, 49, 50, 51, 52,   51, 52, 53, 54, 55],
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
-    assert eq(result, expected)
+    assert_eq(result, expected)
     assert same_keys(ghost_internal(d, {0: 2, 1: 1}), g)
 
 
@@ -85,8 +74,8 @@ def test_periodic():
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
-    assert eq(e[1, :], d[-1, :])
-    assert eq(e[0, :], d[-2, :])
+    assert_eq(e[1, :], d[-1, :])
+    assert_eq(e[0, :], d[-2, :])
 
 
 def test_reflect():
@@ -95,11 +84,11 @@ def test_reflect():
 
     e = reflect(d, axis=0, depth=2)
     expected = np.array([1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 8])
-    assert eq(e, expected)
+    assert_eq(e, expected)
 
     e = reflect(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert eq(e, expected)
+    assert_eq(e, expected)
 
 
 def test_nearest():
@@ -108,11 +97,11 @@ def test_nearest():
 
     e = nearest(d, axis=0, depth=2)
     expected = np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9])
-    assert eq(e, expected)
+    assert_eq(e, expected)
 
     e = nearest(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert eq(e, expected)
+    assert_eq(e, expected)
 
 
 def test_constant():
@@ -123,8 +112,8 @@ def test_constant():
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
-    assert eq(e[1, :], 10)
-    assert eq(e[-1, :], 10)
+    assert_eq(e[1, :], np.ones(8, dtype=x.dtype) * 10)
+    assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10)
 
 
 def test_boundaries():
@@ -146,7 +135,7 @@ def test_boundaries():
          [63,56,57,58,59,60,61,62,63,56],
          [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
          [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-    assert eq(e, expected)
+    assert_eq(e, expected)
 
 
 def test_ghost():
@@ -171,7 +160,7 @@ def test_ghost():
        [ 56,  56,  57,  58,  59,  60,  59,  60,  61,  62,  63,  63],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
-    assert eq(g, expected)
+    assert_eq(g, expected)
     assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
                              boundary={0: 100, 1: 'reflect'}))
 
@@ -193,23 +182,23 @@ def test_ghost():
        [ 56,  57,  58,  59,  60,  59,  60,  61,  62,  63],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
-    assert eq(g, expected)
+    assert_eq(g, expected)
     assert g.chunks == ((8, 8), (5, 5))
 
 
 def test_map_overlap():
     x = da.arange(10, chunks=5)
 
-    y = x.map_overlap(lambda x: x + len(x), depth=2)
-    assert eq(y, np.arange(10) + 5 + 2 + 2)
+    y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x._dtype)
+    assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = np.arange(16).reshape((4, 4))
     d = da.from_array(x, chunks=(2, 2))
-    exp1 = d.map_overlap(lambda x: x + x.size, depth=1).compute()
+    exp1 = d.map_overlap(lambda x: x + x.size, depth=1, dtype=d._dtype)
     exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},
-                    boundary={0: 'reflect', 1: 'none'}).compute()
-    assert eq(exp1, x + 16)
-    assert eq(exp2, x + 12)
+                    boundary={0: 'reflect', 1: 'none'}, dtype=d._dtype)
+    assert_eq(exp1, x + 16)
+    assert_eq(exp2, x + 12)
 
 
 def test_nearest_ghost():
@@ -350,4 +339,4 @@ def test_none_boundaries():
            [33, 33,  4,  5,  6,  7, 33, 33],
            [33, 33,  8,  9, 10, 11, 33, 33],
            [33, 33, 12, 13, 14, 15, 33, 33]])
-    assert eq(exp, res)
+    assert_eq(exp, res)

@@ -51,7 +51,12 @@ def percentile(a, q, interpolation='linear'):
     dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
                          sorted(dsk), a.chunks[0], interpolation)}
 
-    return Array(merge(a.dask, dsk, dsk2), name2, chunks=((len(q),),))
+    dtype = a.dtype
+    if np.issubdtype(dtype, np.integer):
+        dtype = (np.array([], dtype=dtype) / 0.5).dtype
+
+    return Array(merge(a.dask, dsk, dsk2), name2, chunks=((len(q),),),
+                 dtype=dtype)
 
 
 def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):

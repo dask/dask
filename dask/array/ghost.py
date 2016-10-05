@@ -139,7 +139,7 @@ def ghost_internal(x, axes):
             chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
-                 name, chunks)
+                 name, chunks, dtype=x._dtype)
 
 
 def trim_internal(x, axes):
@@ -162,7 +162,8 @@ def trim_internal(x, axes):
 
     chunks = tuple(olist)
 
-    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks)
+    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks,
+                      dtype=x.dtype)
 
 
 def periodic(x, axis, depth):
