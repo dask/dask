@@ -1503,6 +1503,10 @@ class Array(Base):
         out._chunks = chunks
         return out
 
+    @wraps(np.swapaxes)
+    def swapaxes(self, axis1, axis2):
+        return swapaxes(self, axis1, axis2)
+
     def copy(self):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
@@ -3557,3 +3561,14 @@ def from_npy_stack(dirname, mmap_mode='r'):
 
 def _astype(x, dtype, **kwargs):
     return x.astype(dtype, **kwargs)
+
+
+@wraps(np.swapaxes)
+def swapaxes(a, axis1, axis2):
+    if axis1 == axis2:
+        return a
+    ind = list(range(a.ndim))
+    out = list(ind)
+    out[axis1], out[axis2] = axis2, axis1
+
+    return atop(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2)
