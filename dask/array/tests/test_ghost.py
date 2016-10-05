@@ -42,6 +42,9 @@ def test_fractional_slice():
     assert fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3}) == \
             (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
 
+    fs = fractional_slice(('x', 4.9), {0: 2})
+    assert isinstance(fs[1][1], int)
+
 
 def test_ghost_internal():
     x = np.arange(64).reshape((8, 8))

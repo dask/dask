@@ -25,7 +25,7 @@ def fractional_slice(task, axes):
     >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
     (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
     """
-    rounded = (task[0],) + tuple(map(round, task[1:]))
+    rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
 
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
