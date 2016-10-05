@@ -1,26 +1,14 @@
 import pytest
 pytest.importorskip('numpy')
 
-import dask
 from dask.compatibility import skip
 import dask.array as da
 from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
         sanitize_index)
+from dask.array.utils import assert_eq
 from operator import getitem
 import numpy as np
 from toolz import merge
-
-
-def eq(a, b):
-    if isinstance(a, da.Array):
-        a = a.compute(get=dask.get)
-    if isinstance(b, da.Array):
-        b = b.compute(get=dask.get)
-
-    c = a == b
-    if isinstance(c, np.ndarray):
-        c = c.all()
-    return c
 
 
 def same_keys(a, b):
@@ -385,14 +373,14 @@ def test_slice_stop_0():
     # from gh-125
     a = da.ones(10, chunks=(10,))[:0].compute()
     b = np.ones(10)[:0]
-    assert eq(a, b)
+    assert_eq(a, b)
 
 
 def test_slice_list_then_None():
     x = da.zeros(shape=(5, 5), chunks=(3, 3))
     y = x[[2, 1]][None]
 
-    assert eq(y, np.zeros((1, 2, 5)))
+    assert_eq(y, np.zeros((1, 2, 5)))
 
 
 class ReturnItem(object):
@@ -409,19 +397,19 @@ def test_slicing_exhaustively():
     # independent indexing along different axes
     indexers = [0, -2, I[:], I[:5], [0, 1], [0, 1, 2], [4, 2], I[::-1], None, I[:0], []]
     for i in indexers:
-        assert eq(x[i], a[i]), i
+        assert_eq(x[i], a[i]), i
         for j in indexers:
-            assert eq(x[i][:, j], a[i][:, j]), (i, j)
-            assert eq(x[:, i][j], a[:, i][j]), (i, j)
+            assert_eq(x[i][:, j], a[i][:, j]), (i, j)
+            assert_eq(x[:, i][j], a[:, i][j]), (i, j)
             for k in indexers:
-                assert eq(x[..., i][:, j][k], a[..., i][:, j][k]), (i, j, k)
+                assert_eq(x[..., i][:, j][k], a[..., i][:, j][k]), (i, j, k)
 
     # repeated indexing along the first axis
     first_indexers = [I[:], I[:5], np.arange(5), [3, 1, 4, 5, 0], np.arange(6) < 6]
     second_indexers = [0, -1, 3, I[:], I[:3], I[2:-1], [2, 4], [], I[:0]]
     for i in first_indexers:
         for j in second_indexers:
-            assert eq(x[i][j], a[i][j]), (i, j)
+            assert_eq(x[i][j], a[i][j]), (i, j)
 
 
 def test_slicing_with_negative_step_flops_keys():
@@ -430,7 +418,7 @@ def test_slicing_with_negative_step_flops_keys():
     assert (x.name, 1) in y.dask[(y.name, 0)]
     assert (x.name, 0) in y.dask[(y.name, 1)]
 
-    assert eq(y, np.arange(10)[:1:-1])
+    assert_eq(y, np.arange(10)[:1:-1])
 
     assert y.chunks == ((5, 3),)
 
@@ -444,13 +432,13 @@ def test_empty_slice():
     x = da.ones((5, 5), chunks=(2, 2), dtype='i4')
     y = x[:0]
 
-    assert eq(y, np.ones((5, 5), dtype='i4')[:0])
+    assert_eq(y, np.ones((5, 5), dtype='i4')[:0])
 
 
 def test_multiple_list_slicing():
     x = np.random.rand(6, 7, 8)
     a = da.from_array(x, chunks=(3, 3, 3))
-    assert eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
+    assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
 def test_uneven_chunks():

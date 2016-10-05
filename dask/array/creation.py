@@ -44,6 +44,8 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     space = float(range_) / (num - 1)
 
+    dtype = dtype or np.linspace(0, 1, 1).dtype
+
     name = 'linspace-' + tokenize((start, stop, num, chunks, dtype))
 
     dsk = {}

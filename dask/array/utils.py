@@ -34,19 +34,15 @@ def assert_eq(a, b, **kwargs):
     if isinstance(a, Array):
         adt = a._dtype
         a = a.compute(get=get_sync)
-        if adt is not None:
-            _maybe_check_dtype(a, adt)
-        else:
-            adt = getattr(a, 'dtype', None)
+        assert adt is not None
+        _maybe_check_dtype(a, adt)
     else:
         adt = getattr(a, 'dtype', None)
     if isinstance(b, Array):
         bdt = b._dtype
         b = b.compute(get=get_sync)
-        if bdt is not None:
-            _maybe_check_dtype(b, bdt)
-        else:
-            bdt = getattr(b, 'dtype', None)
+        assert bdt is not None
+        _maybe_check_dtype(b, bdt)
     else:
         bdt = getattr(b, 'dtype', None)
 
