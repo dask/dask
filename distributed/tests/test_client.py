@@ -104,6 +104,14 @@ def test_map(c, s, a, b):
     s.validate_state()
 
 
+@gen_cluster(client=True)
+def test_map_empty(c, s, a, b):
+    L1 = c.map(inc, [], pure=False)
+    assert len(L1) == 0
+    results = yield c._gather(L1)
+    assert results == []
+
+
 @gen_cluster()
 def test_compatible_map(s, a, b):
     e = CompatibleExecutor((s.ip, s.port), start=False)

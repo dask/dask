@@ -700,7 +700,7 @@ class Client(object):
         else:
             uid = str(uuid.uuid4())
             keys = [funcname(func) + '-' + uid + '-' + str(i)
-                    for i in range(min(map(len, iterables)))]
+                    for i in range(min(map(len, iterables)))] if iterables else []
 
         if not kwargs:
             dsk = {key: (func,) + args
