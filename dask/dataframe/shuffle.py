@@ -164,6 +164,23 @@ def rearrange_by_column(df, col, npartitions=None, max_branch=None,
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
 
+class maybe_buffered_partd(object):
+    """If serialized, will return non-buffered partd. Otherwise returns a
+    buffered partd"""
+    def __init__(self, buffer=True):
+        self.buffer = buffer
+
+    def __reduce__(self):
+        return (maybe_buffered_partd, (False,))
+
+    def __call__(self, *args, **kwargs):
+        import partd
+        if self.buffer:
+            return partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+        else:
+            return partd.PandasBlocks(partd.File())
+
+
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     """ Shuffle using local disk """
     if npartitions is None:
@@ -172,10 +189,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     token = tokenize(df, column, npartitions)
     always_new_token = uuid.uuid1().hex
 
-    import partd
     p = ('zpartd-' + always_new_token,)
-    dsk1 = {p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,),
-                                                   (partd.File,)))}
+    dsk1 = {p: (maybe_buffered_partd(),)}
 
     # Partition data on disk
     name = 'shuffle-partition-' + always_new_token
