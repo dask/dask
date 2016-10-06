@@ -251,14 +251,10 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1):
-        from functools import partial
-        meta = self.obj._meta
-        if isinstance(meta, pd.Series):
-            meta = meta.to_frame()
-        meta = meta.groupby(self.index).var(ddof=1)
         result = aca([self.obj, self.index], chunk=_var_chunk,
-                     aggregate=partial(_var_agg, ddof=ddof), meta=meta,
-                     token=self._token_prefix + 'var')
+                     aggregate=_var_agg,
+                     token=self._token_prefix + 'var',
+                     aggregate_kwargs={'ddof': ddof})
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
