@@ -2389,7 +2389,7 @@ class DataFrame(_Frame):
 
         lines.append('Data columns (total {} columns):'.format(len(self.columns)))
         lines.extend(column_info)
-        dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems())]
+        dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems(), key=str)]
         lines.append('dtypes: {}'.format(', '.join(dtype_counts)))
 
         if memory_usage:
