@@ -329,6 +329,10 @@ class _Frame(Base):
 
         Uses chest by default to store data on disk
         """
+        warnings.warn("Deprecation Warning: The `cache` method is deprecated, "
+                      "and will be removed in the next release. To achieve "
+                      "the same behavior, either write to disk or use "
+                      "`Client.persist`, from `dask.distributed`.")
         if callable(cache):
             cache = cache()
 
