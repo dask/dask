@@ -1961,6 +1961,37 @@ def test_info():
     assert ddf.info(buf=None) is None
 
 
+def test_categorize_info():
+    # assert that we can call info after categorize
+    # workaround for: https://github.com/pydata/pandas/issues/14368
+    from io import StringIO
+    from dask.compatibility import unicode
+
+    # TODO This should be fixed in pandas 0.18.2
+    if pd.__version__ == '0.18.0':
+        from pandas.core import format
+    else:
+        from pandas.formats import format
+    format._put_lines = put_lines
+
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': pd.Series(list('aabc')),
+                       'z': pd.Series(list('aabc'))},
+                      index=pd.Int64Index(range(4)))  # No RangeIndex in dask
+    ddf = dd.from_pandas(df, npartitions=4).categorize(['y'])
+
+    # Verbose=False
+    buf = StringIO()
+    ddf.info(buf=buf, verbose=True)
+    assert buf.getvalue() == unicode("<class 'dask.dataframe.core.DataFrame'>\n"
+                                     "Int64Index: 4 entries, 0 to 3\n"
+                                     "Data columns (total 3 columns):\n"
+                                     "x    4 non-null int64\n"
+                                     "y    4 non-null category\n"
+                                     "z    4 non-null object\n"
+                                     "dtypes: category(1), object(1), int64(1)")
+
+
 def test_gh_1301():
     df = pd.DataFrame([['1', '2'], ['3', '4']])
     ddf = dd.from_pandas(df, npartitions=2)
