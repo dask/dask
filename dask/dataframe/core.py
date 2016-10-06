@@ -631,7 +631,7 @@ class _Frame(Base):
         if isinstance(ind, Series):
             return self._loc_series(ind)
         if self.known_divisions:
-            ind = _maybe_partial_time_string(self._meta.index, ind, kind='loc')
+            ind = _maybe_partial_time_string(self._meta_nonempty.index, ind, kind='loc')
             if isinstance(ind, slice):
                 return self._loc_slice(ind)
             else:
