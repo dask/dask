@@ -138,9 +138,9 @@ else:
     AUTO_BLOCKSIZE = 2**25
 
 
-def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
-             collection=True, lineterminator=None, compression=None,
-             sample=256000, enforce=False, storage_options=None, **kwargs):
+def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
+             lineterminator=None, compression=None, sample=256000,
+             enforce=False, storage_options=None, **kwargs):
     """ Read CSV files into a Dask.DataFrame
 
     This parallelizes the ``pandas.read_csv`` file in the following ways:
@@ -193,9 +193,6 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, chunkbytes=None,
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
-    if chunkbytes is not None:
-        warn("Deprecation warning: chunksize csv keyword renamed to blocksize")
-        blocksize = chunkbytes
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
                          "dd.read_csv(...).set_index('my-index') instead")

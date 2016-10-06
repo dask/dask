@@ -15,7 +15,6 @@ Top level user functions:
     DataFrame.astype
     DataFrame.cache
     DataFrame.categorize
-    DataFrame.column_info
     DataFrame.columns
     DataFrame.compute
     DataFrame.corr
@@ -33,10 +32,9 @@ Top level user functions:
     DataFrame.dtypes
     DataFrame.fillna
     DataFrame.floordiv
-    DataFrame.get_division
+    DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
-    DataFrame.iloc
     DataFrame.index
     DataFrame.iterrows
     DataFrame.itertuples

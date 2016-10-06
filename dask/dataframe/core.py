@@ -252,16 +252,6 @@ class _Frame(Base):
         return len(self.divisions) - 1
 
     @property
-    def _pd(self):
-        warnings.warn('Deprecation warning: use `_meta` instead')
-        return self._meta
-
-    @property
-    def _pd_nonempty(self):
-        warnings.warn('Deprecation warning: use `_meta_nonempty` instead')
-        return self._meta_nonempty
-
-    @property
     def _meta_nonempty(self):
         """ A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)
@@ -307,10 +297,6 @@ class _Frame(Base):
     def clear_divisions(self):
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
-
-    def get_division(self, n):
-        warnings.warn("Deprecation warning: use `get_partition` instead")
-        return self.get_partition(self, n)
 
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
@@ -1464,12 +1450,6 @@ class Series(_Frame):
         return list(o)
 
     @property
-    def column_info(self):
-        """ Return Series.name """
-        warnings.warn('column_info is deprecated, use name')
-        return self.name
-
-    @property
     def nbytes(self):
         return self.reduction(methods.nbytes, np.sum, token='nbytes', meta=int)
 
@@ -2003,12 +1983,6 @@ class DataFrame(_Frame):
         """
         from .shuffle import set_partition
         return set_partition(self, column, divisions, **kwargs)
-
-    @property
-    def column_info(self):
-        """ Return the Index of column names """
-        warnings.warn('column_info is deprecated, use columns')
-        return self.columns
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None):
