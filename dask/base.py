@@ -6,7 +6,6 @@ from operator import attrgetter
 import pickle
 import os
 import uuid
-import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
@@ -60,13 +59,6 @@ class Base(object):
         """
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
-
-    def _visualize(self, filename='mydask', format=None, optimize_graph=False):
-        warn = DeprecationWarning("``_visualize`` is deprecated, use "
-                                  "``visualize`` instead.")
-        warnings.warn(warn)
-        return self.visualize(filename=filename, format=format,
-                              optimize_graph=optimize_graph)
 
     def compute(self, **kwargs):
         """Compute several dask collections at once.

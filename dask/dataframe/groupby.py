@@ -378,11 +378,6 @@ class DataFrameGroupBy(_GroupBy):
         super(DataFrameGroupBy, self).__init__(df, index=index,
                                                slice=slice, **kwargs)
 
-    @property
-    def column_info(self):
-        warnings.warn('column_info is deprecated')
-        return self.obj.columns
-
     def __getitem__(self, key):
         if isinstance(key, list):
             g = DataFrameGroupBy(self.obj, index=self.index,
@@ -425,11 +420,6 @@ class SeriesGroupBy(_GroupBy):
                 df._meta.groupby(index)
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
-
-    @property
-    def column_info(self):
-        warnings.warn('column_info is deprecated')
-        return self._slice
 
     def nunique(self):
         name = self._meta.obj.name

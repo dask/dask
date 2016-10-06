@@ -13,6 +13,7 @@ import os
 import pickle
 from threading import Lock
 import uuid
+import warnings
 
 from toolz.curried import (pipe, partition, concat, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
@@ -1025,6 +1026,10 @@ class Array(Base):
          ('x', 1): array([5, 7]),
          ('x', 2): array([9])}
         """
+        warnings.warn("Deprecation Warning: The `cache` method is deprecated, "
+                      "and will be removed in the next release. To achieve "
+                      "the same behavior, either write to disk or use "
+                      "`Client.persist`, from `dask.distributed`.")
         if store is not None and hasattr(store, 'shape'):
             self.store(store)
             return from_array(store, chunks=self.chunks)
@@ -3482,7 +3487,6 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
             ddof = 0
     fact = float(N - ddof)
     if fact <= 0:
-        import warnings
         warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
         fact = 0.0
 

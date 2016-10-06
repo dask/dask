@@ -47,7 +47,7 @@ Edith,600
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=30, lineterminator=os.linesep)
+        f = dd.read_csv(fn, blocksize=30, lineterminator=os.linesep)
         assert list(f.columns) == ['name', 'amount']
         result = f.compute(get=dask.get)
         # index may be different
@@ -61,7 +61,7 @@ def test_read_multiple_csv():
             f.write(text)
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
-        df = dd.read_csv('_foo.*.csv', chunkbytes=30)
+        df = dd.read_csv('_foo.*.csv', blocksize=30)
         assert df.npartitions > 2
 
         assert (len(dd.read_csv('_foo.*.csv').compute()) ==
@@ -88,7 +88,7 @@ def test_consistent_dtypes():
     """)
 
     with filetext(text) as fn:
-        df = dd.read_csv(fn, chunkbytes=30)
+        df = dd.read_csv(fn, blocksize=30)
         assert isinstance(df.amount.sum().compute(), float)
 
 datetime_csv_file = """
@@ -102,7 +102,7 @@ Dan,400,2014-01-01
 
 def test_read_csv_index():
     with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=20).set_index('amount')
+        f = dd.read_csv(fn, blocksize=20).set_index('amount')
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -119,7 +119,7 @@ def test_read_csv_index():
 
 def test_usecols():
     with filetext(datetime_csv_file) as fn:
-        df = dd.read_csv(fn, chunkbytes=30, usecols=['when', 'amount'])
+        df = dd.read_csv(fn, blocksize=30, usecols=['when', 'amount'])
         expected = pd.read_csv(fn, usecols=['when', 'amount'])
         assert (df.compute().values == expected.values).all()
 
@@ -338,7 +338,7 @@ def test_skipinitialspace():
     """)
 
     with filetext(text) as fn:
-        df = dd.read_csv(fn, skipinitialspace=True, chunkbytes=20)
+        df = dd.read_csv(fn, skipinitialspace=True, blocksize=20)
 
         assert 'amount' in df.columns
         assert df.amount.max().compute() == 600
@@ -363,7 +363,7 @@ def test_consistent_dtypes_2():
             f.write(text1)
         with open('_foo.2.csv', 'w') as f:
             f.write(text2)
-        df = dd.read_csv('_foo.*.csv', chunkbytes=25)
+        df = dd.read_csv('_foo.*.csv', blocksize=25)
 
         assert df.amount.max().compute() == 600
     finally:
@@ -1391,7 +1391,7 @@ def test_hdf_globbing():
 def test_index_col():
     with filetext(text) as fn:
         try:
-            dd.read_csv(fn, chunkbytes=30, index_col='name')
+            dd.read_csv(fn, blocksize=30, index_col='name')
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
@@ -1415,10 +1415,10 @@ def test_read_csv_with_datetime_index_partitions_one():
     with filetext(timeseries) as fn:
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
-        # chunkbytes set to explicitly set to single chunk
+        # blocksize set to explicitly set to single chunk
         ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
                           parse_dates=['Date'],
-                          chunkbytes=10000000).set_index('Date')
+                          blocksize=10000000).set_index('Date')
         eq(df, ddf)
 
         # because fn is so small, by default, this will only be one chunk
@@ -1434,7 +1434,7 @@ def test_read_csv_with_datetime_index_partitions_n():
         # because fn is so small, by default, set chunksize small
         ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
                           parse_dates=['Date'],
-                          chunkbytes=400).set_index('Date')
+                          blocksize=400).set_index('Date')
         eq(df, ddf)
 
 
@@ -1460,7 +1460,7 @@ def test_encoding_gh601(encoding):
         test_df.to_csv(fn, encoding=encoding, index=False)
 
         a = pd.read_csv(fn, encoding=encoding)
-        d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
+        d = dd.read_csv(fn, encoding=encoding, blocksize=1000)
         d = d.compute()
         d.index = range(len(d.index))
         assert eq(d, a)
