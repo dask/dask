@@ -1,13 +1,17 @@
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
+import pickle
 import numpy as np
 
 import dask.dataframe as dd
+from dask.threaded import get as threaded_get
+from dask.multiprocessing import get as mp_get
 from dask.dataframe.shuffle import (shuffle, hash_series,
                                     partitioning_index,
                                     rearrange_by_column,
-                                    rearrange_by_divisions)
+                                    rearrange_by_divisions,
+                                    maybe_buffered_partd)
 from dask.async import get_sync
 from dask.dataframe.utils import eq, make_meta
 
@@ -216,7 +220,8 @@ def test_shuffle_sort(shuffle):
 
 
 @pytest.mark.parametrize('shuffle', ['tasks', 'disk'])
-def test_rearrange(shuffle):
+@pytest.mark.parametrize('get', [threaded_get, mp_get])
+def test_rearrange(shuffle, get):
     df = pd.DataFrame({'x': range(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(y=ddf.x % 4)
@@ -226,8 +231,8 @@ def test_rearrange(shuffle):
     assert set(ddf.dask).issubset(result.dask)
 
     # Every value in exactly one partition
-    a = result.compute()
-    parts = get_sync(result.dask, result._keys())
+    a = result.compute(get=get)
+    parts = get(result.dask, result._keys())
     for i in a.y.drop_duplicates():
         assert sum(i in part.y for part in parts) == 1
 
@@ -239,3 +244,14 @@ def test_rearrange_by_column_with_narrow_divisions():
 
     df = rearrange_by_divisions(a, 'x', (0, 2, 5))
     list_eq(df, a)
+
+
+def test_maybe_buffered_partd():
+    import partd
+    f = maybe_buffered_partd()
+    p1 = f()
+    assert isinstance(p1.partd, partd.Buffer)
+    f2 = pickle.loads(pickle.dumps(f))
+    assert not f2.buffer
+    p2 = f2()
+    assert isinstance(p2.partd, partd.File)
