@@ -455,7 +455,9 @@ def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
     assert eq(result, full.sum(axis=1))
-    assert eq(d.map_partitions(lambda df: 1), pd.Series([1, 1, 1]),
+
+    # dtype is inferred to np.array default (so on windows this is int32)
+    assert eq(d.map_partitions(lambda df: 1), pd.Series([1, 1, 1], dtype=np.int),
               check_divisions=False)
     x = Scalar({('x', 0): 1}, 'x', int)
     result = dd.map_partitions(lambda x: 2, x)
@@ -1362,6 +1364,22 @@ def test_str_accessor():
     assert 'upper' in dir(a.index.str)
     assert eq(a.index.str.upper(), df.index.str.upper())
     assert a.index.str.upper().dask == a.index.str.upper().dask
+
+    # make sure to pass thru args & kwargs
+    assert 'contains' in dir(a.x.str)
+    assert eq(a.x.str.contains('a'), df.x.str.contains('a'))
+    assert a.x.str.contains('a').dask == a.x.str.contains('a').dask
+
+    assert eq(a.x.str.contains('d', case=False), df.x.str.contains('d', case=False))
+    assert a.x.str.contains('d', case=False).dask == a.x.str.contains('d', case=False).dask
+
+    for na in [True, False]:
+        assert eq(a.x.str.contains('a', na=na), df.x.str.contains('a', na=na))
+        assert a.x.str.contains('a', na=na).dask == a.x.str.contains('a', na=na).dask
+
+    for regex in [True, False]:
+        assert eq(a.x.str.contains('a', regex=regex), df.x.str.contains('a', regex=regex))
+        assert a.x.str.contains('a', regex=regex).dask == a.x.str.contains('a', regex=regex).dask
 
 
 def test_empty_max():

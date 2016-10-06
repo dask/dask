@@ -3262,8 +3262,8 @@ class StringAccessor(Accessor):
         return getattr(obj.str, attr)
 
     @staticmethod
-    def call(obj, attr, *args):
-        return getattr(obj.str, attr)(*args)
+    def call(obj, attr, *args, **kwargs):
+        return getattr(obj.str, attr)(*args, **kwargs)
 
 
 class CategoricalAccessor(Accessor):
