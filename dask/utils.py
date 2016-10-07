@@ -556,10 +556,13 @@ def derived_from(original_klass, version=None, ua_args=[]):
             if doc is None:
                 doc = ''
 
-            method_args = getargspec(method).args
-            original_args = getargspec(original_method).args
+            try:
+                method_args = getargspec(method).args
+                original_args = getargspec(original_method).args
+                not_supported = [m for m in original_args if m not in method_args]
+            except TypeError:
+                not_supported = []
 
-            not_supported = [m for m in original_args if m not in method_args]
             if len(ua_args) > 0:
                 not_supported.extend(ua_args)
 

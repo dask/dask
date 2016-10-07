@@ -25,7 +25,7 @@ from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
-                     IndexCallable, funcname)
+                     IndexCallable, funcname, derived_from)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from .. import threaded, core
 
@@ -1145,7 +1145,7 @@ class Array(Base):
     def T(self):
         return transpose(self)
 
-    @wraps(np.transpose)
+    @derived_from(np.ndarray)
     def transpose(self, *axes):
         if not axes:
             axes = None
