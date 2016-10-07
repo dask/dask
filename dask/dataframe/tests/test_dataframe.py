@@ -1669,6 +1669,14 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis='index')
 
 
+def test_applymap():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+
+    assert eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
 def test_cov():
     df = pd.util.testing.makeMissingDataframe(0.3, 42)
     ddf = dd.from_pandas(df, npartitions=3)

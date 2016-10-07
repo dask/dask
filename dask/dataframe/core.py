@@ -1486,6 +1486,14 @@ class Series(_Frame):
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
 
+    @cache_readonly
+    def dt(self):
+        return DatetimeAccessor(self)
+
+    @cache_readonly
+    def str(self):
+        return StringAccessor(self)
+
     def quantile(self, q=0.5):
         """ Approximate quantiles of Series
 
@@ -2341,6 +2349,10 @@ class DataFrame(_Frame):
 
         return map_partitions(M.apply, self, func, axis,
                               False, False, None, args, meta=meta, **kwds)
+
+    @derived_from(pd.DataFrame)
+    def applymap(self, func):
+        return elemwise(M.applymap, self, func)
 
     @derived_from(pd.DataFrame)
     def cov(self, min_periods=None):
