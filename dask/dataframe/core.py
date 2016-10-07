@@ -2355,6 +2355,10 @@ class DataFrame(_Frame):
         return elemwise(M.applymap, self, func)
 
     @derived_from(pd.DataFrame)
+    def round(self, decimals=0):
+        return elemwise(M.round, self, decimals)
+
+    @derived_from(pd.DataFrame)
     def cov(self, min_periods=None):
         return cov_corr(self, min_periods)
 

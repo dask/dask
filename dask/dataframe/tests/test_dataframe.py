@@ -1677,6 +1677,14 @@ def test_applymap():
     assert eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
 
 
+def test_round():
+    df = pd.DataFrame({'col1': [1.123, 2.123, 3.123],
+                       'col2': [1.234, 2.234, 3.234]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert eq(ddf.round(), df.round())
+    assert eq(ddf.round(2), df.round(2))
+
+
 def test_cov():
     df = pd.util.testing.makeMissingDataframe(0.3, 42)
     ddf = dd.from_pandas(df, npartitions=3)
