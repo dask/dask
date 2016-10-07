@@ -1494,6 +1494,10 @@ class Series(_Frame):
     def str(self):
         return StringAccessor(self)
 
+    @derived_from(pd.Series)
+    def round(self, decimals=0):
+        return elemwise(M.round, self, decimals)
+
     def quantile(self, q=0.5):
         """ Approximate quantiles of Series
 

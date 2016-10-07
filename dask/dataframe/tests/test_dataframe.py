@@ -1137,6 +1137,12 @@ def test_random_partitions():
     assert len(a.compute()) + len(b.compute()) == len(full)
 
 
+def test_series_round():
+    ps = pd.Series([1.123, 2.123, 3.123, 1.234, 2.234, 3.234], name='a')
+    s = dd.from_pandas(ps, npartitions=3)
+    assert eq(s.round(), ps.round())
+
+
 def test_series_nunique():
     ps = pd.Series(list('aaabbccccdddeee'), name='a')
     s = dd.from_pandas(ps, npartitions=3)
