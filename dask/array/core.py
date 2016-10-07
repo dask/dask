@@ -1146,8 +1146,12 @@ class Array(Base):
         return transpose(self)
 
     @wraps(np.transpose)
-    def transpose(self, axes=None):
-        return transpose(self, axes)
+    def transpose(self, *axes):
+        if not axes:
+            axes = None
+        elif len(axes) == 1 and isinstance(axes[0], Iterable):
+            axes = axes[0]
+        return transpose(self, axes=axes)
 
     @wraps(np.ravel)
     def ravel(self):
@@ -2110,7 +2114,11 @@ def _take_dask_array_from_numpy(a, indices, axis):
 
 @wraps(np.transpose)
 def transpose(a, axes=None):
-    axes = axes or tuple(range(a.ndim))[::-1]
+    if axes:
+        if len(axes) != a.ndim:
+            raise ValueError("axes don't match array")
+    else:
+        axes = tuple(range(a.ndim))[::-1]
     return atop(partial(np.transpose, axes=axes),
                 axes,
                 a, tuple(range(a.ndim)), dtype=a._dtype)

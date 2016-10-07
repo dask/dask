@@ -144,6 +144,15 @@ def test_transpose():
               x.transpose((2, 0, 1)))
     assert same_keys(d.transpose((2, 0, 1)), d.transpose((2, 0, 1)))
 
+    assert_eq(d.transpose(2, 0, 1),
+              x.transpose(2, 0, 1))
+    assert same_keys(d.transpose(2, 0, 1), d.transpose(2, 0, 1))
+
+    with pytest.raises(ValueError):
+        d.transpose(1, 2)
+    with pytest.raises(ValueError):
+        d.transpose((1, 2))
+
 
 def test_broadcast_dimensions_works_with_singleton_dimensions():
     argpairs = [('x', 'i')]
