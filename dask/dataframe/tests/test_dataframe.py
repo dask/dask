@@ -2101,3 +2101,17 @@ def test_getitem_meta():
 
     eq(df.col2[df.col1 == 'a'],
        ddf.col2[ddf.col1 == 'a'])
+
+
+def test_set_index_sorted_min_max_same():
+    a = pd.DataFrame({'x': [1, 2, 3], 'y': [0, 0, 0]})
+    b = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 1, 1]})
+
+    aa = delayed(a)
+    bb = delayed(b)
+
+    df = dd.from_delayed([aa, bb], meta=a)
+    assert not df.known_divisions
+
+    df2 = df.set_index('y', sorted=True)
+    assert df2.divisions == (0, 1, 1)

@@ -3336,7 +3336,7 @@ def compute_divisions(df, **kwargs):
 
     if (sorted(mins) != list(mins) or
             sorted(maxes) != list(maxes) or
-            any(a >= b for a, b in zip(mins, maxes))):
+            any(a > b for a, b in zip(mins, maxes))):
         raise ValueError("Partitions must be sorted ascending with the index",
                          mins, maxes)
 
