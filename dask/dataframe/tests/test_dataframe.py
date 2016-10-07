@@ -1633,6 +1633,14 @@ def test_rename_index():
     assert raises(ValueError, lambda: d.rename(index=renamer))
 
 
+def test_to_timestamp():
+    index = pd.PeriodIndex(freq='A', start='1/1/2001', end='12/1/2004')
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]}, index=index)
+    ddf = dd.from_pandas(df, npartitions=3)
+    print(ddf.to_timestamp())
+    assert eq(ddf.to_timestamp().compute(), df.to_timestamp())
+
+
 def test_to_frame():
     s = pd.Series([1, 2, 3], name='foo')
     a = dd.from_pandas(s, npartitions=2)

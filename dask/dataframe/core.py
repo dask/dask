@@ -2125,6 +2125,10 @@ class DataFrame(_Frame):
     def dropna(self, how='any', subset=None):
         return self.map_partitions(M.dropna, how=how, subset=subset)
 
+    @derived_from(pd.DataFrame)
+    def to_timestamp(self, freq=None, how='start', axis=0, copy=True):
+        return elemwise(M.to_timestamp, self, freq, how, axis, copy)
+
     def to_castra(self, fn=None, categories=None, sorted_index_column=None,
                   compute=True, get=get_sync):
         """ Write DataFrame to Castra on-disk store
