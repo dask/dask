@@ -86,23 +86,6 @@ def test_dataframe_categoricals():
     assert 'cat' not in dir(ddf.y)
 
 
-def test_categories():
-    df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': pd.Categorical(['a', 'b', 'a', 'c'])},
-                      index=pd.CategoricalIndex(['x', 'x', 'y', 'y']))
-
-    categories = dd.categorical.get_categories(df)
-    assert set(categories.keys()) == set(['y', '.index'])
-    assert list(categories['y']) == ['a', 'b', 'c']
-    assert list(categories['.index']) == ['x', 'y']
-
-    df2 = dd.categorical.strip_categories(df)
-    assert not dd.categorical.get_categories(df2)
-
-    df3 = dd.categorical._categorize(categories, df2)
-    tm.assert_frame_equal(df, df3)
-
-
 def test_categorize_nan():
     df = dd.from_pandas(pd.DataFrame({"A": ['a', 'b', 'a', float('nan')]}),
                         npartitions=2)

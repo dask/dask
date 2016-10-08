@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
-import io
 from math import ceil
 from operator import getitem
 import os
@@ -11,7 +10,6 @@ from threading import Lock
 import multiprocessing
 import uuid
 from warnings import warn
-import sys
 
 import pandas as pd
 import numpy as np
@@ -19,7 +17,7 @@ import dask
 from toolz import merge
 
 from ..base import tokenize
-from ..compatibility import unicode, PY2
+from ..compatibility import unicode
 from .. import array as da
 from ..async import get_sync
 from ..context import _globals
@@ -31,7 +29,6 @@ from .shuffle import set_partition
 from .utils import insert_meta_param_description
 
 from ..utils import build_name_function, M
-from ..bytes.core import write_bytes
 
 lock = Lock()
 
@@ -747,33 +744,6 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return DataFrame._get(dsk, keys, get=get)[0]
     else:
         return delayed([Delayed(key, [dsk]) for key in keys])[0]
-
-
-@delayed
-def _to_csv_chunk(df, **kwargs):
-    if PY2:
-        out = io.BytesIO()
-    else:
-        out = io.StringIO()
-    df.to_csv(out, **kwargs)
-    out.seek(0)
-    if PY2:
-        return out.getvalue()
-    encoding = kwargs.get('encoding', sys.getdefaultencoding())
-    return out.getvalue().encode(encoding)
-
-
-def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           **kwargs):
-    values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
-    values = write_bytes(values, filename, name_function, compression,
-                         encoding=None)
-
-    if compute:
-        from dask import compute
-        compute(*values)
-    else:
-        return values
 
 
 def _df_to_bag(df, index=False):

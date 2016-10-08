@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
+import sys
 
 try:
     import psutil
@@ -11,10 +12,12 @@ except ImportError:
 import numpy as np
 import pandas as pd
 
+from ..compatibility import PY2
 from ..delayed import delayed
 from .io import from_delayed
 
 from ..bytes import read_bytes
+from ..bytes.core import write_bytes
 from ..bytes.compression import seekable_files, files as cfiles
 
 
@@ -239,3 +242,31 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                              collection=collection, enforce=enforce)
 
     return df
+
+
+@delayed
+def _to_csv_chunk(df, **kwargs):
+    import io
+    if PY2:
+        out = io.BytesIO()
+    else:
+        out = io.StringIO()
+    df.to_csv(out, **kwargs)
+    out.seek(0)
+    if PY2:
+        return out.getvalue()
+    encoding = kwargs.get('encoding', sys.getdefaultencoding())
+    return out.getvalue().encode(encoding)
+
+
+def to_csv(df, filename, name_function=None, compression=None, compute=True,
+           **kwargs):
+    values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
+    values = write_bytes(values, filename, name_function, compression,
+                         encoding=None)
+
+    if compute:
+        from dask import compute
+        compute(*values)
+    else:
+        return values

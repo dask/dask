@@ -8,9 +8,9 @@ from .utils import PANDAS_VERSION
 
 
 if PANDAS_VERSION >= '0.19.0':
-    from pandas.api.types import is_categorical_dtype
+    from pandas.api.types import is_categorical_dtype        # noqa
 else:
-    from pandas.core.common import is_categorical_dtype
+    from pandas.core.common import is_categorical_dtype      # noqa
 
 
 def _categorize_block(df, categories):
@@ -45,77 +45,3 @@ def categorize(df, columns=None, **kwargs):
 
     meta = func(df._meta)
     return df.map_partitions(func, meta=meta)
-
-
-def _categorize(categories, df):
-    """ Categorize columns in dataframe
-
-    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': [0, 2, 0]})
-    >>> categories = {'y': ['A', 'B', 'c']}
-    >>> _categorize(categories, df)
-       x  y
-    0  1  A
-    1  2  c
-    2  3  A
-
-    >>> _categorize(categories, df.y)
-    0    A
-    1    c
-    2    A
-    dtype: category
-    Categories (3, object): [A, B, c]
-    """
-    if '.index' in categories:
-        index = pd.CategoricalIndex(
-            pd.Categorical.from_codes(df.index.values, categories['.index']))
-    else:
-        index = df.index
-    if isinstance(df, pd.Series):
-        if df.name in categories:
-            cat = pd.Categorical.from_codes(df.values, categories[df.name])
-            return pd.Series(cat, index=index)
-        else:
-            return df
-
-    else:
-        return pd.DataFrame(
-            dict((col, pd.Categorical.from_codes(df[col].values, categories[col])
-                 if col in categories else df[col].values)
-                 for col in df.columns),
-            columns=df.columns, index=index)
-
-
-def strip_categories(df):
-    """ Strip categories from dataframe
-
-    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
-    >>> df['y'] = df.y.astype('category')
-    >>> strip_categories(df)
-       x  y
-    0  1  0
-    1  2  1
-    2  3  0
-    """
-    index = df.index.codes if is_categorical_dtype(df.index) else df.index
-    return pd.DataFrame(dict((col, df[col].cat.codes.values
-                              if is_categorical_dtype(df[col])
-                              else df[col].values)
-                             for col in df.columns),
-                        columns=df.columns,
-                        index=index)
-
-
-def get_categories(df):
-    """
-    Get Categories of dataframe
-
-    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
-    >>> df['y'] = df.y.astype('category')
-    >>> get_categories(df)
-    {'y': Index([u'A', u'B'], dtype='object')}
-    """
-    result = dict((col, df[col].cat.categories) for col in df.columns
-                  if is_categorical_dtype(df[col]))
-    if is_categorical_dtype(df.index):
-        result['.index'] = df.index.categories
-    return result
