@@ -1,5 +1,6 @@
 import sys
 from operator import getitem
+from io import StringIO
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -1647,6 +1648,34 @@ def test_to_frame():
 
     assert eq(s.to_frame(), a.to_frame())
     assert eq(s.to_frame('bar'), a.to_frame('bar'))
+
+
+def test_elementwise_comparisons():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['aba', 'bcb', 'cdc', 'ded']})
+    df2 = pd.DataFrame({'x': [1, 3, 3, 5], 'y': ['aba', 'qwe', 'ew', 'ded']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    assert eq(ddf.lt(ddf2), df.lt(df2))
+    assert eq(ddf.gt(ddf2), df.gt(df2))
+    assert eq(ddf.le(ddf2), df.le(df2))
+    assert eq(ddf.ge(ddf2), df.ge(df2))
+    assert eq(ddf.ne(ddf2), df.ne(df2))
+    assert eq(ddf.eq(ddf2), df.eq(df2))
+
+
+def test_series_elementwise_comparisons():
+    ps = pd.Series({'x': [1, 2, 3, 4, 'aba', 'bcb', 'cdc', 'ded']})
+    ps2 = pd.Series({'x': [1, 3, 3, 5, 'aba', 'qwe', 'ew', 'ded']})
+    s = dd.from_pandas(ps, npartitions=2)
+    s2 = dd.from_pandas(ps2, npartitions=2)
+
+    assert eq(s.lt(s2), ps.lt(ps2))
+    assert eq(s.gt(s2), ps.gt(ps2))
+    assert eq(s.le(s2), ps.le(ps2))
+    assert eq(s.ge(s2), ps.ge(ps2))
+    assert eq(s.ne(s2), ps.ne(ps2))
+    assert eq(s.eq(s2), ps.eq(ps2))
 
 
 def test_apply():

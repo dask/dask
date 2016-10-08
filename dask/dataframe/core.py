@@ -1685,6 +1685,19 @@ class Series(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
+    @classmethod
+    def _bind_comparison_method(cls, name, comparison):
+        """ bind comparison method like DataFrame.add to this class """
+
+        def meth(self, other, level=None, fill_value=None, axis=0):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+            axis = self._validate_axis(axis)
+            return elemwise(comparison, self, other, fill_value=fill_value, axis=axis)
+
+        meth.__doc__ = comparison.__doc__
+        bind_method(cls, name, meth)
+
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default,
               name=no_default, args=(), **kwds):
@@ -2262,6 +2275,19 @@ class DataFrame(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
+    @classmethod
+    def _bind_comparison_method(cls, name, comparison):
+        """ bind comparison method like DataFrame.add to this class """
+
+        def meth(self, other, axis='columns', level=None):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+            axis = self._validate_axis(axis)
+            return elemwise(comparison, self, other, axis=axis)
+
+        meth.__doc__ = comparison.__doc__
+        bind_method(cls, name, meth)
+
     @insert_meta_param_description(pad=12)
     def apply(self, func, axis=0, args=(), meta=no_default,
               columns=no_default, **kwds):
@@ -2437,13 +2463,19 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
 for name in ['add', 'sub', 'mul', 'div',
              'truediv', 'floordiv', 'mod', 'pow',
              'radd', 'rsub', 'rmul', 'rdiv',
-             'rtruediv', 'rfloordiv', 'rmod', 'rpow']:
+             'rtruediv', 'rfloordiv', 'rmod', 'rpow', 'eq']:
     meth = getattr(pd.DataFrame, name)
     DataFrame._bind_operator_method(name, meth)
 
     meth = getattr(pd.Series, name)
     Series._bind_operator_method(name, meth)
 
+for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
+    meth = getattr(pd.DataFrame, name)
+    DataFrame._bind_comparison_method(name, meth)
+
+    meth = getattr(pd.Series, name)
+    Series._bind_comparison_method(name, meth)
 
 def elemwise_property(attr, s):
     meta = pd.Series([], dtype=getattr(s._meta, attr).dtype)
