@@ -1437,6 +1437,15 @@ def test_select_dtypes(include, exclude):
     expected = df.select_dtypes(include=include, exclude=exclude)
     assert eq(result, expected)
 
+    # count dtypes
+    tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
+    tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
+
+    tm.assert_series_equal(result.get_dtype_counts(),
+                           expected.get_dtype_counts())
+    tm.assert_series_equal(result.get_ftype_counts(),
+                           expected.get_ftype_counts())
+
 
 def test_deterministic_arithmetic_names():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})

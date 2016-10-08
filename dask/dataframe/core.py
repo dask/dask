@@ -1944,6 +1944,14 @@ class DataFrame(_Frame):
         return self._meta.dtypes
 
     @derived_from(pd.DataFrame)
+    def get_dtype_counts(self):
+        return self._meta.get_dtype_counts()
+
+    @derived_from(pd.DataFrame)
+    def get_ftype_counts(self):
+        return self._meta.get_ftype_counts()
+
+    @derived_from(pd.DataFrame)
     def select_dtypes(self, include=None, exclude=None):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
