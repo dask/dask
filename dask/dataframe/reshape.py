@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pandas as pd
 
 from .core import Series, DataFrame, map_partitions
-from .categorical import is_categorical_dtype, _get_categorical_columns
+from .categorical import is_categorical_dtype
 
 
 def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
@@ -25,6 +25,10 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
         list or dictionary as with `prefix.`
     dummy_na : bool, default False
         Add a column to indicate NaNs, if False NaNs are ignored.
+    columns : list-like, default None
+        Column names in the DataFrame to be encoded.
+        If `columns` is None then all the columns with
+        `category` dtype will be converted.
     drop_first : bool, default False
         Whether to get k-1 dummies out of k categorical levels by removing the
         first level.
@@ -43,7 +47,7 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
         raise ValueError('data must have category dtype')
     elif isinstance(data, DataFrame):
         if columns is None:
-            columns = _get_categorical_columns(data)
+            columns = data._meta.select_dtypes(include=['category']).columns
         else:
             if not all(is_categorical_dtype(data[c]) for c in columns):
                 raise ValueError('target columns must have category dtype')
