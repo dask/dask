@@ -1097,6 +1097,9 @@ class Array(Base):
         if not isinstance(index, tuple):
             index = (index,)
 
+        if any(isinstance(i, Array) for i in index):
+            raise NotImplementedError("Indexing with a dask Array")
+
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
