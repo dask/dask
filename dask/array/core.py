@@ -25,7 +25,7 @@ from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
-                     IndexCallable, funcname)
+                     IndexCallable, funcname, derived_from)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from .. import threaded, core
 
@@ -1148,9 +1148,13 @@ class Array(Base):
     def T(self):
         return transpose(self)
 
-    @wraps(np.transpose)
-    def transpose(self, axes=None):
-        return transpose(self, axes)
+    @derived_from(np.ndarray)
+    def transpose(self, *axes):
+        if not axes:
+            axes = None
+        elif len(axes) == 1 and isinstance(axes[0], Iterable):
+            axes = axes[0]
+        return transpose(self, axes=axes)
 
     @wraps(np.ravel)
     def ravel(self):
@@ -2115,7 +2119,11 @@ def _take_dask_array_from_numpy(a, indices, axis):
 
 @wraps(np.transpose)
 def transpose(a, axes=None):
-    axes = axes or tuple(range(a.ndim))[::-1]
+    if axes:
+        if len(axes) != a.ndim:
+            raise ValueError("axes don't match array")
+    else:
+        axes = tuple(range(a.ndim))[::-1]
     return atop(partial(np.transpose, axes=axes),
                 axes,
                 a, tuple(range(a.ndim)), dtype=a._dtype)
