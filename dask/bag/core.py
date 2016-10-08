@@ -728,9 +728,8 @@ class Bag(Base):
         depth = 0
         while k > 1:
             c = fmt + str(depth)
-            dsk2 = dict(((c, i), (empty_safe_aggregate,
-                                   aggregate,
-                                   [(b, j) for j in inds]))
+            dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
+                                  [(b, j) for j in inds]))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -914,27 +913,23 @@ class Bag(Base):
         if combine is None:
             combine = binop
         if initial is not no_default:
-            dsk = dict(((a, i),
-                        (reduceby, key, binop, (self.name, i), initial))
+            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i), initial))
                        for i in range(self.npartitions))
         else:
-            dsk = dict(((a, i),
-                        (reduceby, key, binop, (self.name, i)))
+            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i)))
                        for i in range(self.npartitions))
 
         def combine2(acc, x):
             return combine(acc, x[1])
 
         if combine_initial is not no_default:
-            dsk2 = {(b, 0): (dictitems, (
-                                reduceby, 0, combine2, (
-                                    toolz.concat, (
-                                        map, dictitems, list(dsk.keys()))),
-                                combine_initial))}
+            dsk2 = {(b, 0): (dictitems, (reduceby, 0, combine2,
+                                         (toolz.concat, (map, dictitems,
+                                                         list(dsk.keys()))),
+                                         combine_initial))}
         else:
-            dsk2 = {(b, 0): (dictitems, (
-                                merge_with, (partial, reduce, combine),
-                                list(dsk.keys())))}
+            dsk2 = {(b, 0): (dictitems, (merge_with, (partial, reduce, combine),
+                                         list(dsk.keys())))}
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def take(self, k, npartitions=1, compute=True):
@@ -961,7 +956,7 @@ class Bag(Base):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError("only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions))
+                             "received {}".format(self.npartitions, npartitions))
 
         token = tokenize(self, k, npartitions)
         name = 'take-' + token
@@ -1044,7 +1039,7 @@ class Bag(Base):
         if method is None:
             get = _globals.get('get')
             if (isinstance(get, types.MethodType) and
-                'distributed' in get.__func__.__module__):
+               'distributed' in get.__func__.__module__):
                 method = 'tasks'
             else:
                 method = 'disk'
@@ -1054,8 +1049,8 @@ class Bag(Base):
         elif method == 'tasks':
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
-            raise NotImplementedError(
-                    "Shuffle method must be 'disk' or 'tasks'")
+            msg = "Shuffle method must be 'disk' or 'tasks'"
+            raise NotImplementedError(msg)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -1125,21 +1120,22 @@ class Bag(Base):
         >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
         """
         if npartitions > self.npartitions:
-            raise NotImplementedError(
-              "Repartition only supports going to fewer partitions\n"
-              " old: %d  new: %d" % (self.npartitions, npartitions))
+            msg = ("Repartition only supports going to fewer partitions\n"
+                   " old: %d  new: %d")
+            raise NotImplementedError(msg % (self.npartitions, npartitions))
         npartitions_ratio = self.npartitions / npartitions
         new_partitions_boundaries = [int(old_partition_index * npartitions_ratio)
-                                        for old_partition_index in range(npartitions + 1)]
+                                     for old_partition_index in range(npartitions + 1)]
         new_name = 'repartition-%d-%s' % (npartitions, tokenize(self))
-        dsk = {(new_name, new_partition_index):
-                (list,
-                 (toolz.concat,
-                  [(self.name, old_partition_index)
-                    for old_partition_index in range(
-                        new_partitions_boundaries[new_partition_index],
-                        new_partitions_boundaries[new_partition_index + 1])]))
-                for new_partition_index in range(npartitions)}
+
+        dsk = {}
+        for new_partition_index in range(npartitions):
+            value = (list, (toolz.concat,
+                            [(self.name, old_partition_index)
+                             for old_partition_index in
+                             range(new_partitions_boundaries[new_partition_index],
+                                   new_partitions_boundaries[new_partition_index + 1])]))
+            dsk[new_name, new_partition_index] = value
         return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
@@ -1170,11 +1166,10 @@ class Bag(Base):
         b = '%s-first-%s' % (binop_name, token)
         c = '%s-second-%s' % (binop_name, token)
         dsk = {(a, 0): (accumulate_part, binop, (self.name, 0), initial, True),
-            (b, 0): (first, (a, 0)),
-            (c, 0): (second, (a, 0))}
+               (b, 0): (first, (a, 0)),
+               (c, 0): (second, (a, 0))}
         for i in range(1, self.npartitions):
-            dsk[(a, i)] = (accumulate_part, binop, (self.name, i),
-                        (c, i - 1))
+            dsk[(a, i)] = (accumulate_part, binop, (self.name, i), (c, i - 1))
             dsk[(b, i)] = (first, (a, i))
             dsk[(c, i)] = (second, (a, i))
         return Bag(merge(self.dask, dsk), b, self.npartitions)
@@ -1563,9 +1558,9 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     for stage in range(1, stages + 1):
         group = dict((('shuffle-group-' + token, stage, inp),
                       (groupby,
-                        (make_group, k, stage - 1),
-                        ('shuffle-join-' + token, stage - 1, inp)))
-                 for inp in inputs)
+                       (make_group, k, stage - 1),
+                       ('shuffle-join-' + token, stage - 1, inp)))
+                     for inp in inputs)
 
         split = dict((('shuffle-split-' + token, stage, i, inp),
                       (dict.get, ('shuffle-group-' + token, stage, inp), i, {}))
@@ -1573,10 +1568,9 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
                      for inp in inputs)
 
         join = dict((('shuffle-join-' + token, stage, inp),
-                     (list, (toolz.concat,
-                        [('shuffle-split-' + token, stage, inp[stage - 1],
-                          insert(inp, stage - 1, j)) for j in range(k)])))
-                     for inp in inputs)
+                     (list, (toolz.concat, [('shuffle-split-' + token, stage, inp[stage - 1],
+                             insert(inp, stage - 1, j)) for j in range(k)])))
+                    for inp in inputs)
         groups.append(group)
         splits.append(split)
         joins.append(join)
@@ -1622,8 +1616,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
                  (collect, grouper, i, p, barrier_token))
                 for i in range(npartitions))
 
-    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name,
-                         npartitions)
+    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
 
 def empty_safe_apply(func, part):

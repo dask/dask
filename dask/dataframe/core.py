@@ -326,7 +326,7 @@ class _Frame(Base):
         # Evaluate and store in cache
         name = 'cache' + uuid.uuid1().hex
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
-                    for i, key in enumerate(self._keys()))
+                   for i, key in enumerate(self._keys()))
         self._get(merge(dsk, self.dask), list(dsk.keys()))
 
         # Create new dataFrame pointing to that cache
@@ -562,8 +562,8 @@ class _Frame(Base):
 
         dsks = [dict(((self._name + '-split-%d' % i, j),
                       (getitem, (self._name + '-split-full', j), i))
-                      for j in range(self.npartitions))
-                      for i in range(len(frac))]
+                     for j in range(self.npartitions))
+                for i in range(len(frac))]
         return [type(self)(merge(self.dask, dsk_full, dsk),
                            self._name + '-split-%d' % i,
                            self._meta, self.divisions)
@@ -1120,8 +1120,8 @@ class _Frame(Base):
                                   skipna=skipna, axis=axis)
         else:
             return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
-                        known_divisions=self.known_divisions, fn=fn, axis=axis)
+                       meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                       known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def idxmin(self, axis=None, skipna=True):
@@ -1134,8 +1134,8 @@ class _Frame(Base):
                                   skipna=skipna, axis=axis)
         else:
             return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                        meta=meta, token=self._token_prefix + fn, skipna=skipna,
-                        known_divisions=self.known_divisions, fn=fn, axis=axis)
+                       meta=meta, token=self._token_prefix + fn, skipna=skipna,
+                       known_divisions=self.known_divisions, fn=fn, axis=axis)
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None):
@@ -1498,8 +1498,8 @@ class Series(_Frame):
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'index-%s' % tokenize(self, key)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
-                                                       (key._name, i)))
-                        for i in range(self.npartitions))
+                                    (key._name, i)))
+                       for i in range(self.npartitions))
             return Series(merge(self.dask, key.dask, dsk), name,
                           self._meta, self.divisions)
         raise NotImplementedError()
@@ -1878,7 +1878,7 @@ class DataFrame(_Frame):
 
             dsk = dict(((name, i), (operator.getitem,
                                     (self._name, i), (list, key)))
-                        for i in range(self.npartitions))
+                       for i in range(self.npartitions))
             return self._constructor(merge(self.dask, dsk), name,
                                      meta, self.divisions)
         if isinstance(key, Series):
@@ -2437,7 +2437,7 @@ def elemwise(op, *args, **kwargs):
     if other:
         dsk = dict(((_name, i),
                    (apply, partial_by_order, list(frs),
-                     {'function': op, 'other': other}))
+                   {'function': op, 'other': other}))
                    for i, frs in enumerate(zip(*keys)))
     else:
         dsk = dict(((_name, i), (op,) + frs) for i, frs in enumerate(zip(*keys)))
@@ -2469,7 +2469,7 @@ def remove_empties(seq):
         return seq
 
     seq2 = [x for x in seq
-              if not (isinstance(x, tuple) and x and x[0] == 'empty')]
+            if not (isinstance(x, tuple) and x and x[0] == 'empty')]
     if seq2:
         return seq2
     else:
@@ -2776,7 +2776,7 @@ def quantile(df, q):
         name = 'quantiles-' + token
         empty_index = pd.Index([], dtype=float)
         return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
-                       name, df._meta, [None, None])
+                      name, df._meta, [None, None])
     else:
         new_divisions = [np.min(q), np.max(q)]
 
@@ -3096,15 +3096,15 @@ def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
     npartitions_ratio = df.npartitions / npartitions
     new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
-                                    for new_partition_index in range(npartitions + 1)]
+                                 for new_partition_index in range(npartitions + 1)]
     new_name = 'repartition-%d-%s' % (npartitions, tokenize(df))
-    dsk = {(new_name, new_partition_index):
-            (pd.concat,
-             [(df._name, old_partition_index)
-                for old_partition_index in range(
-                    new_partitions_boundaries[new_partition_index],
-                    new_partitions_boundaries[new_partition_index + 1])])
-            for new_partition_index in range(npartitions)}
+    dsk = {}
+    for new_partition_index in range(npartitions):
+        value = (pd.concat, [(df._name, old_partition_index)
+                             for old_partition_index in
+                             range(new_partitions_boundaries[new_partition_index],
+                                   new_partitions_boundaries[new_partition_index + 1])])
+        dsk[new_name, new_partition_index] = value
     divisions = [df.divisions[new_partition_index]
                  for new_partition_index in new_partitions_boundaries]
     return DataFrame(merge(df.dask, dsk), new_name, df._meta, divisions)

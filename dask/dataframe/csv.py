@@ -220,10 +220,10 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     b_lineterminator = lineterminator.encode()
     sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                         blocksize=blocksize,
-                                         sample=sample,
-                                         compression=compression,
-                                         **(storage_options or {}))
+                                blocksize=blocksize,
+                                sample=sample,
+                                compression=compression,
+                                **(storage_options or {}))
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]

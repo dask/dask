@@ -215,7 +215,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
 
 def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
-        dependencies=None):
+                     dependencies=None):
     """ Inline cheap functions into larger operations
 
     Examples
@@ -249,13 +249,12 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
-              if istask(v)
-              and functions_of(v).issubset(fast_functions)
-              and dependents[k]
-              and k not in output]
+            if istask(v) and functions_of(v).issubset(fast_functions) and
+            dependents[k] and k not in output]
+
     if keys:
         dsk = inline(dsk, keys, inline_constants=inline_constants,
-                dependencies=dependencies)
+                     dependencies=dependencies)
         for k in keys:
             del dsk[k]
     return dsk
@@ -589,4 +588,4 @@ def fuse_getitem(dsk, func, place):
     {'y': (<function load at ...>, 'store', 'part', 'a')}
     """
     return fuse_selections(dsk, getitem, func,
-            lambda a, b: tuple(b[:place]) + (a[2],) + tuple(b[place + 1:]))
+                           lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))

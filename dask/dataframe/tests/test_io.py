@@ -996,7 +996,7 @@ def test_to_hdf_sync():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     # test single file single node
@@ -1023,7 +1023,7 @@ def test_to_hdf_thread():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     # test single file single node
@@ -1050,7 +1050,7 @@ def test_to_hdf_process():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
+                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     # test single file single node
@@ -1147,8 +1147,8 @@ def test_read_hdf_multiple():
                              'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9,
                              10, 11, 12, 13, 14, 15, 16]},
-                            index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
-                                   10., 11., 12., 13., 14., 15., 16.])
+                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9.,
+                             10., 11., 12., 13., 14., 15., 16.])
     a = dd.from_pandas(df, 16)
 
     with tmpfile('h5') as fn:

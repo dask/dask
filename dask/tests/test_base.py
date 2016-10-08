@@ -70,8 +70,8 @@ def test_tokenize():
 
 @pytest.mark.skipif('not np')
 def test_tokenize_numpy_array_consistent_on_values():
-    assert tokenize(np.random.RandomState(1234).random_sample(1000)) == \
-           tokenize(np.random.RandomState(1234).random_sample(1000))
+    assert (tokenize(np.random.RandomState(1234).random_sample(1000)) ==
+            tokenize(np.random.RandomState(1234).random_sample(1000)))
 
 
 @pytest.mark.skipif('not np')
@@ -92,21 +92,21 @@ def test_tokenize_numpy_datetime():
 @pytest.mark.skipif('not np')
 def test_tokenize_numpy_scalar():
     assert tokenize(np.array(1.0, dtype='f8')) == tokenize(np.array(1.0, dtype='f8'))
-    assert (tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0])
-         == tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]))
+    assert (tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]) ==
+            tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]))
 
 
 @pytest.mark.skipif('not np')
 def test_tokenize_numpy_array_on_object_dtype():
-    assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \
-           tokenize(np.array(['a', 'aa', 'aaa'], dtype=object))
-    assert tokenize(np.array(['a', None, 'aaa'], dtype=object)) == \
-           tokenize(np.array(['a', None, 'aaa'], dtype=object))
-    assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
-           tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+    assert (tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) ==
+            tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)))
+    assert (tokenize(np.array(['a', None, 'aaa'], dtype=object)) ==
+            tokenize(np.array(['a', None, 'aaa'], dtype=object)))
+    assert (tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) ==
+            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)))
     if sys.version_info[0] == 2:
-        assert tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) == \
-               tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object))
+        assert (tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) ==
+                tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)))
 
 
 @pytest.mark.skipif('not np')
@@ -168,8 +168,10 @@ def test_tokenize_kwargs():
 
 def test_tokenize_same_repr():
     class Foo(object):
+
         def __init__(self, x):
             self.x = x
+
         def __repr__(self):
             return 'a foo'
 

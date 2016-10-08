@@ -177,10 +177,10 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
     assert c.divisions[-1] == 8
     assert eq(c.compute(), A.join(B, how='outer'))
 
-    assert sorted(merge_indexed_dataframes(a, b, how='inner').dask) == \
-           sorted(merge_indexed_dataframes(a, b, how='inner').dask)
-    assert sorted(merge_indexed_dataframes(a, b, how='inner').dask) != \
-           sorted(merge_indexed_dataframes(a, b, how='outer').dask)
+    assert (sorted(merge_indexed_dataframes(a, b, how='inner').dask) ==
+            sorted(merge_indexed_dataframes(a, b, how='inner').dask))
+    assert (sorted(merge_indexed_dataframes(a, b, how='inner').dask) !=
+            sorted(merge_indexed_dataframes(a, b, how='outer').dask))
 
 
 def list_eq(aa, bb):
@@ -227,10 +227,10 @@ def test_hash_join(how, shuffle):
 
     list_eq(result, expected)
 
-    assert hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name == \
-           hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name
-    assert hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name != \
-           hash_join(a, 'y', b, 'y', 'outer', shuffle=shuffle)._name
+    assert (hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name ==
+            hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name)
+    assert (hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name !=
+            hash_join(a, 'y', b, 'y', 'outer', shuffle=shuffle)._name)
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
@@ -247,10 +247,10 @@ def test_indexed_concat(join):
     expected = pd.concat([A, B], axis=0, join=join)
     assert eq(result, expected)
 
-    assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == \
-           sorted(concat_indexed_dataframes([a, b], join=join).dask)
-    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) != \
-           sorted(concat_indexed_dataframes([a, b], join='outer').dask)
+    assert (sorted(concat_indexed_dataframes([a, b], join=join).dask) ==
+            sorted(concat_indexed_dataframes([a, b], join=join).dask))
+    assert (sorted(concat_indexed_dataframes([a, b], join='inner').dask) !=
+            sorted(concat_indexed_dataframes([a, b], join='outer').dask))
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
@@ -362,42 +362,42 @@ def test_merge_by_index_patterns(how, shuffle):
 
     pdf2l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
     pdf2r = pd.DataFrame({'c': [7, 6, 5, 4, 3, 2, 1],
                           'd': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
 
     pdf3l = pdf2l
     pdf3r = pd.DataFrame({'c': [6, 7, 8, 9],
                           'd': [5, 4, 3, 2]},
-                          index=list('abdg'))
+                         index=list('abdg'))
 
     pdf4l = pdf2l
     pdf4r = pd.DataFrame({'c': [9, 10, 11, 12],
                           'd': [5, 4, 3, 2]},
-                          index=list('abdg'))
+                         index=list('abdg'))
 
     # completely different index
     pdf5l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('lmnopqr'))
+                         index=list('lmnopqr'))
     pdf5r = pd.DataFrame({'c': [1, 1, 1, 1],
                           'd': [5, 4, 3, 2]},
-                          index=list('abcd'))
+                         index=list('abcd'))
 
     pdf6l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('cdefghi'))
+                         index=list('cdefghi'))
     pdf6r = pd.DataFrame({'c': [1, 2, 1, 2],
                           'd': [5, 4, 3, 2]},
-                          index=list('abcd'))
+                         index=list('abcd'))
 
     pdf7l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
     pdf7r = pd.DataFrame({'c': [5, 6, 7, 8],
                           'd': [5, 4, 3, 2]},
-                          index=list('fghi'))
+                         index=list('fghi'))
 
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
@@ -489,41 +489,41 @@ def test_join_by_index_patterns(how, shuffle):
     pdf2l = pdf1l
     pdf2r = pd.DataFrame({'c': list('gfedcba'),
                           'd': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
 
     pdf3l = pdf1l
     pdf3r = pd.DataFrame({'c': list('abdg'),
                           'd': [5, 4, 3, 2]},
-                          index=list('abdg'))
+                         index=list('abdg'))
 
     pdf4l = pd.DataFrame({'a': list('abcabce'),
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
     pdf4r = pd.DataFrame({'c': list('abda'),
                           'd': [5, 4, 3, 2]},
-                          index=list('abdg'))
+                         index=list('abdg'))
 
     # completely different index
     pdf5l = pd.DataFrame({'a': list('lmnopqr'),
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('lmnopqr'))
+                         index=list('lmnopqr'))
     pdf5r = pd.DataFrame({'c': list('abcd'),
                           'd': [5, 4, 3, 2]},
-                          index=list('abcd'))
+                         index=list('abcd'))
 
     pdf6l = pd.DataFrame({'a': list('cdefghi'),
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('cdefghi'))
+                         index=list('cdefghi'))
     pdf6r = pd.DataFrame({'c': list('abab'),
                           'd': [5, 4, 3, 2]},
-                          index=list('abcd'))
+                         index=list('abcd'))
 
     pdf7l = pd.DataFrame({'a': list('aabbccd'),
                           'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+                         index=list('abcdefg'))
     pdf7r = pd.DataFrame({'c': list('aabb'),
                           'd': [5, 4, 3, 2]},
-                          index=list('fghi'))
+                         index=list('fghi'))
 
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
@@ -662,7 +662,7 @@ def test_cheap_inner_merge_with_pandas_object():
     assert all('shuffle' not in k[0] for k in dc.dask)
 
     list_eq(da.merge(b, on='x', how='inner'),
-             a.merge(b, on='x', how='inner'))
+            a.merge(b, on='x', how='inner'))
 
 
 def test_cheap_single_partition_merge():
@@ -686,12 +686,12 @@ def test_merge_maintains_columns():
                         'B': list('abc'),
                         'C': 'foo',
                         'D': 1.0},
-                        columns=list('DCBA'))
+                       columns=list('DCBA'))
     rhs = pd.DataFrame({'G': [4, 5],
                         'H': 6.0,
                         'I': 'bar',
                         'B': list('ab')},
-                        columns=list('GHIB'))
+                       columns=list('GHIB'))
     ddf = dd.from_pandas(lhs, npartitions=1)
     merged = dd.merge(ddf, rhs, on='B').compute()
     assert tuple(merged.columns) == ('D', 'C', 'B', 'A', 'G', 'H', 'I')

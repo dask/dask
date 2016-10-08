@@ -28,8 +28,8 @@ def test_column_optimizations_with_bcolz_and_rewrite():
                           for i in [1, 2, 3]))
 
         expected = dict((('y', i), (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {}))
-                          for i in [1, 2, 3])
+                                    bc, slice(0, 2), (list, ['a', 'b']), {}))
+                        for i in [1, 2, 3])
 
         result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
@@ -54,7 +54,7 @@ def test_castra_column_store():
         dsk = dd.optimize(df2.dask, df2._keys())
 
         assert dsk == {(df2._name, 0): (castra.Castra.load_partition, c, '0--2',
-                                            (list, ['x']))}
+                                        (list, ['x']))}
         df3 = df.index
         dsk = dd.optimize(df3.dask, df3._keys())
         assert dsk == {(df3._name, 0): (castra.Castra.load_index, c, '0--2')}

@@ -71,10 +71,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
             compression = infer_compression(urlpath)
 
         if blocksize and compression not in seekable_files:
-            raise ValueError(
-                  "Compression %s does not support breaking apart files\n"
-                  "Use ``blocksize=None`` or decompress file externally"
-                  % compression)
+            msg = ("Compression %s does not support breaking apart files\n"
+                   "Use ``blocksize=None`` or decompress file externally")
+            raise ValueError(msg % compression)
         if compression not in seekable_files and compression not in cfiles:
             raise NotImplementedError("Compression format %s not installed" %
                                       compression)
@@ -87,8 +86,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
 
         else:
             _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
-                    blocksize=blocksize, sample=False, compression=compression,
-                    **(storage_options or {}))
+                                   blocksize=blocksize, sample=False,
+                                   compression=compression,
+                                   **(storage_options or {}))
             if isinstance(blocks[0], (tuple, list)):
                 blocks = list(concat(blocks))
             blocks = [delayed(decode)(b, encoding, errors)

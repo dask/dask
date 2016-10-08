@@ -12,6 +12,8 @@ from dask.utils import (textblock, filetext, takes_multiple_arguments,
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
+
+
 @pytest.mark.parametrize('myopen,compression',
                          [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'),
                           SKIP_XZ((LZMAFile, 'xz'))])
@@ -143,8 +145,8 @@ def test_infer_storage_options():
     assert infer_storage_options('test.csv')['path'] == 'test.csv'
 
     so = infer_storage_options(
-              'hdfs://username:pwd@Node:123/mnt/datasets/test.csv?q=1#fragm',
-              inherit_storage_options={'extra': 'value'})
+        'hdfs://username:pwd@Node:123/mnt/datasets/test.csv?q=1#fragm',
+        inherit_storage_options={'extra': 'value'})
     assert so.pop('protocol') == 'hdfs'
     assert so.pop('username') == 'username'
     assert so.pop('password') == 'pwd'

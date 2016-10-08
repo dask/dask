@@ -26,7 +26,7 @@ def open_file_write_direct(path):
 
 
 def read_bytes(path, delimiter=None, not_zero=False, blocksize=2**27,
-        sample=True, compression=None):
+               sample=True, compression=None):
     """ See dask.bytes.core.read_bytes for docstring """
     if '*' in path:
         filenames = list(map(os.path.abspath, sorted(glob(path))))

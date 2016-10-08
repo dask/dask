@@ -193,7 +193,7 @@ class RewriteRule(object):
 
     def __str__(self):
         return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs,
-                self.vars)
+                                                   self.vars)
 
     def __repr__(self):
         return str(self)

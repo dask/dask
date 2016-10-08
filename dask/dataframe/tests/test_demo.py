@@ -19,9 +19,9 @@ def test_make_timeseries():
     tm.assert_frame_equal(df.head(), df.head())
 
     a = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
-                                 freq='2D', partition_freq='6M', seed=123)
+                                freq='2D', partition_freq='6M', seed=123)
     b = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
-                                 freq='2D', partition_freq='6M', seed=123)
+                                freq='2D', partition_freq='6M', seed=123)
     tm.assert_frame_equal(a.head(), b.head())
 
 

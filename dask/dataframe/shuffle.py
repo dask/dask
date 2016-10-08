@@ -40,8 +40,8 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=True,
         index2 = index
 
     divisions = (index2
-                  ._repartition_quantiles(npartitions, upsample=upsample)
-                  .compute()).tolist()
+                 ._repartition_quantiles(npartitions, upsample=upsample)
+                 .compute()).tolist()
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          **kwargs)
@@ -211,7 +211,7 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     # Collect groups
     name = 'shuffle-collect-' + token
     dsk4 = {(name, i): (collect, p, i, df._meta, barrier_token)
-                for i in range(npartitions)}
+            for i in range(npartitions)}
 
     divisions = (None,) * (npartitions + 1)
 
@@ -254,9 +254,8 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
 
     for stage in range(1, stages + 1):
         group = dict((('shuffle-group-' + token, stage, inp),
-                      (shuffle_group,
-                        ('shuffle-join-' + token, stage - 1, inp),
-                        column, stage - 1, k, n))
+                      (shuffle_group, ('shuffle-join-' + token, stage - 1, inp),
+                       column, stage - 1, k, n))
                      for inp in inputs)
 
         split = dict((('shuffle-split-' + token, stage, i, inp),
@@ -275,7 +274,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
 
     end = dict((('shuffle-' + token, i),
                 ('shuffle-join-' + token, stages, inp))
-                for i, inp in enumerate(inputs))
+               for i, inp in enumerate(inputs))
 
     dsk = merge(df.dask, start, end, *(groups + splits + joins))
     df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
@@ -284,9 +283,8 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
         parts = partitioning_index(pd.Series(range(npartitions)),
                                    df.npartitions)
         token = tokenize(df2, npartitions)
-        dsk = {('repartition-group-' + token, i):
-               (shuffle_group_2, k, column)
-                for i, k in enumerate(df2._keys())}
+        dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
+               for i, k in enumerate(df2._keys())}
         for p in range(npartitions):
             dsk[('repartition-get-' + token, p)] = \
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)

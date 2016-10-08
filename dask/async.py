@@ -173,7 +173,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
 
     dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk)
     waiting = dict((k, v.copy()) for k, v in dependencies.items()
-                                 if k not in data_keys)
+                   if k not in data_keys)
 
     dependents = reverse_dict(dependencies)
     for a in cache:

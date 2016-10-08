@@ -514,7 +514,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     i_name = name_function(0)
     dsk[(name, 0)] = (_pd_to_hdf, pd_to_hdf, lock,
                       [(df._name, 0), fmt_obj(path_or_buf, i_name),
-                             key.replace('*', i_name)], kwargs)
+                       key.replace('*', i_name)], kwargs)
 
     kwargs2 = kwargs.copy()
     if single_file:

@@ -58,8 +58,8 @@ def test_shuffle_npatitions_task():
 
     assert len(sc) == len(df)
     assert list(s.columns) == list(df.columns)
-    assert set(map(tuple, sc.values.tolist())) == \
-           set(map(tuple, df.values.tolist()))
+    assert (set(map(tuple, sc.values.tolist())) ==
+            set(map(tuple, df.values.tolist())))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -133,7 +133,7 @@ def test_partitioning_index():
 def test_set_partition_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
-                       index=np.random.random(100))
+                      index=np.random.random(100))
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
@@ -160,7 +160,7 @@ def test_set_partition_tasks(npartitions):
 def test_set_index_self_index(shuffle):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
-                       index=np.random.random(100))
+                      index=np.random.random(100))
 
     a = dd.from_pandas(df, npartitions=4)
     b = a.set_index(a.index, shuffle=shuffle)
@@ -173,7 +173,7 @@ def test_set_index_self_index(shuffle):
 def test_set_partition_names(shuffle):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
-                       index=np.random.random(100))
+                      index=np.random.random(100))
 
     ddf = dd.from_pandas(df, npartitions=4)
 

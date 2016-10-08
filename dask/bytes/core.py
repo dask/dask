@@ -154,7 +154,7 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-                     sample=True, compression=None, **kwargs):
+               sample=True, compression=None, **kwargs):
     """ Convert path to a list of delayed values
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -208,8 +208,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                                   (protocol, urlpath))
 
     return read_bytes(storage_options.pop('path'), delimiter=delimiter,
-            not_zero=not_zero, blocksize=blocksize, sample=sample,
-            compression=compression, **storage_options)
+                      not_zero=not_zero, blocksize=blocksize, sample=sample,
+                      compression=compression, **storage_options)
 
 
 def open_files_by(open_files_backend, path, compression=None, **kwargs):
@@ -312,7 +312,7 @@ def _expand_paths(path, name_function, num):
 
 
 def open_text_files(urlpath, encoding=system_encoding, errors='strict',
-        compression=None, **kwargs):
+                    compression=None, **kwargs):
     """ Given path return dask.delayed file-like objects in text mode
 
     Parameters
@@ -365,8 +365,8 @@ def open_text_files(urlpath, encoding=system_encoding, errors='strict',
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes)
-            or (protocol in _open_files))):
+    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
+       (protocol in _open_files))):
         return
 
     if protocol == 's3':

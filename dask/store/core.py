@@ -63,7 +63,7 @@ class Store(MutableMapping):
         if key in self.dsk:
             if (self.dsk[key] == value or
                 self.dsk[key] == (getitem, self.cache, key) and
-                self.cache[key] == value):
+               self.cache[key] == value):
                 return
             else:
                 raise KeyError("Can not overwrite data")

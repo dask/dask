@@ -4,7 +4,7 @@ pytest.importorskip('numpy')
 from dask.compatibility import skip
 import dask.array as da
 from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
-        sanitize_index)
+                                sanitize_index)
 from dask.array.utils import assert_eq
 from operator import getitem
 import numpy as np
@@ -180,34 +180,28 @@ def test_slice_array_1d():
 
 def test_slice_array_2d():
     #2d slices: x[13::2,10::1]
-    expected = {('y', 0, 0): (getitem,
-                               ('x', 0, 0),
-                               (slice(13, 20, 2), slice(10, 20, 1))),
-                 ('y', 0, 1): (getitem,
-                               ('x', 0, 1),
-                               (slice(13, 20, 2), slice(None, None, None))),
-                 ('y', 0, 2): (getitem,
-                               ('x', 0, 2),
-                               (slice(13, 20, 2), slice(None, None, None)))}
+    expected = {('y', 0, 0): (getitem, ('x', 0, 0),
+                              (slice(13, 20, 2), slice(10, 20, 1))),
+                ('y', 0, 1): (getitem, ('x', 0, 1),
+                              (slice(13, 20, 2), slice(None, None, None))),
+                ('y', 0, 2): (getitem, ('x', 0, 2),
+                              (slice(13, 20, 2), slice(None, None, None)))}
 
     result, chunks = slice_array('y', 'x', [[20], [20, 20, 5]],
-                        [slice(13, None, 2), slice(10, None, 1)])
+                                 [slice(13, None, 2), slice(10, None, 1)])
 
     assert expected == result
 
     #2d slices with one dimension: x[5,10::1]
-    expected = {('y', 0): (getitem,
-                               ('x', 0, 0),
-                               (5, slice(10, 20, 1))),
-                 ('y', 1): (getitem,
-                               ('x', 0, 1),
-                               (5, slice(None, None, None))),
-                 ('y', 2): (getitem,
-                               ('x', 0, 2),
-                               (5, slice(None, None, None)))}
+    expected = {('y', 0): (getitem, ('x', 0, 0),
+                           (5, slice(10, 20, 1))),
+                ('y', 1): (getitem, ('x', 0, 1),
+                           (5, slice(None, None, None))),
+                ('y', 2): (getitem, ('x', 0, 2),
+                           (5, slice(None, None, None)))}
 
     result, chunks = slice_array('y', 'x', ([20], [20, 20, 5]),
-                        [5, slice(10, None, 1)])
+                                 [5, slice(10, None, 1)])
 
     assert expected == result
 
@@ -230,8 +224,7 @@ def test_slice_optimizations():
 
 
 def test_slicing_with_singleton_indices():
-    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
-                                    (slice(0, 5), 8))
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]), (slice(0, 5), 8))
 
     expected = {('y', 0): (getitem, ('x', 0, 1), (slice(None, None, None), 3))}
 
@@ -240,16 +233,13 @@ def test_slicing_with_singleton_indices():
 
 def test_slicing_with_newaxis():
     result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
-                            (slice(0, 3), None, slice(None, None, None)))
+                                 (slice(0, 3), None, slice(None, None, None)))
 
     expected = {
-        ('y', 0, 0, 0): (getitem,
-                          ('x', 0, 0),
-                          (slice(0, 3, 1), None, slice(None, None, None))),
-        ('y', 0, 0, 1): (getitem,
-                          ('x', 0, 1),
-                          (slice(0, 3, 1), None, slice(None, None, None)))
-      }
+        ('y', 0, 0, 0): (getitem, ('x', 0, 0),
+                         (slice(0, 3, 1), None, slice(None, None, None))),
+        ('y', 0, 0, 1): (getitem, ('x', 0, 1),
+                         (slice(0, 3, 1), None, slice(None, None, None)))}
 
     assert expected == result
     assert chunks == ((3,), (1,), (5, 5))
@@ -257,37 +247,38 @@ def test_slicing_with_newaxis():
 
 def test_take():
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
-    expected = {('y', 0):
-            (getitem,
-              (np.concatenate, (list,
-                [(getitem, ('x', 0), ([1, 3, 5],)),
-                 (getitem, ('x', 2), ([7],))]),
-               0),
-             ([2, 0, 3, 1],))}
+    expected = {
+        ('y', 0): (getitem,
+                   (np.concatenate, (list, [(getitem, ('x', 0), ([1, 3, 5],)),
+                                            (getitem, ('x', 2), ([7],))]),
+                    0),
+                   ([2, 0, 3, 1], ))}
     assert dsk == expected
     assert chunks == ((4,),)
 
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
-    expected = dict((('y', 0, j),
-            (getitem,
-              (np.concatenate, (list,
-                [(getitem, ('x', 0, j), ([1, 3, 5], slice(None, None, None))),
-                 (getitem, ('x', 2, j), ([7], slice(None, None, None)))]),
-                0),
-              ([2, 0, 3, 1], slice(None, None, None))))
-            for j in range(2))
+    expected = dict(
+        (('y', 0, j), (getitem,
+                       (np.concatenate, (list, [(getitem, ('x', 0, j),
+                                                ([1, 3, 5], slice(None, None, None))),
+                                                (getitem, ('x', 2, j),
+                                                ([7], slice(None, None, None)))]),
+                        0),
+                       ([2, 0, 3, 1], slice(None, None, None))))
+        for j in range(2))
     assert dsk == expected
     assert chunks == ((4,), (20, 20))
 
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
-    expected = dict((('y', i, 0),
-            (getitem,
-              (np.concatenate, (list,
-                [(getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])),
-                 (getitem, ('x', i, 1), (slice(None, None, None), [17]))]),
-                1),
-             (slice(None, None, None), [2, 0, 3, 1])))
-           for i in range(4))
+    expected = dict(
+        (('y', i, 0), (getitem,
+                       (np.concatenate, (list, [(getitem, ('x', i, 0),
+                                                 (slice(None, None, None), [1, 3, 5])),
+                                                (getitem, ('x', i, 1),
+                                                 (slice(None, None, None), [17]))]),
+                        1),
+                       (slice(None, None, None), [2, 0, 3, 1])))
+        for i in range(4))
     assert dsk == expected
     assert chunks == ((20, 20, 20, 20), (4,))
 
@@ -300,50 +291,44 @@ def test_take_sorted():
     assert chunks == ((3, 1),)
 
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
-    expected = merge(
-            dict((('y', i, 0),
-                  (getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])))
-                  for i in range(4)),
-            dict((('y', i, 1),
-                  (getitem, ('x', i, 1), (slice(None, None, None), [17])))
-                  for i in range(4)))
+    expected = merge(dict((('y', i, 0), (getitem, ('x', i, 0),
+                                         (slice(None, None, None), [1, 3, 5])))
+                          for i in range(4)),
+                     dict((('y', i, 1), (getitem, ('x', i, 1),
+                                         (slice(None, None, None), [17])))
+                          for i in range(4)))
     assert dsk == expected
     assert chunks == ((20, 20, 20, 20), (3, 1))
 
 
 def test_slice_lists():
     y, chunks = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
-                                ([2, 1, 9], slice(None, None, None)))
-    assert y == \
-        dict((('y', 0, i), (getitem,
-                       (np.concatenate,
-                        (list,
-                         [(getitem,
-                           ('x', 0, i),
-                           ([1, 2], slice(None, None, None))),
-                          (getitem,
-                           ('x', 3, i),
-                           ([0], slice(None, None, None))),
-                           ]),
+                            ([2, 1, 9], slice(None, None, None)))
+    exp = dict(
+        (('y', 0, i), (getitem,
+                       (np.concatenate, (list, [(getitem, ('x', 0, i),
+                                                 ([1, 2], slice(None, None, None))),
+                                                (getitem, ('x', 3, i),
+                                                 ([0], slice(None, None, None)))]),
                         0),
                        ([1, 0, 2], slice(None, None, None))))
-                for i in range(4))
-
+        for i in range(4))
+    assert y == exp
     assert chunks == ((3,), (3, 3, 3, 1))
 
 
 def test_slicing_chunks():
     result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
-                                    (1, [2, 0, 3]))
-    assert chunks == ((3,),)
+                                 (1, [2, 0, 3]))
+    assert chunks == ((3,), )
 
     result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
-                                    (slice(0, 7), [2, 0, 3]))
-    assert chunks == ((5, 2), (3,))
+                                 (slice(0, 7), [2, 0, 3]))
+    assert chunks == ((5, 2), (3, ))
 
     result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
-                                    (slice(0, 7), 1))
-    assert chunks == ((5, 2),)
+                                 (slice(0, 7), 1))
+    assert chunks == ((5, 2), )
 
 
 def test_slicing_with_numpy_arrays():
