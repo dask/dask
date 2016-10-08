@@ -696,7 +696,7 @@ def topk(k, x):
     token = tokenize(k, x)
     name = 'chunk.topk-' + token
     dsk = dict(((name, i), (chunk.topk, k, key))
-                for i, key in enumerate(x._keys()))
+               for i, key in enumerate(x._keys()))
     name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, (list, list(dsk)))),
                        slice(-1, -k - 1, -1))
@@ -786,7 +786,7 @@ def blockdims_from_blockshape(shape, chunks):
     shape = tuple(map(int, shape))
     chunks = tuple(map(int, chunks))
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
-                              for d, bd in zip(shape, chunks))
+                 for d, bd in zip(shape, chunks))
 
 
 def finalize(results):
@@ -868,8 +868,8 @@ class Array(Base):
 
     def _set_chunks(self, chunks):
         raise TypeError("Can not set chunks directly\n\n"
-            "Please use the rechunk method instead:\n"
-            "  x.rechunk(%s)" % str(chunks))
+                        "Please use the rechunk method instead:\n"
+                        "  x.rechunk(%s)" % str(chunks))
 
     chunks = property(_get_chunks, _set_chunks, "chunks property")
 
@@ -924,10 +924,10 @@ class Array(Base):
         ind = len(args)
         if ind + 1 == self.ndim:
             result = [(self.name,) + args + (i,)
-                        for i in range(self.numblocks[ind])]
+                      for i in range(self.numblocks[ind])]
         else:
             result = [self._keys(*(args + (i,)))
-                        for i in range(self.numblocks[ind])]
+                      for i in range(self.numblocks[ind])]
         if not args:
             self._cached_keys = result
         return result
@@ -1636,10 +1636,11 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
     chunks = normalize_chunks(chunks, x.shape)
     if len(chunks) != len(x.shape):
         raise ValueError("Input array has %d dimensions but the supplied "
-                "chunks has only %d dimensions" % (len(x.shape), len(chunks)))
+                         "chunks has only %d dimensions" %
+                         (len(x.shape), len(chunks)))
     if tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, x.shape))
+                         "Got chunks=%s, shape=%s" % (chunks, x.shape))
     token = tokenize(x, chunks)
     original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
@@ -1928,7 +1929,8 @@ def stack(seq, axis=0):
         axis = ndim + axis + 1
     if axis > ndim:
         raise ValueError("Axis must not be greater than number of dimensions"
-                "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
+                         "\nData has %d dimensions, but got axis=%d" %
+                         (ndim, axis))
 
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
@@ -1997,7 +1999,7 @@ def concatenate(seq, axis=0):
     bds = [a.chunks for a in seq]
 
     if not all(len(set(bds[i][j] for i in range(n))) == 1
-            for j in range(len(bds[0])) if j != axis):
+               for j in range(len(bds[0])) if j != axis):
         raise ValueError("Block shapes do not align")
 
     chunks = (seq[0].chunks[:axis] + (sum([bd[axis] for bd in bds], ()), ) +
@@ -2139,7 +2141,7 @@ def tensordot(lhs, rhs, axes=2):
 
     if len(left_axes) > 1:
         raise NotImplementedError("Simultaneous Contractions of multiple "
-                "indices not yet supported")
+                                  "indices not yet supported")
 
     if isinstance(lhs, np.ndarray):
         chunks = [(d,) for d in lhs.shape]
@@ -2253,10 +2255,10 @@ def is_scalar_for_elemwise(arg):
     >>> is_scalar_for_elemwise(np.dtype('i4'))
     True
     """
-    return (np.isscalar(arg)
-            or not isinstance(getattr(arg, 'shape', None), Iterable)
-            or isinstance(arg, np.dtype)
-            or (isinstance(arg, np.ndarray) and arg.ndim == 0))
+    return (np.isscalar(arg) or
+            not isinstance(getattr(arg, 'shape', None), Iterable) or
+            isinstance(arg, np.dtype) or
+            (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
 
 def broadcast_shapes(*shapes):
@@ -2545,6 +2547,7 @@ See the following documentation page for details:
   http://dask.pydata.org/en/latest/array-creation.html#chunks
 """.strip()
 
+
 @wraps(np.where)
 def where(condition, x=None, y=None):
     if x is None or y is None:
@@ -2728,8 +2731,8 @@ def reshape(array, shape):
                              'reshaped dimension can be evenly divided into '
                              'new chunks')
 
-        chunks = (array.chunks[:ndim_same] + (ndim_same_chunks, )
-                  + tuple((c, ) for c in shape[ndim_same + 1:]))
+        chunks = (array.chunks[:ndim_same] + (ndim_same_chunks, ) +
+                  tuple((c, ) for c in shape[ndim_same + 1:]))
 
     name = 'reshape-' + tokenize(array, shape)
 
@@ -2740,8 +2743,8 @@ def reshape(array, shape):
         index = key[1:]
         valid_index = index[:prev_index_count]
         new_key = (name,) + valid_index + (0,) * extra_zeros
-        new_shape = (tuple(chunk[i] for i, chunk in zip(valid_index, chunks))
-                     + shape[prev_index_count:])
+        new_shape = (tuple(chunk[i] for i, chunk in zip(valid_index, chunks)) +
+                     shape[prev_index_count:])
         dsk[new_key] = (np.reshape, key, new_shape)
 
     return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
@@ -3558,7 +3561,7 @@ def to_npy_stack(dirname, x, axis=0):
 
     name = 'to-npy-stack-' + str(uuid.uuid1())
     dsk = dict(((name, i), (np.save, os.path.join(dirname, '%d.npy' % i), key))
-              for i, key in enumerate(core.flatten(xx._keys())))
+               for i, key in enumerate(core.flatten(xx._keys())))
 
     Array._get(merge(dsk, xx.dask), list(dsk))
 

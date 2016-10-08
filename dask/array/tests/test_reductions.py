@@ -134,8 +134,9 @@ def test_reductions_2D(dtype):
 
 
 @pytest.mark.parametrize(['dfunc', 'func'],
-        [(da.argmin, np.argmin), (da.argmax, np.argmax),
-         (da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)])
+                         [(da.argmin, np.argmin), (da.argmax, np.argmax),
+                          (da.nanargmin, np.nanargmin),
+                          (da.nanargmax, np.nanargmax)])
 def test_arg_reductions(dfunc, func):
     x = np.random.random((10, 10, 10))
     a = da.from_array(x, chunks=(3, 4, 5))
@@ -161,7 +162,8 @@ def test_arg_reductions(dfunc, func):
 
 
 @pytest.mark.parametrize(['dfunc', 'func'],
-         [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)])
+                         [(da.nanargmin, np.nanargmin),
+                          (da.nanargmax, np.nanargmax)])
 def test_nanarg_reductions(dfunc, func):
     x = np.random.random((10, 10, 10))
     x[5] = np.nan

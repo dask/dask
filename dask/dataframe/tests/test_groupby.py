@@ -388,10 +388,10 @@ def test_split_apply_combine_on_series():
             assert eq(ddf1.groupby(ddkey).b.std(ddof),
                       pdf1.groupby(pdkey).b.std(ddof))
 
-    assert sorted(ddf1.groupby('b').a.sum().dask) == \
-           sorted(ddf1.groupby('b').a.sum().dask)
-    assert sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask) == \
-           sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask)
+    assert (sorted(ddf1.groupby('b').a.sum().dask) ==
+            sorted(ddf1.groupby('b').a.sum().dask))
+    assert (sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask) ==
+            sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask))
 
     # test raises with incorrect key
     assert raises(KeyError, lambda: ddf1.groupby('x'))

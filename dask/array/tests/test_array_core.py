@@ -167,7 +167,7 @@ def test_Array():
     assert a.numblocks == (10, 10)
 
     assert a._keys() == [[('x', i, j) for j in range(10)]
-                                     for i in range(10)]
+                         for i in range(10)]
 
     assert a.chunks == ((100,) * 10, (100,) * 10)
 
@@ -195,7 +195,7 @@ def test_keys():
     dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
     dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60))
     assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
-                                          for i in range(5)]
+                          for i in range(5)]
     d = Array({}, 'x', (), shape=())
     assert d._keys() == [('x',)]
 
@@ -210,7 +210,7 @@ def test_Array_computation():
 def test_stack():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), chunks=(2, 3))
-                for name in 'ABC']
+               for name in 'ABC']
 
     s = stack([a, b, c], axis=0)
 
@@ -219,35 +219,34 @@ def test_stack():
     assert s.shape == (3, 4, 6)
     assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
     assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
-                                          (None, colon, colon))
+                                         (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
-                                          (None, colon, colon))
+                                         (None, colon, colon))
     assert same_keys(s, stack([a, b, c], axis=0))
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
-                                            (colon, None, colon))
+                                           (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
-                                            (colon, None, colon))
+                                           (colon, None, colon))
     assert same_keys(s2, stack([a, b, c], axis=1))
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
-                                            (colon, colon, None))
+                                           (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
-                                            (colon, colon, None))
+                                           (colon, colon, None))
     assert same_keys(s2, stack([a, b, c], axis=2))
 
     assert raises(ValueError, lambda: stack([a, b, c], axis=3))
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
 
-    assert stack([a, b, c], axis=-1).chunks == \
-            stack([a, b, c], axis=2).chunks
+    assert stack([a, b, c], axis=-1).chunks == stack([a, b, c], axis=2).chunks
 
 
 def test_short_stack():
@@ -269,7 +268,7 @@ def test_stack_scalars():
 def test_concatenate():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), chunks=(2, 3))
-                for name in 'ABC']
+               for name in 'ABC']
 
     x = concatenate([a, b, c], axis=0)
 
@@ -289,8 +288,8 @@ def test_concatenate():
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
 
-    assert concatenate([a, b, c], axis=-1).chunks == \
-            concatenate([a, b, c], axis=1).chunks
+    assert (concatenate([a, b, c], axis=-1).chunks ==
+            concatenate([a, b, c], axis=1).chunks)
 
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
@@ -588,9 +587,9 @@ def test_coarsen():
     d = from_array(x, chunks=(4, 8))
 
     assert_eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
-                    coarsen(np.sum, d, {0: 2, 1: 4}))
+              coarsen(np.sum, d, {0: 2, 1: 4}))
     assert_eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
-                    coarsen(da.sum, d, {0: 2, 1: 4}))
+              coarsen(da.sum, d, {0: 2, 1: 4}))
 
 
 def test_coarsen_with_excess():
@@ -612,20 +611,20 @@ def test_insert():
     assert_eq(np.insert(x, 5, -1, axis=1), insert(a, 5, -1, axis=1))
     assert_eq(np.insert(x, -1, -1, axis=-2), insert(a, -1, -1, axis=-2))
     assert_eq(np.insert(x, [2, 3, 3], -1, axis=1),
-                 insert(a, [2, 3, 3], -1, axis=1))
+              insert(a, [2, 3, 3], -1, axis=1))
     assert_eq(np.insert(x, [2, 3, 8, 8, -2, -2], -1, axis=0),
-                 insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
+              insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
     assert_eq(np.insert(x, slice(1, 4), -1, axis=1),
-                 insert(a, slice(1, 4), -1, axis=1))
+              insert(a, slice(1, 4), -1, axis=1))
     assert_eq(np.insert(x, [2] * 3 + [5] * 2, y, axis=0),
-                 insert(a, [2] * 3 + [5] * 2, b, axis=0))
+              insert(a, [2] * 3 + [5] * 2, b, axis=0))
     assert_eq(np.insert(x, 0, y[0], axis=1),
-                 insert(a, 0, b[0], axis=1))
+              insert(a, 0, b[0], axis=1))
     assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
     assert same_keys(insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0),
-                    insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
+                     insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
 
 
 def test_multi_insert():
@@ -641,7 +640,7 @@ def test_broadcast_to():
 
     for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         assert_eq(chunk.broadcast_to(x, shape),
-                        broadcast_to(a, shape))
+                  broadcast_to(a, shape))
 
     assert raises(ValueError, lambda: broadcast_to(a, (2, 1, 6)))
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
@@ -763,7 +762,7 @@ def test_map_blocks():
 
     d = from_array(x, chunks=(8, 8))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=((4, 4, 2), (4, 4, 2)),
-            dtype=d.dtype)
+                     dtype=d.dtype)
 
     assert_eq(e, x[::2, ::2])
 
@@ -1472,7 +1471,7 @@ def test_histogram_return_type():
     # Check if return type is same as hist
     bins = np.arange(0, 11, 1, dtype='i4')
     assert_eq(da.histogram(v * 10, bins=bins)[0],
-       np.histogram(v * 10, bins=bins)[0])
+              np.histogram(v * 10, bins=bins)[0])
 
 
 def test_histogram_extra_args_and_shapes():
@@ -1485,24 +1484,24 @@ def test_histogram_extra_args_and_shapes():
     for v, bins, w in data:
         # density
         assert_eq(da.histogram(v, bins=bins, normed=True)[0],
-           np.histogram(v, bins=bins, normed=True)[0])
+                  np.histogram(v, bins=bins, normed=True)[0])
 
         # normed
         assert_eq(da.histogram(v, bins=bins, density=True)[0],
-           np.histogram(v, bins=bins, density=True)[0])
+                  np.histogram(v, bins=bins, density=True)[0])
 
         # weights
         assert_eq(da.histogram(v, bins=bins, weights=w)[0],
-           np.histogram(v, bins=bins, weights=w)[0])
+                  np.histogram(v, bins=bins, weights=w)[0])
 
         assert_eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
-           da.histogram(v, bins=bins, weights=w, density=True)[0])
+                  da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
 def test_concatenate3_2():
     x = np.array([1, 2])
     assert_eq(concatenate3([x, x, x]),
-       np.array([1, 2, 1, 2, 1, 2]))
+              np.array([1, 2, 1, 2, 1, 2]))
 
     x = np.array([[1, 2]])
     assert (concatenate3([[x, x, x], [x, x, x]]) ==
@@ -1515,29 +1514,27 @@ def test_concatenate3_2():
                       [1, 2, 1, 2]])).all()
 
     x = np.arange(12).reshape((2, 2, 3))
-    assert_eq(concatenate3([[[x, x, x],
-                      [x, x, x]],
-                     [[x, x, x],
-                      [x, x, x]]]),
-       np.array([[[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
-                  [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
-                  [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
-                  [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
+    assert_eq(concatenate3([[[x, x, x], [x, x, x]],
+                           [[x, x, x], [x, x, x]]]),
+              np.array([[[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
+                         [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
 
-                 [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
-                  [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
-                  [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
-                  [ 9, 10, 11,  9, 10, 11,  9, 10, 11]],
+                        [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
+                         [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11]],
 
-                 [[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
-                  [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
-                  [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
-                  [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
+                        [[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
+                         [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
 
-                 [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
-                  [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
-                  [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
-                  [ 9, 10, 11,  9, 10, 11,  9, 10, 11]]]))
+                        [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
+                         [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11]]]))
 
 
 def test_map_blocks3():
@@ -1665,20 +1662,18 @@ def test_point_slicing_with_full_slice():
     x = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
 
-    inds = [
-            [[1, 2, 3], None, [3, 2, 1], [5, 3, 4]],
+    inds = [[[1, 2, 3], None, [3, 2, 1], [5, 3, 4]],
             [[1, 2, 3], None, [4, 3, 2], None],
             [[1, 2, 3], [3, 2, 1]],
             [[1, 2, 3], [3, 2, 1], [3, 2, 1], [5, 3, 4]],
             [[], [], [], None],
             [np.array([1, 2, 3]), None, np.array([4, 3, 2]), None],
             [None, None, [1, 2, 3], [4, 3, 2]],
-            [None, [0, 2, 3], None, [0, 3, 2]],
-            ]
+            [None, [0, 2, 3], None, [0, 3, 2]]]
 
     for ind in inds:
         slc = [i if isinstance(i, (np.ndarray, list)) else slice(None, None)
-                for i in ind]
+               for i in ind]
         result = d.vindex[tuple(slc)]
 
         # Rotate the expected result accordingly
@@ -1730,7 +1725,7 @@ def test_array():
     x = np.ones(5, dtype='i4')
     d = da.ones(5, chunks=3, dtype='i4')
     assert_eq(da.array(d, ndmin=3, dtype='i8'),
-       np.array(x, ndmin=3, dtype='i8'))
+              np.array(x, ndmin=3, dtype='i8'))
 
 
 def test_cov():
@@ -2216,7 +2211,6 @@ def test_atop_concatenate():
 
     z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x._dtype)
     assert_eq(z, np.ones((4, 4)) * 2)
-
 
     def f(a, b, c):
         assert isinstance(a, np.ndarray)

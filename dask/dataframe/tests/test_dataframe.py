@@ -468,14 +468,14 @@ def test_map_partitions():
 
 def test_map_partitions_names():
     func = lambda x: x
-    assert sorted(dd.map_partitions(func, d, meta=d).dask) == \
-           sorted(dd.map_partitions(func, d, meta=d).dask)
-    assert sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) == \
-           sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask)
+    assert (sorted(dd.map_partitions(func, d, meta=d).dask) ==
+            sorted(dd.map_partitions(func, d, meta=d).dask))
+    assert (sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) ==
+            sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask))
 
     func = lambda x, y: x
-    assert sorted(dd.map_partitions(func, d, d, meta=d).dask) == \
-           sorted(dd.map_partitions(func, d, d, meta=d).dask)
+    assert (sorted(dd.map_partitions(func, d, d, meta=d).dask) ==
+            sorted(dd.map_partitions(func, d, d, meta=d).dask))
 
 
 def test_map_partitions_column_info():
@@ -859,7 +859,7 @@ def test_concat2():
                                    'd': [90, 80, 70]},
                                   index=[3, 4, 5])}
     meta = make_meta({'b': 'i8', 'c': 'i8', 'd': 'i8'},
-                            index=pd.Index([], 'i8'))
+                     index=pd.Index([], 'i8'))
     d = dd.DataFrame(dsk, 'y', meta, [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]
@@ -1386,7 +1386,7 @@ def test_empty_max():
     meta = make_meta({'x': 'i8'})
     a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
-                      meta, [None, None, None])
+                     meta, [None, None, None])
     assert eq(a.x.max(), 1)
 
 
@@ -1701,7 +1701,7 @@ def test_cov_corr_meta():
     df = pd.DataFrame({'a': np.array([1, 2, 3]),
                        'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
                        'c': np.array([1.0, 2.0, 3.0])},
-                       index=pd.Index([1, 2, 3], name='myindex'))
+                      index=pd.Index([1, 2, 3], name='myindex'))
     ddf = dd.from_pandas(df, npartitions=2)
     eq(ddf.corr(), df.corr())
     eq(ddf.cov(), df.cov())
@@ -1872,7 +1872,7 @@ def test_astype():
 
 def test_groupby_callable():
     a = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
-                      index=[1, 2, 3, 4])
+                     index=[1, 2, 3, 4])
     b = dd.from_pandas(a, 2)
 
     def iseven(x):
@@ -1912,7 +1912,7 @@ def test_compute_divisions():
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]},
-                       index=[1, 3, 10, 20])
+                      index=[1, 3, 10, 20])
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
 

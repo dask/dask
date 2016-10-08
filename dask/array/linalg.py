@@ -766,7 +766,7 @@ def lstsq(a, b):
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
     sdsk.update(rt.dask)
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                           np.array([0, 1], dtype=b.dtype))
+                                  np.array([0, 1], dtype=b.dtype))
     s = Array(sdsk, sname, shape=(r.shape[0], ),
               chunks=r.shape[0], dtype=ss.dtype)
 

@@ -307,8 +307,8 @@ def _nonempty_series(s, idx):
     elif is_categorical_dtype(dtype):
         entry = s.cat.categories[0]
         data = pd.Categorical([entry, entry],
-                               categories=s.cat.categories,
-                               ordered=s.cat.ordered)
+                              categories=s.cat.categories,
+                              ordered=s.cat.ordered)
     else:
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)

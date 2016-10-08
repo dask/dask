@@ -65,8 +65,9 @@ def basic_rolling_tests(p, d):
     eq(p.rolling(3, center=False).std(), d.rolling(3, center=False).std())
     eq(p.rolling(6, center=True).var(), d.rolling(6, center=True).var())
     # see note around test_rolling_dataframe for logic concerning precision
-    eq(p.rolling(7, center=True).skew(), d.rolling(7, center=True).skew(),
-                 check_less_precise=True)
+    eq(p.rolling(7, center=True).skew(),
+       d.rolling(7, center=True).skew(),
+       check_less_precise=True)
 
 
 def test_rolling_functions_series():

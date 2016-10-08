@@ -328,7 +328,7 @@ class _GroupBy(object):
         df = self.obj
         if isinstance(self.index, DataFrame):  # add index columns to dataframe
             df2 = df.assign(**{'_index_' + c: self.index[c]
-                                for c in self.index.columns})
+                               for c in self.index.columns})
             index = self.index
         elif isinstance(self.index, Series):
             df2 = df.assign(_index=self.index)

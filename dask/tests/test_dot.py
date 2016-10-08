@@ -19,6 +19,8 @@ from IPython.display import Image, SVG
 
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
+
+
 def get_label(line):
     m = label_re.match(line)
     if m:

@@ -11,6 +11,7 @@ cachey = pytest.importorskip('cachey')
 
 flag = []
 
+
 def inc(x):
     flag.append(x)
     return x + 1
@@ -50,6 +51,7 @@ def test_cache_with_number():
 def f(duration, size, *args):
     sleep(duration)
     return [0] * size
+
 
 def test_prefer_cheap_dependent():
     dsk = {'x': (f, 0.01, 10), 'y': (f, 0.000001, 1, 'x')}

@@ -14,8 +14,8 @@ from toolz import merge, join, filter, identity, valmap, groupby, pluck
 import dask
 import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
-        reduceby, reify, partition, inline_singleton_lists, optimize,
-        from_delayed)
+                           reduceby, reify, partition, inline_singleton_lists,
+                           optimize, from_delayed)
 from dask.async import get_sync
 from dask.compatibility import BZ2File, GzipFile, PY2
 from dask.utils import filetexts, tmpfile, tmpdir, raises, open
@@ -302,8 +302,8 @@ def test_var():
 def test_join():
     c = b.join([1, 2, 3], on_self=isodd, on_other=iseven)
     assert list(c) == list(join(iseven, [1, 2, 3], isodd, list(b)))
-    assert list(b.join([1, 2, 3], isodd)) == \
-            list(join(isodd, [1, 2, 3], isodd, list(b)))
+    assert (list(b.join([1, 2, 3], isodd)) ==
+            list(join(isodd, [1, 2, 3], isodd, list(b))))
     assert c.name == b.join([1, 2, 3], on_self=isodd, on_other=iseven).name
 
 
@@ -395,10 +395,8 @@ def test_lazify_task():
     task = (reify, (map, inc, [1, 2, 3]))
     assert lazify_task(task) == task
 
-    a = (reify, (map, inc,
-                      (reify, (filter, iseven, 'y'))))
-    b = (reify, (map, inc,
-                              (filter, iseven, 'y')))
+    a = (reify, (map, inc, (reify, (filter, iseven, 'y'))))
+    b = (reify, (map, inc, (filter, iseven, 'y')))
     assert lazify_task(a) == b
 
 
@@ -406,11 +404,9 @@ f = lambda x: x
 
 
 def test_lazify():
-    a = {'x': (reify, (map, inc,
-                            (reify, (filter, iseven, 'y')))),
+    a = {'x': (reify, (map, inc, (reify, (filter, iseven, 'y')))),
          'a': (f, 'x'), 'b': (f, 'x')}
-    b = {'x': (reify, (map, inc,
-                                    (filter, iseven, 'y'))),
+    b = {'x': (reify, (map, inc, (filter, iseven, 'y'))),
          'a': (f, 'x'), 'b': (f, 'x')}
     assert lazify(a) == b
 
@@ -448,7 +444,7 @@ def test_take_npartitions():
 
 
 @pytest.mark.skipif(sys.version_info[:2] == (3,3),
-    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_take_npartitions_warn():
     with pytest.warns(None):
         b.take(100)
@@ -486,7 +482,7 @@ def test_from_castra():
         with_columns = db.from_castra(c, 'x')
         with_index = db.from_castra(c, 'x', index=True)
         assert (list(default) == [{'x': i, 'y': str(i)}
-                                 for i in range(100)] or
+                                  for i in range(100)] or
                 list(default) == [(i, str(i)) for i in range(100)])
         assert list(with_columns) == list(range(100))
         assert list(with_index) == list(zip(range(100), range(100)))
@@ -506,10 +502,10 @@ def test_from_url():
 
 def test_read_text():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
-        assert set(line.strip() for line in db.read_text(fns)) == \
-                set('ABCD')
-        assert set(line.strip() for line in db.read_text('a*.log')) == \
-                set('ABCD')
+        assert (set(line.strip() for line in db.read_text(fns)) ==
+                set('ABCD'))
+        assert (set(line.strip() for line in db.read_text('a*.log')) ==
+                set('ABCD'))
 
     assert raises(ValueError, lambda: db.read_text('non-existent-*-path'))
 
@@ -607,8 +603,7 @@ def test_partition_collect():
         assert set(p.get(1)) == set([1, 4])
         assert set(p.get(2)) == set([2, 5])
 
-        assert sorted(collect(identity, 0, p, '')) == \
-                [(0, [0]), (3, [3])]
+        assert sorted(collect(identity, 0, p, '')) == [(0, [0]), (3, [3])]
 
 
 def test_groupby():

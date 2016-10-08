@@ -227,7 +227,7 @@ def create_merge_tree(func, keys, token):
         groups = tree_groups(prev_width, width)
         keys = [(token, level, i) for i in range(width)]
         rv.update((key, (func, list(take(num, prev_keys))))
-                   for num, key in zip(groups, keys))
+                  for num, key in zip(groups, keys))
         prev_width = width
         prev_keys = iter(keys)
         level += 1

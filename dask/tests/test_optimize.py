@@ -4,8 +4,8 @@ from functools import partial
 from dask.utils import raises
 from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias, equivalent, sync_keys, merge_sync, fuse_getitem,
-        fuse_selections)
+                           dealias, equivalent, sync_keys, merge_sync,
+                           fuse_getitem, fuse_selections)
 
 
 def double(x):
@@ -36,72 +36,63 @@ def test_fuse():
                    'a': 1,
                    'b': 2}
     assert dependencies == {'a': set(), 'b': set(), 'w': set(['a', 'b'])}
-    assert fuse({
-        'NEW': (inc, 'y'),
-        'w': (inc, 'x'),
-        'x': (inc, 'y'),
-        'y': (inc, 'z'),
-        'z': (add, 'a', 'b'),
-        'a': 1,
-        'b': 2,
-    }) == ({
-        'NEW': (inc, 'y'),
-        'w': (inc, (inc, 'y')),
-        'y': (inc, (add, 'a', 'b')),
-        'a': 1,
-        'b': 2,
-    },
-    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
-     'w': set(['y']), 'NEW': set(['y'])})
+    assert (fuse({'NEW': (inc, 'y'),
+                  'w': (inc, 'x'),
+                  'x': (inc, 'y'),
+                  'y': (inc, 'z'),
+                  'z': (add, 'a', 'b'),
+                  'a': 1,
+                  'b': 2}) ==
+            ({'NEW': (inc, 'y'),
+              'w': (inc, (inc, 'y')),
+              'y': (inc, (add, 'a', 'b')),
+              'a': 1,
+              'b': 2},
+             {'a': set(), 'b': set(), 'y': set(['a', 'b']),
+              'w': set(['y']), 'NEW': set(['y'])}))
 
-    assert fuse({
-        'v': (inc, 'y'),
-        'u': (inc, 'w'),
-        'w': (inc, 'x'),
-        'x': (inc, 'y'),
-        'y': (inc, 'z'),
-        'z': (add, 'a', 'b'),
-        'a': (inc, 'c'),
-        'b': (inc, 'd'),
-        'c': 1,
-        'd': 2,
-    }) == ({
-        'u': (inc, (inc, (inc, 'y'))),
-        'v': (inc, 'y'),
-        'y': (inc, (add, 'a', 'b')),
-        'a': (inc, 1),
-        'b': (inc, 2),
-    },
-    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
-     'v': set(['y']), 'u': set(['y'])})
-    assert fuse({
-        'a': (inc, 'x'),
-        'b': (inc, 'x'),
-        'c': (inc, 'x'),
-        'd': (inc, 'c'),
-        'x': (inc, 'y'),
-        'y': 0,
-    }) == ({
-        'a': (inc, 'x'),
-        'b': (inc, 'x'),
-        'd': (inc, (inc, 'x')),
-        'x': (inc, 0),
-    },
-    {'x': set(), 'd': set(['x']), 'a': set(['x']), 'b': set(['x'])})
-    assert fuse({
-        'a': 1,
-        'b': (inc, 'a'),
-        'c': (add, 'b', 'b')
-    }) == ({
-        'b': (inc, 1),
-        'c': (add, 'b', 'b')
-        }, {'b': set(), 'c': set(['b'])})
+    assert (fuse({'v': (inc, 'y'),
+                  'u': (inc, 'w'),
+                  'w': (inc, 'x'),
+                  'x': (inc, 'y'),
+                  'y': (inc, 'z'),
+                  'z': (add, 'a', 'b'),
+                  'a': (inc, 'c'),
+                  'b': (inc, 'd'),
+                  'c': 1,
+                  'd': 2}) ==
+            ({'u': (inc, (inc, (inc, 'y'))),
+              'v': (inc, 'y'),
+              'y': (inc, (add, 'a', 'b')),
+              'a': (inc, 1),
+              'b': (inc, 2)},
+             {'a': set(), 'b': set(), 'y': set(['a', 'b']),
+              'v': set(['y']), 'u': set(['y'])}))
+
+    assert (fuse({'a': (inc, 'x'),
+                  'b': (inc, 'x'),
+                  'c': (inc, 'x'),
+                  'd': (inc, 'c'),
+                  'x': (inc, 'y'),
+                  'y': 0}) ==
+            ({'a': (inc, 'x'),
+              'b': (inc, 'x'),
+              'd': (inc, (inc, 'x')),
+              'x': (inc, 0)},
+             {'x': set(), 'd': set(['x']),
+              'a': set(['x']), 'b': set(['x'])}))
+
+    assert (fuse({'a': 1,
+                  'b': (inc, 'a'),
+                  'c': (add, 'b', 'b')}) ==
+            ({'b': (inc, 1),
+              'c': (add, 'b', 'b')},
+             {'b': set(), 'c': set(['b'])}))
 
 
 def test_fuse_keys():
-    assert (fuse({'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}, keys=['b'])
-            == ({'b': (inc, 1), 'c': (inc, 'b')},
-                {'b': set(), 'c': set(['b'])}))
+    assert (fuse({'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}, keys=['b']) ==
+            ({'b': (inc, 1), 'c': (inc, 'b')}, {'b': set(), 'c': set(['b'])}))
     dsk, dependencies = fuse({
         'w': (inc, 'x'),
         'x': (inc, 'y'),
@@ -328,7 +319,7 @@ def test_merge_sync():
     dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     new_dsk, key_map = merge_sync(dsk1, dsk2)
     assert new_dsk == {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5),
-            'z': (mul, 'b', 2)}
+                       'z': (mul, 'b', 2)}
     assert key_map == {'x': 'a', 'y': 'b', 'z': 'z'}
 
     dsk1 = {'g1': 1,
@@ -351,7 +342,7 @@ def test_merge_sync():
                        'h4': (add, 'h2', 1),
                        'h5': (mul, (inc, 'g3'), (inc, 'h4'))}
     assert key_map == {'h1': 'g1', 'h2': 'h2', 'h3': 'g3',
-            'h4': 'h4', 'h5': 'h5'}
+                       'h4': 'h4', 'h5': 'h5'}
 
     # Test merging with name conflict
     # Reset name count to ensure same numbers

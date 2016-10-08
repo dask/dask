@@ -229,11 +229,9 @@ def rechunk(x, chunks):
             for i in range(ndim - 1):
                 temp = getitem(temp, ind_in_blk[i])
             for ind, slc in zip(old_inds, slic):
-                name = (('rechunk-split-' + token,)
-                        + tuple(ind)
-                        + sum([(s.start, s.stop) for s in slc], ()))
-                intermediates[name] = (getitem, (x.name,) + tuple(ind),
-                                                 tuple(slc))
+                name = (('rechunk-split-' + token, ) + tuple(ind) +
+                        sum([(s.start, s.stop) for s in slc], ()))
+                intermediates[name] = (getitem, (x.name,) + tuple(ind), tuple(slc))
                 temp[ind_in_blk[-1]] = name
         x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2, intermediates)

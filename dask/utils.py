@@ -429,14 +429,16 @@ def file_size(fn, compression=None):
 
 
 ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
-    classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset,
-    hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range,
-    repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple,
-    type, vars, zip, memoryview])
+                          classmethod, complex, dict, dir, enumerate, eval,
+                          float, format, frozenset, hash, hex, id, int, iter,
+                          len, list, max, min, next, oct, open, ord, range,
+                          repr, reversed, round, set, slice, sorted,
+                          staticmethod, str, sum, tuple,
+                          type, vars, zip, memoryview])
 if PY3:
     ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
 MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
-    isinstance, issubclass, map, pow, setattr])
+                            isinstance, issubclass, map, pow, setattr])
 
 
 def takes_multiple_arguments(func):
@@ -613,8 +615,8 @@ def ensure_bytes(s):
         return s
     if hasattr(s, 'encode'):
         return s.encode()
-    raise TypeError(
-            "Object %s is neither a bytes object nor has an encode method" % s)
+    msg = "Object %s is neither a bytes object nor has an encode method"
+    raise TypeError(msg % s)
 
 
 def digit(n, k, base):

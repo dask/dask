@@ -45,7 +45,7 @@ def percentile(a, q, interpolation='linear'):
     token = tokenize(a, list(q), interpolation)
     name = 'percentile_chunk-' + token
     dsk = dict(((name, i), (_percentile, (key), q, interpolation))
-            for i, key in enumerate(a._keys()))
+               for i, key in enumerate(a._keys()))
 
     name2 = 'percentile-' + token
     dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),

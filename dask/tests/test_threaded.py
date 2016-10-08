@@ -44,6 +44,7 @@ def test_reuse_pool():
 
 def test_threaded_within_thread():
     L = []
+
     def f(i):
         result = get({'x': (lambda: i,)}, 'x', num_workers=2)
         L.append(result)

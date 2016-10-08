@@ -300,7 +300,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
                             how, left_on, right_on,
                             left_index, right_index, indicator))
-                for i in range(npartitions))
+               for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
     return DataFrame(toolz.merge(lhs2.dask, rhs2.dask, dsk),
@@ -346,7 +346,7 @@ def _pdconcat(dfs, axis=0, join='outer'):
                 if isinstance(base, pd.Series) and len(base) == 0:
                     # use aligned index to keep index for outer concat
                     return pd.Series([np.nan] * len(fillby),
-                                      index=fillby.index, name=base.name)
+                                     index=fillby.index, name=base.name)
                 else:
                     return base
 
@@ -371,7 +371,7 @@ def concat_unindexed_dataframes(dfs):
     name = 'concat-' + tokenize(*dfs)
 
     dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
-            for i in range(dfs[0].npartitions)}
+           for i in range(dfs[0].npartitions)}
 
     meta = pd.concat([df._meta for df in dfs], axis=1)
 
@@ -398,7 +398,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
     name = 'concat-indexed-' + tokenize(join, *dfs)
     dsk = dict(((name, i), (_pdconcat, part, axis, join))
-                for i, part in enumerate(parts2))
+               for i, part in enumerate(parts2))
 
     return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs2]),
                          name, meta, divisions)

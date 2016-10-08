@@ -83,7 +83,7 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
                                    blocksize, sample=sample,
                                    compression=compression)
         rest = [read_bytes(f, s3, delimiter, not_zero, blocksize,
-                       sample=False, compression=compression)[1]
+                           sample=False, compression=compression)[1]
                 for f in filenames[1:]]
         return sample, [first] + rest
     else:
@@ -105,10 +105,11 @@ def read_bytes(path, s3=None, delimiter=None, not_zero=False, blocksize=2**27,
 
         delayed_read_block_from_s3 = delayed(read_block_from_s3)
         values = [delayed_read_block_from_s3(s3_path, offset, blocksize,
-                    delimiter=delimiter, compression=compression,
-                    dask_key_name='read-block-s3-%s-%d' % (token, offset),
-                    **s3_storage_options)
-                    for offset in offsets]
+                                             delimiter=delimiter,
+                                             compression=compression,
+                                             dask_key_name='read-block-s3-%s-%d' % (token, offset),
+                                             **s3_storage_options)
+                  for offset in offsets]
 
         if sample:
             if isinstance(sample, int) and not isinstance(sample, bool):
@@ -159,6 +160,7 @@ def open_file_write_direct(path, s3=None, **kwargs):
     if s3 is None:
         s3 = _get_s3(**kwargs)
     return s3.open(bucket + path, 'wb')
+
 
 def open_files(path, s3=None, **kwargs):
     """ Open many files.  Return delayed objects.

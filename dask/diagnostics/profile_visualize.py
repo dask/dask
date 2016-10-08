@@ -242,15 +242,15 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
 
         id_group = tz.groupby(itemgetter(4), results)
         timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                    id_group.items())
+                       id_group.items())
         id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                    key=itemgetter(1), reverse=True)))
+                     key=itemgetter(1), reverse=True)))
 
         left = min(starts)
         right = max(ends)
 
         p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                    x_range=[0, right - left], **defaults)
+                      x_range=[0, right - left], **defaults)
 
         data = {}
         data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
@@ -263,7 +263,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
         source = bp.ColumnDataSource(data=data)
 
         p.rect(source=source, x='x', y='y', height=1, width='width',
-            color='color', line_color='gray')
+               color='color', line_color='gray')
     else:
         p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
                       **defaults)

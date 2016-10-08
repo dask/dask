@@ -2,6 +2,7 @@ from dask.context import set_options, _globals
 import dask.array as da
 import dask
 
+
 def test_with_get():
     var = [0]
 

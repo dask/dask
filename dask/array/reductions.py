@@ -41,11 +41,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
                         in enumerate(tmp.chunks))
 
     return _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
-                       combine, name=name)
+                        combine, name=name)
 
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
-                combine=None, name=None):
+                 combine=None, name=None):
     """Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
@@ -95,7 +95,7 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
     >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
     """
     name = (name or funcname(func)) + '-' + tokenize(func, x, split_every,
-                                                   keepdims, dtype)
+                                                     keepdims, dtype)
     parts = [list(partition_all(split_every.get(i, 1), range(n))) for (i, n)
              in enumerate(x.numblocks)]
     keys = product(*map(range, map(len, parts)))
@@ -222,7 +222,7 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
     result = np.empty(shape=n.shape,
-              dtype=[('total', total.dtype), ('n', n.dtype)])
+                      dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result

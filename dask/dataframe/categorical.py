@@ -104,14 +104,13 @@ def strip_categories(df):
     1  2  1
     2  3  0
     """
+    index = df.index.codes if is_categorical_dtype(df.index) else df.index
     return pd.DataFrame(dict((col, df[col].cat.codes.values
-                                   if is_categorical_dtype(df[col])
-                                   else df[col].values)
-                              for col in df.columns),
+                              if is_categorical_dtype(df[col])
+                              else df[col].values)
+                             for col in df.columns),
                         columns=df.columns,
-                        index=df.index.codes
-                              if is_categorical_dtype(df.index)
-                              else df.index)
+                        index=index)
 
 
 def iscategorical(dt):
