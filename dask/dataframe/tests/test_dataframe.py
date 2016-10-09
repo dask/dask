@@ -1,6 +1,5 @@
 import sys
 from operator import getitem
-from io import StringIO
 
 import pandas as pd
 import pandas.util.testing as tm
