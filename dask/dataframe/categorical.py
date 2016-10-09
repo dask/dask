@@ -13,14 +13,6 @@ else:
     from pandas.core.common import is_categorical_dtype
 
 
-def _get_categorical_columns(df):
-
-    dtypes = df.dtypes
-    columns = [name for name, dt in zip(dtypes.index, dtypes.values)
-               if is_categorical_dtype(dt)]
-    return columns
-
-
 def _categorize_block(df, categories):
     """ Categorize a dataframe with given categories
 
@@ -111,10 +103,6 @@ def strip_categories(df):
                              for col in df.columns),
                         columns=df.columns,
                         index=index)
-
-
-def iscategorical(dt):
-    return isinstance(dt, pd.types.dtypes.CategoricalDtype)
 
 
 def get_categories(df):
