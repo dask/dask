@@ -2385,8 +2385,8 @@ class DataFrame(_Frame):
                               False, False, None, args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
-    def applymap(self, func):
-        return elemwise(M.applymap, self, func)
+    def applymap(self, func, meta='__no_default__'):
+        return elemwise(M.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
