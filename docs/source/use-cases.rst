@@ -132,7 +132,7 @@ the analyst is already very comfortable.
    df = dd.read_csv('hdfs://data/2016-*.*.csv', parse_dates=['timestamp'])
    df.groupby(df.timestamp.dt.hour).value.mean().compute()
 
-.. _HDFS3: http://hdfs3.readthedocs.io/en/latest/
+.. _HDFS3: https://hdfs3.readthedocs.io/en/latest/
 
 
 Directories of custom format files
@@ -304,8 +304,8 @@ Their algorithm is written the same in all cases, drastically reducing the
 cognitive load, and letting the readers of their work experiment with their
 system on their own machines, aiding reproducibility.
 
-.. _`distributed diagnostics`: http://distributed.readthedocs.io/en/latest/web.html
-.. _dask-ec2: http://distributed.readthedocs.io/en/latest/ec2.html
+.. _`distributed diagnostics`: https://distributed.readthedocs.io/en/latest/web.html
+.. _dask-ec2: https://distributed.readthedocs.io/en/latest/ec2.html
 
 
 Scikit-Learn or Joblib User
@@ -354,8 +354,8 @@ resources.  They contact these users and teach them how to launch_ their own
 dask.distributed clusters using the traditional job scheduler on their cluster,
 making space for more new users in the sandbox allocation.
 
-.. _`dask.distributed quickstart`: http://distributed.readthedocs.io/en/latest/quickstart.html
-.. _launch: http://distributed.readthedocs.io/en/latest/setup.html
+.. _`dask.distributed quickstart`: https://distributed.readthedocs.io/en/latest/quickstart.html
+.. _launch: https://distributed.readthedocs.io/en/latest/setup.html
 
 
 Financial Modeling Team
@@ -400,7 +400,7 @@ produce a rudimentary but effective stream processing system.
 Because dask.distributed is elastic, they can scale up or scale down their
 cluster resources in response to demand.
 
-.. _`combine dask.distributed with normal Python Queues`: http://distributed.readthedocs.io/en/latest/queues.html
+.. _`combine dask.distributed with normal Python Queues`: https://distributed.readthedocs.io/en/latest/queues.html
 
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
-.. _dask.distributed: http://distributed.readthedocs.io/en/latest/
+.. _dask.distributed: https://distributed.readthedocs.io/en/latest/
