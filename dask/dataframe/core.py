@@ -1689,11 +1689,11 @@ class Series(_Frame):
     def _bind_comparison_method(cls, name, comparison):
         """ bind comparison method like DataFrame.add to this class """
 
-        def meth(self, other, level=None, fill_value=None, axis=0):
+        def meth(self, other, level=None, axis=0):
             if level is not None:
                 raise NotImplementedError('level must be None')
             axis = self._validate_axis(axis)
-            return elemwise(comparison, self, other, fill_value=fill_value, axis=axis)
+            return elemwise(comparison, self, other, axis=axis)
 
         meth.__doc__ = comparison.__doc__
         bind_method(cls, name, meth)
@@ -2463,7 +2463,7 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
 for name in ['add', 'sub', 'mul', 'div',
              'truediv', 'floordiv', 'mod', 'pow',
              'radd', 'rsub', 'rmul', 'rdiv',
-             'rtruediv', 'rfloordiv', 'rmod', 'rpow', 'eq']:
+             'rtruediv', 'rfloordiv', 'rmod', 'rpow']:
     meth = getattr(pd.DataFrame, name)
     DataFrame._bind_operator_method(name, meth)
 
