@@ -2477,6 +2477,7 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
     meth = getattr(pd.Series, name)
     Series._bind_comparison_method(name, meth)
 
+
 def elemwise_property(attr, s):
     meta = pd.Series([], dtype=getattr(s._meta, attr).dtype)
     return map_partitions(getattr, s, attr, meta=meta)
