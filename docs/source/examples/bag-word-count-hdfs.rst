@@ -223,5 +223,5 @@ The complete Python script for this example is shown below:
    results = e.gather(future)
    print(results)
 
-.. _distributed: http://distributed.readthedocs.io/en/latest/
-.. _hdfs3: http://hdfs3.readthedocs.io/en/latest/
+.. _distributed: https://distributed.readthedocs.io/en/latest/
+.. _hdfs3: https://hdfs3.readthedocs.io/en/latest/

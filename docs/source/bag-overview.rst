@@ -6,7 +6,7 @@ Dask.Bag implements a operations like ``map``, ``filter``, ``fold``, and
 small memory using Python iterators.  It is similar to a parallel version of
 PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 
-.. _PyToolz: http://toolz.readthedocs.io/en/latest/
+.. _PyToolz: https://toolz.readthedocs.io/en/latest/
 .. _`PySpark RDD`: http://spark.apache.org/docs/latest/api/python/pyspark.html
 
 Design

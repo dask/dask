@@ -65,7 +65,7 @@ on a distributed cluster.  This allows computations to scale to significantly
 larger problems.  This doesn't come for free though, as you will need to `setup
 the distributed scheduler`_ on those machines.
 
-.. _`setup the distributed scheduler`: http://distributed.readthedocs.io/en/latest/setup.html
+.. _`setup the distributed scheduler`: https://distributed.readthedocs.io/en/latest/setup.html
 
 Distributed Scheduler on a Single Machine
 -----------------------------------------
@@ -80,7 +80,7 @@ default by creating a ``dask.distributed.Executor`` with no arguments.
    from dask.distributed import Executor
    e = Executor(set_as_default=True)
 
-.. _`distributed scheduler`: http://distributed.readthedocs.io/en/latest/
+.. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
 
 Diagnostics
 ~~~~~~~~~~~
@@ -88,7 +88,7 @@ Diagnostics
 One reason to do this is to get access to the pleasant `web interface`_, which
 gives a real-time visualization of what's computing on your cores.
 
-.. _`web interface`: http://distributed.readthedocs.io/en/latest/web.html
+.. _`web interface`: https://distributed.readthedocs.io/en/latest/web.html
 
 Asynchronous Interface
 ~~~~~~~~~~~~~~~~~~~~~~

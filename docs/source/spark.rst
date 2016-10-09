@@ -53,7 +53,7 @@ scheduling, low memory footprints, shared memory, and efficient use of local
 disk.  That being said dask can run on a distributed_ cluster, making use of
 HDFS and other Big Data technologies.
 
-.. _distributed: http://distributed.readthedocs.io/
+.. _distributed: https://distributed.readthedocs.io/
 
 
 Java Python Performance

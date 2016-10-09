@@ -62,7 +62,7 @@ Delayed
 Distributed Concurrent.futures
 ------------------------------
 
-`Concurrent.futures documentation <http://distributed.readthedocs.io/en/latest/quickstart.html#map-and-submit-functions>`_
+`Concurrent.futures documentation <https://distributed.readthedocs.io/en/latest/quickstart.html#map-and-submit-functions>`_
 
 *  `Custom workflows <https://gist.github.com/mrocklin/ef9ccd29a6ec5f4de84d6192be95042a>`_
 *  `Ad Hoc Distributed Random Forests <https://gist.github.com/mrocklin/9f5720d8658e5f2f66666815b1f03f00>`_

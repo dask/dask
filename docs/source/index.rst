@@ -35,7 +35,7 @@ Dask emphasizes the following virtues:
    :align: center
 
 See the `dask.distributed documentation (separate website)
-<http://distributed.readthedocs.io/en/latest/>`_ for more technical information
+<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
 on Dask's distributed scheduler,
 
 Familiar user interface
@@ -265,8 +265,8 @@ Dask is part of the Blaze_ project supported and offered by
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/dask/dask
-.. _`xarray`: http://xray.readthedocs.org/en/stable/
+.. _`xarray`: https://xray.readthedocs.io/en/stable/
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
-.. _`distributed scheduler`: http://distributed.readthedocs.org/en/latest/
+.. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/

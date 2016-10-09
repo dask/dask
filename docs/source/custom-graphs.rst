@@ -87,4 +87,4 @@ paradigms.  One should inspect all such projects before selecting one.
 .. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
 .. _`Concurrent.futures`: https://docs.python.org/3/library/concurrent.futures.html
-.. _Luigi: http://luigi.readthedocs.io
+.. _Luigi: https://luigi.readthedocs.io

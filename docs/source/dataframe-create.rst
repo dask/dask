@@ -154,7 +154,7 @@ your path:
    >>> df = dd.read_csv('s3://bucket/key/2015-*-*.csv')  # Amazon's S3
 
 These functions are more useful if you are connected to a `dask.distributed
-<http://distributed.readthedocs.io/en/latest/>`_ cluster.
+<https://distributed.readthedocs.io/en/latest/>`_ cluster.
 
 
 Write DataFrames to Disk
