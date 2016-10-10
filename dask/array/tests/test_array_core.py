@@ -29,7 +29,8 @@ from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
                              broadcast_to, reshape, fromfunction,
                              blockdims_from_blockshape, store, optimize,
                              from_func, normalize_chunks, broadcast_chunks,
-                             atop, from_delayed, concatenate_axes)
+                             atop, from_delayed, concatenate_axes,
+                             common_blockdim)
 from dask.array.utils import assert_eq
 
 # temporary until numpy functions migrated
@@ -2235,3 +2236,50 @@ def test_atop_concatenate():
     z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
              dtype=x._dtype)
     assert_eq(z, np.ones(10))
+
+
+def test_common_blockdim():
+    assert common_blockdim([(5,), (5,)]) == (5,)
+    assert common_blockdim([(5,), (2, 3,)]) == (2, 3)
+    assert common_blockdim([(5, 5), (2, 3, 5)]) == (2, 3, 5)
+    assert common_blockdim([(5, 5), (2, 3, 5)]) == (2, 3, 5)
+    assert common_blockdim([(5, 2, 3), (2, 3, 5)]) == (2, 3, 2, 3)
+
+    assert common_blockdim([(1, 2), (2, 1)]) == (1, 1, 1)
+    assert common_blockdim([(1, 2, 2), (2, 1, 2), (2, 2, 1)]) == (1, 1, 1, 1, 1)
+
+
+def test_uneven_chunks_that_fit_neatly():
+    x = da.arange(10, chunks=((5, 5),))
+    y = da.ones(10, chunks=((5, 2, 3),))
+
+    assert_eq(x + y, np.arange(10) + np.ones(10))
+
+    z = x + y
+    assert z.chunks == ((5, 2, 3),)
+
+
+def test_elemwise_uneven_chunks():
+    x = da.arange(10, chunks=((4, 6),))
+    y = da.ones(10, chunks=((6, 4),))
+
+    assert_eq(x + y, np.arange(10) + np.ones(10))
+
+    z = x + y
+    assert z.chunks == ((4, 2, 4),)
+
+    x = da.random.random((10, 10), chunks=((4, 6), (5, 2, 3)))
+    y = da.random.random((4, 10, 10), chunks=((2, 2), (6, 4), (2, 3, 5)))
+
+    z = x + y
+    assert_eq(x + y, x.compute() + y.compute())
+    assert z.chunks == ((2, 2), (4, 2, 4), (2, 3, 2, 3))
+
+
+def test_uneven_chunks_atop():
+    x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
+    y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
+    z = atop(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x._dtype, concatenate=True)
+    assert z.chunks == (x.chunks[0], y.chunks[1])
+
+    assert_eq(z, x.compute().dot(y))
