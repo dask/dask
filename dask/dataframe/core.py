@@ -102,7 +102,11 @@ class Scalar(Base):
         # objects.
         self.dask = dsk
         self._name = name
-        self._meta = make_meta(meta)
+        meta = make_meta(meta)
+        if isinstance(meta, (pd.DataFrame, pd.Series, pd.Index)):
+            raise ValueError("Expected meta to specify scalar, got "
+                             "{0}".format(type(meta).__name__))
+        self._meta = meta
 
     @property
     def _meta_nonempty(self):
@@ -2760,7 +2764,12 @@ def quantile(df, q):
     from dask.array.percentile import _percentile, merge_percentiles
 
     # currently, only Series has quantile method
-    if isinstance(q, (list, tuple, np.ndarray)):
+    if isinstance(df, Index):
+        meta = pd.Series(df._meta_nonempty).quantile(q)
+    else:
+        meta = df._meta_nonempty.quantile(q)
+
+    if isinstance(meta, pd.Series):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
         finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
@@ -2769,11 +2778,6 @@ def quantile(df, q):
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
         return_type = Scalar
         q = [q]
-
-    if isinstance(df, Index):
-        meta = pd.Series(df._meta_nonempty).quantile(q)
-    else:
-        meta = df._meta_nonempty.quantile(q)
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
