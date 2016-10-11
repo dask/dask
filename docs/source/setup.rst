@@ -174,3 +174,21 @@ This is typically enforced through external means, such as by having a network
 file system (NFS) mount for libraries, by starting the ``dask-worker``
 processes in equivalent docker containers, or through any of the other means
 typically employed by cluster administrators.
+
+Windows
+~~~~~~~
+
+.. note::
+
+  - Running a ``dask-scheduler`` on Windows architectures is supported for only a
+    limited number of workers (roughly 100). This is a detail of the underlying tcp server
+    implementation and is discussed `here`__.
+
+  - Running ``dask-worker`` processes on Windows is well supported, performant, and without limit.
+
+If you wish to run in a primarily Windows environment, it is recommneded
+to run a ``dask-scheduler`` on a linux or MacOSX environment, with ``dask-worker`` workers
+on the Windows boxes. This works because the scheduler environment is de-coupled from that of
+the workers.
+
+__ https://github.com/jfisteus/ztreamy/issues/26
