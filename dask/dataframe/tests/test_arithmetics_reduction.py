@@ -238,6 +238,12 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
         assert eq(l <= r, el <= er)
         assert eq(l == r, el == er)
         assert eq(l != r, el != er)
+        assert eq(l.lt(r), el.lt(er))
+        assert eq(l.gt(r), el.gt(er))
+        assert eq(l.le(r), el.le(er))
+        assert eq(l.ge(r), el.ge(er))
+        assert eq(l.ne(r), el.ne(er))
+        assert eq(l.eq(r), el.eq(er))
 
     assert eq(l + 2, el + 2)
     assert eq(l * 2, el * 2)
@@ -272,6 +278,13 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert eq(2 <= r, 2 <= er)
     assert eq(2 == r, 2 == er)
     assert eq(2 != r, 2 != er)
+
+    assert eq(l.lt(2), el.lt(2))
+    assert eq(l.gt(2), el.gt(2))
+    assert eq(l.le(2), el.le(2))
+    assert eq(l.ge(2), el.ge(2))
+    assert eq(l.ne(2), el.ne(2))
+    assert eq(l.eq(2), el.eq(2))
 
     assert eq(-l, -el)
     assert eq(abs(l), abs(el))
@@ -309,6 +322,12 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
         assert eq(l <= r, el <= er)
         assert eq(l == r, el == er)
         assert eq(l != r, el != er)
+        assert eq(l.lt(r), el.lt(er))
+        assert eq(l.gt(r), el.gt(er))
+        assert eq(l.le(r), el.le(er))
+        assert eq(l.ge(r), el.ge(er))
+        assert eq(l.ne(r), el.ne(er))
+        assert eq(l.eq(r), el.eq(er))
 
     assert eq(l + 2, el + 2)
     assert eq(l * 2, el * 2)
@@ -343,6 +362,13 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert eq(2 <= l, 2 <= el)
     assert eq(2 == l, 2 == el)
     assert eq(2 != l, 2 != el)
+
+    assert eq(l.lt(2), el.lt(2))
+    assert eq(l.gt(2), el.gt(2))
+    assert eq(l.le(2), el.le(2))
+    assert eq(l.ge(2), el.ge(2))
+    assert eq(l.ne(2), el.ne(2))
+    assert eq(l.eq(2), el.eq(2))
 
     assert eq(-l, -el)
     assert eq(abs(l), abs(el))
