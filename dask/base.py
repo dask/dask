@@ -316,7 +316,13 @@ with ignoring(ImportError):
         if not x.shape:
             return (str(x), x.dtype)
         if hasattr(x, 'mode') and getattr(x, 'filename', None):
-            return x.filename, os.path.getmtime(x.filename), x.dtype, x.shape
+            if hasattr(x.base, 'ctypes'):
+                offset = (x.ctypes.get_as_parameter().value -
+                          x.base.ctypes.get_as_parameter().value)
+            else:
+                offset = 0  # root memmap's have mmap object as base
+            return (x.filename, os.path.getmtime(x.filename), x.dtype,
+                    x.shape, x.strides, offset)
         if x.dtype.hasobject:
             try:
                 data = md5('-'.join(x.flat).encode('utf-8')).hexdigest()
