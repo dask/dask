@@ -123,6 +123,19 @@ def test_tokenize_numpy_memmap():
 
     assert y != z
 
+    with tmpfile('.npy') as fn:
+        x = np.random.normal(size=(10, 10))
+        np.save(fn, x)
+        mm = np.load(fn, mmap_mode='r')
+        mm2 = np.load(fn, mmap_mode='r')
+        a = tokenize(mm[0, :])
+        b = tokenize(mm[1, :])
+        c = tokenize(mm[0:3, :])
+        d = tokenize(mm[:, 0])
+        assert len(set([a, b, c, d])) == 4
+        assert tokenize(mm) == tokenize(mm2)
+        assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
+
 
 @pytest.mark.skipif('not np')
 def test_tokenize_numpy_memmap_no_filename():
