@@ -13,5 +13,5 @@ from .rolling import (rolling_count, rolling_sum, rolling_mean, rolling_median,
                       rolling_window)
 from ..base import compute
 from .csv import read_csv
-from .reshape import get_dummies
+from .reshape import get_dummies, pivot_table
 from . import demo

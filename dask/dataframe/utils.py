@@ -18,6 +18,13 @@ from ..async import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
+if PANDAS_VERSION >= '0.19.0':
+    PANDAS_ge_0190 = True
+    from pandas.api.types import is_categorical_dtype, is_scalar       # noqa
+else:
+    PANDAS_ge_0190 = False
+    from pandas.core.common import is_categorical_dtype                # noqa
+    is_scalar = pd.lib.isscalar                                        # noqa
 
 
 def shard_df_on_index(df, divisions):
@@ -58,7 +65,6 @@ def shard_df_on_index(df, divisions):
     3  30  2
     4  40  1
     """
-    from dask.dataframe.categorical import is_categorical_dtype
 
     if isinstance(divisions, Iterator):
         divisions = list(divisions)
@@ -298,8 +304,6 @@ def is_pd_scalar(x):
 
 def _nonempty_series(s, idx):
 
-    from dask.dataframe.categorical import is_categorical_dtype
-
     dtype = s.dtype
     if is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
@@ -329,8 +333,12 @@ def meta_nonempty(x):
         return _nonempty_series(x, idx)
     elif isinstance(x, pd.DataFrame):
         idx = _nonempty_index(x.index)
-        data = {c: _nonempty_series(x[c], idx) for c in x.columns}
-        return pd.DataFrame(data, columns=x.columns, index=idx)
+        data = {i: _nonempty_series(x.iloc[:, i], idx)
+                for i, c in enumerate(x.columns)}
+        res = pd.DataFrame(data, index=idx,
+                           columns=np.arange(len(x.columns)))
+        res.columns = x.columns
+        return res
     elif is_pd_scalar(x):
         return _nonempty_scalar(x)
     else:

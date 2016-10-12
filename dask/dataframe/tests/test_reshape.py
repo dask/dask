@@ -6,7 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, PANDAS_ge_0190
 
 
 @pytest.mark.parametrize('data', [
@@ -94,3 +94,56 @@ def test_get_dummies_errors():
         s = pd.Series([1, 1, 1, 2, 2, 1, 3, 4])
         ds = dd.from_pandas(s, 2)
         dd.get_dummies(ds)
+
+
+@pytest.mark.parametrize('aggfunc', ['mean', 'sum', 'count'])
+def test_pivot_table(aggfunc):
+    df = pd.DataFrame({'A': np.random.choice(list('XYZ'), size=100),
+                       'B': np.random.randn(100),
+                       'C': pd.Categorical(np.random.choice(list('abc'), size=100))})
+    ddf = dd.from_pandas(df, 5)
+
+    res = dd.pivot_table(ddf, index='A', columns='C', values='B',
+                         aggfunc=aggfunc)
+    exp = pd.pivot_table(df, index='A', columns='C', values='B',
+                         aggfunc=aggfunc)
+    if aggfunc == 'count':
+        # dask result cannot be int64 dtype depending on divisions because of NaN
+        exp = exp.astype(np.float64)
+
+    if PANDAS_ge_0190:
+        assert eq(res, exp)
+    else:
+        # because of a pandas 0.18.x bug, categorical dtype is not preserved
+        assert eq(res, exp, check_names=False, check_column_type=False)
+
+
+def test_pivot_table_errors():
+    df = pd.DataFrame({'A': np.random.choice(list('abc'), size=10),
+                       'B': np.random.randn(10),
+                       'C': pd.Categorical(np.random.choice(list('abc'), size=10))})
+    ddf = dd.from_pandas(df, 2)
+
+    msg = "'index' must be a scalar"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index=['A'], columns='C', values='B')
+    msg = "'columns' must be a scalar"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns=['C'], values='B')
+    msg = "'values' must be a scalar"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns='C', values=['B'])
+    msg = "'aggfunc' must be a scalar"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc=['sum'])
+    msg = "aggfunc muset be either 'mean', 'sum', 'count'"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc='xx')
+
+    df = pd.DataFrame({'A': np.random.choice(list('abc'), size=10),
+                       'B': np.random.randn(10),
+                       'C': np.random.choice(list('abc'), size=10)})
+    ddf = dd.from_pandas(df, 2)
+    msg = "'columns' must be category dtype"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns='C', values='B')
