@@ -2294,3 +2294,4 @@ def test_warn_bad_rechunking():
         x + y
 
     assert record
+    assert '20' in record[0].message.args[0]

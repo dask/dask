@@ -1741,18 +1741,29 @@ def common_blockdim(blockdims):
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
 
-    chunks = list(map(list, non_trivial_dims))
+    # We have multiple non-trivial chunks on this axis
+    # e.g. (5, 2) and (4, 3)
+
+    # We create a single chunk tuple with the same total length
+    # that evenly divides both, e.g. (4, 1, 2)
+
+    # To accomplish this we walk down all chunk tuples together, finding the
+    # smallest element, adding it to the output, and subtracting it from all
+    # other elements and remove the element itself.  We stop once we have
+    # burned through all of the chunk tuples.
+    # For efficiency's sake we reverse the lists so that we can pop off the end
+    rchunks = [list(ntd)[::-1] for ntd in non_trivial_dims]
     total = sum(first(non_trivial_dims))
     i = 0
 
     out = []
     while i < total:
-        m = min(c[0] for c in chunks)
+        m = min(c[-1] for c in rchunks)
         out.append(m)
-        for c in chunks:
-            c[0] -= m
-            if c[0] == 0:
-                c.pop(0)
+        for c in rchunks:
+            c[-1] -= m
+            if c[-1] == 0:
+                c.pop()
         i += m
 
     return tuple(out)
@@ -1787,7 +1798,7 @@ def unify_chunks(*args):
     nparts = np.prod(list(map(len, chunkss.values())))
 
     if nparts >= max_parts * 10:
-        warnings.warn("Increasing number of chunks by factor of %2f" %
+        warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
     arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
                               for n, j in enumerate(i)))
