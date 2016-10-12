@@ -108,7 +108,12 @@ the scheduler.
    w.start(0)  # choose randomly assigned port
 
 Alternatively, replace ``Worker`` with ``Nanny`` if you want your workers to be
-managed in a separate process by a local nanny process.
+managed in a separate process by a local nanny process.  This allows workers to
+restart themselves in case of failure, provides some additional monitoring, and
+is useful when coordinating many workers that should live in different
+processes to avoid the GIL_.
+
+.. _GIL: https://docs.python.org/3/glossary.html#term-gil
 
 
 Using LocalCluster
@@ -172,8 +177,12 @@ otherwise.)
 
 This is typically enforced through external means, such as by having a network
 file system (NFS) mount for libraries, by starting the ``dask-worker``
-processes in equivalent docker containers, or through any of the other means
-typically employed by cluster administrators.
+processes in equivalent Docker_ containers, using Conda_ environments, or
+through any of the other means typically employed by cluster administrators.
+
+.. _Docker: https://www.docker.com/
+.. _Conda: http://conda.pydata.org/docs/
+
 
 Windows
 ~~~~~~~
@@ -192,3 +201,4 @@ on the Windows boxes. This works because the scheduler environment is de-coupled
 the workers.
 
 __ https://github.com/jfisteus/ztreamy/issues/26
+

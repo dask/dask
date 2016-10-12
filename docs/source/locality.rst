@@ -178,7 +178,7 @@ hard requirements.
    future = client.compute(z, workers={(x, y): '127.0.0.1'},
                            allow_other_workers=True)
 
-Set provide a list of collection to ``allow_other_workers=[...]`` to say that
+Provide a collection to ``allow_other_workers=[...]`` to say that
 the keys for only some of the collections are loose.  In the case below ``z``
 *must* run on ``127.0.0.1`` while ``x`` *should* run on ``127.0.0.1`` but can
 run elsewhere if necessary:

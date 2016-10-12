@@ -133,7 +133,9 @@ Each of the following is a dictionary keyed by task name (described below):
     The reverse of the ``processing`` dictionary.  This is all keys that are
     currently running with a set of all workers that are currently running
     them.  This is redundant with ``processing`` and just here for faster
-    indexed querying.
+    indexed querying.  It is rare for these sets to be larger than size one but
+    does happen in rare cases when a task might be submitted redundantly to
+    multiple workers.
 
 * **who_has:** ``{key: {worker}}``:
 
@@ -189,9 +191,9 @@ Each of the following is a dictionary keyed by task name (described below):
     all of the tasks on that worker are reassigned to others.  This combination
     of behaviors can cause a bad task to catastrophically destroy all workers
     on the cluster, one after another.  Whenever a worker fails we mark each
-    task currently running on that worker as suspicious.  If a worker is
-    involved in three failures (or some other fixed constant) then we mark the
-    task as failed.
+    task currently running on that worker as suspicious.  If a task is involved
+    in three failures (or some other fixed constant) then we mark the task as
+    failed.
 
 * **who_wants:** ``{key: {client}}``:
 

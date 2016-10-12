@@ -538,7 +538,18 @@ class Client(object):
                 self.scheduler.close_rpc()
 
     def shutdown(self, timeout=10):
-        """ Send shutdown signal and wait until scheduler terminates """
+        """ Send shutdown signal and wait until scheduler terminates
+
+        This cancels all currently running tasks, clears the state of the
+        scheduler, and shuts down all workers and scheduler.
+
+        You do not need to call this when you finish your session.  You only
+        need to call this if you want to take down the distributed cluster.
+
+        See Also
+        --------
+        Client.restart
+        """
         if self.status == 'closed':
             return
         self.status = 'closed'
@@ -938,6 +949,11 @@ class Client(object):
     def scatter(self, data, workers=None, broadcast=False, maxsize=0):
         """ Scatter data into distributed memory
 
+        This moves data from the local client process into the workers of the
+        distributed scheduler.  Note that it is often better to submit jobs to
+        your workers to have them load the data rather than loading data
+        locally and then scattering it out to them.
+
         Parameters
         ----------
         data: list, iterator, dict, or Queue
@@ -969,14 +985,17 @@ class Client(object):
          'z': <Future: status: finished, key: z>}
 
         Constrain location of data to subset of workers
+
         >>> c.scatter([1, 2, 3], workers=[('hostname', 8788)])   # doctest: +SKIP
 
         Handle streaming sequences of data with iterators or queues
+
         >>> seq = c.scatter(iter([1, 2, 3]))  # doctest: +SKIP
         >>> next(seq)  # doctest: +SKIP
         <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
 
         Broadcast data to all workers
+
         >>> [future] = c.scatter([element], broadcast=True)  # doctest: +SKIP
 
         See Also
@@ -1051,11 +1070,13 @@ class Client(object):
         Examples
         --------
         Publishing client:
+
         >>> df = dd.read_csv('s3://...')  # doctest: +SKIP
         >>> df = c.persist(df) # doctest: +SKIP
         >>> c.publish_dataset(my_dataset=df)  # doctest: +SKIP
 
         Receiving client:
+
         >>> c.list_datasets()  # doctest: +SKIP
         ['my_dataset']
         >>> df2 = c.get_dataset('my_dataset')  # doctest: +SKIP
@@ -1599,11 +1620,12 @@ class Client(object):
     def replicate(self, futures, n=None, workers=None, branching_factor=2):
         """ Set replication of futures within network
 
-        This performs a tree copy of the data throughout the network
-        individually on each piece of data.
+        Copy data onto many workers.  This helps to broadcast frequently
+        accessed data and it helps to improve resilience.
 
-        This operation blocks until complete.  It does not guarantee
-        replication of data to future workers.
+        This performs a tree copy of the data throughout the network
+        individually on each piece of data.  This operation blocks until
+        complete.  It does not guarantee replication of data to future workers.
 
         Parameters
         ----------

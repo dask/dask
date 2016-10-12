@@ -36,9 +36,10 @@ The following functions produce Futures
    Client.persist
    Client.scatter
 
-Submit and map handle raw Python functions.  Compute and persist handle Dask
-collections like arrays, bags, delayed values, and dataframes.  Scatter sends
-data directly from the local process.
+The ``submit`` and ``map`` methods handle raw Python functions.  The
+``compute`` and ``persist`` methods handle Dask collections like arrays, bags,
+delayed values, and dataframes.  The ``scatter`` method sends data directly
+from the local process.
 
 Persisting Collections
 ----------------------
@@ -152,6 +153,8 @@ worker nodes.  Resilience is achieved through recomputation by maintaining the
 provenance of any result.  If a worker node goes down the scheduler is able to
 recompute all of its results.  The complete graph for any desired Future is
 maintained until no references to that future exist.
+
+For more information see :doc:`Resilience <resilience>`.
 
 
 Advanced techniques

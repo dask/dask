@@ -18,9 +18,9 @@ global performance.  Currently workers for tasks are determined as follows:
 1.  If the task has no major dependencies and no restrictions then it goes into
     a common pool of tasks to be used by the next worker with nothing better to
     do.
-2.  Otherwise, if a worker has user-provided restrictions (must run on a
-    machine with a GPU) then we restrict the available pool of workers to just
-    that set, otherwise we consider all workers
+2.  Otherwise, if a task has user-provided restrictions (for example it must
+    run on a machine with a GPU) then we restrict the available pool of workers
+    to just that set, otherwise we consider all workers
 3.  From among this pool of workers we determine the workers to whom the least
     amount of data would need to be transferred.
 4.  We break ties by choosing the worker that currently has the fewest tasks,
@@ -60,7 +60,7 @@ Last in, first out
 When a worker finishes a task the immediate dependencies of that task get top
 priority.  This encourages a behavior of finishing ongoing work immediately
 before starting new work.  This often conflicts with the
-first-come-first-served objective but often results in longer total runtimes
+first-come-first-served objective but often results in shorter total runtimes
 and significantly reduced memory footprints.
 
 Break ties with children and depth

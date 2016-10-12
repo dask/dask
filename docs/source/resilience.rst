@@ -48,7 +48,7 @@ This has some fail cases.
     causes a segmentation fault, then that bad function will repeatedly be
     called on other workers.  This function will be marked as "bad" after it
     kills a fixed number of workers (defaults to three).
-3.  Data ``scatter``ed out to the workers is not kept in the scheduler (it is
+3.  Data scattered out to the workers is not kept in the scheduler (it is
     often quite large) and so the loss of this data is irreparable.  You may
     wish to call ``Client.replicate`` on the data with a suitable replication
     factor to ensure that it remains long-lived or else back the data off of

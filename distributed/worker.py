@@ -85,25 +85,19 @@ class Worker(Server):
     Examples
     --------
 
-    Create schedulers and workers in Python:
-
-    >>> from distributed import Scheduler, Worker
-    >>> c = Scheduler('192.168.0.100', 8786)  # doctest: +SKIP
-    >>> w = Worker(c.ip, c.port)  # doctest: +SKIP
-    >>> yield w._start(port=8786)  # doctest: +SKIP
-
-    Or use the command line::
+    Use the command line to start a worker::
 
         $ dask-scheduler
         Start scheduler at 127.0.0.1:8786
 
         $ dask-worker 127.0.0.1:8786
-        Start worker at:               127.0.0.1:8786
-        Registered with scheduler at:  127.0.0.1:8787
+        Start worker at:               127.0.0.1:1234
+        Registered with scheduler at:  127.0.0.1:8786
 
     See Also
     --------
-    distributed.scheduler.Scheduler:
+    distributed.scheduler.Scheduler
+    distributed.nanny.Nanny
     """
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,

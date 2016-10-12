@@ -106,7 +106,7 @@ which are used for larger and smaller result sets respectively.
    >>> type(df)
    dask.DataFrame
 
-For more information see the page on :doc:`Managing Computation<managing-computation>`.
+For more information see the page on :doc:`Managing Computation <manage-computation>`.
 
 
 Pure Functions by Default
