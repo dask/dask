@@ -14,7 +14,8 @@ from ..diagnostics.progress_stream import (task_stream_palette,
 
 try:
     from bokeh.palettes import Spectral11, Spectral9, viridis
-    from bokeh.models import ColumnDataSource, DataRange1d, HoverTool, Range1d
+    from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool,
+            Range1d, value)
     from bokeh.plotting import figure
     from bokeh.io import curstate, push_notebook
 except ImportError:
@@ -169,9 +170,9 @@ def progress_plot(**kwargs):
         fig.quad(source=source, top='top', bottom='bottom',
                  left='erred-loc', right='erred-loc', color='#000000', alpha=0.3)
         fig.text(source=source, text='show-name', y='bottom', x='left',
-                x_offset=5, text_font_size='10pt')
+                x_offset=5, text_font_size=value('10pt'))
         fig.text(source=source, text='done', y='bottom', x='right', x_offset=-5,
-                text_align='right', text_font_size='10pt')
+                text_align='right', text_font_size=value('10pt'))
         fig.xaxis.visible = False
         fig.yaxis.visible = False
         fig.grid.grid_line_alpha = 0

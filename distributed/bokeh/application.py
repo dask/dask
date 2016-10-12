@@ -83,7 +83,7 @@ class BokehWebInterface(object):
         def cleanup_process():
             try:
                 process.terminate()
-            except OSError():
+            except OSError:
                 pass
         atexit.register(cleanup_process)
 

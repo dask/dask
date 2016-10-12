@@ -27,8 +27,11 @@ client = AsyncHTTPClient()
 messages = distributed.bokeh.messages  # monkey-patching
 
 
-if os.path.exists('.dask-web-ui.json'):
-    with open('.dask-web-ui.json', 'r') as f:
+dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
+options_path = os.path.join(dask_dir, '.dask-web-ui.json')
+
+if os.path.exists(options_path):
+    with open(options_path, 'r') as f:
         options = json.load(f)
 else:
     options = {'host': '127.0.0.1',

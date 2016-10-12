@@ -56,10 +56,11 @@ def progress_update():
             return
         d = progress_quads(msg)
         progress_source.data.update(d)
-        progress_plot.title.text = ("Progress -- total: %(total)s, "
-            "in-memory: %(in-memory)s, processing: %(processing)s, "
-            "ready: %(ready)s, waiting: %(waiting)s, failed: %(failed)s"
-            % messages['tasks']['deque'][-1])
+        if messages['tasks']['deque']:
+            progress_plot.title.text = ("Progress -- total: %(total)s, "
+                "in-memory: %(in-memory)s, processing: %(processing)s, "
+                "ready: %(ready)s, waiting: %(waiting)s, failed: %(failed)s"
+                % messages['tasks']['deque'][-1])
 
         nb = nbytes_bar(msg['nbytes'])
         nbytes_task_source.data.update(nb)
