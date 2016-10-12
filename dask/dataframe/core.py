@@ -1015,7 +1015,7 @@ class _Frame(Base):
             Character recognized as decimal separator. E.g. use ',' for
             European data
         """
-        from .csv import to_csv
+        from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):

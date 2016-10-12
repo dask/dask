@@ -12,13 +12,13 @@ except ImportError:
 import numpy as np
 import pandas as pd
 
-from ..compatibility import PY2
-from ..delayed import delayed
+from ...compatibility import PY2
+from ...delayed import delayed
 from .io import from_delayed
 
-from ..bytes import read_bytes
-from ..bytes.core import write_bytes
-from ..bytes.compression import seekable_files, files as cfiles
+from ...bytes import read_bytes
+from ...bytes.core import write_bytes
+from ...bytes.compression import seekable_files, files as cfiles
 
 
 delayed = delayed(pure=True)

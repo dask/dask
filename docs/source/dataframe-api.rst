@@ -164,9 +164,13 @@ Other functions
 .. currentmodule:: dask.dataframe
 
 .. autofunction:: read_csv
+.. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
+.. autofunction:: from_dask_array
+.. autofunction:: from_castra
+.. autofunction:: from_delayed
 
 .. currentmodule:: dask.dataframe.rolling
 
