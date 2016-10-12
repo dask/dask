@@ -56,7 +56,7 @@ def _groupby_aggregate(df, aggfunc=None, levels=None):
 
 
 def _apply_chunk(df, index, func, columns):
-    if isinstance(df, pd.Series):
+    if isinstance(df, pd.Series) or columns is None:
         return func(df.groupby(index))
     else:
         columns = columns if isinstance(columns, str) else list(columns)
@@ -248,6 +248,10 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self):
         return self.sum() / self.count()
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def size(self):
+        return self._aca_agg(token='size', func=M.size, aggfunc=M.sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1):

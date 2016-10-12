@@ -253,6 +253,10 @@ class _Frame(Base):
         return len(self.divisions) - 1
 
     @property
+    def size(self):
+        return self.reduction(lambda x: x.size, np.sum, token='size', meta=int)
+
+    @property
     def _meta_nonempty(self):
         """ A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)

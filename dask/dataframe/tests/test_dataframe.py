@@ -662,6 +662,11 @@ def test_len():
     assert len(d.a) == len(full.a)
 
 
+def test_size():
+    assert eq(d.size, full.size)
+    assert eq(d.a.size, full.a.size)
+
+
 def test_quantile():
     # series / multiple
     result = d.b.quantile([.3, .7])
