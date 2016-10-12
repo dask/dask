@@ -1781,6 +1781,12 @@ def unify_chunks(*args):
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict,
                                    consolidate=common_blockdim)
+    max_parts = max(arg.npartitions for arg in args[::2])
+    nparts = np.prod(list(map(len, chunkss.values())))
+
+    if nparts >= max_parts * 10:
+        warnings.warn("Increasing number of chunks by factor of %2f" %
+                      (nparts / max_parts))
     arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
                               for n, j in enumerate(i)))
               for a, i in arginds]

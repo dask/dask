@@ -8,6 +8,7 @@ import time
 from distutils.version import LooseVersion
 from operator import add, sub, getitem
 from threading import Lock
+import warnings
 
 from toolz import merge, countby, concat
 from toolz.curried import identity
@@ -2283,3 +2284,13 @@ def test_uneven_chunks_atop():
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
     assert_eq(z, x.compute().dot(y))
+
+
+def test_warn_bad_rechunking():
+    x = da.ones((20, 20), chunks=(20, 1))
+    y = da.ones((20, 20), chunks=(1, 20))
+
+    with warnings.catch_warnings(record=True) as record:
+        x + y
+
+    assert record
