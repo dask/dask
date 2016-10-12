@@ -117,6 +117,8 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 
+from toolz import identity
+
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from .context import _globals
@@ -251,7 +253,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
+def execute_task(key, task_info, marshall, unmarshall, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -260,23 +262,24 @@ def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
     _execute_task - actually execute task
     """
     try:
+        task, data = unmarshall(task_info)
         result = _execute_task(task, data)
         id = get_id()
-        result = key, result, None, id
+        result = marshall((result, None, id))
     except Exception as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        result = key, e, tb, None
-    try:
-        queue.put(result)
-    except Exception as e:
-        if raise_on_exception:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = ''.join(traceback.format_tb(exc_traceback))
-        queue.put((key, e, tb, None))
+        try:
+            result = marshall((e, tb, None))
+        except Exception as e:
+            if raise_on_exception:
+                raise
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb = ''.join(traceback.format_tb(exc_traceback))
+            result = marshall((e, tb, None))
+    return key, result
 
 
 def release_data(key, state, delete=True):
@@ -373,7 +376,9 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
-              rerun_exceptions_locally=None, callbacks=None, **kwargs):
+              rerun_exceptions_locally=None, callbacks=None,
+              marshall=identity, unmarshall=identity,
+              **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -458,16 +463,28 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             data = dict((dep, state['cache'][dep])
                         for dep in get_dependencies(dsk, key))
             # Submit
-            apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                            get_id, raise_on_exception])
+            apply_async(execute_task,
+                        args=(key, marshall((dsk[key], data)),
+                              marshall, unmarshall,
+                              get_id, raise_on_exception),
+                        callback=queue.put)
+
+        def fill_pool_with_ready_tasks():
+            while state['ready'] and len(state['running']) < num_workers:
+                fire_task()
 
         # Seed initial tasks into the thread pool
-        while state['ready'] and len(state['running']) < num_workers:
-            fire_task()
+        fill_pool_with_ready_tasks()
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
-            key, res, tb, worker_id = queue.get()
+            key, res_info = queue.get()
+            try:
+                res, tb, worker_id = unmarshall(res_info)
+            except Exception as e:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                tb = ''.join(traceback.format_tb(exc_traceback))
+                res, worker_id = e, None
             if isinstance(res, Exception):
                 for _, _, _, _, finish in callbacks:
                     if finish:
@@ -483,8 +500,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             finish_task(dsk, key, state, results, keyorder.get)
             for f in posttask_cbs:
                 f(key, res, dsk, state, worker_id)
-            while state['ready'] and len(state['running']) < num_workers:
-                fire_task()
+
+            fill_pool_with_ready_tasks()
+
     except KeyboardInterrupt:
         for cb in started_cbs:
             if cb[-1]:
@@ -510,9 +528,11 @@ GIL
 """
 
 
-def apply_sync(func, args=(), kwds={}):
+def apply_sync(func, args=(), kwds={}, callback=None):
     """ A naive synchronous version of apply_async """
-    return func(*args, **kwds)
+    res = func(*args, **kwds)
+    if callback is not None:
+        callback(res)
 
 
 def get_sync(dsk, keys, **kwargs):

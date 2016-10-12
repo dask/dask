@@ -5,6 +5,7 @@ import pickle
 import sys
 
 from .async import get_async  # TODO: get better get
+from .compatibility import Queue
 from .context import _globals
 from .optimize import fuse, cull
 
@@ -63,13 +64,6 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     else:
         cleanup = False
 
-    manager = multiprocessing.Manager()
-    queue = manager.Queue()
-
-    apply_async = pickle_apply_async(pool.apply_async,
-                                     func_dumps=func_dumps,
-                                     func_loads=func_loads)
-
     # Optimize Dask
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
@@ -77,50 +71,21 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     else:
         dsk3 = dsk2
 
+    # We specify marshalling functions in order to catch serialization
+    # errors and report them to the user.
+    loads = func_loads or _globals.get('func_loads') or _loads
+    dumps = func_dumps or _globals.get('func_dumps') or _dumps
+
+    # Note former versions used a multiprocessing Manager to share
+    # a Queue between parent and workers, but this is fragile on Windows
+    # (issue #1652).
     try:
         # Run
-        result = get_async(apply_async, len(pool._pool), dsk3, keys,
-                           queue=queue, get_id=_process_get_id, **kwargs)
+        result = get_async(pool.apply_async, len(pool._pool), dsk3, keys,
+                           queue=Queue(), get_id=_process_get_id,
+                           marshall=dumps, unmarshall=loads,
+                           **kwargs)
     finally:
         if cleanup:
             pool.close()
     return result
-
-
-def apply_func(sfunc, may_fail, wont_fail, loads=None):
-    loads = loads or _globals.get('loads') or _loads
-    func = loads(sfunc)
-    key, queue, get_id, raise_on_exception = loads(wont_fail)
-    try:
-        task, data = loads(may_fail)
-    except Exception as e:
-        # Need a new reference for the exception, as `e` falls out of scope in
-        # python 3
-        exception = e
-
-        def serialization_failure():
-            raise exception
-
-        task = (serialization_failure,)
-        data = {}
-
-    return func(key, task, data, queue, get_id,
-                raise_on_exception=raise_on_exception)
-
-
-@curry
-def pickle_apply_async(apply_async, func, args=(),
-                       func_loads=None, func_dumps=None):
-    # XXX: To deal with deserialization errors of tasks, this version of
-    # apply_async doesn't actually match that of `pool.apply_async`. It's
-    # customized to fit the signature of `dask.async.execute_task`, which is
-    # the only function ever actually passed as `func`. This is a bit of a
-    # hack, but it works pretty well. If the signature of `execute_task`
-    # changes, then this will need to be changed as well.
-    dumps = func_dumps or _globals.get('func_dumps') or _dumps
-    key, task, data, queue, get_id, raise_on_exception = args
-    sfunc = dumps(func)
-    may_fail = dumps((task, data))
-    wont_fail = dumps((key, queue, get_id, raise_on_exception))
-    return apply_async(curry(apply_func, loads=func_loads),
-                       args=[sfunc, may_fail, wont_fail])
