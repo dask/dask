@@ -6,7 +6,7 @@ from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   _maybe_align_partitions)
 import pandas.util.testing as tm
 from dask.async import get_sync
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import eq, assert_divisions
 
 import pytest
 
@@ -679,6 +679,18 @@ def test_cheap_single_partition_merge():
 
     list_eq(aa.merge(bb, on='x', how='inner'),
             a.merge(b, on='x', how='inner'))
+
+
+def test_cheap_single_partition_merge_divisions():
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                     index=[10, 20, 30, 40, 50, 60])
+    aa = dd.from_pandas(a, npartitions=3)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
+    bb = dd.from_pandas(b, npartitions=1, sort=False)
+
+    assert_divisions(aa.merge(bb, on='x', how='inner'))
+    assert_divisions(bb.merge(aa, on='x', how='inner'))
 
 
 def test_merge_maintains_columns():

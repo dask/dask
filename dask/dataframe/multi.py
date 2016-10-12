@@ -322,6 +322,8 @@ def single_partition_join(left, right, **kwargs):
                                 kwargs))
                    for i, left_key in enumerate(left._keys()))
         divisions = left.divisions
+
+    divisions = [None for _ in divisions]
     return DataFrame(toolz.merge(dsk, left.dask, right.dask), name,
                      meta, divisions)
 
