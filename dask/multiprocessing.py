@@ -10,7 +10,6 @@ from .context import _globals
 from .optimize import fuse, cull
 
 import cloudpickle
-from toolz import curry
 
 
 if sys.version_info.major < 3:
