@@ -1015,7 +1015,7 @@ class _Frame(Base):
             Character recognized as decimal separator. E.g. use ',' for
             European data
         """
-        from .io import to_csv
+        from .csv import to_csv
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):
@@ -1452,8 +1452,19 @@ class Series(_Frame):
         return self._meta.dtype
 
     @cache_readonly
+    def dt(self):
+        from .accessor import DatetimeAccessor
+        return DatetimeAccessor(self)
+
+    @cache_readonly
     def cat(self):
+        from .accessor import CategoricalAccessor
         return CategoricalAccessor(self)
+
+    @cache_readonly
+    def str(self):
+        from .accessor import StringAccessor
+        return StringAccessor(self)
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -1474,14 +1485,6 @@ class Series(_Frame):
 
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
-
-    @cache_readonly
-    def dt(self):
-        return DatetimeAccessor(self)
-
-    @cache_readonly
-    def str(self):
-        return StringAccessor(self)
 
     def quantile(self, q=0.5):
         """ Approximate quantiles of Series
@@ -2469,43 +2472,6 @@ def elemwise(op, *args, **kwargs):
     return new_dd_object(dsk, _name, meta, divisions)
 
 
-def remove_empties(seq):
-    """ Remove items of length 0
-
-    >>> remove_empties([1, 2, ('empty', np.nan), 4, 5])
-    [1, 2, 4, 5]
-
-    >>> remove_empties([('empty', np.nan)])
-    [nan]
-
-    >>> remove_empties([])
-    []
-    """
-    if not seq:
-        return seq
-
-    seq2 = [x for x in seq
-            if not (isinstance(x, tuple) and x and x[0] == 'empty')]
-    if seq2:
-        return seq2
-    else:
-        return [seq[0][1]]
-
-
-def empty_safe(func, arg):
-    """
-
-    >>> empty_safe(sum, [1, 2, 3])
-    6
-    >>> empty_safe(sum, [])
-    ('empty', 0)
-    """
-    if len(arg) == 0:
-        return ('empty', func(arg))
-    else:
-        return func(arg)
-
-
 def _maybe_from_pandas(dfs):
     from .io import from_pandas
     dfs = [from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame))
@@ -3170,168 +3136,6 @@ def repartition(df, divisions=None, force=False):
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
         return new_dd_object(dsk, name, df, divisions)
     raise ValueError('Data must be DataFrame or Series')
-
-
-class Accessor(object):
-    """
-    Base class for pandas Accessor objects cat, dt, and str.
-
-    Properties
-    ----------
-
-    _meta_attributes : set
-        set of strings indicting attributes that can be computed
-        on just the ``_meta_nonempty`` attribute
-
-    Notes
-    -----
-    Subclasses should implement
-
-    * getattr
-    * call
-    """
-
-    _meta_attributes = set()
-
-    def __init__(self, series):
-        if not isinstance(series, Series):
-            raise ValueError('Accessor cannot be initialized')
-        self._series = series
-
-    def _property_map(self, key):
-        out = self.getattr(self._series._meta_nonempty, key)
-        if key in self._meta_attributes:
-            return out
-        meta = self._series._partition_type([], dtype=out.dtype,
-                                            name=getattr(out, 'name', None))
-        return map_partitions(self.getattr, self._series, key, meta=meta)
-
-    def _function_map(self, key, *args, **kwargs):
-        out = self.call(self._series._meta_nonempty, key, *args, **kwargs)
-        meta = self._series._partition_type([], dtype=out.dtype,
-                                            name=getattr(out, 'name', None))
-        return map_partitions(self.call, self._series, key, *args, meta=meta,
-                              **kwargs)
-
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      dir(self.ns)))
-
-    def __getattr__(self, key):
-        if key in dir(self.ns):
-            if isinstance(getattr(self.ns, key), property):
-                return self._property_map(key)
-            else:
-                return partial(self._function_map, key)
-        else:
-            raise AttributeError(key)
-
-
-class DatetimeAccessor(Accessor):
-    """ Accessor object for datetimelike properties of the Series values.
-
-    Examples
-    --------
-
-    >>> s.dt.microsecond  # doctest: +SKIP
-    """
-    ns = pd.Series.dt
-
-    @staticmethod
-    def getattr(obj, attr):
-        return getattr(obj.dt, attr)
-
-    @staticmethod
-    def call(obj, attr, *args):
-        return getattr(obj.dt, attr)(*args)
-
-
-class StringAccessor(Accessor):
-    """ Accessor object for string properties of the Series values.
-
-    Examples
-    --------
-
-    >>> s.str.lower()  # doctest: +SKIP
-    """
-    ns = pd.Series.str
-
-    @staticmethod
-    def getattr(obj, attr):
-        return getattr(obj.str, attr)
-
-    @staticmethod
-    def call(obj, attr, *args, **kwargs):
-        return getattr(obj.str, attr)(*args, **kwargs)
-
-
-class CategoricalAccessor(Accessor):
-    """
-    Accessor object for categorical properties of the Series values.
-
-    Examples
-    --------
-    >>> s.cat.categories  # doctest: +SKIP
-
-    Notes
-    -----
-    Attributes that depend only on metadata are eager
-
-    * categories
-    * ordered
-
-    Attributes depending on the entire dataset are lazy
-
-    * codes
-    * ...
-
-    So `df.a.cat.categories` <=> `df.a._meta.cat.categories`
-    So `df.a.cat.codes` <=> `df.a.map_partitions(lambda x: x.cat.codes)`
-    """
-    ns = pd.Series.cat
-    _meta_attributes = {'categories', 'ordered'}
-
-    def _function_map(self, key, *args, **kwargs):
-        out = self.call(self._series._meta_nonempty, key, *args, **kwargs)
-        meta = self._series._partition_type(
-            pd.Categorical([], categories=out.cat.categories,
-                           ordered=out.cat.ordered),
-            name=getattr(out, 'name', None)
-        )
-        return map_partitions(self.call, self._series, key, *args, meta=meta,
-                              **kwargs)
-
-    @staticmethod
-    def getattr(obj, attr):
-        return getattr(obj.cat, attr)
-
-    @staticmethod
-    def call(obj, attr, *args, **kwargs):
-        return getattr(obj.cat, attr)(*args, **kwargs)
-
-    def remove_unused_categories(self):
-        """
-        Removes categories which are not used
-
-        Notes
-        -----
-        This method requires a full scan of the data to compute the
-        unique values, which can be expensive.
-        """
-        # get the set of used categories
-        present = self._series.dropna().unique()
-        present = pd.Index(present.compute())
-        # Reorder to keep cat:code relationship, filtering unused (-1)
-        ordered, mask = present.reindex(self._series._meta.cat.categories)
-        new_categories = ordered[mask != -1]
-
-        meta = self._series._meta.cat.set_categories(
-            new_categories,
-            ordered=self._series._meta.cat.ordered
-        )
-        result = map_partitions(self.call, self._series, 'set_categories',
-                                meta=meta, new_categories=new_categories)
-        return result
 
 
 def set_sorted_index(df, index, drop=True, **kwargs):
