@@ -1724,7 +1724,9 @@ def common_blockdim(blockdims):
     --------
 
     >>> common_blockdim([(3,), (2, 1)])
-    set([(2, 1)])
+    (2, 1)
+    >>> common_blockdim([(1, 2), (2, 1)])
+    (1, 1, 1)
     >>> common_blockdim([(2, 2), (3, 1)])  # doctest: +SKIP
     Traceback (most recent call last):
         ...
