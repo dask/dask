@@ -42,7 +42,7 @@ This release adds some new features and removes dead code
 
 *   Publish and share datasets on the scheduler between many clients
     https://github.com/dask/distributed/pull/453
-    http://distributed.readthedocs.io/en/latest/publish.html
+    https://distributed.readthedocs.io/en/latest/publish.html
 *   Launch tasks from other tasks (experimental)
     https://distributed.readthedocs.io/en/latest/task-launch.html
     https://github.com/dask/distributed/pull/471

@@ -35,7 +35,7 @@ This is possible with the Client.become_distributed_ method::
    >>> e
    <Client: scheduler="127.0.0.1:59683" processes=8 cores=8>
 
-.. _Client.become_distributed: http://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_distributed
+.. _Client.become_distributed: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_distributed
 
 
 Launch IPython within Dask Workers

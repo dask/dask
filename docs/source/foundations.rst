@@ -30,7 +30,7 @@ chosen to use Tornado for the following reasons:
 3.  Stackoverflow coverage is excellent
 4.  Performance is satisfactory
 
-.. _`Tornado's documentation`: http://tornado.readthedocs.io/en/latest/coroutine.html
+.. _`Tornado's documentation`: https://tornado.readthedocs.io/en/latest/coroutine.html
 
 
 Communication with Tornado Streams (raw sockets)

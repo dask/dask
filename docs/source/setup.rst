@@ -158,7 +158,7 @@ DRMAA (SGE, SLURM, Torque, etc..)
 YARN
 ~~~~
 
-*   http://knit.readthedocs.io/en/latest/
+*   https://knit.readthedocs.io/en/latest/
 
 
 Software Environment

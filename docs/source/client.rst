@@ -146,7 +146,7 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
    >>> client.submit(np.random.random, 1000, pure=False).key
    'random_sample-a24e7220-a113-47f2-a030-72209439f093'
 
-.. _pure: http://toolz.readthedocs.io/en/latest/purity.html
+.. _pure: https://toolz.readthedocs.io/en/latest/purity.html
 
 
 Tornado Coroutines

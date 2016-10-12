@@ -13,7 +13,7 @@ This function supports both standalone file and setuptools's ``.egg`` files
 for larger modules.
 
 __ http://stackoverflow.com/questions/39295200/can-i-use-functions-imported-from-py-files-in-dask-distributed
-.. _API docs: http://distributed.readthedocs.io/en/latest/api.html#distributed.executor.Executor.upload_file
+.. _API docs: https://distributed.readthedocs.io/en/latest/api.html#distributed.executor.Executor.upload_file
 
 Too many open file descriptors?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -71,7 +71,7 @@ There are a couple of older projects that often get mentioned
 *   Dispy_: Embarrassingly parallel function evaluation
 *   Pyro_:  Remote objects / RPC
 
-.. _Luigi: http://luigi.readthedocs.io/en/latest/
+.. _Luigi: https://luigi.readthedocs.io/en/latest/
 .. _MPI4Py: http://pythonhosted.org/mpi4py/
 .. _PyZMQ: https://github.com/zeromq/pyzmq
 .. _Celery: http://www.celeryproject.org/
