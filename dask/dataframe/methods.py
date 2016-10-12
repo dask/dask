@@ -72,3 +72,7 @@ def value_counts_aggregate(x):
 
 def nbytes(x):
     return x.nbytes
+
+
+def size(x):
+    return x.size

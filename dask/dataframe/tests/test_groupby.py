@@ -247,6 +247,7 @@ def test_series_groupby():
         assert eq(dg.sum(), pdg.sum())
         assert eq(dg.min(), pdg.min())
         assert eq(dg.max(), pdg.max())
+        assert eq(dg.size(), pdg.size())
 
 
 def test_series_groupby_errors():
@@ -309,6 +310,7 @@ def test_split_apply_combine_on_series():
         assert eq(ddf1.groupby(ddkey).a.count(), pdf1.groupby(pdkey).a.count())
         assert eq(ddf1.groupby(ddkey).a.mean(), pdf1.groupby(pdkey).a.mean())
         assert eq(ddf1.groupby(ddkey).a.nunique(), pdf1.groupby(pdkey).a.nunique())
+        assert eq(ddf1.groupby(ddkey).a.size(), pdf1.groupby(pdkey).a.size())
         for ddof in [0, 1, 2]:
             assert eq(ddf1.groupby(ddkey).a.var(ddof),
                       pdf1.groupby(pdkey).a.var(ddof))
@@ -320,6 +322,7 @@ def test_split_apply_combine_on_series():
         assert eq(ddf1.groupby(ddkey).max(), pdf1.groupby(pdkey).max())
         assert eq(ddf1.groupby(ddkey).count(), pdf1.groupby(pdkey).count())
         assert eq(ddf1.groupby(ddkey).mean(), pdf1.groupby(pdkey).mean())
+        assert eq(ddf1.groupby(ddkey).size(), pdf1.groupby(pdkey).size())
         for ddof in [0, 1, 2]:
             assert eq(ddf1.groupby(ddkey).var(ddof),
                       pdf1.groupby(pdkey).var(ddof), check_dtype=False)
@@ -345,6 +348,7 @@ def test_split_apply_combine_on_series():
         assert eq(ddf1.groupby(ddf1.b > i).a.count(), pdf1.groupby(pdf1.b > i).a.count())
         assert eq(ddf1.groupby(ddf1.b > i).a.mean(), pdf1.groupby(pdf1.b > i).a.mean())
         assert eq(ddf1.groupby(ddf1.b > i).a.nunique(), pdf1.groupby(pdf1.b > i).a.nunique())
+        assert eq(ddf1.groupby(ddf1.b > i).a.size(), pdf1.groupby(pdf1.b > i).a.size())
 
         assert eq(ddf1.groupby(ddf1.a > i).b.sum(), pdf1.groupby(pdf1.a > i).b.sum())
         assert eq(ddf1.groupby(ddf1.a > i).b.min(), pdf1.groupby(pdf1.a > i).b.min())
@@ -352,18 +356,21 @@ def test_split_apply_combine_on_series():
         assert eq(ddf1.groupby(ddf1.a > i).b.count(), pdf1.groupby(pdf1.a > i).b.count())
         assert eq(ddf1.groupby(ddf1.a > i).b.mean(), pdf1.groupby(pdf1.a > i).b.mean())
         assert eq(ddf1.groupby(ddf1.a > i).b.nunique(), pdf1.groupby(pdf1.a > i).b.nunique())
+        assert eq(ddf1.groupby(ddf1.b > i).b.size(), pdf1.groupby(pdf1.b > i).b.size())
 
         assert eq(ddf1.groupby(ddf1.b > i).sum(), pdf1.groupby(pdf1.b > i).sum())
         assert eq(ddf1.groupby(ddf1.b > i).min(), pdf1.groupby(pdf1.b > i).min())
         assert eq(ddf1.groupby(ddf1.b > i).max(), pdf1.groupby(pdf1.b > i).max())
         assert eq(ddf1.groupby(ddf1.b > i).count(), pdf1.groupby(pdf1.b > i).count())
         assert eq(ddf1.groupby(ddf1.b > i).mean(), pdf1.groupby(pdf1.b > i).mean())
+        assert eq(ddf1.groupby(ddf1.b > i).size(), pdf1.groupby(pdf1.b > i).size())
 
         assert eq(ddf1.groupby(ddf1.a > i).sum(), pdf1.groupby(pdf1.a > i).sum())
         assert eq(ddf1.groupby(ddf1.a > i).min(), pdf1.groupby(pdf1.a > i).min())
         assert eq(ddf1.groupby(ddf1.a > i).max(), pdf1.groupby(pdf1.a > i).max())
         assert eq(ddf1.groupby(ddf1.a > i).count(), pdf1.groupby(pdf1.a > i).count())
         assert eq(ddf1.groupby(ddf1.a > i).mean(), pdf1.groupby(pdf1.a > i).mean())
+        assert eq(ddf1.groupby(ddf1.a > i).size(), pdf1.groupby(pdf1.a > i).size())
 
         for ddof in [0, 1, 2]:
             assert eq(ddf1.groupby(ddf1.b > i).std(ddof),
@@ -377,12 +384,14 @@ def test_split_apply_combine_on_series():
         assert eq(ddf1.groupby(ddkey).b.count(), pdf1.groupby(pdkey).b.count())
         assert eq(ddf1.groupby(ddkey).b.mean(), pdf1.groupby(pdkey).b.mean())
         assert eq(ddf1.groupby(ddkey).b.nunique(), pdf1.groupby(pdkey).b.nunique())
+        assert eq(ddf1.groupby(ddkey).b.size(), pdf1.groupby(pdkey).b.size())
 
         assert eq(ddf1.groupby(ddkey).sum(), pdf1.groupby(pdkey).sum())
         assert eq(ddf1.groupby(ddkey).min(), pdf1.groupby(pdkey).min())
         assert eq(ddf1.groupby(ddkey).max(), pdf1.groupby(pdkey).max())
         assert eq(ddf1.groupby(ddkey).count(), pdf1.groupby(pdkey).count())
         assert eq(ddf1.groupby(ddkey).mean(), pdf1.groupby(pdkey).mean().astype(float))
+        assert eq(ddf1.groupby(ddkey).size(), pdf1.groupby(pdkey).size())
 
         for ddof in [0, 1, 2]:
             assert eq(ddf1.groupby(ddkey).b.std(ddof),
@@ -410,6 +419,7 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf1.groupby('b').a.mean(), 'series-groupby-sum')
     assert_dask_graph(ddf1.groupby('b').a.mean(), 'series-groupby-count')
     assert_dask_graph(ddf1.groupby('b').a.nunique(), 'series-groupby-nunique')
+    assert_dask_graph(ddf1.groupby('b').a.size(), 'series-groupby-size')
 
     assert_dask_graph(ddf1.groupby('b').sum(), 'dataframe-groupby-sum')
     assert_dask_graph(ddf1.groupby('b').min(), 'dataframe-groupby-min')
@@ -418,6 +428,7 @@ def test_split_apply_combine_on_series():
     # mean consists from sum and count operations
     assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-sum')
     assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-count')
+    assert_dask_graph(ddf1.groupby('b').size(), 'dataframe-groupby-size')
 
 
 def test_apply_shuffle():
