@@ -17,7 +17,7 @@ import warnings
 
 from toolz.curried import (pipe, partition, concat, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
-                           reduce, interleave, sliding_window)
+                           reduce, interleave, sliding_window, assoc)
 import numpy as np
 
 from . import chunk
@@ -510,7 +510,7 @@ def map_blocks(func, *args, **kwargs):
     >>> y.numblocks
     (10,)
 
-    If these must match (up to broadcasting rules) then we can map arbitrary
+    If these match (up to broadcasting rules) then we can map arbitrary
     functions across blocks
 
     >>> def func(a, b):
@@ -560,6 +560,16 @@ def map_blocks(func, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
+    try:
+        spec = getargspec(func)
+        block_id = ('block_id' in spec.args or
+                    'block_id' in getattr(spec, 'kwonly_args', ()))
+    except:
+        block_id = False
+
+    if block_id:
+        kwargs['block_id'] = '__dummy__'
+
     if args:
         dsk = top(partial_by_order, name, out_ind, *argindsstr,
                   numblocks=numblocks, function=func, other=args,
@@ -568,21 +578,10 @@ def map_blocks(func, *args, **kwargs):
         dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks,
                   **kwargs)
 
-    # If func has block_id as an argument then swap out func
-    # for func with block_id partialed in
-    try:
-        spec = getargspec(func)
-    except:
-        spec = None
-    if spec:
-        args = spec.args
-        try:
-            args += spec.kwonlyargs
-        except AttributeError:
-            pass
-        if 'block_id' in args:
-            for k in dsk.keys():
-                dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
+    # If func has block_id as an argument, add it to the kwargs for each call
+    if block_id:
+        for k in dsk.keys():
+            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
 
     numblocks = list(arrs[0].numblocks)
 
