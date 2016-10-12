@@ -665,6 +665,7 @@ def test_len():
 def test_size():
     assert eq(d.size, full.size)
     assert eq(d.a.size, full.a.size)
+    assert eq(d.index.size, full.index.size)
 
 
 def test_quantile():

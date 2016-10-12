@@ -254,7 +254,7 @@ class _Frame(Base):
 
     @property
     def size(self):
-        return self.reduction(lambda x: x.size, np.sum, token='size', meta=int)
+        return self.reduction(methods.size, np.sum, token='size', meta=int)
 
     @property
     def _meta_nonempty(self):
