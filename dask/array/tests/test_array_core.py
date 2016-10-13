@@ -782,14 +782,20 @@ def test_map_blocks2():
     x = np.arange(10, dtype='i8')
     d = from_array(x, chunks=(2,))
 
-    def func(block, block_id=None):
-        return np.ones_like(block) * sum(block_id)
+    def func(block, block_id=None, c=0):
+        return np.ones_like(block) * sum(block_id) + c
 
     out = d.map_blocks(func, dtype='i8')
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype='i8')
 
     assert_eq(out, expected)
     assert same_keys(d.map_blocks(func, dtype='i8'), out)
+
+    out = d.map_blocks(func, dtype='i8', c=1)
+    expected = expected + 1
+
+    assert_eq(out, expected)
+    assert same_keys(d.map_blocks(func, dtype='i8', c=1), out)
 
 
 def test_map_blocks_with_constants():
@@ -1854,15 +1860,38 @@ def test_map_blocks_with_changed_dimension():
 
     e = d.map_blocks(lambda b: b.sum(axis=0), chunks=(4,), drop_axis=0,
                      dtype=d.dtype)
-    assert e.ndim == 1
     assert e.chunks == ((4, 4),)
     assert_eq(e, x.sum(axis=0))
+
+    # Provided chunks have wrong shape
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=0), chunks=(7, 4), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    # Can't drop axis with more than 1 block
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
+
+    # Can't use both drop_axis and new_axis
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b, drop_axis=1, new_axis=1)
+
+    d = da.from_array(x, chunks=(4, 8))
+    e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
+    assert e.chunks == ((4, 3),)
+    assert_eq(e, x.sum(axis=1))
 
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
     e = d.map_blocks(lambda b: b[None, :, :, None],
                      chunks=(1, 4, 4, 1), new_axis=[0, 3], dtype=d.dtype)
-    assert e.ndim == 4
+    assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
+    assert_eq(e, x[None, :, :, None])
+
+    e = d.map_blocks(lambda b: b[None, :, :, None],
+                     new_axis=[0, 3], dtype=d.dtype)
     assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
     assert_eq(e, x[None, :, :, None])
 

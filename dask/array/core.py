@@ -17,7 +17,7 @@ import warnings
 
 from toolz.curried import (pipe, partition, concat, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
-                           reduce, interleave, sliding_window)
+                           reduce, interleave, sliding_window, assoc)
 import numpy as np
 
 from . import chunk
@@ -445,7 +445,7 @@ def map_blocks(func, *args, **kwargs):
     dtype: np.dtype
         Datatype of resulting array
     chunks: tuple (optional)
-        chunk shape of resulting blocks if the function does not preserve shape
+        Chunk shape of resulting blocks if the function does not preserve shape
     drop_axis: number or iterable (optional)
         Dimensions lost by the function
     new_axis: number or iterable (optional)
@@ -508,7 +508,7 @@ def map_blocks(func, *args, **kwargs):
     >>> y.numblocks
     (10,)
 
-    If these must match (up to broadcasting rules) then we can map arbitrary
+    If these match (up to broadcasting rules) then we can map arbitrary
     functions across blocks
 
     >>> def func(a, b):
@@ -549,63 +549,95 @@ def map_blocks(func, *args, **kwargs):
     if isinstance(new_axis, Number):
         new_axis = [new_axis]
 
+    if drop_axis and new_axis:
+        raise ValueError("Can't specify drop_axis and new_axis together")
+
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
-    arginds = [(a, tuple(range(a.ndim))[::-1]) for a in arrs]
-
-    numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
-    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    argpairs = [(a.name, tuple(range(a.ndim))[::-1]) for a in arrs]
+    numblocks = {a.name: a.numblocks for a in arrs}
+    arginds = list(concat(argpairs))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
+    try:
+        spec = getargspec(func)
+        block_id = ('block_id' in spec.args or
+                    'block_id' in getattr(spec, 'kwonly_args', ()))
+    except:
+        block_id = False
+
+    if block_id:
+        kwargs['block_id'] = '__dummy__'
+
     if args:
-        dsk = top(partial_by_order, name, out_ind, *argindsstr,
+        dsk = top(partial_by_order, name, out_ind, *arginds,
                   numblocks=numblocks, function=func, other=args,
                   **kwargs)
     else:
-        dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks,
+        dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
                   **kwargs)
 
-    # If func has block_id as an argument then swap out func
-    # for func with block_id partialed in
-    try:
-        spec = getargspec(func)
-    except:
-        spec = None
-    if spec:
-        args = spec.args
-        try:
-            args += spec.kwonlyargs
-        except AttributeError:
-            pass
-        if 'block_id' in args:
-            for k in dsk.keys():
-                dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
+    # If func has block_id as an argument, add it to the kwargs for each call
+    if block_id:
+        for k in dsk.keys():
+            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
 
-    numblocks = list(arrs[0].numblocks)
+    if len(arrs) == 1:
+        numblocks = list(arrs[0].numblocks)
+    else:
+        dims = broadcast_dimensions(argpairs, numblocks)
+        numblocks = [b for (_, b) in reversed(list(dims.items()))]
 
     if drop_axis:
+        if any(numblocks[i] > 1 for i in drop_axis):
+            raise ValueError("Can't drop an axis with more than 1 block. "
+                             "Please use `atop` instead.")
         dsk = dict((tuple(k for i, k in enumerate(k)
                           if i - 1 not in drop_axis), v)
                    for k, v in dsk.items())
         numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-
-    if new_axis:
+    elif new_axis:
         dsk, old_dsk = dict(), dsk
         for key in old_dsk:
             new_key = list(key)
             for i in new_axis:
                 new_key.insert(i + 1, 0)
             dsk[tuple(new_key)] = old_dsk[key]
-        for i in sorted(new_axis, reverse=False):
+        for i in sorted(new_axis):
             numblocks.insert(i, 1)
 
-    if chunks is not None and chunks and not isinstance(chunks[0], tuple):
-        chunks = [nb * (bs,) for nb, bs in zip(numblocks, chunks)]
-    if chunks is not None:
-        chunks = tuple(chunks)
+    if chunks:
+        if len(chunks) != len(numblocks):
+            raise ValueError("Provided chunks have {0} dims, expected {1} "
+                             "dims.".format(len(chunks), len(numblocks)))
+        chunks2 = []
+        for i, (c, nb) in enumerate(zip(chunks, numblocks)):
+            if isinstance(c, tuple):
+                if not len(c) == nb:
+                    raise ValueError("Dimension {0} has {1} blocks, "
+                                     "chunks specified with "
+                                     "{2} blocks".format(i, nb, len(c)))
+                chunks2.append(c)
+            else:
+                chunks2.append(nb * (c,))
     else:
-        chunks = broadcast_chunks(*[a.chunks for a in arrs])
+        if len(arrs) == 1:
+            chunks2 = list(arrs[0].chunks)
+        else:
+            try:
+                chunks2 = list(broadcast_chunks(*[a.chunks for a in arrs]))
+            except:
+                raise ValueError("Arrays in `map_blocks` don't align, can't "
+                                 "infer output chunks. Please provide "
+                                 "`chunks` kwarg.")
+        if drop_axis:
+            chunks2 = [c for (i, c) in enumerate(chunks2) if i not in drop_axis]
+        elif new_axis:
+            for i in sorted(new_axis):
+                chunks2.insert(i, (1,))
+
+    chunks = tuple(chunks2)
 
     return Array(merge(dsk, *[a.dask for a in arrs]), name, chunks, dtype)
 
