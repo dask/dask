@@ -8,7 +8,7 @@ from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
 from dask.compatibility import FileNotFoundError
-from dask.utils import filetexts
+from dask.utils import filetexts, tmp_cwd
 from dask.bytes import compression
 from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
 from dask.bytes.core import open_text_files, write_bytes
