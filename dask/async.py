@@ -483,10 +483,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             key, res_info = queue.get()
             try:
                 res, tb, worker_id = loads(res_info)
-            except Exception as e:
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                tb = ''.join(traceback.format_tb(exc_traceback))
-                res, worker_id = e, None
+            except Exception:
+                for _, _, _, _, finish in callbacks:
+                    if finish:
+                        finish(dsk, state, True)
+                raise
             if isinstance(res, Exception):
                 for _, _, _, _, finish in callbacks:
                     if finish:
