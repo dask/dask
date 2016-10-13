@@ -5,7 +5,6 @@ import json
 import logging
 import multiprocessing
 import os
-import resource
 import socket
 import subprocess
 import sys
@@ -53,6 +52,7 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         atexit.register(del_pid_file)
 
     if sys.platform.startswith('linux'):
+        import resource   # module fails importing on Windows
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         limit = max(soft, hard // 2)
         resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))

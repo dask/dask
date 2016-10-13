@@ -12,6 +12,11 @@ import tblib.pickling_support
 import tempfile
 from threading import Thread
 
+try:
+    import resource
+except ImportError:
+    resource = None
+
 from dask import istask
 from toolz import memoize, valmap
 from tornado import gen
@@ -31,6 +36,18 @@ def funcname(func):
         return func.__name__
     except:
         return str(func)
+
+
+def get_fileno_limit():
+    """
+    Get the maximum number of open files per process.
+    """
+    if resource is not None:
+        return resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+    else:
+        # Default ceiling for Windows when using the CRT, though it
+        # is settable using _setmaxstdio().
+        return 512
 
 
 def get_ip(host='8.8.8.8', port=80):

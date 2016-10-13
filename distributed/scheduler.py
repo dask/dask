@@ -8,7 +8,6 @@ from math import log
 import os
 import pickle
 import random
-import resource
 import socket
 from time import time
 from timeit import default_timer
@@ -33,7 +32,8 @@ from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
-        ensure_ip, log_errors, key_split, mean, divide_n_among_bins)
+        ensure_ip, get_fileno_limit, log_errors, key_split, mean,
+        divide_n_among_bins)
 from .config import config
 
 
@@ -318,7 +318,7 @@ class Scheduler(Server):
                  ('released', 'erred'): self.transition_released_erred
         }
 
-        connection_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0] / 2
+        connection_limit = get_fileno_limit() / 2
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, io_loop=self.loop,
