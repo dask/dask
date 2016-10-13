@@ -41,6 +41,7 @@ install:
 
 script:
     - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose $XTRATESTARGS; else py.test dask --runslow --verbose $XTRATESTARGS; fi
+    - flake8 dask
 
 after_success:
     - if [[ $coverage == 'true' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
