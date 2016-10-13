@@ -82,8 +82,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         # Run
         result = get_async(pool.apply_async, len(pool._pool), dsk3, keys,
                            queue=Queue(), get_id=_process_get_id,
-                           marshall=dumps, unmarshall=loads,
-                           **kwargs)
+                           dumps=dumps, loads=loads, **kwargs)
     finally:
         if cleanup:
             pool.close()

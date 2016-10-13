@@ -253,7 +253,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task_info, marshall, unmarshall, get_id, raise_on_exception=False):
+def execute_task(key, task_info, dumps, loads, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -262,23 +262,23 @@ def execute_task(key, task_info, marshall, unmarshall, get_id, raise_on_exceptio
     _execute_task - actually execute task
     """
     try:
-        task, data = unmarshall(task_info)
+        task, data = loads(task_info)
         result = _execute_task(task, data)
         id = get_id()
-        result = marshall((result, None, id))
+        result = dumps((result, None, id))
     except Exception as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         try:
-            result = marshall((e, tb, None))
+            result = dumps((e, tb, None))
         except Exception as e:
             if raise_on_exception:
                 raise
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = ''.join(traceback.format_tb(exc_traceback))
-            result = marshall((e, tb, None))
+            result = dumps((e, tb, None))
     return key, result
 
 
@@ -377,7 +377,7 @@ The main function of the scheduler.  Get is the main entry point.
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
               rerun_exceptions_locally=None, callbacks=None,
-              marshall=identity, unmarshall=identity,
+              dumps=identity, loads=identity,
               **kwargs):
     """ Asynchronous get function
 
@@ -405,6 +405,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
+    dumps: callable, optional
+        Function to serialize task data and results to communicate between
+        worker and parent.  Defaults to identity.
+    loads: callable, optional
+        Inverse function of `dumps`.  Defaults to identity.
     callbacks : tuple or list of tuples, optional
         Callbacks are passed in as tuples of length 5. Multiple sets of
         callbacks may be passed in as a list of tuples. For more information,
@@ -464,23 +469,19 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                         for dep in get_dependencies(dsk, key))
             # Submit
             apply_async(execute_task,
-                        args=(key, marshall((dsk[key], data)),
-                              marshall, unmarshall,
-                              get_id, raise_on_exception),
+                        args=(key, dumps((dsk[key], data)),
+                              dumps, loads, get_id, raise_on_exception),
                         callback=queue.put)
 
-        def fill_pool_with_ready_tasks():
-            while state['ready'] and len(state['running']) < num_workers:
-                fire_task()
-
         # Seed initial tasks into the thread pool
-        fill_pool_with_ready_tasks()
+        while state['ready'] and len(state['running']) < num_workers:
+            fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
             key, res_info = queue.get()
             try:
-                res, tb, worker_id = unmarshall(res_info)
+                res, tb, worker_id = loads(res_info)
             except Exception as e:
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 tb = ''.join(traceback.format_tb(exc_traceback))
@@ -501,7 +502,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             for f in posttask_cbs:
                 f(key, res, dsk, state, worker_id)
 
-            fill_pool_with_ready_tasks()
+            while state['ready'] and len(state['running']) < num_workers:
+                fire_task()
 
     except KeyboardInterrupt:
         for cb in started_cbs:
