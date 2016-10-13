@@ -119,6 +119,7 @@ import traceback
 
 from toolz import identity
 
+from .compatibility import Queue
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from .context import _globals
@@ -375,7 +376,7 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              queue=None, get_id=default_get_id, raise_on_exception=False,
+              get_id=default_get_id, raise_on_exception=False,
               rerun_exceptions_locally=None, callbacks=None,
               dumps=identity, loads=identity,
               **kwargs):
@@ -420,7 +421,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     threaded.get
     """
-    assert queue
+    queue = Queue()
 
     if callbacks is None:
         callbacks = _globals['callbacks']
@@ -542,10 +543,8 @@ def get_sync(dsk, keys, **kwargs):
 
     Can be useful for debugging.
     """
-    from .compatibility import Queue
     kwargs.pop('num_workers', None)    # if num_workers present, remove it
-    queue = Queue()
-    return get_async(apply_sync, 1, dsk, keys, queue=queue,
+    return get_async(apply_sync, 1, dsk, keys,
                      raise_on_exception=True, **kwargs)
 
 

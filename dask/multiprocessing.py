@@ -5,7 +5,6 @@ import pickle
 import sys
 
 from .async import get_async  # TODO: get better get
-from .compatibility import Queue
 from .context import _globals
 from .optimize import fuse, cull
 
@@ -81,7 +80,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     try:
         # Run
         result = get_async(pool.apply_async, len(pool._pool), dsk3, keys,
-                           queue=Queue(), get_id=_process_get_id,
+                           get_id=_process_get_id,
                            dumps=dumps, loads=loads, **kwargs)
     finally:
         if cleanup:
