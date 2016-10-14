@@ -395,6 +395,8 @@ class rpc(object):
 
     >>> remote.close_streams()  # doctest: +SKIP
     """
+    active = 0
+
     def __init__(self, arg=None, stream=None, ip=None, port=None, addr=None,
             timeout=3):
         ip, port = ip_port_from_args(arg=arg, addr=addr, ip=ip, port=port)
@@ -403,6 +405,7 @@ class rpc(object):
         self.port = port
         self.timeout = timeout
         self.status = 'running'
+        rpc.active += 1
         assert self.ip
         assert self.port
 
@@ -452,6 +455,7 @@ class rpc(object):
                     stream.close()
                 except (OSError, IOError, StreamClosedError):
                     pass
+        self.streams.clear()
 
     def __getattr__(self, key):
         @gen.coroutine
@@ -462,12 +466,17 @@ class rpc(object):
             raise gen.Return(result)
         return send_recv_from_rpc
 
-    def __del__(self):
-        self.close_streams()
-
     def close_rpc(self):
+        if self.status != 'closed':
+            rpc.active -= 1
         self.status = 'closed'
         self.close_streams()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close_rpc()
 
 
 class RPCCall(object):
@@ -495,6 +504,9 @@ class RPCCall(object):
 
             raise gen.Return(result)
         return send_recv_from_rpc
+
+    def close_rpc(self):
+        pass
 
 
 class ConnectionPool(object):

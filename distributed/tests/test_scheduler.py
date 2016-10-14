@@ -47,17 +47,6 @@ def test_administration(s, a, b):
     assert str(len(s.ncores)) in repr(s)
 
 
-@gen_cluster()
-def test_ready_add_worker(s, a, b):
-    s.add_client(client='client')
-    s.add_worker(address=alice, coerce_address=False)
-
-    s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
-                   keys=['x-%d' % i for i in range(20)],
-                   client='client',
-                   dependencies={'x-%d' % i: set() for i in range(20)})
-
-
 @gen_cluster(ncores=[])
 def test_update_state(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
@@ -498,9 +487,9 @@ def test_remove_client(s, a, b):
 
 @gen_cluster()
 def test_server_listens_to_other_ops(s, a, b):
-    r = rpc(ip='127.0.0.1', port=s.port)
-    ident = yield r.identity()
-    assert ident['type'] == 'Scheduler'
+    with rpc(ip='127.0.0.1', port=s.port) as r:
+        ident = yield r.identity()
+        assert ident['type'] == 'Scheduler'
 
 
 @gen_cluster()
@@ -537,6 +526,7 @@ def test_add_worker(s, a, b):
 
     assert w.ip in s.host_info
     assert s.host_info[w.ip]['ports'] == set(map(str, [a.port, b.port, w.port]))
+    yield w._close()
 
 
 @gen_cluster()
@@ -807,6 +797,8 @@ def test_ready_add_worker(s, a, b):
                 for w in s.ncores)
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
 
+    w.scheduler.close_rpc()
+
 
 @gen_cluster()
 def test_broadcast(s, a, b):
@@ -1007,6 +999,7 @@ def test_scatter_no_workers(s):
            w._start()]
 
     assert w.data['x'] == 1
+    yield w._close()
 
 
 @gen_cluster(ncores=[])
@@ -1015,6 +1008,7 @@ def test_scheduler_sees_memory_limits(s):
     yield w._start(0)
 
     assert s.worker_info[w.address]['memory_limit'] == 12345
+    yield w._close()
 
 
 @gen_cluster(client=True, timeout=1000)

@@ -62,10 +62,16 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
             else:
                 raise KeyError(*bad_keys)
 
-        coroutines = [rpc(address).get_data(keys=keys, close=close)
-                            for address, keys in d.items()]
-        response = yield ignore_exceptions(coroutines, socket.error,
-                                           StreamClosedError)
+        rpcs = {addr: rpc(addr) for addr in d}
+        try:
+            coroutines = [rpcs[address].get_data(keys=keys, close=close)
+                          for address, keys in d.items()]
+            response = yield ignore_exceptions(coroutines, socket.error,
+                                               StreamClosedError)
+        finally:
+            for r in rpcs.values():
+                r.close_rpc()
+
         response = merge(response)
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(merge(response))
@@ -129,9 +135,14 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
                    for _, key, value in v}
           for worker, v in d.items()}
 
-    out = yield All([rpc(address).update_data(data=v,
-                                             close=True, report=report)
-                 for address, v in d.items()])
+    rpcs = {addr: rpc(addr) for addr in d}
+    try:
+        out = yield All([rpcs[address].update_data(data=v,
+                                                 close=True, report=report)
+                     for address, v in d.items()])
+    finally:
+        for r in rpcs.values():
+            r.close_rpc()
     nbytes = merge(o['nbytes'] for o in out)
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}

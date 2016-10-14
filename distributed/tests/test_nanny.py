@@ -23,29 +23,29 @@ def test_nanny(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
 
     yield n._start(0)
-    nn = rpc(ip=n.ip, port=n.port)
-    assert isalive(n.process)  # alive
-    assert s.ncores[n.worker_address] == 2
+    with rpc(ip=n.ip, port=n.port) as nn:
+        assert isalive(n.process)  # alive
+        assert s.ncores[n.worker_address] == 2
 
-    assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
+        assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
-    yield nn.kill()
-    assert not n.process
-    assert n.worker_address not in s.ncores
-    assert n.worker_address not in s.worker_info
+        yield nn.kill()
+        assert not n.process
+        assert n.worker_address not in s.ncores
+        assert n.worker_address not in s.worker_info
 
-    yield nn.kill()
-    assert n.worker_address not in s.ncores
-    assert n.worker_address not in s.worker_info
-    assert not n.process
+        yield nn.kill()
+        assert n.worker_address not in s.ncores
+        assert n.worker_address not in s.worker_info
+        assert not n.process
 
-    yield nn.instantiate()
-    assert isalive(n.process)
-    assert s.ncores[n.worker_address] == 2
-    assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
+        yield nn.instantiate()
+        assert isalive(n.process)
+        assert s.ncores[n.worker_address] == 2
+        assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
-    yield nn.terminate()
-    assert not n.process
+        yield nn.terminate()
+        assert not n.process
 
     yield n._close()
 
@@ -54,7 +54,6 @@ def test_nanny(s):
 def test_nanny_process_failure(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
     yield n._start()
-    nn = rpc(ip=n.ip, port=n.port)
     first_dir = n.worker_dir
 
     assert os.path.exists(first_dir)
@@ -88,7 +87,7 @@ def test_nanny_process_failure(s):
     assert not os.path.exists(second_dir)
     assert not os.path.exists(first_dir)
     assert first_dir != n.worker_dir
-    nn.close_streams()
+    ww.close_rpc()
     s.stop()
 
 
@@ -98,7 +97,6 @@ def test_monitor_resources(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
 
     yield n._start()
-    nn = rpc(ip=n.ip, port=n.port)
     assert isalive(n.process)
     d = n.resource_collect()
     assert {'cpu_percent', 'memory_percent'}.issubset(d)
@@ -124,8 +122,9 @@ def test_run(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
     yield n._start()
 
-    nn = rpc(n.address)
+    with rpc(n.address) as nn:
+        response = yield nn.run(function=dumps(lambda: 1))
+        assert response['status'] == 'OK'
+        assert loads(response['result']) == 1
 
-    response = yield nn.run(function=dumps(lambda: 1))
-    assert response['status'] == 'OK'
-    assert loads(response['result']) == 1
+    yield n._close()

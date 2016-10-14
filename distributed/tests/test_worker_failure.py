@@ -237,6 +237,13 @@ def test_multiple_clients_restart(s, a, b):
     yield e2._shutdown(fast=True)
 
 
+@gen_cluster(Worker=Nanny)
+def test_restart_scheduler(s, a, b):
+    import gc; gc.collect()
+    yield s.restart()
+    assert len(s.ncores) == 2
+
+
 @gen_cluster(Worker=Nanny, client=True)
 def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
     x = c.submit(inc, 1)

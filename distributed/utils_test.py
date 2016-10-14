@@ -205,6 +205,7 @@ def run_nanny(q, scheduler_port, **kwargs):
 
 @contextmanager
 def cluster(nworkers=2, nanny=False, worker_kwargs={}):
+    rpc_active = rpc.active
     if nanny:
         _run_worker = run_nanny
     else:
@@ -231,15 +232,15 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}):
         worker['port'] = worker['queue'].get()
 
     loop = IOLoop()
-    s = rpc(ip='127.0.0.1', port=sport)
     start = time()
     try:
-        while True:
-            ncores = loop.run_sync(s.ncores)
-            if len(ncores) == nworkers:
-                break
-            if time() - start > 5:
-                raise Exception("Timeout on cluster creation")
+        with rpc(ip='127.0.0.1', port=sport) as s:
+            while True:
+                ncores = loop.run_sync(s.ncores)
+                if len(ncores) == nworkers:
+                    break
+                if time() - start > 5:
+                    raise Exception("Timeout on cluster creation")
 
         yield {'proc': scheduler, 'port': sport}, workers
     finally:
@@ -262,6 +263,7 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}):
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
         loop.close(all_fds=True)
+        assert rpc.active == rpc_active  # no new rpcs made
 
 
 @gen.coroutine
@@ -362,6 +364,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
         cor = gen.coroutine(func)
 
         def test_func():
+            rpc_active = rpc.active
             IOLoop.clear_instance()
             loop = IOLoop()
             loop.make_current()
@@ -382,6 +385,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
                 loop.close(all_fds=True)
+            assert rpc.active == rpc_active
 
         return test_func
     return _

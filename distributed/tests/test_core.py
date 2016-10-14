@@ -43,13 +43,15 @@ def test_rpc(loop):
         server = Server({'ping': pingpong})
         server.listen(8887)
 
-        remote = rpc(ip='127.0.0.1', port=8887)
+        with rpc(ip='127.0.0.1', port=8887) as remote:
+            response = yield remote.ping()
+            assert response == b'pong'
 
-        response = yield remote.ping()
-        assert response == b'pong'
+            response = yield remote.ping(close=True)
+            assert response == b'pong'
 
-        response = yield remote.ping(close=True)
-        assert response == b'pong'
+        assert not remote.streams
+        assert remote.status == 'closed'
 
         server.stop()
 
@@ -67,6 +69,9 @@ def test_rpc_inputs():
          rpc(addr=b'127.0.0.1:8887')]
 
     assert all(r.ip == '127.0.0.1' and r.port == 8887 for r in L)
+
+    for r in L:
+        r.close_rpc()
 
 
 def test_rpc_with_many_connections(loop):
@@ -123,11 +128,11 @@ def test_identity(loop):
         server = Server({})
         server.listen(8887)
 
-        remote = rpc(ip='127.0.0.1', port=8887)
-        a = yield remote.identity()
-        b = yield remote.identity()
-        assert a['type'] == 'Server'
-        assert a['id'] == b['id']
+        with rpc(ip='127.0.0.1', port=8887) as remote:
+            a = yield remote.identity()
+            b = yield remote.identity()
+            assert a['type'] == 'Server'
+            assert a['id'] == b['id']
 
         server.stop()
 
@@ -165,12 +170,12 @@ def test_errors(loop):
 
 
 def test_coerce_to_rpc():
-    r = coerce_to_rpc(('127.0.0.1', 8000))
-    assert (r.ip, r.port) == ('127.0.0.1', 8000)
-    r = coerce_to_rpc('127.0.0.1:8000')
-    assert (r.ip, r.port) == ('127.0.0.1', 8000)
-    r = coerce_to_rpc('foo:bar:8000')
-    assert (r.ip, r.port) == ('foo:bar', 8000)
+    with coerce_to_rpc(('127.0.0.1', 8000)) as r:
+        assert (r.ip, r.port) == ('127.0.0.1', 8000)
+    with coerce_to_rpc('127.0.0.1:8000') as r:
+        assert (r.ip, r.port) == ('127.0.0.1', 8000)
+    with coerce_to_rpc('foo:bar:8000') as r:
+        assert (r.ip, r.port) == ('foo:bar', 8000)
 
 
 def stream_div(stream=None, x=None, y=None):
@@ -181,11 +186,9 @@ def test_errors():
     server = Server({'div': stream_div})
     server.listen(0)
 
-    r = rpc(ip='127.0.0.1', port=server.port)
-    with pytest.raises(ZeroDivisionError):
-        yield r.div(x=1, y=0)
-
-    r.close_streams()
+    with rpc(ip='127.0.0.1', port=server.port) as r:
+        with pytest.raises(ZeroDivisionError):
+            yield r.div(x=1, y=0)
 
 
 @gen_test()

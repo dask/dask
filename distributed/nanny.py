@@ -16,7 +16,7 @@ from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from .compatibility import JSONDecodeError
-from .core import Server, rpc, write
+from .core import Server, rpc, write, RPCClosed
 from .utils import get_ip, ignoring, log_errors, tmpfile
 from .worker import _ncores, Worker, run, TOTAL_MEMORY
 
@@ -91,13 +91,15 @@ class Nanny(Server):
             yield gen.sleep(0.1)
 
         if self.process is not None:
+            process, self.process = self.process, None  # avoid race with _watch
             try:
                 # Ask worker to close
-                worker = rpc(ip='127.0.0.1', port=self.worker_port)
-                result = yield gen.with_timeout(
-                            timedelta(seconds=min(1, timeout)),
-                            worker.terminate(report=False),
-                            io_loop=self.loop)
+                with rpc(ip='127.0.0.1', port=self.worker_port) as worker:
+                    result = yield gen.with_timeout(
+                                timedelta(seconds=min(1, timeout)),
+                                worker.terminate(report=False),
+                                io_loop=self.loop)
+
             except gen.TimeoutError:
                 logger.info("Worker non-responsive.  Terminating.")
             except StreamClosedError:
@@ -121,11 +123,12 @@ class Nanny(Server):
                 logger.info("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
-            except StreamClosedError:
+            except (StreamClosedError, RPCClosed):
                 pass
             except Exception as e:
                 logger.exception(e)
 
+            self.process = process  # re-instantiate self.process
             if self.process:
                 with ignoring(OSError):
                     self.process.terminate()
@@ -242,7 +245,7 @@ class Nanny(Server):
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         self.status = 'closed'
         yield self._kill(timeout=timeout)
-        self.scheduler.close_streams()
+        self.scheduler.close_rpc()
         self.stop()
         raise gen.Return('OK')
 

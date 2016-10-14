@@ -764,7 +764,6 @@ class Scheduler(Server):
                     else:
                         recommendations[key] = 'forgotten'
 
-
             self.transitions(recommendations)
 
             if not self.stacks:
@@ -1277,18 +1276,22 @@ class Scheduler(Server):
             logger.debug("Send kill signal to nannies: %s", nannies)
             nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
                        for worker_address, n_port in nannies.items()]
-            yield All([nanny.kill() for nanny in nannies])
-            logger.debug("Received done signal from nannies")
+            try:
+                yield All([nanny.kill() for nanny in nannies])
+                logger.debug("Received done signal from nannies")
 
-            while self.ncores:
-                yield gen.sleep(0.01)
+                while self.ncores:
+                    yield gen.sleep(0.01)
 
-            logger.debug("Workers all removed.  Sending startup signal")
+                logger.debug("Workers all removed.  Sending startup signal")
 
-            # All quiet
-            resps = yield All([nanny.instantiate(close=True,
-                environment=environment) for nanny in nannies])
-            assert all(resp == 'OK' for resp in resps)
+                # All quiet
+                resps = yield All([nanny.instantiate(close=True,
+                    environment=environment) for nanny in nannies])
+                assert all(resp == 'OK' for resp in resps)
+            finally:
+                for nanny in nannies:
+                    nanny.close_rpc()
 
             self.start()
 

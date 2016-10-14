@@ -2443,6 +2443,7 @@ def test_unrunnable_task_runs(c, s, a, b):
     assert x.key not in s.unrunnable
     result = yield x._result()
     assert result == 2
+    yield w._close()
 
 
 @gen_cluster(client=True, ncores=[])
@@ -2933,6 +2934,7 @@ def test_Client_clears_references_after_restart(c, s, a, b):
 
 
 def test_get_stops_work_after_error(loop):
+    # TODO: this test uses very old testing machinery
     loop2 = IOLoop()
     s = Scheduler(loop=loop2, validate=True)
     s.start(0)
@@ -2952,10 +2954,13 @@ def test_get_stops_work_after_error(loop):
             sleep(0.1)
             assert time() < start + 5
 
+    sync(loop2, w._close)
+    sync(loop2, s.close)
     loop2.add_callback(loop2.stop)
     while loop2._running:
         sleep(0.01)
     loop2.close(all_fds=True)
+
     t.join()
 
 
@@ -3271,6 +3276,9 @@ def test_publish_simple(s, a, b):
     result = yield f.scheduler.list_datasets()
     assert result == ['data']
 
+    yield c._shutdown()
+    yield f._shutdown()
+
 
 @gen_cluster(client=False)
 def test_publish_roundtrip(s, a, b):
@@ -3294,6 +3302,9 @@ def test_publish_roundtrip(s, a, b):
 
     assert "not found" in str(exc_info.value)
     assert "nonexistent" in str(exc_info.value)
+
+    yield c._shutdown()
+    yield f._shutdown()
 
 
 @gen_cluster(client=True)
@@ -3356,6 +3367,8 @@ def test_publish_bag(s, a, b):
 
     out = yield f.compute(result)._result()
     assert out == [0, 1, 2]
+    yield c._shutdown()
+    yield f._shutdown()
 
 
 @gen_cluster(client=True)
@@ -3491,6 +3504,9 @@ def test_serialize_future(s, a, b):
         result2 = yield future2._result()
         assert result == result2
 
+    yield c._shutdown()
+    yield f._shutdown()
+
 
 @gen_cluster(client=False)
 def test_temp_client(s, a, b):
@@ -3506,6 +3522,9 @@ def test_temp_client(s, a, b):
     with temp_default_client(f):
         assert default_client() is f
         assert default_client(c) is c
+
+    yield c._shutdown()
+    yield f._shutdown()
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)] * 3, client=True)

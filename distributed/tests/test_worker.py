@@ -166,9 +166,8 @@ def test_worker_bad_args(c, a, b):
     assert isinstance(response['compute_stop'], float)
     assert isinstance(response['thread'], Integral)
 
-    aa.close_streams()
-
-    bb.close_streams()
+    aa.close_rpc()
+    bb.close_rpc()
 
 
 @gen_cluster()
@@ -216,7 +215,7 @@ def test_worker(c, a, b):
                       loads(response['traceback'])))
                   if line)
 
-    aa.close_streams()
+    aa.close_rpc()
     yield a._close()
 
     assert a.address not in c.ncores and b.address in c.ncores
@@ -227,7 +226,7 @@ def test_worker(c, a, b):
     assert b.ip in b.address
     assert str(b.port) in b.address
 
-    bb.close_streams()
+    bb.close_rpc()
 
 
 def test_compute_who_has(current_loop):
@@ -258,7 +257,7 @@ def test_compute_who_has(current_loop):
         assert z.data['c'] == 3
 
         yield [x._close(), y._close(), z._close()]
-        zz.close_streams()
+        zz.close_rpc()
 
     current_loop.run_sync(f, timeout=5)
 
@@ -280,7 +279,7 @@ def dont_test_workers_update_center(s, a, b):
     assert not s.who_has['x']
     assert all('x' not in s for s in c.has_what.values())
 
-    aa.close_streams()
+    aa.close_rpc()
 
 
 @slow
@@ -301,7 +300,7 @@ def dont_test_delete_data_with_missing_worker(c, a, b):
     assert not c.has_what[bad]
     assert not c.has_what[a.address]
 
-    cc.close_streams()
+    cc.close_rpc()
 
 
 @gen_cluster()
@@ -329,8 +328,8 @@ def test_upload_file(s, a, b):
 
     yield a._close()
     yield b._close()
-    aa.close_streams()
-    bb.close_streams()
+    aa.close_rpc()
+    bb.close_rpc()
     assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
 
 
@@ -362,18 +361,16 @@ def test_upload_egg(s, a, b):
 
     yield a._close()
     yield b._close()
-    aa.close_streams()
-    bb.close_streams()
+    aa.close_rpc()
+    bb.close_rpc()
     assert not os.path.exists(os.path.join(a.local_dir, eggname))
 
 
 @gen_cluster()
 def test_broadcast(s, a, b):
-    cc = rpc(ip=s.ip, port=s.port)
-    results = yield cc.broadcast(msg={'op': 'ping'})
-    assert results == {a.address: b'pong', b.address: b'pong'}
-
-    cc.close_streams()
+    with rpc(ip=s.ip, port=s.port) as cc:
+        results = yield cc.broadcast(msg={'op': 'ping'})
+        assert results == {a.address: b'pong', b.address: b'pong'}
 
 
 @gen_test()
@@ -401,30 +398,28 @@ def test_worker_waits_for_center_to_come_up(current_loop):
 
 @gen_cluster()
 def test_worker_task(s, a, b):
-    aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
-
-    assert a.data['x'] == 2
+    with rpc(ip=a.ip, port=a.port) as aa:
+        yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
+        assert a.data['x'] == 2
 
 
 @gen_cluster()
 def test_worker_task_data(s, a, b):
-    aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps(2), key='x', report=False)
+    with rpc(ip=a.ip, port=a.port) as aa:
+        yield aa.compute(task=dumps(2), key='x', report=False)
 
     assert a.data['x'] == 2
 
 
 @gen_cluster()
 def test_worker_task_bytes(s, a, b):
-    aa = rpc(ip=a.ip, port=a.port)
+    with rpc(ip=a.ip, port=a.port) as aa:
+        yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
+        assert a.data['x'] == 2
 
-    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
-    assert a.data['x'] == 2
-
-    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y',
-            report=False)
-    assert a.data['y'] == 11
+        yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y',
+                report=False)
+        assert a.data['y'] == 11
 
 
 def test_error_message():
@@ -442,12 +437,12 @@ def test_error_message():
 def test_gather(s, a, b):
     b.data['x'] = 1
     b.data['y'] = 2
-    aa = rpc(ip=a.ip, port=a.port)
-    resp = yield aa.gather(who_has={'x': [b.address], 'y': [b.address]})
-    assert resp['status'] == 'OK'
+    with rpc(ip=a.ip, port=a.port) as aa:
+        resp = yield aa.gather(who_has={'x': [b.address], 'y': [b.address]})
+        assert resp['status'] == 'OK'
 
-    assert a.data['x'] == b.data['x']
-    assert a.data['y'] == b.data['y']
+        assert a.data['x'] == b.data['x']
+        assert a.data['y'] == b.data['y']
 
 
 @gen_cluster()
@@ -522,6 +517,7 @@ def test_spill_to_disk(e, s):
     yield x._result()
     assert set(w.data.fast) == {x.key, z.key}
     assert set(w.data.slow) == {y.key}
+    yield w._close()
 
 
 @gen_cluster(client=True)
