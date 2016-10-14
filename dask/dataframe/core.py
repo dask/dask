@@ -9,7 +9,7 @@ from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, partial, first, unique
+from toolz import merge, partial, first, unique, partition_all
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -2585,9 +2585,10 @@ def _maybe_from_pandas(dfs):
 
 
 @insert_meta_param_description
-def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
-                       token=None, chunk_kwargs=None, aggregate_kwargs=None,
-                       **kwargs):
+def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
+                       meta=no_default, token=None, split_every=False,
+                       chunk_kwargs=None, aggregate_kwargs=None,
+                       combine_kwargs=None, **kwargs):
     """Apply a function to blocks, then concat, then apply again
 
     Parameters
@@ -2599,16 +2600,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
         Function to operate on each block of data
     aggregate : function concatenated-block -> block
         Function to operate on the concatenated result of chunk
+    combine : function concatenated-block -> block, optional
+        Function to operate on intermediate concatenated results of chunk
+        in a tree-reduction. If not provided, defaults to aggregate.
     $META
     token : str, optional
         The name to use for the output keys.
+    split_every : int, optional
+        Group partitions into groups of this size while performing a
+        tree-reduction. If set to False, no tree-reduction will be used,
+        and all intermediates will be concatenated and passed to ``aggregate``.
+        Default is 8.
     chunk_kwargs : dict, optional
         Keywords for the chunk function only.
     aggregate_kwargs : dict, optional
         Keywords for the aggregate function only.
+    combine_kwargs : dict, optional
+        Keywords for the combine function only
     kwargs :
-        All remaining keywords will be passed to both ``chunk`` and
-        ``aggregate``.
+        All remaining keywords will be passed to ``chunk``, ``aggregate``, and
+        ``combine``.
 
     Examples
     --------
@@ -2624,35 +2635,66 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
         chunk_kwargs = dict()
     if aggregate_kwargs is None:
         aggregate_kwargs = dict()
+    if combine_kwargs is None:
+        combine_kwargs = dict()
     chunk_kwargs.update(kwargs)
     aggregate_kwargs.update(kwargs)
+    combine_kwargs.update(kwargs)
+
+    if combine is None:
+        combine = aggregate
 
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    assert all(arg.npartitions == args[0].npartitions
-               for arg in args if isinstance(arg, _Frame))
+    npartitions = set(arg.npartitions for arg in args
+                      if isinstance(arg, _Frame))
+    if len(npartitions) > 1:
+        raise ValueError("All arguments must have same number of partitions")
+    npartitions = npartitions.pop()
+
+    if split_every is None:
+        split_every = 8
+    elif split_every is False:
+        split_every = npartitions
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
-                         chunk_kwargs, aggregate_kwargs)
+                         chunk_kwargs, aggregate_kwargs, combine_kwargs,
+                         split_every)
 
+    # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = dict(((a, i), (chunk, key))
-                   for i, key in enumerate(args[0]._keys()))
+        dsk = {(a, i): (chunk, key) for i, key in enumerate(args[0]._keys())}
     else:
-        dsk = dict(((a, i), (apply, chunk, [(x._name, i)
-                                            if isinstance(x, _Frame)
-                                            else x for x in args],
-                             chunk_kwargs))
-                   for i in range(args[0].npartitions))
+        dsk = {(a, i): (apply, chunk, [(x._name, i) if isinstance(x, _Frame)
+                                       else x for x in args], chunk_kwargs)
+               for i in range(args[0].npartitions)}
 
-    b = '{0}-{1}'.format(token or funcname(aggregate), token_key)
-    conc = (_concat, (list, [(a, i) for i in range(args[0].npartitions)]))
-    if not aggregate_kwargs:
-        dsk2 = {(b, 0): (aggregate, conc)}
+    # Combine
+    prefix = '{0}-combine-{1}-'.format(token or funcname(combine), token_key)
+    k = npartitions
+    b = a
+    depth = 0
+    while k > split_every:
+        b = prefix + str(depth)
+        for i, inds in enumerate(partition_all(split_every, range(k))):
+            conc = (_concat, (list, [(a, i) for i in inds]))
+            if combine_kwargs:
+                dsk[(b, i)] = (apply, combine, [conc], combine_kwargs)
+            else:
+                dsk[(b, i)] = (combine, conc)
+        k = i + 1
+        a = b
+        depth += 1
+
+    # Aggregate
+    b = '{0}-agg-{1}'.format(token or funcname(aggregate), token_key)
+    conc = (_concat, (list, [(a, i) for i in range(k)]))
+    if aggregate_kwargs:
+        dsk[(b, 0)] = (apply, aggregate, [conc], aggregate_kwargs)
     else:
-        dsk2 = {(b, 0): (apply, aggregate, [conc], aggregate_kwargs)}
+        dsk[(b, 0)] = (aggregate, conc)
 
     if meta is no_default:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
@@ -2660,8 +2702,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, meta=no_default,
                         aggregate_kwargs)
     meta = make_meta(meta)
 
-    dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
-    return new_dd_object(merge(dsk, dsk2, *dasks), b, meta, [None, None])
+    for arg in args:
+        if isinstance(arg, _Frame):
+            dsk.update(arg.dask)
+    return new_dd_object(dsk, b, meta, [None, None])
 
 
 aca = apply_concat_apply
