@@ -97,7 +97,8 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                shutil.rmtree(dirname)
+                with ignoring(OSError):
+                    shutil.rmtree(dirname)
             else:
                 with ignoring(OSError):
                     os.remove(dirname)
@@ -197,7 +198,8 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
 
         for filename in d:
             if os.path.exists(filename):
-                os.remove(filename)
+                with ignoring(OSError):
+                    os.remove(filename)
 
 
 compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}

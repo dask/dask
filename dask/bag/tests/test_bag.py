@@ -517,7 +517,7 @@ def test_read_text_large():
         b = db.read_text(fn, blocksize=100)
         c = db.read_text(fn)
         assert len(b.dask) > 5
-        assert list(map(str, b)) == list(map(str, c))
+        assert list(map(str, b.str.strip())) == list(map(str, c.str.strip()))
 
         d = db.read_text([fn], blocksize=100)
         assert list(b) == list(d)
@@ -530,7 +530,8 @@ def test_read_text_encoding():
         b = db.read_text(fn, blocksize=100, encoding='gb18030')
         c = db.read_text(fn, encoding='gb18030')
         assert len(b.dask) > 5
-        assert list(map(lambda x: x.encode('utf-8'), b)) == list(map(lambda x: x.encode('utf-8'), c))
+        assert (list(b.str.strip().map(lambda x: x.encode('utf-8'))) ==
+                list(c.str.strip().map(lambda x: x.encode('utf-8'))))
 
         d = db.read_text([fn], blocksize=100, encoding='gb18030')
         assert list(b) == list(d)
