@@ -550,15 +550,12 @@ class Client(object):
         --------
         Client.restart
         """
+        # XXX handling of self.status here is not thread-safe
         if self.status == 'closed':
             return
-        self.status = 'closed'
-        with ignoring(AttributeError):
-            self.loop.add_callback(self.scheduler_stream.send,
-                                   {'op': 'close-stream'})
-            sync(self.loop, self.scheduler_stream.close)
-        with ignoring(AttributeError):
-            self.scheduler.close_rpc()
+        sync(self.loop, self._shutdown, fast=True)
+        assert self.status == 'closed'
+
         if self._should_close_loop:
             sync(self.loop, self.loop.stop)
             self.loop.close(all_fds=True)
@@ -567,8 +564,6 @@ class Client(object):
             dask.set_options(get=self._previous_get)
         with ignoring(AttributeError):
             dask.set_options(shuffle=self._previous_shuffle)
-        if _global_client[0] is self:
-            _global_client[0] = None
         if self.get == _globals.get('get'):
             del _globals['get']
         with ignoring(AttributeError):

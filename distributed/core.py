@@ -593,7 +593,15 @@ class ConnectionPool(object):
     def collect(self):
         logger.info("Collecting unused streams.  open: %d, active: %d",
                     self.open, self.active)
-        for k, streams in list(self.available.items()):
+        for streams in list(self.available.values()):
+            for stream in streams:
+                stream.close()
+
+    def close(self):
+        for streams in list(self.available.values()):
+            for stream in streams:
+                stream.close()
+        for streams in list(self.occupied.values()):
             for stream in streams:
                 stream.close()
 

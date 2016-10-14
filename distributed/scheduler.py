@@ -334,9 +334,6 @@ class Scheduler(Server):
 
     __repr__ = __str__
 
-    def __del__(self):
-        self.close_streams()
-
     @property
     def address(self):
         return '%s:%d' % (self.ip, self.port)
@@ -406,11 +403,9 @@ class Scheduler(Server):
 
     def close_streams(self):
         """ Close all active IOStreams """
-        with ignoring(AttributeError):
-            for r in self._rpcs.values():
-                r.close_rpc()
         for stream in self.streams.values():
             stream.stream.close()
+        self.rpc.close()
 
     @gen.coroutine
     def close(self, stream=None, fast=False):

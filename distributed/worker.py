@@ -255,6 +255,7 @@ class Worker(Server):
 
         for k, v in self.services.items():
             v.stop()
+        self.rpc.close()
         self.status = 'closed'
         self.stop()
 

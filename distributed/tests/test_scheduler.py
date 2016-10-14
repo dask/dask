@@ -50,7 +50,7 @@ def test_administration(s, a, b):
 @gen_cluster(ncores=[])
 def test_update_state(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
-    s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
+    s.update_graph(tasks={'x': 1, 'y': dumps_task((inc, 'x'))},
                    keys=['y'],
                    dependencies={'y': 'x', 'x': set()},
                    client='client')
@@ -67,13 +67,14 @@ def test_update_state(s):
     assert s.who_wants == {'y': {'client'}}
     assert s.wants_what == {'client': {'y'}}
 
-    s.update_graph(tasks={'a': 1, 'z': (add, 'y', 'a')},
+    s.update_graph(tasks={'a': 1, 'z': dumps_task((add, 'y', 'a'))},
                    keys=['z'],
                    dependencies={'z': {'y', 'a'}},
                    client='client')
 
 
-    assert s.tasks == {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
+    assert s.tasks == {'x': 1, 'y': dumps_task((inc, 'x')), 'a': 1,
+                       'z': dumps_task((add, 'y', 'a'))}
     assert s.dependencies == {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
     assert s.dependents == {'z': set(), 'y': {'z'}, 'a': {'z'}, 'x': {'y'}}
 
@@ -89,7 +90,8 @@ def test_update_state(s):
 @gen_cluster(ncores=[])
 def test_update_state_with_processing(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
-    s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')},
+    s.update_graph(tasks={'x': 1, 'y': dumps_task((inc, 'x')),
+                          'z': dumps_task((inc, 'y'))},
                    keys=['z'],
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
@@ -109,7 +111,8 @@ def test_update_state_with_processing(s):
 
     assert s.who_has == {'x': {alice}}
 
-    s.update_graph(tasks={'a': (inc, 'x'), 'b': (add,'a','y'), 'c': (inc, 'z')},
+    s.update_graph(tasks={'a': dumps_task((inc, 'x')), 'b': (add,'a','y'),
+                          'c': dumps_task((inc, 'z'))},
                    keys=['b', 'c'],
                    dependencies={'a': {'x'}, 'b': {'a', 'y'}, 'c': {'z'}},
                    client='client')
@@ -144,7 +147,8 @@ def test_update_state_respects_data_in_memory(c, s, a):
 @gen_cluster(ncores=[])
 def test_update_state_supports_recomputing_released_results(s):
     s.add_worker(address=alice, ncores=1, coerce_address=False)
-    s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')},
+    s.update_graph(tasks={'x': 1, 'y': dumps_task((inc, 'x')),
+                          'z': dumps_task((inc, 'x'))},
                    keys=['z'],
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
@@ -169,7 +173,7 @@ def test_update_state_supports_recomputing_released_results(s):
 
     assert s.who_has == {'z': {alice}}
 
-    s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
+    s.update_graph(tasks={'x': 1, 'y': dumps_task((inc, 'x'))},
                    keys=['y'],
                    dependencies={'y': {'x'}, 'x': set()},
                    client='client')
@@ -896,7 +900,9 @@ def test_file_descriptors_dont_leak(s):
 @gen_cluster()
 def test_update_graph_culls(s, a, b):
     s.add_client(client='client')
-    s.update_graph(tasks={'x': (inc, 1), 'y': (inc, 'x'), 'z': (inc, 2)},
+    s.update_graph(tasks={'x': dumps_task((inc, 1)),
+                          'y': dumps_task((inc, 'x')),
+                          'z': dumps_task((inc, 2))},
                    keys=['y'],
                    dependencies={'y': 'x', 'x': [], 'z': []},
                    client='client')

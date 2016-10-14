@@ -13,7 +13,7 @@ from distributed.utils import ignoring
 def test_BokehWebInterface(loop):
     with LocalCluster(2, loop=loop, scheduler_port=0,
                       services={('http', 0): HTTPScheduler},
-                      diagnostic_port=None) as c:
+                      diagnostics_port=None) as c:
         with pytest.raises(Exception):
             response = requests.get('http://127.0.0.1:8787/status/')
         with BokehWebInterface(

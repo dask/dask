@@ -245,6 +245,7 @@ class Nanny(Server):
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         self.status = 'closed'
         yield self._kill(timeout=timeout)
+        self.rpc.close()
         self.scheduler.close_rpc()
         self.stop()
         raise gen.Return('OK')

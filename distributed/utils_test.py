@@ -344,6 +344,7 @@ def end_cluster(s, workers):
             yield w._close(report=False)
         if w.local_dir and os.path.exists(w.local_dir):
             shutil.rmtree(w.local_dir)
+    yield s.close()
     s.stop()
 
 
