@@ -66,6 +66,10 @@ def unique(x, series_name=None):
     return pd.Series(pd.Series.unique(x), name=series_name)
 
 
+def value_counts_combine(x):
+    return x.groupby(level=0).sum()
+
+
 def value_counts_aggregate(x):
     return x.groupby(level=0).sum().sort_values(ascending=False)
 
