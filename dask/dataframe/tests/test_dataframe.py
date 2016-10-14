@@ -1137,6 +1137,12 @@ def test_random_partitions():
     assert len(a.compute()) + len(b.compute()) == len(full)
 
 
+def test_series_round():
+    ps = pd.Series([1.123, 2.123, 3.123, 1.234, 2.234, 3.234], name='a')
+    s = dd.from_pandas(ps, npartitions=3)
+    assert eq(s.round(), ps.round())
+
+
 def test_series_nunique():
     ps = pd.Series(list('aaabbccccdddeee'), name='a')
     s = dd.from_pandas(ps, npartitions=3)
@@ -1627,6 +1633,18 @@ def test_rename_index():
     assert raises(ValueError, lambda: d.rename(index=renamer))
 
 
+def test_to_timestamp():
+    index = pd.PeriodIndex(freq='A', start='1/1/2001', end='12/1/2004')
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]}, index=index)
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert eq(ddf.to_timestamp(), df.to_timestamp())
+    assert eq(ddf.to_timestamp(freq='M', how='s').compute(),
+              df.to_timestamp(freq='M', how='s'))
+    assert eq(ddf.x.to_timestamp(), df.x.to_timestamp())
+    assert eq(ddf.x.to_timestamp(freq='M', how='s').compute(),
+              df.x.to_timestamp(freq='M', how='s'))
+
+
 def test_to_frame():
     s = pd.Series([1, 2, 3], name='foo')
     a = dd.from_pandas(s, npartitions=2)
@@ -1667,6 +1685,22 @@ def test_apply():
 
     with tm.assertRaises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis='index')
+
+
+def test_applymap():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+
+    assert eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
+def test_round():
+    df = pd.DataFrame({'col1': [1.123, 2.123, 3.123],
+                       'col2': [1.234, 2.234, 3.234]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert eq(ddf.round(), df.round())
+    assert eq(ddf.round(2), df.round(2))
 
 
 def test_cov():

@@ -1486,6 +1486,16 @@ class Series(_Frame):
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
 
+    @derived_from(pd.Series)
+    def round(self, decimals=0):
+        return elemwise(M.round, self, decimals)
+
+    @derived_from(pd.DataFrame)
+    def to_timestamp(self, freq=None, how='start', axis=0):
+        df = elemwise(M.to_timestamp, self, freq, how, axis)
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        return df
+
     def quantile(self, q=0.5):
         """ Approximate quantiles of Series
 
@@ -1671,6 +1681,19 @@ class Series(_Frame):
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
+        bind_method(cls, name, meth)
+
+    @classmethod
+    def _bind_comparison_method(cls, name, comparison):
+        """ bind comparison method like DataFrame.add to this class """
+
+        def meth(self, other, level=None, axis=0):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+            axis = self._validate_axis(axis)
+            return elemwise(comparison, self, other, axis=axis)
+
+        meth.__doc__ = comparison.__doc__
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
@@ -2113,6 +2136,12 @@ class DataFrame(_Frame):
     def dropna(self, how='any', subset=None):
         return self.map_partitions(M.dropna, how=how, subset=subset)
 
+    @derived_from(pd.DataFrame)
+    def to_timestamp(self, freq=None, how='start', axis=0):
+        df = elemwise(M.to_timestamp, self, freq, how, axis)
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        return df
+
     def to_castra(self, fn=None, categories=None, sorted_index_column=None,
                   compute=True, get=get_sync):
         """ Write DataFrame to Castra on-disk store
@@ -2246,6 +2275,19 @@ class DataFrame(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
+    @classmethod
+    def _bind_comparison_method(cls, name, comparison):
+        """ bind comparison method like DataFrame.add to this class """
+
+        def meth(self, other, axis='columns', level=None):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+            axis = self._validate_axis(axis)
+            return elemwise(comparison, self, other, axis=axis)
+
+        meth.__doc__ = comparison.__doc__
+        bind_method(cls, name, meth)
+
     @insert_meta_param_description(pad=12)
     def apply(self, func, axis=0, args=(), meta=no_default,
               columns=no_default, **kwds):
@@ -2343,6 +2385,14 @@ class DataFrame(_Frame):
                               False, False, None, args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
+    def applymap(self, func, meta='__no_default__'):
+        return elemwise(M.applymap, self, func, meta=meta)
+
+    @derived_from(pd.DataFrame)
+    def round(self, decimals=0):
+        return elemwise(M.round, self, decimals)
+
+    @derived_from(pd.DataFrame)
     def cov(self, min_periods=None):
         return cov_corr(self, min_periods)
 
@@ -2419,6 +2469,13 @@ for name in ['add', 'sub', 'mul', 'div',
 
     meth = getattr(pd.Series, name)
     Series._bind_operator_method(name, meth)
+
+for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
+    meth = getattr(pd.DataFrame, name)
+    DataFrame._bind_comparison_method(name, meth)
+
+    meth = getattr(pd.Series, name)
+    Series._bind_comparison_method(name, meth)
 
 
 def elemwise_property(attr, s):
