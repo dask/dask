@@ -2132,7 +2132,9 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
-        return elemwise(M.to_timestamp, self, freq, how, axis)
+        df = elemwise(M.to_timestamp, self, freq, how, axis)
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        return df
 
     def to_castra(self, fn=None, categories=None, sorted_index_column=None,
                   compute=True, get=get_sync):

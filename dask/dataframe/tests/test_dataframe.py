@@ -1638,7 +1638,8 @@ def test_to_timestamp():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
     assert eq(ddf.to_timestamp(), df.to_timestamp())
-    assert eq(ddf.to_timestamp(freq='M', how='s').compute(), df.to_timestamp(freq='M', how='s'))
+    assert eq(ddf.to_timestamp(freq='M', how='s').compute(),
+              df.to_timestamp(freq='M', how='s'))
 
 
 def test_to_frame():
