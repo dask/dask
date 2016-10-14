@@ -1,8 +1,7 @@
 Dask
 ====
 
-|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |Downloads|
-|Dask Examples|
+|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|
 
 Dask is a flexible parallel computing library for analytics.  See
 documentation_ for more information.
@@ -27,8 +26,3 @@ New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt
    :target: https://gitter.im/dask/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
    :target: https://pypi.python.org/pypi/dask/
-.. |Downloads| image:: https://img.shields.io/pypi/dm/dask.svg
-   :target: https://pypi.python.org/pypi/dask/
-.. |Dask Examples| image:: http://mybinder.org/badge.svg
-   :alt: Dask Example Notebooks
-   :target: http://mybinder.org/repo/dask/dask-examples
