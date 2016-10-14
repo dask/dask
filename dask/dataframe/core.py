@@ -1486,14 +1486,6 @@ class Series(_Frame):
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
 
-    @cache_readonly
-    def dt(self):
-        return DatetimeAccessor(self)
-
-    @cache_readonly
-    def str(self):
-        return StringAccessor(self)
-
     @derived_from(pd.Series)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
