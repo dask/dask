@@ -11,7 +11,6 @@ import threading
 from threading import current_thread, Lock
 
 from .async import get_async
-from .compatibility import Queue
 from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 
@@ -65,9 +64,8 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
                 pool = ThreadPool(num_workers)
                 pools[thread][num_workers] = pool
 
-    queue = Queue()
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
-                        cache=cache, queue=queue, get_id=_thread_get_id,
+                        cache=cache, get_id=_thread_get_id,
                         **kwargs)
 
     # Cleanup pools associated to dead threads
