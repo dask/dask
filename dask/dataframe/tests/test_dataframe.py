@@ -1640,6 +1640,9 @@ def test_to_timestamp():
     assert eq(ddf.to_timestamp(), df.to_timestamp())
     assert eq(ddf.to_timestamp(freq='M', how='s').compute(),
               df.to_timestamp(freq='M', how='s'))
+    assert eq(ddf.x.to_timestamp(), df.x.to_timestamp())
+    assert eq(ddf.x.to_timestamp(freq='M', how='s').compute(),
+              df.x.to_timestamp(freq='M', how='s'))
 
 
 def test_to_frame():

@@ -1490,6 +1490,12 @@ class Series(_Frame):
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
 
+    @derived_from(pd.DataFrame)
+    def to_timestamp(self, freq=None, how='start', axis=0):
+        df = elemwise(M.to_timestamp, self, freq, how, axis)
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        return df
+
     def quantile(self, q=0.5):
         """ Approximate quantiles of Series
 
