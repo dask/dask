@@ -1,8 +1,16 @@
-1.13.3
+1.13.3 - October 15th, 2016
 ------
 
-*  Schedulers can retire workers cleanly
-*  Add Future.add_done_callback
+*   Schedulers can retire workers cleanly
+*   Add Future.add_done_callback for concurrent.futures compatibility
+*   Update web interface to be consistent with Bokeh 0.12.3
+*   Close streams explicitly, avoiding race conditions and supporting
+    more robust restarts on Windows.
+*   Improved shuffled performance for dask.dataframe
+*   Add adaptive allocation cluster manager
+*   Reduce administrative overhead when dealing with many workers
+*   dask-ssh --log-directory . no longer errors
+*   Microperformance tuning for the scheduler
 
 1.13.2
 ------

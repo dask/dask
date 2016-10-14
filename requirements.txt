@@ -3,9 +3,9 @@ toolz >= 0.7.4
 msgpack-python
 cloudpickle >= 0.2.1
 dask >= 0.11.0
-click
+click >= 6.6
 six
 tblib
 psutil
 locket
-zict
+zict >= 0.0.3
