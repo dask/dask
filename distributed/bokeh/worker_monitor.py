@@ -23,8 +23,8 @@ with ignoring(ImportError):
 def _format_resource_profile_plot(plot):
     plot.legend[0].location = 'top_left'
     plot.legend[0].orientation = 'horizontal'
-    plot.legend[0].legend_padding = 5
-    plot.legend[0].legend_margin = 5
+    plot.legend[0].padding = 5
+    plot.legend[0].margin = 5
     plot.legend[0].label_height = 5
     plot.toolbar.logo = None
     plot.yaxis[0].ticker.num_minor_ticks = 2
