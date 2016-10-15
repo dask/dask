@@ -133,10 +133,11 @@ def test_pivot_table_errors():
     msg = "'values' must be a scalar"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values=['B'])
-    msg = "'aggfunc' must be a scalar"
+
+    msg = "aggfunc must be either 'mean', 'sum', 'count'"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc=['sum'])
-    msg = "aggfunc muset be either 'mean', 'sum', 'count'"
+
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc='xx')
 

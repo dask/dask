@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
+from . import methods
 from .utils import is_categorical_dtype, is_scalar
 
 
@@ -93,37 +94,28 @@ def pivot_table(df, index=None, columns=None,
         raise ValueError("'columns' must be category dtype")
     if not is_scalar(values) or values is None:
         raise ValueError("'values' must be a scalar")
-    if not is_scalar(aggfunc):
-        raise ValueError("'aggfunc' must be a scalar")
-    if aggfunc not in ('mean', 'sum', 'count'):
-        raise ValueError("aggfunc muset be either 'mean', 'sum', 'count'")
-
-    def agg(df):
-        return df.groupby(level=0).sum()
-
-    def pivot_sum(df, index=index, columns=columns,
-                  values=values):
-        return pd.pivot_table(df, index=index, columns=columns,
-                              values=values, aggfunc='sum')
-
-    def pivot_count(df, index=index, columns=columns,
-                    values=values):
-        return pd.pivot_table(df, index=index, columns=columns,
-                              values=values, aggfunc='count')
+    if not is_scalar(aggfunc) or aggfunc not in ('mean', 'sum', 'count'):
+        raise ValueError("aggfunc must be either 'mean', 'sum', 'count'")
 
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
-    columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+    new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+    meta = pd.DataFrame(columns=new_columns, dtype=np.float64)
 
-    meta = pd.DataFrame(columns=columns, dtype=np.float64)
+    kwargs = {'index': index, 'columns': columns, 'values': values}
+
     pv_sum = apply_concat_apply([df],
-                                chunk=pivot_sum, aggregate=agg,
+                                chunk=methods.pivot_sum,
+                                aggregate=methods.pivot_agg,
                                 meta=meta,
-                                token='pivot_table_sum')
+                                token='pivot_table_sum',
+                                chunk_kwargs=kwargs)
     pv_count = apply_concat_apply([df],
-                                  chunk=pivot_count, aggregate=agg,
+                                  chunk=methods.pivot_count,
+                                  aggregate=methods.pivot_agg,
                                   meta=meta,
-                                  token='pivot_table_count')
+                                  token='pivot_table_count',
+                                  chunk_kwargs=kwargs)
 
     if aggfunc == 'sum':
         return pv_sum
