@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import json
 import logging
 import os
+import socket
 
 from toolz import first
 from tornado import web, gen
@@ -76,7 +77,7 @@ class MyApp(HTTPServer):
             try:
                 super(MyApp, self).listen(port)
                 break
-            except OSError as e:
+            except (socket.error, OSError) as e:
                 if port:
                     raise
                 else:
