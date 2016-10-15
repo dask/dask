@@ -279,6 +279,10 @@ class _Frame(Base):
                 (self.__class__.__name__, name, self.npartitions, div_text))
 
     @property
+    def _elemwise_(self):
+        return map_partitions
+
+    @property
     def index(self):
         """Return dask Index instance"""
         name = self._name + '-index'

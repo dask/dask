@@ -544,10 +544,20 @@ def ensure_not_exists(filename):
 
 
 def _skip_doctest(line):
-    if '>>>' in line:
+    # NumPY docstring contains cursor and comment only example
+    stripped = line.strip()
+    if stripped == '>>>' or stripped.startswith('>>> #'):
+        return stripped
+    elif '>>>' in stripped:
         return line + '    # doctest: +SKIP'
     else:
         return line
+
+
+def skip_doctest(doc):
+    if doc is None:
+        return ''
+    return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
 
 
 def derived_from(original_klass, version=None, ua_args=[]):
@@ -589,7 +599,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
                         "        Dask doesn't supports following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
-            doc = '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+            doc = skip_doctest(doc)
             method.__doc__ = doc
             return method
 

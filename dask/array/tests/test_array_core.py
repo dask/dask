@@ -25,7 +25,7 @@ from dask.array import chunk
 from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
-                             notnull, broadcast_shapes, partial_by_order, exp,
+                             notnull, broadcast_shapes, partial_by_order,
                              tensordot, choose, where, coarsen, insert,
                              broadcast_to, reshape, fromfunction,
                              blockdims_from_blockshape, store, optimize,
@@ -507,7 +507,7 @@ def test_operators():
     expr = (3 / a * b)**2 > 5
     assert_eq(expr, (3 / x * y)**2 > 5)
 
-    c = exp(a)
+    c = da.exp(a)
     assert_eq(c, np.exp(x))
 
     assert_eq(abs(-a), a)
