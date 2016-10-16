@@ -278,8 +278,17 @@ class _Frame(Base):
         return ("dd.%s<%s, npartitions=%s%s>" %
                 (self.__class__.__name__, name, self.npartitions, div_text))
 
+    def __array__(self, dtype=None, **kwargs):
+        x = np.array(self.compute())
+        if dtype and x.dtype != dtype:
+            x = x.astype(dtype)
+        return x
+
+    def __array_wrap__(self, array, context=None):
+        raise NotImplementedError
+
     @property
-    def _elemwise_(self):
+    def _elemwise(self):
         return map_partitions
 
     @property
@@ -1426,6 +1435,9 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
+    def __array_wrap__(self, array, context=None):
+        return pd.Series(array, name=self.name)
+
     @property
     def name(self):
         return self._meta.name
@@ -1478,15 +1490,6 @@ class Series(_Frame):
     def nbytes(self):
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
-
-    def __array__(self, dtype=None, **kwargs):
-        x = np.array(self.compute())
-        if dtype and x.dtype != dtype:
-            x = x.astype(dtype)
-        return x
-
-    def __array_wrap__(self, array, context=None):
-        return pd.Series(array, name=self.name)
 
     @derived_from(pd.Series)
     def round(self, decimals=0):
@@ -1840,6 +1843,9 @@ class DataFrame(_Frame):
 
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
+
+    def __array_wrap__(self, array, context=None):
+        return pd.DataFrame(array, columns=self.columns)
 
     @property
     def columns(self):

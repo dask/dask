@@ -10,14 +10,12 @@ from .. import core
 from ..utils import skip_doctest
 
 
-def wrap_elemwise(numpy_ufunc, **wrapped_kwargs):
+def wrap_elemwise(numpy_ufunc):
     """ Wrap up numpy function into dask.array """
 
     def wrapped(x, *args, **kwargs):
-        if hasattr(x, '_elemwise_'):
-            return x._elemwise_(numpy_ufunc, x, *args, **kwargs)
-            # return x._elemwise_(numpy_ufunc, x, *args, **kwargs,
-            #                     **wrapped_kwargs)
+        if hasattr(x, '_elemwise'):
+            return x._elemwise(numpy_ufunc, x, *args, **kwargs)
         else:
             return numpy_ufunc(x, *args, **kwargs)
 
@@ -62,22 +60,22 @@ deg2rad = wrap_elemwise(np.deg2rad)
 rad2deg = wrap_elemwise(np.rad2deg)
 
 # comparison functions
-logical_and = wrap_elemwise(np.logical_and, dtype='bool')
-logical_or = wrap_elemwise(np.logical_or, dtype='bool')
-logical_xor = wrap_elemwise(np.logical_xor, dtype='bool')
-logical_not = wrap_elemwise(np.logical_not, dtype='bool')
+logical_and = wrap_elemwise(np.logical_and)
+logical_or = wrap_elemwise(np.logical_or)
+logical_xor = wrap_elemwise(np.logical_xor)
+logical_not = wrap_elemwise(np.logical_not)
 maximum = wrap_elemwise(np.maximum)
 minimum = wrap_elemwise(np.minimum)
 fmax = wrap_elemwise(np.fmax)
 fmin = wrap_elemwise(np.fmin)
 
 # floating functions
-isreal = wrap_elemwise(np.isreal, dtype='bool')
-iscomplex = wrap_elemwise(np.iscomplex, dtype='bool')
-isfinite = wrap_elemwise(np.isfinite, dtype='bool')
-isinf = wrap_elemwise(np.isinf, dtype='bool')
-isnan = wrap_elemwise(np.isnan, dtype='bool')
-signbit = wrap_elemwise(np.signbit, dtype='bool')
+isreal = wrap_elemwise(np.isreal)
+iscomplex = wrap_elemwise(np.iscomplex)
+isfinite = wrap_elemwise(np.isfinite)
+isinf = wrap_elemwise(np.isinf)
+isnan = wrap_elemwise(np.isnan)
+signbit = wrap_elemwise(np.signbit)
 copysign = wrap_elemwise(np.copysign)
 nextafter = wrap_elemwise(np.nextafter)
 # modf: see below

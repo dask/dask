@@ -25,7 +25,7 @@ def test_ufunc(ufunc):
     s = pd.Series(np.random.randint(1, 100, size=20))
     ds = dd.from_pandas(s, 3)
 
-    # applying Dask ufunc doesn't trigger to computation
+    # applying Dask ufunc doesn't trigger computation
     assert isinstance(dafunc(ds), dd.Series)
     assert eq(dafunc(ds), npfunc(s))
 
@@ -36,3 +36,19 @@ def test_ufunc(ufunc):
     # applying Dask ufunc to normal Series triggers computation
     assert isinstance(dafunc(s), pd.Series)
     assert eq(dafunc(s), npfunc(s))
+
+    df = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                      columns=['A', 'B'])
+    ddf = dd.from_pandas(df, 3)
+
+    # applying Dask ufunc doesn't trigger computation
+    assert isinstance(dafunc(ddf), dd.DataFrame)
+    assert eq(dafunc(ddf), npfunc(df))
+
+    # applying NumPy ufunc triggers computation
+    assert isinstance(npfunc(ddf), pd.DataFrame)
+    assert eq(npfunc(ddf), npfunc(df))
+
+    # applying Dask ufunc to normal Series triggers computation
+    assert isinstance(dafunc(df), pd.DataFrame)
+    assert eq(dafunc(df), npfunc(df))

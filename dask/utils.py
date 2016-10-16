@@ -544,7 +544,7 @@ def ensure_not_exists(filename):
 
 
 def _skip_doctest(line):
-    # NumPY docstring contains cursor and comment only example
+    # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped

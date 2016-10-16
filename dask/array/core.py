@@ -974,7 +974,7 @@ class Array(Base):
         return x
 
     @property
-    def _elemwise_(self):
+    def _elemwise(self):
         return elemwise
 
     @wraps(store)
