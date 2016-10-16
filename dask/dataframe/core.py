@@ -1384,6 +1384,29 @@ class _Frame(Base):
             divisions = [None] * (self.npartitions + other.npartitions + 1)
             return _append(self, other, divisions)
 
+    @derived_from(pd.DataFrame)
+    def align(self, other, join='outer', axis=None, fill_value=None):
+        meta1, meta2 = _emulate(M.align, self, other, join, axis=axis,
+                                fill_value=fill_value)
+        aligned = self.map_partitions(M.align, other, join=join, axis=axis,
+                                      fill_value=fill_value)
+
+        token = tokenize(self, other, join, axis, fill_value)
+
+        name1 = 'align1-' + token
+        dsk1 = dict(((name1, i), (getitem, key, 0))
+                    for i, key in enumerate(aligned._keys()))
+        dsk1.update(aligned.dask)
+        result1 = self._constructor(dsk1, name1, meta1, aligned.divisions)
+
+        name2 = 'align2-' + token
+        dsk2 = dict(((name2, i), (getitem, key, 1))
+                    for i, key in enumerate(aligned._keys()))
+        dsk2.update(aligned.dask)
+        result2 = self._constructor(dsk2, name2, meta2, aligned.divisions)
+
+        return result1, result2
+
     @classmethod
     def _bind_operator_method(cls, name, op):
         """ bind operator method like DataFrame.add to this class """
@@ -1659,6 +1682,11 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def clip_upper(self, threshold):
         return self.map_partitions(M.clip_upper, threshold=threshold)
+
+    @derived_from(pd.Series)
+    def align(self, other, join='outer', axis=None, fill_value=None):
+        return super(Series, self).align(other, join=join, axis=axis,
+                                         fill_value=fill_value)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag.
