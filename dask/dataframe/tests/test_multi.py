@@ -689,8 +689,13 @@ def test_cheap_single_partition_merge_divisions():
     b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
-    assert_divisions(aa.merge(bb, on='x', how='inner'))
-    assert_divisions(bb.merge(aa, on='x', how='inner'))
+    actual = aa.merge(bb, on='x', how='inner')
+    assert not actual.known_divisions
+    assert_divisions(actual)
+
+    actual = bb.merge(aa, on='x', how='inner')
+    assert not actual.known_divisions
+    assert_divisions(actual)
 
 
 def test_cheap_single_partition_merge_on_index():
@@ -701,10 +706,17 @@ def test_cheap_single_partition_merge_on_index():
     b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
-    assert eq(aa.merge(bb, left_index=True, right_on='x', how='inner'),
-              a.merge(b, left_index=True, right_on='x', how='inner'))
-    assert eq(bb.merge(aa, right_index=True, left_on='x', how='inner'),
-              b.merge(a, right_index=True, left_on='x', how='inner'))
+    actual = aa.merge(bb, left_index=True, right_on='x', how='inner')
+    expected = a.merge(b, left_index=True, right_on='x', how='inner')
+
+    assert actual.known_divisions
+    assert eq(actual, expected)
+
+    actual = bb.merge(aa, right_index=True, left_on='x', how='inner')
+    expected = b.merge(a, right_index=True, left_on='x', how='inner')
+
+    assert actual.known_divisions
+    assert eq(actual, expected)
 
 
 def test_merge_maintains_columns():
