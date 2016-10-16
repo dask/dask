@@ -693,6 +693,20 @@ def test_cheap_single_partition_merge_divisions():
     assert_divisions(bb.merge(aa, on='x', how='inner'))
 
 
+def test_cheap_single_partition_merge_on_index():
+    a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                     index=[10, 20, 30, 40, 50, 60])
+    aa = dd.from_pandas(a, npartitions=3)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')})
+    bb = dd.from_pandas(b, npartitions=1, sort=False)
+
+    assert eq(aa.merge(bb, left_index=True, right_on='x', how='inner'),
+              a.merge(b, left_index=True, right_on='x', how='inner'))
+    assert eq(bb.merge(aa, right_index=True, left_on='x', how='inner'),
+              b.merge(a, right_index=True, left_on='x', how='inner'))
+
+
 def test_merge_maintains_columns():
     lhs = pd.DataFrame({'A': [1, 2, 3],
                         'B': list('abc'),
