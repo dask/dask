@@ -592,11 +592,9 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e)
 
-    def aggregate(self, spec):
-        """
-        TODO: add docs
-        """
-        spec = _normalize_spec(spec)
+    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    def aggregate(self, arg):
+        spec = _normalize_spec(arg)
         chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
 
         if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
@@ -620,11 +618,9 @@ class DataFrameGroupBy(_GroupBy):
         return map_partitions(_agg_finalize, obj, meta=meta, token=token,
                               result_column_func_pairs=finalizers)
 
-    def agg(self, spec):
-        """
-        TODO: add docs
-        """
-        return self.aggregate(spec)
+    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    def agg(self, arg):
+        return self.aggregate(arg)
 
 
 class SeriesGroupBy(_GroupBy):
