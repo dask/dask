@@ -1,5 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import collections
+from functools import partial
+import itertools as it
+import operator
 import warnings
 
 import numpy as np
@@ -130,6 +134,183 @@ def _nunique_series_combine(df):
 
 def _nunique_series_aggregate(df):
     return df.groupby(df.columns[1])[df.columns[0]].nunique()
+
+
+###############################################################
+# Aggregate support
+#
+# Aggregate is implemented as:
+#
+# 1. group-by-aggregate all partitions into intermediate values
+# 2. collect all partitions into a single partition
+# 3. group-by-aggregate the result into intermediate values
+# 4. transform all intermediate values into the result
+#
+# In Step 1 and 3 the dataframe is grouped on the same columns.
+#
+###############################################################
+
+def _aggregate_meta(df, index, levels, chunk_funcs, agg_funcs, finalizers):
+    stage1 = _groupby_apply_funcs(df, funcs=chunk_funcs, by=index)
+    stage2 = _groupby_apply_funcs(stage1, funcs=agg_funcs, level=levels)
+    return _agg_finalize(stage2, finalizers)
+
+
+def _normalize_spec(spec):
+    """
+    Return a list of ``(result_column, func, input_column)`` tuples.
+    """
+    res = []
+
+    # TODO: detect numpy functions
+    # TODO: work with list of functions
+    # TODO: work with a simple function
+
+    if isinstance(spec, dict):
+        for input_column, subspec in spec.items():
+            if isinstance(subspec, dict):
+                res.extend(((input_column, result_column), func, input_column)
+                           for result_column, func in subspec.items())
+
+            elif isinstance(subspec, list):
+                res.extend(((input_column, func), func, input_column)
+                           for func in subspec)
+
+            else:
+                func = subspec
+                res.append(((input_column, func), func, input_column))
+
+    else:
+        raise ValueError("unsupported agg spec of type {}".format(type(spec)))
+
+    compounds = (list, tuple, dict)
+    use_flat_columns = not any(isinstance(subspec, compounds)
+                               for subspec in spec.values())
+
+    if use_flat_columns:
+        res = [(input_col, func, input_col) for (_, func, input_col) in res]
+
+    return res
+
+
+def _build_agg_args(spec):
+    """
+    Create the transformation functions for a normalized aggregate spec.
+
+    Returns
+    -------
+    chunk_funcs: a list of functions that are applied on grouped chunks of the
+        initial dataframe. Each function takes a grouped dataframe and should
+        return a dataframe of intermediate values with the group keys as an
+        index.
+
+    agg_funcs: a list of functions that are applied on the grouped dataframe
+        after all chunks have been concatinated. Each function takes a grouped
+        dataframe and should return a dataframe of intermediate values with the
+        group keys as an index.
+
+    finalizers: a list of result-column transform pairs, that are applied after
+        the ``agg_funcs``. They are used to create final results from
+        intermediate representations.
+    """
+    # generator for consecutive IDs (for intermediate results)
+    ids = it.count()
+    next_id = lambda prefix: '{}-{}'.format(prefix, next(ids))
+
+    simple_impl = {
+        'sum': (M.sum, M.sum),
+        'min': (M.min, M.min),
+        'max': (M.max, M.max),
+        'count': (M.count, M.sum),
+        'size': (M.size, M.sum),
+    }
+
+    chunks = []
+    aggs = []
+    finalizers = []
+
+    for (result_column, func, input_column) in spec:
+        if func in simple_impl.keys():
+            impls = _build_agg_args_simple(result_column, func, input_column,
+                                           next_id, simple_impl[func])
+
+        elif func == 'var':
+            raise NotImplementedError()
+
+        elif func == 'std':
+            raise NotImplementedError()
+
+        elif func == 'mean':
+            impls = _build_agg_args_mean(result_column, func, input_column,
+                                         next_id)
+
+        elif func == 'nunique':
+            raise NotImplementedError()
+
+        else:
+            raise ValueError("unknown aggregate {}".format(func))
+
+        chunks.extend(impls.chunk_funcs)
+        aggs.extend(impls.aggregate_funcs)
+        finalizers.extend(impls.finalizers)
+
+    return chunks, aggs, finalizers
+
+
+AggArgs = collections.namedtuple('AggArgs', ['chunk_funcs', 'aggregate_funcs',
+                                             'finalizers'])
+
+
+def _build_agg_args_simple(result_column, func, input_column, next_id, impl_pair):
+    intermediate = next_id(func)
+    chunk_impl, agg_impl = impl_pair
+
+    return AggArgs(
+        chunk_funcs=[partial(_apply_func_to_column, intermediate, input_column,
+                             chunk_impl)],
+        aggregate_funcs=[partial(_apply_func_to_column, intermediate,
+                                 intermediate, agg_impl)],
+        finalizers=[(result_column, operator.itemgetter(intermediate))],
+    )
+
+def _build_agg_args_mean(result_column, func, input_column, next_id):
+    int_sum = next_id('sum')
+    int_count = next_id('count')
+
+    return AggArgs(
+        chunk_funcs=[
+            partial(_apply_func_to_column, int_sum, input_column, M.sum),
+            partial(_apply_func_to_column, int_count, input_column, M.count),
+        ],
+        aggregate_funcs=[
+            partial(_apply_func_to_column, int_sum, int_sum, M.sum),
+            partial(_apply_func_to_column, int_count, int_count, M.sum)
+        ],
+        finalizers=[(result_column, partial(_finalize_mean, int_sum, int_count))],
+    )
+
+
+def _groupby_apply_funcs(df, funcs, **groupby_kwargs):
+    grouped = df.groupby(**groupby_kwargs)
+    parts = [func(grouped) for func in funcs]
+    return pd.concat(parts, axis=1)
+
+
+def _agg_finalize(df, result_column_func_pairs):
+    result = collections.OrderedDict([
+        (result_column, func(df))
+        for result_column, func in result_column_func_pairs
+    ])
+    return pd.DataFrame(result)
+
+
+def _apply_func_to_column(result_column, column, func, df_like):
+    return pd.DataFrame({result_column: func(df_like[column])})
+
+
+def _finalize_mean(sum_column, count_column, df):
+    return df[sum_column] / df[count_column]
+
 
 
 class _GroupBy(object):
@@ -410,6 +591,40 @@ class DataFrameGroupBy(_GroupBy):
             return self[key]
         except KeyError as e:
             raise AttributeError(e)
+
+    def aggregate(self, spec):
+        """
+        TODO: add docs
+        """
+        spec = _normalize_spec(spec)
+        chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
+
+        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
+            levels = list(range(len(self.index)))
+        else:
+            levels = 0
+
+        # TODO: add normed spec as an additional part to the token
+        token = 'aggregate-'
+
+        meta = _aggregate_meta(self.obj._meta, self.index, levels, chunk_funcs,
+                               aggregate_funcs, finalizers)
+
+        obj = aca([self.obj],
+                  chunk=_groupby_apply_funcs,
+                  chunk_kwargs=dict(funcs=chunk_funcs, by=self.index),
+                  aggregate=_groupby_apply_funcs,
+                  aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
+                  meta=meta, token=token)
+
+        return map_partitions(_agg_finalize, obj, meta=meta, token=token,
+                              result_column_func_pairs=finalizers)
+
+    def agg(self, spec):
+        """
+        TODO: add docs
+        """
+        return self.aggregate(spec)
 
 
 class SeriesGroupBy(_GroupBy):

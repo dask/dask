@@ -554,3 +554,25 @@ def test_groupby_multiprocessing():
     with dask.set_options(get=get):
         assert_eq(ddf.groupby('B').apply(lambda x: x),
                   df.groupby('B').apply(lambda x: x))
+
+
+def test_aggregate_examples():
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2],
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8]},
+                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    spec = {'b': {'c': 'sum'}}
+    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+
+    spec = {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}}
+    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+
+    spec = {'b': 'mean', 'c': 'max'}
+    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+
+    spec = {'b': 'mean', 'c': ['min', 'max']}
+    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+
+    # TODO: add more tests: var, std, nunique, multiple group columns, ...
