@@ -1652,6 +1652,14 @@ class Series(_Frame):
     def clip(self, lower=None, upper=None):
         return self.map_partitions(M.clip, lower=lower, upper=upper)
 
+    @derived_from(pd.Series)
+    def clip_lower(self, threshold):
+        return self.map_partitions(M.clip_lower, threshold=threshold)
+
+    @derived_from(pd.Series)
+    def clip_upper(self, threshold):
+        return self.map_partitions(M.clip_upper, threshold=threshold)
+
     def to_bag(self, index=False):
         """Convert to a dask Bag.
 
@@ -2135,6 +2143,18 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
         return self.map_partitions(M.dropna, how=how, subset=subset)
+
+    @derived_from(pd.DataFrame)
+    def clip(self, lower=None, upper=None):
+        return self.map_partitions(M.clip, lower=lower, upper=upper)
+
+    @derived_from(pd.DataFrame)
+    def clip_lower(self, threshold):
+        return self.map_partitions(M.clip_lower, threshold=threshold)
+
+    @derived_from(pd.DataFrame)
+    def clip_upper(self, threshold):
+        return self.map_partitions(M.clip_upper, threshold=threshold)
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
