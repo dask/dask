@@ -124,17 +124,17 @@ def test_pivot_table_errors():
                        'C': pd.Categorical(np.random.choice(list('abc'), size=10))})
     ddf = dd.from_pandas(df, 2)
 
-    msg = "'index' must be a scalar"
+    msg = "'index' must be the name of an existing column"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index=['A'], columns='C', values='B')
-    msg = "'columns' must be a scalar"
+    msg = "'columns' must be the name of an existing column"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns=['C'], values='B')
-    msg = "'values' must be a scalar"
+    msg = "'values' must be the name of an existing column"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values=['B'])
 
-    msg = "aggfunc must be either 'mean', 'sum', 'count'"
+    msg = "aggfunc must be either 'mean', 'sum' or 'count'"
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc=['sum'])
 

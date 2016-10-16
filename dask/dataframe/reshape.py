@@ -87,15 +87,15 @@ def pivot_table(df, index=None, columns=None,
     """
 
     if not is_scalar(index) or index is None:
-        raise ValueError("'index' must be a scalar")
+        raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns is None:
-        raise ValueError("'columns' must be a scalar")
+        raise ValueError("'columns' must be the name of an existing column")
     if not is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
     if not is_scalar(values) or values is None:
-        raise ValueError("'values' must be a scalar")
+        raise ValueError("'values' must be the name of an existing column")
     if not is_scalar(aggfunc) or aggfunc not in ('mean', 'sum', 'count'):
-        raise ValueError("aggfunc must be either 'mean', 'sum', 'count'")
+        raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
 
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
