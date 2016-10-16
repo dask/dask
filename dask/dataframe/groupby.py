@@ -156,15 +156,14 @@ def _aggregate_meta(df, index, levels, chunk_funcs, agg_funcs, finalizers):
     return _agg_finalize(stage2, finalizers)
 
 
-def _normalize_spec(spec):
+def _normalize_spec(spec, non_group_columns):
     """
     Return a list of ``(result_column, func, input_column)`` tuples.
     """
-    res = []
+    if not isinstance(spec, dict):
+        spec = collections.OrderedDict(zip(non_group_columns, it.repeat(spec)))
 
-    # TODO: detect numpy functions
-    # TODO: work with list of functions
-    # TODO: work with a simple function
+    res = []
 
     if isinstance(spec, dict):
         for input_column, subspec in spec.items():
@@ -172,13 +171,12 @@ def _normalize_spec(spec):
                 res.extend(((input_column, result_column), func, input_column)
                            for result_column, func in subspec.items())
 
-            elif isinstance(subspec, list):
-                res.extend(((input_column, func), func, input_column)
-                           for func in subspec)
-
             else:
-                func = subspec
-                res.append(((input_column, func), func, input_column))
+                if not isinstance(subspec, list):
+                    subspec = [subspec]
+
+                res.extend(((input_column, funcname(func)), func, input_column)
+                           for func in subspec)
 
     else:
         raise ValueError("unsupported agg spec of type {}".format(type(spec)))
@@ -225,11 +223,15 @@ def _build_agg_args(spec):
         'size': (M.size, M.sum),
     }
 
+    known_np_funcs = {np.min: 'min', np.max: 'max'}
+
     chunks = []
     aggs = []
     finalizers = []
 
     for (result_column, func, input_column) in spec:
+        func = funcname(known_np_funcs.get(func, func))
+
         if func in simple_impl.keys():
             impls = _build_agg_args_simple(result_column, func, input_column,
                                            next_id, simple_impl[func])
@@ -594,7 +596,9 @@ class DataFrameGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def aggregate(self, arg):
-        spec = _normalize_spec(arg)
+        non_group_columns = [col for col in self.obj.columns
+                             if col not in self.index]
+        spec = _normalize_spec(arg, non_group_columns)
         chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
 
         if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
