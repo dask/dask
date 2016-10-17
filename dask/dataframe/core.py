@@ -632,7 +632,7 @@ class _Frame(Base):
             for i in range(npartitions):
                 dsk[(name_p, i)] = (M.head, (self._name, i), n)
 
-            concat = (_concat, ([(name_p, i) for i in range(npartitions)]))
+            concat = (_concat, [(name_p, i) for i in range(npartitions)])
             dsk[(name, 0)] = (safe_head, concat, n)
         else:
             dsk = {(name, 0): (safe_head, (self._name, 0), n)}
@@ -2733,7 +2733,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     while k > split_every:
         b = prefix + str(depth)
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            conc = (_concat, (list, [(a, i) for i in inds]))
+            conc = (_concat, [(a, i) for i in inds])
             if combine_kwargs:
                 dsk[(b, part_i)] = (apply, combine, [conc], combine_kwargs)
             else:
@@ -2744,7 +2744,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     # Aggregate
     b = '{0}-agg-{1}'.format(token or funcname(aggregate), token_key)
-    conc = (_concat, (list, [(a, i) for i in range(k)]))
+    conc = (_concat, [(a, i) for i in range(k)])
     if aggregate_kwargs:
         dsk[(b, 0)] = (apply, aggregate, [conc], aggregate_kwargs)
     else:
