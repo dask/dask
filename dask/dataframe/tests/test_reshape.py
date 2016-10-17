@@ -6,7 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import eq, PANDAS_ge_0190
+from dask.dataframe.utils import assert_eq, PANDAS_ge_0190
 
 
 @pytest.mark.parametrize('data', [
@@ -20,7 +20,7 @@ def test_get_dummies(data):
 
     ddata = dd.from_pandas(data, 2)
     res = dd.get_dummies(ddata)
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
 
@@ -33,14 +33,14 @@ def test_get_dummies_object():
 
     ddf = dd.from_pandas(df, 2)
     res = dd.get_dummies(ddf)
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
     exp = pd.get_dummies(df, columns=['a'])
 
     ddf = dd.from_pandas(df, 2)
     res = dd.get_dummies(ddf, columns=['a'])
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
     # cannot target object columns
@@ -55,14 +55,14 @@ def test_get_dummies_kwargs():
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, prefix='X', prefix_sep='-')
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, pd.Index(['X-1', 'X-2', 'X-3', 'X-4']))
 
     exp = pd.get_dummies(s, drop_first=True)
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, drop_first=True)
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
     # nan
@@ -71,7 +71,7 @@ def test_get_dummies_kwargs():
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds)
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
     # dummy_na
@@ -79,7 +79,7 @@ def test_get_dummies_kwargs():
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, dummy_na=True)
-    assert eq(res, exp)
+    assert_eq(res, exp)
     tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
 
     msg = 'sparse=True is not supported'
@@ -112,10 +112,10 @@ def test_pivot_table(aggfunc):
         exp = exp.astype(np.float64)
 
     if PANDAS_ge_0190:
-        assert eq(res, exp)
+        assert_eq(res, exp)
     else:
         # because of a pandas 0.18.x bug, categorical dtype is not preserved
-        assert eq(res, exp, check_names=False, check_column_type=False)
+        assert_eq(res, exp, check_names=False, check_column_type=False)
 
 
 def test_pivot_table_errors():

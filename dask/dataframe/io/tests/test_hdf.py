@@ -14,7 +14,7 @@ import dask.dataframe as dd
 from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.async import get_sync
 
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import assert_eq
 
 
 def test_to_hdf():
@@ -64,19 +64,19 @@ def test_to_hdf_multiple_nodes():
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
     # saving to multiple nodes making sure order is kept
     with tmpfile('h5') as fn:
         b.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
-        eq(df16, out)
+        assert_eq(df16, out)
 
     # saving to multiple datasets with custom name_function
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data_*', name_function=lambda i: 'a' * (i + 1))
         out = dd.read_hdf(fn, '/data_*')
-        eq(df, out)
+        assert_eq(df, out)
 
         out = pd.read_hdf(fn, '/data_a')
         tm.assert_frame_equal(out, df.iloc[:2])
@@ -88,7 +88,7 @@ def test_to_hdf_multiple_nodes():
         with pd.HDFStore(fn) as hdf:
             b.to_hdf(hdf, '/data*')
             out = dd.read_hdf(fn, '/data*')
-            eq(df16, out)
+            assert_eq(df16, out)
 
 
 def test_to_hdf_multiple_files():
@@ -109,21 +109,21 @@ def test_to_hdf_multiple_files():
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # saving to multiple files making sure order is kept
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         b.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
-        eq(df16, out)
+        assert_eq(df16, out)
 
     # saving to multiple files with custom name_function
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data', name_function=lambda i: 'a' * (i + 1))
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
         out = pd.read_hdf(os.path.join(dn, 'data_a.h5'), '/data')
         tm.assert_frame_equal(out, df.iloc[:2])
@@ -135,7 +135,7 @@ def test_to_hdf_multiple_files():
         with pd.HDFStore(fn) as hdf:
             a.to_hdf(hdf, '/data*')
             out = dd.read_hdf(fn, '/data*')
-            eq(df, out)
+            assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes():
@@ -149,7 +149,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, '/data2')
         a.to_hdf(fn, '/data*', mode='a')
         out = dd.read_hdf(fn, '/data*')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
     # overwriting a file with a single partition
     a = dd.from_pandas(df, 1)
@@ -157,7 +157,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, '/data2')
         a.to_hdf(fn, '/data*', mode='w')
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
     # appending two partitions to existing data
     a = dd.from_pandas(df, 2)
@@ -165,7 +165,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, '/data2')
         a.to_hdf(fn, '/data*', mode='a')
         out = dd.read_hdf(fn, '/data*')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -173,7 +173,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, '/data2')
         a.to_hdf(fn, '/data*', mode='w')
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
     # overwriting a single partition, keeping other partitions
     a = dd.from_pandas(df, 2)
@@ -182,7 +182,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, '/data2')
         a.to_hdf(fn, '/data*', mode='a', append=False)
         out = dd.read_hdf(fn, '/data*')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
 
 def test_to_hdf_modes_multiple_files():
@@ -197,7 +197,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, 'data2'), '/data')
         a.to_hdf(fn, '/data', mode='a')
         out = dd.read_hdf(fn, '/data*')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
     # appending two partitions to existing data
     a = dd.from_pandas(df, 2)
@@ -206,7 +206,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, 'data2'), '/data')
         a.to_hdf(fn, '/data', mode='a')
         out = dd.read_hdf(fn, '/data')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -215,7 +215,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, 'data1'), '/data')
         a.to_hdf(fn, '/data', mode='w')
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # overwriting a single partition, keeping other partitions
     a = dd.from_pandas(df, 2)
@@ -224,7 +224,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, 'data1'), '/data')
         a.to_hdf(fn, '/data', mode='a', append=False)
         out = dd.read_hdf(fn, '/data')
-        eq(df.append(df), out)
+        assert_eq(df.append(df), out)
 
 
 def test_to_hdf_link_optimizations():
@@ -283,7 +283,7 @@ def test_to_hdf_lock_delays():
         a = a.apply(delayed_nop, axis=1, columns=a.columns)
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
-        eq(df16, out)
+        assert_eq(df16, out)
 
     # saving to multiple hdf files
     # adding artifichial delays to make sure last tasks finish first
@@ -292,7 +292,7 @@ def test_to_hdf_lock_delays():
         a = a.apply(delayed_nop, axis=1, columns=a.columns)
         a.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
-        eq(df16, out)
+        assert_eq(df16, out)
 
 
 def test_to_hdf_exceptions():
@@ -325,20 +325,20 @@ def test_to_hdf_sync():
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data', get=get_sync)
         out = pd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test multiple files single node
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data', get=get_sync)
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test single file multiple nodes
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*', get=get_sync)
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
 
 def test_to_hdf_thread():
@@ -352,20 +352,20 @@ def test_to_hdf_thread():
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data', get=dask.threaded.get)
         out = pd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test multiple files single node
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data', get=dask.threaded.get)
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test single file multiple nodes
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*', get=dask.threaded.get)
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
 
 def test_to_hdf_process():
@@ -379,20 +379,20 @@ def test_to_hdf_process():
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
         out = pd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test multiple files single node
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
         a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
         out = dd.read_hdf(fn, '/data')
-        eq(df, out)
+        assert_eq(df, out)
 
     # test single file multiple nodes
     with tmpfile('h5') as fn:
         a.to_hdf(fn, '/data*', get=dask.multiprocessing.get)
         out = dd.read_hdf(fn, '/data*')
-        eq(df, out)
+        assert_eq(df, out)
 
 
 @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
@@ -478,7 +478,7 @@ def test_read_hdf_multiple():
         r = dd.read_hdf(fn, '/data*', sorted_index=True)
         assert a.npartitions == r.npartitions
         assert a.divisions == r.divisions
-        eq(a, r)
+        assert_eq(a, r)
 
 
 def test_read_hdf_start_stop_values():

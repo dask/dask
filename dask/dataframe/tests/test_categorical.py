@@ -8,7 +8,7 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
-from dask.dataframe.utils import make_meta, eq, is_categorical_dtype
+from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype
 
 
 @pytest.fixture(params=[True, False])
@@ -97,8 +97,8 @@ class TestCategoricalAccessor:
 
     @pytest.mark.parametrize('prop, compare', [
         ('categories', tm.assert_index_equal),
-        ('ordered', eq),
-        ('codes', eq),
+        ('ordered', assert_eq),
+        ('codes', assert_eq),
     ])
     def test_properties(self, cat_series, prop, compare):
         a = dd.from_pandas(cat_series, npartitions=2)
@@ -122,6 +122,6 @@ class TestCategoricalAccessor:
         op = operator.methodcaller(method, **kwargs)
         expected = op(cat_series.cat)
         result = op(a.cat)
-        eq(result, expected)
-        eq(result._meta.cat.categories, expected.cat.categories)
-        eq(result._meta.cat.ordered, expected.cat.ordered)
+        assert_eq(result, expected)
+        assert_eq(result._meta.cat.categories, expected.cat.categories)
+        assert_eq(result._meta.cat.ordered, expected.cat.ordered)

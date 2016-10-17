@@ -19,7 +19,7 @@ from dask.async import get_sync
 import dask.dataframe as dd
 from dask.dataframe.io.csv import (read_csv_from_bytes, bytes_read_csv,
                                    auto_blocksize)
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import assert_eq
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 
@@ -52,7 +52,7 @@ def test_read_csv():
         assert list(f.columns) == ['name', 'amount']
         result = f.compute(get=dask.get)
         # index may be different
-        assert eq(result.reset_index(drop=True),
+        assert_eq(result.reset_index(drop=True),
                   pd.read_csv(fn))
 
 
@@ -107,7 +107,7 @@ def test_read_csv_index():
                 assert (block.index >= f.divisions[i]).all()
 
         expected = pd.read_csv(fn).set_index('amount')
-        assert eq(result, expected)
+        assert_eq(result, expected)
 
 
 def test_usecols():
@@ -282,14 +282,14 @@ def test_blocked():
         blocks.append([b'\n'.join(bs) for bs in partition_all(2, lines)])
 
     df = read_csv_from_bytes(blocks, header, expected.head(), {})
-    eq(df.compute().reset_index(drop=True),
-       expected.reset_index(drop=True), check_dtype=False)
+    assert_eq(df.compute().reset_index(drop=True),
+              expected.reset_index(drop=True), check_dtype=False)
 
     expected2 = expected[['name', 'id']]
     df = read_csv_from_bytes(blocks, header, expected2.head(),
                              {'usecols': ['name', 'id']})
-    eq(df.compute().reset_index(drop=True),
-       expected2.reset_index(drop=True), check_dtype=False)
+    assert_eq(df.compute().reset_index(drop=True),
+              expected2.reset_index(drop=True), check_dtype=False)
 
 
 def test_enforce_dtypes():
@@ -315,12 +315,12 @@ def test_enforce_columns():
 def test_read_csv_files():
     with filetexts(files, mode='b'):
         df = dd.read_csv('2014-01-*.csv')
-        eq(df, expected, check_dtype=False)
+        assert_eq(df, expected, check_dtype=False)
 
         fn = '2014-01-01.csv'
         df = dd.read_csv(fn)
         expected2 = pd.read_csv(BytesIO(files[fn]))
-        eq(df, expected2, check_dtype=False)
+        assert_eq(df, expected2, check_dtype=False)
 
 
 def test_read_csv_sensitive_to_enforce():
@@ -339,8 +339,8 @@ def test_read_csv_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode='b'):
         df = dd.read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
-        eq(df.compute(get=get_sync).reset_index(drop=True),
-           expected.reset_index(drop=True), check_dtype=False)
+        assert_eq(df.compute(get=get_sync).reset_index(drop=True),
+                  expected.reset_index(drop=True), check_dtype=False)
 
 
 def test_warn_non_seekable_files(capsys):
@@ -394,7 +394,7 @@ def test_header_None():
                     '.tmp.3.csv': '3,4'}):
         df = dd.read_csv('.tmp.*.csv', header=None)
         expected = pd.DataFrame({0: [1, 3], 1: [2, 4]})
-        eq(df.compute().reset_index(drop=True), expected)
+        assert_eq(df.compute().reset_index(drop=True), expected)
 
 
 def test_auto_blocksize():
@@ -455,19 +455,19 @@ def test_to_csv():
         with tmpdir() as dn:
             a.to_csv(dn, index=False)
             result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
-            eq(result, df)
+            assert_eq(result, df)
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
             dask.compute(*r, get=get_sync)
             result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
-            eq(result, df)
+            assert_eq(result, df)
 
         with tmpdir() as dn:
             fn = os.path.join(dn, 'data_*.csv')
             a.to_csv(fn, index=False)
             result = dd.read_csv(fn).compute().reset_index(drop=True)
-            eq(result, df)
+            assert_eq(result, df)
 
 
 def test_to_csv_multiple_files_cornercases():
@@ -488,7 +488,7 @@ def test_to_csv_multiple_files_cornercases():
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
-        eq(result, df16)
+        assert_eq(result, df16)
 
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df, 2)
@@ -497,7 +497,7 @@ def test_to_csv_multiple_files_cornercases():
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
-        eq(result, df)
+        assert_eq(result, df)
 
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df16, 16)
@@ -506,7 +506,7 @@ def test_to_csv_multiple_files_cornercases():
         fn = os.path.join(dn, 'data_*.csv')
         a.to_csv(fn, mode='w', index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
-        eq(result, df16)
+        assert_eq(result, df16)
 
 
 @pytest.mark.xfail(reason="to_csv does not support compression")
@@ -638,12 +638,12 @@ def test_read_csv_with_datetime_index_partitions_one():
         ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
                           parse_dates=['Date'],
                           blocksize=10000000).set_index('Date')
-        eq(df, ddf)
+        assert_eq(df, ddf)
 
         # because fn is so small, by default, this will only be one chunk
         ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
                           parse_dates=['Date']).set_index('Date')
-        eq(df, ddf)
+        assert_eq(df, ddf)
 
 
 def test_read_csv_with_datetime_index_partitions_n():
@@ -654,7 +654,7 @@ def test_read_csv_with_datetime_index_partitions_n():
         ddf = dd.read_csv(fn, header=0, usecols=[0, 4],
                           parse_dates=['Date'],
                           blocksize=400).set_index('Date')
-        eq(df, ddf)
+        assert_eq(df, ddf)
 
 
 def test_from_pandas_with_datetime_index():
@@ -662,9 +662,9 @@ def test_from_pandas_with_datetime_index():
         df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
                          parse_dates=['Date'])
         ddf = dd.from_pandas(df, 2)
-        eq(df, ddf)
+        assert_eq(df, ddf)
         ddf = dd.from_pandas(df, chunksize=2)
-        eq(df, ddf)
+        assert_eq(df, ddf)
 
 
 @pytest.mark.parametrize('encoding', ['utf-16', 'utf-16-le', 'utf-16-be'])
@@ -682,23 +682,23 @@ def test_encoding_gh601(encoding):
         d = dd.read_csv(fn, encoding=encoding, blocksize=1000)
         d = d.compute()
         d.index = range(len(d.index))
-        assert eq(d, a)
+        assert_eq(d, a)
 
 
 def test_read_csv_header_issue_823():
     text = '''a b c-d\n1 2 3\n4 5 6'''.replace(' ', '\t')
     with filetext(text) as fn:
         df = dd.read_csv(fn, sep='\t')
-        eq(df, pd.read_csv(fn, sep='\t'))
+        assert_eq(df, pd.read_csv(fn, sep='\t'))
 
         df = dd.read_csv(fn, delimiter='\t')
-        eq(df, pd.read_csv(fn, delimiter='\t'))
+        assert_eq(df, pd.read_csv(fn, delimiter='\t'))
 
 
 def test_none_usecols():
     with filetext(text) as fn:
         df = dd.read_csv(fn, usecols=None)
-        eq(df, pd.read_csv(fn, usecols=None))
+        assert_eq(df, pd.read_csv(fn, usecols=None))
 
 
 def test_parse_dates_multi_column():
@@ -764,5 +764,5 @@ def test_read_csv_slash_r():
 def test_read_csv_singleton_dtype():
     data = b'a,b\n1,2\n3,4\n5,6'
     with filetext(data, mode='wb') as fn:
-        eq(pd.read_csv(fn, dtype=float),
-           dd.read_csv(fn, dtype=float))
+        assert_eq(pd.read_csv(fn, dtype=float),
+                  dd.read_csv(fn, dtype=float))

@@ -16,7 +16,7 @@ from dask.delayed import Delayed
 from dask.utils import tmpfile
 from dask.async import get_sync
 
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import assert_eq
 
 
 ####################
@@ -191,8 +191,8 @@ def test_from_bcolz_no_lock():
     a = dd.from_bcolz(t, chunksize=2)
     b = dd.from_bcolz(t, chunksize=2, lock=True)
     c = dd.from_bcolz(t, chunksize=2, lock=False)
-    eq(a, b)
-    eq(a, c)
+    assert_eq(a, b)
+    assert_eq(a, c)
 
     assert not any(isinstance(item, locktype)
                    for v in c.dask.values()
@@ -259,11 +259,11 @@ def test_from_pandas_small():
         for i in [0, 2]:
             df = pd.DataFrame({'x': [0] * i})
             ddf = dd.from_pandas(df, npartitions=5, sort=sort)
-            eq(df, ddf)
+            assert_eq(df, ddf)
 
             s = pd.Series([0] * i, name='x')
             ds = dd.from_pandas(s, npartitions=5, sort=sort)
-            eq(s, ds)
+            assert_eq(s, ds)
 
 
 @pytest.mark.xfail(reason="")
@@ -295,18 +295,18 @@ def test_from_pandas_non_sorted():
     df = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
     ddf = dd.from_pandas(df, npartitions=2, sort=False)
     assert not ddf.known_divisions
-    eq(df, ddf)
+    assert_eq(df, ddf)
 
     ddf = dd.from_pandas(df, chunksize=2, sort=False)
     assert not ddf.known_divisions
-    eq(df, ddf)
+    assert_eq(df, ddf)
 
 
 def test_from_pandas_single_row():
     df = pd.DataFrame({'x': [1]}, index=[1])
     ddf = dd.from_pandas(df, npartitions=1)
     assert ddf.divisions == (1, 1)
-    assert eq(ddf, df)
+    assert_eq(ddf, df)
 
 
 def test_DataFrame_from_dask_array():
@@ -341,7 +341,7 @@ def test_Series_from_dask_array():
     # dd.from_array should re-route to from_dask_array
     ser2 = dd.from_array(x)
     assert isinstance(ser2, dd.Series)
-    assert eq(ser, ser2)
+    assert_eq(ser, ser2)
 
 
 def test_from_dask_array_compat_numpy_array():
@@ -421,9 +421,9 @@ def test_from_dask_array_struct_dtype():
     y = da.from_array(x, chunks=(1,))
     df = dd.from_dask_array(y)
     tm.assert_index_equal(df.columns, pd.Index(['a', 'b']))
-    assert eq(df, pd.DataFrame(x))
+    assert_eq(df, pd.DataFrame(x))
 
-    assert eq(dd.from_dask_array(y, columns=['b', 'a']),
+    assert_eq(dd.from_dask_array(y, columns=['b', 'a']),
               pd.DataFrame(x, columns=['b', 'a']))
 
 
@@ -518,7 +518,7 @@ def test_from_castra_with_selection():
 
     b = dd.from_castra(a.to_castra())
 
-    assert eq(b[b.y > 3].x, df[df.y > 3].x)
+    assert_eq(b[b.y > 3].x, df[df.y > 3].x)
 
 
 def test_to_bag():

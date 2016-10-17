@@ -7,6 +7,7 @@ from collections import Iterator
 import sys
 import traceback
 from contextlib import contextmanager
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -410,8 +411,8 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
-def eq(a, b, check_names=True, check_dtypes=True, check_divisions=True,
-       **kwargs):
+def assert_eq(a, b, check_names=True, check_dtypes=True,
+              check_divisions=True, **kwargs):
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
@@ -438,6 +439,11 @@ def eq(a, b, check_names=True, check_dtypes=True, check_divisions=True,
             else:
                 assert np.allclose(a, b)
     return True
+
+
+def eq(*args, **kwargs):
+    warnings.warn('eq is deprecated. Use assert_frame instead', UserWarning)
+    assert_eq(*args, **kwargs)
 
 
 def assert_dask_graph(dask, label):
