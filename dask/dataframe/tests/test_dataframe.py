@@ -377,6 +377,37 @@ def test_dropna():
               df.dropna(subset=['y', 'z'], how='all'))
 
 
+@pytest.mark.parametrize('lower, upper', [(2, 5), (2.5, 3.5)])
+def test_clip(lower, upper):
+
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [3, 5, 2, 5, 7, 2, 4, 2, 4]})
+    ddf = dd.from_pandas(df, 3)
+
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    ds = dd.from_pandas(s, 3)
+
+    assert eq(ddf.clip(lower=lower, upper=upper),
+              df.clip(lower=lower, upper=upper))
+    assert eq(ddf.clip(lower=lower), df.clip(lower=lower))
+    assert eq(ddf.clip(upper=upper), df.clip(upper=upper))
+
+    assert eq(ds.clip(lower=lower, upper=upper),
+              s.clip(lower=lower, upper=upper))
+    assert eq(ds.clip(lower=lower), s.clip(lower=lower))
+    assert eq(ds.clip(upper=upper), s.clip(upper=upper))
+
+    assert eq(ddf.clip_lower(lower), df.clip_lower(lower))
+    assert eq(ddf.clip_lower(upper), df.clip_lower(upper))
+    assert eq(ddf.clip_upper(lower), df.clip_upper(lower))
+    assert eq(ddf.clip_upper(upper), df.clip_upper(upper))
+
+    assert eq(ds.clip_lower(lower), s.clip_lower(lower))
+    assert eq(ds.clip_lower(upper), s.clip_lower(upper))
+    assert eq(ds.clip_upper(lower), s.clip_upper(lower))
+    assert eq(ds.clip_upper(upper), s.clip_upper(upper))
+
+
 def test_where_mask():
     pdf1 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                          'b': [3, 5, 2, 5, 7, 2, 4, 2, 4]})
