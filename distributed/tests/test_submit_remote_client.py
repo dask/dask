@@ -1,3 +1,5 @@
+import os
+
 from tornado import gen
 
 from distributed import rpc
@@ -31,7 +33,7 @@ def test_remote_client_execution_outputs_to_stdout(current_loop, tmpdir):
         yield rr.upload_file(filename='script.py', file_payload='print("hello world!")')
 
         message = yield rr.execute(filename='script.py')
-        assert message['stdout'] == b'hello world!\n'
+        assert message['stdout'] == b'hello world!' + os.linesep.encode()
         assert message['returncode'] == 0
 
         yield remote_client._close()
