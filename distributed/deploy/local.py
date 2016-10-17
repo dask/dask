@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import math
 from threading import Thread
 from time import sleep
 
@@ -75,7 +76,8 @@ class LocalCluster(object):
         if n_workers is None and threads_per_worker is not None:
             n_workers = max(1, _ncores // threads_per_worker)
         if n_workers and threads_per_worker is None:
-            threads_per_worker = max(1, _ncores // n_workers)
+            # Overcommit threads per worker, rather than undercommit
+            threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
 
         self.loop = loop or IOLoop()
         if not self.loop._running:

@@ -90,7 +90,12 @@ def test_defaults():
 
     with LocalCluster(n_workers=2, scheduler_port=0, silence_logs=False,
             diagnostic_port=None) as c:
-        assert sum(w.ncores for w in c.workers) == max(2, _ncores)
+        if _ncores % 2 == 0:
+            expected_total_threads = max(2, _ncores)
+        else:
+            # n_workers not a divisor of _ncores => threads are overcommitted
+            expected_total_threads = max(2, _ncores + 1)
+        assert sum(w.ncores for w in c.workers) == expected_total_threads
 
     with LocalCluster(threads_per_worker=_ncores * 2, scheduler_port=0,
             silence_logs=False, diagnostic_port=None) as c:
