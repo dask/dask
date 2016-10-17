@@ -386,7 +386,7 @@ LSF, Mesos, or Marathon) to run a single ``dask-scheduler`` 24/7 and then scale
 up and down the number of ``dask-workers`` running on the cluster based on
 computational load.  This solution ends up being more responsive (and thus more
 heavily used) than their previous attempts to provide institution-wide access
-to parallel computing but because it responds to load still acts as a good
+to parallel computing but because it responds to load it still acts as a good
 citizen in the cluster.
 
 
