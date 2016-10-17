@@ -15,6 +15,7 @@ import pandas.util.testing as tm
 from pandas.core.common import is_datetime64tz_dtype
 import toolz
 
+from ..core import get_deps
 from ..async import get_sync
 
 
@@ -524,3 +525,11 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
             assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
         else:
             assert type(ddf._meta) == type(res)
+
+
+def assert_max_deps(x, n, eq=True):
+    dependencies, dependents = get_deps(x.dask)
+    if eq:
+        assert max(map(len, dependencies.values())) == n
+    else:
+        assert max(map(len, dependencies.values())) <= n

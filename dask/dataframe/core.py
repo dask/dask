@@ -1295,7 +1295,7 @@ class _Frame(Base):
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
-        name = 'describe--' + tokenize(self)
+        name = 'describe--' + tokenize(self, split_every)
         dsk = merge(num.dask, *(s.dask for s in stats))
         dsk[(name, 0)] = (methods.describe_aggregate, (list, stats_names))
 

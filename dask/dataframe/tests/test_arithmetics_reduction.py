@@ -112,6 +112,15 @@ def test_arithmetics():
                                 allow_comparison_ops=False)
 
 
+def test_deterministic_arithmetic_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert sorted((a.x + a.y ** 2).dask) == sorted((a.x + a.y ** 2).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x + a.y ** 3).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x - a.y ** 2).dask)
+
+
 @pytest.mark.slow
 def test_arithmetics_different_index():
     # index are different, but overwraps
@@ -593,7 +602,8 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
 
 
-def test_reductions():
+@pytest.mark.parametrize('split_every', [False, 2])
+def test_reductions(split_every):
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                                   index=[0, 1, 3]),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
@@ -620,41 +630,74 @@ def test_reductions():
                      (boolds, bools)]:
         assert isinstance(dds, dd.Series)
         assert isinstance(pds, pd.Series)
-        assert_eq(dds.sum(), pds.sum())
-        assert_eq(dds.min(), pds.min())
-        assert_eq(dds.max(), pds.max())
-        assert_eq(dds.count(), pds.count())
-        assert_eq(dds.std(), pds.std())
-        assert_eq(dds.var(), pds.var())
-        assert_eq(dds.std(ddof=0), pds.std(ddof=0))
-        assert_eq(dds.var(ddof=0), pds.var(ddof=0))
-        assert_eq(dds.mean(), pds.mean())
-        assert_eq(dds.nunique(), pds.nunique())
-        assert_eq(dds.nbytes, pds.nbytes)
+        assert_eq(dds.sum(split_every=split_every), pds.sum())
+        assert_eq(dds.min(split_every=split_every), pds.min())
+        assert_eq(dds.max(split_every=split_every), pds.max())
+        assert_eq(dds.count(split_every=split_every), pds.count())
+        assert_eq(dds.std(split_every=split_every), pds.std())
+        assert_eq(dds.var(split_every=split_every), pds.var())
+        assert_eq(dds.std(ddof=0, split_every=split_every), pds.std(ddof=0))
+        assert_eq(dds.var(ddof=0, split_every=split_every), pds.var(ddof=0))
+        assert_eq(dds.mean(split_every=split_every), pds.mean())
+        assert_eq(dds.nunique(split_every=split_every), pds.nunique())
 
-        assert_eq(dds.sum(skipna=False), pds.sum(skipna=False))
-        assert_eq(dds.min(skipna=False), pds.min(skipna=False))
-        assert_eq(dds.max(skipna=False), pds.max(skipna=False))
-        assert_eq(dds.std(skipna=False), pds.std(skipna=False))
-        assert_eq(dds.var(skipna=False), pds.var(skipna=False))
-        assert_eq(dds.std(skipna=False, ddof=0), pds.std(skipna=False, ddof=0))
-        assert_eq(dds.var(skipna=False, ddof=0), pds.var(skipna=False, ddof=0))
-        assert_eq(dds.mean(skipna=False), pds.mean(skipna=False))
+        assert_eq(dds.sum(skipna=False, split_every=split_every),
+                  pds.sum(skipna=False))
+        assert_eq(dds.min(skipna=False, split_every=split_every),
+                  pds.min(skipna=False))
+        assert_eq(dds.max(skipna=False, split_every=split_every),
+                  pds.max(skipna=False))
+        assert_eq(dds.std(skipna=False, split_every=split_every),
+                  pds.std(skipna=False))
+        assert_eq(dds.var(skipna=False, split_every=split_every),
+                  pds.var(skipna=False))
+        assert_eq(dds.std(skipna=False, ddof=0, split_every=split_every),
+                  pds.std(skipna=False, ddof=0))
+        assert_eq(dds.var(skipna=False, ddof=0, split_every=split_every),
+                  pds.var(skipna=False, ddof=0))
+        assert_eq(dds.mean(skipna=False, split_every=split_every),
+                  pds.mean(skipna=False))
 
-    assert_dask_graph(ddf1.b.sum(), 'series-sum')
-    assert_dask_graph(ddf1.b.min(), 'series-min')
-    assert_dask_graph(ddf1.b.max(), 'series-max')
-    assert_dask_graph(ddf1.b.count(), 'series-count')
-    assert_dask_graph(ddf1.b.std(), 'series-std')
-    assert_dask_graph(ddf1.b.var(), 'series-var')
-    assert_dask_graph(ddf1.b.std(ddof=0), 'series-std')
-    assert_dask_graph(ddf1.b.var(ddof=0), 'series-var')
-    assert_dask_graph(ddf1.b.mean(), 'series-mean')
+    assert_dask_graph(ddf1.b.sum(split_every=split_every), 'series-sum')
+    assert_dask_graph(ddf1.b.min(split_every=split_every), 'series-min')
+    assert_dask_graph(ddf1.b.max(split_every=split_every), 'series-max')
+    assert_dask_graph(ddf1.b.count(split_every=split_every), 'series-count')
+    assert_dask_graph(ddf1.b.std(split_every=split_every), 'series-std')
+    assert_dask_graph(ddf1.b.var(split_every=split_every), 'series-var')
+    assert_dask_graph(ddf1.b.std(ddof=0, split_every=split_every), 'series-std')
+    assert_dask_graph(ddf1.b.var(ddof=0, split_every=split_every), 'series-var')
+    assert_dask_graph(ddf1.b.mean(split_every=split_every), 'series-mean')
     # nunique is performed using drop-duplicates
-    assert_dask_graph(ddf1.b.nunique(), 'drop-duplicates')
+    assert_dask_graph(ddf1.b.nunique(split_every=split_every), 'drop-duplicates')
 
-    assert_eq(ddf1.index.min(), pdf1.index.min())
-    assert_eq(ddf1.index.max(), pdf1.index.max())
+    assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
+    assert_eq(ddf1.index.max(split_every=split_every), pdf1.index.max())
+    assert_eq(ddf1.index.count(split_every=split_every), pd.notnull(pdf1.index).sum())
+
+
+@pytest.mark.parametrize('split_every', [False, 2])
+def test_deterministic_reduction_names(split_every):
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for x in [ddf, ddf.x]:
+        assert (x.sum(split_every=split_every)._name ==
+                x.sum(split_every=split_every)._name)
+        assert (x.min(split_every=split_every)._name ==
+                x.min(split_every=split_every)._name)
+        assert (x.max(split_every=split_every)._name ==
+                x.max(split_every=split_every)._name)
+        assert (x.count(split_every=split_every)._name ==
+                x.count(split_every=split_every)._name)
+        assert (x.std(split_every=split_every)._name ==
+                x.std(split_every=split_every)._name)
+        assert (x.var(split_every=split_every)._name ==
+                x.var(split_every=split_every)._name)
+        assert (x.mean(split_every=split_every)._name ==
+                x.mean(split_every=split_every)._name)
+
+    assert (ddf.x.nunique(split_every=split_every)._name ==
+            ddf.x.nunique(split_every=split_every)._name)
 
 
 def test_reduction_series_invalid_axis():
@@ -733,7 +776,8 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.nunique(), pds.nunique())
 
 
-def test_reductions_frame():
+@pytest.mark.parametrize('split_every', [False, 2])
+def test_reductions_frame(split_every):
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                                   index=[0, 1, 3]),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
@@ -744,50 +788,59 @@ def test_reductions_frame():
     ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
-    assert_eq(ddf1.sum(), pdf1.sum())
-    assert_eq(ddf1.min(), pdf1.min())
-    assert_eq(ddf1.max(), pdf1.max())
-    assert_eq(ddf1.count(), pdf1.count())
-    assert_eq(ddf1.std(), pdf1.std())
-    assert_eq(ddf1.var(), pdf1.var())
-    assert_eq(ddf1.std(ddof=0), pdf1.std(ddof=0))
-    assert_eq(ddf1.var(ddof=0), pdf1.var(ddof=0))
-    assert_eq(ddf1.mean(), pdf1.mean())
+    assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
+    assert_eq(ddf1.min(split_every=split_every), pdf1.min())
+    assert_eq(ddf1.max(split_every=split_every), pdf1.max())
+    assert_eq(ddf1.count(split_every=split_every), pdf1.count())
+    assert_eq(ddf1.std(split_every=split_every), pdf1.std())
+    assert_eq(ddf1.var(split_every=split_every), pdf1.var())
+    assert_eq(ddf1.std(ddof=0, split_every=split_every), pdf1.std(ddof=0))
+    assert_eq(ddf1.var(ddof=0, split_every=split_every), pdf1.var(ddof=0))
+    assert_eq(ddf1.mean(split_every=split_every), pdf1.mean())
 
     for axis in [0, 1, 'index', 'columns']:
-        assert_eq(ddf1.sum(axis=axis), pdf1.sum(axis=axis))
-        assert_eq(ddf1.min(axis=axis), pdf1.min(axis=axis))
-        assert_eq(ddf1.max(axis=axis), pdf1.max(axis=axis))
-        assert_eq(ddf1.count(axis=axis), pdf1.count(axis=axis))
-        assert_eq(ddf1.std(axis=axis), pdf1.std(axis=axis))
-        assert_eq(ddf1.var(axis=axis), pdf1.var(axis=axis))
-        assert_eq(ddf1.std(axis=axis, ddof=0), pdf1.std(axis=axis, ddof=0))
-        assert_eq(ddf1.var(axis=axis, ddof=0), pdf1.var(axis=axis, ddof=0))
-        assert_eq(ddf1.mean(axis=axis), pdf1.mean(axis=axis))
+        assert_eq(ddf1.sum(axis=axis, split_every=split_every),
+                  pdf1.sum(axis=axis))
+        assert_eq(ddf1.min(axis=axis, split_every=split_every),
+                  pdf1.min(axis=axis))
+        assert_eq(ddf1.max(axis=axis, split_every=split_every),
+                  pdf1.max(axis=axis))
+        assert_eq(ddf1.count(axis=axis, split_every=split_every),
+                  pdf1.count(axis=axis))
+        assert_eq(ddf1.std(axis=axis, split_every=split_every),
+                  pdf1.std(axis=axis))
+        assert_eq(ddf1.var(axis=axis, split_every=split_every),
+                  pdf1.var(axis=axis))
+        assert_eq(ddf1.std(axis=axis, ddof=0, split_every=split_every),
+                  pdf1.std(axis=axis, ddof=0))
+        assert_eq(ddf1.var(axis=axis, ddof=0, split_every=split_every),
+                  pdf1.var(axis=axis, ddof=0))
+        assert_eq(ddf1.mean(axis=axis, split_every=split_every),
+                  pdf1.mean(axis=axis))
 
     assert raises(ValueError, lambda: ddf1.sum(axis='incorrect').compute())
 
     # axis=0
-    assert_dask_graph(ddf1.sum(), 'dataframe-sum')
-    assert_dask_graph(ddf1.min(), 'dataframe-min')
-    assert_dask_graph(ddf1.max(), 'dataframe-max')
-    assert_dask_graph(ddf1.count(), 'dataframe-count')
+    assert_dask_graph(ddf1.sum(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.min(split_every=split_every), 'dataframe-min')
+    assert_dask_graph(ddf1.max(split_every=split_every), 'dataframe-max')
+    assert_dask_graph(ddf1.count(split_every=split_every), 'dataframe-count')
     # std, var, mean consists from sum and count operations
-    assert_dask_graph(ddf1.std(), 'dataframe-sum')
-    assert_dask_graph(ddf1.std(), 'dataframe-count')
-    assert_dask_graph(ddf1.var(), 'dataframe-sum')
-    assert_dask_graph(ddf1.var(), 'dataframe-count')
-    assert_dask_graph(ddf1.mean(), 'dataframe-sum')
-    assert_dask_graph(ddf1.mean(), 'dataframe-count')
+    assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-count')
+    assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-count')
+    assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-count')
 
     # axis=1
-    assert_dask_graph(ddf1.sum(axis=1), 'dataframe-sum')
-    assert_dask_graph(ddf1.min(axis=1), 'dataframe-min')
-    assert_dask_graph(ddf1.max(axis=1), 'dataframe-max')
-    assert_dask_graph(ddf1.count(axis=1), 'dataframe-count')
-    assert_dask_graph(ddf1.std(axis=1), 'dataframe-std')
-    assert_dask_graph(ddf1.var(axis=1), 'dataframe-var')
-    assert_dask_graph(ddf1.mean(axis=1), 'dataframe-mean')
+    assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.min(axis=1, split_every=split_every), 'dataframe-min')
+    assert_dask_graph(ddf1.max(axis=1, split_every=split_every), 'dataframe-max')
+    assert_dask_graph(ddf1.count(axis=1, split_every=split_every), 'dataframe-count')
+    assert_dask_graph(ddf1.std(axis=1, split_every=split_every), 'dataframe-std')
+    assert_dask_graph(ddf1.var(axis=1, split_every=split_every), 'dataframe-var')
+    assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), 'dataframe-mean')
 
 
 def test_reductions_frame_dtypes():
@@ -812,57 +865,52 @@ def test_reductions_frame_dtypes():
     assert numerics._get_numeric_data().dask == numerics.dask
 
 
-def test_reductions_frame_nan():
+@pytest.mark.parametrize('split_every', [False, 2])
+def test_reductions_frame_nan(split_every):
     df = pd.DataFrame({'a': [1, 2, np.nan, 4, 5, 6, 7, 8],
                        'b': [1, 2, np.nan, np.nan, np.nan, 5, np.nan, np.nan],
                        'c': [np.nan] * 8})
     ddf = dd.from_pandas(df, 3)
-    assert_eq(df.sum(), ddf.sum())
-    assert_eq(df.min(), ddf.min())
-    assert_eq(df.max(), ddf.max())
-    assert_eq(df.count(), ddf.count())
-    assert_eq(df.std(), ddf.std())
-    assert_eq(df.var(), ddf.var())
-    assert_eq(df.std(ddof=0), ddf.std(ddof=0))
-    assert_eq(df.var(ddof=0), ddf.var(ddof=0))
-    assert_eq(df.mean(), ddf.mean())
+    assert_eq(df.sum(), ddf.sum(split_every=split_every))
+    assert_eq(df.min(), ddf.min(split_every=split_every))
+    assert_eq(df.max(), ddf.max(split_every=split_every))
+    assert_eq(df.count(), ddf.count(split_every=split_every))
+    assert_eq(df.std(), ddf.std(split_every=split_every))
+    assert_eq(df.var(), ddf.var(split_every=split_every))
+    assert_eq(df.std(ddof=0), ddf.std(ddof=0, split_every=split_every))
+    assert_eq(df.var(ddof=0), ddf.var(ddof=0, split_every=split_every))
+    assert_eq(df.mean(), ddf.mean(split_every=split_every))
 
-    assert_eq(df.sum(skipna=False), ddf.sum(skipna=False))
-    assert_eq(df.min(skipna=False), ddf.min(skipna=False))
-    assert_eq(df.max(skipna=False), ddf.max(skipna=False))
-    assert_eq(df.std(skipna=False), ddf.std(skipna=False))
-    assert_eq(df.var(skipna=False), ddf.var(skipna=False))
-    assert_eq(df.std(skipna=False, ddof=0), ddf.std(skipna=False, ddof=0))
-    assert_eq(df.var(skipna=False, ddof=0), ddf.var(skipna=False, ddof=0))
-    assert_eq(df.mean(skipna=False), ddf.mean(skipna=False))
+    assert_eq(df.sum(skipna=False),
+              ddf.sum(skipna=False, split_every=split_every))
+    assert_eq(df.min(skipna=False),
+              ddf.min(skipna=False, split_every=split_every))
+    assert_eq(df.max(skipna=False),
+              ddf.max(skipna=False, split_every=split_every))
+    assert_eq(df.std(skipna=False),
+              ddf.std(skipna=False, split_every=split_every))
+    assert_eq(df.var(skipna=False),
+              ddf.var(skipna=False, split_every=split_every))
+    assert_eq(df.std(skipna=False, ddof=0),
+              ddf.std(skipna=False, ddof=0, split_every=split_every))
+    assert_eq(df.var(skipna=False, ddof=0),
+              ddf.var(skipna=False, ddof=0, split_every=split_every))
+    assert_eq(df.mean(skipna=False),
+              ddf.mean(skipna=False, split_every=split_every))
 
-    assert_eq(df.sum(axis=1, skipna=False), ddf.sum(axis=1, skipna=False))
-    assert_eq(df.min(axis=1, skipna=False), ddf.min(axis=1, skipna=False))
-    assert_eq(df.max(axis=1, skipna=False), ddf.max(axis=1, skipna=False))
-    assert_eq(df.std(axis=1, skipna=False), ddf.std(axis=1, skipna=False))
-    assert_eq(df.var(axis=1, skipna=False), ddf.var(axis=1, skipna=False))
+    assert_eq(df.sum(axis=1, skipna=False),
+              ddf.sum(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.min(axis=1, skipna=False),
+              ddf.min(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.max(axis=1, skipna=False),
+              ddf.max(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.std(axis=1, skipna=False),
+              ddf.std(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.var(axis=1, skipna=False),
+              ddf.var(axis=1, skipna=False, split_every=split_every))
     assert_eq(df.std(axis=1, skipna=False, ddof=0),
-              ddf.std(axis=1, skipna=False, ddof=0))
+              ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.var(axis=1, skipna=False, ddof=0),
-              ddf.var(axis=1, skipna=False, ddof=0))
-    assert_eq(df.mean(axis=1, skipna=False), ddf.mean(axis=1, skipna=False))
-
-    assert_eq(df.cumsum(), ddf.cumsum())
-    assert_eq(df.cummin(), ddf.cummin())
-    assert_eq(df.cummax(), ddf.cummax())
-    assert_eq(df.cumprod(), ddf.cumprod())
-
-    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
-    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
-    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
-    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
-
-    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
-    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
-    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
-    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
-
-    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
-    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
-    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
-    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+              ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
+    assert_eq(df.mean(axis=1, skipna=False),
+              ddf.mean(axis=1, skipna=False, split_every=split_every))

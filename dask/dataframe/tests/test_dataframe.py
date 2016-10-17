@@ -14,7 +14,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, _concat,
                                  _Frame, Scalar)
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -330,32 +330,64 @@ def test_describe():
 
     assert_eq(s.describe(), ds.describe())
     assert_eq(df.describe(), ddf.describe())
+    assert_eq(s.describe(), ds.describe(split_every=2))
+    assert_eq(df.describe(), ddf.describe(split_every=2))
+
+    assert ds.describe(split_every=2)._name != ds.describe()._name
+    assert ddf.describe(split_every=2)._name != ddf.describe()._name
 
     # remove string columns
     df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
                        'c': list('abcd') * 20})
     ddf = dd.from_pandas(df, 4)
     assert_eq(df.describe(), ddf.describe())
+    assert_eq(df.describe(), ddf.describe(split_every=2))
 
 
 def test_cumulative():
-    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
-    ddf = dd.from_pandas(pdf, 5)
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(df, 5)
 
-    assert_eq(ddf.cumsum(), pdf.cumsum())
-    assert_eq(ddf.cumprod(), pdf.cumprod())
-    assert_eq(ddf.cummin(), pdf.cummin())
-    assert_eq(ddf.cummax(), pdf.cummax())
+    assert_eq(ddf.cumsum(), df.cumsum())
+    assert_eq(ddf.cumprod(), df.cumprod())
+    assert_eq(ddf.cummin(), df.cummin())
+    assert_eq(ddf.cummax(), df.cummax())
 
-    assert_eq(ddf.cumsum(axis=1), pdf.cumsum(axis=1))
-    assert_eq(ddf.cumprod(axis=1), pdf.cumprod(axis=1))
-    assert_eq(ddf.cummin(axis=1), pdf.cummin(axis=1))
-    assert_eq(ddf.cummax(axis=1), pdf.cummax(axis=1))
+    assert_eq(ddf.cumsum(axis=1), df.cumsum(axis=1))
+    assert_eq(ddf.cumprod(axis=1), df.cumprod(axis=1))
+    assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
+    assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    assert_eq(ddf.a.cumsum(), pdf.a.cumsum())
-    assert_eq(ddf.a.cumprod(), pdf.a.cumprod())
-    assert_eq(ddf.a.cummin(), pdf.a.cummin())
-    assert_eq(ddf.a.cummax(), pdf.a.cummax())
+    assert_eq(ddf.a.cumsum(), df.a.cumsum())
+    assert_eq(ddf.a.cumprod(), df.a.cumprod())
+    assert_eq(ddf.a.cummin(), df.a.cummin())
+    assert_eq(ddf.a.cummax(), df.a.cummax())
+
+    # With NaNs
+    df = pd.DataFrame({'a': [1, 2, np.nan, 4, 5, 6, 7, 8],
+                       'b': [1, 2, np.nan, np.nan, np.nan, 5, np.nan, np.nan],
+                       'c': [np.nan] * 8})
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(df.cumsum(), ddf.cumsum())
+    assert_eq(df.cummin(), ddf.cummin())
+    assert_eq(df.cummax(), ddf.cummax())
+    assert_eq(df.cumprod(), ddf.cumprod())
+
+    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
+    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
+    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
+    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+
+    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
+    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
+    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
+    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+
+    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
+    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
+    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
+    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
 
 
 def test_dropna():
@@ -569,10 +601,26 @@ def test_map_partitions_keeps_kwargs_in_dict():
 
 
 def test_drop_duplicates():
-    # can't detect duplicates only from cached data
-    assert_eq(d.a.drop_duplicates(), full.a.drop_duplicates())
-    assert_eq(d.drop_duplicates(), full.drop_duplicates())
-    assert_eq(d.index.drop_duplicates(), full.index.drop_duplicates())
+    res = d.drop_duplicates()
+    res2 = d.drop_duplicates(split_every=2)
+    sol = full.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
+
+    res = d.a.drop_duplicates()
+    res2 = d.a.drop_duplicates(split_every=2)
+    sol = full.a.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
+
+    res = d.index.drop_duplicates()
+    res2 = d.index.drop_duplicates(split_every=2)
+    sol = full.index.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
 
 
 def test_drop_duplicates_subset():
@@ -665,12 +713,13 @@ def test_cache():
 
 def test_value_counts():
     df = pd.DataFrame({'x': [1, 2, 1, 3, 3, 1, 4]})
-    a = dd.from_pandas(df, npartitions=3)
-    result = a.x.value_counts()
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts()
     expected = df.x.value_counts()
-    # because of pandas bug, value_counts doesn't hold name (fixed in 0.17)
-    # https://github.com/pydata/pandas/pull/10419
-    assert_eq(result, expected, check_names=False)
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
 
 
 def test_unique():
@@ -680,6 +729,12 @@ def test_unique():
     ddf = dd.from_pandas(pdf, npartitions=3)
     assert_eq(ddf.x.unique(), pd.Series(pdf.x.unique(), name='x'))
     assert_eq(ddf.y.unique(), pd.Series(pdf.y.unique(), name='y'))
+
+    assert_eq(ddf.x.unique(split_every=2),
+              pd.Series(pdf.x.unique(), name='x'))
+    assert_eq(ddf.y.unique(split_every=2),
+              pd.Series(pdf.y.unique(), name='y'))
+    assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
 
 
 def test_isin():
@@ -697,6 +752,11 @@ def test_size():
     assert_eq(d.size, full.size)
     assert_eq(d.a.size, full.a.size)
     assert_eq(d.index.size, full.index.size)
+
+
+def test_nbytes():
+    assert_eq(d.a.nbytes, full.a.nbytes)
+    assert_eq(d.index.nbytes, full.index.nbytes)
 
 
 def test_quantile():
@@ -1253,12 +1313,6 @@ def test_series_round():
     assert_eq(s.round(), ps.round())
 
 
-def test_series_nunique():
-    ps = pd.Series(list('aaabbccccdddeee'), name='a')
-    s = dd.from_pandas(ps, npartitions=3)
-    assert_eq(s.nunique(), ps.nunique())
-
-
 def test_set_partition_2():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
     ddf = dd.from_pandas(df, 2)
@@ -1512,13 +1566,6 @@ def test_empty_max():
     assert_eq(a.x.max(), 1)
 
 
-def test_nlargest_series():
-    s = pd.Series([1, 3, 5, 2, 4, 6])
-    ss = dd.from_pandas(s, npartitions=2)
-
-    assert_eq(ss.nlargest(2), s.nlargest(2))
-
-
 def test_query():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
@@ -1567,27 +1614,6 @@ def test_select_dtypes(include, exclude):
                            expected.get_dtype_counts())
     tm.assert_series_equal(result.get_ftype_counts(),
                            expected.get_ftype_counts())
-
-
-def test_deterministic_arithmetic_names():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
-
-    assert sorted((a.x + a.y ** 2).dask) == sorted((a.x + a.y ** 2).dask)
-    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x + a.y ** 3).dask)
-    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x - a.y ** 2).dask)
-
-
-def test_deterministic_reduction_names():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
-
-    assert a.x.sum()._name == a.x.sum()._name
-    assert a.x.mean()._name == a.x.mean()._name
-    assert a.x.var()._name == a.x.var()._name
-    assert a.x.min()._name == a.x.min()._name
-    assert a.x.max()._name == a.x.max()._name
-    assert a.x.count()._name == a.x.count()._name
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -1659,6 +1685,58 @@ def test_aca_meta_infer():
     assert res.compute() == df.x.sum()
 
 
+def test_aca_split_every():
+    df = pd.DataFrame({'x': [1] * 60})
+    ddf = dd.from_pandas(df, npartitions=15)
+
+    def chunk(x, y, constant=0):
+        return x.sum() + y + constant
+
+    def combine(x, constant=0):
+        return x.sum() + constant + 1
+
+    def agg(x, constant=0):
+        return x.sum() + constant + 2
+
+    f = lambda n: aca([ddf, 2.0], chunk=chunk, aggregate=agg, combine=combine,
+                      chunk_kwargs=dict(constant=1.0),
+                      combine_kwargs=dict(constant=2.0),
+                      aggregate_kwargs=dict(constant=3.0),
+                      split_every=n)
+
+    assert_max_deps(f(3), 3)
+    assert_max_deps(f(4), 4, False)
+    assert_max_deps(f(5), 5)
+    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+
+    r3 = f(3)
+    r4 = f(4)
+    assert r3._name != r4._name
+    # Only intersect on reading operations
+    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+
+    # Keywords are different for each step
+    assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
+    # Keywords are same for each step
+    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg, combine=combine,
+              constant=3.0, split_every=3)
+    assert res.compute() == 60 + 15 * (2 + 3) + 7 * (3 + 1) + (3 + 2)
+    # No combine provided, combine is agg
+    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg, constant=3, split_every=3)
+    assert res.compute() == 60 + 15 * (2 + 3) + 8 * (3 + 2)
+
+    # split_every must be >= 2
+    with pytest.raises(ValueError):
+        f(1)
+
+    # combine_kwargs with no combine provided
+    with pytest.raises(ValueError):
+        aca([ddf, 2.0], chunk=chunk, aggregate=agg, split_every=3,
+            chunk_kwargs=dict(constant=1.0),
+            combine_kwargs=dict(constant=2.0),
+            aggregate_kwargs=dict(constant=3.0))
+
+
 def test_reduction_method():
     df = pd.DataFrame({'x': range(50), 'y': range(50, 100)})
     ddf = dd.from_pandas(df, npartitions=4)
@@ -1689,6 +1767,58 @@ def test_reduction_method():
                         aggregate=lambda x: x.groupby(level=0).sum())
 
     assert_eq(res, pd.DataFrame({'sum': df.sum(), 'count': df.count()}))
+
+
+def test_reduction_method_split_every():
+    df = pd.Series([1] * 60)
+    ddf = dd.from_pandas(df, npartitions=15)
+
+    def chunk(x, constant=0):
+        return x.sum() + constant
+
+    def combine(x, constant=0):
+        return x.sum() + constant + 1
+
+    def agg(x, constant=0):
+        return x.sum() + constant + 2
+
+    f = lambda n: ddf.reduction(chunk, aggregate=agg, combine=combine,
+                                chunk_kwargs=dict(constant=1.0),
+                                combine_kwargs=dict(constant=2.0),
+                                aggregate_kwargs=dict(constant=3.0),
+                                split_every=n)
+
+    assert_max_deps(f(3), 3)
+    assert_max_deps(f(4), 4, False)
+    assert_max_deps(f(5), 5)
+    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+
+    r3 = f(3)
+    r4 = f(4)
+    assert r3._name != r4._name
+    # Only intersect on reading operations
+    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+
+    # Keywords are different for each step
+    assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
+    # Keywords are same for each step
+    res = ddf.reduction(chunk, aggregate=agg, combine=combine, constant=3.0,
+                        split_every=3)
+    assert res.compute() == 60 + 15 * 3 + 7 * (3 + 1) + (3 + 2)
+    # No combine provided, combine is agg
+    res = ddf.reduction(chunk, aggregate=agg, constant=3.0, split_every=3)
+    assert res.compute() == 60 + 15 * 3 + 8 * (3 + 2)
+
+    # split_every must be >= 2
+    with pytest.raises(ValueError):
+        f(1)
+
+    # combine_kwargs with no combine provided
+    with pytest.raises(ValueError):
+        ddf.reduction(chunk, aggregate=agg, split_every=3,
+                      chunk_kwargs=dict(constant=1.0),
+                      combine_kwargs=dict(constant=2.0),
+                      aggregate_kwargs=dict(constant=3.0))
 
 
 def test_pipe():
@@ -1922,25 +2052,31 @@ def test_index_time_properties():
 
 def test_nlargest():
     from string import ascii_lowercase
-    df = pd.DataFrame({'a': np.random.permutation(10),
-                       'b': list(ascii_lowercase[:10])})
-    ddf = dd.from_pandas(df, npartitions=2)
+    df = pd.DataFrame({'a': np.random.permutation(20),
+                       'b': list(ascii_lowercase[:20]),
+                       'c': np.random.permutation(20).astype('float64')})
+    ddf = dd.from_pandas(df, npartitions=3)
 
     res = ddf.nlargest(5, 'a')
-    exp = df.nlargest(5, 'a')
-    assert_eq(res, exp)
+    res2 = ddf.nlargest(5, 'a', split_every=2)
+    sol = df.nlargest(5, 'a')
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
 
+    res = ddf.nlargest(5, ['a', 'b'])
+    res2 = ddf.nlargest(5, ['a', 'b'], split_every=2)
+    sol = df.nlargest(5, ['a', 'b'])
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
 
-def test_nlargest_multiple_columns():
-    from string import ascii_lowercase
-    df = pd.DataFrame({'a': np.random.permutation(10),
-                       'b': list(ascii_lowercase[:10]),
-                       'c': np.random.permutation(10).astype('float64')})
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    result = ddf.nlargest(5, ['a', 'b'])
-    expected = df.nlargest(5, ['a', 'b'])
-    assert_eq(result, expected)
+    res = ddf.a.nlargest(5)
+    res2 = ddf.a.nlargest(5, split_every=2)
+    sol = df.a.nlargest(5)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name != res2._name
 
 
 def test_reset_index():
@@ -2237,16 +2373,39 @@ def test_inplace_operators():
     pd.date_range('20150101', periods=100)
 ])
 def test_idxmaxmin(idx, skipna):
-    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'), index=idx)
-    pdf.b.iloc[31] = np.nan
-    pdf.d.iloc[78] = np.nan
-    ddf = dd.from_pandas(pdf, npartitions=3)
-    assert_eq(pdf.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
-    assert_eq(pdf.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
-    assert_eq(pdf.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
-    assert_eq(pdf.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
-    assert_eq(pdf.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-    assert_eq(pdf.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'), index=idx)
+    df.b.iloc[31] = np.nan
+    df.d.iloc[78] = np.nan
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(df.idxmax(axis=1, skipna=skipna),
+              ddf.idxmax(axis=1, skipna=skipna))
+    assert_eq(df.idxmin(axis=1, skipna=skipna),
+              ddf.idxmin(axis=1, skipna=skipna))
+
+    assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
+    assert_eq(df.idxmax(skipna=skipna),
+              ddf.idxmax(skipna=skipna, split_every=2))
+    assert (ddf.idxmax(skipna=skipna)._name !=
+            ddf.idxmax(skipna=skipna, split_every=2)._name)
+
+    assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
+    assert_eq(df.idxmin(skipna=skipna),
+              ddf.idxmin(skipna=skipna, split_every=2))
+    assert (ddf.idxmin(skipna=skipna)._name !=
+            ddf.idxmin(skipna=skipna, split_every=2)._name)
+
+    assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+    assert_eq(df.a.idxmax(skipna=skipna),
+              ddf.a.idxmax(skipna=skipna, split_every=2))
+    assert (ddf.a.idxmax(skipna=skipna)._name !=
+            ddf.a.idxmax(skipna=skipna, split_every=2)._name)
+
+    assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+    assert_eq(df.a.idxmin(skipna=skipna),
+              ddf.a.idxmin(skipna=skipna, split_every=2))
+    assert (ddf.a.idxmin(skipna=skipna)._name !=
+            ddf.a.idxmin(skipna=skipna, split_every=2)._name)
 
 
 def test_getitem_meta():
