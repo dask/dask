@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error)
@@ -125,6 +126,17 @@ def test_meta_nonempty():
     s = meta_nonempty(df2['A'])
     assert s.dtype == df2['A'].dtype
     assert (df3['A'] == s).all()
+
+
+def test_meta_duplicated():
+    df = pd.DataFrame(columns=['A', 'A', 'B'])
+    res = meta_nonempty(df)
+
+    exp = pd.DataFrame([['foo', 'foo', 'foo'],
+                        ['foo', 'foo', 'foo']],
+                       index=['a', 'b'],
+                       columns=['A', 'A', 'B'])
+    tm.assert_frame_equal(res, exp)
 
 
 def test_meta_nonempty_index():

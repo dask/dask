@@ -8,8 +8,7 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
-from dask.dataframe.categorical import is_categorical_dtype
-from dask.dataframe.utils import make_meta, eq
+from dask.dataframe.utils import make_meta, eq, is_categorical_dtype
 
 
 @pytest.fixture(params=[True, False])
