@@ -1126,6 +1126,85 @@ def test_append2():
     assert eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
 
+@pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
+def test_align(join):
+    df1a = pd.DataFrame({'A': np.random.randn(10),
+                         'B': np.random.randn(10)},
+                        index=[1, 12, 5, 6, 3, 9, 10, 4, 13, 11])
+
+    df1b = pd.DataFrame({'A': np.random.randn(10),
+                         'B': np.random.randn(10)},
+                        index=[0, 3, 2, 10, 5, 6, 7, 8, 12, 13])
+    ddf1a = dd.from_pandas(df1a, 3)
+    ddf1b = dd.from_pandas(df1b, 3)
+
+    # DataFrame
+    res1, res2 = ddf1a.align(ddf1b, join=join)
+    exp1, exp2 = df1a.align(df1b, join=join)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    # Series
+    res1, res2 = ddf1a['A'].align(ddf1b['B'], join=join)
+    exp1, exp2 = df1a['A'].align(df1b['B'], join=join)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    # DataFrame with fill_value
+    res1, res2 = ddf1a.align(ddf1b, join=join, fill_value=1)
+    exp1, exp2 = df1a.align(df1b, join=join, fill_value=1)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    # Series
+    res1, res2 = ddf1a['A'].align(ddf1b['B'], join=join, fill_value=1)
+    exp1, exp2 = df1a['A'].align(df1b['B'], join=join, fill_value=1)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+
+@pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
+def test_align_axis(join):
+    df1a = pd.DataFrame({'A': np.random.randn(10),
+                         'B': np.random.randn(10),
+                         'C': np.random.randn(10)},
+                        index=[1, 12, 5, 6, 3, 9, 10, 4, 13, 11])
+
+    df1b = pd.DataFrame({'B': np.random.randn(10),
+                         'C': np.random.randn(10),
+                         'D': np.random.randn(10)},
+                        index=[0, 3, 2, 10, 5, 6, 7, 8, 12, 13])
+    ddf1a = dd.from_pandas(df1a, 3)
+    ddf1b = dd.from_pandas(df1b, 3)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis=0)
+    exp1, exp2 = df1a.align(df1b, join=join, axis=0)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis=1)
+    exp1, exp2 = df1a.align(df1b, join=join, axis=1)
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis='index')
+    exp1, exp2 = df1a.align(df1b, join=join, axis='index')
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis='columns')
+    exp1, exp2 = df1a.align(df1b, join=join, axis='columns')
+    assert eq(res1, exp1)
+    assert eq(res2, exp2)
+
+    # invalid
+    with tm.assertRaises(ValueError):
+        ddf1a.align(ddf1b, join=join, axis='XXX')
+
+    with tm.assertRaises(ValueError):
+        ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
+
+
 def test_dataframe_picklable():
     from pickle import loads, dumps
     cloudpickle = pytest.importorskip('cloudpickle')
