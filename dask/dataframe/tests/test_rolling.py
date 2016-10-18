@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.utils import eq
+from dask.dataframe.utils import assert_eq
 from dask.utils import raises, ignoring
 
 
@@ -13,61 +13,71 @@ def mad(x):
 
 def rolling_functions_tests(p, d):
     # Old-fashioned rolling API
-    eq(pd.rolling_count(p, 3), dd.rolling_count(d, 3))
-    eq(pd.rolling_sum(p, 3), dd.rolling_sum(d, 3))
-    eq(pd.rolling_mean(p, 3), dd.rolling_mean(d, 3))
-    eq(pd.rolling_median(p, 3), dd.rolling_median(d, 3))
-    eq(pd.rolling_min(p, 3), dd.rolling_min(d, 3))
-    eq(pd.rolling_max(p, 3), dd.rolling_max(d, 3))
-    eq(pd.rolling_std(p, 3), dd.rolling_std(d, 3))
-    eq(pd.rolling_var(p, 3), dd.rolling_var(d, 3))
+    assert_eq(pd.rolling_count(p, 3), dd.rolling_count(d, 3))
+    assert_eq(pd.rolling_sum(p, 3), dd.rolling_sum(d, 3))
+    assert_eq(pd.rolling_mean(p, 3), dd.rolling_mean(d, 3))
+    assert_eq(pd.rolling_median(p, 3), dd.rolling_median(d, 3))
+    assert_eq(pd.rolling_min(p, 3), dd.rolling_min(d, 3))
+    assert_eq(pd.rolling_max(p, 3), dd.rolling_max(d, 3))
+    assert_eq(pd.rolling_std(p, 3), dd.rolling_std(d, 3))
+    assert_eq(pd.rolling_var(p, 3), dd.rolling_var(d, 3))
     # see note around test_rolling_dataframe for logic concerning precision
-    eq(pd.rolling_skew(p, 3), dd.rolling_skew(d, 3), check_less_precise=True)
-    eq(pd.rolling_kurt(p, 3), dd.rolling_kurt(d, 3), check_less_precise=True)
-    eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
-    eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
+    assert_eq(pd.rolling_skew(p, 3),
+              dd.rolling_skew(d, 3), check_less_precise=True)
+    assert_eq(pd.rolling_kurt(p, 3),
+              dd.rolling_kurt(d, 3), check_less_precise=True)
+    assert_eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
+    assert_eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
     with ignoring(ImportError):
-        eq(pd.rolling_window(p, 3, 'boxcar'), dd.rolling_window(d, 3, 'boxcar'))
+        assert_eq(pd.rolling_window(p, 3, 'boxcar'),
+                  dd.rolling_window(d, 3, 'boxcar'))
     # Test with edge-case window sizes
-    eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
-    eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
+    assert_eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
+    assert_eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
     # Test with kwargs
-    eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
+    assert_eq(pd.rolling_sum(p, 3, min_periods=3),
+              dd.rolling_sum(d, 3, min_periods=3))
 
 
 def basic_rolling_tests(p, d):
     # Works for series or df
 
     # New rolling API
-    eq(p.rolling(3).count(), d.rolling(3).count())
-    eq(p.rolling(3).sum(), d.rolling(3).sum())
-    eq(p.rolling(3).mean(), d.rolling(3).mean())
-    eq(p.rolling(3).median(), d.rolling(3).median())
-    eq(p.rolling(3).min(), d.rolling(3).min())
-    eq(p.rolling(3).max(), d.rolling(3).max())
-    eq(p.rolling(3).std(), d.rolling(3).std())
-    eq(p.rolling(3).var(), d.rolling(3).var())
+    assert_eq(p.rolling(3).count(), d.rolling(3).count())
+    assert_eq(p.rolling(3).sum(), d.rolling(3).sum())
+    assert_eq(p.rolling(3).mean(), d.rolling(3).mean())
+    assert_eq(p.rolling(3).median(), d.rolling(3).median())
+    assert_eq(p.rolling(3).min(), d.rolling(3).min())
+    assert_eq(p.rolling(3).max(), d.rolling(3).max())
+    assert_eq(p.rolling(3).std(), d.rolling(3).std())
+    assert_eq(p.rolling(3).var(), d.rolling(3).var())
     # see note around test_rolling_dataframe for logic concerning precision
-    eq(p.rolling(3).skew(), d.rolling(3).skew(), check_less_precise=True)
-    eq(p.rolling(3).kurt(), d.rolling(3).kurt(), check_less_precise=True)
-    eq(p.rolling(3).quantile(0.5), d.rolling(3).quantile(0.5))
-    eq(p.rolling(3).apply(mad), d.rolling(3).apply(mad))
+    assert_eq(p.rolling(3).skew(),
+              d.rolling(3).skew(), check_less_precise=True)
+    assert_eq(p.rolling(3).kurt(),
+              d.rolling(3).kurt(), check_less_precise=True)
+    assert_eq(p.rolling(3).quantile(0.5), d.rolling(3).quantile(0.5))
+    assert_eq(p.rolling(3).apply(mad), d.rolling(3).apply(mad))
     with ignoring(ImportError):
-        eq(p.rolling(3, win_type='boxcar').sum(),
-           d.rolling(3, win_type='boxcar').sum())
+        assert_eq(p.rolling(3, win_type='boxcar').sum(),
+                  d.rolling(3, win_type='boxcar').sum())
     # Test with edge-case window sizes
-    eq(p.rolling(0).sum(), d.rolling(0).sum())
-    eq(p.rolling(1).sum(), d.rolling(1).sum())
+    assert_eq(p.rolling(0).sum(), d.rolling(0).sum())
+    assert_eq(p.rolling(1).sum(), d.rolling(1).sum())
     # Test with kwargs
-    eq(p.rolling(3, min_periods=2).sum(), d.rolling(3, min_periods=2).sum())
+    assert_eq(p.rolling(3, min_periods=2).sum(),
+              d.rolling(3, min_periods=2).sum())
     # Test with center
-    eq(p.rolling(3, center=True).max(), d.rolling(3, center=True).max())
-    eq(p.rolling(3, center=False).std(), d.rolling(3, center=False).std())
-    eq(p.rolling(6, center=True).var(), d.rolling(6, center=True).var())
+    assert_eq(p.rolling(3, center=True).max(),
+              d.rolling(3, center=True).max())
+    assert_eq(p.rolling(3, center=False).std(),
+              d.rolling(3, center=False).std())
+    assert_eq(p.rolling(6, center=True).var(),
+              d.rolling(6, center=True).var())
     # see note around test_rolling_dataframe for logic concerning precision
-    eq(p.rolling(7, center=True).skew(),
-       d.rolling(7, center=True).skew(),
-       check_less_precise=True)
+    assert_eq(p.rolling(7, center=True).skew(),
+              d.rolling(7, center=True).skew(),
+              check_less_precise=True)
 
 
 def test_rolling_functions_series():
@@ -77,9 +87,8 @@ def test_rolling_functions_series():
 
 
 def test_rolling_series():
-    for ts in [
-            pd.Series(np.random.randn(25).cumsum()),
-            pd.Series(np.random.randint(100, size=(25,)))]:
+    for ts in [pd.Series(np.random.randn(25).cumsum()),
+               pd.Series(np.random.randint(100, size=(25,)))]:
         dts = dd.from_pandas(ts, 3)
         basic_rolling_tests(ts, dts)
 
@@ -129,8 +138,9 @@ def test_rolling_dataframe(npartitions, method, args, window, center, axis,
 
     prolling = df.rolling(window, center=center, axis=axis)
     drolling = ddf.rolling(window, center=center, axis=axis)
-    eq(getattr(prolling, method)(*args), getattr(drolling, method)(*args),
-       check_less_precise=check_less_precise)
+    assert_eq(getattr(prolling, method)(*args),
+              getattr(drolling, method)(*args),
+              check_less_precise=check_less_precise)
 
 
 def test_rolling_functions_raises():
@@ -174,18 +184,18 @@ def test_rolling_axis():
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
-    eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
-    eq(df.rolling(3, min_periods=1, axis=1).mean(),
-        ddf.rolling(3, min_periods=1, axis=1).mean())
-    eq(df.rolling(3, axis='columns').mean(),
-        ddf.rolling(3, axis='columns').mean())
-    eq(df.rolling(3, axis='rows').mean(),
-        ddf.rolling(3, axis='rows').mean())
+    assert_eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
+    assert_eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
+    assert_eq(df.rolling(3, min_periods=1, axis=1).mean(),
+              ddf.rolling(3, min_periods=1, axis=1).mean())
+    assert_eq(df.rolling(3, axis='columns').mean(),
+              ddf.rolling(3, axis='columns').mean())
+    assert_eq(df.rolling(3, axis='rows').mean(),
+              ddf.rolling(3, axis='rows').mean())
 
     s = df[3]
     ds = ddf[3]
-    eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
+    assert_eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
 
 
 def test_rolling_function_partition_size():
@@ -193,8 +203,8 @@ def test_rolling_function_partition_size():
     ddf = dd.from_pandas(df, npartitions=5)
 
     for obj, dobj in [(df, ddf), (df[0], ddf[0])]:
-        eq(pd.rolling_mean(obj, 10), dd.rolling_mean(dobj, 10))
-        eq(pd.rolling_mean(obj, 11), dd.rolling_mean(dobj, 11))
+        assert_eq(pd.rolling_mean(obj, 10), dd.rolling_mean(dobj, 10))
+        assert_eq(pd.rolling_mean(obj, 11), dd.rolling_mean(dobj, 11))
         raises(NotImplementedError, lambda: dd.rolling_mean(dobj, 12))
 
 
@@ -203,8 +213,8 @@ def test_rolling_partition_size():
     ddf = dd.from_pandas(df, npartitions=5)
 
     for obj, dobj in [(df, ddf), (df[0], ddf[0])]:
-        eq(obj.rolling(10).mean(), dobj.rolling(10).mean())
-        eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
+        assert_eq(obj.rolling(10).mean(), dobj.rolling(10).mean())
+        assert_eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
         raises(NotImplementedError, lambda: dobj.rolling(12).mean())
 
 
