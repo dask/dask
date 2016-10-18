@@ -258,7 +258,8 @@ class _Frame(Base):
 
     @property
     def size(self):
-        return self.reduction(methods.size, np.sum, token='size', meta=int)
+        return self.reduction(methods.size, np.sum, token='size', meta=int,
+                              split_every=False)
 
     @property
     def _meta_nonempty(self):
@@ -352,7 +353,8 @@ class _Frame(Base):
                    token='drop-duplicates', split_every=split_every, **kwargs)
 
     def __len__(self):
-        return self.reduction(len, np.sum, token='len', meta=int).compute()
+        return self.reduction(len, np.sum, token='len', meta=int,
+                              split_every=False).compute()
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
@@ -1536,7 +1538,8 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
-        return self.reduction(methods.nbytes, np.sum, token='nbytes', meta=int)
+        return self.reduction(methods.nbytes, np.sum, token='nbytes',
+                              meta=int, split_every=False)
 
     def __array__(self, dtype=None, **kwargs):
         x = np.array(self.compute())
@@ -1610,36 +1613,46 @@ class Series(_Frame):
         return SeriesGroupBy(self, index, **kwargs)
 
     @derived_from(pd.Series)
-    def sum(self, axis=None, skipna=True, split_every=None):
+    def sum(self, axis=None, skipna=True, split_every=False):
         return super(Series, self).sum(axis=axis, skipna=skipna,
                                        split_every=None)
 
     @derived_from(pd.Series)
-    def max(self, axis=None, skipna=True, split_every=None):
+    def max(self, axis=None, skipna=True, split_every=False):
         return super(Series, self).max(axis=axis, skipna=skipna,
                                        split_every=split_every)
 
     @derived_from(pd.Series)
-    def min(self, axis=None, skipna=True, split_every=None):
+    def min(self, axis=None, skipna=True, split_every=False):
         return super(Series, self).min(axis=axis, skipna=skipna,
                                        split_every=split_every)
 
     @derived_from(pd.Series)
-    def count(self, split_every=None):
+    def idx_max(self, axis=None, skipna=True, split_every=False):
+        return super(Series, self).idx_max(axis=axis, skipna=skipna,
+                                           split_every=split_every)
+
+    @derived_from(pd.Series)
+    def idx_min(self, axis=None, skipna=True, split_every=False):
+        return super(Series, self).idx_min(axis=axis, skipna=skipna,
+                                           split_every=split_every)
+
+    @derived_from(pd.Series)
+    def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
     @derived_from(pd.Series)
-    def mean(self, axis=None, skipna=True, split_every=None):
+    def mean(self, axis=None, skipna=True, split_every=False):
         return super(Series, self).mean(axis=axis, skipna=skipna,
                                         split_every=split_every)
 
     @derived_from(pd.Series)
-    def var(self, axis=None, ddof=1, skipna=True, split_every=None):
+    def var(self, axis=None, ddof=1, skipna=True, split_every=False):
         return super(Series, self).var(axis=axis, ddof=ddof, skipna=skipna,
                                        split_every=split_every)
 
     @derived_from(pd.Series)
-    def std(self, axis=None, ddof=1, skipna=True, split_every=None):
+    def std(self, axis=None, ddof=1, skipna=True, split_every=False):
         return super(Series, self).std(axis=axis, ddof=ddof, skipna=skipna,
                                        split_every=split_every)
 
@@ -1912,18 +1925,18 @@ class Index(Series):
         return result
 
     @derived_from(pd.Index)
-    def max(self, split_every=None):
+    def max(self, split_every=False):
         return self.reduction(M.max, meta=self._meta_nonempty.max(),
                               token=self._token_prefix + 'max',
                               split_every=split_every)
 
     @derived_from(pd.Index)
-    def min(self, split_every=None):
+    def min(self, split_every=False):
         return self.reduction(M.min, meta=self._meta_nonempty.min(),
                               token=self._token_prefix + 'min',
                               split_every=split_every)
 
-    def count(self, split_every=None):
+    def count(self, split_every=False):
         return self.reduction(methods.index_count, np.sum,
                               token='index-count', meta=int,
                               split_every=split_every)
