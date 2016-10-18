@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function
 import pandas as pd
 import numpy as np
 
-from .core import tokenize, DataFrame
-from ..utils import different_seeds
+from ..core import tokenize, DataFrame
+from ...utils import different_seeds
 
 __all__ = ['make_timeseries']
 

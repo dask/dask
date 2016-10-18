@@ -2,9 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from .core import (DataFrame, Series, Index, _Frame, map_partitions,
                    repartition)
-from .io import (from_array, from_bcolz, from_array, from_bcolz,
-                 from_pandas, from_dask_array, from_castra, read_hdf,
-                 from_delayed)
+from .io import (from_array, from_pandas, from_bcolz,
+                 from_dask_array, from_castra, read_hdf,
+                 from_delayed, read_csv, to_csv, demo)
 from .optimize import optimize
 from .multi import merge, concat, melt
 from .rolling import (rolling_count, rolling_sum, rolling_mean, rolling_median,
@@ -12,6 +12,4 @@ from .rolling import (rolling_count, rolling_sum, rolling_mean, rolling_median,
                       rolling_skew, rolling_kurt, rolling_quantile, rolling_apply,
                       rolling_window)
 from ..base import compute
-from .csv import read_csv
 from .reshape import get_dummies, pivot_table
-from . import demo
