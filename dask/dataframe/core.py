@@ -1109,7 +1109,7 @@ class _Frame(Base):
                        freq=freq, center=center, win_type=win_type, axis=axis)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=None):
+    def sum(self, axis=None, skipna=True, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.sum(axis=axis, skipna=skipna)
         token = self._token_prefix + 'sum'
@@ -1122,7 +1122,7 @@ class _Frame(Base):
                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
-    def max(self, axis=None, skipna=True, split_every=None):
+    def max(self, axis=None, skipna=True, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.max(axis=axis, skipna=skipna)
         token = self._token_prefix + 'max'
@@ -1135,7 +1135,7 @@ class _Frame(Base):
                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
-    def min(self, axis=None, skipna=True, split_every=None):
+    def min(self, axis=None, skipna=True, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.min(axis=axis, skipna=skipna)
         token = self._token_prefix + 'min'
@@ -1148,7 +1148,7 @@ class _Frame(Base):
                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, axis=None, skipna=True, split_every=None):
+    def idxmax(self, axis=None, skipna=True, split_every=False):
         fn = 'idxmax'
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
@@ -1165,7 +1165,7 @@ class _Frame(Base):
                        skipna=skipna, fn=fn)
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, axis=None, skipna=True, split_every=None):
+    def idxmin(self, axis=None, skipna=True, split_every=False):
         fn = 'idxmin'
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.idxmax(axis=axis)
@@ -1182,7 +1182,7 @@ class _Frame(Base):
                        skipna=skipna, fn=fn)
 
     @derived_from(pd.DataFrame)
-    def count(self, axis=None, split_every=None):
+    def count(self, axis=None, split_every=False):
         axis = self._validate_axis(axis)
         token = self._token_prefix + 'count'
         if axis == 1:
@@ -1195,7 +1195,7 @@ class _Frame(Base):
                                   token=token, split_every=split_every)
 
     @derived_from(pd.DataFrame)
-    def mean(self, axis=None, skipna=True, split_every=None):
+    def mean(self, axis=None, skipna=True, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
         if axis == 1:
@@ -1211,7 +1211,7 @@ class _Frame(Base):
                                   token=name, meta=meta)
 
     @derived_from(pd.DataFrame)
-    def var(self, axis=None, skipna=True, ddof=1, split_every=None):
+    def var(self, axis=None, skipna=True, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
@@ -1228,7 +1228,7 @@ class _Frame(Base):
                                   token=name, meta=meta, ddof=ddof)
 
     @derived_from(pd.DataFrame)
-    def std(self, axis=None, skipna=True, ddof=1, split_every=None):
+    def std(self, axis=None, skipna=True, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
         if axis == 1:
@@ -1285,7 +1285,7 @@ class _Frame(Base):
                 return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=None):
+    def describe(self, split_every=False):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
 
@@ -1613,64 +1613,8 @@ class Series(_Frame):
         return SeriesGroupBy(self, index, **kwargs)
 
     @derived_from(pd.Series)
-    def sum(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).sum(axis=axis, skipna=skipna,
-                                       split_every=None)
-
-    @derived_from(pd.Series)
-    def max(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).max(axis=axis, skipna=skipna,
-                                       split_every=split_every)
-
-    @derived_from(pd.Series)
-    def min(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).min(axis=axis, skipna=skipna,
-                                       split_every=split_every)
-
-    @derived_from(pd.Series)
-    def idx_max(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).idx_max(axis=axis, skipna=skipna,
-                                           split_every=split_every)
-
-    @derived_from(pd.Series)
-    def idx_min(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).idx_min(axis=axis, skipna=skipna,
-                                           split_every=split_every)
-
-    @derived_from(pd.Series)
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
-
-    @derived_from(pd.Series)
-    def mean(self, axis=None, skipna=True, split_every=False):
-        return super(Series, self).mean(axis=axis, skipna=skipna,
-                                        split_every=split_every)
-
-    @derived_from(pd.Series)
-    def var(self, axis=None, ddof=1, skipna=True, split_every=False):
-        return super(Series, self).var(axis=axis, ddof=ddof, skipna=skipna,
-                                       split_every=split_every)
-
-    @derived_from(pd.Series)
-    def std(self, axis=None, ddof=1, skipna=True, split_every=False):
-        return super(Series, self).std(axis=axis, ddof=ddof, skipna=skipna,
-                                       split_every=split_every)
-
-    @derived_from(pd.Series)
-    def cumsum(self, axis=None, skipna=True):
-        return super(Series, self).cumsum(axis=axis, skipna=skipna)
-
-    @derived_from(pd.Series)
-    def cumprod(self, axis=None, skipna=True):
-        return super(Series, self).cumprod(axis=axis, skipna=skipna)
-
-    @derived_from(pd.Series)
-    def cummax(self, axis=None, skipna=True):
-        return super(Series, self).cummax(axis=axis, skipna=skipna)
-
-    @derived_from(pd.Series)
-    def cummin(self, axis=None, skipna=True):
-        return super(Series, self).cummin(axis=axis, skipna=skipna)
 
     def unique(self, split_every=None):
         """
@@ -1686,7 +1630,7 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def nunique(self, split_every=None):
-        return self.drop_duplicates(split_every=None).count()
+        return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
     def value_counts(self, split_every=None):

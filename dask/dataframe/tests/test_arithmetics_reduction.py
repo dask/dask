@@ -834,13 +834,20 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-count')
 
     # axis=1
-    assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), 'dataframe-sum')
-    assert_dask_graph(ddf1.min(axis=1, split_every=split_every), 'dataframe-min')
-    assert_dask_graph(ddf1.max(axis=1, split_every=split_every), 'dataframe-max')
-    assert_dask_graph(ddf1.count(axis=1, split_every=split_every), 'dataframe-count')
-    assert_dask_graph(ddf1.std(axis=1, split_every=split_every), 'dataframe-std')
-    assert_dask_graph(ddf1.var(axis=1, split_every=split_every), 'dataframe-var')
-    assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), 'dataframe-mean')
+    assert_dask_graph(ddf1.sum(axis=1, split_every=split_every),
+                      'dataframe-sum')
+    assert_dask_graph(ddf1.min(axis=1, split_every=split_every),
+                      'dataframe-min')
+    assert_dask_graph(ddf1.max(axis=1, split_every=split_every),
+                      'dataframe-max')
+    assert_dask_graph(ddf1.count(axis=1, split_every=split_every),
+                      'dataframe-count')
+    assert_dask_graph(ddf1.std(axis=1, split_every=split_every),
+                      'dataframe-std')
+    assert_dask_graph(ddf1.var(axis=1, split_every=split_every),
+                      'dataframe-var')
+    assert_dask_graph(ddf1.mean(axis=1, split_every=split_every),
+                      'dataframe-mean')
 
 
 def test_reductions_frame_dtypes():
