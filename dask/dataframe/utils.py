@@ -225,7 +225,7 @@ def make_meta(x, index=None):
 
     if is_pd_scalar(x):
         return _nonempty_scalar(x)
-
+    print(x, type(x))
     raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 

@@ -279,9 +279,8 @@ class _Frame(Base):
                 (self.__class__.__name__, name, self.npartitions, div_text))
 
     def __array__(self, dtype=None, **kwargs):
-        x = np.array(self.compute())
-        if dtype and x.dtype != dtype:
-            x = x.astype(dtype)
+        self._computed = self.compute()
+        x = np.array(self._computed)
         return x
 
     def __array_wrap__(self, array, context=None):
@@ -289,7 +288,7 @@ class _Frame(Base):
 
     @property
     def _elemwise(self):
-        return map_partitions
+        return elemwise
 
     @property
     def index(self):
@@ -1436,7 +1435,10 @@ class Series(_Frame):
     _token_prefix = 'series-'
 
     def __array_wrap__(self, array, context=None):
-        return pd.Series(array, name=self.name)
+        if isinstance(context, tuple) and len(context) > 0:
+            index = context[1][0].index
+
+        return pd.Series(array, index=index, name=self.name)
 
     @property
     def name(self):
@@ -1845,7 +1847,10 @@ class DataFrame(_Frame):
     _token_prefix = 'dataframe-'
 
     def __array_wrap__(self, array, context=None):
-        return pd.DataFrame(array, columns=self.columns)
+        if isinstance(context, tuple) and len(context) > 0:
+            index = context[1][0].index
+
+        return pd.DataFrame(array, index=index, columns=self.columns)
 
     @property
     def columns(self):
