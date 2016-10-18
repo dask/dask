@@ -1588,16 +1588,16 @@ def test_multi_client(s, a, b):
 
     assert not s.tasks
 
+    
+def long_running_client_connection(ip, port):
+    c = Client((ip, port))
+    x = c.submit(lambda x: x + 1, 10)
+    x.result()
+    sleep(100)
 
 @gen_cluster()
 def test_cleanup_after_broken_client_connection(s, a, b):
-    def f(ip, port):
-        c = Client((ip, port))
-        x = c.submit(lambda x: x + 1, 10)
-        x.result()
-        sleep(100)
-
-    proc = Process(target=f, args=(s.ip, s.port))
+    proc = Process(target=long_running_client_connection, args=(s.ip, s.port))
     proc.daemon = True
     proc.start()
 
@@ -2620,6 +2620,8 @@ def test_client_replicate_sync(loop):
             assert y.result() == 3
 
 
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="Windows timer too coarse-grained")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 4)] * 1)
 def test_task_load_adapts_quickly(c, s, a):
     future = c.submit(slowinc, 1, delay=0.2)  # slow
