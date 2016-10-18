@@ -112,6 +112,20 @@ def test_map_empty(c, s, a, b):
     assert results == []
 
 
+@gen_cluster(client=True)
+def test_map_keynames(c, s, a, b):
+    futures = c.map(inc, range(4), key='INC')
+    assert all(f.key.startswith('INC') for f in futures)
+    assert isdistinct(f.key for f in futures)
+
+    futures2 = c.map(inc, [5, 6, 7, 8], key='INC')
+    assert [f.key for f in futures] != [f.key for f in futures2]
+
+    keys = ['inc-1', 'inc-2', 'inc-3', 'inc-4']
+    futures = c.map(inc, range(4), key=keys)
+    assert [f.key for f in futures] == keys
+
+
 @gen_cluster()
 def test_compatible_map(s, a, b):
     e = CompatibleExecutor((s.ip, s.port), start=False)

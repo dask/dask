@@ -673,6 +673,8 @@ class Client(object):
         ----------
         func: callable
         iterables: Iterables, Iterators, or Queues
+        key: str, list
+            Prefix for task names if string.  Explicit names if list.
         pure: bool (defaults to True)
             Whether or not the function is pure.  Set ``pure=False`` for
             impure functions like ``np.random.random``.
@@ -709,6 +711,8 @@ class Client(object):
             else:
                 return queue_to_iterator(q_out)
 
+        key = kwargs.pop('key', None)
+        key = key or funcname(func)
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
@@ -717,13 +721,16 @@ class Client(object):
             raise ValueError("Only use allow_other_workers= if using workers=")
 
         iterables = list(zip(*zip(*iterables)))
-        if pure:
-            keys = [funcname(func) + '-' + tokenize(func, kwargs, *args)
-                    for args in zip(*iterables)]
+        if isinstance(key, list):
+            keys = key
         else:
-            uid = str(uuid.uuid4())
-            keys = [funcname(func) + '-' + uid + '-' + str(i)
-                    for i in range(min(map(len, iterables)))] if iterables else []
+            if pure:
+                keys = [key + '-' + tokenize(func, kwargs, *args)
+                        for args in zip(*iterables)]
+            else:
+                uid = str(uuid.uuid4())
+                keys = [key + '-' + uid + '-' + str(i)
+                        for i in range(min(map(len, iterables)))] if iterables else []
 
         if not kwargs:
             dsk = {key: (func,) + args
