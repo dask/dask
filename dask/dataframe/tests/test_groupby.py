@@ -563,9 +563,11 @@ def test_groupby_multiprocessing():
     {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
     {'b': 'mean', 'c': 'max'},
     {'b': 'mean', 'c': ['min', 'max']},
-    {'b': np.sum, 'c': ['min', np.max]},
-    ['sum', 'mean', 'min', 'max', 'count', 'size'],
+    {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
     'mean',
+    'var',
+    'std',
 ])
 def test_aggregate_examples(spec):
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
@@ -604,6 +606,6 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 
     assert len(no_mean_chunks) == len(with_mean_chunks)
     assert len(no_mean_aggs) == len(with_mean_aggs)
-    
+
     assert len(no_mean_finalizers) == len(no_mean_spec)
     assert len(with_mean_finalizers) == len(with_mean_spec)

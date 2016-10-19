@@ -87,6 +87,7 @@ def _var_agg(g, ddof):
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
     n = g[g.columns[-nc // 3:]].rename(columns=lambda c: c[:-6])
 
+    # TODO: replace with _finalize_var?
     result = x2 - x ** 2 / n
     div = (n - ddof)
     div[div < 0] = 0
@@ -206,6 +207,7 @@ def _build_agg_args(spec):
     # generated for (result, func) pairs. Once an id for a pair has been
     # generated it is reused in subsequent id requests.
     ids = it.count()
+    # TODO: add func, input_column to intermediate name for easier debugging
     id_map = collections.defaultdict(lambda: 'intermediate-{}'.format(next(ids)))
 
     known_np_funcs = {np.min: 'min', np.max: 'max'}
@@ -244,10 +246,10 @@ def _build_agg_args_single(result_column, func, input_column, id_map):
                                       id_map, simple_impl[func])
 
     elif func == 'var':
-        raise NotImplementedError()
+        return _build_agg_args_var(result_column, func, input_column, id_map)
 
     elif func == 'std':
-        raise NotImplementedError()
+        return _build_agg_args_std(result_column, func, input_column, id_map)
 
     elif func == 'mean':
         return _build_agg_args_mean(result_column, func, input_column, id_map)
@@ -268,6 +270,40 @@ def _build_agg_args_simple(result_column, func, input_column, id_map, impl_pair)
         finalizer=(result_column, operator.itemgetter(intermediate), dict()),
     )
 
+
+def _build_agg_args_var(result_column, func, input_column, id_map):
+    int_sum = id_map['sum', input_column]
+    int_sum2 = id_map['sum2', input_column]
+    int_count = id_map['count', input_column]
+
+    return dict(
+        chunk_funcs=[
+            (int_sum, _apply_func_to_column,
+             dict(column=input_column, func=M.sum)),
+            (int_count, _apply_func_to_column,
+             dict(column=input_column, func=M.count)),
+            (int_sum2, _compute_sum_of_squares,
+             dict(column=input_column)),
+        ],
+        aggregate_funcs=[
+            (col, _apply_func_to_column, dict(column=col, func=M.sum))
+            for col in (int_sum, int_count, int_sum2)
+        ],
+        finalizer=(result_column, _finalize_var,
+                   dict(sum_column=int_sum, count_column=int_count,
+                        sum2_column=int_sum2)),
+    )
+
+
+def _build_agg_args_std(result_column, func, input_column, id_map):
+    impls = _build_agg_args_var(result_column, func, input_column, id_map)
+
+    result_column, _, kwargs = impls['finalizer']
+    impls['finalizer'] = (result_column, _finalize_std, kwargs)
+
+    return impls
+
+
 def _build_agg_args_mean(result_column, func, input_column, id_map):
     int_sum = id_map['sum', input_column]
     int_count = id_map['count', input_column]
@@ -280,10 +316,8 @@ def _build_agg_args_mean(result_column, func, input_column, id_map):
              dict(column=input_column, func=M.count)),
         ],
         aggregate_funcs=[
-            (int_sum, _apply_func_to_column,
-             dict(column=int_sum, func=M.sum)),
-            (int_count, _apply_func_to_column,
-             dict(column=int_count, func=M.sum)),
+            (col, _apply_func_to_column, dict(column=col, func=M.sum))
+            for col in (int_sum, int_count)
         ],
         finalizer=(result_column, _finalize_mean,
                    dict(sum_column=int_sum, count_column=int_count)),
@@ -298,6 +332,10 @@ def _groupby_apply_funcs(df, funcs, **groupby_kwargs):
         result[result_column] = func(grouped, **kwargs)
 
     return pd.DataFrame(result)
+
+
+def _compute_sum_of_squares(grouped, column):
+    return grouped[column].apply(lambda x: (x ** 2).sum())
 
 
 def _agg_finalize(df, funcs):
@@ -315,6 +353,24 @@ def _apply_func_to_column(df_like, column, func):
 def _finalize_mean(df, sum_column, count_column):
     return df[sum_column] / df[count_column]
 
+
+def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
+    n = df[count_column]
+    x = df[sum_column]
+    x2 = df[sum2_column]
+
+    result = x2 - x ** 2 / n
+    div = (n - ddof)
+    div[div < 0] = 0
+    result /= div
+    result[(n - ddof) == 0] = np.nan
+
+    return result
+
+
+def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
+    result = _finalize_var(df, count_column, sum_column, sum2_column, ddof)
+    return np.sqrt(result)
 
 
 class _GroupBy(object):
