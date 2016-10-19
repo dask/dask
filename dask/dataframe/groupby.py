@@ -193,15 +193,26 @@ def _normalize_spec(spec, non_group_columns):
 
 def _build_agg_args(spec):
     """
-    Create the transformation functions for a normalized aggregate spec.
+    Create transformation functions for a normalized aggregate spec.
+
+    Parameters
+    ----------
+    spec: a list of (result-column, aggregation-function, input-column) triples.
+        To work with all arugment forms understood by pandas use
+        ``_normalize_spec`` to normalize the argment before passing it on to
+        ``_build_agg_args``.
 
     Returns
     -------
-    chunk_funcs: TODO: document
+    chunk_funcs: a list of (intermediate-column, function, keyword) triples
+        that are applied on grouped chunks of the initial dataframe.
 
-    agg_funcs: TODO: document
+    agg_funcs: a list of (intermediate-column, functions, keword) triples that
+        are applied on the grouped concatination of the preprocessed chunks.
 
-    finalizers: TODO: document
+    finalizers: a list of (result-column, function, keyword) triples that are
+        applied after the ``agg_funcs``. They are used to create final results
+        from intermediate representations.
     """
     # generator for consecutive IDs (for intermediate results). Ids are
     # generated for (result, func) pairs. Once an id for a pair has been
