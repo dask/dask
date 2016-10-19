@@ -8,6 +8,8 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph
 
+import pytest
+
 
 def groupby_internal_repr():
     pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
@@ -556,7 +558,16 @@ def test_groupby_multiprocessing():
                   df.groupby('B').apply(lambda x: x))
 
 
-def test_aggregate_examples():
+@pytest.mark.parametrize('spec', [
+    {'b': {'c': 'sum'}},
+    {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+    {'b': 'mean', 'c': 'max'},
+    {'b': 'mean', 'c': ['min', 'max']},
+    {'b': np.sum, 'c': ['min', np.max]},
+    ['sum', 'mean', 'min', 'max', 'count', 'size'],
+    'mean',
+])
+def test_aggregate_examples(spec):
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2],
                         'c': [0, 1, 2, 3, 4, 5, 6, 7, 8]},
@@ -564,25 +575,7 @@ def test_aggregate_examples():
                        columns=['c', 'b', 'a'])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
-    spec = {'b': {'c': 'sum'}}
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}}
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = {'b': 'mean', 'c': 'max'}
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = {'b': 'mean', 'c': ['min', 'max']}
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = {'b': np.sum, 'c': ['min', np.max]}
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = np.sum
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-
-    spec = 'mean'
-    assert eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+    assert_eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
+    assert_eq(pdf.groupby('a').aggregate(spec), ddf.groupby('a').aggregate(spec))
 
     # TODO: add more tests: var, std, nunique, multiple group columns, ...
