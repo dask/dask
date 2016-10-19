@@ -17,11 +17,20 @@ import dask
 from dask.async import get_sync
 
 import dask.dataframe as dd
-from dask.dataframe.io.csv import (read_csv_from_bytes, bytes_read_csv,
+from dask.dataframe.io.csv import (read_pandas_from_bytes, bytes_read_pandas,
                                    auto_blocksize)
 from dask.dataframe.utils import assert_eq
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
+
+
+# Temp, just for testing, will remove later
+def bytes_read_csv(*args, **kwargs):
+    return bytes_read_pandas(pd.read_csv, *args, **kwargs)
+
+
+def read_csv_from_bytes(*args, **kwargs):
+    return read_pandas_from_bytes(pd.read_csv, *args, **kwargs)
 
 
 ########
