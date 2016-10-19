@@ -8,7 +8,7 @@ import os
 import shutil
 import signal
 import socket
-from subprocess import Popen, PIPE
+import subprocess
 import sys
 from time import time, sleep
 import uuid
@@ -417,28 +417,42 @@ def raises(func, exc=Exception):
 
 @contextmanager
 def popen(*args, **kwargs):
-    kwargs['stdout'] = PIPE
-    kwargs['stderr'] = PIPE
-    proc = Popen(*args, **kwargs)
+    kwargs['stdout'] = subprocess.PIPE
+    kwargs['stderr'] = subprocess.PIPE
+    if sys.platform.startswith('win'):
+        # Allow using CTRL_C_EVENT / CTRL_BREAK_EVENT
+        kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+    dump_stdout = False
+    proc = subprocess.Popen(*args, **kwargs)
     try:
         yield proc
     except Exception:
-        line = '\n\nPrint from stderr\n=================\n'
-        while line:
-            print(line)
-            line = proc.stderr.readline()
-
-        line = '\n\nPrint from stdout\n=================\n'
-        while line:
-            print(line)
-            line = proc.stdout.readline()
+        dump_stdout = True
         raise
 
     finally:
-        os.kill(proc.pid, signal.SIGINT)
-        if sys.version_info[0] == 3:
-            proc.wait(10)
+        if sys.platform.startswith('win'):
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
         else:
-            proc.wait()
-        with ignoring(OSError):
-            proc.terminate()
+            proc.send_signal(signal.SIGINT)
+        try:
+            if sys.version_info[0] == 3:
+                proc.wait(10)
+            else:
+                proc.wait()
+        finally:
+            # Make sure we don't leave the process lingering around
+            with ignoring(OSError):
+                proc.kill()
+
+            # XXX Also dump stdout if return code != 0 ?
+            if dump_stdout:
+                line = '\n\nPrint from stderr\n=================\n'
+                while line:
+                    print(line)
+                    line = proc.stderr.readline()
+
+                line = '\n\nPrint from stdout\n=================\n'
+                while line:
+                    print(line)
+                    line = proc.stdout.readline()

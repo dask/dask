@@ -24,7 +24,7 @@ def test_defaults(loop):
             assert response.ok
             assert response.json()['status'] == 'running'
     with pytest.raises(Exception):
-        requests.get('http://127.0.0.1:9786/info.json')
+        response = requests.get('http://127.0.0.1:9786/info.json')
     with pytest.raises(Exception):
         requests.get('http://127.0.0.1:8787/status/')
 
@@ -147,29 +147,26 @@ def test_multiple_workers(loop):
 
 
 def test_pid_file(loop):
+    def check_pidfile(proc, pidfile):
+        while not os.path.exists(pidfile):
+            sleep(0.01)
+        text = False
+        while not text:
+            sleep(0.01)
+            with open(pidfile) as f:
+                text = f.read()
+        pid = int(text)
+        if sys.platform.startswith('win'):
+            # On Windows, `dask-XXX` invokes the dask-XXX.exe
+            # shim, but the PID is written out by the child Python process
+            assert pid
+        else:
+            assert proc.pid == pid
+    
     with tmpfile() as s:
         with popen(['dask-scheduler', '--pid-file', s]) as sched:
-            while not os.path.exists(s):
-                sleep(0.01)
-            text = False
-            while not text:
-                sleep(0.01)
-                with open(s) as f:
-                    text = f.read()
-            pid = int(text)
-
-            assert sched.pid == pid
+            check_pidfile(sched, s)
 
         with tmpfile() as w:
             with popen(['dask-worker', '127.0.0.1:8786', '--pid-file', w]) as worker:
-                while not os.path.exists(w):
-                    sleep(0.01)
-                text = False
-                while not text:
-                    sleep(0.01)
-                    with open(w) as f:
-                        text = f.read()
-
-                pid = int(text)
-
-                assert worker.pid == pid
+                check_pidfile(worker, w)

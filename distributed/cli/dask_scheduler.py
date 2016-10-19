@@ -81,13 +81,15 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         except Exception as e:
             logger.warn("Could not start Bokeh web UI", exc_info=True)
 
-    loop.start()
-    loop.close()
-    scheduler.stop()
-    if bokeh_proc:
-        bokeh_proc.close()
+    try:
+        loop.start()
+        loop.close()
+    finally:
+        scheduler.stop()
+        if bokeh_proc:
+            bokeh_proc.close()
 
-    logger.info("End scheduler at %s:%d", ip, port)
+        logger.info("End scheduler at %s:%d", ip, port)
 
 
 def go():
