@@ -569,18 +569,19 @@ def test_groupby_multiprocessing():
     'var',
     'std',
 ])
-def test_aggregate_examples(spec):
-    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
-                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2],
-                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8]},
-                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
+@pytest.mark.parametrize('split_every', [False, 3, None])
+def test_aggregate_examples(spec, split_every):
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 20,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 20,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20},
                        columns=['c', 'b', 'a'])
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=20)
 
-    assert_eq(pdf.groupby('a').agg(spec), ddf.groupby('a').agg(spec))
-    assert_eq(pdf.groupby('a').aggregate(spec), ddf.groupby('a').aggregate(spec))
+    assert_eq(pdf.groupby('a').agg(spec),
+              ddf.groupby('a').agg(spec, split_every=split_every))
 
-    # TODO: add more tests: var, std, nunique, multiple group columns, ...
+    assert_eq(pdf.groupby('a').aggregate(spec),
+              ddf.groupby('a').aggregate(spec, split_every=split_every))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():

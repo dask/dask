@@ -653,7 +653,7 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def aggregate(self, arg):
+    def aggregate(self, arg, split_every=None):
         non_group_columns = [col for col in self.obj.columns
                              if col not in self.index]
         spec = _normalize_spec(arg, non_group_columns)
@@ -675,14 +675,14 @@ class DataFrameGroupBy(_GroupBy):
                   chunk_kwargs=dict(funcs=chunk_funcs, by=self.index),
                   aggregate=_groupby_apply_funcs,
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  meta=meta, token=token)
+                  meta=meta, token=token, split_every=split_every)
 
         return map_partitions(_agg_finalize, obj, meta=meta, token=token,
                               funcs=finalizers)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def agg(self, arg):
-        return self.aggregate(arg)
+    def agg(self, arg, split_every=None):
+        return self.aggregate(arg, split_every=split_every)
 
 
 class SeriesGroupBy(_GroupBy):
