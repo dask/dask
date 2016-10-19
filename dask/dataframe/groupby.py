@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import collections
-from functools import partial
 import itertools as it
 import operator
 import warnings
@@ -197,19 +196,11 @@ def _build_agg_args(spec):
 
     Returns
     -------
-    chunk_funcs: a list of functions that are applied on grouped chunks of the
-        initial dataframe. Each function takes a grouped dataframe and should
-        return a dataframe of intermediate values with the group keys as an
-        index.
+    chunk_funcs: TODO: document
 
-    agg_funcs: a list of functions that are applied on the grouped dataframe
-        after all chunks have been concatinated. Each function takes a grouped
-        dataframe and should return a dataframe of intermediate values with the
-        group keys as an index.
+    agg_funcs: TODO: document
 
-    finalizers: a list of result-column transform pairs, that are applied after
-        the ``agg_funcs``. They are used to create final results from
-        intermediate representations.
+    finalizers: TODO: document
     """
     # generator for consecutive IDs (for intermediate results)
     ids = it.count()
@@ -252,65 +243,65 @@ def _build_agg_args(spec):
         else:
             raise ValueError("unknown aggregate {}".format(func))
 
-        chunks.extend(impls.chunk_funcs)
-        aggs.extend(impls.aggregate_funcs)
-        finalizers.extend(impls.finalizers)
+        chunks.extend(impls['chunk_funcs'])
+        aggs.extend(impls['aggregate_funcs'])
+        finalizers.extend(impls['finalizers'])
 
     return chunks, aggs, finalizers
-
-
-AggArgs = collections.namedtuple('AggArgs', ['chunk_funcs', 'aggregate_funcs',
-                                             'finalizers'])
 
 
 def _build_agg_args_simple(result_column, func, input_column, next_id, impl_pair):
     intermediate = next_id(func)
     chunk_impl, agg_impl = impl_pair
 
-    return AggArgs(
-        chunk_funcs=[partial(_apply_func_to_column, intermediate, input_column,
-                             chunk_impl)],
-        aggregate_funcs=[partial(_apply_func_to_column, intermediate,
-                                 intermediate, agg_impl)],
-        finalizers=[(result_column, operator.itemgetter(intermediate))],
+    return dict(
+        chunk_funcs=[(intermediate, _apply_func_to_column,
+                     dict(column=input_column, func=chunk_impl))],
+        aggregate_funcs=[(intermediate, _apply_func_to_column,
+                         dict(column=intermediate, func=agg_impl))],
+        finalizers=[(result_column, operator.itemgetter(intermediate), dict())],
     )
 
 def _build_agg_args_mean(result_column, func, input_column, next_id):
     int_sum = next_id('sum')
     int_count = next_id('count')
 
-    return AggArgs(
+    return dict(
         chunk_funcs=[
-            partial(_apply_func_to_column, int_sum, input_column, M.sum),
-            partial(_apply_func_to_column, int_count, input_column, M.count),
+            (int_sum, _apply_func_to_column, dict(column=input_column, func=M.sum)),
+            (int_count, _apply_func_to_column, dict(column=input_column, func=M.count)),
         ],
         aggregate_funcs=[
-            partial(_apply_func_to_column, int_sum, int_sum, M.sum),
-            partial(_apply_func_to_column, int_count, int_count, M.sum)
+            (int_sum, _apply_func_to_column, dict(column=int_sum, func=M.sum)),
+            (int_count, _apply_func_to_column, dict(column=int_count, func=M.sum)),
         ],
-        finalizers=[(result_column, partial(_finalize_mean, int_sum, int_count))],
+        finalizers=[(result_column, _finalize_mean, dict(sum_column=int_sum, count_column=int_count))],
     )
 
 
 def _groupby_apply_funcs(df, funcs, **groupby_kwargs):
     grouped = df.groupby(**groupby_kwargs)
-    parts = [func(grouped) for func in funcs]
-    return pd.concat(parts, axis=1)
 
+    result = collections.OrderedDict()
+    for result_column, func, kwargs in funcs:
+        result[result_column] = func(grouped, **kwargs)
 
-def _agg_finalize(df, result_column_func_pairs):
-    result = collections.OrderedDict([
-        (result_column, func(df))
-        for result_column, func in result_column_func_pairs
-    ])
     return pd.DataFrame(result)
 
 
-def _apply_func_to_column(result_column, column, func, df_like):
-    return pd.DataFrame({result_column: func(df_like[column])})
+def _agg_finalize(df, funcs):
+    result = collections.OrderedDict()
+    for result_column, func, kwargs in funcs:
+        result[result_column] = func(df, **kwargs)
+
+    return pd.DataFrame(result)
 
 
-def _finalize_mean(sum_column, count_column, df):
+def _apply_func_to_column(df_like, column, func):
+    return func(df_like[column])
+
+
+def _finalize_mean(df, sum_column, count_column):
     return df[sum_column] / df[count_column]
 
 
@@ -620,7 +611,7 @@ class DataFrameGroupBy(_GroupBy):
                   meta=meta, token=token)
 
         return map_partitions(_agg_finalize, obj, meta=meta, token=token,
-                              result_column_func_pairs=finalizers)
+                              funcs=finalizers)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg):
