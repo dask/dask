@@ -6,7 +6,6 @@ import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
 import dask.array as da
-from dask.utils import raises
 
 
 def test_rechunk_internals_1():
@@ -155,7 +154,7 @@ def test_rechunk_with_dict():
 def test_rechunk_with_empty_input():
     x = da.ones((24, 24), chunks=(4, 8))
     assert x.rechunk(chunks={}).chunks == x.chunks
-    assert raises(ValueError, lambda: x.rechunk(chunks=()))
+    pytest.raises(ValueError, lambda: x.rechunk(chunks=()))
 
 
 def test_rechunk_with_null_dimensions():

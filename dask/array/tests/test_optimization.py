@@ -6,7 +6,6 @@ from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
 
-from dask.utils import raises
 from dask.array.core import getarray, getarray_nofancy
 
 
@@ -100,9 +99,8 @@ def test_fuse_slice():
     assert (fuse_slice((1, slice(10, 20)), (None, None, 3, None)) ==
             (1, None, None, 13, None))
 
-    assert (raises(NotImplementedError,
-                   lambda: fuse_slice(slice(10, 15, 2), -1)) or
-            fuse_slice(slice(10, 15, 2), -1) == 14)
+    with pytest.raises(NotImplementedError):
+        fuse_slice(slice(10, 15, 2), -1)
 
 
 def test_fuse_slice_with_lists():

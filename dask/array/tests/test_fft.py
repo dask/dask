@@ -1,7 +1,8 @@
 import numpy as np
 import numpy.fft as npfft
 
-from dask.utils import raises
+import pytest
+
 import dask.array as da
 from dask.array.fft import fft, ifft, rfft, irfft, hfft, ihfft
 from dask.array.utils import assert_eq
@@ -23,8 +24,8 @@ darr2 = da.from_array(nparr, chunks=(10, 1))
 
 def test_cant_fft_chunked_axis():
     bad_darr = da.from_array(nparr, chunks=(5, 5))
-    assert raises(ValueError, lambda: fft(bad_darr))
-    assert raises(ValueError, lambda: fft(bad_darr, axis=0))
+    pytest.raises(ValueError, lambda: fft(bad_darr))
+    pytest.raises(ValueError, lambda: fft(bad_darr, axis=0))
 
 
 def test_fft():

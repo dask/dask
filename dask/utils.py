@@ -26,14 +26,6 @@ if system_encoding == 'ascii':
     system_encoding = 'utf-8'
 
 
-def raises(err, lamda):
-    try:
-        lamda()
-        return False
-    except err:
-        return True
-
-
 def deepmap(func, *seqs):
     """ Apply function inside nested lists
 

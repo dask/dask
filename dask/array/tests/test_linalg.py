@@ -9,7 +9,6 @@ import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
-from dask.utils import raises
 from dask.array.utils import assert_eq
 
 
@@ -214,15 +213,15 @@ def test_lu_3(size):
 def test_lu_errors():
     A = np.random.random_integers(0, 10, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
     A = np.random.random_integers(0, 10, (10, 8))
     dA = da.from_array(A, chunks=(5, 4))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
     A = np.random.random_integers(0, 10, (20, 20))
     dA = da.from_array(A, chunks=(5, 4))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10), (70, 20)])
@@ -302,13 +301,13 @@ def test_solve_triangular_errors():
     b = np.random.random_integers(1, 10, 10)
     dA = da.from_array(A, chunks=(5, 5, 5))
     db = da.from_array(b, chunks=5)
-    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+    pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
     A = np.random.random_integers(0, 10, (10, 10))
     b = np.random.random_integers(1, 10, 10)
     dA = da.from_array(A, chunks=(3, 3))
     db = da.from_array(b, chunks=5)
-    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+    pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])

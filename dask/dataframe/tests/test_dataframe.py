@@ -9,7 +9,7 @@ import pytest
 import dask
 from dask.async import get_sync
 from dask import delayed
-from dask.utils import raises, ignoring, put_lines
+from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc, aca, _concat,
@@ -127,7 +127,7 @@ def test_Index():
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
         assert repr(ddf.index).startswith('dd.Index')
-        assert raises(AttributeError, lambda: ddf.index.index)
+        pytest.raises(AttributeError, lambda: ddf.index.index)
 
 
 def test_Scalar():
@@ -844,7 +844,7 @@ def test_dataframe_quantile():
     assert (result < maxexp).all().all()
 
     assert_eq(ddf.quantile(axis=1), df.quantile(axis=1))
-    assert raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
+    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
 
 
 def test_index():
@@ -898,7 +898,7 @@ def test_map():
     assert_eq(d.b.map(lk), full.b.map(lk))
     assert_eq(d.b.map(lk, meta=d.b), full.b.map(lk))
     assert_eq(d.b.map(lk, meta=('b', 'i8')), full.b.map(lk))
-    assert raises(TypeError, lambda: d.a.map(d.b))
+    pytest.raises(TypeError, lambda: d.a.map(d.b))
 
 
 def test_concat():
@@ -1347,7 +1347,7 @@ def test_repartition():
                 [10, 50, 20, 60],    # not sorted
                 [10, 10, 20, 60]]:   # not unique (last element can be duplicated)
 
-        assert raises(ValueError, lambda: a.repartition(divisions=div))
+        pytest.raises(ValueError, lambda: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list('abxyz'))
     for p in range(1, 7):
@@ -1870,7 +1870,7 @@ def test_rename_function():
 
 def test_rename_index():
     renamer = {0: 1}
-    assert raises(ValueError, lambda: d.rename(index=renamer))
+    pytest.raises(ValueError, lambda: d.rename(index=renamer))
 
 
 def test_to_timestamp():
