@@ -579,3 +579,31 @@ def test_aggregate_examples(spec):
     assert_eq(pdf.groupby('a').aggregate(spec), ddf.groupby('a').aggregate(spec))
 
     # TODO: add more tests: var, std, nunique, multiple group columns, ...
+
+
+def test_aggregate_build_agg_args__reuse_of_intermediates():
+    """Aggregate reuses intermediates. For example, with sum, count, and mean
+    the sums and counts are only calculated once accross the graph and reused to
+    compute the mean.
+    """
+    from dask.dataframe.groupby import _build_agg_args
+
+    no_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+    ]
+
+    with_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+        ('baz', 'mean', 'input'),
+    ]
+
+    no_mean_chunks, no_mean_aggs, no_mean_finalizers = _build_agg_args(no_mean_spec)
+    with_mean_chunks, with_mean_aggs, with_mean_finalizers = _build_agg_args(with_mean_spec)
+
+    assert len(no_mean_chunks) == len(with_mean_chunks)
+    assert len(no_mean_aggs) == len(with_mean_aggs)
+    
+    assert len(no_mean_finalizers) == len(no_mean_spec)
+    assert len(with_mean_finalizers) == len(with_mean_spec)

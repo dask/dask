@@ -202,10 +202,35 @@ def _build_agg_args(spec):
 
     finalizers: TODO: document
     """
-    # generator for consecutive IDs (for intermediate results)
+    # generator for consecutive IDs (for intermediate results). Ids are
+    # generated for (result, func) pairs. Once an id for a pair has been
+    # generated it is reused in subsequent id requests.
     ids = it.count()
-    next_id = lambda prefix: '{}-{}'.format(prefix, next(ids))
+    id_map = collections.defaultdict(lambda: 'intermediate-{}'.format(next(ids)))
 
+    known_np_funcs = {np.min: 'min', np.max: 'max'}
+
+    chunks = {}
+    aggs = {}
+    finalizers = []
+
+    for (result_column, func, input_column) in spec:
+        func = funcname(known_np_funcs.get(func, func))
+        impls = _build_agg_args_single(result_column, func, input_column, id_map)
+
+        # overwrite existing result-columns, generate intermedates only once
+        chunks.update((spec[0], spec) for spec in impls['chunk_funcs'])
+        aggs.update((spec[0], spec) for spec in impls['aggregate_funcs'])
+
+        finalizers.append(impls['finalizer'])
+
+    chunks = sorted(chunks.values())
+    aggs = sorted(aggs.values())
+
+    return chunks, aggs, finalizers
+
+
+def _build_agg_args_single(result_column, func, input_column, id_map):
     simple_impl = {
         'sum': (M.sum, M.sum),
         'min': (M.min, M.min),
@@ -214,44 +239,25 @@ def _build_agg_args(spec):
         'size': (M.size, M.sum),
     }
 
-    known_np_funcs = {np.min: 'min', np.max: 'max'}
+    if func in simple_impl.keys():
+        return _build_agg_args_simple(result_column, func, input_column,
+                                      id_map, simple_impl[func])
 
-    chunks = []
-    aggs = []
-    finalizers = []
+    elif func == 'var':
+        raise NotImplementedError()
 
-    for (result_column, func, input_column) in spec:
-        func = funcname(known_np_funcs.get(func, func))
+    elif func == 'std':
+        raise NotImplementedError()
 
-        if func in simple_impl.keys():
-            impls = _build_agg_args_simple(result_column, func, input_column,
-                                           next_id, simple_impl[func])
+    elif func == 'mean':
+        return _build_agg_args_mean(result_column, func, input_column, id_map)
 
-        elif func == 'var':
-            raise NotImplementedError()
-
-        elif func == 'std':
-            raise NotImplementedError()
-
-        elif func == 'mean':
-            impls = _build_agg_args_mean(result_column, func, input_column,
-                                         next_id)
-
-        elif func == 'nunique':
-            raise NotImplementedError()
-
-        else:
-            raise ValueError("unknown aggregate {}".format(func))
-
-        chunks.extend(impls['chunk_funcs'])
-        aggs.extend(impls['aggregate_funcs'])
-        finalizers.extend(impls['finalizers'])
-
-    return chunks, aggs, finalizers
+    else:
+        raise ValueError("unknown aggregate {}".format(func))
 
 
-def _build_agg_args_simple(result_column, func, input_column, next_id, impl_pair):
-    intermediate = next_id(func)
+def _build_agg_args_simple(result_column, func, input_column, id_map, impl_pair):
+    intermediate = id_map[func, input_column]
     chunk_impl, agg_impl = impl_pair
 
     return dict(
@@ -259,23 +265,28 @@ def _build_agg_args_simple(result_column, func, input_column, next_id, impl_pair
                      dict(column=input_column, func=chunk_impl))],
         aggregate_funcs=[(intermediate, _apply_func_to_column,
                          dict(column=intermediate, func=agg_impl))],
-        finalizers=[(result_column, operator.itemgetter(intermediate), dict())],
+        finalizer=(result_column, operator.itemgetter(intermediate), dict()),
     )
 
-def _build_agg_args_mean(result_column, func, input_column, next_id):
-    int_sum = next_id('sum')
-    int_count = next_id('count')
+def _build_agg_args_mean(result_column, func, input_column, id_map):
+    int_sum = id_map['sum', input_column]
+    int_count = id_map['count', input_column]
 
     return dict(
         chunk_funcs=[
-            (int_sum, _apply_func_to_column, dict(column=input_column, func=M.sum)),
-            (int_count, _apply_func_to_column, dict(column=input_column, func=M.count)),
+            (int_sum, _apply_func_to_column,
+             dict(column=input_column, func=M.sum)),
+            (int_count, _apply_func_to_column,
+             dict(column=input_column, func=M.count)),
         ],
         aggregate_funcs=[
-            (int_sum, _apply_func_to_column, dict(column=int_sum, func=M.sum)),
-            (int_count, _apply_func_to_column, dict(column=int_count, func=M.sum)),
+            (int_sum, _apply_func_to_column,
+             dict(column=int_sum, func=M.sum)),
+            (int_count, _apply_func_to_column,
+             dict(column=int_count, func=M.sum)),
         ],
-        finalizers=[(result_column, _finalize_mean, dict(sum_column=int_sum, count_column=int_count))],
+        finalizer=(result_column, _finalize_mean,
+                   dict(sum_column=int_sum, count_column=int_count)),
     )
 
 
