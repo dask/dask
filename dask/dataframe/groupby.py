@@ -77,12 +77,12 @@ def _var_chunk(df, index):
     return pd.concat([x, x2, n], axis=1)
 
 
-def _var_combine(g):
-    return g.groupby(level=0).sum()
+def _var_combine(g, levels):
+    return g.groupby(level=levels).sum()
 
 
-def _var_agg(g, ddof):
-    g = g.groupby(level=0).sum()
+def _var_agg(g, levels, ddof):
+    g = g.groupby(level=levels).sum()
     nc = len(g.columns)
     x = g[g.columns[:nc // 3]]
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
@@ -102,22 +102,36 @@ def _var_agg(g, ddof):
 # nunique
 ###############################################################
 
-def _nunique_df_chunk(df, index):
+def _nunique_df_chunk(df, index, levels, name):
     # we call set_index here to force a possibly duplicate index
     # for our reduce step
-    grouped = df.groupby(index).apply(pd.DataFrame.drop_duplicates)
-    grouped.index = grouped.index.get_level_values(level=0)
+    grouped = df.groupby(index)[[name]].apply(pd.DataFrame.drop_duplicates)
+
+    if isinstance(levels, list):
+        grouped.index = pd.MultiIndex.from_arrays([
+            grouped.index.get_level_values(level=level) for level in levels
+        ])
+    else:
+        grouped.index = grouped.index.get_level_values(level=levels)
+
     return grouped
 
 
-def _nunique_df_combine(df):
-    result = df.groupby(level=0).apply(pd.DataFrame.drop_duplicates)
-    result.index = result.index.get_level_values(level=0)
+def _nunique_df_combine(df, levels):
+    result = df.groupby(level=levels).apply(pd.DataFrame.drop_duplicates)
+
+    if isinstance(levels, list):
+        result.index = pd.MultiIndex.from_arrays([
+            result.index.get_level_values(level=level) for level in levels
+        ])
+    else:
+        result.index = result.index.get_level_values(level=levels)
+
     return result
 
 
-def _nunique_df_aggregate(df, name):
-    return df.groupby(level=0)[name].nunique()
+def _nunique_df_aggregate(df, levels, name):
+    return df.groupby(level=levels)[name].nunique()
 
 
 def _nunique_series_chunk(df, index):
@@ -471,6 +485,13 @@ def _normalize_index(df, index):
         return index
 
 
+def _determine_levels(index):
+    if isinstance(index, (tuple, list)) and len(index) > 1:
+        return list(range(len(index)))
+    else:
+        return 0
+
+
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -555,11 +576,7 @@ class _GroupBy(object):
         columns = meta.name if isinstance(meta, pd.Series) else meta.columns
 
         token = self._token_prefix + token
-
-        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
-            levels = list(range(len(self.index)))
-        else:
-            levels = 0
+        levels = _determine_levels(self.index)
 
         return aca([self.obj, self.index, func, columns],
                    chunk=_apply_chunk, aggregate=_groupby_aggregate,
@@ -594,10 +611,13 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None):
+        levels = _determine_levels(self.index)
         result = aca([self.obj, self.index], chunk=_var_chunk,
                      aggregate=_var_agg, combine=_var_combine,
                      token=self._token_prefix + 'var',
-                     aggregate_kwargs={'ddof': ddof}, split_every=split_every)
+                     aggregate_kwargs={'ddof': ddof, 'levels': levels},
+                     combine_kwargs={'levels': levels},
+                     split_every=split_every)
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -840,13 +860,17 @@ class SeriesGroupBy(_GroupBy):
                          index=pd.Index([], dtype=self._meta.obj.dtype),
                          name=name)
 
+        levels = _determine_levels(self.index)
+
         if isinstance(self.obj, DataFrame):
             return aca([self.obj, self.index],
                        chunk=_nunique_df_chunk,
                        aggregate=_nunique_df_aggregate,
                        combine=_nunique_df_combine,
                        meta=meta, token='series-groupby-nunique',
-                       aggregate_kwargs={'name': name},
+                       chunk_kwargs={'levels': levels, 'name': name},
+                       aggregate_kwargs={'levels': levels, 'name': name},
+                       combine_kwargs={'levels': levels},
                        split_every=split_every)
         else:
             return aca([self.obj, self.index],

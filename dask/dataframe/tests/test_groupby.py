@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-import pytest
-
 import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
+
+import pytest
 
 
 def groupby_internal_repr():
@@ -722,3 +722,23 @@ def test_aggregate__dask():
             other = ddf.groupby(['a', 'b']).agg(other_spec, split_every=2)
             assert len(other.dask) == len(result1.dask)
             assert len(other.dask) == len(result2.dask)
+
+
+@pytest.mark.parametrize('agg_func', ['sum', 'var', 'mean', 'count', 'size',
+                                      'std', 'nunique', 'min', 'max'])
+def test_aggs_multilevel(agg_func):
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 20,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 20,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20},
+                       columns=['c', 'b', 'a'])
+
+    ddf = dd.from_pandas(pdf, npartitions=20)
+
+    assert_eq(call(pdf.groupby(['a', 'b'])['c'], agg_func),
+              call(ddf.groupby(['a', 'b'])['c'], agg_func, split_every=2))
+
+    assert_eq(call(pdf.groupby(['a'])['c'], agg_func),
+              call(ddf.groupby(['a'])['c'], agg_func))
