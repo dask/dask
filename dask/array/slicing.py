@@ -515,11 +515,10 @@ def take(outname, inname, blockdims, index, axis=0):
     keys = list(product([outname], *dims))
 
     rev_index = list(map(sorted(index).index, index))
-    vals = [(getitem,
-             (np.concatenate,
-              (list, [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
-                      ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
-                      for i, IL in enumerate(index_lists) if IL]), axis),
+    vals = [(getitem, (np.concatenate,
+                       [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
+                         ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
+                        for i, IL in enumerate(index_lists) if IL], axis),
              ((colon, ) * axis + (rev_index, ) + (colon, ) * (n - axis - 1)))
             for d in product(*dims)]
 

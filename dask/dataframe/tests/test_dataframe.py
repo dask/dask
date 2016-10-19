@@ -1422,7 +1422,7 @@ def test_repartition_divisions():
                       ('b', 1): (_loc, ('a', 1), 3, 4, False),
                       ('b', 2): (_loc, ('a', 1), 4, 6, False),
                       ('b', 3): (_loc, ('a', 1), 6, 7, True),
-                      ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
+                      ('c', 0): (pd.concat, [('b', 0), ('b', 1)]),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
 

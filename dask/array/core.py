@@ -728,7 +728,7 @@ def topk(k, x):
     dsk = dict(((name, i), (chunk.topk, k, key))
                for i, key in enumerate(x._keys()))
     name2 = 'topk-' + token
-    dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, (list, list(dsk)))),
+    dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
                        slice(-1, -k - 1, -1))
     chunks = ((k,),)
 
@@ -2896,7 +2896,7 @@ def bincount(x, weights=None, minlength=None):
 
     # Sum up all of the intermediate bincounts per block
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, (list, list(dsk)), 0)
+    dsk[(name, 0)] = (np.sum, list(dsk), 0)
 
     chunks = ((minlength,),)
 
