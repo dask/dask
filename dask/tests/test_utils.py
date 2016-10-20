@@ -6,9 +6,9 @@ import pytest
 
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, different_seeds, file_size,
-                        infer_storage_options, eq_strict, memory_repr,
-                        methodcaller, M)
+                        Dispatch, tmpfile, different_random_state_tuples,
+                        file_size, infer_storage_options, eq_strict,
+                        memory_repr, methodcaller, M)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -107,24 +107,26 @@ def test_gh606():
         assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
 
 
-def test_different_seeds():
+def test_different_random_state_tuples():
     seed = 37
     state = np.random.RandomState(seed)
     n = 100000
 
     # Use an integer
-    seeds = set(different_seeds(n, seed))
-    assert len(seeds) == n
+    states = different_random_state_tuples(n, seed)
+    assert len(states) == n
 
     # Use RandomState object
-    seeds2 = set(different_seeds(n, state))
-    assert seeds == seeds2
+    states2 = different_random_state_tuples(n, state)
+    for s1, s2 in zip(states, states2):
+        assert (s1[1] == s2[1]).all()
 
     # Consistent ordering
-    seeds = different_seeds(10, 1234)
-    seeds2 = different_seeds(20, 1234)
+    states = different_random_state_tuples(10, 1234)
+    states2 = different_random_state_tuples(20, 1234)[:10]
 
-    assert seeds == seeds2[:10]
+    for s1, s2 in zip(states, states2):
+        assert (s1[1] == s2[1]).all()
 
 
 def test_infer_storage_options():

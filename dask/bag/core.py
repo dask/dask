@@ -36,7 +36,7 @@ from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert, different_seeds)
+                     digit, insert)
 from ..bytes.core import write_bytes
 
 
@@ -443,44 +443,37 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
-    def _get_rs_predicate(self, seed, prob):
-        """ Return sampling filter predicate for the given seed.
-        """
-        random_state = Random(seed)
-        return lambda _: random_state.random() < prob
-
     def random_sample(self, prob, random_state=None):
         """ Return elements from bag with probability of ``prob``.
 
-        ``prob`` must be a number in the interval `[0, 1]`. All elements are
-        considered independently without replacement.
+        Parameters
+        ----------
+        prob : float
+            A float between 0 and 1, representing the probability that each
+            element will be returned.
+        random_state : int or random.Random, optional
+            If an integer, will be used to seed a new ``random.Random`` object.
+            If provided, results in deterministic sampling.
 
-        Providing an integer seed for ``random_state`` will result in
-        deterministic sampling. Given the same seed it will return the same
-        sample every time.
-
+        Examples
+        --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 42))
-        [1, 3]
+        [2, 3, 4]
         >>> list(b.random_sample(0.5, 42))
-        [1, 3]
+        [2, 3, 4]
         """
         if not 0 <= prob <= 1:
             raise ValueError('prob must be a number in the interval [0, 1]')
-        import numpy as np
-        if random_state is None:
-            random_state = np.random.randint(np.iinfo(np.int32).max)
+        if not isinstance(random_state, Random):
+            random_state = Random(random_state)
 
-        name = 'random-sample-{0}'.format(tokenize(self, prob, random_state))
-        # we need to generate a different random seed for each partition or
-        # otherwise we would be selecting the exact same positions at each
-        # partition
-        seeds = different_seeds(self.npartitions, random_state)
-
-        dsk = dict(((name, i), (reify, (filter,
-                   self._get_rs_predicate(seed, prob), (self.name, i))))
-                   for i, seed in zip(range(self.npartitions), seeds))
+        name = 'random-sample-%s' % tokenize(self, prob, random_state.getstate())
+        state_tuples = different_random_state_tuples_python(self.npartitions,
+                                                            random_state)
+        dsk = {(name, i): (reify, (random_sample, (self.name, i), state_tuple, prob))
+               for i, state_tuple in zip(range(self.npartitions), state_tuples)}
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def remove(self, predicate):
@@ -1639,3 +1632,45 @@ def safe_take(n, b):
              "only {1} elements available. Try passing larger `npartitions` "
              "to `take`.".format(n, len(r)))
     return r
+
+
+def random_sample(x, state_tuple, prob):
+    """Filter elements of `x` by a probability `prob`
+
+    Parameters
+    ----------
+    x : iterable
+    state_tuple : tuple
+        A tuple that can be passed to ``random.Random.setstate``.
+    prob : float
+        A float between 0 and 1, representing the probability that each
+        element will be yielded.
+    """
+    random_state = Random()
+    random_state.setstate(state_tuple)
+    for i in x:
+        if random_state.random() < prob:
+            yield i
+
+
+def different_random_state_tuples_python(n, random_state=None):
+    """Return a list of tuples that can be passed to
+    ``random.Random.setstate``.
+
+    Parameters
+    ----------
+    n : int
+        Number of tuples to return.
+    random_state : int or ``random.Random``, optional
+        If an int, is used to seed a new ``random.Random``.
+    """
+    if not isinstance(random_state, Random):
+        random_state = Random(random_state)
+
+    maxuint32 = 1 << 32
+    states = []
+    for i in range(n):
+        keys = [random_state.randint(0, maxuint32) for i in range(624)]
+        keys.append(0)
+        states.append((3, tuple(keys), None))
+    return states

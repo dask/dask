@@ -24,9 +24,9 @@ from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
-from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds, funcname,
-                     memory_repr, put_lines, M)
+from ..utils import (repr_long_list, IndexCallable, different_random_state_tuples,
+                     pseudorandom, derived_from, funcname, memory_repr,
+                     put_lines, M)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
@@ -590,15 +590,14 @@ class _Frame(Base):
         --------
         dask.DataFrame.sample
         """
-        seeds = different_seeds(self.npartitions, random_state)
-        dsk_full = dict(((self._name + '-split-full', i),
-                         (pd_split, (self._name, i), frac, seed))
-                        for i, seed in enumerate(seeds))
+        state_tuples = different_random_state_tuples(self.npartitions,
+                                                     random_state)
+        name = self._name + '-split-full'
+        dsk_full = {(name, i): (pd_split, (self._name, i), frac, state)
+                    for i, state in enumerate(state_tuples)}
 
-        dsks = [dict(((self._name + '-split-%d' % i, j),
-                      (getitem, (self._name + '-split-full', j), i))
-                     for j in range(self.npartitions))
-                for i in range(len(frac))]
+        dsks = [{(self._name + '-split-%d' % i, j): (getitem, (name, j), i)
+                 for j in range(self.npartitions)} for i in range(len(frac))]
         return [type(self)(merge(self.dask, dsk_full, dsk),
                            self._name + '-split-%d' % i,
                            self._meta, self.divisions)
@@ -795,18 +794,15 @@ class _Frame(Base):
         """
 
         if random_state is None:
-            random_state = np.random.randint(np.iinfo(np.int32).max)
+            random_state = np.random.RandomState()
 
         name = 'sample-' + tokenize(self, frac, replace, random_state)
-        func = M.sample
 
-        seeds = different_seeds(self.npartitions, random_state)
-
-        dsk = dict(((name, i),
-                   (apply, func, (tuple, [(self._name, i)]),
-                       {'frac': frac, 'random_state': seed,
-                        'replace': replace}))
-                   for i, seed in zip(range(self.npartitions), seeds))
+        state_tuples = different_random_state_tuples(self.npartitions,
+                                                     random_state)
+        dsk = {(name, i): (methods.sample, (self._name, i), state_tuple,
+                           frac, replace)
+               for i, state_tuple in enumerate(state_tuples)}
 
         return self._constructor(merge(self.dask, dsk), name,
                                  self._meta, self.divisions)
@@ -3034,27 +3030,31 @@ def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     return pd.DataFrame(mat, columns=meta.columns, index=meta.columns)
 
 
-def pd_split(df, p, random_state=None):
+def pd_split(df, p, state_tuple):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
 
-    >>> a, b = pd_split(df, [0.5, 0.5], random_state=123)  # roughly 50/50 split
+    >>> state_tuple = different_random_state_tuples(1, 1)[0]
+
+    >>> a, b = pd_split(df, [0.5, 0.5], state_tuple)  # roughly 50/50 split
     >>> a
        a  b
-    1  2  3
-    2  3  4
+    0  1  2
+    4  5  6
     5  6  7
 
     >>> b
        a  b
-    0  1  2
+    1  2  3
+    2  3  4
     3  4  5
-    4  5  6
     """
     p = list(p)
-    index = pseudorandom(len(df), p, random_state)
+    rs = np.random.RandomState()
+    rs.set_state(state_tuple)
+    index = pseudorandom(len(df), p, rs)
     return [df.iloc[index == i] for i in range(len(p))]
 
 

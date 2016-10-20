@@ -76,7 +76,7 @@ import pandas as pd
 
 from toolz import merge, merge_sorted, take
 
-from ..utils import different_seeds
+from ..utils import different_random_state_tuples
 from ..base import tokenize
 from .core import Series
 from dask.compatibility import zip
@@ -372,7 +372,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     return rv
 
 
-def percentiles_summary(df, num_old, num_new, upsample=1.0, random_state=None):
+def percentiles_summary(df, num_old, num_new, upsample, state_tuple):
     """Summarize data using percentiles and derived weights.
 
     These summaries can be merged, compressed, and converted back into
@@ -394,6 +394,8 @@ def percentiles_summary(df, num_old, num_new, upsample=1.0, random_state=None):
     length = len(df)
     if length == 0:
         return ()
+    random_state = np.random.RandomState()
+    random_state.set_state(state_tuple)
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
     data = df.values
     interpolation = 'linear'
@@ -427,7 +429,7 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     token = tokenize(df, qs, upsample)
     if random_state is None:
         random_state = hash(token) % np.iinfo(np.int32).max
-    seeds = different_seeds(df.npartitions, random_state)
+    state_tuples = different_random_state_tuples(df.npartitions, random_state)
 
     df_keys = df._keys()
 
@@ -435,9 +437,9 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}
 
     name1 = 're-quantiles-1-' + token
-    val_dsk = dict(((name1, i), (percentiles_summary, key, df.npartitions,
-                                 npartitions, upsample, seeds[i]))
-                   for i, key in enumerate(df_keys))
+    val_dsk = {(name1, i): (percentiles_summary, key, df.npartitions,
+                            npartitions, upsample, state_tuple)
+               for i, (state_tuple, key) in enumerate(zip(state_tuples, df_keys))}
 
     name2 = 're-quantiles-2-' + token
     merge_dsk = create_merge_tree(merge_and_compress_summaries, sorted(val_dsk), name2)

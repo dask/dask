@@ -8,7 +8,7 @@ import numpy as np
 from .core import (normalize_chunks, Array, slices_from_chunks,
                    broadcast_shapes, broadcast_to)
 from ..base import tokenize
-from ..utils import different_seeds, ignoring
+from ..utils import ignoring, different_random_state_tuples
 
 
 def doc_wraps(func):
@@ -36,7 +36,7 @@ class RandomState(object):
     >>> state = da.random.RandomState(1234)  # a seed
     >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
     >>> x.compute()
-    array([  9.95487579,  10.02999135,  10.08498441])
+    array([ 10.06684919,   9.91186452,   9.91939617])
 
     See Also:
         np.random.RandomState
@@ -118,15 +118,16 @@ class RandomState(object):
                      **small_kwargs).dtype
 
         sizes = list(product(*chunks))
-        seeds = different_seeds(len(sizes), self._numpy_state)
-        token = tokenize(seeds, size, chunks, args, kwargs)
+        state_tuples = different_random_state_tuples(len(sizes),
+                                                     self._numpy_state)
+        token = tokenize(state_tuples, size, chunks, args, kwargs)
         name = 'da.random.{0}-{1}'.format(func.__name__, token)
 
         keys = product([name], *([range(len(bd)) for bd in chunks] +
                                  [[0]] * len(extra_chunks)))
         blocks = product(*[range(len(bd)) for bd in chunks])
         vals = []
-        for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
+        for state, size, slc, block in zip(state_tuples, sizes, slices, blocks):
             arg = []
             for i, ar in enumerate(args):
                 if i not in lookup:
@@ -145,7 +146,7 @@ class RandomState(object):
                         kwrg[k] = (lookup[k], ) + block
                     else:   # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
-            vals.append((_apply_random, func.__name__, seed, size, arg, kwrg))
+            vals.append((_apply_random, func.__name__, state, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
@@ -349,13 +350,10 @@ class RandomState(object):
                           size=size, chunks=chunks)
 
 
-def _apply_random(func, seed, size, args, kwargs):
-    """ Apply RandomState method with seed
-
-    >>> _apply_random('normal', 123, 3, (10, 1.0), {})
-    array([  8.9143694 ,  10.99734545,  10.2829785 ])
-    """
-    state = np.random.RandomState(seed)
+def _apply_random(func, state_tuple, size, args, kwargs):
+    """Apply RandomState method with seed"""
+    state = np.random.RandomState()
+    state.set_state(state_tuple)
     func = getattr(state, func)
     return func(*args, size=size, **kwargs)
 
