@@ -120,9 +120,11 @@ def test_different_seeds():
     seeds2 = set(different_seeds(n, state))
     assert seeds == seeds2
 
-    # Should be sorted
-    smallseeds = different_seeds(10, 1234)
-    assert smallseeds == sorted(smallseeds)
+    # Consistent ordering
+    seeds = different_seeds(10, 1234)
+    seeds2 = different_seeds(20, 1234)
+
+    assert seeds == seeds2[:10]
 
 
 def test_infer_storage_options():

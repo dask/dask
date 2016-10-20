@@ -411,12 +411,14 @@ def different_seeds(n, random_state=None):
 
     big_n = np.iinfo(np.int32).max
 
-    seeds = set(random_state.randint(big_n, size=n))
+    seeds = []
+    seen = set()
     while len(seeds) < n:
-        seeds.add(random_state.randint(big_n))
-
-    # Sorting makes it easier to know what seeds are for what chunk
-    return sorted(seeds)
+        s = random_state.randint(big_n)
+        if s not in seen:
+            seeds.append(s)
+            seen.add(s)
+    return seeds
 
 
 def is_integer(i):
