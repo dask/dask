@@ -1298,6 +1298,59 @@ class Client(object):
         results2 = pack_data(keys, results)
         return results2
 
+    def _optimize_insert_futures(self, dsk, keys):
+        """ Replace known keys in dask graph with Futures
+
+        When given a Dask graph that might have overlapping keys with our known
+        results we replace the values of that graph with futures.  This can be
+        used as an optimization to avoid recomputation.
+
+        This returns the same graph if unchanged but a new graph if any changes
+        were necessary.
+        """
+        changed = False
+        for key in list(dsk):
+            if tokey(key) in self.futures:
+                if not changed:
+                    changed = True
+                    dsk = dsk.copy()
+                dsk[key] = Future(key, self)
+
+        if changed:
+            dsk, _ = dask.optimize.cull(dsk, keys)
+
+        return dsk
+
+    def normalize_collection(self, collection):
+        """
+        Replace collection's tasks by already existing futures if they exist
+
+        This normalizes the tasks within a collections task graph against the
+        known futures within the scheduler.  It returns a copy of the
+        collection with a task graph that includes the overlapping futures.
+
+        Examples
+        --------
+        >>> len(x.dask)  # x is a dask collection with 100 tasks
+        100
+        >>> set(client.futures).intersection(x.dask)  # some overlap exists
+        10
+
+        >>> x = client.normalize_collection(x)
+        >>> len(x.dask)  # smaller computational graph
+        20
+
+        See Also
+        --------
+        Client.persist: trigger computation of collection's tasks
+        """
+        dsk = self._optimize_insert_futures(collection.dask, collection._keys())
+
+        if dsk is collection.dask:
+            return collection
+        else:
+            return redict_collection(collection, dsk)
+
     def compute(self, collections, sync=False, optimize_graph=True,
             workers=None, allow_other_workers=False, **kwargs):
         """ Compute dask collections on cluster
@@ -1357,17 +1410,9 @@ class Client(object):
 
         variables = [a for a in collections if isinstance(a, Base)]
 
-        if optimize_graph:
-            groups = groupby(lambda x: x._optimize, variables)
-            dsk = merge([opt(merge([v.dask for v in val]),
-                             [v._keys() for v in val], **kwargs)
-                        for opt, val in groups.items()])
-        else:
-            dsk = merge(c.dask for c in variables)
-
+        dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
-
 
         restrictions, loose_restrictions = get_restrictions(collections,
                 workers, allow_other_workers)
@@ -1442,13 +1487,7 @@ class Client(object):
 
         assert all(isinstance(c, Base) for c in collections)
 
-        if optimize_graph:
-            groups = groupby(lambda x: x._optimize, collections)
-            dsk = merge([opt(merge([v.dask for v in val]),
-                             [v._keys() for v in val], **kwargs)
-                        for opt, val in groups.items()])
-        else:
-            dsk = merge(c.dask for c in collections)
+        dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
 
         names = {k for c in collections for k in flatten(c._keys())}
 
@@ -2165,8 +2204,7 @@ def ensure_default_get(client):
 def redict_collection(c, dsk):
     from dask.delayed import Delayed
     if isinstance(c, Delayed):
-        assert len(dsk) == 1
-        return Delayed(first(dsk), [dsk])
+        return Delayed(c.key, [dsk])
     else:
         cc = copy.copy(c)
         cc.dask = dsk
@@ -2239,3 +2277,24 @@ def get_restrictions(collections, workers, allow_other_workers):
         loose_restrictions = []
 
     return restrictions, loose_restrictions
+
+
+def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+    """
+    Convert many collections into a single dask graph, after optimization
+    """
+    optimizations = _globals.get('optimizations', [])
+    if optimize_graph:
+        groups = groupby(lambda x: x._optimize, collections)
+        groups = {opt: [merge([v.dask for v in val]),
+                       [v._keys() for v in val]]
+                  for opt, val in groups.items()}
+        for opt in optimizations:
+            groups = {k: [opt(dsk, keys), keys]
+                      for k, (dsk, keys) in groups.items()}
+        dsk = merge([opt(dsk, keys, **kwargs)
+                     for opt, (dsk, keys) in groups.items()])
+    else:
+        dsk = merge(c.dask for c in collections)
+
+    return dsk
