@@ -82,9 +82,8 @@ def size(x):
     return x.size
 
 
-def sample(df, state_tuple, frac, replace):
-    rs = np.random.RandomState()
-    rs.set_state(state_tuple)
+def sample(df, state, frac, replace):
+    rs = np.random.RandomState(state)
     return df.sample(random_state=rs, frac=frac, replace=replace)
 
 

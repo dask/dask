@@ -460,9 +460,9 @@ class Bag(Base):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 42))
-        [2, 3, 4]
+        [1, 4]
         >>> list(b.random_sample(0.5, 42))
-        [2, 3, 4]
+        [1, 4]
         """
         if not 0 <= prob <= 1:
             raise ValueError('prob must be a number in the interval [0, 1]')
@@ -470,10 +470,9 @@ class Bag(Base):
             random_state = Random(random_state)
 
         name = 'random-sample-%s' % tokenize(self, prob, random_state.getstate())
-        state_tuples = different_random_state_tuples_python(self.npartitions,
-                                                            random_state)
-        dsk = {(name, i): (reify, (random_sample, (self.name, i), state_tuple, prob))
-               for i, state_tuple in zip(range(self.npartitions), state_tuples)}
+        state_data = random_state_data_python(self.npartitions, random_state)
+        dsk = {(name, i): (reify, (random_sample, (self.name, i), state, prob))
+               for i, state in zip(range(self.npartitions), state_data)}
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def remove(self, predicate):
@@ -1634,28 +1633,27 @@ def safe_take(n, b):
     return r
 
 
-def random_sample(x, state_tuple, prob):
+def random_sample(x, state_data, prob):
     """Filter elements of `x` by a probability `prob`
 
     Parameters
     ----------
     x : iterable
-    state_tuple : tuple
-        A tuple that can be passed to ``random.Random.setstate``.
+    state_data : tuple
+        A tuple that can be passed to ``random.Random``.
     prob : float
         A float between 0 and 1, representing the probability that each
         element will be yielded.
     """
-    random_state = Random()
-    random_state.setstate(state_tuple)
+    random_state = Random(state_data)
     for i in x:
         if random_state.random() < prob:
             yield i
 
 
-def different_random_state_tuples_python(n, random_state=None):
-    """Return a list of tuples that can be passed to
-    ``random.Random.setstate``.
+def random_state_data_python(n, random_state=None):
+    """Return a list of tuples that can initialize
+    ``random.Random``.
 
     Parameters
     ----------
@@ -1668,9 +1666,5 @@ def different_random_state_tuples_python(n, random_state=None):
         random_state = Random(random_state)
 
     maxuint32 = 1 << 32
-    states = []
-    for i in range(n):
-        keys = [random_state.randint(0, maxuint32) for i in range(624)]
-        keys.append(0)
-        states.append((3, tuple(keys), None))
-    return states
+    return [tuple(random_state.randint(0, maxuint32) for i in range(624))
+            for i in range(n)]

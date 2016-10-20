@@ -8,7 +8,7 @@ import numpy as np
 from .core import (normalize_chunks, Array, slices_from_chunks,
                    broadcast_shapes, broadcast_to)
 from ..base import tokenize
-from ..utils import ignoring, different_random_state_tuples
+from ..utils import ignoring, random_state_data
 
 
 def doc_wraps(func):
@@ -36,7 +36,7 @@ class RandomState(object):
     >>> state = da.random.RandomState(1234)  # a seed
     >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
     >>> x.compute()
-    array([ 10.06684919,   9.91186452,   9.91939617])
+    array([ 10.06307943,   9.91493648,  10.0822082 ])
 
     See Also:
         np.random.RandomState
@@ -118,16 +118,15 @@ class RandomState(object):
                      **small_kwargs).dtype
 
         sizes = list(product(*chunks))
-        state_tuples = different_random_state_tuples(len(sizes),
-                                                     self._numpy_state)
-        token = tokenize(state_tuples, size, chunks, args, kwargs)
+        state_data = random_state_data(len(sizes), self._numpy_state)
+        token = tokenize(state_data, size, chunks, args, kwargs)
         name = 'da.random.{0}-{1}'.format(func.__name__, token)
 
         keys = product([name], *([range(len(bd)) for bd in chunks] +
                                  [[0]] * len(extra_chunks)))
         blocks = product(*[range(len(bd)) for bd in chunks])
         vals = []
-        for state, size, slc, block in zip(state_tuples, sizes, slices, blocks):
+        for state, size, slc, block in zip(state_data, sizes, slices, blocks):
             arg = []
             for i, ar in enumerate(args):
                 if i not in lookup:
@@ -350,10 +349,9 @@ class RandomState(object):
                           size=size, chunks=chunks)
 
 
-def _apply_random(func, state_tuple, size, args, kwargs):
+def _apply_random(func, state_data, size, args, kwargs):
     """Apply RandomState method with seed"""
-    state = np.random.RandomState()
-    state.set_state(state_tuple)
+    state = np.random.RandomState(state_data)
     func = getattr(state, func)
     return func(*args, size=size, **kwargs)
 

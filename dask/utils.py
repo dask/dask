@@ -393,9 +393,9 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def different_random_state_tuples(n, random_state=None):
-    """Return a list of tuples that can be passed to
-    ``np.random.RandomState.set_state``.
+def random_state_data(n, random_state=None):
+    """Return a list of arrays that can initialize
+    ``np.random.RandomState``.
 
     Parameters
     ----------
@@ -410,11 +410,8 @@ def different_random_state_tuples(n, random_state=None):
         random_state = np.random.RandomState(random_state)
 
     maxuint32 = np.iinfo(np.uint32).max
-    states = []
-    for i in range(n):
-        keys = random_state.randint(maxuint32, size=624, dtype=np.uint32)
-        states.append(('MT19937', keys, 0, 0, 0.0))
-    return states
+    return [(random_state.rand(624) * maxuint32).astype('uint32')
+            for i in range(n)]
 
 
 def is_integer(i):
