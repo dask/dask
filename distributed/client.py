@@ -38,6 +38,7 @@ from .core import (read, write, connect, coerce_to_rpc, dumps,
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph)
+from .versions import get_versions
 
 logger = logging.getLogger(__name__)
 
@@ -1858,6 +1859,31 @@ class Client(object):
                                          'time-delay': 0.0061032772064208984}}}
         """
         return sync(self.loop, self.scheduler.identity)
+
+    def get_versions(self):
+        """ Return version info for the scheduler, all workers and myself
+
+        Examples
+        --------
+        >>> c.get_versions()  # doctest: +SKIP
+        """
+        client = get_versions()
+        try:
+            scheduler = sync(self.loop, self.scheduler.versions)
+        except KeyError:
+            scheduler = None
+
+        def f(worker=None):
+
+            # use our local version
+            try:
+                from distributed.versions import get_versions
+                return get_versions()
+            except ImportError:
+                return None
+
+        workers = sync(self.loop, self._run, f)
+        return {'scheduler': scheduler, 'workers': workers, 'client': client}
 
     def futures_of(self, futures):
         return futures_of(futures, client=self)

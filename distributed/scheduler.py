@@ -34,6 +34,7 @@ from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
         divide_n_among_bins)
+from .versions import get_versions
 from .config import config
 
 
@@ -273,6 +274,7 @@ class Scheduler(Server):
                          'stacks': self.get_stacks,
                          'processing': self.get_processing,
                          'nbytes': self.get_nbytes,
+                         'versions': self.get_versions,
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
@@ -350,6 +352,10 @@ class Scheduler(Server):
              'services': {key: v.port for (key, v) in self.services.items()},
              'workers': dict(self.worker_info)}
         return d
+
+    def get_versions(self, stream):
+        """ Basic information about ourselves and our cluster """
+        return get_versions()
 
     def start(self, port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """

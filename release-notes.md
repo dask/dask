@@ -1,3 +1,9 @@
+1.13.4 - October ??, 2016
+------
+
+*   Add ``Client.get_versions()`` function to return software and package
+    information from the scheduler, workers, and client #595
+
 1.13.3 - October 15th, 2016
 ------
 

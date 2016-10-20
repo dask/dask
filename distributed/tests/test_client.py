@@ -1602,7 +1602,7 @@ def test_multi_client(s, a, b):
 
     assert not s.tasks
 
-    
+
 def long_running_client_connection(ip, port):
     c = Client((ip, port))
     x = c.submit(lambda x: x + 1, 10)
@@ -3253,6 +3253,17 @@ def test_scheduler_info(loop):
             info = c.scheduler_info()
             assert isinstance(info, dict)
             assert len(info['workers']) == 2
+
+
+def test_get_versions(loop):
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            v = c.get_versions()
+            assert v['scheduler'] is not None
+            assert v['client'] is not None
+            assert len(v['workers']) == 2
+            for k, v in v['workers'].items():
+                assert v is not None
 
 
 def test_threaded_get_within_distributed(loop):

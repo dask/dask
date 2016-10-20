@@ -265,7 +265,6 @@ def ensure_ip(hostname):
 
 tblib.pickling_support.install()
 
-
 def get_traceback():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     bad = [os.path.join('distributed', 'worker'),
