@@ -1276,12 +1276,12 @@ class _Frame(Base):
             qnames = [(_q._name, 0) for _q in quantiles]
 
             if isinstance(quantiles[0], Scalar):
-                dask[(keyname, 0)] = (pd.Series, (list, qnames), num.columns)
+                dask[(keyname, 0)] = (pd.Series, qnames, num.columns)
                 divisions = (min(num.columns), max(num.columns))
                 return Series(dask, keyname, meta, divisions)
             else:
                 from .multi import _pdconcat
-                dask[(keyname, 0)] = (_pdconcat, (list, qnames), 1)
+                dask[(keyname, 0)] = (_pdconcat, qnames, 1)
                 return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
@@ -1299,7 +1299,7 @@ class _Frame(Base):
 
         name = 'describe--' + tokenize(self, split_every)
         dsk = merge(num.dask, *(s.dask for s in stats))
-        dsk[(name, 0)] = (methods.describe_aggregate, (list, stats_names))
+        dsk[(name, 0)] = (methods.describe_aggregate, stats_names)
 
         return self._constructor(dsk, name, num._meta, divisions=[None, None])
 
@@ -1950,8 +1950,7 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = dict(((name, i), (operator.getitem,
-                                    (self._name, i), (list, key)))
+            dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
             return self._constructor(merge(self.dask, dsk), name,
                                      meta, self.divisions)
@@ -3229,7 +3228,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
                 raise ValueError('check for duplicate partitions\nold:\n%s\n\n'
                                  'new:\n%s\n\ncombined:\n%s'
                                  % (pformat(a), pformat(b), pformat(c)))
-            d[(out2, j - 1)] = (pd.concat, (list, tmp))
+            d[(out2, j - 1)] = (pd.concat, tmp)
         j += 1
     return d
 

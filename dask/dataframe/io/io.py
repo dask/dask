@@ -425,8 +425,6 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     Castra.to_dask
     """
     from castra import Castra
-    if isinstance(categories, list):
-        categories = (list, categories)
 
     name = 'to-castra-' + uuid.uuid1().hex
 
