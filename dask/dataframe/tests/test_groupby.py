@@ -1,3 +1,5 @@
+import operator
+
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -559,29 +561,43 @@ def test_groupby_multiprocessing():
 
 
 @pytest.mark.parametrize('spec', [
-    {'b': {'c': 'sum'}},
     {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
-    {'b': 'mean', 'c': 'max'},
     {'b': 'mean', 'c': ['min', 'max']},
     {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
     ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
-    'mean',
     'var',
-    'std',
 ])
 @pytest.mark.parametrize('split_every', [False, 3, None])
-def test_aggregate_examples(spec, split_every):
-    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 20,
+@pytest.mark.parametrize('grouper', [
+    lambda df: 'a',
+    lambda df: ['a', 'd'],
+    lambda df: [df['a'], df['b']],
+])
+def test_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 20,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 20,
-                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20},
-                       columns=['c', 'b', 'a'])
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 20},
+                       columns=['c', 'b', 'a', 'd'])
     ddf = dd.from_pandas(pdf, npartitions=20)
 
-    assert_eq(pdf.groupby('a').agg(spec),
-              ddf.groupby('a').agg(spec, split_every=split_every))
+    assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
+              ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
-    assert_eq(pdf.groupby('a').aggregate(spec),
-              ddf.groupby('a').aggregate(spec, split_every=split_every))
+
+@pytest.mark.parametrize('spec', [
+    'sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'
+])
+def test_aggregate__single_element_groups(spec):
+    pdf = pd.DataFrame({'a': [1, 2, 3],
+                        'b': [4, 2, 7],
+                        'c': [0, 1, 2],
+                        'd': [1, 2, 3]},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    assert_eq(pdf.groupby(['a', 'd']).agg(spec),
+              ddf.groupby(['a', 'd']).agg(spec))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
