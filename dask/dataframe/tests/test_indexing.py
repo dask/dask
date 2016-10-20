@@ -1,10 +1,10 @@
-
 import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
 
+import pytest
+
 import dask
-from dask.utils import raises
 import dask.dataframe as dd
 
 from dask.dataframe.core import _coerce_loc_index
@@ -38,7 +38,7 @@ def test_loc():
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
 
-    assert raises(KeyError, lambda: d.loc[1000])
+    pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
     assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
@@ -97,9 +97,9 @@ def test_getitem():
 
     assert_eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
 
-    assert raises(KeyError, lambda: df['X'])
-    assert raises(KeyError, lambda: df[['A', 'X']])
-    assert raises(AttributeError, lambda: df.X)
+    pytest.raises(KeyError, lambda: df['X'])
+    pytest.raises(KeyError, lambda: df[['A', 'X']])
+    pytest.raises(AttributeError, lambda: df.X)
 
     # not str/unicode
     df = pd.DataFrame(np.random.randn(10, 5))
@@ -107,8 +107,8 @@ def test_getitem():
     assert_eq(ddf[0], df[0])
     assert_eq(ddf[[1, 2]], df[[1, 2]])
 
-    assert raises(KeyError, lambda: df[8])
-    assert raises(KeyError, lambda: df[[1, 8]])
+    pytest.raises(KeyError, lambda: df[8])
+    pytest.raises(KeyError, lambda: df[[1, 8]])
 
 
 def test_getitem_slice():

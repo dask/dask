@@ -1,6 +1,7 @@
 from collections import namedtuple
 
-from dask.utils import raises
+import pytest
+
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
 from dask.core import (istask, get_dependencies, flatten, subs,
@@ -67,7 +68,7 @@ def test_GetFunctionTestMixin_class():
         get = staticmethod(lambda x, y: 1)
 
     custom_testget = TestCustomGetFail()
-    raises(AssertionError, custom_testget.test_get)
+    pytest.raises(AssertionError, custom_testget.test_get)
 
     class TestCustomGetPass(GetFunctionTestMixin):
         get = staticmethod(core.get)

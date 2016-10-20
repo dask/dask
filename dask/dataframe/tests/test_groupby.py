@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import pytest
+
 import dask
-from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph
 
@@ -96,8 +97,8 @@ def test_full_groupby():
                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert raises(Exception, lambda: df.groupby('does_not_exist'))
-    assert raises(Exception, lambda: df.groupby('a').does_not_exist)
+    pytest.raises(Exception, lambda: df.groupby('does_not_exist'))
+    pytest.raises(Exception, lambda: df.groupby('a').does_not_exist)
     assert 'b' in dir(df.groupby('a'))
 
     def func(df):
@@ -273,7 +274,7 @@ def test_series_groupby_errors():
         ss.groupby([])   # dask should raise the same error
 
     sss = dd.from_pandas(s, npartitions=3)
-    assert raises(NotImplementedError, lambda: ss.groupby(sss))
+    pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
 
     with tm.assertRaises(KeyError):
         s.groupby('x')    # pandas
@@ -292,7 +293,7 @@ def test_groupby_index_array():
 def test_groupby_set_index():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
-    assert raises(NotImplementedError,
+    pytest.raises(NotImplementedError,
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
@@ -401,11 +402,11 @@ def test_split_apply_combine_on_series():
             sorted(ddf.groupby(ddf.a > 3).b.mean().dask))
 
     # test raises with incorrect key
-    assert raises(KeyError, lambda: ddf.groupby('x'))
-    assert raises(KeyError, lambda: ddf.groupby(['a', 'x']))
-    assert raises(KeyError, lambda: ddf.groupby('a')['x'])
-    assert raises(KeyError, lambda: ddf.groupby('a')['b', 'x'])
-    assert raises(KeyError, lambda: ddf.groupby('a')[['b', 'x']])
+    pytest.raises(KeyError, lambda: ddf.groupby('x'))
+    pytest.raises(KeyError, lambda: ddf.groupby(['a', 'x']))
+    pytest.raises(KeyError, lambda: ddf.groupby('a')['x'])
+    pytest.raises(KeyError, lambda: ddf.groupby('a')['b', 'x'])
+    pytest.raises(KeyError, lambda: ddf.groupby('a')[['b', 'x']])
 
     # test graph node labels
     assert_dask_graph(ddf.groupby('b').a.sum(), 'series-groupby-sum')

@@ -3,7 +3,6 @@ from itertools import product
 import pandas as pd
 import pytest
 
-from dask.utils import raises
 from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
 
@@ -40,7 +39,7 @@ def test_series_resample_not_implemented():
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    assert raises(NotImplementedError, lambda: resample(ds, '57T'))
+    pytest.raises(NotImplementedError, lambda: resample(ds, '57T'))
 
 
 def test_unknown_divisions_error():

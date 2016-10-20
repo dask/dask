@@ -4,7 +4,7 @@ import numpy as np
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
-from dask.utils import raises, ignoring
+from dask.utils import ignoring
 
 
 def mad(x):
@@ -147,23 +147,23 @@ def test_rolling_functions_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
-    assert raises(TypeError, lambda: dd.rolling_mean(ddf, 1.5))
-    assert raises(ValueError, lambda: dd.rolling_mean(ddf, -1))
-    assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, freq=2))
-    assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
+    pytest.raises(TypeError, lambda: dd.rolling_mean(ddf, 1.5))
+    pytest.raises(ValueError, lambda: dd.rolling_mean(ddf, -1))
+    pytest.raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, freq=2))
+    pytest.raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
 
 
 def test_rolling_raises():
     df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
                        'b': np.random.randint(100, size=(25,))})
     ddf = dd.from_pandas(df, 3)
-    assert raises(ValueError, lambda: ddf.rolling(1.5))
-    assert raises(ValueError, lambda: ddf.rolling(-1))
-    assert raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
-    assert raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
-    assert raises(ValueError, lambda: ddf.rolling(3, axis=10))
-    assert raises(ValueError, lambda: ddf.rolling(3, axis='coulombs'))
-    assert raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
+    pytest.raises(ValueError, lambda: ddf.rolling(1.5))
+    pytest.raises(ValueError, lambda: ddf.rolling(-1))
+    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
+    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
+    pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
+    pytest.raises(ValueError, lambda: ddf.rolling(3, axis='coulombs'))
+    pytest.raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
 
 
 def test_rolling_functions_names():
@@ -205,7 +205,8 @@ def test_rolling_function_partition_size():
     for obj, dobj in [(df, ddf), (df[0], ddf[0])]:
         assert_eq(pd.rolling_mean(obj, 10), dd.rolling_mean(dobj, 10))
         assert_eq(pd.rolling_mean(obj, 11), dd.rolling_mean(dobj, 11))
-        raises(NotImplementedError, lambda: dd.rolling_mean(dobj, 12))
+        with pytest.raises(NotImplementedError):
+            dd.rolling_mean(dobj, 12).compute()
 
 
 def test_rolling_partition_size():
@@ -215,7 +216,8 @@ def test_rolling_partition_size():
     for obj, dobj in [(df, ddf), (df[0], ddf[0])]:
         assert_eq(obj.rolling(10).mean(), dobj.rolling(10).mean())
         assert_eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
-        raises(NotImplementedError, lambda: dobj.rolling(12).mean())
+        with pytest.raises(NotImplementedError):
+            dobj.rolling(12).mean().compute()
 
 
 def test_rolling_repr():

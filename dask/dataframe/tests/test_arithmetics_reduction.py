@@ -4,7 +4,6 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph, make_meta
 
@@ -576,7 +575,7 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
-        assert raises(ValueError, lambda: l.add(r, axis=1))
+        pytest.raises(ValueError, lambda: l.add(r, axis=1))
 
     for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps2, pdf1, ps2)]:
         assert_eq(l, el)
@@ -713,23 +712,23 @@ def test_reduction_series_invalid_axis():
 
     for axis in [1, 'columns']:
         for s in [ddf1.a, pdf1.a]:    # both must behave the same
-            assert raises(ValueError, lambda: s.sum(axis=axis))
-            assert raises(ValueError, lambda: s.min(axis=axis))
-            assert raises(ValueError, lambda: s.max(axis=axis))
+            pytest.raises(ValueError, lambda: s.sum(axis=axis))
+            pytest.raises(ValueError, lambda: s.min(axis=axis))
+            pytest.raises(ValueError, lambda: s.max(axis=axis))
             # only count doesn't have axis keyword
-            assert raises(TypeError, lambda: s.count(axis=axis))
-            assert raises(ValueError, lambda: s.std(axis=axis))
-            assert raises(ValueError, lambda: s.var(axis=axis))
-            assert raises(ValueError, lambda: s.mean(axis=axis))
+            pytest.raises(TypeError, lambda: s.count(axis=axis))
+            pytest.raises(ValueError, lambda: s.std(axis=axis))
+            pytest.raises(ValueError, lambda: s.var(axis=axis))
+            pytest.raises(ValueError, lambda: s.mean(axis=axis))
 
 
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 
     def check_raises(d, p, func):
-        assert raises((TypeError, ValueError),
+        pytest.raises((TypeError, ValueError),
                       lambda: getattr(d, func)().compute())
-        assert raises((TypeError, ValueError),
+        pytest.raises((TypeError, ValueError),
                       lambda: getattr(p, func)())
 
     pds = pd.Series(['a', 'b', 'c', 'd', 'e'])
@@ -818,7 +817,7 @@ def test_reductions_frame(split_every):
         assert_eq(ddf1.mean(axis=axis, split_every=split_every),
                   pdf1.mean(axis=axis))
 
-    assert raises(ValueError, lambda: ddf1.sum(axis='incorrect').compute())
+    pytest.raises(ValueError, lambda: ddf1.sum(axis='incorrect').compute())
 
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), 'dataframe-sum')

@@ -18,7 +18,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            optimize, from_delayed)
 from dask.async import get_sync
 from dask.compatibility import BZ2File, GzipFile, PY2
-from dask.utils import filetexts, tmpfile, tmpdir, raises, open
+from dask.utils import filetexts, tmpfile, tmpdir, open
 from dask.utils_test import inc, add
 
 
@@ -149,7 +149,7 @@ def test_pluck():
 
 def test_pluck_with_default():
     b = db.from_sequence(['Hello', '', 'World'])
-    assert raises(IndexError, lambda: list(b.pluck(0)))
+    pytest.raises(IndexError, lambda: list(b.pluck(0)))
     assert list(b.pluck(0, None)) == ['H', None, 'W']
     assert b.pluck(0, None).name == b.pluck(0, None).name
     assert b.pluck(0).name != b.pluck(0, None).name
@@ -507,7 +507,7 @@ def test_read_text():
         assert (set(line.strip() for line in db.read_text('a*.log')) ==
                 set('ABCD'))
 
-    assert raises(ValueError, lambda: db.read_text('non-existent-*-path'))
+    pytest.raises(ValueError, lambda: db.read_text('non-existent-*-path'))
 
 
 def test_read_text_large():
@@ -772,7 +772,7 @@ def test_to_textfiles_inputs():
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
-    assert raises(ValueError, lambda: B.to_textfiles(5))
+    pytest.raises(ValueError, lambda: B.to_textfiles(5))
 
 
 def test_to_textfiles_endlines():
@@ -797,7 +797,7 @@ def test_string_namespace():
                                       ['Charlie', 'Smith']]
     assert list(b.str.match('*Smith')) == ['Alice Smith', 'Charlie Smith']
 
-    assert raises(AttributeError, lambda: b.str.sfohsofhf)
+    pytest.raises(AttributeError, lambda: b.str.sfohsofhf)
     assert b.str.match('*Smith').name == b.str.match('*Smith').name
     assert b.str.match('*Smith').name != b.str.match('*John').name
 

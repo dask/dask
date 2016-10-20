@@ -1,5 +1,6 @@
+import pytest
+
 from dask.store import Store
-from dask.utils import raises
 from dask.utils_test import inc, add
 
 
@@ -33,7 +34,7 @@ def test_basic():
 
     def reassign():
         s['x'] = 2
-    assert raises(Exception, reassign)
+    pytest.raises(Exception, reassign)
 
 
 def test_update():
@@ -44,5 +45,6 @@ def test_update():
 
     assert s['y'] == 2
 
-    assert raises(Exception, lambda: s.update({'x': 2}))
-    assert not raises(Exception, lambda: s.update({'x': 1}))
+    pytest.raises(Exception, lambda: s.update({'x': 2}))
+    # Test that it doesn't raise
+    s.update({'x': 1})

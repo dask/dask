@@ -1,7 +1,9 @@
 from itertools import count
 from operator import mul, getitem
 from functools import partial
-from dask.utils import raises
+
+import pytest
+
 from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
                            dealias, equivalent, sync_keys, merge_sync,
@@ -22,7 +24,7 @@ def test_cull():
     assert cull(d, 'out') == cull(d, ['out'])
     assert cull(d, ['out', 'z'])[0] == d
     assert cull(d, [['out'], ['z']]) == cull(d, ['out', 'z'])
-    assert raises(KeyError, lambda: cull(d, 'badkey'))
+    pytest.raises(KeyError, lambda: cull(d, 'badkey'))
 
 
 def test_fuse():
@@ -284,7 +286,7 @@ class Uncomparable(object):
 def test_equivalence_uncomparable():
     t1 = Uncomparable()
     t2 = Uncomparable()
-    assert raises(TypeError, lambda: t1 == t2)
+    pytest.raises(TypeError, lambda: t1 == t2)
     assert equivalent(t1, t1)
     assert not equivalent(t1, t2)
     assert equivalent((add, t1, 0), (add, t1, 0))
