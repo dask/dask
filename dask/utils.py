@@ -397,18 +397,21 @@ def different_seeds(n, random_state=None):
     Otherwise draw from the passed RandomState
     """
     import numpy as np
+    from collections import OrderedDict
 
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
     big_n = np.iinfo(np.int32).max
 
-    seeds = set(random_state.randint(big_n, size=n))
+    # Deduplicate seeds, while preserving order
+    # Using OrderedDict as there's no OrderedSet or IndexedSet
+    # in the standard library yet
+    seeds = OrderedDict((s, None)
+                        for s in random_state.randint(big_n, size=n).tolist())
     while len(seeds) < n:
-        seeds.add(random_state.randint(big_n))
-
-    # Sorting makes it easier to know what seeds are for what chunk
-    return sorted(seeds)
+        seeds[random_state.randint(big_n)] = None
+    return list(seeds.keys())
 
 
 def is_integer(i):
