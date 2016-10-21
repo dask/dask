@@ -1066,3 +1066,15 @@ def test_bag_with_single_callable():
     f = lambda: None
     b = db.from_sequence([f])
     assert list(b.compute(get=dask.get)) == [f]
+
+
+def test_optimize_fuse_keys():
+    x = db.range(10, npartitions=2)
+    y = x.map(inc)
+    z = y.map(inc)
+
+    dsk = z._optimize(z.dask, z._keys())
+    assert not set(y.dask) & set(dsk)
+
+    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
+    assert all(k in dsk for k in y._keys())

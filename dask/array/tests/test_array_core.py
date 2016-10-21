@@ -2324,3 +2324,15 @@ def test_warn_bad_rechunking():
 
     assert record
     assert '20' in record[0].message.args[0]
+
+
+def test_optimize_fuse_keys():
+    x = da.ones(10, chunks=(5,))
+    y = x + 1
+    z = y + 1
+
+    dsk = z._optimize(z.dask, z._keys())
+    assert not set(y.dask) & set(dsk)
+
+    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
+    assert all(k in dsk for k in y._keys())

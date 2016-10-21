@@ -4,10 +4,9 @@ Optimization
 Performance can be significantly improved in different contexts by making
 small optimizations on the dask graph before calling the scheduler.
 
-The
-``dask.optimize`` module contains several functions to transform graphs in a
-variety of useful ways. In most cases, users won't need to interact with these
-functions directly, as specialized subsets of these transforms are done
+The ``dask.optimize`` module contains several functions to transform graphs in
+a variety of useful ways. In most cases, users won't need to interact with
+these functions directly, as specialized subsets of these transforms are done
 automatically in the dask collections (``dask.array``, ``dask.bag``, and
 ``dask.dataframe``). However, users working with custom graphs or computations
 may find that applying these methods results in substantial speedups.
@@ -263,6 +262,22 @@ to the top-level of the task, you can pass in ``strategy='top_level'`` as shown:
 The rewriting system provides a powerful abstraction for transforming
 computations at a task level. Again, for many users, directly interacting with
 these transformations will be unnecessary.
+
+
+Keyword Arguments
+-----------------
+
+Some optimizations take optional keyword arguments.  To pass keywords from the
+compute call down to the right optimization, prepend the keyword with the name
+of the optimization.  For example to send a ``keys=`` keyword argument to the
+``fuse`` optimization from a compute call, use the ``fuse_keys=`` keyword:
+
+.. code-block:: python
+
+   def fuse(dsk, keys=None):
+       ...
+
+   x.compute(fuse_keys=['x', 'y', 'z'])
 
 
 API
