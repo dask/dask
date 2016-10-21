@@ -1300,11 +1300,23 @@ def test_dataframe_picklable():
 
 
 def test_random_partitions():
-    a, b = d.random_split([0.5, 0.5])
+    a, b = d.random_split([0.5, 0.5], 42)
     assert isinstance(a, dd.DataFrame)
     assert isinstance(b, dd.DataFrame)
+    assert a._name != b._name
 
     assert len(a.compute()) + len(b.compute()) == len(full)
+    a2, b2 = d.random_split([0.5, 0.5], 42)
+    assert a2._name == a._name
+    assert b2._name == b._name
+
+    parts = d.random_split([0.4, 0.5, 0.1], 42)
+    names = set([p._name for p in parts])
+    names.update([a._name, b._name])
+    assert len(names) == 5
+
+    with pytest.raises(ValueError):
+        d.random_split([0.4, 0.5], 42)
 
 
 def test_series_round():

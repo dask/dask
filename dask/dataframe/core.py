@@ -590,17 +590,22 @@ class _Frame(Base):
         --------
         dask.DataFrame.sample
         """
+        if not np.allclose(sum(frac), 1):
+            raise ValueError("frac should sum to 1")
         state_data = random_state_data(self.npartitions, random_state)
-        name = self._name + '-split-full'
-        dsk_full = {(name, i): (pd_split, (self._name, i), frac, state)
-                    for i, state in enumerate(state_data)}
+        token = tokenize(self, frac, random_state)
+        name = 'split-' + token
+        dsk = {(name, i): (pd_split, (self._name, i), frac, state)
+               for i, state in enumerate(state_data)}
 
-        dsks = [{(self._name + '-split-%d' % i, j): (getitem, (name, j), i)
-                 for j in range(self.npartitions)} for i in range(len(frac))]
-        return [type(self)(merge(self.dask, dsk_full, dsk),
-                           self._name + '-split-%d' % i,
-                           self._meta, self.divisions)
-                for i, dsk in enumerate(dsks)]
+        out = []
+        for i in range(len(frac)):
+            name2 = 'split-%d-%s' % (i, token)
+            dsk2 = {(name2, j): (getitem, (name, j), i)
+                    for j in range(self.npartitions)}
+            out.append(type(self)(merge(self.dask, dsk, dsk2), name2,
+                                  self._meta, self.divisions))
+        return out
 
     def head(self, n=5, npartitions=1, compute=True):
         """ First n rows of the dataset
