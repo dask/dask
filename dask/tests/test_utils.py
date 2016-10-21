@@ -110,8 +110,9 @@ def test_gh606():
 def test_different_seeds():
     seed = 37
     state = np.random.RandomState(seed)
-    n = 100000
+    n = 1000000
 
+    # Test for no duplicates
     # Use an integer
     seeds = set(different_seeds(n, seed))
     assert len(seeds) == n
@@ -120,9 +121,10 @@ def test_different_seeds():
     seeds2 = set(different_seeds(n, state))
     assert seeds == seeds2
 
-    # Should be sorted
-    smallseeds = different_seeds(10, 1234)
-    assert smallseeds == sorted(smallseeds)
+    # Order must remain constant
+    seeds3 = different_seeds(10000, 1234)
+    seeds4 = different_seeds(100000, 1234)[:10000]
+    assert seeds3 == seeds4
 
 
 def test_infer_storage_options():
