@@ -12,6 +12,7 @@ if sys.version_info[0] == 2:
     PY2 = True
     PY3 = False
     ConnectionRefusedError = OSError
+    FileExistsError = OSError
 
     import gzip
     def gzip_decompress(b):
@@ -46,6 +47,7 @@ if sys.version_info[0] == 3:
     from gzip import decompress as gzip_decompress
     from gzip import compress as gzip_compress
     ConnectionRefusedError = ConnectionRefusedError
+    FileExistsError = FileExistsError
 
     def isqueue(o):
         return isinstance(o, Queue)

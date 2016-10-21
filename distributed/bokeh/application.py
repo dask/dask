@@ -9,7 +9,7 @@ import sys
 
 import bokeh
 import distributed.bokeh
-from toolz import get_in
+from toolz import get_in, concat
 
 from ..utils import ignoring
 from ..compatibility import logging_names
@@ -74,8 +74,8 @@ class BokehWebInterface(object):
                          'http-port': http_port,
                          'tcp-port': tcp_port,
                          'bokeh-port': bokeh_port}
-        with open(os.path.join(dask_dir, '.dask-web-ui.json'), 'w') as f:
-            json.dump(bokeh_options, f, indent=2)
+
+        args.extend(['--args'] + list(map(str, concat(bokeh_options.items()))))
 
         import subprocess
         process = subprocess.Popen(args)

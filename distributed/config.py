@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import os
+from .compatibility import FileExistsError
 try:
     import yaml
 except ImportError:
@@ -15,7 +16,10 @@ else:
         if not os.path.exists(destination):
             import shutil
             if not os.path.exists(os.path.dirname(destination)):
-                os.mkdir(os.path.dirname(destination))
+                try:
+                    os.mkdir(os.path.dirname(destination))
+                except FileExistsError:
+                    pass
             shutil.copy(default_path, destination)
 
 

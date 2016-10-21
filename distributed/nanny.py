@@ -201,8 +201,6 @@ class Nanny(Server):
                     except queues.Empty:
                         yield gen.sleep(0.1)
 
-
-
             logger.info("Nanny %s:%d starts worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
             raise gen.Return('OK')
@@ -242,6 +240,8 @@ class Nanny(Server):
     @gen.coroutine
     def _close(self, stream=None, timeout=5, report=None):
         """ Close the nanny process, stop listening """
+        if self.status == 'closed':
+            raise gen.Return('OK')
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         self.status = 'closed'
         yield self._kill(timeout=timeout)

@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 
 import json
 import os
+import sys
 
 from bokeh.io import curdoc
 from bokeh.layouts import column, row
@@ -15,24 +16,17 @@ from distributed.core import rpc
 from distributed.bokeh.worker_monitor import (worker_table_plot,
         worker_table_update, processing_plot, processing_update)
 from distributed.utils import log_errors
+from distributed.bokeh.utils import parse_args
 import distributed.bokeh
 
 SIZING_MODE = 'scale_width'
 WIDTH = 600
 
 messages = distributed.bokeh.messages  # global message store
+
+options = parse_args(sys.argv[1:])
+
 doc = curdoc()
-
-
-dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
-options_path = os.path.join(dask_dir, '.dask-web-ui.json')
-if os.path.exists(options_path):
-    with open(options_path, 'r') as f:
-        options = json.load(f)
-else:
-    options = {'host': '127.0.0.1',
-               'tcp-port': 8786,
-               'http-port': 9786}
 
 scheduler = rpc(ip=options['host'], port=options['tcp-port'])
 

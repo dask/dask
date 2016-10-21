@@ -5,6 +5,7 @@ from collections import deque
 import json
 import logging
 import os
+import sys
 from time import time
 
 from tornado import gen
@@ -17,25 +18,17 @@ from distributed.core import read, connect, write, dumps
 from distributed.diagnostics.progress_stream import progress_stream
 from distributed.bokeh.worker_monitor import resource_append
 import distributed.bokeh
+from distributed.bokeh.utils import parse_args
 from distributed.utils import log_errors
 
 
 logger = logging.getLogger(__name__)
 
-
 client = AsyncHTTPClient()
 
 messages = distributed.bokeh.messages  # monkey-patching
 
-dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
-options_path = os.path.join(dask_dir, '.dask-web-ui.json')
-if os.path.exists(options_path):
-    with open(options_path, 'r') as f:
-        options = json.load(f)
-else:
-    options = {'host': '127.0.0.1',
-               'tcp-port': 8786,
-               'http-port': 9786}
+options = parse_args(sys.argv[1:])
 
 
 @gen.coroutine
