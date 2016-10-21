@@ -385,30 +385,25 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def different_seeds(n, random_state=None):
-    """ A list of different 32 bit integer seeds
+def random_state_data(n, random_state=None):
+    """Return a list of arrays that can initialize
+    ``np.random.RandomState``.
 
     Parameters
     ----------
-    n: int
-        Number of distinct seeds to return
-    random_state: int or np.random.RandomState
-        If int create a new RandomState with this as the seed
-    Otherwise draw from the passed RandomState
+    n : int
+        Number of tuples to return.
+    random_state : int or np.random.RandomState, optional
+        If an int, is used to seed a new ``RandomState``.
     """
     import numpy as np
 
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
-    big_n = np.iinfo(np.int32).max
-
-    seeds = set(random_state.randint(big_n, size=n))
-    while len(seeds) < n:
-        seeds.add(random_state.randint(big_n))
-
-    # Sorting makes it easier to know what seeds are for what chunk
-    return sorted(seeds)
+    maxuint32 = np.iinfo(np.uint32).max
+    return [(random_state.rand(624) * maxuint32).astype('uint32')
+            for i in range(n)]
 
 
 def is_integer(i):

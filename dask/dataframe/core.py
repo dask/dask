@@ -24,9 +24,9 @@ from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
-from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from, different_seeds, funcname,
-                     memory_repr, put_lines, M)
+from ..utils import (repr_long_list, IndexCallable, random_state_data,
+                     pseudorandom, derived_from, funcname, memory_repr,
+                     put_lines, M)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
@@ -590,19 +590,22 @@ class _Frame(Base):
         --------
         dask.DataFrame.sample
         """
-        seeds = different_seeds(self.npartitions, random_state)
-        dsk_full = dict(((self._name + '-split-full', i),
-                         (pd_split, (self._name, i), frac, seed))
-                        for i, seed in enumerate(seeds))
+        if not np.allclose(sum(frac), 1):
+            raise ValueError("frac should sum to 1")
+        state_data = random_state_data(self.npartitions, random_state)
+        token = tokenize(self, frac, random_state)
+        name = 'split-' + token
+        dsk = {(name, i): (pd_split, (self._name, i), frac, state)
+               for i, state in enumerate(state_data)}
 
-        dsks = [dict(((self._name + '-split-%d' % i, j),
-                      (getitem, (self._name + '-split-full', j), i))
-                     for j in range(self.npartitions))
-                for i in range(len(frac))]
-        return [type(self)(merge(self.dask, dsk_full, dsk),
-                           self._name + '-split-%d' % i,
-                           self._meta, self.divisions)
-                for i, dsk in enumerate(dsks)]
+        out = []
+        for i in range(len(frac)):
+            name2 = 'split-%d-%s' % (i, token)
+            dsk2 = {(name2, j): (getitem, (name, j), i)
+                    for j in range(self.npartitions)}
+            out.append(type(self)(merge(self.dask, dsk, dsk2), name2,
+                                  self._meta, self.divisions))
+        return out
 
     def head(self, n=5, npartitions=1, compute=True):
         """ First n rows of the dataset
@@ -795,18 +798,13 @@ class _Frame(Base):
         """
 
         if random_state is None:
-            random_state = np.random.randint(np.iinfo(np.int32).max)
+            random_state = np.random.RandomState()
 
         name = 'sample-' + tokenize(self, frac, replace, random_state)
-        func = M.sample
 
-        seeds = different_seeds(self.npartitions, random_state)
-
-        dsk = dict(((name, i),
-                   (apply, func, (tuple, [(self._name, i)]),
-                       {'frac': frac, 'random_state': seed,
-                        'replace': replace}))
-                   for i, seed in zip(range(self.npartitions), seeds))
+        state_data = random_state_data(self.npartitions, random_state)
+        dsk = {(name, i): (methods.sample, (self._name, i), state, frac, replace)
+               for i, state in enumerate(state_data)}
 
         return self._constructor(merge(self.dask, dsk), name,
                                  self._meta, self.divisions)
@@ -3045,7 +3043,6 @@ def pd_split(df, p, random_state=None):
     1  2  3
     2  3  4
     5  6  7
-
     >>> b
        a  b
     0  1  2
