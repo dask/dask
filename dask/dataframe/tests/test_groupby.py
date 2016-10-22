@@ -748,3 +748,6 @@ def test_aggregations_multilevel(agg_func):
 
     assert_eq(call(pdf.groupby([pdf['a'], pdf['b']])['c'], agg_func),
               call(ddf.groupby([ddf['a'], ddf['b']])['c'], agg_func))
+
+    assert_eq(call(pdf.groupby([pdf['a'] > 2, pdf['b'] > 1])['c'], agg_func),
+              call(ddf.groupby([ddf['a'] > 2, ddf['b'] > 1])['c'], agg_func))

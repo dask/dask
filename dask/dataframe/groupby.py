@@ -59,7 +59,10 @@ def _groupby_aggregate(df, aggfunc=None, levels=None):
     return aggfunc(df.groupby(level=levels))
 
 
-def _apply_chunk(df, index, func, columns):
+def _apply_chunk(df, *index, **kwargs):
+    func = kwargs.pop('func')
+    columns = kwargs.pop('columns')
+
     if isinstance(df, pd.Series) or columns is None:
         return func(df.groupby(index))
     else:
@@ -67,7 +70,7 @@ def _apply_chunk(df, index, func, columns):
         return func(df.groupby(index)[columns])
 
 
-def _var_chunk(df, index):
+def _var_chunk(df, *index):
     if isinstance(df, pd.Series):
         df = df.to_frame()
     g = df.groupby(index)
@@ -102,7 +105,10 @@ def _var_agg(g, levels, ddof):
 # nunique
 ###############################################################
 
-def _nunique_df_chunk(df, index, levels, name):
+def _nunique_df_chunk(df, *index, **kwargs):
+    levels = kwargs.pop('levels')
+    name = kwargs.pop('name')
+
     # we call set_index here to force a possibly duplicate index
     # for our reduce step
     grouped = df.groupby(index)[[name]].apply(pd.DataFrame.drop_duplicates)
@@ -512,6 +518,14 @@ def _normalize_index(df, index):
         return index
 
 
+def _get_groupby_chunk_args(obj, index):
+    if not isinstance(index, list):
+        return [obj, index]
+
+    else:
+        return [obj] + index
+
+
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -598,8 +612,10 @@ class _GroupBy(object):
         token = self._token_prefix + token
         levels = _determine_levels(self.index)
 
-        return aca([self.obj, self.index, func, columns],
-                   chunk=_apply_chunk, aggregate=_groupby_aggregate,
+        return aca(_get_groupby_chunk_args(self.obj, self.index),
+                   chunk=_apply_chunk,
+                   chunk_kwargs=dict(func=func, columns=columns),
+                   aggregate=_groupby_aggregate,
                    meta=meta, token=token, split_every=split_every,
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels))
 
@@ -632,7 +648,8 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None):
         levels = _determine_levels(self.index)
-        result = aca([self.obj, self.index], chunk=_var_chunk,
+        result = aca(_get_groupby_chunk_args(self.obj, self.index),
+                     chunk=_var_chunk,
                      aggregate=_var_agg, combine=_var_combine,
                      token=self._token_prefix + 'var',
                      aggregate_kwargs={'ddof': ddof, 'levels': levels},
@@ -883,7 +900,7 @@ class SeriesGroupBy(_GroupBy):
         levels = _determine_levels(self.index)
 
         if isinstance(self.obj, DataFrame):
-            return aca([self.obj, self.index],
+            return aca(_get_groupby_chunk_args(self.obj, self.index),
                        chunk=_nunique_df_chunk,
                        aggregate=_nunique_df_aggregate,
                        combine=_nunique_df_combine,
@@ -893,7 +910,7 @@ class SeriesGroupBy(_GroupBy):
                        combine_kwargs={'levels': levels},
                        split_every=split_every)
         else:
-            return aca([self.obj, self.index],
+            return aca(_get_groupby_chunk_args(self.obj, self.index),
                        chunk=_nunique_series_chunk,
                        aggregate=_nunique_series_aggregate,
                        combine=_nunique_series_combine,
