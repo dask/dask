@@ -714,6 +714,8 @@ class DataFrameGroupBy(_GroupBy):
                   chunk_kwargs=dict(funcs=chunk_funcs),
                   aggregate=_groupby_apply_funcs,
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
+                  combine=_groupby_apply_funcs,
+                  combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   meta=meta, token=token, split_every=split_every)
 
         return map_partitions(_agg_finalize, obj, meta=meta,
