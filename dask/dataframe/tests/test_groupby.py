@@ -726,16 +726,16 @@ def test_aggregate__dask():
 
 @pytest.mark.parametrize('agg_func', ['sum', 'var', 'mean', 'count', 'size',
                                       'std', 'nunique', 'min', 'max'])
-def test_aggs_multilevel(agg_func):
+def test_aggregations_multilevel(agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
-    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 20,
-                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 20,
-                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20},
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
                        columns=['c', 'b', 'a'])
 
-    ddf = dd.from_pandas(pdf, npartitions=20)
+    ddf = dd.from_pandas(pdf, npartitions=10)
 
     assert_eq(call(pdf.groupby(['a', 'b'])['c'], agg_func),
               call(ddf.groupby(['a', 'b'])['c'], agg_func, split_every=2))
