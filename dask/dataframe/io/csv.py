@@ -24,8 +24,8 @@ from ...bytes.compression import seekable_files, files as cfiles
 delayed = delayed(pure=True)
 
 
-def bytes_read_pandas(reader, b, header, kwargs, dtypes=None, columns=None,
-                      write_header=True, enforce=False):
+def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
+                     write_header=True, enforce=False):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -81,8 +81,8 @@ def coerce_dtypes(df, dtypes):
             df[c] = df[c].astype(dtypes[c])
 
 
-def read_pandas_from_bytes(reader, block_lists, header, head, kwargs,
-                           collection=True, enforce=False):
+def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
+                          collection=True, enforce=False):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -111,19 +111,19 @@ def read_pandas_from_bytes(reader, block_lists, header, head, kwargs,
     """
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
-    delayed_bytes_read_pandas = delayed(bytes_read_pandas)
+    delayed_pandas_read_text = delayed(pandas_read_text)
     dfs = []
     for blocks in block_lists:
         if not blocks:
             continue
-        df = delayed_bytes_read_pandas(reader, blocks[0], header, kwargs,
-                                       dtypes, columns, write_header=False,
-                                       enforce=enforce)
+        df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
+                                      dtypes, columns, write_header=False,
+                                      enforce=enforce)
         dfs.append(df)
         for b in blocks[1:]:
-            dfs.append(delayed_bytes_read_pandas(reader, b, header, kwargs,
-                                                 dtypes, columns,
-                                                 enforce=enforce))
+            dfs.append(delayed_pandas_read_text(reader, b, header, kwargs,
+                                                dtypes, columns,
+                                                enforce=enforce))
 
     if collection:
         return from_delayed(dfs, head)
@@ -203,8 +203,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     head = reader(BytesIO(sample), **kwargs)
 
-    return read_pandas_from_bytes(reader, values, header, head, kwargs,
-                                  collection=collection, enforce=enforce)
+    return text_blocks_to_pandas(reader, values, header, head, kwargs,
+                                 collection=collection, enforce=enforce)
 
 
 READ_DOC_TEMPLATE = """

@@ -17,7 +17,7 @@ import dask
 from dask.async import get_sync
 
 import dask.dataframe as dd
-from dask.dataframe.io.csv import (read_pandas_from_bytes, bytes_read_pandas,
+from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
 from dask.dataframe.utils import assert_eq
 from dask.bytes.core import read_bytes
@@ -101,53 +101,53 @@ csv_and_table = pytest.mark.parametrize('reader,files',
 
 
 @csv_and_table
-def test_bytes_read_pandas(reader, files):
+def test_pandas_read_text(reader, files):
     b = files['2014-01-01.csv']
-    df = bytes_read_pandas(reader, b, b'', {})
+    df = pandas_read_text(reader, b, b'', {})
     assert list(df.columns) == ['name', 'amount', 'id']
     assert len(df) == 3
     assert df.id.sum() == 1 + 2 + 3
 
 
 @csv_and_table
-def test_bytes_read_pandas_kwargs(reader, files):
+def test_pandas_read_text_kwargs(reader, files):
     b = files['2014-01-01.csv']
-    df = bytes_read_pandas(reader, b, b'', {'usecols': ['name', 'id']})
+    df = pandas_read_text(reader, b, b'', {'usecols': ['name', 'id']})
     assert list(df.columns) == ['name', 'id']
 
 
 @csv_and_table
-def test_bytes_read_pandas_dtype_coercion(reader, files):
+def test_pandas_read_text_dtype_coercion(reader, files):
     b = files['2014-01-01.csv']
-    df = bytes_read_pandas(reader, b, b'', {}, {'amount': 'float'})
+    df = pandas_read_text(reader, b, b'', {}, {'amount': 'float'})
     assert df.amount.dtype == 'float'
 
 
 @csv_and_table
-def test_bytes_read_pandas_with_header(reader, files):
+def test_pandas_read_text_with_header(reader, files):
     b = files['2014-01-01.csv']
     header, b = b.split(b'\n', 1)
     header = header + b'\n'
-    df = bytes_read_pandas(reader, b, header, {})
+    df = pandas_read_text(reader, b, header, {})
     assert list(df.columns) == ['name', 'amount', 'id']
     assert len(df) == 3
     assert df.id.sum() == 1 + 2 + 3
 
 
 @csv_and_table
-def test_read_pandas_simple(reader, files):
+def test_text_blocks_to_pandas_simple(reader, files):
     blocks = [[files[k]] for k in sorted(files)]
     kwargs = {}
-    head = bytes_read_pandas(reader, files['2014-01-01.csv'], b'', {})
+    head = pandas_read_text(reader, files['2014-01-01.csv'], b'', {})
     header = files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
 
-    df = read_pandas_from_bytes(reader, blocks, header, head, kwargs,
-                                collection=True)
+    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs,
+                               collection=True)
     assert isinstance(df, dd.DataFrame)
     assert list(df.columns) == ['name', 'amount', 'id']
 
-    values = read_pandas_from_bytes(reader, blocks, header, head, kwargs,
-                                    collection=False)
+    values = text_blocks_to_pandas(reader, blocks, header, head, kwargs,
+                                   collection=False)
     assert isinstance(values, list)
     assert len(values) == 3
     assert all(hasattr(item, 'dask') for item in values)
@@ -157,22 +157,22 @@ def test_read_pandas_simple(reader, files):
 
 
 @csv_and_table
-def test_kwargs(reader, files):
+def test_text_blocks_to_pandas_kwargs(reader, files):
     blocks = [files[k] for k in sorted(files)]
     blocks = [[b] for b in blocks]
     kwargs = {'usecols': ['name', 'id']}
-    head = bytes_read_pandas(reader, files['2014-01-01.csv'], b'', kwargs)
+    head = pandas_read_text(reader, files['2014-01-01.csv'], b'', kwargs)
     header = files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
 
-    df = read_pandas_from_bytes(reader, blocks, header, head, kwargs,
-                                collection=True)
+    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs,
+                               collection=True)
     assert list(df.columns) == ['name', 'id']
     result = df.compute()
     assert (result.columns == df.columns).all()
 
 
 @csv_and_table
-def test_blocked(reader, files):
+def test_text_blocks_to_pandas_blocked(reader, files):
     header = files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
     blocks = []
     for k in sorted(files):
@@ -180,13 +180,13 @@ def test_blocked(reader, files):
         lines = b.split(b'\n')
         blocks.append([b'\n'.join(bs) for bs in partition_all(2, lines)])
 
-    df = read_pandas_from_bytes(reader, blocks, header, expected.head(), {})
+    df = text_blocks_to_pandas(reader, blocks, header, expected.head(), {})
     assert_eq(df.compute().reset_index(drop=True),
               expected.reset_index(drop=True), check_dtype=False)
 
     expected2 = expected[['name', 'id']]
-    df = read_pandas_from_bytes(reader, blocks, header, expected2.head(),
-                                {'usecols': ['name', 'id']})
+    df = text_blocks_to_pandas(reader, blocks, header, expected2.head(),
+                               {'usecols': ['name', 'id']})
     assert_eq(df.compute().reset_index(drop=True),
               expected2.reset_index(drop=True), check_dtype=False)
 
@@ -203,8 +203,8 @@ tsv_blocks = [[b'aa\tbb\n1\t1.0\n2\t2.0', b'10\t20\n30\t40'],
 def test_enforce_dtypes(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b'\n')[0] + b'\n'
-    dfs = read_pandas_from_bytes(reader, blocks, header, head, {},
-                                 collection=False)
+    dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
+                                collection=False)
     dfs = dask.compute(*dfs, get=get_sync)
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
@@ -217,8 +217,8 @@ def test_enforce_columns(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b'\n')[0] + b'\n'
     with pytest.raises(ValueError):
-        dfs = read_pandas_from_bytes(reader, blocks, header, head, {},
-                                     collection=False, enforce=True)
+        dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
+                                    collection=False, enforce=True)
         dask.compute(*dfs, get=get_sync)
 
 
