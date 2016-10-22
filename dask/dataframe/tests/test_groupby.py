@@ -1,3 +1,4 @@
+import collections
 import operator
 
 import numpy as np
@@ -8,7 +9,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph
+from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
 
 import pytest
 
@@ -637,3 +638,54 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 
     assert len(no_mean_finalizers) == len(no_mean_spec)
     assert len(with_mean_finalizers) == len(with_mean_spec)
+
+
+def test_aggregate__dask():
+    dask_holder = collections.namedtuple('dask_holder', ['dask'])
+    get_agg_dask = lambda obj: dask_holder({
+        k: v for (k, v) in obj.dask.items() if k[0].startswith('aggregate')
+    })
+
+    specs = [
+        {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+        {'b': 'mean', 'c': ['min', 'max']},
+        ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+        'sum', 'mean', 'min', 'max', 'count', 'std', 'var',
+
+        # NOTE: the 'size' spec is special since it bypasses aggregate
+        #'size'
+    ]
+
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    for spec in specs:
+        result1 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+        result2 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+
+        agg_dask1 = get_agg_dask(result1)
+        agg_dask2 = get_agg_dask(result2)
+
+        core_agg_dask1 = {k: v for (k, v) in agg_dask1.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        core_agg_dask2 = {k: v for (k, v) in agg_dask2.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        # check that the number of paritions used is fixed by split_every
+        assert_max_deps(agg_dask1, 2)
+        assert_max_deps(agg_dask2, 2)
+
+        # check for deterministic key names
+        # not finalize passes the meta object, which cannot tested with ==
+        assert core_agg_dask1 == core_agg_dask2
+
+        # the length of the dask does not depend on the passed spec
+        for other_spec in specs:
+            other = ddf.groupby(['a', 'b']).agg(other_spec, split_every=2)
+            assert len(other.dask) == len(result1.dask)
+            assert len(other.dask) == len(result2.dask)

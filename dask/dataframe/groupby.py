@@ -695,8 +695,9 @@ class DataFrameGroupBy(_GroupBy):
         else:
             levels = 0
 
-        # TODO: add normed spec as an additional part to the token
-        token = 'aggregate-'
+        # TODO: add normed spec as an additional part to the token?
+        token = 'aggregate'
+        finalize_token = '{}-finalize'.format(token)
 
         meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
         meta = _aggregate_meta(self.obj._meta, meta_groupby, 0, chunk_funcs,
@@ -715,8 +716,8 @@ class DataFrameGroupBy(_GroupBy):
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   meta=meta, token=token, split_every=split_every)
 
-        return map_partitions(_agg_finalize, obj, meta=meta, token=token,
-                              funcs=finalizers)
+        return map_partitions(_agg_finalize, obj, meta=meta,
+                              token=finalize_token, funcs=finalizers)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None):
