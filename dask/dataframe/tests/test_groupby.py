@@ -567,32 +567,43 @@ def test_groupby_multiprocessing():
     ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
     'var',
 ])
-@pytest.mark.parametrize('split_every', [False, 3, None])
+@pytest.mark.parametrize('split_every', [False, None])
 @pytest.mark.parametrize('grouper', [
     lambda df: 'a',
     lambda df: ['a', 'd'],
-    lambda df: [df['a'], df['b']],
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+    pytest.mark.xfail(reason='pandas detects (and removes) derived groupers')(lambda df: [df['a'], df['b']]),
+    # example:
+    # >>> df.groupby(pdf['a']).agg('mean').columns
+    # Index(['c', 'b', 'd'], dtype='object')
+    #
+    # >>> pdf.groupby(pdf['a'] > 2).agg('mean').columns
+    # Index(['c', 'b', 'a', 'd'], dtype='object')
 ])
 def test_aggregate__examples(spec, split_every, grouper):
-    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 20,
-                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 20,
-                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 20,
-                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 20},
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
                        columns=['c', 'b', 'a', 'd'])
-    ddf = dd.from_pandas(pdf, npartitions=20)
+    ddf = dd.from_pandas(pdf, npartitions=10)
 
     assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
               ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 @pytest.mark.parametrize('spec', [
-    'sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'
+    'sum', 'min', 'max', 'count', 'size',
+    'std', # NOTE: for std the result is not recast ot the original dtype
+    pytest.mark.xfail(reason="pandas recast to original type")('var'),
+    pytest.mark.xfail(reason="pandas recast to original type")('mean')
 ])
 def test_aggregate__single_element_groups(spec):
-    pdf = pd.DataFrame({'a': [1, 2, 3],
-                        'b': [4, 2, 7],
-                        'c': [0, 1, 2],
-                        'd': [1, 2, 3]},
+    pdf = pd.DataFrame({'a': [1, 1, 3, 3],
+                        'b': [4, 4, 16, 16],
+                        'c': [1, 1, 4, 4],
+                        'd': [1, 1, 3, 3]},
                        columns=['c', 'b', 'a', 'd'])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
