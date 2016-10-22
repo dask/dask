@@ -561,6 +561,22 @@ def test_groupby_multiprocessing():
                   df.groupby('B').apply(lambda x: x))
 
 
+def test_groupby_normalize_index():
+    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    d = dd.from_pandas(full, npartitions=3)
+
+    assert d.groupby('a').index == 'a'
+    assert d.groupby(d['a']).index == 'a'
+    assert d.groupby(d['a'] > 2).index._name == (d['a'] > 2)._name
+    assert d.groupby(['a', 'b']).index == ['a', 'b']
+
+    assert d.groupby([d['a'], d['b']]).index == ['a', 'b']
+    assert d.groupby([d['a'], 'b']).index == ['a', 'b']
+
+
+
 @pytest.mark.parametrize('spec', [
     {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
     {'b': 'mean', 'c': ['min', 'max']},
@@ -572,15 +588,9 @@ def test_groupby_multiprocessing():
 @pytest.mark.parametrize('grouper', [
     lambda df: 'a',
     lambda df: ['a', 'd'],
+    lambda df: [df['a'], df['d']],
     lambda df: df['a'],
     lambda df: df['a'] > 2,
-    pytest.mark.xfail(reason='pandas detects (and removes) derived groupers')(lambda df: [df['a'], df['b']]),
-    # example:
-    # >>> df.groupby(pdf['a']).agg('mean').columns
-    # Index(['c', 'b', 'd'], dtype='object')
-    #
-    # >>> pdf.groupby(pdf['a'] > 2).agg('mean').columns
-    # Index(['c', 'b', 'a', 'd'], dtype='object')
 ])
 def test_aggregate__examples(spec, split_every, grouper):
     pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,

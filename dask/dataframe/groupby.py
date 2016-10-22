@@ -414,6 +414,26 @@ def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
     return np.sqrt(result)
 
 
+def _normalize_index(df, index):
+    if not isinstance(df, DataFrame):
+        return index
+
+    elif isinstance(index, list):
+        return [_normalize_index(df, col) for col in index]
+
+    elif (isinstance(index, Series) and index.name in df.columns and
+           index._name == df[index.name]._name):
+            return index.name
+
+    elif (isinstance(index, DataFrame) and
+          set(index.columns).issubset(df.columns) and
+          index._name == df[index.columns]._name):
+        return list(index.columns)
+
+    else:
+        return index
+
+
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -432,18 +452,7 @@ class _GroupBy(object):
         self.obj = df
 
         # grouping key passed via groupby method
-        if (isinstance(index, (DataFrame, Series, Index)) and
-           isinstance(df, DataFrame)):
-
-            if (isinstance(index, Series) and index.name in df.columns and
-               index._name == df[index.name]._name):
-                index = index.name
-            elif (isinstance(index, DataFrame) and
-                  set(index.columns).issubset(df.columns) and
-                  index._name == df[index.columns]._name):
-                index = list(index.columns)
-
-        self.index = index
+        self.index = _normalize_index(df, index)
 
         # slicing key applied to _GroupBy instance
         self._slice = slice
@@ -708,6 +717,8 @@ class DataFrameGroupBy(_GroupBy):
         else:
             group_columns = set()
 
+        # NOTE: this step relies on the index normalization to replace series
+        #       with their name in an index.
         non_group_columns = [col for col in self.obj.columns
                              if col not in group_columns]
         spec = _normalize_spec(arg, non_group_columns)
