@@ -150,6 +150,30 @@ def _nunique_series_aggregate(df):
 #
 ###############################################################
 
+def _make_agg_id_factory():
+    """
+    Return a factory for ids in the aggregate graph.
+
+    Keys are built from the function, the column to apply the function to, and
+    a increasing numeric id. The returns ids are deterministic. However, the
+    order in which ids are generated changes the numeric id. For different
+    calls with the same arguments, the factory function will always return the
+    same id.
+    """
+    integers = it.count()
+    ids = {}
+
+    def factory(func, column):
+        try:
+            return ids[func,column]
+
+        except KeyError:
+            new_id = '{}‐{!s}‐{!s}'.format(next(integers), func, column)
+            return ids.setdefault((func,column), new_id)
+
+    return factory
+
+
 def _aggregate_meta(df, index, levels, chunk_funcs, agg_funcs, finalizers):
     stage1 = _groupby_apply_funcs(df, funcs=chunk_funcs, by=index)
     stage2 = _groupby_apply_funcs(stage1, funcs=agg_funcs, level=levels)
@@ -214,13 +238,7 @@ def _build_agg_args(spec):
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    # generator for consecutive IDs (for intermediate results). Ids are
-    # generated for (result, func) pairs. Once an id for a pair has been
-    # generated it is reused in subsequent id requests.
-    ids = it.count()
-    # TODO: add func, input_column to intermediate name for easier debugging
-    id_map = collections.defaultdict(lambda: 'intermediate-{}'.format(next(ids)))
-
+    id_factory = _make_agg_id_factory()
     known_np_funcs = {np.min: 'min', np.max: 'max'}
 
     chunks = {}
@@ -229,7 +247,8 @@ def _build_agg_args(spec):
 
     for (result_column, func, input_column) in spec:
         func = funcname(known_np_funcs.get(func, func))
-        impls = _build_agg_args_single(result_column, func, input_column, id_map)
+        impls = _build_agg_args_single(result_column, func, input_column,
+                                       id_factory)
 
         # overwrite existing result-columns, generate intermedates only once
         chunks.update((spec[0], spec) for spec in impls['chunk_funcs'])
@@ -243,7 +262,7 @@ def _build_agg_args(spec):
     return chunks, aggs, finalizers
 
 
-def _build_agg_args_single(result_column, func, input_column, id_map):
+def _build_agg_args_single(result_column, func, input_column, id_factory):
     simple_impl = {
         'sum': (M.sum, M.sum),
         'min': (M.min, M.min),
@@ -254,23 +273,27 @@ def _build_agg_args_single(result_column, func, input_column, id_map):
 
     if func in simple_impl.keys():
         return _build_agg_args_simple(result_column, func, input_column,
-                                      id_map, simple_impl[func])
+                                      id_factory, simple_impl[func])
 
     elif func == 'var':
-        return _build_agg_args_var(result_column, func, input_column, id_map)
+        return _build_agg_args_var(result_column, func, input_column,
+                                   id_factory)
 
     elif func == 'std':
-        return _build_agg_args_std(result_column, func, input_column, id_map)
+        return _build_agg_args_std(result_column, func, input_column,
+                                   id_factory)
 
     elif func == 'mean':
-        return _build_agg_args_mean(result_column, func, input_column, id_map)
+        return _build_agg_args_mean(result_column, func, input_column,
+                                    id_factory)
 
     else:
         raise ValueError("unknown aggregate {}".format(func))
 
 
-def _build_agg_args_simple(result_column, func, input_column, id_map, impl_pair):
-    intermediate = id_map[func, input_column]
+def _build_agg_args_simple(result_column, func, input_column, id_factory,
+                           impl_pair):
+    intermediate = id_factory(func, input_column)
     chunk_impl, agg_impl = impl_pair
 
     return dict(
@@ -282,10 +305,10 @@ def _build_agg_args_simple(result_column, func, input_column, id_map, impl_pair)
     )
 
 
-def _build_agg_args_var(result_column, func, input_column, id_map):
-    int_sum = id_map['sum', input_column]
-    int_sum2 = id_map['sum2', input_column]
-    int_count = id_map['count', input_column]
+def _build_agg_args_var(result_column, func, input_column, id_factory):
+    int_sum = id_factory('sum', input_column)
+    int_sum2 = id_factory('sum2', input_column)
+    int_count = id_factory('count', input_column)
 
     return dict(
         chunk_funcs=[
@@ -306,8 +329,8 @@ def _build_agg_args_var(result_column, func, input_column, id_map):
     )
 
 
-def _build_agg_args_std(result_column, func, input_column, id_map):
-    impls = _build_agg_args_var(result_column, func, input_column, id_map)
+def _build_agg_args_std(result_column, func, input_column, id_factory):
+    impls = _build_agg_args_var(result_column, func, input_column, id_factory)
 
     result_column, _, kwargs = impls['finalizer']
     impls['finalizer'] = (result_column, _finalize_std, kwargs)
@@ -315,9 +338,9 @@ def _build_agg_args_std(result_column, func, input_column, id_map):
     return impls
 
 
-def _build_agg_args_mean(result_column, func, input_column, id_map):
-    int_sum = id_map['sum', input_column]
-    int_count = id_map['count', input_column]
+def _build_agg_args_mean(result_column, func, input_column, id_factory):
+    int_sum = id_factory('sum', input_column)
+    int_count = id_factory('count', input_column)
 
     return dict(
         chunk_funcs=[
