@@ -335,8 +335,15 @@ def _build_agg_args_mean(result_column, func, input_column, id_map):
     )
 
 
-def _groupby_apply_funcs(df, funcs, **groupby_kwargs):
-    grouped = df.groupby(**groupby_kwargs)
+def _groupby_apply_funcs(df, *index, **kwargs):
+    """
+    TODO: document args
+    """
+    if len(index):
+        kwargs.update(by=list(index))
+
+    funcs = kwargs.pop('funcs')
+    grouped = df.groupby(**kwargs)
 
     result = collections.OrderedDict()
     for result_column, func, kwargs in funcs:
@@ -665,8 +672,21 @@ class DataFrameGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def aggregate(self, arg, split_every=None):
+        if arg == 'size':
+            return self.size()
+
+        if isinstance(self.index, tuple) or np.isscalar(self.index):
+            group_columns = {self.index}
+
+        elif isinstance(self.index, list):
+            group_columns = {i for i in self.index
+                             if isinstance(i, tuple) or np.isscalar(i)}
+
+        else:
+            group_columns = set()
+
         non_group_columns = [col for col in self.obj.columns
-                             if col not in self.index]
+                             if col not in group_columns]
         spec = _normalize_spec(arg, non_group_columns)
         chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
 
@@ -678,12 +698,19 @@ class DataFrameGroupBy(_GroupBy):
         # TODO: add normed spec as an additional part to the token
         token = 'aggregate-'
 
-        meta = _aggregate_meta(self.obj._meta, self.index, levels, chunk_funcs,
+        meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
+        meta = _aggregate_meta(self.obj._meta, meta_groupby, 0, chunk_funcs,
                                aggregate_funcs, finalizers)
 
-        obj = aca([self.obj],
+        if not isinstance(self.index, list):
+            chunk_args = [self.obj, self.index]
+
+        else:
+            chunk_args = [self.obj] + self.index
+
+        obj = aca(chunk_args,
                   chunk=_groupby_apply_funcs,
-                  chunk_kwargs=dict(funcs=chunk_funcs, by=self.index),
+                  chunk_kwargs=dict(funcs=chunk_funcs),
                   aggregate=_groupby_apply_funcs,
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   meta=meta, token=token, split_every=split_every)
