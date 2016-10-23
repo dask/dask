@@ -8,8 +8,6 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
 
-import pytest
-
 
 def groupby_internal_repr():
     pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],

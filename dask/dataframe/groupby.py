@@ -506,7 +506,7 @@ def _normalize_index(df, index):
         return [_normalize_index(df, col) for col in index]
 
     elif (isinstance(index, Series) and index.name in df.columns and
-           index._name == df[index.name]._name):
+          index._name == df[index.name]._name):
             return index.name
 
     elif (isinstance(index, DataFrame) and
