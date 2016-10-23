@@ -174,15 +174,51 @@ def _make_agg_id_factory():
     return factory
 
 
-def _aggregate_meta(df, index, levels, chunk_funcs, agg_funcs, finalizers):
-    stage1 = _groupby_apply_funcs(df, funcs=chunk_funcs, by=index)
-    stage2 = _groupby_apply_funcs(stage1, funcs=agg_funcs, level=levels)
-    return _agg_finalize(stage2, finalizers)
-
-
 def _normalize_spec(spec, non_group_columns):
     """
     Return a list of ``(result_column, func, input_column)`` tuples.
+
+    Spec can be
+
+    - a function
+    - a list of functions
+    - a dictionary that maps input-columns to functions
+    - a dictionary that maps input-columns to a lists of functions
+    - a dictionary that maps input-columns to a dictionaries that map
+      output-columns to functions.
+
+    The non-group columns are a list of all column names that are not used in
+    the groupby operation.
+
+    Usually, the result columns are be a mutli-level names, returned as a
+    tuples. If only a single function is supplied or dictionary mapping columns
+    to single functions, simple names are returned as strings (see the first
+    two examples below).
+
+    Examples
+    --------
+
+        >>> _normalize_spec('mean', ['a', 'b', 'c'])
+        [('a', 'mean', 'a'), ('b', 'mean', 'b'), ('c', 'mean', 'c')]
+
+        >>> _normalize_spec({'a': 'mean', 'b': 'count'}, ['a', 'b', 'c'])
+        [('a', 'mean', 'a'), ('b', 'count', 'b')]
+
+        >>> _normalize_spec(['var', 'mean'], ['a', 'b', 'c'])
+        [(('a', 'var'), 'var', 'a'), (('a', 'mean'), 'mean', 'a'),
+         (('b', 'var'), 'var', 'b'), (('b', 'mean'), 'mean', 'b'),
+         (('c', 'var'), 'var', 'c'), (('c', 'mean'), 'mean', 'c')]
+
+        >>> _normalize_spec({'a': 'mean', 'b': ['sum', 'count']},
+        ...                 ['a', 'b', 'c'])
+        [(('a', 'mean'), 'mean', 'a'), (('b', 'sum'), 'sum', 'b'),
+          (('b', 'count'), 'count', 'b')]
+
+        >>> _normalize_spec({'a': ['mean', 'size'],
+        ...                  'b': {'e': 'count', 'f': 'var'}},
+        ...                 ['a', 'b', 'c'])
+        [(('a', 'mean'), 'mean', 'a'), (('a', 'size'), 'size', 'a'),
+         (('b', 'e'), 'count', 'b'), (('b', 'f'), 'var', 'b')]
     """
     if not isinstance(spec, dict):
         spec = collections.OrderedDict(zip(non_group_columns, it.repeat(spec)))
@@ -360,7 +396,31 @@ def _build_agg_args_mean(result_column, func, input_column, id_factory):
 
 def _groupby_apply_funcs(df, *index, **kwargs):
     """
-    TODO: document args
+    Group a dataframe and apply multiple aggregation functions.
+
+    Parameters
+    ----------
+
+    df: pandas.DataFrame
+        The dataframe to work on.
+
+    index: list of groupers
+        If given, they are added to the keyword arguments as the ``by``
+        argument.
+
+    funcs: list of result-colum, function, keywordargument triples
+        The list of functions that are applied on the grouped data frame.
+        Has to be passed as a keyword argument.
+
+    kwargs:
+        All keyword arguments, but ``funcs``, are passed verbatim to the groupby
+        operation of the dataframe
+
+    Returns
+    -------
+
+    aggregated:
+        the aggregated dataframe.
     """
     if len(index):
         kwargs.update(by=list(index))
@@ -369,8 +429,8 @@ def _groupby_apply_funcs(df, *index, **kwargs):
     grouped = df.groupby(**kwargs)
 
     result = collections.OrderedDict()
-    for result_column, func, kwargs in funcs:
-        result[result_column] = func(grouped, **kwargs)
+    for result_column, func, func_kwargs in funcs:
+        result[result_column] = func(grouped, **func_kwargs)
 
     return pd.DataFrame(result)
 
@@ -729,13 +789,13 @@ class DataFrameGroupBy(_GroupBy):
         else:
             levels = 0
 
-        # TODO: add normed spec as an additional part to the token?
-        token = 'aggregate'
-        finalize_token = '{}-finalize'.format(token)
-
+        # apply the transformations to determine the meta object
         meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
-        meta = _aggregate_meta(self.obj._meta, meta_groupby, 0, chunk_funcs,
-                               aggregate_funcs, finalizers)
+        meta_stage1 = _groupby_apply_funcs(self.obj._meta, funcs=chunk_funcs,
+                                           by=meta_groupby)
+        meta_stage2 = _groupby_apply_funcs(meta_stage1, funcs=aggregate_funcs,
+                                           level=0)
+        meta = _agg_finalize(meta_stage2, finalizers)
 
         if not isinstance(self.index, list):
             chunk_args = [self.obj, self.index]
@@ -750,10 +810,10 @@ class DataFrameGroupBy(_GroupBy):
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   combine=_groupby_apply_funcs,
                   combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  meta=meta, token=token, split_every=split_every)
+                  meta=meta, token='aggregate', split_every=split_every)
 
         return map_partitions(_agg_finalize, obj, meta=meta,
-                              token=finalize_token, funcs=finalizers)
+                              token='aggregate-finalize', funcs=finalizers)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None):

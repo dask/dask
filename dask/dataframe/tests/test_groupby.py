@@ -648,6 +648,32 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
+def test_aggregate__make_agg_id_factory():
+    from dask.dataframe.groupby import _make_agg_id_factory
+
+    factory = _make_agg_id_factory()
+
+    # the initial id depends on the order
+    assert factory('sum', 'a') == '0-sum-a'
+    assert factory('sum', 'a') == '0-sum-a'
+    assert factory('sum', 'b') == '1-sum-b'
+    assert factory('sum', 'a') == '0-sum-a'
+    assert factory('sum', 'b') == '1-sum-b'
+    assert factory('sum', 'c') == '2-sum-c'
+
+    # factories are independent
+    factory = _make_agg_id_factory()
+    assert factory('sum', 'c') == '0-sum-c'
+    assert factory('sum', 'a') == '1-sum-a'
+    assert factory('sum', 'b') == '2-sum-b'
+    assert factory('sum', 'a') == '1-sum-a'
+    assert factory('sum', 'b') == '2-sum-b'
+    assert factory('sum', 'c') == '0-sum-c'
+
+    # it can also handle tuple column names
+    assert factory('sum', ('foo', 'bar')) == '3-sum-(\'foo\', \'bar\')'
+
+
 def test_aggregate__dask():
     dask_holder = collections.namedtuple('dask_holder', ['dask'])
     get_agg_dask = lambda obj: dask_holder({
