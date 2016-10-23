@@ -168,7 +168,7 @@ def _make_agg_id_factory():
             return ids[func,column]
 
         except KeyError:
-            new_id = '{}‐{!s}‐{!s}'.format(next(integers), func, column)
+            new_id = '{}-{!s}-{!s}'.format(next(integers), func, column)
             return ids.setdefault((func,column), new_id)
 
     return factory
