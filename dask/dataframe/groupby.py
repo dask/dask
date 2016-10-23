@@ -566,6 +566,12 @@ class _GroupBy(object):
             # otherwise, group key is regarded as a separate column
             self._meta = self.obj._meta.groupby(self.obj._meta[index.name])
 
+        elif isinstance(self.index, list):
+            self._meta = self.obj._meta.groupby([
+                item._meta if isinstance(item, Series) else item
+                for item in self.index
+            ])
+
         elif isinstance(self.index, Series):
             self._meta = self.obj._meta.groupby(self.index._meta)
         else:
