@@ -200,22 +200,28 @@ def _normalize_spec(spec, non_group_columns):
     >>> _normalize_spec('mean', ['a', 'b', 'c'])
     [('a', 'mean', 'a'), ('b', 'mean', 'b'), ('c', 'mean', 'c')]
 
-    >>> _normalize_spec({'a': 'mean', 'b': 'count'}, ['a', 'b', 'c'])
+    >>> spec = collections.OrderedDict([('a', 'mean'), ('b', 'count')])
+    >>> _normalize_spec(spec, ['a', 'b', 'c'])
     [('a', 'mean', 'a'), ('b', 'count', 'b')]
 
     >>> _normalize_spec(['var', 'mean'], ['a', 'b', 'c'])
-    [(('a', 'var'), 'var', 'a'), (('a', 'mean'), 'mean', 'a'),
-     (('b', 'var'), 'var', 'b'), (('b', 'mean'), 'mean', 'b'),
+    ... # doctest: +NORMALIZE_WHITESPACE
+    [(('a', 'var'), 'var', 'a'), (('a', 'mean'), 'mean', 'a'), \
+     (('b', 'var'), 'var', 'b'), (('b', 'mean'), 'mean', 'b'), \
      (('c', 'var'), 'var', 'c'), (('c', 'mean'), 'mean', 'c')]
 
-    >>> _normalize_spec({'a': 'mean', 'b': ['sum', 'count']}, ['a', 'b', 'c'])
-    [(('a', 'mean'), 'mean', 'a'), (('b', 'sum'), 'sum', 'b'),
+    >>> spec = collections.OrderedDict([('a', 'mean'), ('b', ['sum', 'count'])])
+    >>> _normalize_spec(spec, ['a', 'b', 'c'])
+    ... # doctest: +NORMALIZE_WHITESPACE
+    [(('a', 'mean'), 'mean', 'a'), (('b', 'sum'), 'sum', 'b'), \
       (('b', 'count'), 'count', 'b')]
 
-    >>> _normalize_spec({'a': ['mean', 'size'],
-    ...                  'b': {'e': 'count', 'f': 'var'}},
-    ...                 ['a', 'b', 'c'])
-    [(('a', 'mean'), 'mean', 'a'), (('a', 'size'), 'size', 'a'),
+    >>> spec = collections.OrderedDict()
+    >>> spec['a'] = ['mean', 'size']
+    >>> spec['b'] = collections.OrderedDict([('e', 'count'), ('f', 'var')])
+    >>> _normalize_spec(spec, ['a', 'b', 'c'])
+    ... # doctest: +NORMALIZE_WHITESPACE
+    [(('a', 'mean'), 'mean', 'a'), (('a', 'size'), 'size', 'a'), \
      (('b', 'e'), 'count', 'b'), (('b', 'f'), 'var', 'b')]
     """
     if not isinstance(spec, dict):
