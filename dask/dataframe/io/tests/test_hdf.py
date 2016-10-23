@@ -395,6 +395,16 @@ def test_to_hdf_process():
         assert_eq(df, out)
 
 
+def test_to_hdf_kwargs():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'A': ['a', 'aaaa']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with tmpfile('h5') as fn:
+        ddf.to_hdf(fn, 'foo4', format='table', min_itemsize=4)
+        df2 = pd.read_hdf(fn, 'foo4')
+        tm.assert_frame_equal(df, df2)
+
+
 @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
                     reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_fmt_warns():

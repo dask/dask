@@ -24,30 +24,33 @@ from ...bytes.compression import seekable_files, files as cfiles
 delayed = delayed(pure=True)
 
 
-def bytes_read_csv(b, header, kwargs, dtypes=None, columns=None,
-                   write_header=True, enforce=False):
+def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
+                     write_header=True, enforce=False):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
     ----------
-    b: bytestring
-        The content to be parsed with pandas.read_csv
-    header: bytestring
-        An optional header to prepend to b
-    kwargs: dict
-        A dictionary of keyword arguments to be passed to pandas.read_csv
-    dtypes: dict
+    reader : callable
+        ``pd.read_csv`` or ``pd.read_table``.
+    b : bytestring
+        The content to be parsed with ``reader``
+    header : bytestring
+        An optional header to prepend to ``b``
+    kwargs : dict
+        A dictionary of keyword arguments to be passed to ``reader``
+    dtypes : dict
         DTypes to assign to columns
 
-    See Also:
-        dask.dataframe.csv.read_csv_from_bytes
+    See Also
+    --------
+    dask.dataframe.csv.read_pandas_from_bytes
     """
     bio = BytesIO()
     if write_header and not b.startswith(header.rstrip()):
         bio.write(header)
     bio.write(b)
     bio.seek(0)
-    df = pd.read_csv(bio, **kwargs)
+    df = reader(bio, **kwargs)
     if dtypes:
         coerce_dtypes(df, dtypes)
 
@@ -72,13 +75,14 @@ def coerce_dtypes(df, dtypes):
                     np.issubdtype(dtypes[c], np.integer)):
                 if (df[c] % 1).any():
                     msg = ("Runtime type mismatch. "
-                           "Add {'%s': float} to dtype= keyword in read_csv")
+                           "Add {'%s': float} to dtype= keyword in "
+                           "read_csv/read_table")
                     raise TypeError(msg % c)
             df[c] = df[c].astype(dtypes[c])
 
 
-def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
-                        enforce=False):
+def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
+                          collection=True, enforce=False):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -87,16 +91,18 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
 
     Parameters
     ----------
-    block_lists: list of lists of delayed values of bytes
+    reader : callable
+        ``pd.read_csv`` or ``pd.read_table``.
+    block_lists : list of lists of delayed values of bytes
         The lists of bytestrings where each list corresponds to one logical file
-    header: bytestring
+    header : bytestring
         The header, found at the front of the first file, to be prepended to
         all blocks
-    head: pd.DataFrame
+    head : pd.DataFrame
         An example Pandas DataFrame to be used for metadata.
         Can be ``None`` if ``collection==False``
-    kwargs: dict
-        Keyword arguments to pass down to ``pd.read_csv``
+    kwargs : dict
+        Keyword arguments to pass down to ``reader``
     collection: boolean, optional (defaults to True)
 
     Returns
@@ -105,18 +111,19 @@ def read_csv_from_bytes(block_lists, header, head, kwargs, collection=True,
     """
     dtypes = head.dtypes.to_dict()
     columns = list(head.columns)
-    delayed_bytes_read_csv = delayed(bytes_read_csv)
+    delayed_pandas_read_text = delayed(pandas_read_text)
     dfs = []
     for blocks in block_lists:
         if not blocks:
             continue
-        df = delayed_bytes_read_csv(blocks[0], header, kwargs, dtypes,
-                                    columns, write_header=False,
-                                    enforce=enforce)
+        df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
+                                      dtypes, columns, write_header=False,
+                                      enforce=enforce)
         dfs.append(df)
         for b in blocks[1:]:
-            dfs.append(delayed_bytes_read_csv(b, header, kwargs, dtypes,
-                                              columns, enforce=enforce))
+            dfs.append(delayed_pandas_read_text(reader, b, header, kwargs,
+                                                dtypes, columns,
+                                                enforce=enforce))
 
     if collection:
         return from_delayed(dfs, head)
@@ -141,75 +148,33 @@ else:
     AUTO_BLOCKSIZE = 2**25
 
 
-def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
-             lineterminator=None, compression=None, sample=256000,
-             enforce=False, storage_options=None, **kwargs):
-    """ Read CSV files into a Dask.DataFrame
-
-    This parallelizes the ``pandas.read_csv`` file in the following ways:
-
-    1.  It supports loading many files at once using globstrings as follows:
-
-        >>> df = dd.read_csv('myfiles.*.csv')  # doctest: +SKIP
-
-    2.  In some cases it can break up large files as follows:
-
-        >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks  # doctest: +SKIP
-
-    3.  You can read CSV files from external resources (e.g. S3, HDFS)
-        providing a URL:
-
-        >>> df = dd.read_csv('s3://bucket/myfiles.*.csv')  # doctest: +SKIP
-        >>> df = dd.read_csv('hdfs:///myfiles.*.csv')  # doctest: +SKIP
-        >>> df = dd.read_csv('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
-
-    Internally dd.read_csv uses pandas.read_csv and so supports many of the
-    same keyword arguments with the same performance guarantees.
-
-    See the docstring for ``pandas.read_csv`` for more information on available
-    keyword arguments.
-
-    Note that this function may fail if a CSV file includes quoted strings that
-    contain the line terminator.
-
-    Parameters
-    ----------
-
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring for CSV files.
-    blocksize: int or None
-        Number of bytes by which to cut up larger files. Default value is
-        computed based on available physical memory and the number of cores.
-        If ``None``, use a single block for each file.
-    collection: boolean
-        Return a dask.dataframe if True or list of dask.delayed objects if False
-    sample: int
-        Number of bytes to use when determining dtypes
-    storage_options: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
-    **kwargs: dict
-        Options to pass down to ``pandas.read_csv``
-    """
+def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
+                lineterminator=None, compression=None, sample=256000,
+                enforce=False, storage_options=None, **kwargs):
+    reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
-                         "dd.read_csv(...).set_index('my-index') instead")
+                         "dd.{0}(...).set_index('my-index') "
+                         "instead".format(reader_name))
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
-            raise ValueError("%s not supported for dd.read_csv" % kw)
+            raise ValueError("{0} not supported for "
+                             "dd.{1}".format(kw, reader_name))
     if kwargs.get('nrows', None):
         raise ValueError("The 'nrows' keyword is not supported by "
-                         "`dd.read_csv`. To achieve the same behavior, it's "
-                         "recommended to use `dd.read_csv(...).head(n=nrows)`")
+                         "`dd.{0}`. To achieve the same behavior, it's "
+                         "recommended to use `dd.{0}(...)."
+                         "head(n=nrows)`".format(reader_name))
     if isinstance(kwargs.get('skiprows'), list):
-        raise TypeError("List of skiprows not supported for dd.read_csv")
+        raise TypeError("List of skiprows not supported for "
+                        "dd.{0}".format(reader_name))
     if isinstance(kwargs.get('header'), list):
-        raise TypeError("List of header rows not supported for dd.read_csv")
+        raise TypeError("List of header rows not supported for "
+                        "dd.{0}".format(reader_name))
 
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
@@ -236,12 +201,80 @@ def read_csv(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     else:
         header = sample.split(b_lineterminator)[0] + b_lineterminator
 
-    head = pd.read_csv(BytesIO(sample), **kwargs)
+    head = reader(BytesIO(sample), **kwargs)
 
-    df = read_csv_from_bytes(values, header, head, kwargs,
-                             collection=collection, enforce=enforce)
+    return text_blocks_to_pandas(reader, values, header, head, kwargs,
+                                 collection=collection, enforce=enforce)
 
-    return df
+
+READ_DOC_TEMPLATE = """
+Read {file_type} files into a Dask.DataFrame
+
+This parallelizes the ``pandas.{reader}`` file in the following ways:
+
+1.  It supports loading many files at once using globstrings as follows:
+
+    >>> df = dd.{reader}('myfiles.*.csv')  # doctest: +SKIP
+
+2.  In some cases it can break up large files as follows:
+
+    >>> df = dd.{reader}('largefile.csv', blocksize=25e6)  # 25MB chunks  # doctest: +SKIP
+
+3.  You can read CSV files from external resources (e.g. S3, HDFS)
+    providing a URL:
+
+    >>> df = dd.{reader}('s3://bucket/myfiles.*.csv')  # doctest: +SKIP
+    >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
+    >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
+
+Internally ``dd.{reader}`` uses ``pandas.{reader}`` and so supports many
+of the same keyword arguments with the same performance guarantees.
+
+See the docstring for ``pandas.{reader}`` for more information on available
+keyword arguments.
+
+Note that this function may fail if a {file_type} file includes quoted strings
+that contain the line terminator.
+
+Parameters
+----------
+urlpath : string
+    Absolute or relative filepath, URL (may include protocols like
+    ``s3://``), or globstring for {file_type} files.
+blocksize : int or None
+    Number of bytes by which to cut up larger files. Default value is
+    computed based on available physical memory and the number of cores.
+    If ``None``, use a single block for each file.
+collection : boolean
+    Return a dask.dataframe if True or list of dask.delayed objects if False
+sample : int
+    Number of bytes to use when determining dtypes
+storage_options : dict
+    Extra options that make sense to a particular storage connection, e.g.
+    host, port, username, password, etc.
+**kwargs : dict
+    Options to pass down to ``pandas.{reader}``
+"""
+
+
+def make_reader(reader, reader_name, file_type):
+    def read(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
+             lineterminator=None, compression=None, sample=256000,
+             enforce=False, storage_options=None, **kwargs):
+        return read_pandas(reader, urlpath, blocksize=blocksize,
+                           collection=collection,
+                           lineterminator=lineterminator,
+                           compression=compression, sample=sample,
+                           enforce=enforce, storage_options=storage_options,
+                           **kwargs)
+    read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name,
+                                            file_type=file_type)
+    read.__name__ = reader_name
+    return read
+
+
+read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
+read_table = make_reader(pd.read_table, 'read_table', 'delimited')
 
 
 @delayed

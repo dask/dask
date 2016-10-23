@@ -309,6 +309,18 @@ def test_from_pandas_single_row():
     assert_eq(ddf, df)
 
 
+def test_from_pandas_with_datetime_index():
+    df = pd.DataFrame({"Date": ["2015-08-28", "2015-08-27", "2015-08-26",
+                                "2015-08-25", "2015-08-24", "2015-08-21",
+                                "2015-08-20", "2015-08-19", "2015-08-18"],
+                       "Val": list(range(9))})
+    df.Date = df.Date.astype('datetime64')
+    ddf = dd.from_pandas(df, 2)
+    assert_eq(df, ddf)
+    ddf = dd.from_pandas(df, chunksize=2)
+    assert_eq(df, ddf)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
 
