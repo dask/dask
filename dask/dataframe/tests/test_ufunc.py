@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 pd = pytest.importorskip('pandas')
+import pandas.util.testing as tm
 
 import numpy as np
 
@@ -10,11 +11,16 @@ import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
 
-@pytest.mark.parametrize('ufunc',
-                         ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
-                          'expm1', 'sqrt', 'square', 'sin', 'cos', 'tan',
-                          'arcsin','arccos', 'arctan', 'sinh', 'cosh', 'tanh',
-                          'arcsinh', 'arccosh', 'arctanh', 'deg2rad', 'rad2deg'])
+_BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
+                'expm1', 'sqrt', 'square', 'sin', 'cos', 'tan',
+                'arcsin','arccos', 'arctan', 'sinh', 'cosh', 'tanh',
+                'arcsinh', 'arccosh', 'arctanh', 'deg2rad', 'rad2deg',
+                'isfinite', 'isinf', 'isnan', 'signbit',
+                'degrees', 'radians', 'rint',
+                'fabs', 'sign', 'absolute']
+
+
+@pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc(ufunc):
 
     dafunc = getattr(da, ufunc)
@@ -52,13 +58,7 @@ def test_ufunc(ufunc):
     assert_eq(dafunc(df), npfunc(df))
 
 
-@pytest.mark.parametrize('ufunc',
-                         ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
-                          'expm1', 'sqrt', 'square',
-                          'sin', 'cos', 'tan', 'arcsin','arccos',
-                          'arctan', 'sinh', 'cosh', 'tanh',
-                          'arcsinh', 'arccosh', 'arctanh', 'deg2rad', 'rad2deg'
-                          ])
+@pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc_with_index(ufunc):
 
     dafunc = getattr(da, ufunc)
@@ -98,7 +98,55 @@ def test_ufunc_with_index(ufunc):
     assert_eq(dafunc(df), npfunc(df))
 
 
-@pytest.mark.parametrize('ufunc', ['logaddexp', 'arctan2', 'hypot'])
+@pytest.mark.parametrize('ufunc', ['isreal', 'iscomplex', 'real', 'imag',
+                                   'angle', 'fix'])
+def test_ufunc_array_wrap(ufunc):
+    """
+    some np.ufuncs doesn't call __array_wrap__, it should work as below
+
+    - da.ufunc(dd.Series) => dd.Series
+    - da.ufunc(pd.Series) => np.ndarray
+    - np.ufunc(dd.Series) => np.ndarray
+    - np.ufunc(pd.Series) => np.ndarray
+    """
+
+    dafunc = getattr(da, ufunc)
+    npfunc = getattr(np, ufunc)
+
+    s = pd.Series(np.random.randint(1, 100, size=20),
+                  index=list('abcdefghijklmnopqrst'))
+    ds = dd.from_pandas(s, 3)
+
+    # applying Dask ufunc doesn't trigger computation
+    assert isinstance(dafunc(ds), dd.Series)
+    assert_eq(dafunc(ds), pd.Series(npfunc(s), index=s.index))
+
+    assert isinstance(npfunc(ds), np.ndarray)
+    tm.assert_numpy_array_equal(npfunc(ds), npfunc(s))
+
+    assert isinstance(dafunc(s), np.ndarray)
+    tm.assert_numpy_array_equal(dafunc(s), npfunc(s))
+
+    df = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                      columns=['A', 'B'],
+                      index=list('abcdefghijklmnopqrst'))
+    ddf = dd.from_pandas(df, 3)
+
+    # applying Dask ufunc doesn't trigger computation
+    assert isinstance(dafunc(ddf), dd.DataFrame)
+    # result may be read-only ndarray
+    exp = pd.DataFrame(npfunc(df).copy(), columns=df.columns, index=df.index)
+    assert_eq(dafunc(ddf), exp)
+
+    assert isinstance(npfunc(ddf), np.ndarray)
+    tm.assert_numpy_array_equal(npfunc(ddf), npfunc(df))
+
+    assert isinstance(dafunc(df), np.ndarray)
+    tm.assert_numpy_array_equal(dafunc(df), npfunc(df))
+
+
+@pytest.mark.parametrize('ufunc', ['logaddexp', 'logaddexp2',
+                                   'arctan2', 'hypot'])
 def test_ufunc_with_2args(ufunc):
 
     dafunc = getattr(da, ufunc)

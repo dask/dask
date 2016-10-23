@@ -10,12 +10,19 @@ from .. import core
 from ..utils import skip_doctest
 
 
-def wrap_elemwise(numpy_ufunc):
+def _array_wrap(numpy_ufunc, x, *args, **kwargs):
+    return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
+
+
+def wrap_elemwise(numpy_ufunc, array_wrap=False):
     """ Wrap up numpy function into dask.array """
 
     def wrapped(x, *args, **kwargs):
         if hasattr(x, '_elemwise'):
-            return x._elemwise(numpy_ufunc, x, *args, **kwargs)
+            if array_wrap:
+                return x._elemwise(_array_wrap, numpy_ufunc, x, *args, **kwargs)
+            else:
+                return x._elemwise(numpy_ufunc, x, *args, **kwargs)
         else:
             return numpy_ufunc(x, *args, **kwargs)
 
@@ -70,8 +77,8 @@ fmax = wrap_elemwise(np.fmax)
 fmin = wrap_elemwise(np.fmin)
 
 # floating functions
-isreal = wrap_elemwise(np.isreal)
-iscomplex = wrap_elemwise(np.iscomplex)
+isreal = wrap_elemwise(np.isreal, array_wrap=True)
+iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
 isfinite = wrap_elemwise(np.isfinite)
 isinf = wrap_elemwise(np.isinf)
 isnan = wrap_elemwise(np.isnan)
@@ -92,11 +99,11 @@ degrees = wrap_elemwise(np.degrees)
 radians = wrap_elemwise(np.radians)
 
 rint = wrap_elemwise(np.rint)
-fix = wrap_elemwise(np.fix)
+fix = wrap_elemwise(np.fix, array_wrap=True)
 
-angle = wrap_elemwise(np.angle)
-real = wrap_elemwise(np.real)
-imag = wrap_elemwise(np.imag)
+angle = wrap_elemwise(np.angle, array_wrap=True)
+real = wrap_elemwise(np.real, array_wrap=True)
+imag = wrap_elemwise(np.imag, array_wrap=True)
 
 clip = wrap_elemwise(np.clip)
 fabs = wrap_elemwise(np.fabs)
