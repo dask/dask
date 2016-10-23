@@ -1,5 +1,4 @@
 import collections
-import operator
 
 import numpy as np
 import pandas as pd
@@ -574,7 +573,6 @@ def test_groupby_normalize_index():
 
     assert d.groupby([d['a'], d['b']]).index == ['a', 'b']
     assert d.groupby([d['a'], 'b']).index == ['a', 'b']
-
 
 
 @pytest.mark.parametrize('spec', [
