@@ -190,35 +190,33 @@ def _normalize_spec(spec, non_group_columns):
     The non-group columns are a list of all column names that are not used in
     the groupby operation.
 
-    Usually, the result columns are be a mutli-level names, returned as a
-    tuples. If only a single function is supplied or dictionary mapping columns
+    Usually, the result columns are mutli-level names, returned as tuples.
+    If only a single function is supplied or dictionary mapping columns
     to single functions, simple names are returned as strings (see the first
     two examples below).
 
     Examples
     --------
+    >>> _normalize_spec('mean', ['a', 'b', 'c'])
+    [('a', 'mean', 'a'), ('b', 'mean', 'b'), ('c', 'mean', 'c')]
 
-        >>> _normalize_spec('mean', ['a', 'b', 'c'])
-        [('a', 'mean', 'a'), ('b', 'mean', 'b'), ('c', 'mean', 'c')]
+    >>> _normalize_spec({'a': 'mean', 'b': 'count'}, ['a', 'b', 'c'])
+    [('a', 'mean', 'a'), ('b', 'count', 'b')]
 
-        >>> _normalize_spec({'a': 'mean', 'b': 'count'}, ['a', 'b', 'c'])
-        [('a', 'mean', 'a'), ('b', 'count', 'b')]
+    >>> _normalize_spec(['var', 'mean'], ['a', 'b', 'c'])
+    [(('a', 'var'), 'var', 'a'), (('a', 'mean'), 'mean', 'a'),
+     (('b', 'var'), 'var', 'b'), (('b', 'mean'), 'mean', 'b'),
+     (('c', 'var'), 'var', 'c'), (('c', 'mean'), 'mean', 'c')]
 
-        >>> _normalize_spec(['var', 'mean'], ['a', 'b', 'c'])
-        [(('a', 'var'), 'var', 'a'), (('a', 'mean'), 'mean', 'a'),
-         (('b', 'var'), 'var', 'b'), (('b', 'mean'), 'mean', 'b'),
-         (('c', 'var'), 'var', 'c'), (('c', 'mean'), 'mean', 'c')]
+    >>> _normalize_spec({'a': 'mean', 'b': ['sum', 'count']}, ['a', 'b', 'c'])
+    [(('a', 'mean'), 'mean', 'a'), (('b', 'sum'), 'sum', 'b'),
+      (('b', 'count'), 'count', 'b')]
 
-        >>> _normalize_spec({'a': 'mean', 'b': ['sum', 'count']},
-        ...                 ['a', 'b', 'c'])
-        [(('a', 'mean'), 'mean', 'a'), (('b', 'sum'), 'sum', 'b'),
-          (('b', 'count'), 'count', 'b')]
-
-        >>> _normalize_spec({'a': ['mean', 'size'],
-        ...                  'b': {'e': 'count', 'f': 'var'}},
-        ...                 ['a', 'b', 'c'])
-        [(('a', 'mean'), 'mean', 'a'), (('a', 'size'), 'size', 'a'),
-         (('b', 'e'), 'count', 'b'), (('b', 'f'), 'var', 'b')]
+    >>> _normalize_spec({'a': ['mean', 'size'],
+    ...                  'b': {'e': 'count', 'f': 'var'}},
+    ...                 ['a', 'b', 'c'])
+    [(('a', 'mean'), 'mean', 'a'), (('a', 'size'), 'size', 'a'),
+     (('b', 'e'), 'count', 'b'), (('b', 'f'), 'var', 'b')]
     """
     if not isinstance(spec, dict):
         spec = collections.OrderedDict(zip(non_group_columns, it.repeat(spec)))
@@ -400,25 +398,20 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
     Parameters
     ----------
-
     df: pandas.DataFrame
         The dataframe to work on.
-
     index: list of groupers
         If given, they are added to the keyword arguments as the ``by``
         argument.
-
     funcs: list of result-colum, function, keywordargument triples
         The list of functions that are applied on the grouped data frame.
         Has to be passed as a keyword argument.
-
     kwargs:
         All keyword arguments, but ``funcs``, are passed verbatim to the groupby
         operation of the dataframe
 
     Returns
     -------
-
     aggregated:
         the aggregated dataframe.
     """
