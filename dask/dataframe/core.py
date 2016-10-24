@@ -1929,7 +1929,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
-        if np.isscalar(key):
+        if np.isscalar(key) or isinstance(key, tuple):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:

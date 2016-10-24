@@ -2430,6 +2430,14 @@ def test_getitem_meta():
     assert_eq(df.col2[df.col1 == 'a'], ddf.col2[ddf.col1 == 'a'])
 
 
+def test_getitem_multilevel():
+    pdf = pd.DataFrame({('A', '0') : [1,2,2], ('B', '1') : [1,2,3]})
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    assert_eq(pdf['A', '0'], ddf['A', '0'])
+    assert_eq(pdf[[('A', '0'), ('B', '1')]], ddf[[('A', '0'), ('B', '1')]])
+
+
 def test_set_index_sorted_min_max_same():
     a = pd.DataFrame({'x': [1, 2, 3], 'y': [0, 0, 0]})
     b = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 1, 1]})
