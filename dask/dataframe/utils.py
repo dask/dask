@@ -7,6 +7,7 @@ from collections import Iterator
 import sys
 import traceback
 from contextlib import contextmanager
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -14,10 +15,18 @@ import pandas.util.testing as tm
 from pandas.core.common import is_datetime64tz_dtype
 import toolz
 
+from ..core import get_deps
 from ..async import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
+if PANDAS_VERSION >= '0.19.0':
+    PANDAS_ge_0190 = True
+    from pandas.api.types import is_categorical_dtype, is_scalar       # noqa
+else:
+    PANDAS_ge_0190 = False
+    from pandas.core.common import is_categorical_dtype                # noqa
+    is_scalar = pd.lib.isscalar                                        # noqa
 
 
 def shard_df_on_index(df, divisions):
@@ -58,7 +67,6 @@ def shard_df_on_index(df, divisions):
     3  30  2
     4  40  1
     """
-    from dask.dataframe.categorical import is_categorical_dtype
 
     if isinstance(divisions, Iterator):
         divisions = list(divisions)
@@ -298,8 +306,6 @@ def is_pd_scalar(x):
 
 def _nonempty_series(s, idx):
 
-    from dask.dataframe.categorical import is_categorical_dtype
-
     dtype = s.dtype
     if is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
@@ -329,8 +335,12 @@ def meta_nonempty(x):
         return _nonempty_series(x, idx)
     elif isinstance(x, pd.DataFrame):
         idx = _nonempty_index(x.index)
-        data = {c: _nonempty_series(x[c], idx) for c in x.columns}
-        return pd.DataFrame(data, columns=x.columns, index=idx)
+        data = {i: _nonempty_series(x.iloc[:, i], idx)
+                for i, c in enumerate(x.columns)}
+        res = pd.DataFrame(data, index=idx,
+                           columns=np.arange(len(x.columns)))
+        res.columns = x.columns
+        return res
     elif is_pd_scalar(x):
         return _nonempty_scalar(x)
     else:
@@ -402,8 +412,8 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
-def eq(a, b, check_names=True, check_dtypes=True, check_divisions=True,
-       **kwargs):
+def assert_eq(a, b, check_names=True, check_dtypes=True,
+              check_divisions=True, **kwargs):
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
@@ -430,6 +440,11 @@ def eq(a, b, check_names=True, check_dtypes=True, check_divisions=True,
             else:
                 assert np.allclose(a, b)
     return True
+
+
+def eq(*args, **kwargs):
+    warnings.warn('eq is deprecated. Use assert_frame instead', UserWarning)
+    assert_eq(*args, **kwargs)
 
 
 def assert_dask_graph(dask, label):
@@ -510,3 +525,11 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
             assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
         else:
             assert type(ddf._meta) == type(res)
+
+
+def assert_max_deps(x, n, eq=True):
+    dependencies, dependents = get_deps(x.dask)
+    if eq:
+        assert max(map(len, dependencies.values())) == n
+    else:
+        assert max(map(len, dependencies.values())) <= n

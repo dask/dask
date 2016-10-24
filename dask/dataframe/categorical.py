@@ -4,13 +4,6 @@ import pandas as pd
 from toolz import partial
 
 from dask.base import compute
-from .utils import PANDAS_VERSION
-
-
-if PANDAS_VERSION >= '0.19.0':
-    from pandas.api.types import is_categorical_dtype        # noqa
-else:
-    from pandas.core.common import is_categorical_dtype      # noqa
 
 
 def _categorize_block(df, categories):

@@ -12,10 +12,10 @@ _globals['callbacks'] = set()
 class set_options(object):
     """ Set global state within controled context
 
-    This lets you specify various global settings in a tightly controlled with
-    block
+    This lets you specify various global settings in a tightly controlled
+    ``with`` block.
 
-    Valid keyword arguments currently include:
+    Valid keyword arguments currently include the following::
 
         get - the scheduler to use
         pool - a thread or process pool
@@ -23,11 +23,10 @@ class set_options(object):
         func_loads/func_dumps - loads/dumps functions for serialization of data
             likely to contain functions.  Defaults to
             cloudpickle.loads/cloudpickle.dumps
-        rerun_exceptions_locally - rerun failed tasks in master process
+        optimizations - List of additional optimizations to run
 
     Examples
     --------
-
     >>> with set_options(get=dask.get):  # doctest: +SKIP
     ...     x = np.array(x)  # uses dask.get internally
     """

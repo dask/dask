@@ -439,19 +439,11 @@ def isdag(d, keys):
     return not getcycle(d, keys)
 
 
-def list2(L):
-    return list(L)
-
-
 def quote(x):
     """ Ensure that this value remains this value in a dask graph
 
-    Some values in dask graph take on special meaning.  Lists become iterators,
-    tasks get executed.  Sometimes we want to ensure that our data is not
-    interpreted but remains literal.
-
-    >>> quote([1, 2, 3])
-    [1, 2, 3]
+    Some values in dask graph take on special meaning. Sometimes we want to
+    ensure that our data is not interpreted but remains literal.
 
     >>> quote((add, 1, 2))  # doctest: +SKIP
     (tuple, [add, 1, 2])

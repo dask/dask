@@ -1,12 +1,12 @@
 from multiprocessing.pool import ThreadPool
-
 import threading
 from threading import Thread
 from time import time, sleep
 
+import pytest
+
 from dask.context import set_options
 from dask.threaded import get
-from dask.utils import raises
 from dask.utils_test import inc, add
 
 
@@ -32,7 +32,7 @@ def bad(x):
 
 def test_exceptions_rise_to_top():
     dsk = {'x': 1, 'y': (bad, 'x')}
-    assert raises(ValueError, lambda: get(dsk, 'y'))
+    pytest.raises(ValueError, lambda: get(dsk, 'y'))
 
 
 def test_reuse_pool():

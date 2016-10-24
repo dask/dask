@@ -18,7 +18,7 @@ import dask.array as da
 from dask.base import tokenize
 from dask.delayed import delayed
 from dask.async import get_sync
-from dask.utils import raises, ignoring, tmpfile, tmpdir
+from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
@@ -253,7 +253,7 @@ def test_stack():
                                            (colon, colon, None))
     assert same_keys(s2, stack([a, b, c], axis=2))
 
-    assert raises(ValueError, lambda: stack([a, b, c], axis=3))
+    pytest.raises(ValueError, lambda: stack([a, b, c], axis=3))
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
 
@@ -302,7 +302,7 @@ def test_concatenate():
     assert (concatenate([a, b, c], axis=-1).chunks ==
             concatenate([a, b, c], axis=1).chunks)
 
-    assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
+    pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
 def test_concatenate_fixlen_strings():
@@ -356,7 +356,7 @@ def test_take():
 
     assert_eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
     assert_eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
-    assert raises(ValueError, lambda: take(a, 3, axis=2))
+    pytest.raises(ValueError, lambda: take(a, 3, axis=2))
     assert same_keys(take(a, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
 
 
@@ -416,8 +416,8 @@ def test_broadcast_shapes():
     assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
     assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
-    assert raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
-    assert raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
+    pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
+    pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
 
 
 def test_elemwise_on_scalars():
@@ -450,8 +450,8 @@ def test_elemwise_with_ndarrays():
     assert_eq(a + y, x + y)
     assert_eq(y + a, x + y)
     # Error on shape mismatch
-    assert raises(ValueError, lambda: a + y.T)
-    assert raises(ValueError, lambda: a + np.arange(2))
+    pytest.raises(ValueError, lambda: a + y.T)
+    pytest.raises(ValueError, lambda: a + np.arange(2))
 
 
 def test_elemwise_differently_chunked():
@@ -631,9 +631,9 @@ def test_insert():
               insert(a, [2] * 3 + [5] * 2, b, axis=0))
     assert_eq(np.insert(x, 0, y[0], axis=1),
               insert(a, 0, b[0], axis=1))
-    assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
-    assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
-    assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
+    pytest.raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
+    pytest.raises(IndexError, lambda: insert(a, [3], -1, axis=2))
+    pytest.raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
     assert same_keys(insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0),
                      insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
 
@@ -653,8 +653,8 @@ def test_broadcast_to():
         assert_eq(chunk.broadcast_to(x, shape),
                   broadcast_to(a, shape))
 
-    assert raises(ValueError, lambda: broadcast_to(a, (2, 1, 6)))
-    assert raises(ValueError, lambda: broadcast_to(a, (3,)))
+    pytest.raises(ValueError, lambda: broadcast_to(a, (2, 1, 6)))
+    pytest.raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
 def test_ravel():
@@ -744,7 +744,7 @@ def test_reshape_unknown_dimensions():
             a = from_array(x, 24)
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
-    assert raises(ValueError, lambda: reshape(a, (-1, -1)))
+    pytest.raises(ValueError, lambda: reshape(a, (-1, -1)))
 
 
 def test_full():
@@ -828,7 +828,7 @@ def test_fromfunction():
 
 def test_from_function_requires_block_args():
     x = np.arange(10)
-    assert raises(Exception, lambda: from_array(x))
+    pytest.raises(Exception, lambda: from_array(x))
 
 
 def test_repr():
@@ -870,7 +870,7 @@ def test_dtype():
 
 def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
-    assert raises(TypeError, lambda: blockdims_from_blockshape((10,), None))
+    pytest.raises(TypeError, lambda: blockdims_from_blockshape((10,), None))
     assert blockdims_from_blockshape((1e2, 3), [1e1, 3]) == ((10, ) * 10, (3, ))
     assert blockdims_from_blockshape((np.int8(10), ), (5, )) == ((5, 5), )
 
@@ -895,9 +895,9 @@ def test_store():
     assert (at == 2).all()
     assert (bt == 3).all()
 
-    assert raises(ValueError, lambda: store([a], [at, bt]))
-    assert raises(ValueError, lambda: store(at, at))
-    assert raises(ValueError, lambda: store([at, bt], [at, bt]))
+    pytest.raises(ValueError, lambda: store([a], [at, bt]))
+    pytest.raises(ValueError, lambda: store(at, at))
+    pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
 def test_store_compute_false():
@@ -1617,7 +1617,7 @@ def test_raise_on_no_chunks():
     except ValueError as e:
         assert "dask.pydata.org" in str(e)
 
-    assert raises(ValueError, lambda: da.ones(6))
+    pytest.raises(ValueError, lambda: da.ones(6))
 
 
 def test_chunks_is_immutable():
@@ -1716,11 +1716,11 @@ def test_slice_with_floats():
 
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
-    assert raises(IndexError, lambda: d.vindex[0])
-    assert raises(IndexError, lambda: d.vindex[[1, 2, 3]])
-    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
-    assert raises(IndexError, lambda: d.vindex[[1], [1, 2, 3]])
-    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [[1], [2], [3]]])
+    pytest.raises(IndexError, lambda: d.vindex[0])
+    pytest.raises(IndexError, lambda: d.vindex[[1, 2, 3]])
+    pytest.raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
+    pytest.raises(IndexError, lambda: d.vindex[[1], [1, 2, 3]])
+    pytest.raises(IndexError, lambda: d.vindex[[1, 2, 3], [[1], [2], [3]]])
 
 
 def test_vindex_merge():
@@ -1761,7 +1761,7 @@ def test_cov():
     assert_eq(da.cov(d, e), np.cov(x, y))
     assert_eq(da.cov(e, d), np.cov(y, x))
 
-    assert raises(ValueError, lambda: da.cov(d, ddof=1.5))
+    pytest.raises(ValueError, lambda: da.cov(d, ddof=1.5))
 
 
 def test_corrcoef():
@@ -2079,11 +2079,11 @@ def test_tril_triu():
 def test_tril_triu_errors():
     A = np.random.random_integers(0, 10, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
-    assert raises(ValueError, lambda: da.triu(dA))
+    pytest.raises(ValueError, lambda: da.triu(dA))
 
     A = np.random.random_integers(0, 10, (30, 35))
     dA = da.from_array(A, chunks=(5, 5))
-    assert raises(NotImplementedError, lambda: da.triu(dA))
+    pytest.raises(NotImplementedError, lambda: da.triu(dA))
 
 
 def test_atop_names():
@@ -2324,3 +2324,15 @@ def test_warn_bad_rechunking():
 
     assert record
     assert '20' in record[0].message.args[0]
+
+
+def test_optimize_fuse_keys():
+    x = da.ones(10, chunks=(5,))
+    y = x + 1
+    z = y + 1
+
+    dsk = z._optimize(z.dask, z._keys())
+    assert not set(y.dask) & set(dsk)
+
+    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
+    assert all(k in dsk for k in y._keys())

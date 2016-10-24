@@ -66,15 +66,15 @@ def _apply_chunk(df, index, func, columns):
 def _var_chunk(df, index):
     if isinstance(df, pd.Series):
         df = df.to_frame()
-    x = df.groupby(index).sum()
-    x2 = (df**2).rename(columns=lambda c: c + '-x2')
-    cols = [c + '-x2' for c in x.columns]
-    x2 = pd.concat([df, x2], axis=1).groupby(index)[cols].sum()
-    n = (df.groupby(index).count()
-           .rename(columns=lambda c: c + '-count'))
+    g = df.groupby(index)
+    x = g.sum()
+    x2 = g.agg(lambda x: (x**2).sum()).rename(columns=lambda c: c + '-x2')
+    n = g.count().rename(columns=lambda c: c + '-count')
+    return pd.concat([x, x2, n], axis=1)
 
-    result = pd.concat([x, x2, n], axis=1)
-    return result
+
+def _var_combine(g):
+    return g.groupby(level=0).sum()
 
 
 def _var_agg(g, ddof):
@@ -100,9 +100,15 @@ def _var_agg(g, ddof):
 def _nunique_df_chunk(df, index):
     # we call set_index here to force a possibly duplicate index
     # for our reduce step
-    grouped = (df.groupby(index).apply(pd.DataFrame.drop_duplicates))
+    grouped = df.groupby(index).apply(pd.DataFrame.drop_duplicates)
     grouped.index = grouped.index.get_level_values(level=0)
     return grouped
+
+
+def _nunique_df_combine(df):
+    result = df.groupby(level=0).apply(pd.DataFrame.drop_duplicates)
+    result.index = result.index.get_level_values(level=0)
+    return result
 
 
 def _nunique_df_aggregate(df, name):
@@ -116,6 +122,10 @@ def _nunique_series_chunk(df, index):
         index = pd.Series(index, index=df.index)
     grouped = pd.concat([df, index], axis=1).drop_duplicates()
     return grouped
+
+
+def _nunique_series_combine(df):
+    return df.drop_duplicates()
 
 
 def _nunique_series_aggregate(df):
@@ -209,7 +219,7 @@ class _GroupBy(object):
             grouped = sample.groupby(self.index)
         return _maybe_slice(grouped, self._slice)
 
-    def _aca_agg(self, token, func, aggfunc=None):
+    def _aca_agg(self, token, func, aggfunc=None, split_every=None):
         if aggfunc is None:
             aggfunc = func
 
@@ -225,40 +235,41 @@ class _GroupBy(object):
 
         return aca([self.obj, self.index, func, columns],
                    chunk=_apply_chunk, aggregate=_groupby_aggregate,
-                   meta=meta, token=token,
+                   meta=meta, token=token, split_every=split_every,
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels))
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self):
-        return self._aca_agg(token='sum', func=M.sum)
+    def sum(self, split_every=None):
+        return self._aca_agg(token='sum', func=M.sum, split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self):
-        return self._aca_agg(token='min', func=M.min)
+    def min(self, split_every=None):
+        return self._aca_agg(token='min', func=M.min, split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def max(self):
-        return self._aca_agg(token='max', func=M.max)
+    def max(self, split_every=None):
+        return self._aca_agg(token='max', func=M.max, split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def count(self):
+    def count(self, split_every=None):
         return self._aca_agg(token='count', func=M.count,
-                             aggfunc=M.sum)
+                             aggfunc=M.sum, split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self):
-        return self.sum() / self.count()
+    def mean(self, split_every=None):
+        return self.sum(split_every=split_every) / self.count(split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def size(self):
-        return self._aca_agg(token='size', func=M.size, aggfunc=M.sum)
+    def size(self, split_every=None):
+        return self._aca_agg(token='size', func=M.size, aggfunc=M.sum,
+                             split_every=split_every)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def var(self, ddof=1):
+    def var(self, ddof=1, split_every=None):
         result = aca([self.obj, self.index], chunk=_var_chunk,
-                     aggregate=_var_agg,
+                     aggregate=_var_agg, combine=_var_combine,
                      token=self._token_prefix + 'var',
-                     aggregate_kwargs={'ddof': ddof})
+                     aggregate_kwargs={'ddof': ddof}, split_every=split_every)
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -268,8 +279,8 @@ class _GroupBy(object):
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def std(self, ddof=1):
-        v = self.var(ddof)
+    def std(self, ddof=1, split_every=None):
+        v = self.var(ddof, split_every=split_every)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
@@ -421,7 +432,7 @@ class SeriesGroupBy(_GroupBy):
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 
-    def nunique(self):
+    def nunique(self, split_every=None):
         name = self._meta.obj.name
         meta = pd.Series([], dtype='int64',
                          index=pd.Index([], dtype=self._meta.obj.dtype),
@@ -431,10 +442,14 @@ class SeriesGroupBy(_GroupBy):
             return aca([self.obj, self.index],
                        chunk=_nunique_df_chunk,
                        aggregate=_nunique_df_aggregate,
+                       combine=_nunique_df_combine,
                        meta=meta, token='series-groupby-nunique',
-                       aggregate_kwargs={'name': name})
+                       aggregate_kwargs={'name': name},
+                       split_every=split_every)
         else:
             return aca([self.obj, self.index],
                        chunk=_nunique_series_chunk,
                        aggregate=_nunique_series_aggregate,
-                       meta=meta, token='series-groupby-nunique')
+                       combine=_nunique_series_combine,
+                       meta=meta, token='series-groupby-nunique',
+                       split_every=split_every)

@@ -151,6 +151,8 @@ def compute(*args, **kwargs):
         return args
 
     get = kwargs.pop('get', None) or _globals['get']
+    optimizations = (kwargs.pop('optimizations', None) or
+                     _globals.get('optimizations', []))
 
     if not get:
         get = variables[0]._default_get
@@ -162,9 +164,14 @@ def compute(*args, **kwargs):
 
     if kwargs.get('optimize_graph', True):
         groups = groupby(attrgetter('_optimize'), variables)
-        dsk = merge([opt(merge([v.dask for v in val]),
-                         [v._keys() for v in val], **kwargs)
-                    for opt, val in groups.items()])
+        groups = {opt: [merge([v.dask for v in val]),
+                        [v._keys() for v in val]]
+                  for opt, val in groups.items()}
+        for opt in optimizations:
+            groups = {k: [opt(dsk, keys), keys]
+                      for k, (dsk, keys) in groups.items()}
+        dsk = merge([opt(dsk, keys, **kwargs)
+                    for opt, (dsk, keys) in groups.items()])
     else:
         dsk = merge(var.dask for var in variables)
     keys = [var._keys() for var in variables]

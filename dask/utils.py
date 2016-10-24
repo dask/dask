@@ -26,14 +26,6 @@ if system_encoding == 'ascii':
     system_encoding = 'utf-8'
 
 
-def raises(err, lamda):
-    try:
-        lamda()
-        return False
-    except err:
-        return True
-
-
 def deepmap(func, *seqs):
     """ Apply function inside nested lists
 
@@ -97,7 +89,8 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                shutil.rmtree(dirname)
+                with ignoring(OSError):
+                    shutil.rmtree(dirname)
             else:
                 with ignoring(OSError):
                     os.remove(dirname)
@@ -116,6 +109,28 @@ def filetext(text, extension='', open=open, mode='w'):
                 pass
 
         yield filename
+
+
+@contextmanager
+def changed_cwd(new_cwd):
+    old_cwd = os.getcwd()
+    os.chdir(new_cwd)
+    try:
+        yield
+    finally:
+        os.chdir(old_cwd)
+
+
+@contextmanager
+def tmp_cwd(dir=None):
+    with tmpdir(dir) as dirname:
+        with changed_cwd(dirname):
+            yield dirname
+
+
+@contextmanager
+def noop_context():
+    yield
 
 
 def repr_long_list(seq):
@@ -150,27 +165,33 @@ class IndexCallable(object):
 
 
 @contextmanager
-def filetexts(d, open=open, mode='t'):
+def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """ Dumps a number of textfiles to disk
 
     d - dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
+
+    Since this is meant for use in tests, this context manager will
+    automatically switch to a temporary current directory, to avoid
+    race conditions when running tests in parallel.
     """
-    for filename, text in d.items():
-        f = open(filename, 'w' + mode)
-        try:
-            f.write(text)
-        finally:
+    with (tmp_cwd() if use_tmpdir else noop_context()):
+        for filename, text in d.items():
+            f = open(filename, 'w' + mode)
             try:
-                f.close()
-            except AttributeError:
-                pass
+                f.write(text)
+            finally:
+                try:
+                    f.close()
+                except AttributeError:
+                    pass
 
-    yield list(d)
+        yield list(d)
 
-    for filename in d:
-        if os.path.exists(filename):
-            os.remove(filename)
+        for filename in d:
+            if os.path.exists(filename):
+                with ignoring(OSError):
+                    os.remove(filename)
 
 
 compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
@@ -364,30 +385,25 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def different_seeds(n, random_state=None):
-    """ A list of different 32 bit integer seeds
+def random_state_data(n, random_state=None):
+    """Return a list of arrays that can initialize
+    ``np.random.RandomState``.
 
     Parameters
     ----------
-    n: int
-        Number of distinct seeds to return
-    random_state: int or np.random.RandomState
-        If int create a new RandomState with this as the seed
-    Otherwise draw from the passed RandomState
+    n : int
+        Number of tuples to return.
+    random_state : int or np.random.RandomState, optional
+        If an int, is used to seed a new ``RandomState``.
     """
     import numpy as np
 
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
-    big_n = np.iinfo(np.int32).max
-
-    seeds = set(random_state.randint(big_n, size=n))
-    while len(seeds) < n:
-        seeds.add(random_state.randint(big_n))
-
-    # Sorting makes it easier to know what seeds are for what chunk
-    return sorted(seeds)
+    maxuint32 = np.iinfo(np.uint32).max
+    return [(random_state.rand(624) * maxuint32).astype('uint32')
+            for i in range(n)]
 
 
 def is_integer(i):

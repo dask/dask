@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function
 import pandas as pd
 import numpy as np
 
-from .core import tokenize, DataFrame
-from ..utils import different_seeds
+from ..core import tokenize, DataFrame
+from ...utils import random_state_data
 
 __all__ = ['make_timeseries']
 
@@ -38,9 +38,9 @@ make = {float: make_float,
         'category': make_categorical}
 
 
-def make_timeseries_part(start, end, dtypes, freq, seed):
+def make_timeseries_part(start, end, dtypes, freq, state_data):
     index = pd.DatetimeIndex(start=start, end=end, freq=freq)
-    state = np.random.RandomState(seed)
+    state = np.random.RandomState(state_data)
     columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
@@ -72,20 +72,19 @@ def make_timeseries(start, end, dtypes, freq, partition_freq, seed=None):
     ...                              {'value': float, 'name': str, 'id': int},
     ...                              freq='2H', partition_freq='1D', seed=1)
     >>> df.head()
-                           id    name     value
-    2000-01-01 00:00:00   960     Dan  0.824008
-    2000-01-01 02:00:00  1033  Xavier  0.575390
-    2000-01-01 04:00:00   986  George  0.693842
-    2000-01-01 06:00:00  1073   Sarah  0.900580
-    2000-01-01 08:00:00   976  Hannah -0.373847
+                           id      name     value
+    2000-01-01 00:00:00   969     Jerry -0.309014
+    2000-01-01 02:00:00  1010       Ray -0.760675
+    2000-01-01 04:00:00  1016  Patricia -0.063261
+    2000-01-01 06:00:00   960   Charlie  0.788245
+    2000-01-01 08:00:00  1031     Kevin  0.466002
     """
     divisions = list(pd.DatetimeIndex(start=start, end=end,
                                       freq=partition_freq))
-    state = np.random.RandomState(seed)
-    seeds = different_seeds(len(divisions), state)
+    state_data = random_state_data(len(divisions) - 1, seed)
     name = 'make-timeseries-' + tokenize(start, end, dtypes, freq, partition_freq)
-    dsk = dict(((name, i), (make_timeseries_part, divisions[i], divisions[i + 1],
-                            dtypes, freq, seeds[i]))
-               for i in range(len(divisions) - 1))
-    head = make_timeseries_part('2000', '2000', dtypes, '1H', 1)
+    dsk = {(name, i): (make_timeseries_part, divisions[i], divisions[i + 1],
+                       dtypes, freq, state_data[i])
+           for i in range(len(divisions) - 1)}
+    head = make_timeseries_part('2000', '2000', dtypes, '1H', state_data[0])
     return DataFrame(dsk, name, head, divisions)

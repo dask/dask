@@ -75,7 +75,6 @@ Top level user functions:
     DataFrame.sum
     DataFrame.tail
     DataFrame.to_bag
-    DataFrame.to_castra
     DataFrame.to_csv
     DataFrame.to_hdf
     DataFrame.to_delayed
@@ -110,7 +109,6 @@ Create DataFrames
 .. autosummary::
    from_array
    from_bcolz
-   from_castra
    read_csv
    from_dask_array
    from_delayed
@@ -164,9 +162,12 @@ Other functions
 .. currentmodule:: dask.dataframe
 
 .. autofunction:: read_csv
+.. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
+.. autofunction:: from_dask_array
+.. autofunction:: from_delayed
 
 .. currentmodule:: dask.dataframe.rolling
 

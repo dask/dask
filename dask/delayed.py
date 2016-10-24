@@ -28,7 +28,7 @@ def unzip(ls, nout):
     return out
 
 
-def to_task_dasks(expr, **kwargs):
+def to_task_dasks(expr):
     """Normalize a python object and extract all sub-dasks.
 
     - Replace ``Delayed`` with their keys
@@ -53,7 +53,7 @@ def to_task_dasks(expr, **kwargs):
     >>> b = delayed(2, 'b')
     >>> task, dasks = to_task_dasks([a, b, 3])
     >>> task # doctest: +SKIP
-    (list, ['a', 'b', 3])
+    ['a', 'b', 3]
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
 
@@ -63,7 +63,6 @@ def to_task_dasks(expr, **kwargs):
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
     """
-    is_top = kwargs.get('is_top', True)
     if isinstance(expr, Delayed):
         return expr.key, expr._dasks
     if isinstance(expr, base.Base):
@@ -75,17 +74,16 @@ def to_task_dasks(expr, **kwargs):
     if isinstance(expr, tuple) and type(expr) != tuple:
         return expr, []
     if isinstance(expr, (Iterator, list, tuple, set)):
-        args, dasks = unzip((to_task_dasks(e, is_top=False) for e in expr), 2)
+        args, dasks = unzip((to_task_dasks(e) for e in expr), 2)
         args = list(args)
         dasks = flat_unique(dasks)
         # Ensure output type matches input type
-        if is_top or isinstance(expr, (tuple, set)):
+        if isinstance(expr, (tuple, set)):
             return (type(expr), args), dasks
         else:
             return args, dasks
     if isinstance(expr, dict):
-        args, dasks = to_task_dasks([[k, v] for k, v in expr.items()],
-                                    is_top=False)
+        args, dasks = to_task_dasks([[k, v] for k, v in expr.items()])
         return (dict, args), dasks
     return expr, []
 

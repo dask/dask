@@ -8,7 +8,8 @@ import sys
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize)
-from dask.utils import raises, tmpdir, tmpfile, ignoring
+from dask.utils import tmpdir, tmpfile, ignoring
+from dask.utils_test import inc, dec
 from dask.compatibility import unicode
 
 
@@ -280,7 +281,7 @@ def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
 
-    assert raises(ValueError, lambda: compute(x, b))
+    pytest.raises(ValueError, lambda: compute(x, b))
 
     xx, bb = compute(x, b, get=dask.async.get_sync)
     assert np.allclose(xx, np.arange(5))
@@ -332,3 +333,19 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 
     t = normalize_token(f)
     assert b'__main__' not in t
+
+
+def test_optimizations_keyword():
+    def inc_to_dec(dsk, keys):
+        for key in dsk:
+            if dsk[key][0] == inc:
+                dsk[key] = (dec,) + dsk[key][1:]
+        return dsk
+
+    x = dask.delayed(inc)(1)
+    assert x.compute() == 2
+
+    with dask.set_options(optimizations=[inc_to_dec]):
+        assert x.compute() == 0
+
+    assert x.compute() == 2

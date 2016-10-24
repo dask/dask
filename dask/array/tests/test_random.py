@@ -2,9 +2,11 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+
+import dask.array as da
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
-import dask.array as da
+from dask.array.utils import assert_eq
 from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 
@@ -12,11 +14,11 @@ from dask.multiprocessing import _dumps, _loads
 def test_RandomState():
     state = da.random.RandomState(5)
     x = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute() == x.compute()).all()
+    assert_eq(x, x)
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute() == y.compute()).all()
+    assert_eq(x, y)
 
 
 def test_concurrency():
@@ -38,15 +40,15 @@ def test_serializability():
 
     y = _loads(_dumps(x))
 
-    assert (x.compute() == y.compute()).all()
+    assert_eq(x, y)
 
 
 def test_determinisim_through_dask_values():
     samples_1 = da.random.RandomState(42).normal(size=1000, chunks=10)
     samples_2 = da.random.RandomState(42).normal(size=1000, chunks=10)
 
-    assert [v for k, v in sorted(samples_1.dask.items())] ==\
-           [v for k, v in sorted(samples_2.dask.items())]
+    assert set(samples_1.dask) == set(samples_2.dask)
+    assert_eq(samples_1, samples_2)
 
 
 def test_randomstate_consistent_names():
@@ -116,8 +118,16 @@ def test_random_seed():
     a = da.random.normal(size=10, chunks=5)
     b = da.random.normal(size=10, chunks=5)
 
-    assert (x.compute() == a.compute()).all()
-    assert (y.compute() == b.compute()).all()
+    assert_eq(x, a)
+    assert_eq(y, b)
+
+
+def test_consistent_across_sizes():
+    x1 = da.random.RandomState(123).random(20, chunks=20)
+    x2 = da.random.RandomState(123).random(100, chunks=20)[:20]
+    x3 = da.random.RandomState(123).random(200, chunks=20)[:20]
+    assert_eq(x1, x2)
+    assert_eq(x1, x3)
 
 
 def test_random_all():

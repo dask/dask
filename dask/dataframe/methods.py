@@ -66,6 +66,10 @@ def unique(x, series_name=None):
     return pd.Series(pd.Series.unique(x), name=series_name)
 
 
+def value_counts_combine(x):
+    return x.groupby(level=0).sum()
+
+
 def value_counts_aggregate(x):
     return x.groupby(level=0).sum().sort_values(ascending=False)
 
@@ -76,3 +80,29 @@ def nbytes(x):
 
 def size(x):
     return x.size
+
+
+def sample(df, state, frac, replace):
+    rs = np.random.RandomState(state)
+    return df.sample(random_state=rs, frac=frac, replace=replace)
+
+
+# ---------------------------------
+# reshape
+# ---------------------------------
+
+
+def pivot_agg(df):
+    return df.groupby(level=0).sum()
+
+
+def pivot_sum(df, index, columns, values):
+    return pd.pivot_table(df, index=index, columns=columns,
+                          values=values, aggfunc='sum')
+
+
+def pivot_count(df, index, columns, values):
+    # we cannot determine dtype until concatenationg all partitions.
+    # make dtype deterministic, always coerce to np.float64
+    return pd.pivot_table(df, index=index, columns=columns,
+                          values=values, aggfunc='count').astype(np.float64)

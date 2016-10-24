@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import pytest
+
 import dask
-from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.utils import eq, assert_dask_graph
+from dask.dataframe.utils import assert_eq, assert_dask_graph
 
 
 def groupby_internal_repr():
@@ -18,7 +19,7 @@ def groupby_internal_repr():
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     assert isinstance(dp.obj, dd.DataFrame)
-    assert eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby('y')['x']
     dp = ddf.groupby('y')['x']
@@ -26,7 +27,7 @@ def groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
-    assert eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby('y')[['x']]
     dp = ddf.groupby('y')[['x']]
@@ -34,7 +35,7 @@ def groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
-    assert eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby(pdf.y)['x']
     dp = ddf.groupby(ddf.y)['x']
@@ -42,7 +43,7 @@ def groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.Series)
-    assert eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby(pdf.y)[['x']]
     dp = ddf.groupby(ddf.y)[['x']]
@@ -50,7 +51,7 @@ def groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
-    assert eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj)
 
 
 def groupby_error():
@@ -80,13 +81,13 @@ def groupby_internal_head():
                         'C': np.random.randn(20)})
     ddf = dd.from_pandas(pdf, 3)
 
-    assert eq(ddf.groupby('A')._head().sum(),
+    assert_eq(ddf.groupby('A')._head().sum(),
               pdf.head().groupby('A').sum())
 
-    assert eq(ddf.groupby(ddf['A'])._head().sum(),
+    assert_eq(ddf.groupby(ddf['A'])._head().sum(),
               pdf.head().groupby(pdf['A']).sum())
 
-    assert eq(ddf.groupby(ddf['A'] + 1)._head().sum(),
+    assert_eq(ddf.groupby(ddf['A'] + 1)._head().sum(),
               pdf.head().groupby(pdf['A'] + 1).sum())
 
 
@@ -96,15 +97,15 @@ def test_full_groupby():
                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert raises(Exception, lambda: df.groupby('does_not_exist'))
-    assert raises(Exception, lambda: df.groupby('a').does_not_exist)
+    pytest.raises(Exception, lambda: df.groupby('does_not_exist'))
+    pytest.raises(Exception, lambda: df.groupby('a').does_not_exist)
     assert 'b' in dir(df.groupby('a'))
 
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(df.groupby('a').apply(func),
+    assert_eq(df.groupby('a').apply(func),
               ddf.groupby('a').apply(func))
 
 
@@ -124,18 +125,18 @@ def test_groupby_on_index():
 
     e = d.set_index('a')
     efull = full.set_index('a')
-    assert eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
+    assert_eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
 
     def func(df):
         df.loc[:, 'b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func).set_index('a'),
+    assert_eq(d.groupby('a').apply(func).set_index('a'),
               e.groupby(e.index).apply(func))
-    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
-    assert eq(d.groupby('a').apply(func).set_index('a'),
+    assert_eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert_eq(d.groupby('a').apply(func).set_index('a'),
               full.groupby('a').apply(func).set_index('a'))
-    assert eq(efull.groupby(efull.index).apply(func),
+    assert_eq(efull.groupby(efull.index).apply(func),
               e.groupby(e.index).apply(func))
 
 
@@ -156,11 +157,11 @@ def test_groupby_multilevel_getitem():
     for d, p in cases:
         assert isinstance(d, dd.groupby._GroupBy)
         assert isinstance(p, pd.core.groupby.GroupBy)
-        assert eq(d.sum(), p.sum())
-        assert eq(d.min(), p.min())
-        assert eq(d.max(), p.max())
-        assert eq(d.count(), p.count())
-        assert eq(d.mean(), p.mean().astype(float))
+        assert_eq(d.sum(), p.sum())
+        assert_eq(d.min(), p.min())
+        assert_eq(d.max(), p.max())
+        assert_eq(d.count(), p.count())
+        assert_eq(d.mean(), p.mean().astype(float))
 
 
 def test_groupby_multilevel_agg():
@@ -172,11 +173,11 @@ def test_groupby_multilevel_agg():
 
     sol = df.groupby(['a']).mean()
     res = ddf.groupby(['a']).mean()
-    assert eq(res, sol)
+    assert_eq(res, sol)
 
     sol = df.groupby(['a', 'c']).mean()
     res = ddf.groupby(['a', 'c']).mean()
-    assert eq(res, sol)
+    assert_eq(res, sol)
 
 
 def test_groupby_get_group():
@@ -195,11 +196,11 @@ def test_groupby_get_group():
         ddgrouped = d.groupby(ddkey)
         pdgrouped = full.groupby(pdkey)
         # DataFrame
-        assert eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
-        assert eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+        assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
+        assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
         # Series
-        assert eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
-        assert eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+        assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
+        assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
 def test_dataframe_groupby_nunique():
@@ -208,7 +209,7 @@ def test_dataframe_groupby_nunique():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby('strings')['data'].nunique()
-    assert eq(s.groupby('strings')['data'].nunique(), expected)
+    assert_eq(s.groupby('strings')['data'].nunique(), expected)
 
 
 def test_dataframe_groupby_nunique_across_group_same_value():
@@ -217,7 +218,7 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby('strings')['data'].nunique()
-    assert eq(s.groupby('strings')['data'].nunique(), expected)
+    assert_eq(s.groupby('strings')['data'].nunique(), expected)
 
 
 def test_series_groupby_propagates_names():
@@ -229,7 +230,7 @@ def test_series_groupby_propagates_names():
 
     expected = df.groupby('x').apply(func)
     expected.name = 'y'
-    assert eq(result, expected)
+    assert_eq(result, expected)
 
 
 def test_series_groupby():
@@ -243,11 +244,11 @@ def test_series_groupby():
     dask_group2 = ss.groupby(ss + 1)
 
     for dg, pdg in [(dask_group, pd_group), (pd_group2, dask_group2)]:
-        assert eq(dg.count(), pdg.count())
-        assert eq(dg.sum(), pdg.sum())
-        assert eq(dg.min(), pdg.min())
-        assert eq(dg.max(), pdg.max())
-        assert eq(dg.size(), pdg.size())
+        assert_eq(dg.count(), pdg.count())
+        assert_eq(dg.sum(), pdg.sum())
+        assert_eq(dg.min(), pdg.min())
+        assert_eq(dg.max(), pdg.max())
+        assert_eq(dg.size(), pdg.size())
 
 
 def test_series_groupby_errors():
@@ -273,7 +274,7 @@ def test_series_groupby_errors():
         ss.groupby([])   # dask should raise the same error
 
     sss = dd.from_pandas(s, npartitions=3)
-    assert raises(NotImplementedError, lambda: ss.groupby(sss))
+    pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
 
     with tm.assertRaises(KeyError):
         s.groupby('x')    # pandas
@@ -285,150 +286,197 @@ def test_groupby_index_array():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
 
-    eq(df.A.groupby(df.index.month).nunique(),
-       ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
+    assert_eq(df.A.groupby(df.index.month).nunique(),
+              ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
 
 
 def test_groupby_set_index():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
-    assert raises(NotImplementedError,
+    pytest.raises(NotImplementedError,
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
 def test_split_apply_combine_on_series():
-    pdf1 = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
-                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
-                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
-    ddf = dd.from_pandas(pdf1, npartitions=3)
-    ddf1 = ddf
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
+                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(pdf, npartitions=3)
 
-    for ddkey, pdkey in [('b', 'b'), (ddf1.b, pdf1.b),
-                         (ddf1.b + 1, pdf1.b + 1)]:
-        assert eq(ddf1.groupby(ddkey).a.min(), pdf1.groupby(pdkey).a.min())
-        assert eq(ddf1.groupby(ddkey).a.max(), pdf1.groupby(pdkey).a.max())
-        assert eq(ddf1.groupby(ddkey).a.count(), pdf1.groupby(pdkey).a.count())
-        assert eq(ddf1.groupby(ddkey).a.mean(), pdf1.groupby(pdkey).a.mean())
-        assert eq(ddf1.groupby(ddkey).a.nunique(), pdf1.groupby(pdkey).a.nunique())
-        assert eq(ddf1.groupby(ddkey).a.size(), pdf1.groupby(pdkey).a.size())
+    for ddkey, pdkey in [('b', 'b'), (ddf.b, pdf.b), (ddf.b + 1, pdf.b + 1)]:
+        assert_eq(ddf.groupby(ddkey).a.min(), pdf.groupby(pdkey).a.min())
+        assert_eq(ddf.groupby(ddkey).a.max(), pdf.groupby(pdkey).a.max())
+        assert_eq(ddf.groupby(ddkey).a.count(), pdf.groupby(pdkey).a.count())
+        assert_eq(ddf.groupby(ddkey).a.mean(), pdf.groupby(pdkey).a.mean())
+        assert_eq(ddf.groupby(ddkey).a.nunique(), pdf.groupby(pdkey).a.nunique())
+        assert_eq(ddf.groupby(ddkey).a.size(), pdf.groupby(pdkey).a.size())
         for ddof in [0, 1, 2]:
-            assert eq(ddf1.groupby(ddkey).a.var(ddof),
-                      pdf1.groupby(pdkey).a.var(ddof))
-            assert eq(ddf1.groupby(ddkey).a.std(ddof),
-                      pdf1.groupby(pdkey).a.std(ddof))
+            assert_eq(ddf.groupby(ddkey).a.var(ddof),
+                      pdf.groupby(pdkey).a.var(ddof))
+            assert_eq(ddf.groupby(ddkey).a.std(ddof),
+                      pdf.groupby(pdkey).a.std(ddof))
 
-        assert eq(ddf1.groupby(ddkey).sum(), pdf1.groupby(pdkey).sum())
-        assert eq(ddf1.groupby(ddkey).min(), pdf1.groupby(pdkey).min())
-        assert eq(ddf1.groupby(ddkey).max(), pdf1.groupby(pdkey).max())
-        assert eq(ddf1.groupby(ddkey).count(), pdf1.groupby(pdkey).count())
-        assert eq(ddf1.groupby(ddkey).mean(), pdf1.groupby(pdkey).mean())
-        assert eq(ddf1.groupby(ddkey).size(), pdf1.groupby(pdkey).size())
+        assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
+        assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
+        assert_eq(ddf.groupby(ddkey).max(), pdf.groupby(pdkey).max())
+        assert_eq(ddf.groupby(ddkey).count(), pdf.groupby(pdkey).count())
+        assert_eq(ddf.groupby(ddkey).mean(), pdf.groupby(pdkey).mean())
+        assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
         for ddof in [0, 1, 2]:
-            assert eq(ddf1.groupby(ddkey).var(ddof),
-                      pdf1.groupby(pdkey).var(ddof), check_dtype=False)
-            assert eq(ddf1.groupby(ddkey).std(ddof),
-                      pdf1.groupby(pdkey).std(ddof), check_dtype=False)
+            assert_eq(ddf.groupby(ddkey).var(ddof),
+                      pdf.groupby(pdkey).var(ddof), check_dtype=False)
+            assert_eq(ddf.groupby(ddkey).std(ddof),
+                      pdf.groupby(pdkey).std(ddof), check_dtype=False)
 
-    for ddkey, pdkey in [(ddf1.b, pdf1.b), (ddf1.b + 1, pdf1.b + 1)]:
-        assert eq(ddf1.a.groupby(ddkey).sum(), pdf1.a.groupby(pdkey).sum(), check_names=False)
-        assert eq(ddf1.a.groupby(ddkey).max(), pdf1.a.groupby(pdkey).max(), check_names=False)
-        assert eq(ddf1.a.groupby(ddkey).count(), pdf1.a.groupby(pdkey).count(), check_names=False)
-        assert eq(ddf1.a.groupby(ddkey).mean(), pdf1.a.groupby(pdkey).mean(), check_names=False)
-        assert eq(ddf1.a.groupby(ddkey).nunique(), pdf1.a.groupby(pdkey).nunique(), check_names=False)
+    for ddkey, pdkey in [(ddf.b, pdf.b), (ddf.b + 1, pdf.b + 1)]:
+        assert_eq(ddf.a.groupby(ddkey).sum(), pdf.a.groupby(pdkey).sum(), check_names=False)
+        assert_eq(ddf.a.groupby(ddkey).max(), pdf.a.groupby(pdkey).max(), check_names=False)
+        assert_eq(ddf.a.groupby(ddkey).count(), pdf.a.groupby(pdkey).count(), check_names=False)
+        assert_eq(ddf.a.groupby(ddkey).mean(), pdf.a.groupby(pdkey).mean(), check_names=False)
+        assert_eq(ddf.a.groupby(ddkey).nunique(), pdf.a.groupby(pdkey).nunique(), check_names=False)
         for ddof in [0, 1, 2]:
-            assert eq(ddf1.a.groupby(ddkey).var(ddof),
-                      pdf1.a.groupby(pdkey).var(ddof))
-            assert eq(ddf1.a.groupby(ddkey).std(ddof),
-                      pdf1.a.groupby(pdkey).std(ddof))
+            assert_eq(ddf.a.groupby(ddkey).var(ddof),
+                      pdf.a.groupby(pdkey).var(ddof))
+            assert_eq(ddf.a.groupby(ddkey).std(ddof),
+                      pdf.a.groupby(pdkey).std(ddof))
 
-    for i in range(8):
-        assert eq(ddf1.groupby(ddf1.b > i).a.sum(), pdf1.groupby(pdf1.b > i).a.sum())
-        assert eq(ddf1.groupby(ddf1.b > i).a.min(), pdf1.groupby(pdf1.b > i).a.min())
-        assert eq(ddf1.groupby(ddf1.b > i).a.max(), pdf1.groupby(pdf1.b > i).a.max())
-        assert eq(ddf1.groupby(ddf1.b > i).a.count(), pdf1.groupby(pdf1.b > i).a.count())
-        assert eq(ddf1.groupby(ddf1.b > i).a.mean(), pdf1.groupby(pdf1.b > i).a.mean())
-        assert eq(ddf1.groupby(ddf1.b > i).a.nunique(), pdf1.groupby(pdf1.b > i).a.nunique())
-        assert eq(ddf1.groupby(ddf1.b > i).a.size(), pdf1.groupby(pdf1.b > i).a.size())
+    for i in [0, 4, 7]:
+        assert_eq(ddf.groupby(ddf.b > i).a.sum(), pdf.groupby(pdf.b > i).a.sum())
+        assert_eq(ddf.groupby(ddf.b > i).a.min(), pdf.groupby(pdf.b > i).a.min())
+        assert_eq(ddf.groupby(ddf.b > i).a.max(), pdf.groupby(pdf.b > i).a.max())
+        assert_eq(ddf.groupby(ddf.b > i).a.count(), pdf.groupby(pdf.b > i).a.count())
+        assert_eq(ddf.groupby(ddf.b > i).a.mean(), pdf.groupby(pdf.b > i).a.mean())
+        assert_eq(ddf.groupby(ddf.b > i).a.nunique(), pdf.groupby(pdf.b > i).a.nunique())
+        assert_eq(ddf.groupby(ddf.b > i).a.size(), pdf.groupby(pdf.b > i).a.size())
 
-        assert eq(ddf1.groupby(ddf1.a > i).b.sum(), pdf1.groupby(pdf1.a > i).b.sum())
-        assert eq(ddf1.groupby(ddf1.a > i).b.min(), pdf1.groupby(pdf1.a > i).b.min())
-        assert eq(ddf1.groupby(ddf1.a > i).b.max(), pdf1.groupby(pdf1.a > i).b.max())
-        assert eq(ddf1.groupby(ddf1.a > i).b.count(), pdf1.groupby(pdf1.a > i).b.count())
-        assert eq(ddf1.groupby(ddf1.a > i).b.mean(), pdf1.groupby(pdf1.a > i).b.mean())
-        assert eq(ddf1.groupby(ddf1.a > i).b.nunique(), pdf1.groupby(pdf1.a > i).b.nunique())
-        assert eq(ddf1.groupby(ddf1.b > i).b.size(), pdf1.groupby(pdf1.b > i).b.size())
+        assert_eq(ddf.groupby(ddf.a > i).b.sum(), pdf.groupby(pdf.a > i).b.sum())
+        assert_eq(ddf.groupby(ddf.a > i).b.min(), pdf.groupby(pdf.a > i).b.min())
+        assert_eq(ddf.groupby(ddf.a > i).b.max(), pdf.groupby(pdf.a > i).b.max())
+        assert_eq(ddf.groupby(ddf.a > i).b.count(), pdf.groupby(pdf.a > i).b.count())
+        assert_eq(ddf.groupby(ddf.a > i).b.mean(), pdf.groupby(pdf.a > i).b.mean())
+        assert_eq(ddf.groupby(ddf.a > i).b.nunique(), pdf.groupby(pdf.a > i).b.nunique())
+        assert_eq(ddf.groupby(ddf.b > i).b.size(), pdf.groupby(pdf.b > i).b.size())
 
-        assert eq(ddf1.groupby(ddf1.b > i).sum(), pdf1.groupby(pdf1.b > i).sum())
-        assert eq(ddf1.groupby(ddf1.b > i).min(), pdf1.groupby(pdf1.b > i).min())
-        assert eq(ddf1.groupby(ddf1.b > i).max(), pdf1.groupby(pdf1.b > i).max())
-        assert eq(ddf1.groupby(ddf1.b > i).count(), pdf1.groupby(pdf1.b > i).count())
-        assert eq(ddf1.groupby(ddf1.b > i).mean(), pdf1.groupby(pdf1.b > i).mean())
-        assert eq(ddf1.groupby(ddf1.b > i).size(), pdf1.groupby(pdf1.b > i).size())
+        assert_eq(ddf.groupby(ddf.b > i).sum(), pdf.groupby(pdf.b > i).sum())
+        assert_eq(ddf.groupby(ddf.b > i).min(), pdf.groupby(pdf.b > i).min())
+        assert_eq(ddf.groupby(ddf.b > i).max(), pdf.groupby(pdf.b > i).max())
+        assert_eq(ddf.groupby(ddf.b > i).count(), pdf.groupby(pdf.b > i).count())
+        assert_eq(ddf.groupby(ddf.b > i).mean(), pdf.groupby(pdf.b > i).mean())
+        assert_eq(ddf.groupby(ddf.b > i).size(), pdf.groupby(pdf.b > i).size())
 
-        assert eq(ddf1.groupby(ddf1.a > i).sum(), pdf1.groupby(pdf1.a > i).sum())
-        assert eq(ddf1.groupby(ddf1.a > i).min(), pdf1.groupby(pdf1.a > i).min())
-        assert eq(ddf1.groupby(ddf1.a > i).max(), pdf1.groupby(pdf1.a > i).max())
-        assert eq(ddf1.groupby(ddf1.a > i).count(), pdf1.groupby(pdf1.a > i).count())
-        assert eq(ddf1.groupby(ddf1.a > i).mean(), pdf1.groupby(pdf1.a > i).mean())
-        assert eq(ddf1.groupby(ddf1.a > i).size(), pdf1.groupby(pdf1.a > i).size())
+        assert_eq(ddf.groupby(ddf.a > i).sum(), pdf.groupby(pdf.a > i).sum())
+        assert_eq(ddf.groupby(ddf.a > i).min(), pdf.groupby(pdf.a > i).min())
+        assert_eq(ddf.groupby(ddf.a > i).max(), pdf.groupby(pdf.a > i).max())
+        assert_eq(ddf.groupby(ddf.a > i).count(), pdf.groupby(pdf.a > i).count())
+        assert_eq(ddf.groupby(ddf.a > i).mean(), pdf.groupby(pdf.a > i).mean())
+        assert_eq(ddf.groupby(ddf.a > i).size(), pdf.groupby(pdf.a > i).size())
 
         for ddof in [0, 1, 2]:
-            assert eq(ddf1.groupby(ddf1.b > i).std(ddof),
-                      pdf1.groupby(pdf1.b > i).std(ddof))
+            assert_eq(ddf.groupby(ddf.b > i).std(ddof),
+                      pdf.groupby(pdf.b > i).std(ddof))
 
-    for ddkey, pdkey in [('a', 'a'), (ddf1.a, pdf1.a),
-                         (ddf1.a + 1, pdf1.a + 1), (ddf1.a > 3, pdf1.a > 3)]:
-        assert eq(ddf1.groupby(ddkey).b.sum(), pdf1.groupby(pdkey).b.sum())
-        assert eq(ddf1.groupby(ddkey).b.min(), pdf1.groupby(pdkey).b.min())
-        assert eq(ddf1.groupby(ddkey).b.max(), pdf1.groupby(pdkey).b.max())
-        assert eq(ddf1.groupby(ddkey).b.count(), pdf1.groupby(pdkey).b.count())
-        assert eq(ddf1.groupby(ddkey).b.mean(), pdf1.groupby(pdkey).b.mean())
-        assert eq(ddf1.groupby(ddkey).b.nunique(), pdf1.groupby(pdkey).b.nunique())
-        assert eq(ddf1.groupby(ddkey).b.size(), pdf1.groupby(pdkey).b.size())
+    for ddkey, pdkey in [('a', 'a'), (ddf.a, pdf.a),
+                         (ddf.a + 1, pdf.a + 1), (ddf.a > 3, pdf.a > 3)]:
+        assert_eq(ddf.groupby(ddkey).b.sum(), pdf.groupby(pdkey).b.sum())
+        assert_eq(ddf.groupby(ddkey).b.min(), pdf.groupby(pdkey).b.min())
+        assert_eq(ddf.groupby(ddkey).b.max(), pdf.groupby(pdkey).b.max())
+        assert_eq(ddf.groupby(ddkey).b.count(), pdf.groupby(pdkey).b.count())
+        assert_eq(ddf.groupby(ddkey).b.mean(), pdf.groupby(pdkey).b.mean())
+        assert_eq(ddf.groupby(ddkey).b.nunique(), pdf.groupby(pdkey).b.nunique())
+        assert_eq(ddf.groupby(ddkey).b.size(), pdf.groupby(pdkey).b.size())
 
-        assert eq(ddf1.groupby(ddkey).sum(), pdf1.groupby(pdkey).sum())
-        assert eq(ddf1.groupby(ddkey).min(), pdf1.groupby(pdkey).min())
-        assert eq(ddf1.groupby(ddkey).max(), pdf1.groupby(pdkey).max())
-        assert eq(ddf1.groupby(ddkey).count(), pdf1.groupby(pdkey).count())
-        assert eq(ddf1.groupby(ddkey).mean(), pdf1.groupby(pdkey).mean().astype(float))
-        assert eq(ddf1.groupby(ddkey).size(), pdf1.groupby(pdkey).size())
+        assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
+        assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
+        assert_eq(ddf.groupby(ddkey).max(), pdf.groupby(pdkey).max())
+        assert_eq(ddf.groupby(ddkey).count(), pdf.groupby(pdkey).count())
+        assert_eq(ddf.groupby(ddkey).mean(), pdf.groupby(pdkey).mean().astype(float))
+        assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
 
         for ddof in [0, 1, 2]:
-            assert eq(ddf1.groupby(ddkey).b.std(ddof),
-                      pdf1.groupby(pdkey).b.std(ddof))
+            assert_eq(ddf.groupby(ddkey).b.std(ddof),
+                      pdf.groupby(pdkey).b.std(ddof))
 
-    assert (sorted(ddf1.groupby('b').a.sum().dask) ==
-            sorted(ddf1.groupby('b').a.sum().dask))
-    assert (sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask) ==
-            sorted(ddf1.groupby(ddf1.a > 3).b.mean().dask))
+    assert (sorted(ddf.groupby('b').a.sum().dask) ==
+            sorted(ddf.groupby('b').a.sum().dask))
+    assert (sorted(ddf.groupby(ddf.a > 3).b.mean().dask) ==
+            sorted(ddf.groupby(ddf.a > 3).b.mean().dask))
 
     # test raises with incorrect key
-    assert raises(KeyError, lambda: ddf1.groupby('x'))
-    assert raises(KeyError, lambda: ddf1.groupby(['a', 'x']))
-    assert raises(KeyError, lambda: ddf1.groupby('a')['x'])
-    assert raises(KeyError, lambda: ddf1.groupby('a')['b', 'x'])
-    assert raises(KeyError, lambda: ddf1.groupby('a')[['b', 'x']])
+    pytest.raises(KeyError, lambda: ddf.groupby('x'))
+    pytest.raises(KeyError, lambda: ddf.groupby(['a', 'x']))
+    pytest.raises(KeyError, lambda: ddf.groupby('a')['x'])
+    pytest.raises(KeyError, lambda: ddf.groupby('a')['b', 'x'])
+    pytest.raises(KeyError, lambda: ddf.groupby('a')[['b', 'x']])
 
     # test graph node labels
-    assert_dask_graph(ddf1.groupby('b').a.sum(), 'series-groupby-sum')
-    assert_dask_graph(ddf1.groupby('b').a.min(), 'series-groupby-min')
-    assert_dask_graph(ddf1.groupby('b').a.max(), 'series-groupby-max')
-    assert_dask_graph(ddf1.groupby('b').a.count(), 'series-groupby-count')
-    assert_dask_graph(ddf1.groupby('b').a.var(), 'series-groupby-var')
+    assert_dask_graph(ddf.groupby('b').a.sum(), 'series-groupby-sum')
+    assert_dask_graph(ddf.groupby('b').a.min(), 'series-groupby-min')
+    assert_dask_graph(ddf.groupby('b').a.max(), 'series-groupby-max')
+    assert_dask_graph(ddf.groupby('b').a.count(), 'series-groupby-count')
+    assert_dask_graph(ddf.groupby('b').a.var(), 'series-groupby-var')
     # mean consists from sum and count operations
-    assert_dask_graph(ddf1.groupby('b').a.mean(), 'series-groupby-sum')
-    assert_dask_graph(ddf1.groupby('b').a.mean(), 'series-groupby-count')
-    assert_dask_graph(ddf1.groupby('b').a.nunique(), 'series-groupby-nunique')
-    assert_dask_graph(ddf1.groupby('b').a.size(), 'series-groupby-size')
+    assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-sum')
+    assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-count')
+    assert_dask_graph(ddf.groupby('b').a.nunique(), 'series-groupby-nunique')
+    assert_dask_graph(ddf.groupby('b').a.size(), 'series-groupby-size')
 
-    assert_dask_graph(ddf1.groupby('b').sum(), 'dataframe-groupby-sum')
-    assert_dask_graph(ddf1.groupby('b').min(), 'dataframe-groupby-min')
-    assert_dask_graph(ddf1.groupby('b').max(), 'dataframe-groupby-max')
-    assert_dask_graph(ddf1.groupby('b').count(), 'dataframe-groupby-count')
+    assert_dask_graph(ddf.groupby('b').sum(), 'dataframe-groupby-sum')
+    assert_dask_graph(ddf.groupby('b').min(), 'dataframe-groupby-min')
+    assert_dask_graph(ddf.groupby('b').max(), 'dataframe-groupby-max')
+    assert_dask_graph(ddf.groupby('b').count(), 'dataframe-groupby-count')
     # mean consists from sum and count operations
-    assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-sum')
-    assert_dask_graph(ddf1.groupby('b').mean(), 'dataframe-groupby-count')
-    assert_dask_graph(ddf1.groupby('b').size(), 'dataframe-groupby-size')
+    assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-sum')
+    assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-count')
+    assert_dask_graph(ddf.groupby('b').size(), 'dataframe-groupby-size')
+
+
+def test_groupby_reduction_split_every():
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100})
+    ddf = dd.from_pandas(pdf, npartitions=15)
+
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    # DataFrame
+    for m in ['sum', 'min', 'max', 'count', 'mean', 'size', 'var', 'std']:
+        res = call(ddf.groupby('b'), m, split_every=2)
+        sol = call(pdf.groupby('b'), m)
+        assert_eq(res, sol)
+        assert call(ddf.groupby('b'), m)._name != res._name
+
+    res = call(ddf.groupby('b'), 'var', split_every=2, ddof=2)
+    sol = call(pdf.groupby('b'), 'var', ddof=2)
+    assert_eq(res, sol)
+    assert call(ddf.groupby('b'), 'var', ddof=2)._name != res._name
+
+    # Series, post select
+    for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
+              'var', 'std']:
+        res = call(ddf.groupby('b').a, m, split_every=2)
+        sol = call(pdf.groupby('b').a, m)
+        assert_eq(res, sol)
+        assert call(ddf.groupby('b').a, m)._name != res._name
+
+    res = call(ddf.groupby('b').a, 'var', split_every=2, ddof=2)
+    sol = call(pdf.groupby('b').a, 'var', ddof=2)
+    assert_eq(res, sol)
+    assert call(ddf.groupby('b').a, 'var', ddof=2)._name != res._name
+
+    # Series, pre select
+    for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
+              'var', 'std']:
+        res = call(ddf.a.groupby(ddf.b), m, split_every=2)
+        sol = call(pdf.a.groupby(pdf.b), m)
+        # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
+        # not forwarding the series name. Skip name checks here for now.
+        assert_eq(res, sol, check_names=False)
+        assert call(ddf.a.groupby(ddf.b), m)._name != res._name
+
+    res = call(ddf.a.groupby(ddf.b), 'var', split_every=2, ddof=2)
+    sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
+    assert_eq(res, sol)
+    assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
 
 
 def test_apply_shuffle():
@@ -438,33 +486,33 @@ def test_apply_shuffle():
                         'D': np.random.randn(20)})
     ddf = dd.from_pandas(pdf, 3)
 
-    assert eq(ddf.groupby('A').apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby('A').apply(lambda x: x.sum()),
               pdf.groupby('A').apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A']).apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A']).apply(lambda x: x.sum()),
               pdf.groupby(pdf['A']).apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
 
     # SeriesGroupBy
-    assert eq(ddf.groupby('A')['B'].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby('A')['B'].apply(lambda x: x.sum()),
               pdf.groupby('A')['B'].apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A'])['B'].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A'])['B'].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'])['B'].apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
 
     # DataFrameGroupBy with column slice
-    assert eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
               pdf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A'])[['B', 'C']].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A'])[['B', 'C']].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'])[['B', 'C']].apply(lambda x: x.sum()))
 
-    assert eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
+    assert_eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
               pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
 
 
@@ -474,8 +522,9 @@ def test_numeric_column_names():
     df = pd.DataFrame({0: [0, 1, 0, 1],
                        1: [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
-    eq(ddf.groupby(0).sum(), df.groupby(0).sum())
-    eq(ddf.groupby(0).apply(lambda x: x), df.groupby(0).apply(lambda x: x))
+    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    assert_eq(ddf.groupby(0).apply(lambda x: x),
+              df.groupby(0).apply(lambda x: x))
 
 
 def test_groupby_apply_tasks():
@@ -488,12 +537,12 @@ def test_groupby_apply_tasks():
         for ind in [lambda x: 'A', lambda x: x.A]:
             a = df.groupby(ind(df)).apply(len)
             b = ddf.groupby(ind(ddf)).apply(len)
-            assert eq(a, b.compute())
+            assert_eq(a, b.compute())
             assert not any('partd' in k[0] for k in b.dask)
 
             a = df.groupby(ind(df)).B.apply(len)
             b = ddf.groupby(ind(ddf)).B.apply(len)
-            assert eq(a, b.compute())
+            assert_eq(a, b.compute())
             assert not any('partd' in k[0] for k in b.dask)
 
 
@@ -503,5 +552,5 @@ def test_groupby_multiprocessing():
                        'B': ['1','1','a','a','a']})
     ddf = dd.from_pandas(df, npartitions=3)
     with dask.set_options(get=get):
-        assert eq(ddf.groupby('B').apply(lambda x: x),
+        assert_eq(ddf.groupby('B').apply(lambda x: x),
                   df.groupby('B').apply(lambda x: x))
