@@ -10,7 +10,7 @@ from .. import core
 from ..utils import skip_doctest
 
 
-def _array_wrap(numpy_ufunc, x, *args, **kwargs):
+def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
     return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
 
 
@@ -20,7 +20,8 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(x, *args, **kwargs):
         if hasattr(x, '_elemwise'):
             if array_wrap:
-                return x._elemwise(_array_wrap, numpy_ufunc, x, *args, **kwargs)
+                return x._elemwise(__array_wrap__, numpy_ufunc,
+                                   x, *args, **kwargs)
             else:
                 return x._elemwise(numpy_ufunc, x, *args, **kwargs)
         else:
@@ -121,7 +122,7 @@ def frexp(x):
                 for key in core.flatten(tmp._keys()))
 
     if x._dtype is not None:
-        a = np.empty((1,), dtype=x._dtype)
+        a = np.empty((1, ), dtype=x._dtype)
         l, r = np.frexp(a)
         ldt = l.dtype
         rdt = r.dtype
@@ -130,12 +131,10 @@ def frexp(x):
         rdt = None
 
     L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks, dtype=ldt)
-
     R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
-
     return L, R
 
-frexp.__doc__ = np.frexp
+frexp.__doc__ = np.frexp.__doc__
 
 
 def modf(x):
@@ -162,4 +161,4 @@ def modf(x):
 
     return L, R
 
-modf.__doc__ = np.modf
+modf.__doc__ = np.modf.__doc__

@@ -1614,7 +1614,10 @@ class Series(_Frame):
                                    right=right, inclusive=inclusive)
 
     @derived_from(pd.Series)
-    def clip(self, lower=None, upper=None):
+    def clip(self, lower=None, upper=None, out=None):
+        if out is not None:
+            raise ValueError("'out' must be None")
+        # np.clip may pass out
         return self.map_partitions(M.clip, lower=lower, upper=upper)
 
     @derived_from(pd.Series)
@@ -2105,7 +2108,9 @@ class DataFrame(_Frame):
         return self.map_partitions(M.dropna, how=how, subset=subset)
 
     @derived_from(pd.DataFrame)
-    def clip(self, lower=None, upper=None):
+    def clip(self, lower=None, upper=None, out=None):
+        if out is not None:
+            raise ValueError("'out' must be None")
         return self.map_partitions(M.clip, lower=lower, upper=upper)
 
     @derived_from(pd.DataFrame)
