@@ -890,10 +890,11 @@ class SeriesGroupBy(_GroupBy):
                 if isinstance(index, list):
                     if len(index) == 0:
                         raise ValueError("No group keys passed!")
-                    msg = "Grouper for '{0}' not 1-dimensional"
-                    raise ValueError(msg.format(index[0]))
+                    #msg = "Grouper for '{0}' not 1-dimensional"
+                    #raise ValueError(msg.format(index[0]))
                 # raise error from pandas
-                df._meta.groupby(index)
+                else:
+                    df._meta.groupby(index)
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 

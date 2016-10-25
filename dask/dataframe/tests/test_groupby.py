@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import pytest
+
 import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
@@ -109,6 +111,28 @@ def test_full_groupby():
               ddf.groupby('a').apply(func))
 
 
+@pytest.mark.parametrize('grouper', [
+    lambda df: ['a'],
+    lambda df: ['a', 'b'],
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    pytest.mark.xfail(reason="not yet supported")(lambda df: [df['a'] > 2, df['b'] > 1])
+])
+def test_full_groupby_multilevel(grouper):
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'd': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    def func(df):
+        df['b'] = df.b - df.b.mean()
+        return df
+
+    assert_eq(df.groupby(grouper(df)).apply(func),
+              ddf.groupby(grouper(ddf)).apply(func))
+
+
 def test_groupby_dir():
     df = pd.DataFrame({'a': range(10), 'b c d e': range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -150,6 +174,7 @@ def test_groupby_multilevel_getitem():
     cases = [(ddf.groupby('a')['b'], df.groupby('a')['b']),
              (ddf.groupby(['a', 'b']), df.groupby(['a', 'b'])),
              (ddf.groupby(['a', 'b'])['c'], df.groupby(['a', 'b'])['c']),
+             (ddf.groupby(ddf['a'])[['b', 'c']], df.groupby(df['a'])[['b', 'c']]),
              (ddf.groupby('a')[['b', 'c']], df.groupby('a')[['b', 'c']]),
              (ddf.groupby('a')[['b']], df.groupby('a')[['b']]),
              (ddf.groupby(['a', 'b', 'c']), df.groupby(['a', 'b', 'c']))]
@@ -177,6 +202,10 @@ def test_groupby_multilevel_agg():
 
     sol = df.groupby(['a', 'c']).mean()
     res = ddf.groupby(['a', 'c']).mean()
+    assert_eq(res, sol)
+
+    sol = df.groupby([df['a'], df['c']]).mean()
+    res = ddf.groupby([ddf['a'], ddf['c']]).mean()
     assert_eq(res, sol)
 
 
@@ -255,17 +284,6 @@ def test_series_groupby_errors():
     s = pd.Series([1, 2, 2, 1, 1])
 
     ss = dd.from_pandas(s, npartitions=2)
-
-    msg = "Grouper for '1' not 1-dimensional"
-    with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([1, 2])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([1, 2])   # dask should raise the same error
-    msg = "Grouper for '2' not 1-dimensional"
-    with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([2])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([2])   # dask should raise the same error
 
     msg = "No group keys passed!"
     with tm.assertRaisesRegexp(ValueError, msg):
@@ -516,13 +534,44 @@ def test_apply_shuffle():
               pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
 
 
+@pytest.mark.parametrize('grouper', [
+    lambda df: 'AA',
+    lambda df: ['AA', 'AB'],
+    lambda df: df['AA'],
+    lambda df: [df['AA'], df['AB']],
+    lambda df: df['AA'] + 1,
+    pytest.mark.xfail("NotImplemented")(lambda df: [df['AA'] + 1, df['AB'] + 1]),
+])
+def test_apply_shuffle_multilevel(grouper):
+    pdf = pd.DataFrame({'AB': [1, 2, 3, 4] * 5,
+                        'AA': [1, 2, 3, 4] * 5,
+                        'B': np.random.randn(20),
+                        'C': np.random.randn(20),
+                        'D': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 3)
+
+    # DataFrameGroupBy
+    assert_eq(ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()))
+
+    # SeriesGroupBy
+    assert_eq(ddf.groupby(grouper(ddf))['B'].apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf))['B'].apply(lambda x: x.sum()))
+
+    # DataFrameGroupBy with column slice
+    assert_eq(ddf.groupby(grouper(ddf))[['B', 'C']].apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf))[['B', 'C']].apply(lambda x: x.sum()))
+
+
 def test_numeric_column_names():
     # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1],
-                       1: [1, 2, 3, 4]})
+                       1: [1, 2, 3, 4],
+                       2: [0, 1, 0, 1],})
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
     assert_eq(ddf.groupby(0).apply(lambda x: x),
               df.groupby(0).apply(lambda x: x))
 
@@ -722,9 +771,54 @@ def test_aggregate__dask():
             assert len(other.dask) == len(result2.dask)
 
 
-@pytest.mark.parametrize('agg_func', ['sum', 'var', 'mean', 'count', 'size',
-                                      'std', 'nunique', 'min', 'max'])
-def test_aggregations_multilevel(agg_func):
+@pytest.mark.parametrize('agg_func', [
+    'sum', 'var', 'mean', 'count', 'size', 'std', 'nunique', 'min', 'max'
+])
+@pytest.mark.parametrize('grouper', [
+    lambda df: ['a'],
+    lambda df: ['a', 'b'],
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2, df['b'] > 1]
+])
+def test_dataframe_aggregations_multilevel(grouper, agg_func):
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'd': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
+              call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
+
+    # not supported by pandas
+    if agg_func != 'nunique':
+        assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
+                  call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
+
+        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+
+
+@pytest.mark.parametrize('agg_func', [
+    'sum', 'var', 'mean', 'count', 'size', 'std', 'min', 'max',
+    pytest.mark.xfail(reason="nunique is not yet propery supported")('nunique'),
+])
+@pytest.mark.parametrize('grouper', [
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2, df['b'] > 1]
+])
+def test_series_aggregations_multilevel(grouper, agg_func):
+    """
+    similar to ``test_dataframe_aggregations_multilevel``, but series do not
+    support all groupby args.
+    """
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -735,17 +829,5 @@ def test_aggregations_multilevel(agg_func):
 
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-    assert_eq(call(pdf.groupby(['a', 'b'])['c'], agg_func),
-              call(ddf.groupby(['a', 'b'])['c'], agg_func, split_every=2))
-
-    assert_eq(call(pdf.groupby(['a'])['c'], agg_func),
-              call(ddf.groupby(['a'])['c'], agg_func))
-
-    assert_eq(call(pdf.groupby(pdf['a'])['c'], agg_func),
-              call(ddf.groupby(ddf['a'])['c'], agg_func))
-
-    assert_eq(call(pdf.groupby([pdf['a'], pdf['b']])['c'], agg_func),
-              call(ddf.groupby([ddf['a'], ddf['b']])['c'], agg_func))
-
-    assert_eq(call(pdf.groupby([pdf['a'] > 2, pdf['b'] > 1])['c'], agg_func),
-              call(ddf.groupby([ddf['a'] > 2, ddf['b'] > 1])['c'], agg_func))
+    assert_eq(call(pdf['c'].groupby(grouper(pdf)), agg_func),
+              call(ddf['c'].groupby(grouper(ddf)), agg_func, split_every=2))
