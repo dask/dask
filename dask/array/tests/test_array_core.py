@@ -2336,3 +2336,13 @@ def test_optimize_fuse_keys():
 
     dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
     assert all(k in dsk for k in y._keys())
+
+
+def test_round():
+    x = np.random.random(10)
+    d = da.from_array(x, chunks=4)
+
+    for i in (0, 1, 4, 5):
+        assert_eq(x.round(i), d.round(i))
+
+    assert_eq(d.round(2), da.round(d, 2))

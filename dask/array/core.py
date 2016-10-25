@@ -1561,6 +1561,10 @@ class Array(Base):
     def swapaxes(self, axis1, axis2):
         return swapaxes(self, axis1, axis2)
 
+    @wraps(np.round)
+    def round(self, decimals=0):
+        return round(self, decimals=decimals)
+
     def copy(self):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
@@ -3673,6 +3677,11 @@ def from_npy_stack(dirname, mmap_mode='r'):
 
 def _astype(x, dtype, **kwargs):
     return x.astype(dtype, **kwargs)
+
+
+@wraps(np.round)
+def round(a, decimals=0):
+    return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
 @wraps(np.swapaxes)

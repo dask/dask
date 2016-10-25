@@ -117,6 +117,7 @@ Top level user functions:
    rechunk
    reshape
    rint
+   round
    sign
    signbit
    sin
