@@ -830,4 +830,7 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     ddf = dd.from_pandas(pdf, npartitions=10)
 
     assert_eq(call(pdf['c'].groupby(grouper(pdf)), agg_func),
-              call(ddf['c'].groupby(grouper(ddf)), agg_func, split_every=2))
+              call(ddf['c'].groupby(grouper(ddf)), agg_func, split_every=2),
+              # for pandas ~ 0.18, the name is not not properly propagated for
+              # the mean aggregation
+              check_names=(agg_func != 'mean'))
