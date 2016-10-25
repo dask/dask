@@ -601,6 +601,33 @@ def test_aggregate__examples(spec, split_every, grouper):
 
 
 @pytest.mark.parametrize('spec', [
+    {'b': 'sum', 'c': 'min', 'd': 'max'},
+    ['sum'],
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+    'sum', 'size',
+])
+@pytest.mark.parametrize('split_every', [False, None])
+@pytest.mark.parametrize('grouper', [
+    pytest.mark.xfail(reason="Grouper for '{0}' not 1-dimensional")(lambda df: [df['a'], df['d']]),
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+])
+def test_series_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+    ps = pdf['c']
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    ds = ddf['c']
+
+    assert_eq(ps.groupby(grouper(pdf)).agg(spec),
+              ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+
+
+@pytest.mark.parametrize('spec', [
     'sum', 'min', 'max', 'count', 'size',
     'std', # NOTE: for std the result is not recast ot the original dtype
     pytest.mark.xfail(reason="pandas recast to original type")('var'),
@@ -644,32 +671,6 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 
     assert len(no_mean_finalizers) == len(no_mean_spec)
     assert len(with_mean_finalizers) == len(with_mean_spec)
-
-
-def test_aggregate__make_agg_id_factory():
-    from dask.dataframe.groupby import _make_agg_id_factory
-
-    factory = _make_agg_id_factory()
-
-    # the initial id depends on the order
-    assert factory('sum', 'a') == '0-sum-a'
-    assert factory('sum', 'a') == '0-sum-a'
-    assert factory('sum', 'b') == '1-sum-b'
-    assert factory('sum', 'a') == '0-sum-a'
-    assert factory('sum', 'b') == '1-sum-b'
-    assert factory('sum', 'c') == '2-sum-c'
-
-    # factories are independent
-    factory = _make_agg_id_factory()
-    assert factory('sum', 'c') == '0-sum-c'
-    assert factory('sum', 'a') == '1-sum-a'
-    assert factory('sum', 'b') == '2-sum-b'
-    assert factory('sum', 'a') == '1-sum-a'
-    assert factory('sum', 'b') == '2-sum-b'
-    assert factory('sum', 'c') == '0-sum-c'
-
-    # it can also handle tuple column names
-    assert factory('sum', ('foo', 'bar')) == '3-sum-(\'foo\', \'bar\')'
 
 
 def test_aggregate__dask():

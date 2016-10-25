@@ -11,6 +11,7 @@ import pandas as pd
 from .core import DataFrame, Series, aca, map_partitions, no_default
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
+from ..base import tokenize
 from ..utils import derived_from, M, funcname
 
 
@@ -149,29 +150,8 @@ def _nunique_series_aggregate(df):
 # In Step 1 and 3 the dataframe is grouped on the same columns.
 #
 ###############################################################
-
-def _make_agg_id_factory():
-    """
-    Return a factory for ids in the aggregate graph.
-
-    Keys are built from the function, the column to apply the function to, and
-    a increasing numeric id. The returns ids are deterministic. However, the
-    order in which ids are generated changes the numeric id. For different
-    calls with the same arguments, the factory function will always return the
-    same id.
-    """
-    integers = it.count()
-    ids = {}
-
-    def factory(func, column):
-        try:
-            return ids[func,column]
-
-        except KeyError:
-            new_id = '{}-{!s}-{!s}'.format(next(integers), func, column)
-            return ids.setdefault((func,column), new_id)
-
-    return factory
+def _make_agg_id(func, column):
+    return '{!s}-{!s}-{}'.format(func, column, tokenize(func, column))
 
 
 def _normalize_spec(spec, non_group_columns):
@@ -278,7 +258,6 @@ def _build_agg_args(spec):
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    id_factory = _make_agg_id_factory()
     known_np_funcs = {np.min: 'min', np.max: 'max'}
 
     chunks = {}
@@ -287,8 +266,7 @@ def _build_agg_args(spec):
 
     for (result_column, func, input_column) in spec:
         func = funcname(known_np_funcs.get(func, func))
-        impls = _build_agg_args_single(result_column, func, input_column,
-                                       id_factory)
+        impls = _build_agg_args_single(result_column, func, input_column)
 
         # overwrite existing result-columns, generate intermedates only once
         chunks.update((spec[0], spec) for spec in impls['chunk_funcs'])
@@ -302,7 +280,7 @@ def _build_agg_args(spec):
     return chunks, aggs, finalizers
 
 
-def _build_agg_args_single(result_column, func, input_column, id_factory):
+def _build_agg_args_single(result_column, func, input_column):
     simple_impl = {
         'sum': (M.sum, M.sum),
         'min': (M.min, M.min),
@@ -313,27 +291,23 @@ def _build_agg_args_single(result_column, func, input_column, id_factory):
 
     if func in simple_impl.keys():
         return _build_agg_args_simple(result_column, func, input_column,
-                                      id_factory, simple_impl[func])
+                                      simple_impl[func])
 
     elif func == 'var':
-        return _build_agg_args_var(result_column, func, input_column,
-                                   id_factory)
+        return _build_agg_args_var(result_column, func, input_column)
 
     elif func == 'std':
-        return _build_agg_args_std(result_column, func, input_column,
-                                   id_factory)
+        return _build_agg_args_std(result_column, func, input_column)
 
     elif func == 'mean':
-        return _build_agg_args_mean(result_column, func, input_column,
-                                    id_factory)
+        return _build_agg_args_mean(result_column, func, input_column)
 
     else:
         raise ValueError("unknown aggregate {}".format(func))
 
 
-def _build_agg_args_simple(result_column, func, input_column, id_factory,
-                           impl_pair):
-    intermediate = id_factory(func, input_column)
+def _build_agg_args_simple(result_column, func, input_column, impl_pair):
+    intermediate = _make_agg_id(func, input_column)
     chunk_impl, agg_impl = impl_pair
 
     return dict(
@@ -345,10 +319,10 @@ def _build_agg_args_simple(result_column, func, input_column, id_factory,
     )
 
 
-def _build_agg_args_var(result_column, func, input_column, id_factory):
-    int_sum = id_factory('sum', input_column)
-    int_sum2 = id_factory('sum2', input_column)
-    int_count = id_factory('count', input_column)
+def _build_agg_args_var(result_column, func, input_column):
+    int_sum = _make_agg_id('sum', input_column)
+    int_sum2 = _make_agg_id('sum2', input_column)
+    int_count = _make_agg_id('count', input_column)
 
     return dict(
         chunk_funcs=[
@@ -369,8 +343,8 @@ def _build_agg_args_var(result_column, func, input_column, id_factory):
     )
 
 
-def _build_agg_args_std(result_column, func, input_column, id_factory):
-    impls = _build_agg_args_var(result_column, func, input_column, id_factory)
+def _build_agg_args_std(result_column, func, input_column):
+    impls = _build_agg_args_var(result_column, func, input_column)
 
     result_column, _, kwargs = impls['finalizer']
     impls['finalizer'] = (result_column, _finalize_std, kwargs)
@@ -378,9 +352,9 @@ def _build_agg_args_std(result_column, func, input_column, id_factory):
     return impls
 
 
-def _build_agg_args_mean(result_column, func, input_column, id_factory):
-    int_sum = id_factory('sum', input_column)
-    int_count = id_factory('count', input_column)
+def _build_agg_args_mean(result_column, func, input_column):
+    int_sum = _make_agg_id('sum', input_column)
+    int_count = _make_agg_id('count', input_column)
 
     return dict(
         chunk_funcs=[
@@ -435,7 +409,8 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
 
 def _compute_sum_of_squares(grouped, column):
-    return grouped[column].apply(lambda x: (x ** 2).sum())
+    base = grouped[column] if column is not None else grouped
+    return base.apply(lambda x: (x ** 2).sum())
 
 
 def _agg_finalize(df, funcs):
@@ -447,6 +422,9 @@ def _agg_finalize(df, funcs):
 
 
 def _apply_func_to_column(df_like, column, func):
+    if column is None:
+        return func(df_like)
+
     return func(df_like[column])
 
 
@@ -646,6 +624,69 @@ class _GroupBy(object):
         return map_partitions(_groupby_get_group, self.obj, self.index, key,
                               columns, meta=meta, token=token)
 
+    def aggregate(self, arg, split_every):
+        if isinstance(self.obj, DataFrame):
+            if isinstance(self.index, tuple) or np.isscalar(self.index):
+                group_columns = {self.index}
+
+            elif isinstance(self.index, list):
+                group_columns = {i for i in self.index
+                                 if isinstance(i, tuple) or np.isscalar(i)}
+
+            else:
+                group_columns = set()
+
+            # NOTE: this step relies on the index normalization to replace
+            #       series with their name in an index.
+            non_group_columns = [col for col in self.obj.columns
+                                 if col not in group_columns]
+
+            spec = _normalize_spec(arg, non_group_columns)
+
+        elif isinstance(self.obj, Series):
+            # implementation detail: if self.obj is a series, a pseudo column
+            # None is used to denote the series itself. This pseudo column is
+            # removed from the result columns before passing the spec along.
+            spec = _normalize_spec({None: arg}, [])
+            spec = [(result_column, func, input_column)
+                    for ((_, result_column), func, input_column) in spec]
+
+        else:
+            raise ValueError("aggregate on unknown object {}".format(self.obj))
+
+        chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
+
+        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
+            levels = list(range(len(self.index)))
+        else:
+            levels = 0
+
+        # apply the transformations to determine the meta object
+        meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
+        meta_stage1 = _groupby_apply_funcs(self.obj._meta, funcs=chunk_funcs,
+                                           by=meta_groupby)
+        meta_stage2 = _groupby_apply_funcs(meta_stage1, funcs=aggregate_funcs,
+                                           level=0)
+        meta = _agg_finalize(meta_stage2, finalizers)
+
+        if not isinstance(self.index, list):
+            chunk_args = [self.obj, self.index]
+
+        else:
+            chunk_args = [self.obj] + self.index
+
+        obj = aca(chunk_args,
+                  chunk=_groupby_apply_funcs,
+                  chunk_kwargs=dict(funcs=chunk_funcs),
+                  aggregate=_groupby_apply_funcs,
+                  aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
+                  combine=_groupby_apply_funcs,
+                  combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
+                  meta=meta, token='aggregate', split_every=split_every)
+
+        return map_partitions(_agg_finalize, obj, meta=meta,
+                              token='aggregate-finalize', funcs=finalizers)
+
     @insert_meta_param_description(pad=12)
     def apply(self, func, meta=no_default, columns=no_default):
         """ Parallel version of pandas GroupBy.apply
@@ -766,53 +807,7 @@ class DataFrameGroupBy(_GroupBy):
         if arg == 'size':
             return self.size()
 
-        if isinstance(self.index, tuple) or np.isscalar(self.index):
-            group_columns = {self.index}
-
-        elif isinstance(self.index, list):
-            group_columns = {i for i in self.index
-                             if isinstance(i, tuple) or np.isscalar(i)}
-
-        else:
-            group_columns = set()
-
-        # NOTE: this step relies on the index normalization to replace series
-        #       with their name in an index.
-        non_group_columns = [col for col in self.obj.columns
-                             if col not in group_columns]
-        spec = _normalize_spec(arg, non_group_columns)
-        chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
-
-        if isinstance(self.index, (tuple, list)) and len(self.index) > 1:
-            levels = list(range(len(self.index)))
-        else:
-            levels = 0
-
-        # apply the transformations to determine the meta object
-        meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
-        meta_stage1 = _groupby_apply_funcs(self.obj._meta, funcs=chunk_funcs,
-                                           by=meta_groupby)
-        meta_stage2 = _groupby_apply_funcs(meta_stage1, funcs=aggregate_funcs,
-                                           level=0)
-        meta = _agg_finalize(meta_stage2, finalizers)
-
-        if not isinstance(self.index, list):
-            chunk_args = [self.obj, self.index]
-
-        else:
-            chunk_args = [self.obj] + self.index
-
-        obj = aca(chunk_args,
-                  chunk=_groupby_apply_funcs,
-                  chunk_kwargs=dict(funcs=chunk_funcs),
-                  aggregate=_groupby_apply_funcs,
-                  aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  combine=_groupby_apply_funcs,
-                  combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  meta=meta, token='aggregate', split_every=split_every)
-
-        return map_partitions(_agg_finalize, obj, meta=meta,
-                              token='aggregate-finalize', funcs=finalizers)
+        return super(DataFrameGroupBy, self).aggregate(arg, split_every=split_every)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None):
@@ -860,3 +855,18 @@ class SeriesGroupBy(_GroupBy):
                        combine=_nunique_series_combine,
                        meta=meta, token='series-groupby-nunique',
                        split_every=split_every)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def aggregate(self, arg, split_every=None):
+        # short-circuit 'simple' aggregations
+        if (
+            not isinstance(arg, (list, dict)) and
+            arg in {'sum', 'mean', 'var', 'size', 'std', 'count'}
+        ):
+            return getattr(self, arg)(split_every=split_every)
+
+        return super(SeriesGroupBy, self).aggregate(arg, split_every=split_every)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def agg(self, arg, split_every=None):
+        return self.aggregate(arg, split_every=split_every)
