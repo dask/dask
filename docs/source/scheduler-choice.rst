@@ -18,7 +18,7 @@ Briefly, the current options are as follows:
     scheduler for ``dask.bag`` and sometimes useful with ``dask.dataframe``.
 *   ``dask.async.get_sync``: Uses the single main thread.  Good for profiling
     and debugging because all code is run sequentially
-*   ``distributed.Executor.get``:  Uses multiple machines connected over
+*   ``distributed.Client.get``:  Uses multiple machines connected over
     sockets.  Good for larger work but also a viable alternative to
     ``dask.multiprocessing`` on a single machine.  Also sometimes used for its
     improved diagnostic tools.
@@ -73,12 +73,12 @@ Distributed Scheduler on a Single Machine
 It is also reasonable to use the `distributed scheduler`_ on a single machine.
 The algorithms, reporting, and diagnostics in this scheduler are more effective
 in some cases.  You can create a local "cluster" and use this scheduler by
-default by creating a ``dask.distributed.Executor`` with no arguments.
+default by creating a ``dask.distributed.Client`` with no arguments.
 
 .. code-block:: python
 
-   from dask.distributed import Executor
-   e = Executor(set_as_default=True)
+   from dask.distributed import Client
+   client = Client(set_as_default=True)
 
 .. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
 
