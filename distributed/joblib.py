@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from distutils.version import LooseVersion
+import uuid
 
 from tornado import gen
 
@@ -49,7 +50,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
 
     def apply_async(self, func, *args, **kwargs):
         callback = kwargs.pop('callback', None)
-        kwargs['pure'] = False
+        kwargs['key'] = 'joblib-' + str(uuid.uuid4())
         future = self.client.submit(func, *args, **kwargs)
         self.futures.add(future)
 
