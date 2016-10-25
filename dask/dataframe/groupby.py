@@ -581,6 +581,7 @@ class _GroupBy(object):
         """
         Return whether index is a Series sliced from df
         """
+        # TODO: handle list of series
         if isinstance(df, Series):
             return False
         if (isinstance(index, Series) and index._name in df.columns and
@@ -598,12 +599,17 @@ class _GroupBy(object):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
+        # TODO: unify with index logic
         sample = self.obj._meta_nonempty
         if isinstance(self.index, Series):
             if self._is_grouped_by_sliced_column(self.obj, self.index):
                 grouped = sample.groupby(sample[self.index.name])
             else:
                 grouped = sample.groupby(self.index._meta_nonempty)
+        elif (isinstance(self.index, list) and
+              any(isinstance(item, Series) for item in self.index)):
+            # TODO: implement this
+            raise NotImplementedError("raise an error to prevent a segfault")
         else:
             grouped = sample.groupby(self.index)
         return _maybe_slice(grouped, self._slice)
