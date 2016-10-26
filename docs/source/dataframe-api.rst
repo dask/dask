@@ -107,9 +107,11 @@ Create DataFrames
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   read_csv
+   read_table
+   read_hdf
    from_array
    from_bcolz
-   read_csv
    from_dask_array
    from_delayed
    from_pandas
@@ -162,6 +164,7 @@ Other functions
 .. currentmodule:: dask.dataframe
 
 .. autofunction:: read_csv
+.. autofunction:: read_table
 .. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
