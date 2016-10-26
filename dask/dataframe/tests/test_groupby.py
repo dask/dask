@@ -809,8 +809,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
 
 
 @pytest.mark.parametrize('agg_func', [
-    'sum', 'var', 'mean', 'count', 'size', 'std', 'min', 'max',
-    pytest.mark.xfail(reason="nunique is not yet propery supported")('nunique'),
+    'sum', 'var', 'mean', 'count', 'size', 'std', 'min', 'max', 'nunique',
 ])
 @pytest.mark.parametrize('grouper', [
     lambda df: df['a'],

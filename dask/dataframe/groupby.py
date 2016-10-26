@@ -140,12 +140,23 @@ def _nunique_df_aggregate(df, levels, name):
     return df.groupby(level=levels)[name].nunique()
 
 
-def _nunique_series_chunk(df, index):
+def _nunique_series_chunk(df, *index):
+    # nunique_series strategy:
+    # build a dataframe with the target column as the first column and all
+    # group columns appended thereafter. Then 
     assert isinstance(df, pd.Series)
-    if isinstance(index, np.ndarray):
-        assert len(index) == len(df)
-        index = pd.Series(index, index=df.index)
-    grouped = pd.concat([df, index], axis=1).drop_duplicates()
+
+    group_index = []
+    for item in index:
+        if isinstance(item, np.ndarray):
+            assert len(item) == len(df)
+            group_index.append(pd.Series(item, index=df.index))
+
+        else:
+            group_index.append(item)
+
+    grouped = pd.concat([df] + group_index, axis=1).drop_duplicates()
+
     return grouped
 
 
@@ -154,7 +165,7 @@ def _nunique_series_combine(df):
 
 
 def _nunique_series_aggregate(df):
-    return df.groupby(df.columns[1])[df.columns[0]].nunique()
+    return df.groupby(list(df.columns[1:]))[df.columns[0]].nunique()
 
 
 ###############################################################
