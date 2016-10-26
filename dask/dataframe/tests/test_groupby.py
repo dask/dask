@@ -840,4 +840,4 @@ def test_series_aggregations_multilevel(grouper, agg_func):
               call(ddf['c'].groupby(grouper(ddf)), agg_func, split_every=2),
               # for pandas ~ 0.18, the name is not not properly propagated for
               # the mean aggregation
-              check_names=(agg_func != 'mean'))
+              check_names=(agg_func not in {'mean', 'nunique'}))
