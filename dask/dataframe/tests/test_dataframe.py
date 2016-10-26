@@ -2095,12 +2095,25 @@ def test_reset_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
+    sol = df.reset_index()
     res = ddf.reset_index()
-    exp = df.reset_index()
+    assert all(d is None for d in res.divisions)
+    assert_eq(res, sol, check_index=False)
 
-    assert len(res.index.compute()) == len(exp.index)
-    tm.assert_index_equal(res.columns, exp.columns)
-    tm.assert_numpy_array_equal(res.compute().values, exp.values)
+    sol = df.reset_index(drop=True)
+    res = ddf.reset_index(drop=True)
+    assert all(d is None for d in res.divisions)
+    assert_eq(res, sol, check_index=False)
+
+    sol = df.x.reset_index()
+    res = ddf.x.reset_index()
+    assert all(d is None for d in res.divisions)
+    assert_eq(res, sol, check_index=False)
+
+    sol = df.x.reset_index(drop=True)
+    res = ddf.x.reset_index(drop=True)
+    assert all(d is None for d in res.divisions)
+    assert_eq(res, sol, check_index=False)
 
 
 def test_dataframe_compute_forward_kwargs():
