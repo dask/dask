@@ -99,27 +99,9 @@ def processing():
 
 
 def on_server_loaded(server_context):
-    n = 60
-    messages['workers'] = {'interval': 1000,
-                           'deque': deque(maxlen=n),
-                           'times': deque(maxlen=n),
-                           'index': deque(maxlen=n),
-                           'plot-data': {'time': deque(maxlen=n),
-                                         'cpu': deque(maxlen=n),
-                                         'memory_percent': deque(maxlen=n),
-                                         'network-send': deque(maxlen=n),
-                                         'network-recv': deque(maxlen=n)}}
     server_context.add_periodic_callback(workers, 500)
 
-    messages['tasks'] = {'interval': 150,
-                         'deque': deque(maxlen=100),
-                         'times': deque(maxlen=100)}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
-
-    messages['progress'] = {}
-
-    messages['processing'] = {'stacks': {}, 'processing': {},
-                              'memory': 0, 'waiting': 0, 'ready': 0}
     IOLoop.current().add_callback(processing)
 
     IOLoop.current().add_callback(progress)

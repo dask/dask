@@ -1,25 +1,37 @@
 from __future__ import print_function, division, absolute_import
 
+import itertools
 import logging
+import random
 
-from toolz import valmap, merge
+from bokeh.palettes import viridis
+from toolz import valmap, merge, memoize
 from tornado import gen
 
 from .progress import AllProgress
 
 from ..core import connect, write, coerce_to_address
 from ..scheduler import Scheduler
+from ..utils import key_split
 from ..worker import dumps_function
 
 
 logger = logging.getLogger(__name__)
 
+task_stream_palette = list(viridis(25))
+random.shuffle(task_stream_palette)
 
 def counts(scheduler, allprogress):
     return merge({'all': valmap(len, allprogress.all),
                   'nbytes': allprogress.nbytes},
                  {state: valmap(len, allprogress.state[state])
                      for state in ['memory', 'erred', 'released']})
+
+
+counter = itertools.count()
+@memoize
+def incrementing_index(o):
+    return next(counter)
 
 
 @gen.coroutine
@@ -152,15 +164,50 @@ def progress_quads(msg, nrows=8, ncols=3):
 
     return d
 
+def task_stream_append(lists, msg, workers, palette=task_stream_palette):
+    start, stop = msg['compute_start'], msg['compute_stop']
+    lists['start'].append((start + stop) / 2 * 1000)
+    lists['duration'].append(1000 * (stop - start))
+    key = msg['key']
+    name = key_split(key)
+    if msg['status'] == 'OK':
+        color = palette[incrementing_index(name) % len(palette)]
+    else:
+        color = 'black'
+    lists['key'].append(key)
+    lists['name'].append(name)
+    lists['color'].append(color)
+    lists['alpha'].append(1)
+    lists['worker'].append(msg['worker'])
 
-from toolz import memoize
-from bokeh.palettes import Spectral11, Spectral9, viridis
-import random
-task_stream_palette = list(viridis(25))
-random.shuffle(task_stream_palette)
+    worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+    lists['worker_thread'].append(worker_thread)
+    if worker_thread not in workers:
+        workers[worker_thread] = len(workers)
+    lists['y'].append(workers[worker_thread])
 
-import itertools
-counter = itertools.count()
-@memoize
-def incrementing_index(o):
-    return next(counter)
+    if msg.get('transfer_start') is not None:
+        start, stop = msg['transfer_start'], msg['transfer_stop']
+        lists['start'].append((start + stop) / 2 * 1000)
+        lists['duration'].append(1000 * (stop - start))
+
+        lists['key'].append(key)
+        lists['name'].append('transfer-to-' + name)
+        lists['worker'].append(msg['worker'])
+        lists['color'].append('#FF0020')
+        lists['alpha'].append('0.4')
+        lists['worker_thread'].append(worker_thread)
+        lists['y'].append(workers[worker_thread])
+
+    if msg.get('disk_load_start') is not None:
+        start, stop = msg['disk_load_start'], msg['disk_load_stop']
+        lists['start'].append((start + stop) / 2 * 1000)
+        lists['duration'].append(1000 * (stop - start))
+
+        lists['key'].append(key)
+        lists['name'].append('disk-load-' + name)
+        lists['worker'].append(msg['worker'])
+        lists['color'].append('#FF2000')
+        lists['alpha'].append('0.4')
+        lists['worker_thread'].append(worker_thread)
+        lists['y'].append(workers[worker_thread])

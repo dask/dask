@@ -8,7 +8,7 @@ from dask import do
 from distributed.core import read
 from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
-        nbytes_bar, progress_stream)
+        nbytes_bar, progress_stream, task_stream_append)
 from distributed.utils_test import inc, div, dec, gen_cluster
 from distributed.worker import dumps_task
 from time import time, sleep
@@ -101,3 +101,30 @@ def test_progress_quads_many_functions():
     d = progress_quads(msg, nrows=2)
     color = d.pop('color')
     assert len(set(color)) < 100
+
+def test_task_stream_append():
+    msgs = [{'status': 'OK', 'compute_start': 10, 'compute_stop': 20,
+             'key':'inc-1', 'thread': 5855, 'worker':'127.0.0.1:9999'},
+            {'status': 'OK', 'compute_start': 15, 'compute_stop': 25,
+             'key':'inc-2', 'thread': 6000, 'worker':'127.0.0.1:9999'},
+            {'status': 'error', 'compute_start': 10, 'compute_stop': 14,
+             'key':'inc-3', 'thread': 6000, 'worker':'127.0.0.1:9999'},
+            {'status': 'OK', 'compute_start': 10, 'compute_stop': 30,
+             'transfer_start': 8, 'transfer_stop': 10,
+             'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
+
+    lists = {name: [] for name in
+            'start duration key name color worker worker_thread y alpha'.split()}
+    workers = {'127.0.0.1:9999-5855': 0}
+
+    for msg in msgs:
+        task_stream_append(lists, msg, workers)
+    assert len(lists['start']) == len(msgs) + 1  # +1 for a transfer
+    assert len(workers) == 3
+    assert set(workers) == set(lists['worker_thread'])
+    assert set(workers.values()) == set(range(len(workers)))
+    assert lists['color'][-1] == '#FF0020'
+    L = lists['color']
+    assert L[0] == L[1]
+    assert L[2] == 'black'
+    assert L[3] != L[0]

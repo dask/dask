@@ -17,7 +17,7 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read
 from distributed.diagnostics.eventstream import eventstream
-from distributed.bokeh.status_monitor import task_stream_append
+from distributed.diagnostics.progress_stream import task_stream_append
 import distributed.bokeh
 from distributed.bokeh.utils import parse_args
 
@@ -69,12 +69,4 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
 n = 100000
 
 def on_server_loaded(server_context):
-    messages['task-events'] = {'interval': 200,
-                               'deque': deque(maxlen=n),
-                               'times': deque(maxlen=n),
-                               'index': deque(maxlen=n),
-                               'rectangles':{name: deque(maxlen=n) for name in
-                                            'start duration key name color worker worker_thread y alpha'.split()},
-                               'workers': dict(),
-                               'last_seen': [time()]}
     IOLoop.current().add_callback(task_events, **messages['task-events'])
