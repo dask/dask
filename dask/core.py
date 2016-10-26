@@ -191,7 +191,7 @@ def _deps(dsk, arg):
     return [arg]
 
 
-def get_dependencies(dsk, task, as_list=False):
+def get_dependencies(dsk, key=None, task=None, as_list=False):
     """ Get the immediate tasks on which this task depends
 
     >>> dsk = {'x': 1,
@@ -214,8 +214,16 @@ def get_dependencies(dsk, task, as_list=False):
 
     >>> get_dependencies(dsk, 'a')  # Ignore non-keys
     set(['x'])
+
+    >>> get_dependencies(dsk, task=(inc, 'x'))  # provide tasks directly
+    set(['x'])
     """
-    args = [dsk[task]]
+    if key is not None:
+        args = [dsk[key]]
+    elif task is not None:
+        args = [task]
+    else:
+        raise ValueError("Provide either key or task")
     result = []
     while args:
         arg = args.pop()

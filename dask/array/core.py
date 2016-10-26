@@ -27,6 +27,7 @@ from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
                      IndexCallable, funcname, derived_from)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..optimize import cull
 from .. import threaded, core
 
 
@@ -1135,7 +1136,15 @@ class Array(Base):
 
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
-        return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
+        if len(dsk) < self.npartitions / 2:  # significant reduction in graph
+            needed = set.union(*[core.get_dependencies(self.dask, task=v)
+                                 for v in dsk.values()])
+            dsk2, _ = cull(self.dask, needed)
+            dsk2.update(dsk)
+        else:
+            dsk2 = merge(self.dask, dsk)
+
+        return Array(dsk2, out, chunks, dtype=self._dtype)
 
     def _vindex(self, key):
         if (not isinstance(key, tuple) or
