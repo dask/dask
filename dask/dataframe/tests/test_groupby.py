@@ -675,10 +675,7 @@ def test_series_aggregate__examples(spec, split_every, grouper):
 
 
 @pytest.mark.parametrize('spec', [
-    'sum', 'min', 'max', 'count', 'size',
-    'std', # NOTE: for std the result is not recast ot the original dtype
-    pytest.mark.xfail(reason="pandas recast to original type")('var'),
-    pytest.mark.xfail(reason="pandas recast to original type")('mean')
+    'sum', 'min', 'max', 'count', 'size', 'std', 'var', 'mean',
 ])
 def test_aggregate__single_element_groups(spec):
     pdf = pd.DataFrame({'a': [1, 1, 3, 3],
@@ -688,7 +685,13 @@ def test_aggregate__single_element_groups(spec):
                        columns=['c', 'b', 'a', 'd'])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
-    assert_eq(pdf.groupby(['a', 'd']).agg(spec),
+    expected = pdf.groupby(['a', 'd']).agg(spec)
+
+    # NOTE: for std the result is not recast ot the original dtype
+    if spec in {'mean', 'var'}:
+        expected = expected.astype(float)
+
+    assert_eq(expected,
               ddf.groupby(['a', 'd']).agg(spec))
 
 
