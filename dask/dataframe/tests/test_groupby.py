@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -6,7 +8,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph
+from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
 
 
 def groupby_internal_repr():
@@ -554,3 +556,169 @@ def test_groupby_multiprocessing():
     with dask.set_options(get=get):
         assert_eq(ddf.groupby('B').apply(lambda x: x),
                   df.groupby('B').apply(lambda x: x))
+
+
+def test_groupby_normalize_index():
+    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    d = dd.from_pandas(full, npartitions=3)
+
+    assert d.groupby('a').index == 'a'
+    assert d.groupby(d['a']).index == 'a'
+    assert d.groupby(d['a'] > 2).index._name == (d['a'] > 2)._name
+    assert d.groupby(['a', 'b']).index == ['a', 'b']
+
+    assert d.groupby([d['a'], d['b']]).index == ['a', 'b']
+    assert d.groupby([d['a'], 'b']).index == ['a', 'b']
+
+
+@pytest.mark.parametrize('spec', [
+    {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+    {'b': 'mean', 'c': ['min', 'max']},
+    {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+    'var',
+])
+@pytest.mark.parametrize('split_every', [False, None])
+@pytest.mark.parametrize('grouper', [
+    lambda df: 'a',
+    lambda df: ['a', 'd'],
+    lambda df: [df['a'], df['d']],
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+])
+def test_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
+              ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+
+
+@pytest.mark.parametrize('spec', [
+    {'b': 'sum', 'c': 'min', 'd': 'max'},
+    ['sum'],
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+    'sum', 'size',
+])
+@pytest.mark.parametrize('split_every', [False, None])
+@pytest.mark.parametrize('grouper', [
+    pytest.mark.xfail(reason="Grouper for '{0}' not 1-dimensional")(lambda df: [df['a'], df['d']]),
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+])
+def test_series_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+    ps = pdf['c']
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    ds = ddf['c']
+
+    assert_eq(ps.groupby(grouper(pdf)).agg(spec),
+              ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+
+
+@pytest.mark.parametrize('spec', [
+    'sum', 'min', 'max', 'count', 'size',
+    'std', # NOTE: for std the result is not recast ot the original dtype
+    pytest.mark.xfail(reason="pandas recast to original type")('var'),
+    pytest.mark.xfail(reason="pandas recast to original type")('mean')
+])
+def test_aggregate__single_element_groups(spec):
+    pdf = pd.DataFrame({'a': [1, 1, 3, 3],
+                        'b': [4, 4, 16, 16],
+                        'c': [1, 1, 4, 4],
+                        'd': [1, 1, 3, 3]},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    assert_eq(pdf.groupby(['a', 'd']).agg(spec),
+              ddf.groupby(['a', 'd']).agg(spec))
+
+
+def test_aggregate_build_agg_args__reuse_of_intermediates():
+    """Aggregate reuses intermediates. For example, with sum, count, and mean
+    the sums and counts are only calculated once accross the graph and reused to
+    compute the mean.
+    """
+    from dask.dataframe.groupby import _build_agg_args
+
+    no_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+    ]
+
+    with_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+        ('baz', 'mean', 'input'),
+    ]
+
+    no_mean_chunks, no_mean_aggs, no_mean_finalizers = _build_agg_args(no_mean_spec)
+    with_mean_chunks, with_mean_aggs, with_mean_finalizers = _build_agg_args(with_mean_spec)
+
+    assert len(no_mean_chunks) == len(with_mean_chunks)
+    assert len(no_mean_aggs) == len(with_mean_aggs)
+
+    assert len(no_mean_finalizers) == len(no_mean_spec)
+    assert len(with_mean_finalizers) == len(with_mean_spec)
+
+
+def test_aggregate__dask():
+    dask_holder = collections.namedtuple('dask_holder', ['dask'])
+    get_agg_dask = lambda obj: dask_holder({
+        k: v for (k, v) in obj.dask.items() if k[0].startswith('aggregate')
+    })
+
+    specs = [
+        {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+        {'b': 'mean', 'c': ['min', 'max']},
+        ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+        'sum', 'mean', 'min', 'max', 'count', 'std', 'var',
+
+        # NOTE: the 'size' spec is special since it bypasses aggregate
+        #'size'
+    ]
+
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    for spec in specs:
+        result1 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+        result2 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+
+        agg_dask1 = get_agg_dask(result1)
+        agg_dask2 = get_agg_dask(result2)
+
+        core_agg_dask1 = {k: v for (k, v) in agg_dask1.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        core_agg_dask2 = {k: v for (k, v) in agg_dask2.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        # check that the number of paritions used is fixed by split_every
+        assert_max_deps(agg_dask1, 2)
+        assert_max_deps(agg_dask2, 2)
+
+        # check for deterministic key names
+        # not finalize passes the meta object, which cannot tested with ==
+        assert core_agg_dask1 == core_agg_dask2
+
+        # the length of the dask does not depend on the passed spec
+        for other_spec in specs:
+            other = ddf.groupby(['a', 'b']).agg(other_spec, split_every=2)
+            assert len(other.dask) == len(result1.dask)
+            assert len(other.dask) == len(result2.dask)
