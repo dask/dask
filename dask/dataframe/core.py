@@ -299,6 +299,10 @@ class _Frame(Base):
         return Index(merge(dsk, self.dask), name,
                      self._meta.index, self.divisions)
 
+    @derived_from(pd.DataFrame)
+    def reset_index(self, drop=False):
+        return self.map_partitions(M.reset_index, drop=drop).clear_divisions()
+
     @property
     def known_divisions(self):
         """Whether divisions are already known"""
@@ -1517,6 +1521,10 @@ class Series(_Frame):
         from .accessor import DatetimeAccessor
         return DatetimeAccessor(self)
 
+    @derived_from(pd.Series)
+    def reset_index(self, drop=False):
+        return super(Series, self).reset_index(drop=drop)
+
     @cache_readonly
     def cat(self):
         from .accessor import CategoricalAccessor
@@ -2074,12 +2082,6 @@ class DataFrame(_Frame):
         return aca(self, chunk=M.nlargest, aggregate=M.nlargest,
                    meta=self._meta, token=token, split_every=split_every,
                    n=n, columns=columns)
-
-    @derived_from(pd.DataFrame)
-    def reset_index(self):
-        out = self.map_partitions(M.reset_index)
-        out.divisions = [None] * (self.npartitions + 1)
-        return out
 
     @derived_from(pd.DataFrame)
     def groupby(self, key, **kwargs):
