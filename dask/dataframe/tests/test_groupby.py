@@ -304,8 +304,13 @@ def test_groupby_index_array():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
 
+    # first select column, then group
     assert_eq(df.A.groupby(df.index.month).nunique(),
               ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
+
+    # first group, then select column
+    assert_eq(df.groupby(df.index.month).A.nunique(),
+              ddf.groupby(ddf.index.month).A.nunique(), check_names=False)
 
 
 def test_groupby_set_index():
