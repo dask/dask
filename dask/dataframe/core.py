@@ -1920,12 +1920,10 @@ class DataFrame(_Frame):
 
     @columns.setter
     def columns(self, columns):
-        # if length mismatches, error is raised from pandas
-        self._meta.columns = columns
         renamed = _rename_dask(self, columns)
-        # update myself
-        self.dask.update(renamed.dask)
+        self._meta = renamed._meta
         self._name = renamed._name
+        self.dask.update(renamed.dask)
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
@@ -2311,13 +2309,20 @@ class DataFrame(_Frame):
 
             axis = self._validate_axis(axis)
 
-            if axis == 1:
-                # when axis=1, series will be added to each row
-                # it not supported for dd.Series.
-                # dd.DataFrame is not affected as op is applied elemwise
+            if axis in (1, 'columns'):
+                # When axis=1 and other is a series, `other` is transposed
+                # and the operator is applied broadcast across rows. This
+                # isn't supported with dd.Series.
                 if isinstance(other, Series):
                     msg = 'Unable to {0} dd.Series with axis=1'.format(name)
                     raise ValueError(msg)
+                elif isinstance(other, pd.Series):
+                    # Special case for pd.Series to avoid unwanted partitioning
+                    # of other. We pass it in as a kwarg to prevent this.
+                    meta = _emulate(op, self, other=other, axis=axis,
+                                    fill_value=fill_value)
+                    return map_partitions(op, self, other=other, meta=meta,
+                                          axis=axis, fill_value=fill_value)
 
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
             return map_partitions(op, self, other, meta=meta,
@@ -2817,7 +2822,6 @@ def _rename(columns, df):
 
     Parameters
     ----------
-
     columns : tuple, string, pd.DataFrame or pd.Series
         Column names, Series name or pandas instance which has the
         target column names / name.
@@ -2826,11 +2830,11 @@ def _rename(columns, df):
     """
     assert not isinstance(df, _Frame)
 
-    if isinstance(columns, Iterator):
-        columns = list(columns)
-
     if columns is no_default:
         return df
+
+    if isinstance(columns, Iterator):
+        columns = list(columns)
 
     if isinstance(df, pd.DataFrame):
         if isinstance(columns, pd.DataFrame):
@@ -2840,8 +2844,10 @@ def _rename(columns, df):
             if columns.equals(df.columns):
                 # if target is identical, rename is not necessary
                 return df
-            # each functions must be pure op, do not use df.columns = columns
-            return df.rename(columns=dict(zip(df.columns, columns)))
+        # deep=False doesn't doesn't copy any data/indices, so this is cheap
+        df = df.copy(deep=False)
+        df.columns = columns
+        return df
     elif isinstance(df, (pd.Series, pd.Index)):
         if isinstance(columns, (pd.Series, pd.Index)):
             columns = columns.name
@@ -2862,7 +2868,6 @@ def _rename_dask(df, names):
 
     Parameters
     ----------
-
     df : dd.DataFrame or dd.Series
         target DataFrame / Series to be renamed
     names : tuple, string

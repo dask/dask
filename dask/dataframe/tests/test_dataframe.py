@@ -308,6 +308,16 @@ def test_rename_columns():
     with tm.assertRaisesRegexp(ValueError, msg):
         ddf.columns = [1, 2, 3, 4]
 
+    # Multi-index columns
+    df = pd.DataFrame({('A', '0') : [1, 2, 2, 3], ('B', 1) : [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    df.columns = ['x', 'y']
+    ddf.columns = ['x', 'y']
+    tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
+    tm.assert_index_equal(ddf._meta.columns, pd.Index(['x', 'y']))
+    assert_eq(ddf, df)
+
 
 def test_rename_series():
     # GH 819

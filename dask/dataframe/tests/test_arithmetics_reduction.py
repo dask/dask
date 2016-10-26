@@ -514,6 +514,7 @@ def test_frame_series_arithmetic_methods():
                         index=list('abcdefghjk'), columns=list('ABCX'))
     ps1 = pdf1.A
     ps2 = pdf2.A
+    ps3 = pd.Series(np.random.randn(10), index=list('ABCDXabcde'))
 
     ddf1 = dd.from_pandas(pdf1, 2)
     ddf2 = dd.from_pandas(pdf2, 2)
@@ -577,7 +578,7 @@ def test_frame_series_arithmetic_methods():
 
         pytest.raises(ValueError, lambda: l.add(r, axis=1))
 
-    for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps2, pdf1, ps2)]:
+    for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps3, pdf1, ps3)]:
         assert_eq(l, el)
         assert_eq(r, er)
 
