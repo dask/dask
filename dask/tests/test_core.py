@@ -94,6 +94,16 @@ def test_get_dependencies_list():
     assert get_dependencies(dsk, 'z') == set(['x', 'y'])
 
 
+def test_get_dependencies_task():
+    dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
+    assert get_dependencies(dsk, task=(inc, 'x')) == set(['x'])
+
+
+def test_get_dependencies_nothing():
+    with pytest.raises(ValueError):
+        get_dependencies({})
+
+
 def test_flatten():
     assert list(flatten(())) == []
     assert list(flatten('foo')) == ['foo']
