@@ -329,6 +329,13 @@ def test_rename_series():
     assert s.name == 'renamed'
     assert_eq(ds, s)
 
+    ind = s.index
+    dind = ds.index
+    ind.name = 'renamed'
+    dind.name = 'renamed'
+    assert ind.name == 'renamed'
+    assert_eq(dind, ind)
+
 
 def test_describe():
     # prepare test case which approx quantiles will be the same as actuals
@@ -1546,8 +1553,8 @@ def test_datetime_accessor():
     assert_eq(a.x.dt.date, df.x.dt.date, check_names=False)
     assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
 
-    assert a.x.dt.date.dask == a.x.dt.date.dask
-    assert a.x.dt.to_pydatetime().dask == a.x.dt.to_pydatetime().dask
+    assert set(a.x.dt.date.dask) == set(a.x.dt.date.dask)
+    assert set(a.x.dt.to_pydatetime().dask) == set(a.x.dt.to_pydatetime().dask)
 
 
 def test_str_accessor():
@@ -1557,27 +1564,27 @@ def test_str_accessor():
 
     assert 'upper' in dir(a.x.str)
     assert_eq(a.x.str.upper(), df.x.str.upper())
-    assert a.x.str.upper().dask == a.x.str.upper().dask
+    assert set(a.x.str.upper().dask) == set(a.x.str.upper().dask)
 
     assert 'upper' in dir(a.index.str)
     assert_eq(a.index.str.upper(), df.index.str.upper())
-    assert a.index.str.upper().dask == a.index.str.upper().dask
+    assert set(a.index.str.upper().dask) == set(a.index.str.upper().dask)
 
     # make sure to pass thru args & kwargs
     assert 'contains' in dir(a.x.str)
     assert_eq(a.x.str.contains('a'), df.x.str.contains('a'))
-    assert a.x.str.contains('a').dask == a.x.str.contains('a').dask
+    assert set(a.x.str.contains('a').dask) == set(a.x.str.contains('a').dask)
 
     assert_eq(a.x.str.contains('d', case=False), df.x.str.contains('d', case=False))
-    assert a.x.str.contains('d', case=False).dask == a.x.str.contains('d', case=False).dask
+    assert set(a.x.str.contains('d', case=False).dask) == set(a.x.str.contains('d', case=False).dask)
 
     for na in [True, False]:
         assert_eq(a.x.str.contains('a', na=na), df.x.str.contains('a', na=na))
-        assert a.x.str.contains('a', na=na).dask == a.x.str.contains('a', na=na).dask
+        assert set(a.x.str.contains('a', na=na).dask) == set(a.x.str.contains('a', na=na).dask)
 
     for regex in [True, False]:
         assert_eq(a.x.str.contains('a', regex=regex), df.x.str.contains('a', regex=regex))
-        assert a.x.str.contains('a', regex=regex).dask == a.x.str.contains('a', regex=regex).dask
+        assert set(a.x.str.contains('a', regex=regex).dask) == set(a.x.str.contains('a', regex=regex).dask)
 
 
 def test_empty_max():
