@@ -655,7 +655,7 @@ def test_aggregate__examples(spec, split_every, grouper):
 ])
 @pytest.mark.parametrize('split_every', [False, None])
 @pytest.mark.parametrize('grouper', [
-    pytest.mark.xfail(reason="Grouper for '{0}' not 1-dimensional")(lambda df: [df['a'], df['d']]),
+    lambda df: [df['a'], df['d']],
     lambda df: df['a'],
     lambda df: df['a'] > 2,
 ])
