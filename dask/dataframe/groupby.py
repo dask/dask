@@ -471,26 +471,6 @@ def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
     return np.sqrt(result)
 
 
-def _normalize_index(df, index):
-    if not isinstance(df, DataFrame):
-        return index
-
-    elif isinstance(index, list):
-        return [_normalize_index(df, col) for col in index]
-
-    elif (isinstance(index, Series) and index.name in df.columns and
-          index._name == df[index.name]._name):
-            return index.name
-
-    elif (isinstance(index, DataFrame) and
-          set(index.columns).issubset(df.columns) and
-          index._name == df[index.columns]._name):
-        return list(index.columns)
-
-    else:
-        return index
-
-
 def _determine_levels(index):
     if isinstance(index, (tuple, list)) and len(index) > 1:
         return list(range(len(index)))
