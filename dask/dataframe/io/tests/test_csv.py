@@ -769,3 +769,22 @@ def test_to_csv_series():
         result = dd.read_csv(os.path.join(dir, '*'), header=None,
                              names=['x']).compute()
     assert (result.x == df0).all()
+
+
+def test_to_csv_with_get():
+    from dask.multiprocessing import get as mp_get
+    flag = [False]
+
+    def my_get(*args, **kwargs):
+        flag[0] = True
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpdir() as dn:
+        ddf.to_csv(dn, index=False, get=my_get)
+        assert flag[0]
+        result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
+        assert_eq(result, df)
