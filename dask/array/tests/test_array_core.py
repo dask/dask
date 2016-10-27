@@ -276,6 +276,19 @@ def test_stack_scalars():
     assert s.compute().tolist() == [np.arange(4).mean(), np.arange(4).sum()]
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
+                    reason="NumPy doesn't yet support stack")
+def test_stack_rechunk():
+    x = da.random.random(10, chunks=5)
+    y = da.random.random(10, chunks=4)
+
+    z = da.stack([x, y], axis=0)
+    assert z.shape == (2, 10)
+    assert z.chunks == ((1, 1), (4, 1, 3, 2))
+
+    assert_eq(z, np.stack([x.compute(), y.compute()], axis=0))
+
+
 def test_concatenate():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), chunks=(2, 3))
@@ -303,6 +316,21 @@ def test_concatenate():
             concatenate([a, b, c], axis=1).chunks)
 
     pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
+
+
+def test_concatenate_rechunk():
+    x = da.random.random((6, 6), chunks=(3, 3))
+    y = da.random.random((6, 6), chunks=(2, 2))
+
+    z = da.concatenate([x, y], axis=0)
+    assert z.shape == (12, 6)
+    assert z.chunks == ((3, 3, 2, 2, 2), (2, 1, 1, 2))
+    assert_eq(z, np.concatenate([x.compute(), y.compute()], axis=0))
+
+    z = da.concatenate([x, y], axis=1)
+    assert z.shape == (6, 12)
+    assert z.chunks == ((2, 1, 1, 2), (3, 3, 2, 2, 2))
+    assert_eq(z, np.concatenate([x.compute(), y.compute()], axis=1))
 
 
 def test_concatenate_fixlen_strings():

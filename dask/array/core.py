@@ -1767,7 +1767,6 @@ def common_blockdim(blockdims):
 
     Examples
     --------
-
     >>> common_blockdim([(3,), (2, 1)])
     (2, 1)
     >>> common_blockdim([(1, 2), (2, 1)])
@@ -1815,15 +1814,28 @@ def common_blockdim(blockdims):
 
 
 def unify_chunks(*args):
-    """ Unify chunks across a sequence of arrays
-
-    Currently only uses very simple rules for unifying chunks: see
-    common_blockdim for more details.
+    """
+    Unify chunks across a sequence of arrays
 
     Parameters
     ----------
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones(10, chunks=((5, 2, 3),))
+    >>> y = da.ones(10, chunks=((2, 3, 5),))
+    >>> chunkss, arrays = unify_chunks(x, 'i', y, 'i')
+    >>> chunkss
+    {'i': (2, 3, 2, 3)}
+
+    >>> x = da.ones((100, 10), chunks=(20, 5))
+    >>> y = da.ones((10, 100), chunks=(4, 50))
+    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk')
+    >>> chunkss  # doctest: +SKIP
+    {'k': (50, 50), 'i': (20, 20, 20, 20, 20), 'j': (4, 1, 3, 2)}
 
     Returns
     -------
@@ -1831,6 +1843,10 @@ def unify_chunks(*args):
         Map like {index: chunks}.
     arrays : list
         List of rechunked arrays.
+
+    See Also
+    --------
+    common_blockdim
     """
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
 
@@ -2018,6 +2034,10 @@ def stack(seq, axis=0):
                          "\nData has %d dimensions, but got axis=%d" %
                          (ndim, axis))
 
+    ind = list(range(ndim))
+    uc_args = list(concat((x, ind) for x in seq))
+    _, seq = unify_chunks(*uc_args)
+
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
 
@@ -2082,11 +2102,14 @@ def concatenate(seq, axis=0):
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
 
-    bds = [a.chunks for a in seq]
+    inds = [list(range(ndim)) for i in range(n)]
+    for i, ind in enumerate(inds):
+        ind[axis] = -(i + 1)
 
-    if not all(len(set(bds[i][j] for i in range(n))) == 1
-               for j in range(len(bds[0])) if j != axis):
-        raise ValueError("Block shapes do not align")
+    uc_args = list(concat(zip(seq, inds)))
+    _, seq = unify_chunks(*uc_args)
+
+    bds = [a.chunks for a in seq]
 
     chunks = (seq[0].chunks[:axis] + (sum([bd[axis] for bd in bds], ()), ) +
               seq[0].chunks[axis + 1:])
