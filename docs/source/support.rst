@@ -23,14 +23,8 @@ time.  Gitter chat is strictly reserved for developer and community discussion.
 Paid support
 ------------
 
-Dask is an open source project that was started by and is currently primarily
-developed by employees of `Continuum Analytics, Inc. <https://www.continuum.io/>`_.
-In addition to the previous options, Continuum offers paid training and support:
-
-* `Python training <https://www.continuum.io/training>`_ — online and on-premises.
-* `Consulting <https://www.continuum.io/continuum-consulting>`_ — leverage our expertise to solve your analytics puzzles.
-* `Paid support plans <https://www.continuum.io/content/support-plan>`_ — helping you get the most out of Python data tools.
-
+Dask is an open source project that originated at `Continuum Analytics, Inc. <https://www.continuum.io/>`_.
+In addition to the previous options, Continuum offers paid training and support:  https://www.continuum.io/support
 
 Give us feedback
 ----------------
