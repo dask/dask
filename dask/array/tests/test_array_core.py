@@ -2129,6 +2129,23 @@ def test_atop_kwargs():
     assert_eq(y, np.ones(5) + 10)
 
 
+def test_atop_chunks():
+    x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
+
+    def double(a, axis=0):
+        return np.concatenate([a, a], axis=axis)
+
+    y = atop(double, 'ij', x, 'ij', rechunk={'i': lambda n: 2 * n}, axis=0,
+             dtype=x.dtype)
+    assert y.chunks == ((4, 2, 4), (3, 2))
+    assert_eq(y, np.ones((10, 5)))
+
+    y = atop(double, 'ij', x, 'ij', rechunk={'j': lambda n: 2 * n}, axis=1,
+             dtype=x.dtype)
+    assert y.chunks == ((2, 1, 2), (6, 4))
+    assert_eq(y, np.ones((5, 10)))
+
+
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
