@@ -1093,14 +1093,31 @@ def test_dtype_complex():
 
 
 def test_astype():
-    x = np.ones(5, dtype='f4')
-    d = da.from_array(x, chunks=(2,))
+    x = np.ones((5, 5), dtype='f8')
+    d = da.from_array(x, chunks=(2,2))
 
     assert d.astype('i8')._dtype == 'i8'
     assert_eq(d.astype('i8'), x.astype('i8'))
     assert same_keys(d.astype('i8'), d.astype('i8'))
 
-    assert d.astype(d.dtype) is d
+    with pytest.raises(TypeError):
+        d.astype('i8', casting='safe')
+
+    with pytest.raises(TypeError):
+        d.astype('i8', not_a_real_kwarg='foo')
+
+    # smoketest with kwargs
+    assert_eq(d.astype('i8', copy=False), x.astype('i8', copy=False))
+
+    # Check it's a noop
+    assert d.astype('f8') is d
+
+    # Check arrays with unknown dtype are not noops. Since `dtype('f8') == None`
+    # is True, comparing dtypes directly can lead to bugs
+    d._dtype = None
+    d2 = d.astype('f8')
+    assert d2 is not d
+    assert_eq(d2, x.astype('f8'))
 
 
 def test_arithmetic():
