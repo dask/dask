@@ -1966,8 +1966,15 @@ def atop(func, out_ind, *args, **kwargs):
     if rechunk:
         for i, ind in enumerate(out_ind):
             if ind in rechunk:
-                func = rechunk[ind]
-                chunks[i] = tuple(map(func, chunks[i]))
+                if callable(rechunk[ind]):
+                    chunks[i] = tuple(map(rechunk[ind], chunks[i]))
+                elif isinstance(rechunk[ind], int):
+                    chunks[i] = tuple(rechunk[ind] for _ in chunks[i])
+                elif isinstance(rechunk[ind], (tuple, list)):
+                    chunks[i] = tuple(rechunk[ind])
+                else:
+                    raise NotImplementedError(
+                        "rechunk values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)

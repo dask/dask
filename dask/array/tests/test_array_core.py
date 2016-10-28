@@ -2145,6 +2145,17 @@ def test_atop_chunks():
     assert y.chunks == ((2, 1, 2), (6, 4))
     assert_eq(y, np.ones((5, 10)))
 
+    x = da.ones((10, 10), chunks=(5, 5))
+    y = atop(double, 'ij', x, 'ij', axis=0, rechunk={'i': 10}, dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+    y = atop(double, 'ij', x, 'ij', axis=0, rechunk={'i': (10, 10)},
+             dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+
 
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
