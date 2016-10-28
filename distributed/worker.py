@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from datetime import timedelta
 from importlib import import_module
 import logging
-from multiprocessing.pool import ThreadPool
+import multiprocessing
 import os
 import pkg_resources
 import tempfile
@@ -33,7 +33,7 @@ from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
 
-_ncores = ThreadPool()._processes
+_ncores = multiprocessing.cpu_count()
 
 thread_state = local()
 
@@ -82,6 +82,22 @@ class Worker(Server):
         Auxiliary web servers running on this worker
     * **service_ports:** ``{str: port}``:
 
+    Parameters
+    ----------
+    scheduler_ip: str
+    scheduler_port: int
+    ip: str, optional
+    ncores: int, optional
+    loop: tornado.ioloop.IOLoop
+    local_dir: str, optional
+        Directory where we place local resources
+    name: str, optional
+    heartbeat_interval: int
+        Milliseconds between heartbeats to scheduler
+    memory_limit: int
+        Number of bytes of data to keep in memory before using disk
+    executor: concurrent.futures.Executor
+
     Examples
     --------
 
@@ -103,7 +119,7 @@ class Worker(Server):
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, memory_limit=TOTAL_MEMORY,
-                 **kwargs):
+                 executor=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
@@ -123,7 +139,7 @@ class Worker(Server):
             self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
-        self.executor = ThreadPoolExecutor(self.ncores)
+        self.executor = executor or ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.active = set()
         self.name = name

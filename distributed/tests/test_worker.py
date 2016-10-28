@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
+from concurrent.futures import ThreadPoolExecutor
+import logging
 from numbers import Integral
 from operator import add
 import os
+import re
 import shutil
 import sys
 import traceback
-import logging
-import re
 
 import pytest
 from toolz import pluck
@@ -538,3 +539,19 @@ def test_run_dask_worker(c, s, a, b):
 
     response = yield c._run(f)
     assert response == {a.address: a.id, b.address: b.id}
+
+
+@gen_cluster(client=True, ncores=[])
+def test_Executor(c, s):
+    with ThreadPoolExecutor(2) as e:
+        w = Worker(s.ip, s.port, executor=e)
+        assert w.executor is e
+        yield w._start()
+
+        future = c.submit(inc, 1)
+        result = yield future._result()
+        assert result == 2
+
+        assert e._threads  # had to do some work
+
+        yield w._close()
