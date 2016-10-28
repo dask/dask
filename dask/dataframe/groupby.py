@@ -728,8 +728,7 @@ class _GroupBy(object):
 
             with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
                 meta = self._meta_nonempty.apply(func)
-        else:
-            meta = make_meta(meta)
+        meta = make_meta(meta)
 
         df = self.obj
         if isinstance(self.index, DataFrame):  # add index columns to dataframe
