@@ -161,6 +161,8 @@ def _deps(dsk, arg):
 
     Helper function for get_dependencies.
 
+    Examples
+    --------
     >>> dsk = {'x': 1, 'y': 2}
 
     >>> _deps(dsk, 'x')
@@ -174,14 +176,15 @@ def _deps(dsk, arg):
     >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
     ['x', 'y']
     """
-    if istask(arg):
+    typ = type(arg)
+    if typ is tuple and arg and callable(arg[0]):  # istask(arg)
         result = []
         for a in arg[1:]:
             result.extend(_deps(dsk, a))
         return result
-    if type(arg) is list:
+    if typ is list:
         return sum([_deps(dsk, a) for a in arg], [])
-    if type(arg) is dict:
+    if typ is dict:
         return sum([_deps(dsk, v) for v in arg.values()], [])
     try:
         if arg not in dsk:
@@ -194,6 +197,8 @@ def _deps(dsk, arg):
 def get_dependencies(dsk, key=None, task=None, as_list=False):
     """ Get the immediate tasks on which this task depends
 
+    Examples
+    --------
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -227,7 +232,8 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     result = []
     while args:
         arg = args.pop()
-        if istask(arg):
+        typ = type(arg)
+        if typ is tuple and arg and callable(arg[0]):  # istask(arg):
             args.extend(arg[1:])
         elif type(arg) is list:
             args.extend(arg)
