@@ -293,13 +293,13 @@ def _to_csv_chunk(df, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           **kwargs):
+           get=None, **kwargs):
     values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
     values = write_bytes(values, filename, name_function, compression,
                          encoding=None)
 
     if compute:
         from dask import compute
-        compute(*values)
+        compute(*values, get=get)
     else:
         return values
