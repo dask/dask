@@ -15,6 +15,112 @@ from ..base import tokenize
 from ..utils import derived_from, M, funcname
 
 
+# #############################################
+#
+# GroupBy implementation notes
+#
+# Dask groupby supports reductions, i.e., mean, sum and alike, and apply. The
+# former do not shuffle the data and are efficiently implemented as tree
+# reductions. The latter is implemented by shuffling the underlying partiitons
+# such that all items of a group can be found in the same parititon.
+#
+# The argument to ``.groupby``, the index, can be a ``str``, ``dd.DataFrame``,
+# ``dd.Series``, or a list thereof. In operations on the grouped object, the
+# divisions of the the grouped object and the items of index have to align.
+# Currently, there is no support to shuffle the index values as part of the
+# groupby operation. Therefore, the alignment has to be guaranteed by the
+# caller.
+#
+# To operate on matchings paritions, most groupby operations exploit the
+# corresponding support in ``apply_concat_apply``. Specifically, this function
+# operates on matching paritiotns of frame-like objects passed as varargs. The
+# arguments to these functions are generated via ``__get_groupby_chunk_args``.
+#
+# After the inital chunk step, the passed index is implicitly passed along to
+# subsequent operations as the index of the parittions. Groupby operations on
+# the individual parttions can then access the index via the ``levels``
+# parameter of the ``groupby`` function. The correct arguments is determined by
+# the ``_determine_levels`` function.
+#
+# To minimize overhead, series in an index that were obtained by getitem on the
+# object to group are not passed as series to the various operations, but as
+# columnn keys. This transformation is implemented as ``_normalize_index``.
+#
+# Finally, the ``_get_index_meta`` allows to retrieve a index suitable for
+# usage in groupby operations of the meta objects. Both empty and nonempty meta
+# objects are supported.
+#
+# #############################################
+
+def _determine_levels(index):
+    """Determine the correct levels argument to groupby.
+    """
+    if isinstance(index, (tuple, list)) and len(index) > 1:
+        return list(range(len(index)))
+    else:
+        return 0
+
+
+def _normalize_index(df, index):
+    """Replace series with column names in an index wherever possible.
+    """
+    if not isinstance(df, DataFrame):
+        return index
+
+    elif isinstance(index, list):
+        return [_normalize_index(df, col) for col in index]
+
+    elif (isinstance(index, Series) and index.name in df.columns and
+          index._name == df[index.name]._name):
+            return index.name
+
+    elif (isinstance(index, DataFrame) and
+          set(index.columns).issubset(df.columns) and
+          index._name == df[index.columns]._name):
+        return list(index.columns)
+
+    else:
+        return index
+
+
+def _get_groupby_chunk_args(obj, index):
+    """Get the object to group and any partioned index item as list of varargs.
+    """
+    if not isinstance(index, list):
+        return [obj, index]
+    else:
+        return [obj] + index
+
+
+def _get_index_meta(index, meta_attribute):
+    """Get an index suitable for grouping meta objects.
+
+    Note, the index must be normalized. The ``meta_attribute`` should be
+    either ``'_meat'`` or ``'_meta_nonempty'``.
+    """
+    if isinstance(index, Series):
+        return getattr(index, meta_attribute)
+
+    elif isinstance(index, list):
+        return [_get_index_meta(item, meta_attribute) for item in index]
+
+    else:
+        return index
+
+
+def _do_index_partions_align(df, index):
+    """Check alignment of partitions for df and any index item.
+    """
+    if isinstance(index, Series):
+        return df.divisions == index.divisions
+
+    elif isinstance(index, list):
+        return all(_do_index_partions_align(df, item) for item in index)
+
+    else:
+        return True
+
+
 def _maybe_slice(grouped, columns):
     """
     Slice columns if grouped is pd.DataFrameGroupBy
@@ -463,41 +569,6 @@ def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
     return np.sqrt(result)
 
 
-def _determine_levels(index):
-    if isinstance(index, (tuple, list)) and len(index) > 1:
-        return list(range(len(index)))
-    else:
-        return 0
-
-
-def _normalize_index(df, index):
-    if not isinstance(df, DataFrame):
-        return index
-
-    elif isinstance(index, list):
-        return [_normalize_index(df, col) for col in index]
-
-    elif (isinstance(index, Series) and index.name in df.columns and
-          index._name == df[index.name]._name):
-            return index.name
-
-    elif (isinstance(index, DataFrame) and
-          set(index.columns).issubset(df.columns) and
-          index._name == df[index.columns]._name):
-        return list(index.columns)
-
-    else:
-        return index
-
-
-def _get_groupby_chunk_args(obj, index):
-    if not isinstance(index, list):
-        return [obj, index]
-
-    else:
-        return [obj] + index
-
-
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -518,72 +589,25 @@ class _GroupBy(object):
         # grouping key passed via groupby method
         self.index = _normalize_index(df, index)
 
+        if not _do_index_partions_align(df, self.index):
+            raise NotImplementedError("The grouped object and index of the "
+                                      "groupby must have the same divisions.")
+
         # slicing key applied to _GroupBy instance
         self._slice = slice
-
         self.kwargs = kwargs
 
-        if isinstance(index, Series) and df.divisions != index.divisions:
-            msg = ("The Series and index of the groupby"
-                   " must have the same divisions.")
-            raise NotImplementedError(msg)
-
-        if self._is_grouped_by_sliced_column(self.obj, index):
-            # check whether given Series is taken from given df and unchanged.
-            # If any operations are performed, _name will be changed to
-            # e.g. "elemwise-xxxx"
-
-            # if group key (index) is a Series sliced from DataFrame,
-            # emulation must be performed as the same.
-            # otherwise, group key is regarded as a separate column
-            self._meta = self.obj._meta.groupby(self.obj._meta[index.name])
-
-        elif isinstance(self.index, list):
-            self._meta = self.obj._meta.groupby([
-                item._meta if isinstance(item, Series) else item
-                for item in self.index
-            ])
-
-        elif isinstance(self.index, Series):
-            self._meta = self.obj._meta.groupby(self.index._meta)
-        else:
-            self._meta = self.obj._meta.groupby(self.index)
-
-    def _is_grouped_by_sliced_column(self, df, index):
-        """
-        Return whether index is a Series sliced from df
-        """
-        # TODO: handle list of series
-        if isinstance(df, Series):
-            return False
-        if (isinstance(index, Series) and index._name in df.columns and
-                index._name == df[index.name]._name):
-            return True
-        if (isinstance(index, DataFrame) and
-                set(index.columns).issubset(df.columns) and
-                index._name == df[index.columns]._name):
-            index = list(index.columns)
-            return True
-        return False
+        index_meta = _get_index_meta(self.index, meta_attribute='_meta')
+        self._meta = self.obj._meta.groupby(index_meta)
 
     @property
     def _meta_nonempty(self):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
-        # TODO: unify with index logic
         sample = self.obj._meta_nonempty
-        if isinstance(self.index, Series):
-            if self._is_grouped_by_sliced_column(self.obj, self.index):
-                grouped = sample.groupby(sample[self.index.name])
-            else:
-                grouped = sample.groupby(self.index._meta_nonempty)
-        elif (isinstance(self.index, list) and
-              any(isinstance(item, Series) for item in self.index)):
-            # TODO: implement this
-            raise NotImplementedError("raise an error to prevent a segfault")
-        else:
-            grouped = sample.groupby(self.index)
+        index_meta = _get_index_meta(self.index, '_meta_nonempty')
+        grouped = sample.groupby(index_meta)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None, split_every=None):
@@ -780,6 +804,10 @@ class _GroupBy(object):
         elif isinstance(self.index, Series):
             df2 = df.assign(_index=self.index)
             index = self.index
+        elif (isinstance(self.index, list) and
+              any(isinstance(item, Series) for item in self.index)):
+            raise NotImplementedError("groupby-apply with a multiple Series "
+                                      "is currently not supported")
         else:
             df2 = df
             index = df[self.index]
@@ -860,19 +888,22 @@ class SeriesGroupBy(_GroupBy):
     _token_prefix = 'series-groupby-'
 
     def __init__(self, df, index, slice=None, **kwargs):
-
-        # raise pandas-compat error message
+        # for any non series object, raise pandas-compat error message
         if isinstance(df, Series):
-            # When obj is Series, index must be Series
-            if not isinstance(index, Series):
-                if isinstance(index, list):
-                    if len(index) == 0:
-                        raise ValueError("No group keys passed!")
-                    #msg = "Grouper for '{0}' not 1-dimensional"
-                    #raise ValueError(msg.format(index[0]))
-                # raise error from pandas
-                else:
-                    df._meta.groupby(index)
+            if isinstance(index, Series):
+                pass
+            elif isinstance(index, list):
+                if len(index) == 0:
+                    raise ValueError("No group keys passed!")
+
+                non_series_items = [item for item in index
+                                    if not isinstance(item, Series)]
+                # raise error from pandas, if applicable
+                df._meta.groupby(non_series_items)
+            else:
+                # raise error from pandas, if applicable
+                df._meta.groupby(index)
+
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 

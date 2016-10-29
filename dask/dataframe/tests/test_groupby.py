@@ -841,3 +841,88 @@ def test_series_aggregations_multilevel(grouper, agg_func):
               # for pandas ~ 0.18, the name is not not properly propagated for
               # the mean aggregation
               check_names=(agg_func not in {'mean', 'nunique'}))
+
+
+@pytest.mark.parametrize('grouper', [
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2],
+    pytest.mark.xfail(reason="index dtype does not coincide: boolean != empty")(lambda df: [df['a'] > 2, df['b'] > 1])
+])
+@pytest.mark.parametrize('group_and_slice', [
+    lambda df, grouper: df.groupby(grouper(df)),
+    lambda df, grouper: df['c'].groupby(grouper(df)),
+    lambda df, grouper: df.groupby(grouper(df))['c'],
+])
+def test_groupby_meta_content(group_and_slice, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a'])
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    expected = group_and_slice(pdf, grouper).first().head(0)
+    meta = group_and_slice(ddf, grouper)._meta.first()
+    meta_nonempty = group_and_slice(ddf, grouper)._meta_nonempty.first().head(0)
+
+    assert_eq(expected, meta)
+    assert_eq(expected, meta_nonempty)
+
+
+def test_groupy_non_aligned_index():
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a'])
+
+    ddf3 = dd.from_pandas(pdf, npartitions=3)
+    ddf7 = dd.from_pandas(pdf, npartitions=7)
+
+    # working examples
+    ddf3.groupby(['a', 'b'])
+    ddf3.groupby([ddf3['a'], ddf3['b']])
+
+    # misaligned divisions
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby(ddf7['a'])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], ddf7['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], ddf3['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf3['a'], ddf7['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], 'b'])
+
+
+def test_groupy_series_wrong_grouper():
+    df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                       'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                       'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                      columns=['c', 'b', 'a'])
+
+    df = dd.from_pandas(df, npartitions=3)
+    s = df['a']
+
+    # working index values
+    s.groupby(s)
+    s.groupby([s, s])
+
+    # non working index values
+    with pytest.raises(KeyError):
+        s.groupby('foo')
+
+    with pytest.raises(KeyError):
+        s.groupby([s, 'foo'])
+
+    with pytest.raises(ValueError):
+        s.groupby(df)
+
+    with pytest.raises(ValueError):
+        s.groupby([s, df])
