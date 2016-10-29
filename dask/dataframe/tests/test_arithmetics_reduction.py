@@ -690,6 +690,7 @@ def test_allany(split_every):
     assert_eq(ddf.any(axis=1, split_every=split_every), df.any(axis=1))
     assert_eq(ddf.any(axis=0, split_every=split_every), df.any(axis=0))
 
+    assert_eq(ddf.A.all(split_every=split_every), df.A.all())
     assert_eq(ddf.A.any(split_every=split_every), df.A.any())
 
 
