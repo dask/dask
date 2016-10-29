@@ -1794,6 +1794,9 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
+    def __array_wrap__(self, array, context=None):
+        return pd.Index(array, name=self.name)
+
     def head(self, n=5, compute=True):
         """ First n items of the Index.
 
