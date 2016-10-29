@@ -17,7 +17,8 @@ _BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
                 'arcsinh', 'arccosh', 'arctanh', 'deg2rad', 'rad2deg',
                 'isfinite', 'isinf', 'isnan', 'signbit',
                 'degrees', 'radians', 'rint', 'fabs', 'sign', 'absolute',
-                'floor', 'ceil', 'trunc', 'logical_not', 'frexp', 'modf']
+                'floor', 'ceil', 'trunc', 'logical_not']
+
 
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc(ufunc):
@@ -95,7 +96,7 @@ def test_ufunc_with_index(ufunc):
     assert isinstance(dafunc(s), pd.Series)
     assert_eq(dafunc(s), npfunc(s))
 
-    s = pd.Series(np.abs(np.random.randn(100)),
+    s = pd.Series(np.abs(np.random.randn(20)),
                   index=list('abcdefghijklmnopqrst'))
     ds = dd.from_pandas(s, 3)
 

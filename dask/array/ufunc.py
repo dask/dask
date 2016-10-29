@@ -134,7 +134,7 @@ def frexp(x):
     R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
-frexp.__doc__ = np.frexp.__doc__
+frexp.__doc__ = skip_doctest(np.frexp.__doc__)
 
 
 def modf(x):
@@ -161,4 +161,4 @@ def modf(x):
 
     return L, R
 
-modf.__doc__ = np.modf.__doc__
+modf.__doc__ = skip_doctest(np.modf.__doc__)
