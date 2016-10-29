@@ -1449,6 +1449,10 @@ class _Frame(Base):
 
         return result1, result2
 
+    @derived_from(pd.DataFrame)
+    def combine_first(self, other):
+        return self.map_partitions(M.combine_first, other)
+
     @classmethod
     def _bind_operator_method(cls, name, op):
         """ bind operator method like DataFrame.add to this class """
@@ -1697,6 +1701,10 @@ class Series(_Frame):
     def align(self, other, join='outer', axis=None, fill_value=None):
         return super(Series, self).align(other, join=join, axis=axis,
                                          fill_value=fill_value)
+
+    @derived_from(pd.Series)
+    def combine_first(self, other):
+        return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag.
