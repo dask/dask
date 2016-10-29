@@ -12,8 +12,9 @@ from dask import delayed
 from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
 
-from dask.dataframe.core import (repartition_divisions, _loc, aca, _concat,
+from dask.dataframe.core import (repartition_divisions, aca, _concat,
                                  _Frame, Scalar)
+from dask.dataframe.methods import _loc_repartition
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 
 
@@ -1462,16 +1463,16 @@ def test_repartition():
 
 def test_repartition_divisions():
     result = repartition_divisions([0, 6], [0, 6, 6], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc, ('a', 0), 0, 6, False),
-                      ('b', 1): (_loc, ('a', 0), 6, 6, True),
+    assert result == {('b', 0): (_loc_repartition, ('a', 0), 0, 6, False),
+                      ('b', 1): (_loc_repartition, ('a', 0), 6, 6, True),
                       ('c', 0): ('b', 0),
                       ('c', 1): ('b', 1)}
 
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc, ('a', 0), 1, 3, False),
-                      ('b', 1): (_loc, ('a', 1), 3, 4, False),
-                      ('b', 2): (_loc, ('a', 1), 4, 6, False),
-                      ('b', 3): (_loc, ('a', 1), 6, 7, True),
+    assert result == {('b', 0): (_loc_repartition, ('a', 0), 1, 3, False),
+                      ('b', 1): (_loc_repartition, ('a', 1), 3, 4, False),
+                      ('b', 2): (_loc_repartition, ('a', 1), 4, 6, False),
+                      ('b', 3): (_loc_repartition, ('a', 1), 6, 7, True),
                       ('c', 0): (pd.concat, [('b', 0), ('b', 1)]),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}

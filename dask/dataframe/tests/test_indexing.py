@@ -7,7 +7,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 
-from dask.dataframe.core import _coerce_loc_index
+from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -77,6 +77,83 @@ def test_loc_with_series():
 
     assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
     assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
+
+
+def test_loc_with_series_different_partition():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('ABCDE'))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(ddf.loc[ddf.A > 0], df.loc[df.A > 0])
+    assert_eq(ddf.loc[(ddf.A > 0).repartition(['a', 'g', 'k', 'o', 't'])],
+              df.loc[df.A > 0])
+
+
+def test_loc2d():
+    # index indexer is always regarded as slice for duplicated values
+    assert_eq(d.loc[5, 'a'], full.loc[5:5, 'a'])
+    # assert_eq(d.loc[[5], 'a'], full.loc[[5], 'a'])
+    assert_eq(d.loc[5, ['a']], full.loc[5:5, ['a']])
+    # assert_eq(d.loc[[5], ['a']], full.loc[[5], ['a']])
+
+    assert_eq(d.loc[3:8, 'a'], full.loc[3:8, 'a'])
+    assert_eq(d.loc[:8, 'a'], full.loc[:8, 'a'])
+    assert_eq(d.loc[3:, 'a'], full.loc[3:, 'a'])
+
+    assert_eq(d.loc[3:8, ['a']], full.loc[3:8, ['a']])
+    assert_eq(d.loc[:8, ['a']], full.loc[:8, ['a']])
+    assert_eq(d.loc[3:, ['a']], full.loc[3:, ['a']])
+
+    # Series should raise
+    with tm.assertRaises(KeyError):
+        d.a.loc[3, 3]
+
+    with tm.assertRaises(KeyError):
+        d.a.loc[3:, 3]
+
+    with tm.assertRaises(KeyError):
+        d.a.loc[d.a % 2 == 0, 3]
+
+
+def test_loc2d_with_unknown_divisions():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('ABCDE'))
+    ddf = dd.from_pandas(df, 3)
+
+    ddf.divisions = (None, ) * len(ddf.divisions)
+    assert ddf.known_divisions is False
+
+    assert_eq(ddf.loc['a', 'A'], df.loc[['a'], 'A'])
+    assert_eq(ddf.loc['a', ['A']], df.loc[['a'], ['A']])
+    assert_eq(ddf.loc['a':'o', 'A'], df.loc['a':'o', 'A'])
+    assert_eq(ddf.loc['a':'o', ['A']], df.loc['a':'o', ['A']])
+
+
+def test_loc2d_duplicated_columns():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('AABCD'))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(ddf.loc['a', 'A'], df.loc[['a'], 'A'])
+    assert_eq(ddf.loc['a', ['A']], df.loc[['a'], ['A']])
+    assert_eq(ddf.loc['j', 'B'], df.loc[['j'], 'B'])
+    assert_eq(ddf.loc['j', ['B']], df.loc[['j'], ['B']])
+
+    assert_eq(ddf.loc['a':'o', 'A'], df.loc['a':'o', 'A'])
+    assert_eq(ddf.loc['a':'o', ['A']], df.loc['a':'o', ['A']])
+    assert_eq(ddf.loc['j':'q', 'B'], df.loc['j':'q', 'B'])
+    assert_eq(ddf.loc['j':'q', ['B']], df.loc['j':'q', ['B']])
+
+    assert_eq(ddf.loc['a':'o', 'B':'D'], df.loc['a':'o', 'B':'D'])
+    assert_eq(ddf.loc['a':'o', 'B':'D'], df.loc['a':'o', 'B':'D'])
+    assert_eq(ddf.loc['j':'q', 'B':'A'], df.loc['j':'q', 'B':'A'])
+    assert_eq(ddf.loc['j':'q', 'B':'A'], df.loc['j':'q', 'B':'A'])
+
+    assert_eq(ddf.loc[ddf.B > 0, 'B'], df.loc[df.B > 0, 'B'])
+    assert_eq(ddf.loc[ddf.B > 0, ['A', 'C']], df.loc[df.B > 0, ['A', 'C']])
 
 
 def test_getitem():
