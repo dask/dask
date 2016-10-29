@@ -1110,44 +1110,46 @@ class _Frame(Base):
         return Rolling(self, window=window, min_periods=min_periods,
                        freq=freq, center=center, win_type=win_type, axis=axis)
 
-    @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False):
+    def _reduction_agg(self, name, axis=None, skipna=True,
+                       split_every=False):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.sum(axis=axis, skipna=skipna)
-        token = self._token_prefix + 'sum'
+
+        meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
+        token = self._token_prefix + name
+
+        method = getattr(M, name)
         if axis == 1:
-            return self.map_partitions(M.sum, meta=meta,
+            return self.map_partitions(method, meta=meta,
                                        token=token, skipna=skipna, axis=axis)
         else:
-            return self.reduction(M.sum, meta=meta, token=token,
+            return self.reduction(method, meta=meta, token=token,
                                   skipna=skipna, axis=axis,
                                   split_every=split_every)
+
+    @derived_from(pd.DataFrame)
+    def all(self, axis=None, skipna=True, split_every=False):
+        return self._reduction_agg('all', axis=axis, skipna=skipna,
+                                   split_every=split_every)
+
+    @derived_from(pd.DataFrame)
+    def any(self, axis=None, skipna=True, split_every=False):
+        return self._reduction_agg('any', axis=axis, skipna=skipna,
+                                   split_every=split_every)
+
+    @derived_from(pd.DataFrame)
+    def sum(self, axis=None, skipna=True, split_every=False):
+        return self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False):
-        axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.max(axis=axis, skipna=skipna)
-        token = self._token_prefix + 'max'
-        if axis == 1:
-            return self.map_partitions(M.max, meta=meta, token=token,
-                                       skipna=skipna, axis=axis)
-        else:
-            return self.reduction(M.max, meta=meta, token=token,
-                                  skipna=skipna, axis=axis,
-                                  split_every=split_every)
+        return self._reduction_agg('max', axis=axis, skipna=skipna,
+                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
     def min(self, axis=None, skipna=True, split_every=False):
-        axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.min(axis=axis, skipna=skipna)
-        token = self._token_prefix + 'min'
-        if axis == 1:
-            return self.map_partitions(M.min, meta=meta, token=token,
-                                       skipna=skipna, axis=axis)
-        else:
-            return self.reduction(M.min, meta=meta, token=token,
-                                  skipna=skipna, axis=axis,
-                                  split_every=split_every)
+        return self._reduction_agg('min', axis=axis, skipna=skipna,
+                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True, split_every=False):
