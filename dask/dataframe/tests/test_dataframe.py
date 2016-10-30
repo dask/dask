@@ -1282,6 +1282,27 @@ def test_align_axis(join):
         ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
 
 
+def test_combine_first():
+    df1 = pd.DataFrame({'A': np.random.choice([1, 2, np.nan], 100),
+                        'B': np.random.choice(['a', 'b', np.nan], 100)})
+
+    df2 = pd.DataFrame({'A': np.random.choice([1, 2, 3], 100),
+                        'B': np.random.choice(['a', 'b', 'c'], 100)})
+    ddf1 = dd.from_pandas(df1, 4)
+    ddf2 = dd.from_pandas(df2, 5)
+
+    # DataFrame
+    assert_eq(ddf1.combine_first(ddf2), df1.combine_first(df2))
+    assert_eq(ddf1.combine_first(df2), df1.combine_first(df2))
+
+    # Series
+    assert_eq(ddf1.A.combine_first(ddf2.A), df1.A.combine_first(df2.A))
+    assert_eq(ddf1.A.combine_first(df2.A), df1.A.combine_first(df2.A))
+
+    assert_eq(ddf1.B.combine_first(ddf2.B), df1.B.combine_first(df2.B))
+    assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
+
+
 def test_dataframe_picklable():
     from pickle import loads, dumps
     cloudpickle = pytest.importorskip('cloudpickle')
