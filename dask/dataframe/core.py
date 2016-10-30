@@ -305,21 +305,25 @@ class _Frame(Base):
 
     @property
     def _repr_divisions(self):
+        name = "npartitions={0}".format(self.npartitions)
         if self.known_divisions:
-            divisions = pd.Index(self.divisions, name='divisions')
+            divisions = pd.Index(self.divisions, name=name)
         else:
             # avoid to be converted to NaN
             divisions = pd.Index(['None'] * (self.npartitions + 1),
-                                 name='divisions')
+                                 name=name)
         return divisions
 
     def __repr__(self):
+        with pd.option_context("display.max_rows", 5):
+            data = repr(self._repr_data)
+
         return """{name}
 
 Dask {klass} Structure:
 {data}""".format(name=self._repr_header(),
                  klass=self.__class__.__name__,
-                 data=repr(self._repr_data))
+                 data=data)
 
     @property
     def index(self):
@@ -1630,13 +1634,14 @@ class Series(_Frame):
                                                            dtype=self.dtype)
         else:
             footer = "dtype: {dtype}".format(dtype=self.dtype)
+
         return """{name}
 
 Dask {klass} Structure:
 {data}
 {footer}""".format(name=self._repr_header(),
                    klass=self.__class__.__name__,
-                   data=self._repr_data.to_string(),
+                   data=self.to_string(),
                    footer=footer)
 
     @derived_from(pd.Series)
@@ -1805,8 +1810,9 @@ Dask {klass} Structure:
                                    meta=self._meta.to_frame(name))
 
     @derived_from(pd.Series)
-    def to_string(self):
-        return self._repr_data.to_string()
+    def to_string(self, max_rows=5):
+        # option_context doesn't affect
+        return self._repr_data.to_string(max_rows=max_rows)
 
     @classmethod
     def _bind_operator_method(cls, name, op):
@@ -2386,8 +2392,9 @@ class DataFrame(_Frame):
         return to_bag(self, index)
 
     @derived_from(pd.DataFrame)
-    def to_string(self):
-        return self._repr_data.to_string()
+    def to_string(self, max_rows=5):
+        # option_context doesn't affect
+        return self._repr_data.to_string(max_rows=max_rows)
 
     def _get_numeric_data(self, how='any', subset=None):
         # calculate columns to avoid unnecessary calculation
@@ -2706,10 +2713,11 @@ class DataFrame(_Frame):
         return to_records(self)
 
     @derived_from(pd.DataFrame)
-    def to_html(self):
+    def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
+        data = self._repr_data.to_html(max_rows=max_rows)
         return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
-                                     data=self._repr_data.to_html())
+                                     data=data)
 
     @cache_readonly
     def _repr_data(self):
@@ -2725,8 +2733,10 @@ class DataFrame(_Frame):
 {data}"""
 
     def _repr_html_(self):
+        with pd.option_context("display.max_rows", 5):
+            data = self._repr_data._repr_html_()
         return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
-                                     data=self._repr_data._repr_html_())
+                                     data=data)
 
 
 # bind operators
