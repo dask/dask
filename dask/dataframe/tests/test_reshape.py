@@ -117,6 +117,20 @@ def test_pivot_table(aggfunc):
         # because of a pandas 0.18.x bug, categorical dtype is not preserved
         assert_eq(res, exp, check_names=False, check_column_type=False)
 
+    # method
+    res = ddf.pivot_table(index='A', columns='C', values='B',
+                          aggfunc=aggfunc)
+    exp = df.pivot_table(index='A', columns='C', values='B',
+                         aggfunc=aggfunc)
+    if aggfunc == 'count':
+        # dask result cannot be int64 dtype depending on divisions because of NaN
+        exp = exp.astype(np.float64)
+    if PANDAS_ge_0190:
+        assert_eq(res, exp)
+    else:
+        # because of a pandas 0.18.x bug, categorical dtype is not preserved
+        assert_eq(res, exp, check_names=False, check_column_type=False)
+
 
 def test_pivot_table_dtype():
 
