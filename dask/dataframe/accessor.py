@@ -31,8 +31,12 @@ class Accessor(object):
             raise ValueError('Accessor cannot be initialized')
         self._series = series
 
+    def _get_property_out(self, key):
+        # For CategoricalAccessor to override with _meta
+        return self.getattr(self._series._meta_nonempty, key)
+
     def _property_map(self, key):
-        out = self.getattr(self._series._meta_nonempty, key)
+        out = self._get_property_out(key)
         if key in self._meta_attributes:
             return out
         meta = self._series._partition_type([], dtype=out.dtype,
@@ -125,7 +129,7 @@ class CategoricalAccessor(Accessor):
     _meta_attributes = {'categories', 'ordered'}
 
     def _function_map(self, key, *args, **kwargs):
-        out = self.call(self._series._meta_nonempty, key, *args, **kwargs)
+        out = self.call(self._series._meta, key, *args, **kwargs)
         meta = self._series._partition_type(
             pd.Categorical([], categories=out.cat.categories,
                            ordered=out.cat.ordered),
@@ -133,6 +137,11 @@ class CategoricalAccessor(Accessor):
         )
         return map_partitions(self.call, self._series, key, *args, meta=meta,
                               **kwargs)
+
+    def _get_property_out(self, key):
+        # _meta should have all type-info, and _meta_nonempty may fail
+        # See https://github.com/dask/dask/issues/1705
+        return self.getattr(self._series._meta, key)
 
     @staticmethod
     def getattr(obj, attr):

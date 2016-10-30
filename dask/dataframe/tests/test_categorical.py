@@ -1,6 +1,7 @@
 import operator
 import warnings
 
+import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
@@ -125,3 +126,17 @@ class TestCategoricalAccessor:
         assert_eq(result, expected)
         assert_eq(result._meta.cat.categories, expected.cat.categories)
         assert_eq(result._meta.cat.ordered, expected.cat.ordered)
+
+    def test_categorical_empty(self):
+        # GH 1705
+
+        def make_empty():
+            return pd.DataFrame({"A": pd.Categorical([np.nan, np.nan])})
+
+        def make_full():
+            return pd.DataFrame({"A": pd.Categorical(['a', 'a'])})
+
+        a = dd.from_delayed([dask.delayed(make_empty)(),
+                             dask.delayed(make_full)()])
+        # Used to raise an IndexError
+        a.A.cat.categories
