@@ -238,18 +238,9 @@ class _Frame(Base):
         self._meta = meta
         self.divisions = tuple(divisions)
 
-    # constructor properties
-    # http://pandas.pydata.org/pandas-docs/stable/internals.html#override-constructor-properties
-
-    @property
-    def _constructor_sliced(self):
-        """Constructor used when a result has one lower dimension(s) as the original"""
-        raise NotImplementedError
-
     @property
     def _constructor(self):
-        """Constructor used when a result has the same dimension(s) as the original"""
-        raise NotImplementedError
+        return new_dd_object
 
     @property
     def npartitions(self):
@@ -318,8 +309,8 @@ class _Frame(Base):
             name = 'get-partition-%s-%s' % (str(n), self._name)
             dsk = {(name, 0): (self._name, n)}
             divisions = self.divisions[n:n + 2]
-            return self._constructor(merge(self.dask, dsk), name,
-                                     self._meta, divisions)
+            return new_dd_object(merge(self.dask, dsk), name,
+                                 self._meta, divisions)
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
             raise ValueError(msg)
@@ -346,7 +337,7 @@ class _Frame(Base):
         name = 'from-cache-' + self._name
         dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
                     for i, key in enumerate(self._keys()))
-        return self._constructor(dsk2, name, self._meta, self.divisions)
+        return new_dd_object(dsk2, name, self._meta, self.divisions)
 
     @derived_from(pd.DataFrame)
     def drop_duplicates(self, **kwargs):
@@ -646,8 +637,8 @@ class _Frame(Base):
         else:
             dsk = {(name, 0): (safe_head, (self._name, 0), n)}
 
-        result = self._constructor(merge(self.dask, dsk), name, self._meta,
-                                   [self.divisions[0], self.divisions[npartitions]])
+        result = new_dd_object(merge(self.dask, dsk), name, self._meta,
+                               [self.divisions[0], self.divisions[npartitions]])
 
         if compute:
             result = result.compute()
@@ -661,8 +652,8 @@ class _Frame(Base):
         name = 'tail-%d-%s' % (n, self._name)
         dsk = {(name, 0): (M.tail, (self._name, self.npartitions - 1), n)}
 
-        result = self._constructor(merge(self.dask, dsk), name,
-                                   self._meta, self.divisions[-2:])
+        result = new_dd_object(merge(self.dask, dsk), name,
+                               self._meta, self.divisions[-2:])
 
         if compute:
             result = result.compute()
@@ -694,7 +685,7 @@ class _Frame(Base):
             raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (methods.loc, (self._name, part), slice(ind, ind))}
 
-        return self._constructor(merge(self.dask, dsk), name, self, [ind, ind])
+        return new_dd_object(merge(self.dask, dsk), name, self, [ind, ind])
 
     def _loc_slice(self, ind):
         name = 'loc-%s' % tokenize(ind, self)
@@ -730,8 +721,8 @@ class _Frame(Base):
                           else self.divisions[-1],))
 
         assert len(divisions) == len(dsk) + 1
-        return self._constructor(merge(self.dask, dsk), name,
-                                 self._meta, divisions)
+        return new_dd_object(merge(self.dask, dsk), name,
+                             self._meta, divisions)
 
     @property
     def loc(self):
@@ -810,8 +801,8 @@ class _Frame(Base):
         dsk = {(name, i): (methods.sample, (self._name, i), state, frac, replace)
                for i, state in enumerate(state_data)}
 
-        return self._constructor(merge(self.dask, dsk), name,
-                                 self._meta, self.divisions)
+        return new_dd_object(merge(self.dask, dsk), name,
+                             self._meta, self.divisions)
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
         """ Export frame to hdf file(s)
@@ -1305,7 +1296,7 @@ class _Frame(Base):
         dsk = merge(num.dask, *(s.dask for s in stats))
         dsk[(name, 0)] = (methods.describe_aggregate, stats_names)
 
-        return self._constructor(dsk, name, num._meta, divisions=[None, None])
+        return new_dd_object(dsk, name, num._meta, divisions=[None, None])
 
     def _cum_agg(self, token, chunk, aggregate, axis, skipna=True,
                  chunk_kwargs=None):
@@ -1342,8 +1333,8 @@ class _Frame(Base):
                     dask[(cname, i)] = (aggregate, (cname, i - 1),
                                         (cumlast._name, i - 1))
                 dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
-            return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
-                                     name, chunk(self._meta), self.divisions)
+            return new_dd_object(merge(dask, cumpart.dask, cumlast.dask),
+                                 name, chunk(self._meta), self.divisions)
 
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True):
@@ -1441,13 +1432,13 @@ class _Frame(Base):
         dsk1 = dict(((name1, i), (getitem, key, 0))
                     for i, key in enumerate(aligned._keys()))
         dsk1.update(aligned.dask)
-        result1 = self._constructor(dsk1, name1, meta1, aligned.divisions)
+        result1 = new_dd_object(dsk1, name1, meta1, aligned.divisions)
 
         name2 = 'align2-' + token
         dsk2 = dict(((name2, i), (getitem, key, 1))
                     for i, key in enumerate(aligned._keys()))
         dsk2.update(aligned.dask)
-        result2 = self._constructor(dsk2, name2, meta2, aligned.divisions)
+        result2 = new_dd_object(dsk2, name2, meta2, aligned.divisions)
 
         return result1, result2
 
@@ -1491,14 +1482,6 @@ class Series(_Frame):
 
     _partition_type = pd.Series
     _token_prefix = 'series-'
-
-    @property
-    def _constructor_sliced(self):
-        return Scalar
-
-    @property
-    def _constructor(self):
-        return Series
 
     @property
     def name(self):
@@ -1865,10 +1848,6 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
-    @property
-    def _constructor(self):
-        return Index
-
     def head(self, n=5, compute=True):
         """ First n items of the Index.
 
@@ -1877,8 +1856,8 @@ class Index(Series):
         name = 'head-%d-%s' % (n, self._name)
         dsk = {(name, 0): (operator.getitem, (self._name, 0), slice(0, n))}
 
-        result = self._constructor(merge(self.dask, dsk), name,
-                                   self._meta, self.divisions[:2])
+        result = new_dd_object(merge(self.dask, dsk), name,
+                               self._meta, self.divisions[:2])
 
         if compute:
             result = result.compute()
@@ -1925,14 +1904,6 @@ class DataFrame(_Frame):
     _token_prefix = 'dataframe-'
 
     @property
-    def _constructor_sliced(self):
-        return Series
-
-    @property
-    def _constructor(self):
-        return DataFrame
-
-    @property
     def columns(self):
         return self._meta.columns
 
@@ -1955,8 +1926,8 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
-            return self._constructor_sliced(merge(self.dask, dsk), name,
-                                            meta, self.divisions)
+            return new_dd_object(merge(self.dask, dsk), name,
+                                 meta, self.divisions)
         elif isinstance(key, slice):
             return self._loc(key)
 
@@ -1966,8 +1937,8 @@ class DataFrame(_Frame):
 
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
-            return self._constructor(merge(self.dask, dsk), name,
-                                     meta, self.divisions)
+            return new_dd_object(merge(self.dask, dsk), name,
+                                 meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             #
@@ -1976,8 +1947,8 @@ class DataFrame(_Frame):
                 self, key = _maybe_align_partitions([self, key])
             dsk = {(name, i): (M._getitem_array, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
-            return self._constructor(merge(self.dask, key.dask, dsk), name,
-                                     self, self.divisions)
+            return new_dd_object(merge(self.dask, key.dask, dsk), name,
+                                 self, self.divisions)
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
@@ -2008,8 +1979,8 @@ class DataFrame(_Frame):
             name = 'getitem-%s' % tokenize(self, key)
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
-            return self._constructor_sliced(merge(self.dask, dsk), name,
-                                            meta, self.divisions)
+            return new_dd_object(merge(self.dask, dsk), name,
+                                 meta, self.divisions)
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -2169,8 +2140,8 @@ class DataFrame(_Frame):
                        for i in range(self.npartitions))
 
         meta = self._meta.query(expr, **kwargs)
-        return self._constructor(merge(dsk, self.dask), name,
-                                 meta, self.divisions)
+        return new_dd_object(merge(dsk, self.dask), name,
+                             meta, self.divisions)
 
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
@@ -3304,8 +3275,8 @@ def repartition(df, divisions=None, force=False):
         out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions,
                                     df._name, tmp, out, force=force)
-        return df._constructor(merge(df.dask, dsk), out,
-                               df._meta, divisions)
+        return new_dd_object(merge(df.dask, dsk), out,
+                             df._meta, divisions)
     elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token
         from .utils import shard_df_on_index
