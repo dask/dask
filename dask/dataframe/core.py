@@ -2507,6 +2507,31 @@ class DataFrame(_Frame):
 
         put_lines(buf, lines)
 
+    def pivot_table(self, index=None, columns=None,
+                    values=None, aggfunc='mean'):
+        """
+        Create a spreadsheet-style pivot table as a DataFrame. Target ``columns``
+        must have category dtype to infer result's ``columns``.
+        ``index``, ``columns``, ``values`` and ``aggfunc`` must be all scalar.
+
+        Parameters
+        ----------
+        values : scalar
+            column to aggregate
+        index : scalar
+            column to be index
+        columns : scalar
+            column to be columns
+        aggfunc : {'mean', 'sum', 'count'}, default 'mean'
+
+        Returns
+        -------
+        table : DataFrame
+        """
+        from .reshape import pivot_table
+        return pivot_table(self, index=index, columns=columns, values=values,
+                           aggfunc=aggfunc)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
