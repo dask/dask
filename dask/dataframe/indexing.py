@@ -36,7 +36,9 @@ class _LocIndexer(object):
         if isinstance(key, tuple):
             # multi-dimensional selection
             if len(key) > self.obj.ndim:
-                raise KeyError(key)
+                # raise from pandas
+                msg = 'Too many indexers'
+                raise pd.core.indexing.IndexingError(msg)
 
             iindexer = key[0]
             cindexer = key[1]

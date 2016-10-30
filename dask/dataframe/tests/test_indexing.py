@@ -105,14 +105,18 @@ def test_loc2d():
     assert_eq(d.loc[:8, ['a']], full.loc[:8, ['a']])
     assert_eq(d.loc[3:, ['a']], full.loc[3:, ['a']])
 
+    # 3d
+    with tm.assertRaises(pd.core.indexing.IndexingError):
+        d.loc[3, 3, 3]
+
     # Series should raise
-    with tm.assertRaises(KeyError):
+    with tm.assertRaises(pd.core.indexing.IndexingError):
         d.a.loc[3, 3]
 
-    with tm.assertRaises(KeyError):
+    with tm.assertRaises(pd.core.indexing.IndexingError):
         d.a.loc[3:, 3]
 
-    with tm.assertRaises(KeyError):
+    with tm.assertRaises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
 
 
