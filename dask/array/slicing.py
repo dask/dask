@@ -13,6 +13,9 @@ from ..base import tokenize
 from ..compatibility import long
 
 
+colon = slice(None, None, None)
+
+
 def sanitize_index(ind):
     """ Sanitize the elements for indexing along one axis
 
@@ -147,26 +150,31 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     Strips out Nones then hands off to slice_wrap_lists
     """
     # Strip Nones from index
-    index2 = tuple([ind for ind in index if ind is not None])
     where_none = [i for i, ind in enumerate(index) if ind is None]
-    expand = expander(where_none)
+    index2 = tuple([ind for ind in index if ind is not None])
 
     # Pass down and do work
     dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
 
-    # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
-    dsk2 = {(out_name,) + expand(k[1:], 0):
-            (v[:2] + (expand(v[2], None),))
-            for k, v in dsk.items()
-            if k[0] == out_name}
+    if where_none:
+        expand = expander(where_none)
 
-    # Add back intermediate parts of the dask that weren't the output
-    dsk3 = merge(dsk2, {k: v for k, v in dsk.items() if k[0] != out_name})
+        # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
+        dsk2 = {(out_name,) + expand(k[1:], 0):
+                (v[:2] + (expand(v[2], None),))
+                for k, v in dsk.items()
+                if k[0] == out_name}
 
-    # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
-    blockdims3 = expand(blockdims2, (1,))
+        # Add back intermediate parts of the dask that weren't the output
+        dsk3 = merge(dsk2, {k: v for k, v in dsk.items() if k[0] != out_name})
 
-    return dsk3, blockdims3
+        # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
+        blockdims3 = expand(blockdims2, (1,))
+
+        return dsk3, blockdims3
+
+    else:
+        return dsk, blockdims2
 
 
 def slice_wrap_lists(out_name, in_name, blockdims, index):
@@ -196,14 +204,14 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
+    # No lists, hooray! just use slice_slices_and_integers
+    if not where_list:
+        return slice_slices_and_integers(out_name, in_name, blockdims, index2)
+
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
                                if isinstance(i, list) else i
                                for i in index2)
-
-    # No lists, hooray! just use slice_slices_and_integers
-    if index2 == index_without_list:
-        return slice_slices_and_integers(out_name, in_name, blockdims, index2)
 
     # lists and full slices.  Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
@@ -259,9 +267,9 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
-    dsk_out = dict((out_name, (getitem, in_name, slices))
-                   for out_name, in_name, slices
-                   in zip(out_names, in_names, all_slices))
+    dsk_out = {out_name: (getitem, in_name, slices)
+               for out_name, in_name, slices
+               in zip(out_names, in_names, all_slices)}
 
     new_blockdims = [new_blockdim(d, db, i)
                      for d, i, db in zip(shape, index, blockdims)
@@ -295,6 +303,11 @@ def _slice_1d(dim_shape, lengths, index):
 
     Examples
     --------
+
+    Trivial slicing
+
+    >>> _slice_1d(100, [60, 40], slice(None, None, None))
+    {0: slice(None, None, None), 1: slice(None, None, None)}
 
     100 length array cut into length 20 pieces, slice 0:35
 
@@ -340,6 +353,9 @@ def _slice_1d(dim_shape, lengths, index):
         return {i: ind}
 
     assert isinstance(index, slice)
+
+    if index == colon:
+        return {k: colon for k in range(len(lengths))}
 
     step = index.step or 1
     if step > 0:
@@ -428,9 +444,6 @@ def issorted(seq):
             return False
         x = elem
     return True
-
-
-colon = slice(None, None, None)
 
 
 def take_sorted(outname, inname, blockdims, index, axis=0):
