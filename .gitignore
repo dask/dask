@@ -11,3 +11,5 @@ log
 *.swp
 *.swo
 .cache/
+.asv/
+asv.conf.json

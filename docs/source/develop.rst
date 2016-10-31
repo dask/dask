@@ -200,6 +200,25 @@ docstrings with pytest as follows::
    py.test dask --doctest-modules
 
 
+Performance Benchmarks
+~~~~~~~~~~~~~~~~~~~~~~
+
+Dask uses asv_ for benchmarking performance.
+To run the benchmark suite you'll need to install ``asv``.
+If you're using virtualenv instead of conda, you'll need
+to edit the ``asv.conf.json`` file at the root of the git repo.
+Change the ``environment_type`` field from ``conda`` to ``virtualenv``.
+
+When developing a change that might affect performance, you can use
+the ``asv continuous -f 1.1 upstream/master <branch-name>`` command to
+measure the performance effect of your changes. Any changes larger
+than 10% will be reported.
+
+Additionally, you may be asked to contribute an asv benchmark.
+See the examples in the ``benchmarks`` directory.
+
+.. _asv: http://asv.readthedocs.io/en/latest/
+
 Style
 ~~~~~
 
