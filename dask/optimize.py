@@ -43,9 +43,10 @@ def cull(dsk, keys):
         out[key] = dsk[key]
         deps = get_dependencies(dsk, key, as_list=True)  # fuse needs lists
         dependencies[key] = deps
-        unseen = [d for d in deps if d not in seen]
-        stack.extend(unseen)
-        seen.update(unseen)
+        for d in deps:
+            if d not in seen:
+                seen.add(d)
+                stack.append(d)
     return out, dependencies
 
 

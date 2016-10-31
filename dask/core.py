@@ -180,7 +180,7 @@ def _deps(dsk, arg):
     if typ is tuple and arg and callable(arg[0]):  # istask(arg)
         result = []
         for a in arg[1:]:
-            result.extend(_deps(dsk, a))
+            result += _deps(dsk, a)
         return result
     if typ is list:
         return sum([_deps(dsk, a) for a in arg], [])
@@ -211,7 +211,7 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     >>> get_dependencies(dsk, 'y')
     set(['x'])
 
-    >>> get_dependencies(dsk, 'z')  # doctest: +SKIP
+    >>> sorted(get_dependencies(dsk, 'z'))  # doctest: +SKIP
     set(['x', 'y'])
 
     >>> get_dependencies(dsk, 'w')  # Only direct dependencies
@@ -224,27 +224,24 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     set(['x'])
     """
     if key is not None:
-        args = [dsk[key]]
+        arg = dsk[key]
     elif task is not None:
-        args = [task]
+        arg = task
     else:
         raise ValueError("Provide either key or task")
-    result = []
-    while args:
-        arg = args.pop()
-        typ = type(arg)
-        if typ is tuple and arg and callable(arg[0]):  # istask(arg):
-            args.extend(arg[1:])
-        elif type(arg) is list:
-            args.extend(arg)
-        else:
-            result.append(arg)
-    if not result:
-        return [] if as_list else set()
-    rv = []
-    for x in result:
-        rv.extend(_deps(dsk, x))
+    rv = _deps(dsk, arg)
     return rv if as_list else set(rv)
+
+
+def get_all_dependencies(dsk, tasks):
+    """ Get the immediate tasks on which the tasks depend.
+
+    Like get_dependencies(), but operating on multiple tasks at once,
+    and therefore significantly faster.
+    """
+    if not isinstance(tasks, list):
+        raise TypeError("Please provide a list of tasks")
+    return set(_deps(dsk, tasks))
 
 
 def get_deps(dsk):

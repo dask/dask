@@ -1,12 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import lru_cache
 from itertools import product
 from math import ceil
 from numbers import Number
-from operator import getitem, add
+from operator import getitem, add, itemgetter
 
 import numpy as np
-from toolz import merge, first, accumulate, pluck
+from toolz import merge, accumulate, pluck, memoize
 
 from ..base import tokenize
 from ..compatibility import long
@@ -148,21 +149,22 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     # Strip Nones from index
     index2 = tuple([ind for ind in index if ind is not None])
     where_none = [i for i, ind in enumerate(index) if ind is None]
+    expand = expander(where_none)
 
     # Pass down and do work
     dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
 
     # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
-    dsk2 = dict(((out_name,) + insert_many(k[1:], where_none, 0),
-                 (v[:2] + (insert_many(v[2], where_none, None),)))
-                for k, v in dsk.items()
-                if k[0] == out_name)
+    dsk2 = {(out_name,) + expand(k[1:], 0):
+            (v[:2] + (expand(v[2], None),))
+            for k, v in dsk.items()
+            if k[0] == out_name}
 
     # Add back intermediate parts of the dask that weren't the output
-    dsk3 = merge(dsk2, dict((k, v) for k, v in dsk.items() if k[0] != out_name))
+    dsk3 = merge(dsk2, {k: v for k, v in dsk.items() if k[0] != out_name})
 
     # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
-    blockdims3 = insert_many(blockdims2, where_none, (1,))
+    blockdims3 = expand(blockdims2, (1,))
 
     return dsk3, blockdims3
 
@@ -571,6 +573,42 @@ def insert_many(seq, where, val):
     return tuple(result)
 
 
+@memoize
+def _expander(where):
+    if not where:
+        def expand(seq, val):
+            return seq
+        return expand
+    else:
+        decl = """def expand(seq, val):
+            return ({left}) + tuple({right})
+        """
+        left = []
+        j = 0
+        for i in range(max(where) + 1):
+            if i in where:
+                left.append("val, ")
+            else:
+                left.append("seq[%d], " % j)
+                j += 1
+        right = "seq[%d:]" % j
+        left = "".join(left)
+        decl = decl.format(**locals())
+        ns = {}
+        exec(compile(decl, "<dynamic>", "exec"), ns, ns)
+        return ns['expand']
+
+
+def expander(where):
+    """ An optimized version of insert_many() when *where*
+    is known upfront and used many times.
+
+    >>> expander([0, 2])(['a', 'b', 'c'], 'z')
+    ('z', 'a', 'z', 'b', 'c')
+    """
+    return _expander(tuple(where))
+
+
 def new_blockdim(dim_shape, lengths, index):
     """
 
@@ -586,7 +624,8 @@ def new_blockdim(dim_shape, lengths, index):
     if isinstance(index, list):
         return [len(index)]
     assert not isinstance(index, (int, long))
-    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
+    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(),
+                   key=itemgetter(0))
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
               for i, slc in pairs]
     if isinstance(index, slice) and index.step and index.step < 0:
