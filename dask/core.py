@@ -211,7 +211,7 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     >>> get_dependencies(dsk, 'y')
     set(['x'])
 
-    >>> sorted(get_dependencies(dsk, 'z'))  # doctest: +SKIP
+    >>> get_dependencies(dsk, 'z')  # doctest: +SKIP
     set(['x', 'y'])
 
     >>> get_dependencies(dsk, 'w')  # Only direct dependencies
