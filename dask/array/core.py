@@ -1908,6 +1908,8 @@ def atop(func, out_ind, *args, **kwargs):
     A broad class of blocked algorithms and patterns can be specified with a
     concise multi-index notation.  The ``atop`` function applies an in-memory
     function across multiple blocks of multiple inputs in a variety of ways.
+    Many dask.array operations are special cases of atop including elementwise,
+    broadcasting, reductions, tensordot, and transpose.
 
     Parameters
     ----------
@@ -1921,14 +1923,13 @@ def atop(func, out_ind, *args, **kwargs):
         Extra keyword arguments to pass to function
     concatenate: bool, keyword only
         If true concatenate arrays along dummy indices, else provide lists
+    adjust_chunks: dict
+        Dictionary mapping index to function to be applied to chunk sizes
     new_axes: dict, keyword only
         New indexes and their dimension lengths
 
-    This is best explained through example.  Consider the following examples:
-
     Examples
     --------
-
     2D embarrassingly parallel operation from two arrays, x, and y.
 
     >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij')  # z = x + y  # doctest: +SKIP
@@ -1978,9 +1979,14 @@ def atop(func, out_ind, *args, **kwargs):
 
     >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5})  # doctest: +SKIP
 
-    Many dask.array operations are special cases of atop.  These tensor
-    operations cover a broad subset of NumPy and this function has been battle
-    tested, supporting tricky concepts like broadcasting.
+    If the applied function changes the size of each chunk you can specify this
+    with a ``adjust_chunks={...}`` dictionary holding a function for each index
+    that modifies the dimension size in that index.
+
+    >>> def double(x):
+    ...     return np.concatenate([x, x])
+
+    >>> y = atop(double, 'ij', x, 'ij', adjust_chunks={'i': lambda n: 2 * n})  # doctest: +SKIP
 
     See Also
     --------
@@ -1989,6 +1995,7 @@ def atop(func, out_ind, *args, **kwargs):
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
+    adjust_chunks = kwargs.pop('adjust_chunks', None)
     new_axes = kwargs.get('new_axes', {})
 
     chunkss, arrays = unify_chunks(*args)
@@ -2005,7 +2012,21 @@ def atop(func, out_ind, *args, **kwargs):
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, _ in arginds]
-    chunks = tuple(chunkss[i] for i in out_ind)
+
+    chunks = [chunkss[i] for i in out_ind]
+    if adjust_chunks:
+        for i, ind in enumerate(out_ind):
+            if ind in adjust_chunks:
+                if callable(adjust_chunks[ind]):
+                    chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
+                elif isinstance(adjust_chunks[ind], int):
+                    chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
+                elif isinstance(adjust_chunks[ind], (tuple, list)):
+                    chunks[i] = tuple(adjust_chunks[ind])
+                else:
+                    raise NotImplementedError(
+                        "adjust_chunks values must be callable, int, or tuple")
+    chunks = tuple(chunks)
 
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
 
