@@ -213,7 +213,9 @@ def rechunk(x, chunks):
     return x
 
 
-EXPAND_FACTOR = 4
+ENABLE_PROGRESSIVE_RECHUNKING = True
+
+EXPAND_FACTOR = 3.5
 
 
 def _plan_rechunk(old_chunks, new_chunks):
@@ -221,7 +223,7 @@ def _plan_rechunk(old_chunks, new_chunks):
 
     steps = [new_chunks]
 
-    while 1:
+    while ENABLE_PROGRESSIVE_RECHUNKING:
         oldsize = reduce(mul, map(len, old_chunks))
         newsize = reduce(mul, map(len, new_chunks))
         crossed = intersect_chunks(old_chunks, new_chunks)
@@ -232,14 +234,14 @@ def _plan_rechunk(old_chunks, new_chunks):
             break
         chunks = []
         for oc, nc in zip(old_chunks, new_chunks):
-            if len(nc) > 3.5 * len(oc):
+            if len(nc) > EXPAND_FACTOR * len(oc):
                 # Too much expansion => first expand by half
                 c = [nc[i] + nc[i + 1] for i in range(0, len(nc) - 1, 2)]
                 if len(nc) & 1:
                     c.append(nc[-1])
                 assert len(c) >= len(oc)
                 #print("too much expansion: %s -> %s" % (nc, c))
-            elif 3.5 * len(nc) >= len(oc):
+            elif EXPAND_FACTOR * len(nc) >= len(oc):
                 # Moderate expansion or coalescion: ok
                 c = oc
             else:
