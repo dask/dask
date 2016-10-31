@@ -8,13 +8,18 @@ The rechunk module defines:
 from __future__ import absolute_import, division, print_function
 
 from itertools import product, chain
-from operator import getitem, add
+from operator import getitem, add, mul, itemgetter
 
 import numpy as np
-from toolz import merge, accumulate
+from toolz import merge, accumulate, reduce
 
 from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
+
+
+def cumdims_label_1d(blocks, const):
+    return tuple(zip((const,) * (1 + len(blocks)),
+                     accumulate(add, (0,) + blocks)))
 
 
 def cumdims_label(chunks, const):
@@ -24,9 +29,7 @@ def cumdims_label(chunks, const):
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
      (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
     """
-    return [tuple(zip((const,) * (1 + len(bds)),
-                  list(accumulate(add, (0,) + bds))))
-            for bds in chunks]
+    return [cumdims_label_1d(bds, const) for bds in chunks]
 
 
 def _breakpoints(cumold, cumnew):
@@ -40,7 +43,7 @@ def _breakpoints(cumold, cumnew):
     >>> _breakpoints(new[1], old[1])
     (('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
     """
-    return tuple(sorted(tuple(cumold) + tuple(cumnew), key=lambda x:x[1]))
+    return tuple(sorted(cumold + cumnew, key=itemgetter(1)))
 
 
 def _intersect_1d(breaks):
@@ -72,23 +75,22 @@ def _intersect_1d(breaks):
     start = 0
     last_end = 0
     old_idx = 0
-    lastbi = ('n',0)
-    ret = [[]]
+    ret = []
     for idx in range(1, len(breaks)):
-        bi = breaks[idx]
-        lastbi = breaks[idx - 1]
-        if 'n' in lastbi[0] and bi[1]:
+        label, br = breaks[idx]
+        last_label, last_br = breaks[idx - 1]
+        if last_label == 'n':
             ret.append([])
-        if 'o' in lastbi[0]:
+        if last_label == 'o':
             start = 0
         else:
             start = last_end
-        end = bi[1] - lastbi[1] + start
+        end = br - last_br + start
         last_end = end
-        if bi[1] == lastbi[1]:
+        if br == last_br:
             continue
         ret[-1].append((old_idx, slice(start, end)))
-        if bi[0] == 'o':
+        if label == 'o':
             old_idx += 1
             start = 0
     return tuple(map(tuple, filter(None, ret)))
@@ -121,7 +123,7 @@ def intersect_chunks(old_chunks=None,
     new_blockshape: size of each new block as tuple
         (converts to this old_blockshape)
 
-    Note: shape is only required when using old_blockshape or new_blockshape.
+    Note: shape is only required when omitting old_blockshape or new_blockshape.
     """
     old_chunks = normalize_chunks(old_chunks, shape)
     new_chunks = normalize_chunks(new_chunks, shape)
@@ -205,6 +207,71 @@ def rechunk(x, chunks):
     if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 
+    for chunks in _plan_rechunk(x.chunks, chunks):
+        x = _compute_rechunk(x, chunks)
+
+    return x
+
+
+EXPAND_FACTOR = 4
+
+
+def _plan_rechunk(old_chunks, new_chunks):
+    ndim = len(new_chunks)
+
+    steps = [new_chunks]
+
+    while 1:
+        oldsize = reduce(mul, map(len, old_chunks))
+        newsize = reduce(mul, map(len, new_chunks))
+        crossed = intersect_chunks(old_chunks, new_chunks)
+        crossed_size = sum(map(len, crossed))
+
+        overhead = crossed_size / (oldsize + newsize)
+        if overhead < EXPAND_FACTOR:
+            break
+        chunks = []
+        for oc, nc in zip(old_chunks, new_chunks):
+            if len(nc) > 3.5 * len(oc):
+                # Too much expansion => first expand by half
+                c = [nc[i] + nc[i + 1] for i in range(0, len(nc) - 1, 2)]
+                if len(nc) & 1:
+                    c.append(nc[-1])
+                assert len(c) >= len(oc)
+                #print("too much expansion: %s -> %s" % (nc, c))
+            elif 3.5 * len(nc) >= len(oc):
+                # Moderate expansion or coalescion: ok
+                c = oc
+            else:
+                # Too much coalescion => add break points
+                old = cumdims_label_1d(oc, 'o')
+                new = cumdims_label_1d(nc, 'n')
+                c = []
+                for inter in _intersect_1d(_breakpoints(old, new)):
+                    blocks = [sl.stop - sl.start for (_, sl) in inter]
+                    n = max(1, len(blocks) // 2)
+                    for start in range(0, len(blocks), n):
+                        b = sum(blocks[start:start + n])
+                        if b:
+                            c.append(b)
+                assert len(c) <= len(oc)
+                #print("too much coalescion: %s -> %s" % (nc, c))
+            chunks.append(tuple(c))
+        assert list(map(sum, chunks)) == list(map(sum, new_chunks))
+        chunks = tuple(chunks)
+        if chunks == old_chunks:
+            break
+
+        steps.append(chunks)
+        new_chunks = chunks
+    print("=> %d steps" % len(steps))
+
+    steps.reverse()
+    return steps
+
+
+def _compute_rechunk(x, chunks):
+    ndim = x.ndim
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
     intermediates = dict()
@@ -235,4 +302,5 @@ def rechunk(x, chunks):
                 temp[ind_in_blk[-1]] = name
         x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2, intermediates)
+    print("len(x2) ->", len(x2))
     return Array(x2, temp_name, chunks, dtype=x.dtype)
