@@ -1872,7 +1872,7 @@ def atop(func, out_ind, *args, **kwargs):
         Extra keyword arguments to pass to function
     concatenate: bool, keyword only
         If true concatenate arrays along dummy indices, else provide lists
-    rechunk: dict
+    adjust_chunks: dict
         Dictionary mapping index to function to be applied to chunk sizes
     new_axes: dict, keyword only
         New indexes and their dimension lengths
@@ -1929,13 +1929,13 @@ def atop(func, out_ind, *args, **kwargs):
     >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5})  # doctest: +SKIP
 
     If the applied function changes the size of each chunk you can specify this
-    with a ``rechunk={...}`` dictionary holding a function for each index that
-    modifies the dimension size in that index.
+    with a ``adjust_chunks={...}`` dictionary holding a function for each index
+    that modifies the dimension size in that index.
 
     >>> def double(x):
     ...     return np.concatenate([x, x])
 
-    >>> y = atop(double, 'ij', x, 'ij', rechunk={'i': lambda n: 2 * n})  # doctest: +SKIP
+    >>> y = atop(double, 'ij', x, 'ij', adjust_chunks={'i': lambda n: 2 * n})  # doctest: +SKIP
 
     See Also
     --------
@@ -1944,7 +1944,7 @@ def atop(func, out_ind, *args, **kwargs):
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
-    rechunk = kwargs.pop('rechunk', None)
+    adjust_chunks = kwargs.pop('adjust_chunks', None)
     new_axes = kwargs.get('new_axes', {})
 
     chunkss, arrays = unify_chunks(*args)
@@ -1963,18 +1963,18 @@ def atop(func, out_ind, *args, **kwargs):
     dsks = [a.dask for a, _ in arginds]
 
     chunks = [chunkss[i] for i in out_ind]
-    if rechunk:
+    if adjust_chunks:
         for i, ind in enumerate(out_ind):
-            if ind in rechunk:
-                if callable(rechunk[ind]):
-                    chunks[i] = tuple(map(rechunk[ind], chunks[i]))
-                elif isinstance(rechunk[ind], int):
-                    chunks[i] = tuple(rechunk[ind] for _ in chunks[i])
-                elif isinstance(rechunk[ind], (tuple, list)):
-                    chunks[i] = tuple(rechunk[ind])
+            if ind in adjust_chunks:
+                if callable(adjust_chunks[ind]):
+                    chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
+                elif isinstance(adjust_chunks[ind], int):
+                    chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
+                elif isinstance(adjust_chunks[ind], (tuple, list)):
+                    chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(
-                        "rechunk values must be callable, int, or tuple")
+                        "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
