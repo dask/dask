@@ -8,8 +8,8 @@ from ..core import istask
 from ..compatibility import apply
 
 
-_BOKEH_MISSING_MSG = ("Diagnostics plots require `bokeh` to be installed")
-_TOOLZ_MISSING_MSG = ("Diagnostics plots require `toolz` to be installed")
+_BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
+_TOOLZ_MISSING_MSG = "Diagnostics plots require `toolz` to be installed"
 
 
 def unquote(expr):
@@ -119,7 +119,7 @@ def get_colors(palette, funcs):
     Parameters
     ----------
     palette : string
-        Name of the palette. Must be a key in bokeh.palettes.brewer
+        Name of the palette. Must be an attribute on bokeh.palettes.
     funcs : iterable
         Iterable of function names
     """
@@ -128,7 +128,7 @@ def get_colors(palette, funcs):
 
     unique_funcs = list(sorted(tz.unique(funcs)))
     n_funcs = len(unique_funcs)
-    palette_lookup = palettes.brewer[palette]
+    palette_lookup = getattr(palettes, palette)
     keys = list(palette_lookup.keys())
     low, high = min(keys), max(keys)
     if n_funcs > high:
@@ -206,7 +206,7 @@ def _get_figure_keywords():
     return o
 
 
-def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
+def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -216,7 +216,8 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     dsk : dict
         The dask graph being profiled.
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be an attribute on
+        bokeh.palettes.
     label_size: int (optional)
         Maximum size of output labels in plot, defaults to 60
     **kwargs
@@ -289,7 +290,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     return p
 
 
-def plot_resources(results, palette='YlGnBu', **kwargs):
+def plot_resources(results, palette='Viridis', **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
@@ -297,7 +298,8 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     results : sequence
         Output of ResourceProfiler.results
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be an attribute on
+        bokeh.palettes.
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by plot_resources.
@@ -307,7 +309,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
-    from bokeh.palettes import brewer
+    from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
     defaults = dict(title="Profile Results",
@@ -323,7 +325,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     else:
         t = mem = cpu = []
         p = bp.figure(y_range=(0, 100), x_range=(0, 10), **defaults)
-    colors = brewer[palette][6]
+    colors = getattr(palettes, palette)[6]
     p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {'memory': Range1d(start=(min(mem) if mem else 0),
@@ -336,7 +338,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     return p
 
 
-def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
+def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
                label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -351,7 +353,8 @@ def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
     metric_name : string
         Metric used to measure cache size
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be an attribute on
+        bokeh.palettes.
     label_size: int (optional)
         Maximum size of output labels in plot, defaults to 60
     **kwargs
