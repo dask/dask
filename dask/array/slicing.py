@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import lru_cache
 from itertools import product
 from math import ceil
 from numbers import Number
