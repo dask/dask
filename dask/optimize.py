@@ -3,8 +3,6 @@ from __future__ import absolute_import, division, print_function
 from itertools import count
 from operator import getitem
 
-from toolz import memoize
-
 from .compatibility import zip_longest
 
 from .core import add, inc  # noqa: F401
@@ -259,8 +257,8 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
-            if istask(v) and functions_of(v).issubset(fast_functions)
-            and dependents[k] and k not in output
+            if istask(v) and functions_of(v).issubset(fast_functions) and
+            dependents[k] and k not in output
             ]
 
     if keys:
