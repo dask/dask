@@ -4,7 +4,8 @@ import pytest
 
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
-from dask.core import (istask, get_dependencies, flatten, subs,
+from dask.core import (istask, get_dependencies, get_all_dependencies,
+                       get_all_dependencies_per_key, flatten, subs,
                        preorder_traversal, quote, _deps, has_tasks)
 
 
@@ -82,26 +83,69 @@ def test_get_dependencies_nested():
            'z': (add, (inc, [['x']]), 'y')}
 
     assert get_dependencies(dsk, 'z') == set(['x', 'y'])
+    assert sorted(get_dependencies(dsk, 'z', as_list=True)) == ['x', 'y']
 
 
 def test_get_dependencies_empty():
     dsk = {'x': (inc,)}
     assert get_dependencies(dsk, 'x') == set()
+    assert get_dependencies(dsk, 'x', as_list=True) == []
 
 
 def test_get_dependencies_list():
     dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
     assert get_dependencies(dsk, 'z') == set(['x', 'y'])
+    assert sorted(get_dependencies(dsk, 'z', as_list=True)) == ['x', 'y']
 
 
 def test_get_dependencies_task():
     dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
     assert get_dependencies(dsk, task=(inc, 'x')) == set(['x'])
+    assert get_dependencies(dsk, task=(inc, 'x'), as_list=True) == ['x']
 
 
 def test_get_dependencies_nothing():
     with pytest.raises(ValueError):
         get_dependencies({})
+
+
+def test_get_all_dependencies():
+    dsk = {'a': [1, 2, 3],
+           'b': 'a',
+           'c': [1, (inc, 1)],
+           'd': [(sum, 'a')],
+           'e': ['a', 'b', 'zzz'],
+           'f': [['a', 'b'], 2, 3]}
+
+    tasks = [(inc, 'a'), (add, (inc, 'b'), ['c', 'e'])]
+    s = get_all_dependencies(dsk, tasks)
+    assert s == {'a', 'b', 'c', 'e'}
+    s = get_all_dependencies(dsk, [])
+    assert s == set()
+
+def test_get_all_dependencies_per_key():
+    dsk = {'a': [1, 2, 3],
+           'b': 'a',
+           'c': [1, (inc, 1)],
+           'd': [(sum, 'c')],
+           'e': ['a', 'b', 'zzz'],
+           'f': [['a', 'c'], 2, 3]}
+
+    keys = ['b', 'c', 'd', 'e', 'f']
+    d = get_all_dependencies_per_key(dsk, keys)
+    assert d == {'b': {'a'},
+                 'c': set(),
+                 'd': {'c'},
+                 'e': {'a', 'b'},
+                 'f': {'a', 'c'},
+                 }
+    d = get_all_dependencies_per_key(dsk, keys, as_list=True)
+    assert d == {'b': ['a'],
+                 'c': [],
+                 'd': ['c'],
+                 'e': ['a', 'b'],
+                 'f': ['a', 'c'],
+                 }
 
 
 def test_flatten():
