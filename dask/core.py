@@ -176,22 +176,28 @@ def _deps(dsk, arg):
     >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
     ['x', 'y']
     """
-    typ = type(arg)
-    if typ is tuple and arg and callable(arg[0]):  # istask(arg)
-        result = []
-        for a in arg[1:]:
-            result += _deps(dsk, a)
-        return result
-    if typ is list:
-        return sum([_deps(dsk, a) for a in arg], [])
-    if typ is dict:
-        return sum([_deps(dsk, v) for v in arg.values()], [])
-    try:
-        if arg not in dsk:
-            return []
-    except TypeError:  # not hashable
-            return []
-    return [arg]
+    result = []
+    work = [arg]
+
+    while work:
+        new_work = []
+        for w in work:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                new_work += w[1:]
+            elif typ is list:
+                new_work += w
+            elif typ is dict:
+                new_work += w.values()
+            else:
+                try:
+                    if w in dsk:
+                        result.append(w)
+                except TypeError:  # not hashable
+                    pass
+        work = new_work
+
+    return result
 
 
 def get_dependencies(dsk, key=None, task=None, as_list=False):
