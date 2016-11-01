@@ -1385,6 +1385,11 @@ class _Frame(Base):
         """ bind operator method like DataFrame.add to this class """
         raise NotImplementedError
 
+    @derived_from(pd.DataFrame)
+    def resample(self, rule, how=None, closed=None, label=None):
+        from .tseries.resample import _resample
+        return _resample(self, rule, how=how, closed=closed, label=label)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -1502,11 +1507,6 @@ class Series(_Frame):
         """
         from .partitionquantiles import partition_quantiles
         return partition_quantiles(self, npartitions, upsample=upsample)
-
-    @derived_from(pd.Series)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
