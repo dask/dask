@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 from itertools import count
 from operator import getitem
 
+from toolz import memoize
+
 from .compatibility import zip_longest
 
 from .core import add, inc  # noqa: F401
@@ -250,8 +252,9 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
-            if istask(v) and functions_of(v).issubset(fast_functions) and
-            dependents[k] and k not in output]
+            if istask(v) and functions_of(v).issubset(fast_functions)
+            and dependents[k] and k not in output
+            ]
 
     if keys:
         dsk = inline(dsk, keys, inline_constants=inline_constants,
@@ -259,6 +262,12 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
         for k in keys:
             del dsk[k]
     return dsk
+
+
+def unwrap_partial(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    return func
 
 
 def functions_of(task):
@@ -270,20 +279,23 @@ def functions_of(task):
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
     """
-    if istask(task):
-        args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
-        return set([unwrap_partial(task[0])]) | args
-    if isinstance(task, (list, tuple)):
-        if not task:
-            return set()
-        return set.union(*map(functions_of, task))
-    return set()
+    funcs = set()
 
+    work = [task]
+    sequence_types = {list, tuple}
 
-def unwrap_partial(func):
-    while hasattr(func, 'func'):
-        func = func.func
-    return func
+    while work:
+        new_work = []
+        for task in work:
+            if type(task) in sequence_types:
+                if istask(task):
+                    funcs.add(unwrap_partial(task[0]))
+                    new_work += task[1:]
+                else:
+                    new_work += task
+        work = new_work
+
+    return funcs
 
 
 def dealias(dsk, keys=None, dependencies=None):
