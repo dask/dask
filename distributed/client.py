@@ -19,7 +19,7 @@ import socket
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten, _deps
+from dask.core import flatten, get_dependencies
 from dask.compatibility import apply
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
@@ -1229,7 +1229,7 @@ class Client(object):
                     raise CancelledError(v)
 
         for k, v in dsk3.items():
-            dependencies[k] |= set(_deps(dsk3, v))
+            dependencies[k] |= get_dependencies(dsk3, task=v)
 
         self._send_to_scheduler({'op': 'update-graph',
                                  'tasks': valmap(dumps_task, dsk3),
