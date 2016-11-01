@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from functools import partial
 import logging
 import math
 from threading import Thread
@@ -36,6 +37,8 @@ class LocalCluster(object):
         If False keep the workers in the main calling process
     scheduler_port: int
         Port of the scheduler.  8786 by default, use 0 to choose a random port
+    kwargs: dict
+        Extra worker arguments, will be passed to the Worker constructor.
 
     Examples
     --------
@@ -95,9 +98,9 @@ class LocalCluster(object):
         if start:
             _start_worker = self.start_worker
         else:
-            _start_worker = lambda *args, **kwargs: self.loop.add_callback(self._start_worker, *args, **kwargs)
+            _start_worker = partial(self.loop.add_callback, self._start_worker)
         for i in range(n_workers):
-            _start_worker(ncores=threads_per_worker, nanny=nanny)
+            _start_worker(ncores=threads_per_worker, nanny=nanny, **kwargs)
         self.status = 'running'
 
         self.diagnostics = None

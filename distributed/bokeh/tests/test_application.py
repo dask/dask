@@ -34,8 +34,7 @@ def test_BokehWebInterface(loop):
 
 def test_bokeh_shutsdown_without_cluster___del__(loop):
     c = LocalCluster(2, loop=loop, scheduler_port=0,
-                     services={('http', 0): HTTPScheduler},
-                     diagnostic_port=None)
+                     services={('http', 0): HTTPScheduler})
     proc = c.diagnostics.process
     # don't run the del, as it isn't ever run in python < 3.5 due to cycles
     c.__del__ = lambda self: None
