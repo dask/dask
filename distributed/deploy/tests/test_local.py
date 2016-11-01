@@ -18,7 +18,7 @@ from distributed.deploy.utils_test import ClusterTest
 
 def test_simple(loop):
     with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False,
-            diagnostic_port=None, loop=loop) as c:
+            diagnostics_port=None, loop=loop) as c:
         with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
             x = e.submit(inc, 1)
             x.result()
@@ -29,7 +29,7 @@ def test_simple(loop):
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')
 def test_procs(loop):
     with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3,
-            diagnostic_port=None, silence_logs=False) as c:
+            diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
         with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
@@ -37,7 +37,7 @@ def test_procs(loop):
         repr(c)
 
     with LocalCluster(2, scheduler_port=0, nanny=True, threads_per_worker=3,
-            diagnostic_port=None, silence_logs=False) as c:
+            diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
         with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
@@ -50,12 +50,12 @@ def test_procs(loop):
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='')
 class LocalTest(ClusterTest, unittest.TestCase):
-    Cluster = partial(LocalCluster, silence_logs=False, diagnostic_port=None)
+    Cluster = partial(LocalCluster, silence_logs=False, diagnostics_port=None)
 
 
 def test_Client_with_local(loop):
     with LocalCluster(1, scheduler_port=0, silence_logs=False,
-            diagnostic_port=None, loop=loop) as c:
+            diagnostics_port=None, loop=loop) as c:
         with Client(c, loop=loop) as e:
             assert len(e.ncores()) == len(c.workers)
             assert c.scheduler_address in repr(c)
@@ -77,19 +77,19 @@ def test_defaults():
     from distributed.worker import _ncores
 
     with LocalCluster(scheduler_port=0, silence_logs=False,
-            diagnostic_port=None) as c:
+            diagnostics_port=None) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Nanny) for w in c.workers)
         assert all(w.ncores == 1 for w in c.workers)
 
     with LocalCluster(nanny=False, scheduler_port=0, silence_logs=False,
-            diagnostic_port=None) as c:
+            diagnostics_port=None) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Worker) for w in c.workers)
         assert len(c.workers) == 1
 
     with LocalCluster(n_workers=2, scheduler_port=0, silence_logs=False,
-            diagnostic_port=None) as c:
+            diagnostics_port=None) as c:
         if _ncores % 2 == 0:
             expected_total_threads = max(2, _ncores)
         else:
@@ -98,34 +98,40 @@ def test_defaults():
         assert sum(w.ncores for w in c.workers) == expected_total_threads
 
     with LocalCluster(threads_per_worker=_ncores * 2, scheduler_port=0,
-            silence_logs=False, diagnostic_port=None) as c:
+            silence_logs=False, diagnostics_port=None) as c:
         assert len(c.workers) == 1
 
     with LocalCluster(n_workers=_ncores * 2, scheduler_port=0,
-            silence_logs=False, diagnostic_port=None) as c:
+            silence_logs=False, diagnostics_port=None) as c:
         assert all(w.ncores == 1 for w in c.workers)
     with LocalCluster(threads_per_worker=2, n_workers=3, scheduler_port=0,
-            silence_logs=False, diagnostic_port=None) as c:
+            silence_logs=False, diagnostics_port=None) as c:
         assert len(c.workers) == 3
         assert all(w.ncores == 2 for w in c.workers)
 
 
+def test_worker_params():
+    with LocalCluster(n_workers=2, scheduler_port=0, silence_logs=False,
+            diagnostics_port=None, memory_limit=500) as c:
+        assert [w.memory_limit for w in c.workers] == [500] * 2
+
+
 def test_cleanup():
     c = LocalCluster(2, scheduler_port=0, silence_logs=False,
-            diagnostic_port=None)
+            diagnostics_port=None)
     port = c.scheduler.port
     c.close()
     c2 = LocalCluster(2, scheduler_port=port, silence_logs=False,
-            diagnostic_port=None)
+            diagnostics_port=None)
     c.close()
 
 
 def test_repeated():
     with LocalCluster(scheduler_port=8448, silence_logs=False,
-            diagnostic_port=None) as c:
+            diagnostics_port=None) as c:
         pass
     with LocalCluster(scheduler_port=8448, silence_logs=False,
-            diagnostic_port=None) as c:
+            diagnostics_port=None) as c:
         pass
 
 
@@ -133,7 +139,7 @@ def test_http(loop):
     from distributed.http import HTTPScheduler
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False,
-            services={('http', 3485): HTTPScheduler}, diagnostic_port=None,
+            services={('http', 3485): HTTPScheduler}, diagnostics_port=None,
             loop=loop) as c:
         response = requests.get('http://127.0.0.1:3485/info.json')
         assert response.ok
@@ -144,7 +150,7 @@ def test_bokeh(loop):
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
             diagnostics_port=4724, services={('http', 0): HTTPScheduler},
-            diagnostic_port=None) as c:
+            ) as c:
         start = time()
         while True:
             with ignoring(Exception):
@@ -187,7 +193,7 @@ def test_blocks_until_full(loop):
 def test_scale_up_and_down():
     loop = IOLoop.current()
     cluster = LocalCluster(0, scheduler_port=0, nanny=False, silence_logs=False,
-                           diagnostic_port=None, loop=loop, start=False)
+                           diagnostics_port=None, loop=loop, start=False)
     c = Client(cluster, start=False, loop=loop)
     yield c._start()
 
