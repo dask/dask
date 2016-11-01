@@ -498,7 +498,7 @@ def test_cull():
                                    (Ellipsis, None),
                                    (None, Ellipsis, None)])
 def test_slicing_with_Nones(shape, slice):
-    x = np.empty(shape)
+    x = np.random.random(shape)
     d = da.from_array(x, chunks=shape)
 
     assert_eq(x[slice], d[slice])
