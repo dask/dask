@@ -56,6 +56,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
 
     if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
+    elif columns:
+        df.columns = columns
     return df
 
 
