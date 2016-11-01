@@ -43,7 +43,7 @@ class TaskStream(DashboardComponent):
 
     The start and stop time of tasks as they occur on each core of the cluster.
     """
-    def __init__(self, n_rectangles, **kwargs):
+    def __init__(self, n_rectangles=1000, **kwargs):
         """
         kwargs are applied to the bokeh.models.plots.Plot constructor
         """
