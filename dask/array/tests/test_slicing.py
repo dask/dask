@@ -1,12 +1,14 @@
 import pytest
 pytest.importorskip('numpy')
 
+import itertools
+from operator import getitem
+
 from dask.compatibility import skip
 import dask.array as da
 from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
                                 sanitize_index)
 from dask.array.utils import assert_eq
-from operator import getitem
 import numpy as np
 from toolz import merge
 
@@ -502,3 +504,49 @@ def test_slicing_with_Nones(shape, slice):
     d = da.from_array(x, chunks=shape)
 
     assert_eq(x[slice], d[slice])
+
+
+indexers = [Ellipsis, slice(2), 0, 1, -2, -1, slice(-2, None), None]
+
+"""
+@pytest.mark.parametrize('a', indexers)
+@pytest.mark.parametrize('b', indexers)
+@pytest.mark.parametrize('c', indexers)
+@pytest.mark.parametrize('d', indexers)
+def test_slicing_none_int_ellipses(a, b, c, d):
+    if (a, b, c, d).count(Ellipsis) > 1:
+        return
+    shape = (2,3,5,7,11)
+    x = np.arange(np.prod(shape)).reshape(shape)
+    y = da.core.asarray(x)
+
+    xx = x[a, b, c, d]
+    yy = y[a, b, c, d]
+    assert_eq(xx, yy)
+"""
+
+
+def test_slicing_none_int_ellipes():
+    shape = (2,3,5,7,11)
+    x = np.arange(np.prod(shape)).reshape(shape)
+    y = da.core.asarray(x)
+    for ind in itertools.product(indexers, indexers, indexers, indexers):
+        if ind.count(Ellipsis) > 1:
+            continue
+
+        assert_eq(x[ind], y[ind])
+
+
+def test_None_overlap_int():
+    a, b, c, d = (0, slice(None, 2, None), None, Ellipsis)
+    shape = (2,3,5,7,11)
+    x = np.arange(np.prod(shape)).reshape(shape)
+    y = da.core.asarray(x)
+
+    xx = x[a, b, c, d]
+    yy = y[a, b, c, d]
+    assert_eq(xx, yy)
+
+
+def test_negative_n_slicing():
+    assert_eq(da.ones(2, chunks=2)[-2], np.ones(2)[-2])
