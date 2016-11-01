@@ -4,9 +4,8 @@ import pytest
 
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
-from dask.core import (istask, get_dependencies, get_all_dependencies,
-                       get_all_dependencies_per_key, flatten, subs,
-                       preorder_traversal, quote, _deps, has_tasks)
+from dask.core import (istask, get_dependencies, get_deps, flatten, subs,
+                       preorder_traversal, quote, has_tasks)
 
 
 def contains(a, b):
@@ -109,44 +108,56 @@ def test_get_dependencies_nothing():
         get_dependencies({})
 
 
-def test_get_all_dependencies():
-    dsk = {'a': [1, 2, 3],
-           'b': 'a',
-           'c': [1, (inc, 1)],
-           'd': [(sum, 'a')],
-           'e': ['a', 'b', 'zzz'],
-           'f': [['a', 'b'], 2, 3]}
-
-    tasks = [(inc, 'a'), (add, (inc, 'b'), ['c', 'e'])]
-    s = get_all_dependencies(dsk, tasks)
-    assert s == {'a', 'b', 'c', 'e'}
-    s = get_all_dependencies(dsk, [])
-    assert s == set()
-
-
-def test_get_all_dependencies_per_key():
+def test_get_dependencies_many():
     dsk = {'a': [1, 2, 3],
            'b': 'a',
            'c': [1, (inc, 1)],
            'd': [(sum, 'c')],
            'e': ['a', 'b', 'zzz'],
-           'f': [['a', 'c'], 2, 3]}
+           'f': [['a', 'b'], 2, 3]}
 
-    keys = ['b', 'c', 'd', 'e', 'f']
-    d = get_all_dependencies_per_key(dsk, keys)
-    assert d == {'b': {'a'},
-                 'c': set(),
-                 'd': {'c'},
-                 'e': {'a', 'b'},
-                 'f': {'a', 'c'},
-                 }
-    d = get_all_dependencies_per_key(dsk, keys, as_list=True)
-    assert d == {'b': ['a'],
-                 'c': [],
-                 'd': ['c'],
-                 'e': ['a', 'b'],
-                 'f': ['a', 'c'],
-                 }
+    tasks = [dsk[k] for k in ('d', 'f')]
+    s = get_dependencies(dsk, task=tasks)
+    assert s == {'a', 'b', 'c'}
+    s = get_dependencies(dsk, task=tasks, as_list=True)
+    assert sorted(s) == ['a', 'b', 'c']
+
+    s = get_dependencies(dsk, task=[])
+    assert s == set()
+    s = get_dependencies(dsk, task=[], as_list=True)
+    assert s == []
+
+
+def test_get_deps():
+    """
+    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+    >>> dependencies, dependents = get_deps(dsk)
+    >>> dependencies
+    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    >>> dependents
+    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    """
+    dsk = {'a': [1, 2, 3],
+           'b': 'a',
+           'c': [1, (inc, 1)],
+           'd': [(sum, 'c')],
+           'e': ['b', 'zzz', 'b'],
+           'f': [['a', 'b'], 2, 3]}
+    dependencies, dependents = get_deps(dsk)
+    assert dependencies == {'a': set(),
+                            'b': {'a'},
+                            'c': set(),
+                            'd': {'c'},
+                            'e': {'b'},
+                            'f': {'a', 'b'},
+                            }
+    assert dependents == {'a': {'b', 'f'},
+                          'b': {'e', 'f'},
+                          'c': {'d'},
+                          'd': set(),
+                          'e': set(),
+                          'f': set(),
+                          }
 
 
 def test_flatten():
@@ -215,9 +226,3 @@ def test_quote():
 
     for l in literals:
         assert core.get({'x': quote(l)}, 'x') == l
-
-
-def test__deps():
-    dsk = {'x': 1, 'y': 2}
-
-    assert _deps(dsk, ['x', 'y']) == ['x', 'y']

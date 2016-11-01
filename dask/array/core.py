@@ -1137,7 +1137,7 @@ class Array(Base):
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         if len(dsk) < self.npartitions / 2:  # significant reduction in graph
-            needed = core.get_all_dependencies(self.dask, list(dsk.values()))
+            needed = core.get_dependencies(self.dask, task=list(dsk.values()))
             dsk2, _ = cull(self.dask, needed)
             dsk2.update(dsk)
         else:

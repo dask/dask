@@ -92,7 +92,8 @@ def inline_singleton_lists(dsk, dependencies=None):
     Pairs nicely with lazify afterwards
     """
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, task=v)
+                        for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
