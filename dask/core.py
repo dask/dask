@@ -250,6 +250,21 @@ def get_all_dependencies(dsk, tasks):
     return set(_deps(dsk, tasks))
 
 
+def get_all_dependencies_per_key(dsk, keys, as_list=False):
+    """ Get the immediate tasks on which the keys depend,
+    as a dictionary.
+
+    Like get_dependencies(), but operating on multiple tasks at once,
+    and therefore significantly faster.
+    """
+    if not isinstance(keys, list):
+        raise TypeError("Please provide a list of keys")
+    if as_list:
+        return {k: _deps(dsk, dsk[k]) for k in keys}
+    else:
+        return {k: set(_deps(dsk, dsk[k])) for k in keys}
+
+
 def get_deps(dsk):
     """ Get dependencies and dependents from dask dask graph
 
@@ -260,7 +275,7 @@ def get_deps(dsk):
     >>> dependents
     {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
     """
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependencies = get_all_dependencies_per_key(dsk, list(dsk))
     dependents = reverse_dict(dependencies)
     return dependencies, dependents
 

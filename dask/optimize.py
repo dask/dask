@@ -8,7 +8,8 @@ from toolz import memoize
 from .compatibility import zip_longest
 
 from .core import add, inc  # noqa: F401
-from .core import (istask, get_dependencies, subs, toposort, flatten,
+from .core import (istask, get_dependencies, get_all_dependencies_per_key,
+                   subs, toposort, flatten,
                    reverse_dict, ishashable, preorder_traversal)
 from .rewrite import END
 
@@ -36,19 +37,26 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out = dict()
+    out_keys = []
     seen = set()
     dependencies = dict()
-    stack = list(set(flatten(keys)))
-    while stack:
-        key = stack.pop()
-        out[key] = dsk[key]
-        deps = get_dependencies(dsk, key, as_list=True)  # fuse needs lists
-        dependencies[key] = deps
-        for d in deps:
-            if d not in seen:
-                seen.add(d)
-                stack.append(d)
+
+    work = list(set(flatten(keys)))
+    while work:
+        new_work = []
+        out_keys += work
+        deps = get_all_dependencies_per_key(dsk, work,
+                                            as_list=True)  # fuse needs lists
+        dependencies.update(deps)
+        for deplist in deps.values():
+            for d in deplist:
+                if d not in seen:
+                    seen.add(d)
+                    new_work.append(d)
+        work = new_work
+
+    out = {k: dsk[k] for k in out_keys}
+
     return out, dependencies
 
 
@@ -89,8 +97,7 @@ def fuse(dsk, keys=None, dependencies=None):
         keys = set(flatten(keys))
 
     if dependencies is None:
-        dependencies = dict((key, get_dependencies(dsk, key, as_list=True))
-                            for key in dsk)
+        dependencies = get_all_dependencies_per_key(dsk, list(dsk), as_list=True)
 
     # locate all members of linear chains
     child2parent = {}
@@ -185,7 +192,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     keys = _flat_set(keys)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = get_all_dependencies_per_key(dsk, list(dsk))
 
     if inline_constants:
         keys.update(k for k, v in dsk.items() if
@@ -248,7 +255,7 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     fast_functions = set(fast_functions)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = get_all_dependencies_per_key(dsk, list(dsk))
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
@@ -334,7 +341,7 @@ def dealias(dsk, keys=None, dependencies=None):
         keys = set(keys)
 
     if not dependencies:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = get_all_dependencies_per_key(dsk, list(dsk))
 
     aliases = set(k for k, task in dsk.items() if
                   ishashable(task) and task in dsk)
