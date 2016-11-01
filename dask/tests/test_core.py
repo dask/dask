@@ -123,6 +123,7 @@ def test_get_all_dependencies():
     s = get_all_dependencies(dsk, [])
     assert s == set()
 
+
 def test_get_all_dependencies_per_key():
     dsk = {'a': [1, 2, 3],
            'b': 'a',
