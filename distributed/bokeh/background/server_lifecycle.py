@@ -16,7 +16,9 @@ from tornado.ioloop import IOLoop
 from distributed.compatibility import ConnectionRefusedError
 from distributed.core import read, connect, write
 from distributed.protocol.pickle import dumps
-from distributed.diagnostics.progress_stream import progress_stream
+from distributed.diagnostics.eventstream import eventstream
+from distributed.diagnostics.progress_stream import (progress_stream,
+        task_stream_append)
 from distributed.bokeh.worker_monitor import resource_append
 import distributed.bokeh
 from distributed.bokeh.utils import parse_args
@@ -99,6 +101,41 @@ def processing():
                 messages['processing'] = msg
 
 
+@gen.coroutine
+def task_events(interval, deque, times, index, rectangles, workers, last_seen):
+    i = 0
+    try:
+        stream = yield eventstream('%(host)s:%(tcp-port)d' % options, 0.100)
+        while True:
+            msgs = yield read(stream)
+            if not msgs:
+                continue
+
+            last_seen[0] = time()
+            for msg in msgs:
+                if 'compute_start' in msg:
+                    deque.append(msg)
+                    times.append(msg['compute_start'])
+                    index.append(i)
+                    i += 1
+                    if msg.get('transfer_start') is not None:
+                        index.append(i)
+                        i += 1
+                    if msg.get('disk_load_start') is not None:
+                        index.append(i)
+                        i += 1
+                    task_stream_append(rectangles, msg, workers)
+    except StreamClosedError:
+        pass  # don't log StreamClosedErrors
+    except Exception as e:
+        logger.exception(e)
+    finally:
+        try:
+            sys.exit(0)
+        except:
+            pass
+
+
 def on_server_loaded(server_context):
     server_context.add_periodic_callback(workers, 500)
 
@@ -106,3 +143,5 @@ def on_server_loaded(server_context):
     IOLoop.current().add_callback(processing)
 
     IOLoop.current().add_callback(progress)
+
+    IOLoop.current().add_callback(task_events, **messages['task-events'])

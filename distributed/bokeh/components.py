@@ -8,7 +8,8 @@ from bokeh.models import (
     ColumnDataSource, Plot, Datetime, DataRange1d, Rect, LinearAxis,
     DatetimeAxis, Grid, BasicTicker, HoverTool, BoxZoomTool, ResetTool,
     PanTool, WheelZoomTool, Title, Range1d, Quad, Text, value, Line,
-    NumeralTickFormatter, ToolbarBox, Legend, LegendItem
+    NumeralTickFormatter, ToolbarBox, Legend, LegendItem, BoxSelectTool,
+    Circle
 )
 from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
 from bokeh.palettes import Spectral9
@@ -127,7 +128,7 @@ class TaskProgress(DashboardComponent):
         y_range = Range1d(-8, 0)
 
         self.root = Plot(
-            id='bk-progress-plot',
+            id='bk-task-progress-plot',
             x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
         )
         self.root.add_glyph(
@@ -328,6 +329,7 @@ class ResourceProfiles(DashboardComponent):
         self.root = row(
             column(resource_plot, network_plot, **sizing_mode),
             column(combo_toolbar, **sizing_mode),
+            id='bk-resource-profiles-plot',
             **sizing_mode
         )
 
@@ -359,62 +361,65 @@ class WorkerTable(DashboardComponent):
     plot laying out hosts by their current memory use.
     """
     def __init__(self, **kwargs):
-        with log_errors():
-            names = ['processes', 'disk-read', 'cores', 'cpu', 'disk-write',
-                     'memory', 'last-seen', 'memory_percent', 'host']
-            self.source = ColumnDataSource({k: [] for k in names})
+        names = ['processes', 'disk-read', 'cores', 'cpu', 'disk-write',
+                 'memory', 'last-seen', 'memory_percent', 'host']
+        self.source = ColumnDataSource({k: [] for k in names})
 
-            columns = {name: TableColumn(field=name,
-                                         title=name.replace('_percent', ' %'))
-                       for name in names}
+        columns = {name: TableColumn(field=name,
+                                     title=name.replace('_percent', ' %'))
+                   for name in names}
 
-            cnames = ['host', 'cores', 'processes', 'memory', 'cpu', 'memory_percent']
+        cnames = ['host', 'cores', 'processes', 'memory', 'cpu', 'memory_percent']
 
-            formatters = {'cpu': NumberFormatter(format='0.0 %'),
-                          'memory_percent': NumberFormatter(format='0.0 %'),
-                          'memory': NumberFormatter(format='0 b'),
-                          'latency': NumberFormatter(format='0.00000'),
-                          'last-seen': NumberFormatter(format='0.000'),
-                          'disk-read': NumberFormatter(format='0 b'),
-                          'disk-write': NumberFormatter(format='0 b'),
-                          'net-send': NumberFormatter(format='0 b'),
-                          'net-recv': NumberFormatter(format='0 b')}
+        formatters = {'cpu': NumberFormatter(format='0.0 %'),
+                      'memory_percent': NumberFormatter(format='0.0 %'),
+                      'memory': NumberFormatter(format='0 b'),
+                      'latency': NumberFormatter(format='0.00000'),
+                      'last-seen': NumberFormatter(format='0.000'),
+                      'disk-read': NumberFormatter(format='0 b'),
+                      'disk-write': NumberFormatter(format='0 b'),
+                      'net-send': NumberFormatter(format='0 b'),
+                      'net-recv': NumberFormatter(format='0 b')}
 
-            table = DataTable(source=self.source, columns=[columns[n] for n in cnames],
-                              id='bk-worker-table', **kwargs)
-            for name in cnames:
-                if name in formatters:
-                    table.columns[cnames.index(name)].formatter = formatters[name]
+        table = DataTable(
+            source=self.source, columns=[columns[n] for n in cnames],
+        )
 
-            x_range = Range1d(0, 1)
-            y_range = Range1d(-.1, .1)
-            mem_plot = figure(title="Memory Usage (%)", tools='box_select',
-                              height=90, width=600, x_range=x_range, y_range=y_range,
-                              toolbar_location=None, id='bk-memory-usage-plot')
-            mem_plot.circle(source=self.source, x='memory_percent', y=0, size=10,
-                            alpha=0.5)
-            mem_plot.yaxis.visible = False
-            mem_plot.xaxis.minor_tick_line_width = 0
-            mem_plot.ygrid.visible = False
-            mem_plot.xaxis.minor_tick_line_alpha = 0
+        for name in cnames:
+            if name in formatters:
+                table.columns[cnames.index(name)].formatter = formatters[name]
 
-            hover = HoverTool()
-            mem_plot.add_tools(hover)
-            hover = mem_plot.select(HoverTool)
-            hover.tooltips = """
-            <div>
-              <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
-              <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
-            </div>
-            """
-            hover.point_policy = 'follow_mouse'
+        mem_plot = Plot(
+            title=Title(text="Memory Usage (%)"), toolbar_location=None,
+            x_range=Range1d(start=0, end=1), y_range=Range1d(start=-0.1, end=0.1),
+            **kwargs
+        )
 
-            if 'sizing_mode' in kwargs:
-                sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
-            else:
-                sizing_mode = {}
+        mem_plot.add_glyph(
+            self.source,
+            Circle(x='memory_percent', y=0, size=10, fill_alpha=0.5)
+        )
 
-            self.root = column(mem_plot, table, **sizing_mode)
+        mem_plot.add_layout(LinearAxis(), 'left')
+        mem_plot.add_layout(LinearAxis(), 'below')
+
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
+                </div>
+                """
+        )
+        mem_plot.add_tools(hover, BoxSelectTool())
+
+        if 'sizing_mode' in kwargs:
+            sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
+        else:
+            sizing_mode = {}
+
+        self.root = column(mem_plot, table, id='bk-worker-table', **sizing_mode)
 
     def update(self, messages):
         with log_errors():
@@ -450,43 +455,43 @@ class ProcessingStacks(DashboardComponent):
     tasks are enqueued for each worker and how many are in the common pool
     """
     def __init__(self, **kwargs):
-        with log_errors():
-            data = self.processing_update({'processing': {}, 'stacks': {},
-                                      'ncores': {}, 'ready': 0})
-            self.source = ColumnDataSource(data)
+        data = self.processing_update({'processing': {}, 'stacks': {},
+                                  'ncores': {}, 'ready': 0})
+        self.source = ColumnDataSource(data)
 
-            x_range = Range1d(-1, 1)
-            fig = figure(title='Processing and Pending', tools='resize',
-                         x_range=x_range, id='bk-processing-plot', **kwargs)
-            fig.quad(source=self.source, left=0, right='right', color=Spectral9[0],
-                     top='top', bottom='bottom')
-            fig.quad(source=self.source, left='left', right=0, color=Spectral9[1],
-                     top='top', bottom='bottom', alpha='alpha')
+        x_range = Range1d(-1, 1)
+        fig = figure(
+            title='Processing and Pending', tools='resize',
+             x_range=x_range, id='bk-processing-stacks-plot', **kwargs)
+        fig.quad(source=self.source, left=0, right='right', color=Spectral9[0],
+                 top='top', bottom='bottom')
+        fig.quad(source=self.source, left='left', right=0, color=Spectral9[1],
+                 top='top', bottom='bottom', alpha='alpha')
 
-            fig.xaxis.minor_tick_line_alpha = 0
-            fig.yaxis.visible = False
-            fig.ygrid.visible = False
+        fig.xaxis.minor_tick_line_alpha = 0
+        fig.yaxis.visible = False
+        fig.ygrid.visible = False
 
-            hover = HoverTool()
-            fig.add_tools(hover)
-            hover = fig.select(HoverTool)
-            hover.tooltips = """
-            <div>
-                <span style="font-size: 14px; font-weight: bold;">Host:</span>&nbsp;
-                <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-            </div>
-            <div>
-                <span style="font-size: 14px; font-weight: bold;">Stacks:</span>&nbsp;
-                <span style="font-size: 10px; font-family: Monaco, monospace;">@stacks</span>
-            </div>
-            <div>
-                <span style="font-size: 14px; font-weight: bold;">Processing:</span>&nbsp;
-                <span style="font-size: 10px; font-family: Monaco, monospace;">@processing</span>
-            </div>
-            """
-            hover.point_policy = 'follow_mouse'
+        hover = HoverTool()
+        fig.add_tools(hover)
+        hover = fig.select(HoverTool)
+        hover.tooltips = """
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Host:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+        </div>
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Stacks:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@stacks</span>
+        </div>
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Processing:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@processing</span>
+        </div>
+        """
+        hover.point_policy = 'follow_mouse'
 
-            self.root = fig
+        self.root = fig
 
     def update(self, messages):
         with log_errors():

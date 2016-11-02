@@ -17,7 +17,9 @@ from ..config import config
 
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
-         for name in ['status', 'tasks', 'workers']]
+         for name in ['background', 'status', 'tasks', 'workers',
+             'memory-usage.py', 'task-stream.py', 'task-progress.py',
+             'resource-profiles.py', 'worker-table.py', 'processing-stacks.py']]
 
 logger = logging.getLogger(__file__)
 
