@@ -1078,3 +1078,22 @@ def test_optimize_fuse_keys():
 
     dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
     assert all(k in dsk for k in y._keys())
+
+
+def test_reductions_are_lazy():
+    current = [None]
+
+    def part():
+        for i in range(10):
+            current[0] = i
+            yield i
+
+    def func(part):
+        assert current[0] == 0
+        return sum(part)
+
+    b = Bag({('foo', 0): part()}, 'foo', 1)
+
+    res = b.reduction(func, sum)
+
+    assert res.compute(get=dask.get) == sum(range(10))
