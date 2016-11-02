@@ -14,16 +14,16 @@ from tornado.iostream import StreamClosedError
 from dask.base import tokenize
 from toolz import merge, concat, groupby, drop, valmap
 
-from .core import rpc, coerce_to_rpc, loads, coerce_to_address, dumps
+from .core import rpc, coerce_to_rpc, coerce_to_address
 from .utils import ignore_exceptions, All, log_errors, tokey, sync
+from .protocol.pickle import dumps, loads
 
 
 no_default = '__no_default__'
 
 
 @gen.coroutine
-def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
-                        permissive=False):
+def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
     """ Gather data directly from peers
 
     Parameters
@@ -76,8 +76,6 @@ def gather_from_workers(who_has, deserialize=True, rpc=rpc, close=True,
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(merge(response))
 
-    if deserialize:
-        results = valmap(loads, results)
     if permissive:
         raise Return((results, all_bad_keys))
     else:

@@ -21,10 +21,11 @@ import pytest
 
 from distributed import Nanny, Worker
 from distributed.batched import BatchedStream
-from distributed.core import connect, read, write, rpc, dumps
+from distributed.core import connect, read, write, rpc
 from distributed.scheduler import (validate_state, decide_worker,
         Scheduler)
 from distributed.client import _wait
+from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop)
@@ -994,14 +995,14 @@ def test_launch_without_blocked_services():
     yield [s.close(), s2.close()]
 
 
-@gen_cluster(ncores=[])
-def test_scatter_no_workers(s):
+@gen_cluster(ncores=[], client=True)
+def test_scatter_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
         yield gen.with_timeout(timedelta(seconds=0.1),
                               s.scatter(data={'x': dumps(1)}, client='alice'))
 
     w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
-    yield [s.scatter(data={'x': dumps(1)}, client='alice'),
+    yield [c._scatter(data={'x': 1}),
            w._start()]
 
     assert w.data['x'] == 1

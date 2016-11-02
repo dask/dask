@@ -22,7 +22,7 @@ from toolz import memoize, valmap
 from tornado import gen
 from tornado.iostream import StreamClosedError
 
-from .compatibility import Queue, PY3
+from .compatibility import Queue, PY3, PY2
 from .config import config
 
 logger = logging.getLogger(__name__)
@@ -492,6 +492,10 @@ def ensure_bytes(s):
     """
     if isinstance(s, bytes):
         return s
+    if isinstance(s, memoryview):
+        return s.tobytes()
+    if isinstance(s, bytearray) or PY2 and isinstance(s, buffer):
+        return bytes(s)
     if hasattr(s, 'encode'):
         return s.encode()
     raise TypeError(

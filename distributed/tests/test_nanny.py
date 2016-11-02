@@ -12,7 +12,8 @@ from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from distributed import Nanny, rpc, Scheduler
-from distributed.core import connect, read, write, dumps, loads
+from distributed.core import connect, read, write
+from distributed.protocol.pickle import dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster
 from distributed.nanny import isalive
@@ -125,6 +126,6 @@ def test_run(s):
     with rpc(n.address) as nn:
         response = yield nn.run(function=dumps(lambda: 1))
         assert response['status'] == 'OK'
-        assert loads(response['result']) == 1
+        assert response['result'] == 1
 
     yield n._close()

@@ -17,7 +17,7 @@ from distributed.utils_test import (gen_cluster, cluster, inc, dec, gen_test,
 from distributed.utils import All, key_split
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
         AllProgress, MultiProgress, dependent_keys)
-from distributed.core import dumps
+from distributed.protocol.pickle import dumps
 
 
 def test_dependent_keys():

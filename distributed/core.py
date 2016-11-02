@@ -28,53 +28,9 @@ from .compatibility import PY3, unicode, WINDOWS
 from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
-pickle_types = [str, bytes]
-with ignoring(ImportError):
-    import numpy as np
-    pickle_types.append(np.ndarray)
-with ignoring(ImportError):
-    import pandas as pd
-    pickle_types.append(pd.core.generic.NDFrame)
-pickle_types = tuple(pickle_types)
-
 
 class RPCClosed(IOError):
     pass
-
-
-def dumps(x):
-    """ Manage between cloudpickle and pickle
-
-    1.  Try pickle
-    2.  If it is short then check if it contains __main__
-    3.  If it is long, then first check type, then check __main__
-    """
-    try:
-        result = pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-        if len(result) < 1000:
-            if b'__main__' in result:
-                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-            else:
-                return result
-        else:
-            if isinstance(x, pickle_types) or b'__main__' not in result:
-                return result
-            else:
-                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-    except:
-        try:
-            return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception:
-            logger.info("Failed to serialize %s", x, exc_info=True)
-            raise
-
-
-def loads(x):
-    try:
-        return pickle.loads(x)
-    except Exception:
-        logger.info("Failed to deserialize %s", x[:10000], exc_info=True)
-        raise
 
 
 logger = logging.getLogger(__name__)
@@ -132,11 +88,13 @@ class Server(TCPServer):
     default_port = 0
 
     def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE,
-            connection_limit=512, **kwargs):
+            connection_limit=512, deserialize=True, **kwargs):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
-        self.rpc = ConnectionPool(limit=connection_limit)
+        self.rpc = ConnectionPool(limit=connection_limit,
+                                  deserialize=deserialize)
+        self.deserialize = deserialize
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     @property
@@ -184,7 +142,7 @@ class Server(TCPServer):
         try:
             while True:
                 try:
-                    msg = yield read(stream)
+                    msg = yield read(stream, deserialize=self.deserialize)
                     logger.debug("Message from %s:%d: %s", ip, port, msg)
                 except StreamClosedError:
                     logger.info("Lost connection: %s", str(address))
@@ -234,9 +192,8 @@ class Server(TCPServer):
                     type(self).__name__)
 
 
-
 @gen.coroutine
-def read(stream):
+def read(stream, deserialize=True):
     """ Read a message from a stream """
     if isinstance(stream, BatchedStream):
         msg = yield stream.recv()
@@ -256,7 +213,7 @@ def read(stream):
                 frame = b''
             frames.append(frame)
 
-        msg = protocol.loads(frames)
+        msg = protocol.loads(frames, deserialize=deserialize)
         raise gen.Return(msg)
 
 
@@ -315,7 +272,8 @@ def connect(ip, port, timeout=3):
 
 
 @gen.coroutine
-def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, **kwargs):
+def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True,
+        deserialize=True, **kwargs):
     """ Send and recv with a stream
 
     Keyword arguments turn into the message
@@ -344,7 +302,7 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
     yield write(stream, msg)
 
     if reply:
-        response = yield read(stream)
+        response = yield read(stream, deserialize=deserialize)
         if isinstance(response, dict) and response.get('status') == 'uncaught-error':
             six.reraise(*clean_exception(**response))
     else:
@@ -398,13 +356,14 @@ class rpc(object):
     active = 0
 
     def __init__(self, arg=None, stream=None, ip=None, port=None, addr=None,
-            timeout=3):
+            deserialize=True, timeout=3):
         ip, port = ip_port_from_args(arg=arg, addr=addr, ip=ip, port=port)
         self.streams = dict()
         self.ip = ip
         self.port = port
         self.timeout = timeout
         self.status = 'running'
+        self.deserialize = deserialize
         rpc.active += 1
         assert self.ip
         assert self.port
@@ -461,7 +420,8 @@ class rpc(object):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
             stream = yield self.live_stream()
-            result = yield send_recv(stream=stream, op=key, **kwargs)
+            result = yield send_recv(stream=stream, op=key,
+                    deserialize=self.deserialize, **kwargs)
             self.streams[stream] = True  # mark as open
             raise gen.Return(result)
         return send_recv_from_rpc
@@ -495,7 +455,8 @@ class RPCCall(object):
         def send_recv_from_rpc(**kwargs):
             stream = yield self.pool.connect(self.ip, self.port)
             try:
-                result = yield send_recv(stream=stream, op=key, **kwargs)
+                result = yield send_recv(stream=stream, op=key,
+                        deserialize=self.pool.deserialize, **kwargs)
             finally:
                 if not stream.closed():
                     self.pool.available[self.ip, self.port].add(stream)
@@ -534,13 +495,21 @@ class ConnectionPool(object):
     issues.  Whenever this maximum is reached we clear out all idling streams.
     If that doesn't do the trick then we wait until one of the occupied streams
     closes.
+
+    Parameters
+    ----------
+    limit: int
+        The number of open streams to maintain at once
+    deserialize: bool
+        Whether or not to deserialize data by default or pass it through
     """
-    def __init__(self, limit=512):
+    def __init__(self, limit=512, deserialize=True):
         self.open = 0
         self.active = 0
         self.limit = limit
         self.available = defaultdict(set)
         self.occupied = defaultdict(set)
+        self.deserialize = deserialize
         self.event = Event()
 
     def __str__(self):
@@ -655,16 +624,16 @@ def error_message(e, status='error'):
     tb = get_traceback()
     e2 = truncate_exception(e, 1000)
     try:
-        e3 = dumps(e2)
-        loads(e3)
+        e3 = protocol.pickle.dumps(e2)
+        protocol.pickle.loads(e3)
     except Exception:
         e3 = Exception(str(e2))
-        e3 = dumps(e3)
+        e3 = protocol.pickle.dumps(e3)
     try:
-        tb2 = dumps(tb)
+        tb2 = protocol.pickle.dumps(tb)
     except Exception:
         tb2 = ''.join(traceback.format_tb(tb))
-        tb2 = dumps(tb2)
+        tb2 = protocol.pickle.dumps(tb2)
 
     if len(tb2) > 10000:
         tb2 = None
@@ -680,9 +649,9 @@ def clean_exception(exception, traceback, **kwargs):
     error_message: create and serialize errors into message
     """
     if isinstance(exception, bytes):
-        exception = loads(exception)
+        exception = protocol.pickle.loads(exception)
     if isinstance(traceback, bytes):
-        traceback = loads(traceback)
+        traceback = protocol.pickle.loads(traceback)
     if isinstance(traceback, str):
         traceback = None
     return type(exception), exception, traceback

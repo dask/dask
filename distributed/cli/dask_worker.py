@@ -55,7 +55,7 @@ def handle_signal(sig, frame):
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='', help="Alias")
-@click.option('--memory-limit', default=False,
+@click.option('--memory-limit', default='auto',
               help="Number of bytes before spilling data to disk. "
               "This can be an integer (nbytes) float (fraction of total memory) or auto")
 @click.option('--no-nanny', is_flag=True)

@@ -45,10 +45,10 @@ Overview
 
 We may split a single message into multiple message-part to suit different
 protocols.  Generally small bits of data are encoded with MsgPack while large
-bytestrings are handled specially by a custom format.  Each message-part gets
-its own header, which is always encoded as msgpack.  After serializing all
-message parts we have a sequence of bytestrings or *frames* which we send along
-the wire, prepended with length information.
+bytestrings and complex datatypes are handled by a custom format.  Each
+message-part gets its own header, which is always encoded as msgpack.  After
+serializing all message parts we have a sequence of bytestrings or *frames*
+which we send along the wire, prepended with length information.
 
 The application doesn't know any of this, it just sends us Python dictionaries
 with various datatypes and we produce a list of bytestrings that get written to
@@ -87,8 +87,8 @@ Because of these failings we supplement it with a language-specific protocol
 and a special case for large bytestrings.
 
 
-CloudPickle for Functions and Data
-----------------------------------
+CloudPickle for Functions and Some Data
+---------------------------------------
 
 Pickle and CloudPickle are Python libraries to serialize almost any Python
 object, including functions.  We use these libraries to transform the users'
@@ -104,6 +104,9 @@ That is because this value ``...`` will actually be the result of calling
 ``cloudpickle.dumps(myfunction)``.  Those bytes will then be included in the
 dictionary that we send off to msgpack, which will only have to deal with
 bytes rather than obscure Python functions.
+
+*Note: we actually call some combination of pickle and cloudpickle, depending
+on the situation.  This is for performance reasons.*
 
 Cross Language Specialization
 -----------------------------
@@ -165,29 +168,41 @@ The header is a small dictionary encoded in msgpack that includes some metadata
 about the message, such as compression.
 
 
-Large Bytestrings
------------------
+Serializing Data
+----------------
 
-Whenever a message comes in with very large byte values like the following::
+For administrative messages like updating status msgpack is sufficient.
+However for large results or Python specific data, like NumPy arrays or Pandas Dataframes, or
+for larger results we need to use something else to convert Python objects to
+bytestrings.  Exactly how we do this is described more in the
+`:doc:Serialization documentation <serialize.rst>`.
 
-   {'key': 'x',
-    'address': 'alice',
-    'data-1': b'...'  # very long bytestring
-    'data-2': b'...'  # very long bytestring
-    }
+The application code marks Python specific results with the ``to_serialize``
+function:
 
-We separate the message into two messages, one encoding all of the large
-bytestrings, and one encoding everything else::
+.. code-block:: python
+
+   >>> import numpy as np
+   >>> x = np.ones(5)
+
+   >>> from distributed.protocol import to_serialize
+   >>> msg = {'status': 'OK', 'data': to_serialize(x)}
+   >>> msg
+   {'data': <Serialize: [ 1.  1.  1.  1.  1.]>, 'status': 'OK'}
+
+We separate the message into two messages, one encoding all of the data to be
+serialized and, and one encoding everything else::
 
    {'key': 'x', 'addresss': 'alice'}
-   {'data-1': b'...', 'data-2': b'...'}
+   {'data': <Serialize: [ 1.  1.  1.  1.  1.]>}
 
-The first message we pass normally with msgpack, the second we pass in multiple
-parts, including a header that contains the keys and compression used for each
+The first message we pass normally with msgpack. The second we pass in multiple
+parts, one part for each serialized piece of data (see `:doc: serialization
+<serialize.rst>`) and one header including types, compression, etc. used for each
 value::
 
-   {'keys': ['data-1', 'data-2'],
-    'compression': ['lz4', None]}
+   {'keys': ['data'],
+    'compression': ['lz4']}
    b'...'
    b'...'
 
@@ -205,15 +220,5 @@ these frames are.  We order the frames and lengths of frames as follows:
 
 In the following sections we describe how we create these frames.
 
-
-Performance
------------
-
-For large numpy arrays we currently suffer three memory copies.  On a nice
-machine this ends up being a 1-1.5 GB/s bottleneck, which is almost always
-faster than the network bandwidth.  These copies come from NumPy (two
-memcopies) and Tornado (one memcopy).
-
-For small messages we generally serialize in around 5 microseconds.
 
 .. _MsgPack: http://msgpack.org/index.html

@@ -18,8 +18,7 @@ def test_pack_data():
 
 @gen_cluster()
 def test_gather_from_workers_permissive(s, a, b):
-    yield a.update_data(data={'x': 1}, deserialize=False)
-
+    yield a.update_data(data={'x': 1})
     with pytest.raises(KeyError):
         yield gather_from_workers({'x': [a.address], 'y': [b.address]})
 

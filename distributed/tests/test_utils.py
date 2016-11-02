@@ -16,9 +16,10 @@ from tornado.locks import Event
 import dask
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
-        iterator_to_queue, _maybe_complex, read_block, seek_delimiter, funcname)
+        iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
+        funcname, ensure_bytes)
 from distributed.utils_test import loop, inc, throws, div
-from distributed.compatibility import Queue, isqueue
+from distributed.compatibility import Queue, isqueue, PY2
 
 
 def test_All(loop):
@@ -271,3 +272,13 @@ def test_funcname():
     assert funcname(f) == 'f'
     assert funcname(partial(f)) == 'f'
     assert funcname(partial(partial(f))) == 'f'
+
+
+def test_ensure_bytes():
+    data = [b'1', '1', memoryview(b'1'), bytearray(b'1')]
+    if PY2:
+        data.append(buffer(b'1'))
+    for d in data:
+        result = ensure_bytes(d)
+        assert isinstance(result, bytes)
+        assert result == b'1'

@@ -17,6 +17,7 @@ from tornado import gen
 
 from .compatibility import JSONDecodeError
 from .core import Server, rpc, write, RPCClosed
+from .protocol import to_serialize
 from .utils import get_ip, ignoring, log_errors, tmpfile
 from .worker import _ncores, Worker, run, TOTAL_MEMORY
 

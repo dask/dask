@@ -2005,6 +2005,7 @@ def test__persist(c, s, a, b):
     assert yy._keys() == y._keys()
 
     g, h = c.compute([y, yy])
+
     gg, hh = yield c._gather([g, h])
     assert (gg == hh).all()
 
@@ -2030,7 +2031,7 @@ def test_persist(loop):
 
 @gen_cluster(timeout=60, client=True)
 def test_long_traceback(c, s, a, b):
-    from distributed.core import dumps
+    from distributed.protocol.pickle import dumps
 
     n = sys.getrecursionlimit()
     sys.setrecursionlimit(500)
