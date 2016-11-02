@@ -3455,7 +3455,7 @@ def repartition(df, divisions=None, force=False):
     raise ValueError('Data must be DataFrame or Series')
 
 
-def set_sorted_index(df, index, drop=True, **kwargs):
+def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
     if not isinstance(index, Series):
         meta = df._meta.set_index(index, drop=drop)
     else:
@@ -3463,7 +3463,11 @@ def set_sorted_index(df, index, drop=True, **kwargs):
 
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
-    return compute_divisions(result, **kwargs)
+    if not divisions:
+        divisions = compute_divisions(result, **kwargs)
+
+    result.divisions = divisions
+    return result
 
 
 def compute_divisions(df, **kwargs):
@@ -3478,11 +3482,7 @@ def compute_divisions(df, **kwargs):
                          mins, maxes)
 
     divisions = tuple(mins) + (list(maxes)[-1],)
-
-    df = copy(df)
-    df.divisions = divisions
-
-    return df
+    return divisions
 
 
 def _reduction_chunk(x, aca_chunk=None, **kwargs):

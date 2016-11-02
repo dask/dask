@@ -1,5 +1,6 @@
-import sys
+from copy import copy
 from operator import getitem
+import sys
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -2321,7 +2322,10 @@ def test_compute_divisions():
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
 
-    b = compute_divisions(a)
+    divisions = compute_divisions(a)
+    b = copy(a)
+    b.divisions = divisions
+
     assert_eq(a, b)
     assert b.known_divisions
 
