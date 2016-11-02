@@ -212,7 +212,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                       compression=compression, **storage_options)
 
 
-def open_files_by(open_files_backend, path, compression=None, **kwargs):
+def open_files_by(open_files_backend, path, compression=None, mode='rb',
+                  **kwargs):
     """ Given open files backend and path return dask.delayed file-like objects
 
     NOTE: This is an internal helper function, please refer to
@@ -232,7 +233,7 @@ def open_files_by(open_files_backend, path, compression=None, **kwargs):
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
-    files = open_files_backend(path, **kwargs)
+    files = open_files_backend(path, mode=mode, **kwargs)
 
     if compression:
         decompress = merge(seekable_files, compress_files)[compression]
@@ -243,7 +244,7 @@ def open_files_by(open_files_backend, path, compression=None, **kwargs):
     return files
 
 
-def open_files(urlpath, compression=None, **kwargs):
+def open_files(urlpath, compression=None, mode='rb', **kwargs):
     """ Given path return dask.delayed file-like objects
 
     Parameters
@@ -280,7 +281,7 @@ def open_files(urlpath, compression=None, **kwargs):
                                   (protocol, urlpath))
 
     return open_files_by(open_files_backend, storage_options.pop('path'),
-                         compression=compression, **storage_options)
+                         compression=compression, mode=mode, **storage_options)
 
 
 def _expand_paths(path, name_function, num):

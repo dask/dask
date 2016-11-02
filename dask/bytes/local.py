@@ -82,7 +82,7 @@ def read_block_from_file(path, offset, length, delimiter, compression):
     return result
 
 
-def open_files(path):
+def open_files(path, mode='rb'):
     """ Open many files.  Return delayed objects.
 
     See Also
@@ -91,7 +91,7 @@ def open_files(path):
     """
     myopen = delayed(open)
     filepaths = sorted(glob(path))
-    return [myopen(_path, mode='rb',
+    return [myopen(_path, mode=mode,
                    dask_key_name='open-%s' % tokenize(_path,
                                                       os.path.getmtime(_path)))
             for _path in filepaths]

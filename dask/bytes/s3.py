@@ -138,12 +138,12 @@ def read_block_from_s3(path, offset, length, s3=None,
     return result
 
 
-def s3_open_file(path, s3=None, **kwargs):
+def s3_open_file(path, s3=None, mode='rb', **kwargs):
     bucket = kwargs.pop('host', '')
     s3_path = bucket + path
     if s3 is None:
         s3 = _get_s3(**kwargs)
-    return s3.open(s3_path, mode='rb')
+    return s3.open(s3_path, mode=mode)
 
 
 def open_file_write(paths, s3=None, **kwargs):
@@ -162,7 +162,7 @@ def open_file_write_direct(path, s3=None, **kwargs):
     return s3.open(bucket + path, 'wb')
 
 
-def open_files(path, s3=None, **kwargs):
+def open_files(path, s3=None, mode='rb', **kwargs):
     """ Open many files.  Return delayed objects.
 
     See Also
@@ -174,14 +174,25 @@ def open_files(path, s3=None, **kwargs):
     if s3 is None:
         s3 = _get_s3(**kwargs)
 
-    filenames = sorted(s3.glob(s3_path))
-    myopen = delayed(s3_open_file)
+    if "*" in path:
+        filenames = sorted(s3.glob(s3_path))
+    elif isinstance(path, str):
+        filenames = [s3_path]
+    else:
+        filenames = s3_path
+
+    if 'r' in mode:
+        myopen = delayed(s3_open_file)
+        keys = ['s3-open-file-%s' % s3.info(_s3_path)['ETag'] for _s3_path
+                in filenames]
+    else:
+        myopen = delayed(s3_open_file, pure=False)
+        keys = ['s3-open-file-%s' % _s3_path for _s3_path
+                in filenames]
     s3_storage_options = s3.get_delegated_s3pars()
 
-    return [myopen(_s3_path,
-                   dask_key_name='s3-open-file-%s' % s3.info(_s3_path)['ETag'],
-                   **s3_storage_options)
-            for _s3_path in filenames]
+    return [myopen(_s3_path, mode=mode, dask_key_name=key, **s3_storage_options)
+            for _s3_path, key in zip(filenames, keys)]
 
 
 def getsize(path, compression, s3):
