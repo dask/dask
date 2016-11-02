@@ -4,7 +4,7 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy
+from .core import getarray, getarray_nofancy, concatenate3
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
 
@@ -105,15 +105,19 @@ def optimize_concatenate(dsk):
         add_slices_or_lists
     """
     getters = (getarray_nofancy, getarray, getitem)
-    from .core import concatenate3
     concatenaters = (concatenate3,)
     dsk = dsk.copy()
     for k, val in dsk.items():
         if isinstance(val, tuple) and val[0] in concatenaters and len(val) == 2:
-            if (all([(isinstance(g, tuple) and g[0] in getters and len(g) == 3)
-                     for g in flatten(val[1])]) and
-                    len(set([g[1] for g in flatten(val[1])])) == 1 and
-                    len(set([g[0] for g in flatten(val[1])])) == 1):
+            try:
+                condition = (all([(isinstance(g, tuple) and g[0] in getters and len(g) == 3)
+                                  for g in flatten(val[1])]) and
+                             len(set([g[1] for g in flatten(val[1])])) == 1 and
+                             len(set([g[0] for g in flatten(val[1])])) == 1)
+            except TypeError:
+                condition = False
+
+            if condition:
                 #Concatenate is joining different parts of the same array
                 getter, arr = next(flatten(val[1]))[:2]
                 new_slices = add_slices_or_lists(_pick_index(val[1], 2))
