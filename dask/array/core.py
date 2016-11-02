@@ -2356,18 +2356,35 @@ def insert_to_ooc(out, arr, lock=True):
     if lock is True:
         lock = Lock()
 
+    slices = slices_from_chunks(arr.chunks)
+
+    if isinstance(out, Array):
+        if not out.chunks == arr.chunks:
+            out = out.rechunk(arr.chunks)
+
     def store(x, index, lock):
         if lock:
             lock.acquire()
         try:
-            out[index] = np.asanyarray(x)
+            if isinstance(out, Array):
+                dsk = optimize(out[index].dask, out[index]._keys())
+                if len(dsk) == 2:
+                    for key in dsk:
+                        if (isinstance(key, tuple) and
+                            isinstance(dsk[key],tuple) and
+                            len(dsk[key]) == 3 and
+                            dsk[key][0] is getarray and
+                            isinstance(dsk[key][2], tuple)):
+                            operator.setitem(dsk[dsk[key][1]], dsk[key][2], np.asanyarray(x))
+                else:
+                    out[index] = np.asanyarray(x)
+            else:
+                out[index] = np.asanyarray(x)
         finally:
             if lock:
                 lock.release()
 
         return None
-
-    slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
     dsk = dict(((name,) + t[1:], (store, t, slc, lock))

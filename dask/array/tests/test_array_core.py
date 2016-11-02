@@ -928,6 +928,39 @@ def test_store():
     pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_store_to_dask_full():
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    data = [da.from_array(np.empty(shape=(4, 2)), chunks=(1, 2)),
+            da.from_array(np.empty(shape=(4, 2)), chunks=(1, 2))]
+    at = da.concatenate(data, axis=1).rechunk(d.chunks)
+    bt = da.from_array(np.empty(shape=(4, 4)), chunks=(1, 2)).rechunk(d.chunks)
+
+    store([a, b], [at, bt])
+    assert (at == 2).all()
+    assert (bt == 3).all()
+
+    pytest.raises(ValueError, lambda: store([a], [at, bt]))
+
+
+def test_store_to_dask_sliced():
+    d = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    a, b = d + 1, d + 2
+
+    data = [da.from_array(np.zeros(shape=(4, 2, 4)), chunks=(1, 2, 2)),
+            da.from_array(np.zeros(shape=(4, 2, 4)), chunks=(1, 2, 2))]
+    at = da.concatenate(data, axis=1)
+    ct = da.from_array(np.zeros(shape=(8, 4, 6)), chunks=(1, 2, 1))
+    bt = ct[::2,:,[1, 2, 4, 5]]
+
+    v = store([a, b], [at, bt], compute=False)
+    assert (at == 0).all() and (bt == 0).all()
+    v.compute()
+    assert (at == 2).all() and (bt == 3).all()
+    assert not (ct == 3).all() and not ( ct == 0 ).all()
+
+
 def test_store_compute_false():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
