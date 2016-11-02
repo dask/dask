@@ -14,8 +14,7 @@ from distutils.version import LooseVersion
 from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
-                   remove, compose, curry, first, second, accumulate, cons,
-                   peek)
+                   remove, compose, curry, first, second, accumulate, peek)
 from toolz.compatibility import iteritems, zip
 import toolz
 _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
