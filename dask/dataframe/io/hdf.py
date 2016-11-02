@@ -25,8 +25,6 @@ from ...utils import build_name_function
 
 from .io import _link
 
-lock = Lock()
-
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     """ A wrapper function around pd_to_hdf that enables locking"""

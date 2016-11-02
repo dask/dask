@@ -507,15 +507,14 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     else:
         Frame = DataFrame
 
+    df = Frame(dsk3, name, meta, [None] * (len(dfs) + 1))
+
     if divisions == 'sorted':
         from ..core import compute_divisions
-        divisions = [None] * (len(dfs) + 1)
-        df = Frame(dsk3, name, meta, divisions)
-        return compute_divisions(df)
-    elif divisions is None:
-        divisions = [None] * (len(dfs) + 1)
+        divisions = compute_divisions(df)
+        df.divisions = divisions
 
-    return Frame(dsk3, name, meta, divisions)
+    return df
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):

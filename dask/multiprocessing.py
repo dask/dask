@@ -20,12 +20,14 @@ else:
 def _reduce_method_descriptor(m):
     return getattr, (m.__objclass__, m.__name__)
 
+
 # type(set.union) is used as a proxy to <class 'method_descriptor'>
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
 
 def _dumps(x):
     return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 _loads = pickle.loads
 

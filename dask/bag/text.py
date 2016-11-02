@@ -5,9 +5,8 @@ import os
 
 from toolz import concat
 
-from ..utils import infer_compression, system_encoding
+from ..utils import system_encoding
 from ..delayed import delayed
-from ..bytes.compression import files as cfiles, seekable_files
 from ..bytes import open_text_files, read_bytes
 from .core import from_delayed
 
@@ -67,22 +66,12 @@ def read_text(urlpath, blocksize=None, compression='infer',
                       storage_options=storage_options)
                      for fn in urlpath], [])
     else:
-        if compression == 'infer':
-            compression = infer_compression(urlpath)
-
-        if blocksize and compression not in seekable_files:
-            msg = ("Compression %s does not support breaking apart files\n"
-                   "Use ``blocksize=None`` or decompress file externally")
-            raise ValueError(msg % compression)
-        if compression not in seekable_files and compression not in cfiles:
-            raise NotImplementedError("Compression format %s not installed" %
-                                      compression)
-
-        elif blocksize is None:
+        if blocksize is None:
             files = open_text_files(urlpath, encoding=encoding, errors=errors,
                                     compression=compression,
                                     **(storage_options or {}))
-            blocks = [delayed(list)(file) for file in files]
+            blocks = [delayed(list, pure=True)(delayed(file_to_blocks)(file))
+                      for file in files]
 
         else:
             _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
@@ -101,6 +90,12 @@ def read_text(urlpath, blocksize=None, compression='infer',
         return blocks
     else:
         return from_delayed(blocks)
+
+
+def file_to_blocks(lazy_file):
+    with lazy_file as f:
+        for line in f:
+            yield line
 
 
 def decode(block, encoding, errors):

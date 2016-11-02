@@ -626,7 +626,7 @@ def test_groupby_normalize_index():
 
 
 @pytest.mark.parametrize('spec', [
-    {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+    {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
     {'b': 'mean', 'c': ['min', 'max']},
     {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
     ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
@@ -735,7 +735,7 @@ def test_aggregate__dask():
     })
 
     specs = [
-        {'b': {'c': 'mean'}, 'c': {'a': 'max', 'a': 'min'}},
+        {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
         {'b': 'mean', 'c': ['min', 'max']},
         ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
         'sum', 'mean', 'min', 'max', 'count', 'std', 'var',

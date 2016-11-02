@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import gzip
 import os
 from time import sleep
 
@@ -7,11 +8,12 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
-from dask.compatibility import FileNotFoundError
+from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
-from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
-from dask.bytes.core import open_text_files, write_bytes
+from dask.bytes.local import LocalFileSystem
+from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
+                             open_files, OpenFileCreator)
 
 compute = partial(compute, get=get)
 
@@ -135,11 +137,13 @@ def test_registered_read_bytes():
 
 
 def test_registered_open_files():
-    from dask.bytes.core import open_files
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k] for k in sorted(files)]
 
 
@@ -149,7 +153,10 @@ def test_registered_open_text_files(encoding):
     with filetexts(files, mode='b'):
         myfiles = open_text_files('.test.accounts.*', encoding=encoding)
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k].decode(encoding)
                               for k in sorted(files)]
 
@@ -158,17 +165,21 @@ def test_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
-        assert list(data) == [files[k] for k in sorted(files)]
+        for lazy_file, data_file in zip(myfiles, sorted(files)):
+            with lazy_file as f:
+                x = f.read()
+                assert x == files[data_file]
 
 
 @pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_binary(fmt):
-    from dask.bytes.core import open_files
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_files('.test.accounts.*', compression=fmt)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k] for k in sorted(files)]
 
 
@@ -177,19 +188,22 @@ def test_compression_text(fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_text_files('.test.accounts.*', compression=fmt)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k].decode() for k in sorted(files)]
 
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
+    fs = LocalFileSystem()
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
-        assert getsize('.tmp.getsize', fmt) == 10
+        assert fs.logical_size('.tmp.getsize', fmt) == 10
 
 
 def test_bad_compression():
-    from dask.bytes.core import read_bytes, open_files, open_text_files
     with filetexts(files, mode='b'):
         for func in [read_bytes, open_files, open_text_files]:
             with pytest.raises(ValueError):
@@ -199,7 +213,7 @@ def test_bad_compression():
 
 def test_not_found():
     fn = 'not-a-file'
-    with pytest.raises(FileNotFoundError) as e:
+    with pytest.raises((FileNotFoundError, OSError)) as e:
         read_bytes(fn)
     assert fn in str(e)
 
@@ -222,23 +236,6 @@ def test_names():
         _, c = read_bytes('.test.accounts.*')
         c = list(concat(c))
         assert [aa._key for aa in a] != [cc._key for cc in c]
-
-
-@pytest.mark.parametrize('open_files', [open_files, open_text_files])
-def test_modification_time_open_files(open_files):
-    with filetexts(files, mode='b'):
-        a = open_files('.test.accounts.*')
-        b = open_files('.test.accounts.*')
-
-        assert [aa._key for aa in a] == [bb._key for bb in b]
-
-    sleep(1)
-
-    double = lambda x: x + x
-    with filetexts(valmap(double, files), mode='b'):
-        c = open_files('.test.accounts.*')
-
-    assert [aa._key for aa in a] != [cc._key for cc in c]
 
 
 def test_simple_write(tmpdir):
@@ -274,8 +271,41 @@ def test_compressed_write(tmpdir):
 
 def test_open_files_write(tmpdir):
     tmpdir = str(tmpdir)
-    f = open_file_write([os.path.join(tmpdir, 'test1'),
-                         os.path.join(tmpdir, 'test2')])
-    assert len(f) == 2
-    files = compute(*f)
+    files = open_files([os.path.join(tmpdir, 'test1'),
+                        os.path.join(tmpdir, 'test2')], mode='wb')
+    assert len(files) == 2
     assert files[0].mode == 'wb'
+
+
+def test_pickability_of_lazy_files(tmpdir):
+    cloudpickle = pytest.importorskip('cloudpickle')
+    fn = os.path.join(str(tmpdir), 'foo')
+    with open(fn, 'wb') as f:
+        f.write(b'1')
+
+    opener = OpenFileCreator('file://foo.py', open=open)
+    opener2 = cloudpickle.loads(cloudpickle.dumps(opener))
+    assert type(opener2.fs) == type(opener.fs)
+
+    lazy_file = opener(fn, mode='rt')
+    lazy_file2 = cloudpickle.loads(cloudpickle.dumps(lazy_file))
+    assert lazy_file.path == lazy_file2.path
+
+    with lazy_file as f:
+        pass
+
+    lazy_file3 = cloudpickle.loads(cloudpickle.dumps(lazy_file))
+    assert lazy_file.path == lazy_file3.path
+
+
+def test_py2_local_bytes(tmpdir):
+    fn = str(tmpdir / 'myfile.txt.gz')
+    with gzip.open(fn, mode='wb') as f:
+        f.write(b'hello\nworld')
+
+    ofc = OpenFileCreator(fn, text=True, open=open, mode='rt',
+                          compression='gzip', encoding='utf-8')
+    lazy_file = ofc(fn)
+
+    with lazy_file as f:
+        assert all(isinstance(line, unicode) for line in f)

@@ -31,6 +31,7 @@ def make_categorical(n, rstate):
     return pd.Categorical.from_codes(rstate.randint(0, len(names), size=n),
                                      names)
 
+
 make = {float: make_float,
         int: make_int,
         str: make_string,
