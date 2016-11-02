@@ -145,7 +145,8 @@ def add_slices_or_lists(slices, axis=0):
         return new_slices[0]
     else:
         #Keep track of level by add slices along axis corresponding to current level:
-        other_slices = zip(*new_slices)
+        #Add call to list for 2/3 compatibility:
+        other_slices = list(zip(*new_slices))
         slices_to_combine = other_slices.pop(axis)
 
         output_slices = [slc[0] for slc in other_slices]
