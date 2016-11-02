@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 
 from dask.base import normalize_token
+from toolz import valmap, get_in
 
 from . import pickle
 
@@ -157,6 +158,55 @@ class Serialized(object):
     def __init__(self, header, frames):
         self.header = header
         self.frames = frames
+
+
+def container_copy(c):
+    typ = type(c)
+    if typ is list:
+        return list(map(container_copy, c))
+    if typ is dict:
+        return valmap(container_copy, c)
+    return c
+
+
+def extract_serialize(x):
+    """ Pull out Serialize objects from message
+
+    Examples
+    --------
+    >>> from distributed.protocol import to_serialize
+    >>> msg = {'op': 'update', 'data': to_serialize(123)}
+    >>> extract_serialize(msg)
+    ({'op': 'update'}, {('data',): <Serialize: 123>})
+    """
+    ser = {}
+    _extract_serialize(x, ser)
+    if ser:
+        x = container_copy(x)
+        for path in ser:
+            t = get_in(path[:-1], x)
+            if isinstance(t, dict):
+                del t[path[-1]]
+            else:
+                t[path[-1]] = None
+
+    return x, ser
+
+
+def _extract_serialize(x, ser, path=()):
+    if type(x) is dict:
+        for k, v in x.items():
+            if isinstance(v, (list, dict)):
+                _extract_serialize(v, ser, path + (k,))
+            elif type(v) is Serialize or type(v) is Serialized:
+                ser[path + (k,)] = v
+    elif type(x) is list:
+        for k, v in enumerate(x):
+            if isinstance(v, (list, dict)):
+                _extract_serialize(v, ser, path + (k,))
+            elif type(v) is Serialize or type(v) is Serialized:
+                ser[path + (k,)] = v
+
 
 
 @partial(normalize_token.register, Serialized)

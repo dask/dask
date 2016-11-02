@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from copy import deepcopy
 from functools import partial
 import logging
 
@@ -9,11 +8,11 @@ try:
 except ImportError:
     import msgpack
 
-from toolz import identity, get_in, valmap
+from toolz import get_in
 
 from .compression import compressions, maybe_compress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
-        to_serialize)
+        to_serialize, extract_serialize)
 from .utils import frame_split_size, merge_frames
 
 from ..utils import ignoring
@@ -154,45 +153,6 @@ def loads_msgpack(header, payload):
                              " installed" % str(header['compression']))
 
     return msgpack.loads(payload, encoding='utf8')
-
-
-def extract_serialize(x):
-    """ Pull out Serialize objects from message
-
-    Examples
-    --------
-    >>> from distributed.protocol import to_serialize
-    >>> msg = {'op': 'update', 'data': to_serialize(123)}
-    >>> extract_serialize(msg)
-    ({'op': 'update'}, {('data',): <Serialize: 123>})
-    """
-    ser = {}
-    _extract_serialize(x, ser)
-    if ser:
-        x = deepcopy(x)
-        for path in ser:
-            t = get_in(path[:-1], x)
-            if isinstance(t, dict):
-                del t[path[-1]]
-            else:
-                t[path[-1]] = None
-
-    return x, ser
-
-
-def _extract_serialize(x, ser, path=()):
-    if type(x) is dict:
-        for k, v in x.items():
-            if isinstance(v, (list, dict)):
-                _extract_serialize(v, ser, path + (k,))
-            elif type(v) is Serialize or type(v) is Serialized:
-                ser[path + (k,)] = v
-    elif type(x) is list:
-        for k, v in enumerate(x):
-            if isinstance(v, (list, dict)):
-                _extract_serialize(v, ser, path + (k,))
-            elif type(v) is Serialize or type(v) is Serialized:
-                ser[path + (k,)] = v
 
 
 def decompress(header, frames):
