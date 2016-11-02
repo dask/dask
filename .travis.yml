@@ -26,14 +26,14 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -c conda-forge numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython python-lmdb
-  - if [[ $PYTHON != '3.3' ]]; then conda install -c conda-forge pandas=$PANDAS cloudpickle bokeh; fi
+  - conda install -c conda-forge numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython
+  - if [[ $PYTHON != '3.3' ]]; then conda install -c conda-forge pandas=$PANDAS distributed cloudpickle bokeh python-lmdb; fi
+  - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/zict --upgrade; fi
+  - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/distributed --upgrade; fi
   - if [[ $PYTHON == '3.3' ]]; then pip install cloudpickle pandas==$PANDAS; fi
   - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma mock; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
-  - pip install git+https://github.com/dask/zict --upgrade
-  - pip install git+https://github.com/dask/distributed --upgrade
   - pip install blosc --upgrade
   - pip install graphviz moto flake8
   - if [[ $PYTHON < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
