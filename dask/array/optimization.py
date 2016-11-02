@@ -4,7 +4,7 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy
+from .core import getarray, getarray_nofancy, concatenate3
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
 
@@ -31,7 +31,8 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
                             fast_functions=inline_functions_fast_functions)
 
-    return dsk6
+    dsk7 = optimize_concatenate(dsk6)
+    return dsk7
 
 
 def optimize_slices(dsk):
@@ -91,6 +92,104 @@ def optimize_slices(dsk):
             else:
                 dsk[k] = (getitem, a, a_index)
     return dsk
+
+
+def optimize_concatenate(dsk):
+    """
+    Optimize concatenate on a single array:
+
+    1. np.concatenate(x[1:3], x[3:5]) -> x[1:5]
+    2. np.concatenate(x[1:3], x[[4, 6]]) -> x[[1, 2, 4, 6]]
+
+    See also:
+        add_slices_or_lists
+    """
+    getters = (getarray_nofancy, getarray, getitem)
+    concatenaters = (concatenate3,)
+    dsk = dsk.copy()
+    for k, val in dsk.items():
+        if isinstance(val, tuple) and val[0] in concatenaters and len(val) == 2:
+            try:
+                condition = (all([(isinstance(g, tuple) and g[0] in getters and len(g) == 3)
+                                  for g in flatten(val[1])]) and
+                             len(set([g[1] for g in flatten(val[1])])) == 1 and
+                             len(set([g[0] for g in flatten(val[1])])) == 1)
+            except TypeError:
+                condition = False
+
+            if condition:
+                #Concatenate is joining different parts of the same array
+                getter, arr = next(flatten(val[1]))[:2]
+                new_slices = add_slices_or_lists(_pick_index(val[1], 2))
+                if isinstance(new_slices, tuple):
+                    #Only remove concatenate if slices could be added:
+                    dsk[k] = (getter, arr, new_slices)
+    return dsk
+
+
+def _pick_index(seq, ind):
+    #Pick an index from the last level of a nested sequence:
+    return [_pick_index(x, ind) if isinstance(x, list) else x[ind] for x in seq]
+
+
+def add_slices_or_lists(slices, axis=0):
+    if _count_levels(slices) > 0:
+        #Recursively add slices if not at lowest level:
+        new_slices = [add_slices_or_lists(slc, axis=axis + 1) for slc in slices]
+    else:
+        #At lowest level, add slices:
+        new_slices = slices
+
+    if len(list(flatten(new_slices))) == 1:
+        #If there is only one slice, remove from list:
+        return new_slices[0]
+    else:
+        #Keep track of level by add slices along axis corresponding to current level:
+        #Add call to list for 2/3 compatibility:
+        other_slices = list(zip(*new_slices))
+        slices_to_combine = other_slices.pop(axis)
+
+        output_slices = [slc[0] for slc in other_slices]
+        if (all([isinstance(slc, slice) for slc in slices_to_combine]) and
+                len(set([slc.step for slc in slices_to_combine])) == 1):
+
+            #All slices, same step:
+            possible_slice = slice(slices_to_combine[0].start,
+                                   slices_to_combine[-1].stop,
+                                   slices_to_combine[0].step)
+            if ([slc.stop for slc in slices_to_combine][:-1] ==
+                    [slc.start for slc in slices_to_combine][1:]):
+                #Continous works:
+                output_slices.insert(axis, possible_slice)
+            else:
+                #Check if continuous works:
+                list_of_indices = []
+                for slc in slices_to_combine:
+                    list_of_indices.extend(range(slc.stop)[slc])
+                if list_of_indices == range(possible_slice.stop)[possible_slice]:
+                    #It works, insert:
+                    output_slices.insert(axis, possible_slice)
+                else:
+                    #It does not work. Insert list of indices:
+                    output_slices.insert(axis, list_of_indices)
+            return tuple(output_slices)
+        elif all([(isinstance(slc, slice) or isinstance(slc, list))
+                  for slc in slices_to_combine]):
+            #Mixed slicing:
+            output_slices.insert(axis, [])
+            for slc in slices_to_combine:
+                if isinstance(slc, slice):
+                    output_slices[axis].extend(range(slc.start, slc.stop)[slc])
+                else:
+                    output_slices[axis].extend(slc)
+            return tuple(output_slices)
+        else:
+            return new_slices
+
+
+def _count_levels(l):
+    #Count levels in nested lists:
+    return sum(1 + _count_levels(i) for i in l if isinstance(i, list))
 
 
 def normalize_slice(s):
