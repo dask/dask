@@ -1,10 +1,10 @@
 Specification
 =============
 
-Dask is a specification to encode a graph -- specifically, a directed 
-acyclic graph of tasks with data dependencies -- using ordinary Python data 
+Dask is a specification to encode a graph -- specifically, a directed
+acyclic graph of tasks with data dependencies -- using ordinary Python data
 structures, namely dicts, tuples, functions, and arbitrary Python
-values. 
+values.
 
 
 Definitions
@@ -28,7 +28,7 @@ A **key** is any hashable value that is not a **task**:
    ('x', 2, 3)
 
 A **task** is a tuple with a callable first element.  Tasks represent atomic
-units of work meant to be run by a single worker. Example: 
+units of work meant to be run by a single worker. Example:
 
 .. code-block:: python
 
@@ -44,6 +44,8 @@ A **computation** may be one of the following:
 2.  Any other value like ``1``, to be interpreted literally
 3.  A **task** like ``(inc, 'x')`` (see below)
 4.  A list of **computations**, like ``[1, 'x', (inc, 'x')]``
+5.  A dictionary of literal keys and **computation** values like
+    ``{'name': 'Alice', 'value': (inc, 'x')}``
 
 So all of the following are valid **computations**:
 
@@ -57,6 +59,7 @@ So all of the following are valid **computations**:
    (sum, ['x', (inc, 'x')])
    (np.dot, np.array([...]), np.array([...]))
    [(sum, ['x', 'y']), 'z']
+   {'total': (sum, ['x', 'y'])}
 
 To encode keyword arguments, we recommend the use of ``functools.partial`` or
 ``toolz.curry``.
