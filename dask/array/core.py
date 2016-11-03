@@ -2381,13 +2381,14 @@ def insert_to_ooc(out, arr, lock=True, region=None):
                 lock.release()
 
         return None
-   
+
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
     dsk = dict(((name,) + t[1:], (store, t, slc, lock, region))
                for t, slc in zip(core.flatten(arr._keys()), slices))
     return dsk
+
 
 def storeindask(out, index, x):
     #Loop through output chunks and setitem:
@@ -2405,6 +2406,7 @@ def storeindask(out, index, x):
         else:
             raise NotImplementedError('Only concantenated dask arrays can be stored to')
 
+
 def base_condition(dsk, key):
     #Simple condition that allows simple setitem:
     return (isinstance(key, tuple) and
@@ -2412,6 +2414,7 @@ def base_condition(dsk, key):
             len(dsk[key]) == 3 and
             dsk[key][0] is getarray and
             isinstance(dsk[key][2], tuple))
+
 
 def asarray(array):
     """Coerce argument into a dask array
