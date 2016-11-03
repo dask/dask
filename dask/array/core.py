@@ -758,8 +758,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         Pass True (lock each file individually), False (don't lock) or a
         particular ``threading.Lock`` object to be shared among all writes.
     regions: tuple of slices or iterable of tuple of slices
-        Each ``region`` tuple in ``regions`` should be such that 
-        ``target[region].shape = source.shape`` 
+        Each ``region`` tuple in ``regions`` should be such that
+        ``target[region].shape = source.shape``
         for the corresponding source and target in sources and targets, respectively.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
