@@ -107,6 +107,8 @@ def test_BatchedSend():
         stream = yield client.connect('127.0.0.1', e.port)
 
         b = BatchedSend(interval=10)
+        assert str(len(b.buffer)) in str(b)
+        assert str(len(b.buffer)) in repr(b)
         b.start(stream)
         yield b.last_send
 
