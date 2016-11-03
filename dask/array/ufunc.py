@@ -113,7 +113,8 @@ absolute = wrap_elemwise(np.absolute)
 
 
 def frexp(x):
-    tmp = elemwise(np.frexp, x)
+    # Not actually object dtype, just need to specify something
+    tmp = elemwise(np.frexp, x, dtype=object)
     left = 'mantissa-' + tmp.name
     right = 'exponent-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
@@ -121,14 +122,10 @@ def frexp(x):
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
                 for key in core.flatten(tmp._keys()))
 
-    if x._dtype is not None:
-        a = np.empty((1, ), dtype=x._dtype)
-        l, r = np.frexp(a)
-        ldt = l.dtype
-        rdt = r.dtype
-    else:
-        ldt = None
-        rdt = None
+    a = np.empty((1, ), dtype=x.dtype)
+    l, r = np.frexp(a)
+    ldt = l.dtype
+    rdt = r.dtype
 
     L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks, dtype=ldt)
     R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
@@ -138,7 +135,8 @@ frexp.__doc__ = skip_doctest(np.frexp.__doc__)
 
 
 def modf(x):
-    tmp = elemwise(np.modf, x)
+    # Not actually object dtype, just need to specify something
+    tmp = elemwise(np.modf, x, dtype=object)
     left = 'modf1-' + tmp.name
     right = 'modf2-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
@@ -146,19 +144,13 @@ def modf(x):
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
                 for key in core.flatten(tmp._keys()))
 
-    if x._dtype is not None:
-        a = np.empty((1,), dtype=x._dtype)
-        l, r = np.modf(a)
-        ldt = l.dtype
-        rdt = r.dtype
-    else:
-        ldt = None
-        rdt = None
+    a = np.empty((1,), dtype=x.dtype)
+    l, r = np.modf(a)
+    ldt = l.dtype
+    rdt = r.dtype
 
     L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks, dtype=ldt)
-
     R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
-
     return L, R
 
 modf.__doc__ = skip_doctest(np.modf.__doc__)

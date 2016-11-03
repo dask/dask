@@ -62,7 +62,7 @@ def test_arange():
 
 
 def test_arange_has_dtype():
-    assert da.arange(5, chunks=2)._dtype is not None
+    assert da.arange(5, chunks=2).dtype == np.arange(5).dtype
 
 
 def test_arange_working_float_step():

@@ -173,7 +173,7 @@ def test_Array():
     chunks = (100, 100)
     name = 'x'
     dsk = merge({name: 'some-array'}, getem(name, chunks, shape=shape))
-    a = Array(dsk, name, chunks, shape=shape)
+    a = Array(dsk, name, chunks, shape=shape, dtype='f8')
 
     assert a.numblocks == (10, 10)
 
@@ -188,7 +188,7 @@ def test_Array():
 
 
 def test_uneven_chunks():
-    a = Array({}, 'x', chunks=(3, 3), shape=(10, 10))
+    a = Array({}, 'x', chunks=(3, 3), shape=(10, 10), dtype='f8')
     assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
 
 
@@ -197,22 +197,22 @@ def test_numblocks_suppoorts_singleton_block_dims():
     chunks = (10, 10)
     name = 'x'
     dsk = merge({name: 'some-array'}, getem(name, shape=shape, chunks=chunks))
-    a = Array(dsk, name, chunks, shape=shape)
+    a = Array(dsk, name, chunks, shape=shape, dtype='f8')
 
     assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100 // 10)])
 
 
 def test_keys():
     dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
-    dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60))
+    dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60), dtype='f8')
     assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
                           for i in range(5)]
-    d = Array({}, 'x', (), shape=())
+    d = Array({}, 'x', (), shape=(), dtype='f8')
     assert d._keys() == [('x',)]
 
 
 def test_Array_computation():
-    a = Array({('x', 0, 0): np.eye(3)}, 'x', shape=(3, 3), chunks=(3, 3))
+    a = Array({('x', 0, 0): np.eye(3)}, 'x', shape=(3, 3), chunks=(3, 3), dtype='f8')
     assert_eq(np.array(a), np.eye(3))
     assert isinstance(a.compute(), np.ndarray)
     assert float(a[0, 0]) == 1
@@ -220,7 +220,7 @@ def test_Array_computation():
 
 def test_stack():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
-                     name, shape=(4, 6), chunks=(2, 3))
+                     name, chunks=(2, 3), dtype='f8', shape=(4, 6))
                for name in 'ABC']
 
     s = stack([a, b, c], axis=0)
@@ -291,7 +291,7 @@ def test_stack_rechunk():
 
 def test_concatenate():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
-                     name, shape=(4, 6), chunks=(2, 3))
+                     name, chunks=(2, 3), dtype='f8', shape=(4, 6))
                for name in 'ABC']
 
     x = concatenate([a, b, c], axis=0)
@@ -408,10 +408,10 @@ def test_compress():
 
 
 def test_binops():
-    a = Array(dict((('a', i), np.array([''])) for i in range(3)),
-              'a', chunks=((1, 1, 1),))
-    b = Array(dict((('b', i), np.array([''])) for i in range(3)),
-              'b', chunks=((1, 1, 1),))
+    a = Array(dict((('a', i), np.array([0])) for i in range(3)),
+              'a', chunks=((1, 1, 1),), dtype='i8')
+    b = Array(dict((('b', i), np.array([0])) for i in range(3)),
+              'b', chunks=((1, 1, 1),), dtype='i8')
 
     result = elemwise(add, a, b, name='c')
     assert result.dask == merge(a.dask, b.dask,
@@ -863,13 +863,13 @@ def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
     assert d.name[:5] in repr(d)
     assert str(d.shape) in repr(d)
-    assert str(d._dtype) in repr(d)
+    assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
     # Empty array
     d = da.Array({}, 'd', ((), (3, 4)), dtype='i8')
     assert str(d.shape) in repr(d)
-    assert str(d._dtype) in repr(d)
+    assert str(d.dtype) in repr(d)
 
 
 def test_slicing_with_ellipsis():
@@ -1087,44 +1087,44 @@ def test_dtype_complex():
                 isinstance(b, np.dtype) and
                 str(a) == str(b))
 
-    assert_eq(a._dtype, x.dtype)
-    assert_eq(b._dtype, y.dtype)
+    assert_eq(a.dtype, x.dtype)
+    assert_eq(b.dtype, y.dtype)
 
-    assert_eq((a + 1)._dtype, (x + 1).dtype)
-    assert_eq((a + b)._dtype, (x + y).dtype)
-    assert_eq(a.T._dtype, x.T.dtype)
-    assert_eq(a[:3]._dtype, x[:3].dtype)
-    assert_eq((a.dot(b.T))._dtype, (x.dot(y.T)).dtype)
+    assert_eq((a + 1).dtype, (x + 1).dtype)
+    assert_eq((a + b).dtype, (x + y).dtype)
+    assert_eq(a.T.dtype, x.T.dtype)
+    assert_eq(a[:3].dtype, x[:3].dtype)
+    assert_eq((a.dot(b.T)).dtype, (x.dot(y.T)).dtype)
 
-    assert_eq(stack([a, b])._dtype, np.vstack([x, y]).dtype)
-    assert_eq(concatenate([a, b])._dtype, np.concatenate([x, y]).dtype)
+    assert_eq(stack([a, b]).dtype, np.vstack([x, y]).dtype)
+    assert_eq(concatenate([a, b]).dtype, np.concatenate([x, y]).dtype)
 
-    assert_eq(b.std()._dtype, y.std().dtype)
-    assert_eq(c.sum()._dtype, z.sum().dtype)
-    assert_eq(a.min()._dtype, a.min().dtype)
-    assert_eq(b.std()._dtype, b.std().dtype)
-    assert_eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
+    assert_eq(b.std().dtype, y.std().dtype)
+    assert_eq(c.sum().dtype, z.sum().dtype)
+    assert_eq(a.min().dtype, a.min().dtype)
+    assert_eq(b.std().dtype, b.std().dtype)
+    assert_eq(a.argmin(axis=0).dtype, a.argmin(axis=0).dtype)
 
-    assert_eq(da.sin(c)._dtype, np.sin(z).dtype)
-    assert_eq(da.exp(b)._dtype, np.exp(y).dtype)
-    assert_eq(da.floor(a)._dtype, np.floor(x).dtype)
-    assert_eq(da.isnan(b)._dtype, np.isnan(y).dtype)
+    assert_eq(da.sin(c).dtype, np.sin(z).dtype)
+    assert_eq(da.exp(b).dtype, np.exp(y).dtype)
+    assert_eq(da.floor(a).dtype, np.floor(x).dtype)
+    assert_eq(da.isnan(b).dtype, np.isnan(y).dtype)
     with ignoring(ImportError):
-        assert da.isnull(b)._dtype == 'bool'
-        assert da.notnull(b)._dtype == 'bool'
+        assert da.isnull(b).dtype == 'bool'
+        assert da.notnull(b).dtype == 'bool'
 
     x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
     d = da.from_array(x, chunks=(1,))
 
-    assert_eq(d['text']._dtype, x['text'].dtype)
-    assert_eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
+    assert_eq(d['text'].dtype, x['text'].dtype)
+    assert_eq(d[['numbers', 'text']].dtype, x[['numbers', 'text']].dtype)
 
 
 def test_astype():
     x = np.ones((5, 5), dtype='f8')
     d = da.from_array(x, chunks=(2,2))
 
-    assert d.astype('i8')._dtype == 'i8'
+    assert d.astype('i8').dtype == 'i8'
     assert_eq(d.astype('i8'), x.astype('i8'))
     assert same_keys(d.astype('i8'), d.astype('i8'))
 
@@ -1139,13 +1139,6 @@ def test_astype():
 
     # Check it's a noop
     assert d.astype('f8') is d
-
-    # Check arrays with unknown dtype are not noops. Since `dtype('f8') == None`
-    # is True, comparing dtypes directly can lead to bugs
-    d._dtype = None
-    d2 = d.astype('f8')
-    assert d2 is not d
-    assert_eq(d2, x.astype('f8'))
 
 
 def test_arithmetic():
@@ -2130,7 +2123,7 @@ def test_atop_new_axes():
         return x[:, None] * np.ones((1, 7))
     x = da.ones(5, chunks=2)
     y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x._dtype)
+             dtype=x.dtype)
     assert y.chunks == ((2, 2, 1), (7,))
     assert_eq(y, np.ones((5, 7)))
 
@@ -2138,7 +2131,7 @@ def test_atop_new_axes():
         return x[None, :] * np.ones((7, 1))
     x = da.ones(5, chunks=2)
     y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x._dtype)
+             dtype=x.dtype)
     assert y.chunks == ((7,), (2, 2, 1))
     assert_eq(y, np.ones((7, 5)))
 
@@ -2148,7 +2141,7 @@ def test_atop_new_axes():
 
     x = da.ones((4, 6), chunks=(2, 2))
     y = atop(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True,
-             dtype=x._dtype)
+             dtype=x.dtype)
     assert y.chunks == ((2, 2), (5,))
     assert_eq(y, np.ones((4, 5)) * 6)
 
@@ -2307,10 +2300,10 @@ def test_atop_concatenate():
 
         return (a + b).sum(axis=(1, 2))
 
-    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x._dtype)
+    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones(4) * 32)
 
-    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x._dtype)
+    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones((4, 4)) * 2)
 
     def f(a, b, c):
@@ -2325,7 +2318,7 @@ def test_atop_concatenate():
         return np.ones(5)
 
     z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
-             dtype=x._dtype)
+             dtype=x.dtype)
     assert_eq(z, np.ones(10))
 
 
@@ -2370,7 +2363,7 @@ def test_elemwise_uneven_chunks():
 def test_uneven_chunks_atop():
     x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
     y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
-    z = atop(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x._dtype, concatenate=True)
+    z = atop(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x.dtype, concatenate=True)
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
     assert_eq(z, x.compute().dot(y))

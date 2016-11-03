@@ -15,9 +15,9 @@ from threading import Lock
 import uuid
 import warnings
 
-from toolz.curried import (pipe, partition, concat, pluck, join, first,
-                           memoize, map, groupby, valmap, accumulate, merge,
-                           reduce, interleave, sliding_window, assoc)
+from toolz.curried import (pipe, partition, concat, pluck, join, first, map,
+                           groupby, valmap, accumulate, merge, reduce,
+                           interleave, sliding_window, assoc)
 import numpy as np
 
 from . import chunk
@@ -856,21 +856,21 @@ class Array(Base):
     --------
     dask.array.from_array
     """
-    __slots__ = 'dask', 'name', '_chunks', '_dtype'
+    __slots__ = 'dask', 'name', '_chunks', 'dtype'
 
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __init__(self, dask, name, chunks, dtype=None, shape=None):
+    def __init__(self, dask, name, chunks, dtype, shape=None):
         self.dask = dask
         self.name = name
         self._chunks = normalize_chunks(chunks, shape)
         if self._chunks is None:
             raise ValueError(chunks_none_error_message)
-        if dtype is not None:
-            dtype = np.dtype(dtype)
-        self._dtype = dtype
+        if dtype is None:
+            raise ValueError("FIXME")
+        self.dtype = np.dtype(dtype)
 
     @property
     def _args(self):
@@ -880,7 +880,7 @@ class Array(Base):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self.name, self._chunks, self._dtype = state
+        self.dask, self.name, self._chunks, self.dtype = state
 
     @property
     def numblocks(self):
@@ -907,16 +907,6 @@ class Array(Base):
     def __len__(self):
         return sum(self.chunks[0])
 
-    @property
-    @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))
-    def dtype(self):
-        if self._dtype is not None:
-            return self._dtype
-        if self.shape:
-            return self[(0,) * self.ndim].compute().dtype
-        else:
-            return self.compute().dtype
-
     def __repr__(self):
         """
 
@@ -927,7 +917,7 @@ class Array(Base):
         chunksize = str(tuple(c[0] if c else 0 for c in self.chunks))
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
-                (name, self.shape, self._dtype, chunksize))
+                (name, self.shape, self.dtype, chunksize))
 
     @property
     def ndim(self):
@@ -1089,7 +1079,7 @@ class Array(Base):
 
             dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
                         for k in store)
-            return Array(dsk2, self.name, chunks=self.chunks, dtype=self._dtype)
+            return Array(dsk2, self.name, chunks=self.chunks, dtype=self.dtype)
 
     def __int__(self):
         return int(self.compute())
@@ -1112,15 +1102,12 @@ class Array(Base):
         if (isinstance(index, (str, unicode)) or
                 (isinstance(index, list) and
                  all(isinstance(i, (str, unicode)) for i in index))):
-            if self._dtype is not None:
-                if isinstance(index, (str, unicode)):
-                    dt = self._dtype[index]
-                else:
-                    dt = np.dtype([(name, self._dtype[name]) for name in index])
+            if isinstance(index, (str, unicode)):
+                dt = self.dtype[index]
             else:
-                dt = None
+                dt = np.dtype([(name, self.dtype[name]) for name in index])
 
-            if dt is not None and dt.shape:
+            if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
                 chunks = self.chunks + tuple((i,) for i in dt.shape)
                 return self.map_blocks(getitem, index, dtype=dt.base, name=out,
@@ -1147,7 +1134,7 @@ class Array(Base):
         else:
             dsk2 = merge(self.dask, dsk)
 
-        return Array(dsk2, out, chunks, dtype=self._dtype)
+        return Array(dsk2, out, chunks, dtype=self.dtype)
 
     def _vindex(self, key):
         if (not isinstance(key, tuple) or
@@ -1245,13 +1232,12 @@ class Array(Base):
         casting = kwargs.get('casting', 'unsafe')
         copy = kwargs.get('copy', True)
         dtype = np.dtype(dtype)
-        if self._dtype is not None:
-            if self._dtype == dtype:
-                return self
-            elif not np.can_cast(self._dtype, dtype, casting=casting):
-                raise TypeError("Cannot cast array from {0!r} to {1!r}"
-                                " according to the rule "
-                                "{2!r}".format(self._dtype, dtype, casting))
+        if self.dtype == dtype:
+            return self
+        elif not np.can_cast(self.dtype, dtype, casting=casting):
+            raise TypeError("Cannot cast array from {0!r} to {1!r}"
+                            " according to the rule "
+                            "{2!r}".format(self.dtype, dtype, casting))
         name = 'astype-' + tokenize(self, dtype, casting, copy)
         return self.map_blocks(_astype, dtype=dtype, name=name,
                                astype_dtype=dtype, **kwargs)
@@ -2121,10 +2107,7 @@ def stack(seq, axis=0):
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
 
-    if all(a._dtype is not None for a in seq):
-        dt = reduce(np.promote_types, [a._dtype for a in seq])
-    else:
-        dt = None
+    dt = reduce(np.promote_types, [a.dtype for a in seq])
 
     return Array(dsk2, name, chunks, dtype=dt)
 
@@ -2183,11 +2166,8 @@ def concatenate(seq, axis=0):
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
 
-    if all(a._dtype is not None for a in seq):
-        dt = reduce(np.promote_types, [a._dtype for a in seq])
-        seq = [x.astype(dt) for x in seq]
-    else:
-        dt = None
+    dt = reduce(np.promote_types, [a.dtype for a in seq])
+    seq = [x.astype(dt) for x in seq]
 
     names = [a.name for a in seq]
 
@@ -2295,7 +2275,7 @@ def transpose(a, axes=None):
         axes = tuple(range(a.ndim))[::-1]
     return atop(partial(np.transpose, axes=axes),
                 axes,
-                a, tuple(range(a.ndim)), dtype=a._dtype)
+                a, tuple(range(a.ndim)), dtype=a.dtype)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -2333,10 +2313,7 @@ def tensordot(lhs, rhs, axes=2):
         chunks[right_axes[0]] = lhs.chunks[left_axes[0]]
         rhs = from_array(rhs, chunks=chunks)
 
-    if lhs._dtype is not None and rhs._dtype is not None:
-        dt = np.promote_types(lhs._dtype, rhs._dtype)
-    else:
-        dt = None
+    dt = np.promote_types(lhs.dtype, rhs.dtype)
 
     left_index = list(alphabet[:lhs.ndim])
     right_index = list(ALPHABET[:rhs.ndim])
@@ -2498,8 +2475,6 @@ def elemwise(op, *args, **kwargs):
 
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
-    elif any(a._dtype is None for a in arrays):
-        dt = None
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
         # scalars and 0d ndarrays (which it considers equivalent) by using
@@ -2612,10 +2587,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     chunks = tuple(tuple(int(bd // axes.get(i, 1)) for bd in bds)
                    for i, bds in enumerate(x.chunks))
 
-    if x._dtype is not None:
-        dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    else:
-        dt = None
+    dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
     return Array(merge(x.dask, dsk), name, chunks, dtype=dt)
 
 
@@ -3062,7 +3034,7 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v._dtype)
+    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
 def triu(m, k=0):
@@ -3654,7 +3626,7 @@ def swapaxes(a, axis1, axis2):
     out[axis1], out[axis2] = axis2, axis1
 
     return atop(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2,
-                dtype=a._dtype)
+                dtype=a.dtype)
 
 
 @wraps(np.dot)
@@ -3692,7 +3664,7 @@ def repeat(a, repeats, axis=None):
         chunks[axis] = (chunks[axis][0] * repeats,)
         chunks = tuple(chunks)
         result = slab.map_blocks(np.repeat, repeats, axis=axis, chunks=chunks,
-                                 dtype=slab._dtype)
+                                 dtype=slab.dtype)
         out.append(result)
 
     return concatenate(out, axis=axis)
