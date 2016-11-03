@@ -11,7 +11,7 @@ import random
 from toolz import identity, partial
 
 from ..config import config
-from ..utils import ignoring
+from ..utils import ignoring, ensure_bytes
 
 
 compressions = {None: {'compress': identity,
@@ -106,7 +106,7 @@ def maybe_compress(payload, compression=default_compression, min_size=1e4,
     if len(compress(sample)) > 0.9 * len(sample):  # not very compressible
         return None, payload
 
-    compressed = compress(payload)
+    compressed = compress(ensure_bytes(payload))
     if len(compressed) > 0.9 * len(payload):  # not very compressible
         return None, payload
     else:

@@ -1,11 +1,20 @@
-1.13.4 - October ??, 2016
-------
+1.14.0 - November 3rd, 2016
+---------------------------
 
 *   Add ``Client.get_versions()`` function to return software and package
     information from the scheduler, workers, and client #595
+*   Improved windows support #577 #590 #583 #597
+*   Clean up rpc objects explicitly #584
+*   Normalize collections against known futures #587
+*   Add key= keyword to map to specify keynames #589
+*   Custom data serialization #606
+*   Refactor the web interface #608 #615 #621
+*   Allow user-supplied Executor in Worker #609
+*   Pass Worker kwargs through LocalCluster
+
 
 1.13.3 - October 15th, 2016
-------
+---------------------------
 
 *   Schedulers can retire workers cleanly
 *   Add Future.add_done_callback for concurrent.futures compatibility

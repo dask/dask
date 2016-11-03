@@ -2,10 +2,10 @@ tornado >= 4.2
 toolz >= 0.7.4
 msgpack-python
 cloudpickle >= 0.2.1
-dask >= 0.11.0
+dask >= 0.12.0
 click >= 6.6
 six
 tblib
 psutil
 locket
-zict >= 0.0.3
+zict >= 0.1.0
