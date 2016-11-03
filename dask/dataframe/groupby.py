@@ -33,8 +33,7 @@ from ..utils import derived_from, M, funcname
 #
 # To operate on matchings paritions, most groupby operations exploit the
 # corresponding support in ``apply_concat_apply``. Specifically, this function
-# operates on matching paritiotns of frame-like objects passed as varargs. The
-# arguments to these functions are generated via ``__get_groupby_chunk_args``.
+# operates on matching paritiotns of frame-like objects passed as varargs.
 #
 # After the inital chunk step, the passed index is implicitly passed along to
 # subsequent operations as the index of the parittions. Groupby operations on
@@ -45,10 +44,6 @@ from ..utils import derived_from, M, funcname
 # To minimize overhead, series in an index that were obtained by getitem on the
 # object to group are not passed as series to the various operations, but as
 # columnn keys. This transformation is implemented as ``_normalize_index``.
-#
-# Finally, the ``_get_index_meta`` allows to retrieve a index suitable for
-# usage in groupby operations of the meta objects. Both empty and nonempty meta
-# objects are supported.
 #
 # #############################################
 
@@ -81,44 +76,6 @@ def _normalize_index(df, index):
 
     else:
         return index
-
-
-def _get_groupby_chunk_args(obj, index):
-    """Get the object to group and any partioned index item as list of varargs.
-    """
-    if not isinstance(index, list):
-        return [obj, index]
-    else:
-        return [obj] + index
-
-
-def _get_index_meta(index, meta_attribute):
-    """Get an index suitable for grouping meta objects.
-
-    Note, the index must be normalized. The ``meta_attribute`` should be
-    either ``'_meat'`` or ``'_meta_nonempty'``.
-    """
-    if isinstance(index, Series):
-        return getattr(index, meta_attribute)
-
-    elif isinstance(index, list):
-        return [_get_index_meta(item, meta_attribute) for item in index]
-
-    else:
-        return index
-
-
-def _do_index_partions_align(df, index):
-    """Check alignment of partitions for df and any index item.
-    """
-    if isinstance(index, Series):
-        return df.divisions == index.divisions
-
-    elif isinstance(index, list):
-        return all(_do_index_partions_align(df, item) for item in index)
-
-    else:
-        return True
 
 
 def _maybe_slice(grouped, columns):
@@ -589,7 +546,17 @@ class _GroupBy(object):
         # grouping key passed via groupby method
         self.index = _normalize_index(df, index)
 
-        if not _do_index_partions_align(df, self.index):
+        if isinstance(self.index, list):
+            do_index_partition_align = all(
+                item.divisions == df.divisions if isinstance(item, Series) else True
+                for item in self.index
+            )
+        elif isinstance(self.index, Series):
+            do_index_partition_align = df.divisions == self.index.divisions
+        else:
+            do_index_partition_align = True
+
+        if not do_index_partition_align:
             raise NotImplementedError("The grouped object and index of the "
                                       "groupby must have the same divisions.")
 
@@ -597,7 +564,15 @@ class _GroupBy(object):
         self._slice = slice
         self.kwargs = kwargs
 
-        index_meta = _get_index_meta(self.index, meta_attribute='_meta')
+        if isinstance(self.index, list):
+            index_meta = [item._meta if isinstance(item, Series) else item for item in self.index]
+
+        elif isinstance(self.index, Series):
+            index_meta = self.index._meta
+
+        else:
+            index_meta = self.index
+
         self._meta = self.obj._meta.groupby(index_meta)
 
     @property
@@ -606,7 +581,16 @@ class _GroupBy(object):
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
         """
         sample = self.obj._meta_nonempty
-        index_meta = _get_index_meta(self.index, '_meta_nonempty')
+
+        if isinstance(self.index, list):
+            index_meta = [item._meta_nonempty if isinstance(item, Series) else item for item in self.index]
+
+        elif isinstance(self.index, Series):
+            index_meta = self.index._meta_nonempty
+
+        else:
+            index_meta = self.index
+
         grouped = sample.groupby(index_meta)
         return _maybe_slice(grouped, self._slice)
 
@@ -620,7 +604,7 @@ class _GroupBy(object):
         token = self._token_prefix + token
         levels = _determine_levels(self.index)
 
-        return aca(_get_groupby_chunk_args(self.obj, self.index),
+        return aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
                    chunk=_apply_chunk,
                    chunk_kwargs=dict(func=func, columns=columns),
                    aggregate=_groupby_aggregate,
@@ -656,7 +640,7 @@ class _GroupBy(object):
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None):
         levels = _determine_levels(self.index)
-        result = aca(_get_groupby_chunk_args(self.obj, self.index),
+        result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
                      chunk=_var_chunk,
                      aggregate=_var_agg, combine=_var_combine,
                      token=self._token_prefix + 'var',
@@ -921,7 +905,7 @@ class SeriesGroupBy(_GroupBy):
         else:
             chunk = _nunique_series_chunk
 
-        return aca(_get_groupby_chunk_args(self.obj, self.index),
+        return aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
                    chunk=chunk,
                    aggregate=_nunique_df_aggregate,
                    combine=_nunique_df_combine,
