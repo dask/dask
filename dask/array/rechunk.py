@@ -226,7 +226,6 @@ def estimate_rechunk_cost(old_chunks, new_chunks):
     newsize = _number_of_blocks(new_chunks)
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
-    crossed = []
     crossed_size = reduce(mul, (len(oc) + len(nc)
                                 for oc, nc in zip(old_chunks, new_chunks)))
     return crossed_size / (oldsize + newsize)
@@ -245,7 +244,7 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
                                reverse=True)
 
     # XXX what if block_size_limit is already too small for old_chunks
-    # and new_chunks?
+    # and/or new_chunks?
     max_block_size = reduce(mul, map(max, old_chunks))
 
     chunks = list(old_chunks)
@@ -253,18 +252,25 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
         oc = old_chunks[dim]
         nc = new_chunks[dim]
         new_max_block_size = max_block_size * max(nc) / max(oc)
-        #print("dim %d: candidate max_block_size = %s" % (dim, new_max_block_size))
         if new_max_block_size < block_size_limit:
             chunks[dim] = nc
             max_block_size = new_max_block_size
 
-    #print("... returning %s" % (chunks,))
     return tuple(chunks)
 
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
                  threshold=4, block_size_limit=1e8):
-    """
+    """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
+    The plan aims to minimize the rechunk graph size.
+
+    Parameters
+    ----------
+    itemsize: the item size of the array
+    threshold: the graph growth factor under which we don't bother
+        introducing an intermediate step
+    block_size_limit: the maximum block size (in bytes)
+        we want to produce during the intermediate step
     """
     ndim = len(new_chunks)
 
@@ -277,7 +283,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     chunks = find_intermediate_rechunk(old_chunks, new_chunks,
                                        block_size_limit / itemsize)
     if chunks == old_chunks or chunks == new_chunks:
-        # XXX warn
+        # XXX warn the user no solution could be found?
         return steps
 
     steps.insert(0, chunks)
@@ -285,7 +291,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
 
 
 def _compute_rechunk(x, chunks):
-    """ Compute the rechunk of *x* to the given chunklist.
+    """ Compute the rechunk of *x* to the given *chunks*.
     """
     ndim = x.ndim
     crossed = intersect_chunks(x.chunks, chunks)
