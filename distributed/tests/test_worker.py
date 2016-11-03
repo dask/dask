@@ -38,6 +38,14 @@ def test_worker_ncores():
         shutil.rmtree(w.local_dir)
 
 
+@gen_cluster()
+def test_str(s, a, b):
+    assert a.address in str(a)
+    assert a.address in repr(a)
+    assert str(a.ncores) in str(a)
+    assert str(a.ncores) in repr(a)
+
+
 def test_identity():
     w = Worker('127.0.0.1', 8019)
     ident = w.identity(None)
