@@ -8,6 +8,11 @@ from . import methods
 from .utils import is_categorical_dtype, is_scalar
 
 
+###############################################################
+# Dummies
+###############################################################
+
+
 def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                 columns=None, sparse=False, drop_first=False):
     """
@@ -61,6 +66,11 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                           prefix_sep=prefix_sep, dummy_na=dummy_na,
                           columns=columns, sparse=sparse,
                           drop_first=drop_first)
+
+
+###############################################################
+# Pivot table
+###############################################################
 
 
 def pivot_table(df, index=None, columns=None,
@@ -125,3 +135,19 @@ def pivot_table(df, index=None, columns=None,
         return pv_sum / pv_count
     else:
         raise ValueError
+
+
+###############################################################
+# Melt
+###############################################################
+
+
+def melt(frame, id_vars=None, value_vars=None, var_name=None,
+         value_name='value', col_level=None):
+
+    from dask.dataframe.core import no_default
+
+    return frame.map_partitions(pd.melt, meta=no_default, id_vars=id_vars,
+                                value_vars=value_vars,
+                                var_name=var_name, value_name=value_name,
+                                col_level=col_level, token='melt')

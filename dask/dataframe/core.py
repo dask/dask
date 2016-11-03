@@ -1221,8 +1221,7 @@ class _Frame(Base):
                 divisions = (min(num.columns), max(num.columns))
                 return Series(dask, keyname, meta, divisions)
             else:
-                from .multi import _pdconcat
-                dask[(keyname, 0)] = (_pdconcat, qnames, 1)
+                dask[(keyname, 0)] = (methods.concat, qnames, 1)
                 return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)

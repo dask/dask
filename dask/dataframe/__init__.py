@@ -7,10 +7,10 @@ from .io import (from_array, from_pandas, from_bcolz,
                  from_delayed, read_csv, to_csv, read_table,
                  demo)
 from .optimize import optimize
-from .multi import merge, concat, melt
+from .multi import merge, concat
 from .rolling import (rolling_count, rolling_sum, rolling_mean, rolling_median,
                       rolling_min, rolling_max, rolling_std, rolling_var,
                       rolling_skew, rolling_kurt, rolling_quantile, rolling_apply,
                       rolling_window)
 from ..base import compute
-from .reshape import get_dummies, pivot_table
+from .reshape import get_dummies, pivot_table, melt
