@@ -2508,7 +2508,7 @@ def elemwise(op, *args, **kwargs):
         # https://github.com/numpy/numpy/issues/6240
         # We don't inspect the values of 0d dask arrays, because these could
         # hold potentially very expensive calculations.
-        vals = [np.empty((1, ) * a.ndim, dtype=a.dtype)
+        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
         try:
