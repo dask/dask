@@ -89,12 +89,23 @@ def open_files(path, mode='rb'):
     --------
     dask.bytes.core.open_files: User function
     """
-    myopen = delayed(open)
-    filepaths = sorted(glob(path))
-    return [myopen(_path, mode=mode,
-                   dask_key_name='open-%s' % tokenize(_path,
-                                                      os.path.getmtime(_path)))
-            for _path in filepaths]
+    if "*" in path:
+        filepaths = sorted(glob(path))
+    elif isinstance(path, str):
+        filepaths = [path]
+    else:
+        filepaths = path
+    if 'r' in mode:
+        myopen = delayed(open)
+        return [myopen(_path, mode=mode,
+                       dask_key_name='open-%s' % tokenize(_path,
+                                                          os.path.getmtime(_path)))
+                for _path in filepaths]
+    else:
+        myopen = delayed(open, pure=False)
+        return [myopen(_path, mode=mode,
+                       dask_key_name='open-%s' % _path)
+                for _path in filepaths]
 
 
 from . import core

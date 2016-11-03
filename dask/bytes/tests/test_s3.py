@@ -278,3 +278,35 @@ def test_read_text_passes_through_options():
     with s3_context('csv', {'a.csv': b'a,b\n1,2\n3,4'}) as s3:
         df = db.read_text('s3://csv/*.csv', storage_options={'s3': s3})
         assert df.count().compute(get=get) == 3
+
+
+def test_parquet_s3(s3):
+    dd = pytest.importorskip('dask.dataframe')
+    pytest.importorskip('fastparquet')
+    from dask.dataframe.io.parquet import (parquet_to_dask_dataframe,
+                                       dask_dataframe_to_parquet)
+
+    import pandas as pd
+    import numpy as np
+
+    url = 's3://%s/test.parquet' % test_bucket_name
+
+    data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                         'i64': np.arange(1000, dtype=np.int64),
+                         'f': np.arange(1000, dtype=np.float64),
+                         'bhello': np.random.choice([b'hello', b'you',
+                            b'people'], size=1000).astype("O")})
+    df = dd.from_pandas(data, chunksize=500)
+    dask_dataframe_to_parquet(url, df)
+
+    files = [f.split('/')[-1] for f in s3.ls(url)]
+    assert '_metadata' in files
+    assert 'part.0.parquet' in files
+
+    df2 = parquet_to_dask_dataframe(url)
+    assert len(df2.divisions) > 1
+
+    out, out2 = df.compute(), df2.compute().reset_index()
+
+    for column in df.columns:
+        assert (out[column] == out2[column]).all()

@@ -1,25 +1,28 @@
 import struct
+import dask
 from dask.bytes.core import open_files
+import dask.dataframe as dd
+from dask import delayed
 
 try:
     import fastparquet
     from fastparquet import parquet_thrift
+    default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
+    default_encoding = None
 
 
 def parquet_to_dask_dataframe(url, columns=None, filters=[],
                               categories=None, **kwargs):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
-    import dask.dataframe as dd
-    from dask import delayed
     try:
-        f = open_files(url+'/_metadata')[0].compute()
+        f = open_files(url+'/_metadata')[0].compute(get=dask.get)
         pf = fastparquet.ParquetFile(f)
         root = url
     except:
-        f = open_files(url)[0].compute()
+        f = open_files(url)[0].compute(get=dask.get)
         pf = ParquetFile(f)
         root = os.path.dirname(url)
 
@@ -29,7 +32,7 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     infiles = [open_files('/'.join([root, rg.columns[0].file_path]))[0]
-                          for rg in pf.row_groups]
+               for rg in pf.row_groups]
     tot = [delayed(pf.read_row_group)(rg, columns, categories,
                                       infile=infile, **kwargs)
            for rg, infile in zip(rgs, infiles)]
@@ -41,11 +44,13 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
     return dd.from_delayed(tot, meta=dtypes)
 
 
-def dask_dataframe_to_parquet(url, data,
-        encoding=parquet_thrift.Encoding.PLAIN, compression=None):
+def dask_dataframe_to_parquet(
+        url, data, encoding=default_encoding, compression=None):
     """Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
+    if fastparquet is False:
+        raise ImportError("fastparquet not installed")
     sep = '/'
     from dask import delayed, compute
     # mkdirs(filename)
@@ -64,15 +69,15 @@ def dask_dataframe_to_parquet(url, data,
             chunk.file_path = part
         fmd.row_groups.append(rg)
 
-    f = open_files(fn, mode='wb')[0].compute()
-    try:
-        f.write(b'PAR1')
-        foot_size = fastparquet.writer.write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(b'PAR1')
-    finally:
-        f.close()
+    f = open_files(fn, mode='wb')[0].compute(get=dask.get)
 
-    f = open_files(sep.join([url, '_common_metadata']), mode='wb')[0].compute()
+    f.write(b'PAR1')
+    foot_size = fastparquet.writer.write_thrift(f, fmd)
+    f.write(struct.pack(b"<i", foot_size))
+    f.write(b'PAR1')
+    f.close()
+
+    f = open_files(sep.join([url, '_common_metadata']),
+                   mode='wb')[0].compute(get=dask.get)
 
     fastparquet.writer.write_common_metadata(f, fmd)
