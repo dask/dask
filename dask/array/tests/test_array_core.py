@@ -928,6 +928,50 @@ def test_store():
     pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_store_to_dask_full():
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    data = [da.from_array(np.empty(shape=(4, 2)), chunks=(1, 2)),
+            da.from_array(np.empty(shape=(4, 2)), chunks=(1, 2))]
+    at = da.concatenate(data, axis=1)
+    bt = da.from_array(np.empty(shape=(4, 4)), chunks=(1, 2))
+
+    store([a, b], [at, bt])
+    assert (at == 2).all()
+    assert (bt == 3).all()
+
+    pytest.raises(ValueError, lambda: store([a], [at, bt]))
+
+
+def test_store_to_dask_sliced():
+    d = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    a, b = d + 1, d + 2
+
+    data = [da.from_array(np.zeros(shape=(4, 2, 6)), chunks=(1, 2, 2)),
+            da.from_array(np.zeros(shape=(4, 2, 6)), chunks=(1, 2, 2))]
+    acat = da.concatenate(data, axis=1)
+    at = da.concatenate([acat, acat], axis=0)
+
+    ct = da.from_array(np.zeros(shape=(8, 4, 6)), chunks=(1, 2, 1))
+    region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
+
+    v = store([a, b], [at, ct], region=region, compute=False)
+    assert (at == 0).all() and (ct[region] == 0).all()
+    v.compute()
+    assert (at[region] == 2).all() and (ct[region] == 3).all()
+    assert not (ct == 3).all() and not ( ct == 0 ).all()
+    assert not (at == 3).all() and not ( at == 0 ).all()
+
+    #Same test but by slicing destination array first:
+    ct = da.from_array(np.zeros(shape=(8, 4, 6)), chunks=(1, 2, 1))
+    v = store(b, ct[region], compute=False)
+    assert (ct[region] == 0).all()
+    v.compute()
+    assert (ct[region] == 3).all()
+    assert not (ct == 3).all() and not ( ct == 0 ).all()
+
+
 def test_store_compute_false():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
