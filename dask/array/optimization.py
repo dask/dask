@@ -4,7 +4,7 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy, concatenate3
+from .core import getarray, getarray_nofancy
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
 
@@ -31,8 +31,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
                             fast_functions=inline_functions_fast_functions)
 
-    dsk7 = optimize_concatenate(dsk6)
-    return dsk7
+    return dsk6
 
 
 def optimize_slices(dsk):
@@ -91,39 +90,6 @@ def optimize_slices(dsk):
                 dsk[k] = a
             else:
                 dsk[k] = (getitem, a, a_index)
-    return dsk
-
-
-def optimize_concatenate(dsk):
-    """
-    Optimize concatenate on a single array:
-
-    1. np.concatenate(x[1:3], x[3:5]) -> x[1:5]
-    2. np.concatenate(x[1:3], x[[4, 6]]) -> x[[1, 2, 4, 6]]
-
-    See also:
-        add_slices_or_lists
-    """
-    getters = (getarray_nofancy, getarray, getitem)
-    concatenaters = (concatenate3,)
-    dsk = dsk.copy()
-    for k, val in dsk.items():
-        if isinstance(val, tuple) and val[0] in concatenaters and len(val) == 2:
-            try:
-                condition = (all([(isinstance(g, tuple) and g[0] in getters and len(g) == 3)
-                                  for g in flatten(val[1])]) and
-                             len(set([g[1] for g in flatten(val[1])])) == 1 and
-                             len(set([g[0] for g in flatten(val[1])])) == 1)
-            except TypeError:
-                condition = False
-
-            if condition:
-                #Concatenate is joining different parts of the same array
-                getter, arr = next(flatten(val[1]))[:2]
-                new_slices = add_slices_or_lists(_pick_index(val[1], 2))
-                if isinstance(new_slices, tuple):
-                    #Only remove concatenate if slices could be added:
-                    dsk[k] = (getter, arr, new_slices)
     return dsk
 
 

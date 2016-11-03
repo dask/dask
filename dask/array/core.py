@@ -107,7 +107,7 @@ def concatenate3(arrays):
     return result
 
 
-from .optimization import optimize
+from .optimization import optimize, fuse_slice
 
 
 def slices_from_chunks(chunks):
@@ -779,7 +779,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, lock=True, compute=True, **kwargs):
+def store(sources, targets, lock=True, region=None, compute=True, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -800,6 +800,8 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular ``threading.Lock`` object to be shared among all writes.
+    region: tuple of slices
+        This tuple should be such that targets[region].shape = sources.shape.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
 
@@ -830,7 +832,7 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d]"
                          % (len(sources), len(targets)))
 
-    updates = [insert_to_ooc(tgt, src, lock=lock)
+    updates = [insert_to_ooc(tgt, src, lock=lock, region=region)
                for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
@@ -2399,45 +2401,60 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-def insert_to_ooc(out, arr, lock=True):
+def insert_to_ooc(out, arr, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    slices = slices_from_chunks(arr.chunks)
-
-    if isinstance(out, Array):
-        if not out.chunks == arr.chunks:
-            out = out.rechunk(arr.chunks)
-
-    def store(x, index, lock):
+    def store(x, index, lock, region):
         if lock:
             lock.acquire()
         try:
-            if isinstance(out, Array):
-                dsk = optimize(out[index].dask, out[index]._keys())
-                if len(dsk) == 2:
-                    for key in dsk:
-                        if (isinstance(key, tuple) and
-                            isinstance(dsk[key],tuple) and
-                            len(dsk[key]) == 3 and
-                            dsk[key][0] is getarray and
-                            isinstance(dsk[key][2], tuple)):
-                            operator.setitem(dsk[dsk[key][1]], dsk[key][2], np.asanyarray(x))
-                else:
+            if not isinstance(out, Array):
+                if region is None:
                     out[index] = np.asanyarray(x)
+                else:
+                    out[fuse_slice(region, index)] = np.asanyarray(x)
             else:
-                out[index] = np.asanyarray(x)
+                if region is None:
+                    storeindask(out, index, np.asanyarray(x))
+                else:
+                    storeindask(out[region], index, np.asanyarray(x))
         finally:
             if lock:
                 lock.release()
 
         return None
+   
+    slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, t, slc, lock))
+    dsk = dict(((name,) + t[1:], (store, t, slc, lock, region))
                for t, slc in zip(core.flatten(arr._keys()), slices))
     return dsk
 
+def storeindask(out, index, x):
+    #Loop through output chunks and setitem:
+    out_sliced = out[index]
+    for slc in slices_from_chunks(out_sliced.chunks):
+        dsk = optimize(out_sliced[slc].dask, out_sliced[slc]._keys())
+        if len(dsk) == 1:
+            key = dsk.keys()[0]
+            if base_condition(dsk, key):
+                operator.setitem(dsk[key][1], dsk[key][2], x[slc])
+        elif len(dsk) == 2:
+            for key in dsk:
+                if base_condition(dsk, key):
+                    operator.setitem(dsk[dsk[key][1]], dsk[key][2], x[slc])
+        else:
+            raise NotImplementedError('Only concantenated dask arrays can be stored to')
+
+def base_condition(dsk, key):
+    #Simple condition that allows simple setitem:
+    return (isinstance(key, tuple) and
+            isinstance(dsk[key],tuple) and
+            len(dsk[key]) == 3 and
+            dsk[key][0] is getarray and
+            isinstance(dsk[key][2], tuple))
 
 def asarray(array):
     """Coerce argument into a dask array
