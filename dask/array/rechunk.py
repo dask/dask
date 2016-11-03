@@ -218,15 +218,17 @@ def _number_of_blocks(chunks):
     return reduce(mul, map(len, chunks))
 
 
-def estimate_rechunk_overhead(old_chunks, new_chunks):
-    """ Estimate the factor by which node size grows during a rechunk
+def estimate_rechunk_cost(old_chunks, new_chunks):
+    """ Estimate the factor by which graph size grows during a rechunk
     computation.
     """
     oldsize = _number_of_blocks(old_chunks)
     newsize = _number_of_blocks(new_chunks)
-    crossed = intersect_chunks(old_chunks, new_chunks)
-    # The number of intermediate blocks that will be produced
-    crossed_size = sum(map(len, crossed))
+    # Estimate the number of intermediate blocks that will be produced
+    # (we don't use intersect_chunks() which is much more expensive)
+    crossed = []
+    crossed_size = reduce(mul, (len(oc) + len(nc)
+                                for oc, nc in zip(old_chunks, new_chunks)))
     return crossed_size / (oldsize + newsize)
 
 
@@ -237,20 +239,16 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
                         for dim, (oc, nc) in enumerate(zip(old_chunks, new_chunks))
                         if len(oc) >= len(nc)
                         }
-    print(merge_candidates)
+    # Consider candidates yielding the best benefit first
+    sorted_candidates = sorted(merge_candidates,
+                               key=lambda k: merge_candidates[k],
+                               reverse=True)
 
     # XXX what if block_size_limit is already too small for old_chunks
     # and new_chunks?
     max_block_size = reduce(mul, map(max, old_chunks))
 
-    # Initialize with no rechunk
     chunks = list(old_chunks)
-
-    sorted_candidates = sorted(merge_candidates,
-                               key=lambda k: merge_candidates[k],
-                               reverse=True)
-    print(sorted_candidates)
-
     for dim in sorted_candidates:
         oc = old_chunks[dim]
         nc = new_chunks[dim]
@@ -265,15 +263,14 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
 
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
-                 threshold=4, block_size_limit=1e4):
+                 threshold=4, block_size_limit=1e8):
     """
     """
     ndim = len(new_chunks)
 
     steps = [new_chunks]
 
-    overhead = estimate_rechunk_overhead(old_chunks, new_chunks)
-    print("overhead =", overhead)
+    overhead = estimate_rechunk_cost(old_chunks, new_chunks)
     if overhead < threshold:
         return steps
 
@@ -321,5 +318,4 @@ def _compute_rechunk(x, chunks):
                 temp[ind_in_blk[-1]] = name
         x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2, intermediates)
-    print("len(x2) ->", len(x2))
     return Array(x2, temp_name, chunks, dtype=x.dtype)

@@ -117,13 +117,6 @@ def test_hard_fuse_slice_cases():
     assert optimize_slices(dsk) == {'x': (getarray, 'x', (None, 5))}
 
 
-def test_dont_fuse_different_slices():
-    x = da.random.random(size=(10, 10), chunks=(10, 1))
-    y = x.rechunk((1, 10))
-    dsk = optimize(y.dask, y._keys())
-    assert len(dsk) == len(y.dask)
-
-
 def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
     dsk = {'a': (getitem, (getarray_nofancy, 'x', (slice(10, 20, None), slice(100, 200, None))),
                  ([1, 3], slice(50, 60, None)))}

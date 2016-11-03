@@ -5,6 +5,7 @@ from itertools import product
 import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
+from dask.array.rechunk import plan_rechunk
 import dask.array as da
 
 
@@ -188,3 +189,43 @@ def test_rechunk_intermediates():
     x = da.random.normal(10, 0.1, (10, 10), chunks=(10, 1))
     y = x.rechunk((1, 10))
     assert len(y.dask) > 30
+
+
+def _plan(old_chunks, new_chunks, itemsize=1, block_size_limit=1e7):
+    return plan_rechunk(old_chunks, new_chunks,
+                        itemsize=itemsize,
+                        block_size_limit=block_size_limit)
+
+def test_plan_rechunk():
+    c = coarse = ((100,) * 1)
+    f = fine = ((1,) * 100)
+
+    # No intermediate required
+    steps = _plan((c, c), (f, f))
+    assert steps == [(f, f)]
+    steps = _plan((f, f), (c, c))
+    assert steps == [(c, c)]
+    steps = _plan((f, c), (c, c))
+    assert steps == [(c, c)]
+
+    # An intermediate is used to reduce graph size
+    steps = _plan((f, c), (c, f))
+    assert steps == [(c, c), (c, f)]
+
+    # Hitting the memory limit => no intermediate
+    steps = _plan((f, c), (c, f), block_size_limit=1e3)
+    assert steps == [(c, f)]
+    steps = _plan((f, c), (c, f), itemsize=10000)
+    assert steps == [(c, f)]
+
+    # 5d problem
+    c = coarse = ((10,) * 1)
+    f = fine = ((1,) * 10)
+
+    steps = _plan((c, c, c, c, c), (f, f, f, f, f))
+    assert steps == [(f, f, f, f, f)]
+    steps = _plan((f, f, f, f, c), (c, c, c, f, f))
+    assert steps == [(c, c, c, f, c), (c, c, c, f, f)]
+    # Only 1 dim can be merged at first
+    steps = _plan((c, c, f, f, c), (c, c, c, f, f), block_size_limit=2e4)
+    assert steps == [(c, c, c, f, c), (c, c, c, f, f)]
