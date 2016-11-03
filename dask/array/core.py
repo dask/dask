@@ -64,49 +64,6 @@ def getarray_nofancy(a, b, lock=None):
     return getarray(a, b, lock=lock)
 
 
-def concatenate3(arrays):
-    """ Recursive np.concatenate
-
-    Input should be a nested list of numpy arrays arranged in the order they
-    should appear in the array itself.  Each array should have the same number
-    of dimensions as the desired output and the nesting of the lists.
-
-    >>> x = np.array([[1, 2]])
-    >>> concatenate3([[x, x, x], [x, x, x]])
-    array([[1, 2, 1, 2, 1, 2],
-           [1, 2, 1, 2, 1, 2]])
-
-    >>> concatenate3([[x, x], [x, x], [x, x]])
-    array([[1, 2, 1, 2],
-           [1, 2, 1, 2],
-           [1, 2, 1, 2]])
-    """
-    arrays = concrete(arrays)
-    ndim = ndimlist(arrays)
-    if not ndim:
-        return arrays
-    if not arrays:
-        return np.empty(0)
-    chunks = chunks_from_arrays(arrays)
-    shape = tuple(map(sum, chunks))
-
-    def dtype(x):
-        try:
-            return x.dtype
-        except AttributeError:
-            return type(x)
-
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
-
-    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
-        if hasattr(arr, 'ndim'):
-            while arr.ndim < ndim:
-                arr = arr[None, ...]
-        result[idx] = arr
-
-    return result
-
-
 from .optimization import optimize, fuse_slice
 
 
@@ -2438,9 +2395,9 @@ def storeindask(out, index, x):
     for slc in slices_from_chunks(out_sliced.chunks):
         dsk = optimize(out_sliced[slc].dask, out_sliced[slc]._keys())
         if len(dsk) == 1:
-            key = dsk.keys()[0]
-            if base_condition(dsk, key):
-                operator.setitem(dsk[key][1], dsk[key][2], x[slc])
+            for key in dsk:
+                if base_condition(dsk, key):
+                    operator.setitem(dsk[key][1], dsk[key][2], x[slc])
         elif len(dsk) == 2:
             for key in dsk:
                 if base_condition(dsk, key):
@@ -3431,6 +3388,49 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+def concatenate3(arrays):
+    """ Recursive np.concatenate
+
+    Input should be a nested list of numpy arrays arranged in the order they
+    should appear in the array itself.  Each array should have the same number
+    of dimensions as the desired output and the nesting of the lists.
+
+    >>> x = np.array([[1, 2]])
+    >>> concatenate3([[x, x, x], [x, x, x]])
+    array([[1, 2, 1, 2, 1, 2],
+           [1, 2, 1, 2, 1, 2]])
+
+    >>> concatenate3([[x, x], [x, x], [x, x]])
+    array([[1, 2, 1, 2],
+           [1, 2, 1, 2],
+           [1, 2, 1, 2]])
+    """
+    arrays = concrete(arrays)
+    ndim = ndimlist(arrays)
+    if not ndim:
+        return arrays
+    if not arrays:
+        return np.empty(0)
+    chunks = chunks_from_arrays(arrays)
+    shape = tuple(map(sum, chunks))
+
+    def dtype(x):
+        try:
+            return x.dtype
+        except AttributeError:
+            return type(x)
+
+    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+
+    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+        if hasattr(arr, 'ndim'):
+            while arr.ndim < ndim:
+                arr = arr[None, ...]
+        result[idx] = arr
+
+    return result
 
 
 def concatenate_axes(arrays, axes):
