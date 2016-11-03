@@ -24,14 +24,12 @@ from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
-from ..utils import (repr_long_list, IndexCallable, random_state_data,
+from ..utils import (repr_long_list, random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
-from .indexing import (_partition_of_index_value, _loc, _try_loc,
-                       _coerce_loc_index, _maybe_partial_time_string)
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error)
 
@@ -659,78 +657,14 @@ class _Frame(Base):
             result = result.compute()
         return result
 
-    def _loc(self, ind):
-        """ Helper function for the .loc accessor """
-        if isinstance(ind, Series):
-            return self._loc_series(ind)
-        if self.known_divisions:
-            ind = _maybe_partial_time_string(self._meta_nonempty.index, ind, kind='loc')
-            if isinstance(ind, slice):
-                return self._loc_slice(ind)
-            else:
-                return self._loc_element(ind)
-        else:
-            return map_partitions(_try_loc, self, ind, meta=self)
-
-    def _loc_series(self, ind):
-        if not self.divisions == ind.divisions:
-            raise ValueError("Partitions of dataframe and index not the same")
-        return map_partitions(methods.loc, self, ind, token='loc-series',
-                              meta=self)
-
-    def _loc_element(self, ind):
-        name = 'loc-%s' % tokenize(ind, self)
-        part = _partition_of_index_value(self.divisions, ind)
-        if ind < self.divisions[0] or ind > self.divisions[-1]:
-            raise KeyError('the label [%s] is not in the index' % str(ind))
-        dsk = {(name, 0): (methods.loc, (self._name, part), slice(ind, ind))}
-
-        return new_dd_object(merge(self.dask, dsk), name, self, [ind, ind])
-
-    def _loc_slice(self, ind):
-        name = 'loc-%s' % tokenize(ind, self)
-        assert ind.step in (None, 1)
-
-        if ind.start:
-            start = _partition_of_index_value(self.divisions, ind.start)
-        else:
-            start = 0
-        if ind.stop is not None:
-            stop = _partition_of_index_value(self.divisions, ind.stop)
-        else:
-            stop = self.npartitions - 1
-        istart = _coerce_loc_index(self.divisions, ind.start)
-        istop = _coerce_loc_index(self.divisions, ind.stop)
-        if stop == start:
-            dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
-            divisions = [istart, istop]
-        else:
-            dsk = merge({(name, 0): (_loc, (self._name, start),
-                                     ind.start, None)},
-                        dict(((name, i), (self._name, start + i))
-                             for i in range(1, stop - start)),
-                        {(name, stop - start): (_loc, (self._name, stop),
-                                                None, ind.stop)})
-
-            divisions = ((max(istart, self.divisions[start])
-                          if ind.start is not None
-                          else self.divisions[0],) +
-                         self.divisions[start + 1:stop + 1] +
-                         (min(istop, self.divisions[stop + 1])
-                          if ind.stop is not None
-                          else self.divisions[-1],))
-
-        assert len(divisions) == len(dsk) + 1
-        return new_dd_object(merge(self.dask, dsk), name,
-                             self._meta, divisions)
-
     @property
     def loc(self):
         """ Purely label-location based indexer for selection by label.
 
         >>> df.loc["b"]  # doctest: +SKIP
         >>> df.loc["b":"d"]  # doctest: +SKIP"""
-        return IndexCallable(self._loc)
+        from .indexing import _LocIndexer
+        return _LocIndexer(self)
 
     # NOTE: `iloc` is not implemented because of performance concerns.
     # see https://github.com/dask/dask/pull/507
@@ -1451,6 +1385,11 @@ class _Frame(Base):
         """ bind operator method like DataFrame.add to this class """
         raise NotImplementedError
 
+    @derived_from(pd.DataFrame)
+    def resample(self, rule, how=None, closed=None, label=None):
+        from .tseries.resample import _resample
+        return _resample(self, rule, how=how, closed=closed, label=label)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -1568,11 +1507,6 @@ class Series(_Frame):
         """
         from .partitionquantiles import partition_quantiles
         return partition_quantiles(self, npartitions, upsample=upsample)
-
-    @derived_from(pd.Series)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -1920,7 +1854,7 @@ class DataFrame(_Frame):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
-                    return self._loc(key)
+                    return self.loc[key]
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
@@ -1929,7 +1863,7 @@ class DataFrame(_Frame):
             return new_dd_object(merge(self.dask, dsk), name,
                                  meta, self.divisions)
         elif isinstance(key, slice):
-            return self._loc(key)
+            return self.loc[key]
 
         if isinstance(key, list):
             # error is raised from pandas
@@ -3122,10 +3056,10 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     --------
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
-    {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
-     ('b', 1): (<function _loc at ...>, ('a', 1), 3, 4, False),
-     ('b', 2): (<function _loc at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function _loc at ...>, ('a', 1), 6, 7, False)
+    {('b', 0): (<function _loc_repartition at ...>, ('a', 0), 1, 3, False),
+     ('b', 1): (<function _loc_repartition at ...>, ('a', 1), 3, 4, False),
+     ('b', 2): (<function _loc_repartition at ...>, ('a', 1), 4, 6, False),
+     ('b', 3): (<function _loc_repartition at ...>, ('a', 1), 6, 7, False)
      ('c', 0): (<function concat at ...>,
                 (<type 'list'>, [('b', 0), ('b', 1)])),
      ('c', 1): ('b', 2),
@@ -3181,16 +3115,16 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
             # tuple is something like:
-            # (_loc, ('from_pandas-#', 0), 3, 4, False))
-            d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
+            # (methods._loc_partition, ('from_pandas-#', 0), 3, 4, False))
+            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, a[i], False)
             low = a[i]
             i += 1
         elif a[i] > b[j]:
-            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
             low = b[j]
             j += 1
         else:
-            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
             low = b[j]
             i += 1
             j += 1
@@ -3203,7 +3137,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             # always use right-most of old division
             # because it may contain last element
             m = len(a) - 2
-            d[(out1, k)] = (_loc, (name, m), low, b[_j], False)
+            d[(out1, k)] = (methods._loc_repartition, (name, m), low, b[_j], False)
             low = b[_j]
             c.append(low)
             k += 1
@@ -3211,7 +3145,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         # even if new division is processed through,
         # right-most element of old division can remain
         if last_elem and i < len(a):
-            d[(out1, k)] = (_loc, (name, i - 1), a[i], a[i], False)
+            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), a[i], a[i], False)
             k += 1
         c.append(a[-1])
 
@@ -3234,7 +3168,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         if len(tmp) == 0:
             # dummy slice to return empty DataFrame or Series,
             # which retain original data attributes (columns / name)
-            d[(out2, j - 1)] = (_loc, (name, 0), a[0], a[0], False)
+            d[(out2, j - 1)] = (methods._loc_repartition, (name, 0), a[0], a[0], False)
         elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:

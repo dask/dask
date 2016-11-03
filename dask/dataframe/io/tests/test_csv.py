@@ -667,6 +667,17 @@ def test_read_csv_singleton_dtype():
                   dd.read_csv(fn, dtype=float))
 
 
+def test_robust_column_mismatch():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b'name', b'Name')
+    with filetexts(files, mode='b'):
+        ddf = dd.read_csv('2014-01-*.csv')
+        df = pd.read_csv('2014-01-01.csv')
+        assert (df.columns == ddf.columns).all()
+        assert_eq(ddf, ddf)
+
+
 ############
 #  to_csv  #
 ############

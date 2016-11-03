@@ -14,7 +14,7 @@ from distutils.version import LooseVersion
 from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
-                   remove, compose, curry, first, second, accumulate)
+                   remove, compose, curry, first, second, accumulate, peek)
 from toolz.compatibility import iteritems, zip
 import toolz
 _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
@@ -92,7 +92,8 @@ def inline_singleton_lists(dsk, dependencies=None):
     Pairs nicely with lazify afterwards
     """
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, task=v)
+                        for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
@@ -1617,11 +1618,14 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
 
 def empty_safe_apply(func, part):
-    part = list(part)
-    if part:
-        return func(part)
+    if isinstance(part, Iterator):
+        try:
+            _, part = peek(part)
+            return func(part)
+        except StopIteration:
+            return no_result
     else:
-        return no_result
+        return func(part)
 
 
 def empty_safe_aggregate(func, parts):

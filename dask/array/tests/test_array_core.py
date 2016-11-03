@@ -2174,6 +2174,34 @@ def test_atop_kwargs():
     assert_eq(y, np.ones(5) + 10)
 
 
+def test_atop_chunks():
+    x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
+
+    def double(a, axis=0):
+        return np.concatenate([a, a], axis=axis)
+
+    y = atop(double, 'ij', x, 'ij',
+             adjust_chunks={'i': lambda n: 2 * n}, axis=0, dtype=x.dtype)
+    assert y.chunks == ((4, 2, 4), (3, 2))
+    assert_eq(y, np.ones((10, 5)))
+
+    y = atop(double, 'ij', x, 'ij',
+             adjust_chunks={'j': lambda n: 2 * n}, axis=1, dtype=x.dtype)
+    assert y.chunks == ((2, 1, 2), (6, 4))
+    assert_eq(y, np.ones((5, 10)))
+
+    x = da.ones((10, 10), chunks=(5, 5))
+    y = atop(double, 'ij', x, 'ij', axis=0,
+             adjust_chunks={'i': 10}, dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+    y = atop(double, 'ij', x, 'ij', axis=0,
+             adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
@@ -2391,3 +2419,34 @@ def test_round():
         assert_eq(x.round(i), d.round(i))
 
     assert_eq(d.round(2), da.round(d, 2))
+
+
+def test_repeat():
+    x = np.random.random((10, 11, 13))
+    d = da.from_array(x, chunks=(4, 5, 3))
+
+    repeats = [1, 2, 5]
+    axes = [0, 1, 2]
+
+    for r in repeats:
+        for a in axes:
+            assert_eq(x.repeat(r, axis=a), d.repeat(r, axis=a))
+
+    assert_eq(d.repeat(2, 0), da.repeat(d, 2, 0))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, np.arange(10))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2, None)
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2)
+
+    x = np.arange(5)
+    d = da.arange(5, chunks=(2,))
+
+    assert_eq(x.repeat(3), d.repeat(3))
+
+    for r in [1, 2, 3, 4]:
+        assert all(concat(d.repeat(r).chunks))
