@@ -207,72 +207,89 @@ def rechunk(x, chunks):
     if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 
-    for chunks in _plan_rechunk(x.chunks, chunks):
+    steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize)
+    for chunks in steps:
         x = _compute_rechunk(x, chunks)
 
     return x
 
 
-ENABLE_PROGRESSIVE_RECHUNKING = True
+def _number_of_blocks(chunks):
+    return reduce(mul, map(len, chunks))
 
-EXPAND_FACTOR = 3.5
+
+def estimate_rechunk_overhead(old_chunks, new_chunks):
+    """ Estimate the factor by which node size grows during a rechunk
+    computation.
+    """
+    oldsize = _number_of_blocks(old_chunks)
+    newsize = _number_of_blocks(new_chunks)
+    crossed = intersect_chunks(old_chunks, new_chunks)
+    # The number of intermediate blocks that will be produced
+    crossed_size = sum(map(len, crossed))
+    return crossed_size / (oldsize + newsize)
 
 
-def _plan_rechunk(old_chunks, new_chunks):
+def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
+    # Our goal is to reduce the number of nodes in the rechunk graph,
+    # so consider dimensions where we can reduce the # of chunks
+    merge_candidates = {dim: len(oc) / len(nc)
+                        for dim, (oc, nc) in enumerate(zip(old_chunks, new_chunks))
+                        if len(oc) >= len(nc)
+                        }
+    print(merge_candidates)
+
+    # XXX what if block_size_limit is already too small for old_chunks
+    # and new_chunks?
+    max_block_size = reduce(mul, map(max, old_chunks))
+
+    # Initialize with no rechunk
+    chunks = list(old_chunks)
+
+    sorted_candidates = sorted(merge_candidates,
+                               key=lambda k: merge_candidates[k],
+                               reverse=True)
+    print(sorted_candidates)
+
+    for dim in sorted_candidates:
+        oc = old_chunks[dim]
+        nc = new_chunks[dim]
+        new_max_block_size = max_block_size * max(nc) / max(oc)
+        #print("dim %d: candidate max_block_size = %s" % (dim, new_max_block_size))
+        if new_max_block_size < block_size_limit:
+            chunks[dim] = nc
+            max_block_size = new_max_block_size
+
+    #print("... returning %s" % (chunks,))
+    return tuple(chunks)
+
+
+def plan_rechunk(old_chunks, new_chunks, itemsize,
+                 threshold=4, block_size_limit=1e4):
+    """
+    """
     ndim = len(new_chunks)
 
     steps = [new_chunks]
 
-    while ENABLE_PROGRESSIVE_RECHUNKING:
-        oldsize = reduce(mul, map(len, old_chunks))
-        newsize = reduce(mul, map(len, new_chunks))
-        crossed = intersect_chunks(old_chunks, new_chunks)
-        crossed_size = sum(map(len, crossed))
+    overhead = estimate_rechunk_overhead(old_chunks, new_chunks)
+    print("overhead =", overhead)
+    if overhead < threshold:
+        return steps
 
-        overhead = crossed_size / (oldsize + newsize)
-        if overhead < EXPAND_FACTOR:
-            break
-        chunks = []
-        for oc, nc in zip(old_chunks, new_chunks):
-            if len(nc) > EXPAND_FACTOR * len(oc):
-                # Too much expansion => first expand by half
-                c = [nc[i] + nc[i + 1] for i in range(0, len(nc) - 1, 2)]
-                if len(nc) & 1:
-                    c.append(nc[-1])
-                assert len(c) >= len(oc)
-                #print("too much expansion: %s -> %s" % (nc, c))
-            elif EXPAND_FACTOR * len(nc) >= len(oc):
-                # Moderate expansion or coalescion: ok
-                c = oc
-            else:
-                # Too much coalescion => add break points
-                old = cumdims_label_1d(oc, 'o')
-                new = cumdims_label_1d(nc, 'n')
-                c = []
-                for inter in _intersect_1d(_breakpoints(old, new)):
-                    blocks = [sl.stop - sl.start for (_, sl) in inter]
-                    n = max(1, len(blocks) // 2)
-                    for start in range(0, len(blocks), n):
-                        b = sum(blocks[start:start + n])
-                        if b:
-                            c.append(b)
-                assert len(c) <= len(oc)
-                #print("too much coalescion: %s -> %s" % (nc, c))
-            chunks.append(tuple(c))
-        assert list(map(sum, chunks)) == list(map(sum, new_chunks))
-        chunks = tuple(chunks)
-        if chunks == old_chunks:
-            break
+    chunks = find_intermediate_rechunk(old_chunks, new_chunks,
+                                       block_size_limit / itemsize)
+    if chunks == old_chunks or chunks == new_chunks:
+        # XXX warn
+        return steps
 
-        steps.append(chunks)
-        new_chunks = chunks
-    print("=> %d steps" % len(steps))
-
-    steps.reverse()
+    steps.insert(0, chunks)
     return steps
 
 
 def _compute_rechunk(x, chunks):
+    """ Compute the rechunk of *x* to the given chunklist.
+    """
     ndim = x.ndim
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
