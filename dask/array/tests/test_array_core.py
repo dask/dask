@@ -25,7 +25,7 @@ from dask.array import chunk
 from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
-                             notnull, broadcast_shapes, partial_by_order, exp,
+                             notnull, broadcast_shapes, partial_by_order,
                              tensordot, choose, where, coarsen, insert,
                              broadcast_to, reshape, fromfunction,
                              blockdims_from_blockshape, store, optimize,
@@ -507,7 +507,7 @@ def test_operators():
     expr = (3 / a * b)**2 > 5
     assert_eq(expr, (3 / x * y)**2 > 5)
 
-    c = exp(a)
+    c = da.exp(a)
     assert_eq(c, np.exp(x))
 
     assert_eq(abs(-a), a)
@@ -1293,18 +1293,6 @@ def test_arithmetic():
     assert_eq(l2, r2)
 
     assert_eq(da.around(a, -1), np.around(x, -1))
-
-
-def test_clip():
-    x = np.random.normal(0, 10, size=(10, 10))
-    d = da.from_array(x, chunks=(3, 4))
-
-    assert_eq(x.clip(5), d.clip(5))
-    assert_eq(x.clip(1, 5), d.clip(1, 5))
-    assert_eq(x.clip(min=5), d.clip(min=5))
-    assert_eq(x.clip(max=5), d.clip(max=5))
-    assert_eq(x.clip(max=1, min=5), d.clip(max=1, min=5))
-    assert_eq(x.clip(min=1, max=5), d.clip(min=1, max=5))
 
 
 def test_elemwise_consistent_names():

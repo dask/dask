@@ -278,6 +278,18 @@ class _Frame(Base):
         return ("dd.%s<%s, npartitions=%s%s>" %
                 (self.__class__.__name__, name, self.npartitions, div_text))
 
+    def __array__(self, dtype=None, **kwargs):
+        self._computed = self.compute()
+        x = np.array(self._computed)
+        return x
+
+    def __array_wrap__(self, array, context=None):
+        raise NotImplementedError
+
+    @property
+    def _elemwise(self):
+        return elemwise
+
     @property
     def index(self):
         """Return dask Index instance"""
@@ -1422,6 +1434,12 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
+    def __array_wrap__(self, array, context=None):
+        if isinstance(context, tuple) and len(context) > 0:
+            index = context[1][0].index
+
+        return pd.Series(array, index=index, name=self.name)
+
     @property
     def name(self):
         return self._meta.name
@@ -1474,15 +1492,6 @@ class Series(_Frame):
     def nbytes(self):
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
-
-    def __array__(self, dtype=None, **kwargs):
-        x = np.array(self.compute())
-        if dtype and x.dtype != dtype:
-            x = x.astype(dtype)
-        return x
-
-    def __array_wrap__(self, array, context=None):
-        return pd.Series(array, name=self.name)
 
     @derived_from(pd.Series)
     def round(self, decimals=0):
@@ -1605,7 +1614,10 @@ class Series(_Frame):
                                    right=right, inclusive=inclusive)
 
     @derived_from(pd.Series)
-    def clip(self, lower=None, upper=None):
+    def clip(self, lower=None, upper=None, out=None):
+        if out is not None:
+            raise ValueError("'out' must be None")
+        # np.clip may pass out
         return self.map_partitions(M.clip, lower=lower, upper=upper)
 
     @derived_from(pd.Series)
@@ -1782,6 +1794,9 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
+    def __array_wrap__(self, array, context=None):
+        return pd.Index(array, name=self.name)
+
     def head(self, n=5, compute=True):
         """ First n items of the Index.
 
@@ -1836,6 +1851,12 @@ class DataFrame(_Frame):
 
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
+
+    def __array_wrap__(self, array, context=None):
+        if isinstance(context, tuple) and len(context) > 0:
+            index = context[1][0].index
+
+        return pd.DataFrame(array, index=index, columns=self.columns)
 
     @property
     def columns(self):
@@ -2090,7 +2111,9 @@ class DataFrame(_Frame):
         return self.map_partitions(M.dropna, how=how, subset=subset)
 
     @derived_from(pd.DataFrame)
-    def clip(self, lower=None, upper=None):
+    def clip(self, lower=None, upper=None, out=None):
+        if out is not None:
+            raise ValueError("'out' must be None")
         return self.map_partitions(M.clip, lower=lower, upper=upper)
 
     @derived_from(pd.DataFrame)

@@ -8,7 +8,7 @@ from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
-                        methodcaller, M)
+                        methodcaller, M, skip_doctest)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -198,3 +198,18 @@ def test_method_caller():
     assert M.count is f
     assert pickle.loads(pickle.dumps(f)) is f
     assert 'count' in dir(M)
+
+
+def test_skip_doctest():
+    example = """>>> xxx
+>>>
+>>> # comment
+>>> xxx"""
+
+    res = skip_doctest(example)
+    assert res == """>>> xxx    # doctest: +SKIP
+>>>
+>>> # comment
+>>> xxx    # doctest: +SKIP"""
+
+    assert skip_doctest(None) == ''
