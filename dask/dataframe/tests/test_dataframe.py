@@ -1995,43 +1995,89 @@ def test_round():
 
 
 def test_cov():
+    # DataFrame
     df = pd.util.testing.makeMissingDataframe(0.3, 42)
-    ddf = dd.from_pandas(df, npartitions=3)
+    ddf = dd.from_pandas(df, npartitions=6)
 
-    assert_eq(ddf.cov(), df.cov())
-    assert_eq(ddf.cov(10), df.cov(10))
-    assert ddf.cov()._name == ddf.cov()._name
-    assert ddf.cov(10)._name != ddf.cov()._name
+    res = ddf.cov()
+    res2 = ddf.cov(split_every=2)
+    res3 = ddf.cov(10)
+    res4 = ddf.cov(10, split_every=2)
+    sol = df.cov()
+    sol2 = df.cov(10)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert_eq(res3, sol2)
+    assert_eq(res4, sol2)
+    assert res._name == ddf.cov()._name
+    assert res._name != res2._name
+    assert res3._name != res4._name
+    assert res._name != res3._name
 
+    # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, npartitions=3)
-    db = dd.from_pandas(b, npartitions=4)
-    assert_eq(da.cov(db), a.cov(b))
-    assert_eq(da.cov(db, 10), a.cov(b, 10))
-    assert da.cov(db)._name == da.cov(db)._name
-    assert da.cov(db, 10)._name != da.cov(db)._name
+    da = dd.from_pandas(a, npartitions=6)
+    db = dd.from_pandas(b, npartitions=7)
+
+    res = da.cov(db)
+    res2 = da.cov(db, split_every=2)
+    res3 = da.cov(db, 10)
+    res4 = da.cov(db, 10, split_every=2)
+    sol = a.cov(b)
+    sol2 = a.cov(b, 10)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert_eq(res3, sol2)
+    assert_eq(res4, sol2)
+    assert res._name == da.cov(db)._name
+    assert res._name != res2._name
+    assert res3._name != res4._name
+    assert res._name != res3._name
 
 
 def test_corr():
+    # DataFrame
     df = pd.util.testing.makeMissingDataframe(0.3, 42)
-    ddf = dd.from_pandas(df, npartitions=3)
+    ddf = dd.from_pandas(df, npartitions=6)
 
-    assert_eq(ddf.corr(), df.corr())
-    assert_eq(ddf.corr(min_periods=10), df.corr(min_periods=10))
-    assert ddf.corr()._name == ddf.corr()._name
-    assert ddf.corr(min_periods=10)._name != ddf.corr()._name
+    res = ddf.corr()
+    res2 = ddf.corr(split_every=2)
+    res3 = ddf.corr(min_periods=10)
+    res4 = ddf.corr(min_periods=10, split_every=2)
+    sol = df.corr()
+    sol2 = df.corr(min_periods=10)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert_eq(res3, sol2)
+    assert_eq(res4, sol2)
+    assert res._name == ddf.corr()._name
+    assert res._name != res2._name
+    assert res3._name != res4._name
+    assert res._name != res3._name
 
     pytest.raises(NotImplementedError, lambda: ddf.corr(method='spearman'))
 
+    # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, npartitions=3)
-    db = dd.from_pandas(b, npartitions=4)
-    assert_eq(da.corr(db), a.corr(b))
-    assert_eq(da.corr(db, min_periods=10), a.corr(b, min_periods=10))
-    assert da.corr(db)._name == da.corr(db)._name
-    assert da.corr(db, min_periods=10)._name != da.corr(db)._name
+    da = dd.from_pandas(a, npartitions=6)
+    db = dd.from_pandas(b, npartitions=7)
+
+    res = da.corr(db)
+    res2 = da.corr(db, split_every=2)
+    res3 = da.corr(db, min_periods=10)
+    res4 = da.corr(db, min_periods=10, split_every=2)
+    sol = da.corr(db)
+    sol2 = da.corr(db, min_periods=10)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert_eq(res3, sol2)
+    assert_eq(res4, sol2)
+    assert res._name == da.corr(db)._name
+    assert res._name != res2._name
+    assert res3._name != res4._name
+    assert res._name != res3._name
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
@@ -2053,8 +2099,8 @@ def test_cov_corr_meta():
 def test_cov_corr_stable():
     df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])
     ddf = dd.from_pandas(df, npartitions=50)
-    assert_eq(ddf.cov(), df.cov())
-    assert_eq(ddf.corr(), df.corr())
+    assert_eq(ddf.cov(split_every=8), df.cov())
+    assert_eq(ddf.corr(split_every=8), df.corr())
 
 
 def test_apply_infer_columns():
