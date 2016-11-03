@@ -190,21 +190,28 @@ def extract_serialize(x):
             else:
                 t[path[-1]] = None
 
+    for k, v in ser.items():
+        if type(v) is bytes:
+            ser[k] = to_serialize(v)
     return x, ser
 
 
 def _extract_serialize(x, ser, path=()):
     if type(x) is dict:
         for k, v in x.items():
-            if isinstance(v, (list, dict)):
+            typ = type(v)
+            if typ is list or typ is dict:
                 _extract_serialize(v, ser, path + (k,))
-            elif type(v) is Serialize or type(v) is Serialized:
+            elif (typ is Serialize or typ is Serialized
+                  or typ is bytes and len(v) > 2**16):
                 ser[path + (k,)] = v
     elif type(x) is list:
         for k, v in enumerate(x):
-            if isinstance(v, (list, dict)):
+            typ = type(v)
+            if typ is list or typ is dict:
                 _extract_serialize(v, ser, path + (k,))
-            elif type(v) is Serialize or type(v) is Serialized:
+            elif (typ is Serialize or typ is Serialized
+                  or typ is bytes and len(v) > 2**16):
                 ser[path + (k,)] = v
 
 
