@@ -156,44 +156,6 @@ def get(d, x, recursive=False):
     raise KeyError("{0} is not a key in the graph".format(x))
 
 
-def _deps(dsk, arg):
-    """ Get dependencies from keys or tasks
-
-    Helper function for get_dependencies.
-
-    Examples
-    --------
-    >>> dsk = {'x': 1, 'y': 2}
-
-    >>> _deps(dsk, 'x')
-    ['x']
-    >>> _deps(dsk, (add, 'x', 1))
-    ['x']
-    >>> _deps(dsk, ['x', 'y'])
-    ['x', 'y']
-    >>> _deps(dsk, {'a': 'x'})
-    ['x']
-    >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
-    ['x', 'y']
-    """
-    typ = type(arg)
-    if typ is tuple and arg and callable(arg[0]):  # istask(arg)
-        result = []
-        for a in arg[1:]:
-            result.extend(_deps(dsk, a))
-        return result
-    if typ is list:
-        return sum([_deps(dsk, a) for a in arg], [])
-    if typ is dict:
-        return sum([_deps(dsk, v) for v in arg.values()], [])
-    try:
-        if arg not in dsk:
-            return []
-    except TypeError:  # not hashable
-            return []
-    return [arg]
-
-
 def get_dependencies(dsk, key=None, task=None, as_list=False):
     """ Get the immediate tasks on which this task depends
 
@@ -224,27 +186,34 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     set(['x'])
     """
     if key is not None:
-        args = [dsk[key]]
+        arg = dsk[key]
     elif task is not None:
-        args = [task]
+        arg = task
     else:
         raise ValueError("Provide either key or task")
+
     result = []
-    while args:
-        arg = args.pop()
-        typ = type(arg)
-        if typ is tuple and arg and callable(arg[0]):  # istask(arg):
-            args.extend(arg[1:])
-        elif type(arg) is list:
-            args.extend(arg)
-        else:
-            result.append(arg)
-    if not result:
-        return [] if as_list else set()
-    rv = []
-    for x in result:
-        rv.extend(_deps(dsk, x))
-    return rv if as_list else set(rv)
+    work = [arg]
+
+    while work:
+        new_work = []
+        for w in work:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                new_work += w[1:]
+            elif typ is list:
+                new_work += w
+            elif typ is dict:
+                new_work += w.values()
+            else:
+                try:
+                    if w in dsk:
+                        result.append(w)
+                except TypeError:  # not hashable
+                    pass
+        work = new_work
+
+    return result if as_list else set(result)
 
 
 def get_deps(dsk):
@@ -257,7 +226,8 @@ def get_deps(dsk):
     >>> dependents
     {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
     """
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependencies = {k: get_dependencies(dsk, task=v)
+                    for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
     return dependencies, dependents
 
