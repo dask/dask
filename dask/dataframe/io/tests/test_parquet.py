@@ -1,14 +1,14 @@
 import os
+import pytest
 
 from dask.utils import tmpdir
 import dask.dataframe as dd
+parquet = pytest.importorskip('fastparquet')
 from dask.dataframe.io.parquet import (parquet_to_dask_dataframe,
                                        dask_dataframe_to_parquet)
 
 
 def test_local(tmpdir):
-    # import distributed
-    # c = distributed.Client()
     import pandas as pd
     import numpy as np
 

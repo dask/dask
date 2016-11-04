@@ -38,7 +38,8 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
            for rg, infile in zip(rgs, infiles)]
     if len(tot) == 0:
         raise ValueError("All partitions failed filtering")
-    dtypes = {k: v for k, v in pf.dtypes.items() if k in columns}
+    dtypes = {k: ('category' if k in categories else v) for k, v in
+              pf.dtypes.items() if k in columns}
 
     # TODO: if categories vary from one rg to next, need to cope
     return dd.from_delayed(tot, meta=dtypes)
