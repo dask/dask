@@ -1859,7 +1859,7 @@ def common_blockdim(blockdims):
     return tuple(out)
 
 
-def unify_chunks(*args):
+def unify_chunks(*args, **kwargs):
     """
     Unify chunks across a sequence of arrays
 
@@ -1894,6 +1894,7 @@ def unify_chunks(*args):
     --------
     common_blockdim
     """
+    warn = kwargs.get('warn', True)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
 
     nameinds = [(a.name, i) for a, i in arginds]
@@ -1904,7 +1905,7 @@ def unify_chunks(*args):
     max_parts = max(arg.npartitions for arg in args[::2])
     nparts = np.prod(list(map(len, chunkss.values())))
 
-    if nparts >= max_parts * 10:
+    if warn and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
     arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
@@ -2174,7 +2175,7 @@ def concatenate(seq, axis=0):
         ind[axis] = -(i + 1)
 
     uc_args = list(concat(zip(seq, inds)))
-    _, seq = unify_chunks(*uc_args)
+    _, seq = unify_chunks(*uc_args, warn=False)
 
     bds = [a.chunks for a in seq]
 
