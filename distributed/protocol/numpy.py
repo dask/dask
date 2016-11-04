@@ -12,11 +12,17 @@ except ImportError:
 
 from .utils import frame_split_size
 from .serialize import register_serialization
+from . import pickle
 
 from ..utils import log_errors, ensure_bytes
 
 
 def serialize_numpy_ndarray(x):
+    if x.dtype.hasobject:
+        header = {'pickle': True}
+        frames = [pickle.dumps(x)]
+        return header, frames
+
     if x.dtype.kind == 'V':
         dt = x.dtype.descr
     else:
@@ -45,8 +51,10 @@ def serialize_numpy_ndarray(x):
 
 def deserialize_numpy_ndarray(header, frames):
     with log_errors():
-        if len(frames) != 1:
-            import pdb; pdb.set_trace()
+        assert len(frames) == 1
+
+        if header.get('pickle'):
+            return pickle.loads(frames[0])
 
         dt = header['dtype']
         if isinstance(dt, tuple):
