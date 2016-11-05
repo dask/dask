@@ -937,7 +937,7 @@ def test_store_regions():
 
     region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
 
-    #Single region:
+    # Single region:
     v = store([a, b], [at, bt], regions=region, compute=False)
     assert (at == 0).all() and (bt[region] == 0).all()
     v.compute()
@@ -945,7 +945,7 @@ def test_store_regions():
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 3).all() and not ( at == 0 ).all()
 
-    #Multiple regions:
+    # Multiple regions:
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
