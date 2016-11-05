@@ -795,7 +795,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         regions = [regions]
 
     if len(sources) > 1 and len(regions) == 1:
-        regions = [regions[0] for src in sources]
+        regions *= len(sources)
 
     if len(sources) != len(regions):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
