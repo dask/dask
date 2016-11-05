@@ -145,3 +145,33 @@ def getsize(path, compression=None):
             result = g.tell()
             g.close()
         return result
+
+
+class LocalFileSystem(object):
+    """Implements bytes.core.TemplateFileSystem for local disc"""
+    sep = os.sep
+
+    def __init__(self, **storage_options):
+        # no configuration necessary
+        pass
+
+    def glob(self, path):
+        """For a template path, return matching files"""
+        return glob(path)
+
+    def mkdirs(self, path):
+        """Make any intermediate directories to make path writable"""
+        return os.makedirs(path, exist_ok=True)
+
+    def open(self, path, mode='rb', **kwargs):
+        """Make a file-like object
+
+        Parameters
+        ----------
+        mode: string
+            normally "rb", "wb" or "ab" or other.
+        kwargs: not used
+        """
+        return open(path, mode=mode)
+
+core._filesystems['file'] = LocalFileSystem

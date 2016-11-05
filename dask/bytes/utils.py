@@ -21,7 +21,7 @@ if sys.version_info[0] < 3:
 
         def writable(self):
             try:
-                return self.file.readable()
+                return self.file.writable()
             except AttributeError:
                 return 'w' in self.file.mode
 

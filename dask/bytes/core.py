@@ -212,39 +212,54 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                       compression=compression, **storage_options)
 
 
-def open_files_by(open_files_backend, path, compression=None, mode='rb',
-                  **kwargs):
-    """ Given open files backend and path return dask.delayed file-like objects
-
-    NOTE: This is an internal helper function, please refer to
-    :func:`open_files` documentation for more details.
+def make_myopen(urlpath, compression=None, text=False, encoding='utf8',
+                errors=None, **kwargs):
+    """ Makes a lambda which opens a file in one of the registered backends.
 
     Parameters
     ----------
-    path: string
-        Filepath or globstring
+    urlpath: string
+        Absolute or relative template filepath, URL (may include protocols like
+        ``s3://``), or globstring pointing to data.
     compression: string
         Compression to use.  See ``dask.bytes.compression.files`` for options.
+    text: bool [False]
+        If not binary, file object will be wrapped with a textwrapper
+    encoding: string
+        If in text mode, the encoding to use
+    errors: string or None
+        To pass to TextIOWrapper, if using
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
+
+    Examples
+    --------
+    >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
+    >>> files = open_files('s3://bucket/2015-*-*.csv.gz', compression='gzip')  # doctest: +SKIP
 
     Returns
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
-    files = open_files_backend(path, mode=mode, **kwargs)
+    if compression is not None and compression not in compress_files:
+        raise ValueError("Compression type %s not supported" % compression)
+    storage_options = infer_storage_options(urlpath,
+                                            inherit_storage_options=kwargs)
+    protocol = storage_options.pop('protocol')
+    ensure_protocol(protocol)
+    try:
+        fs = _filesystems[protocol](**storage_options)
+        myopen = lambda path, mode: opener(fs.open, path, compression, mode,
+                                           text, encoding)
+    except KeyError:
+        raise NotImplementedError("Unknown protocol %s (%s)" %
+                                  (protocol, urlpath))
+    return fs, myopen
 
-    if compression:
-        decompress = merge(seekable_files, compress_files)[compression]
-        if PY2:
-            files = [delayed(SeekableFile)(file) for file in files]
-        files = [delayed(decompress)(file) for file in files]
 
-    return files
-
-
-def open_files(urlpath, compression=None, mode='rb', **kwargs):
+def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
+               errors=None, **kwargs):
     """ Given path return dask.delayed file-like objects
 
     Parameters
@@ -267,21 +282,36 @@ def open_files(urlpath, compression=None, mode='rb', **kwargs):
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
+    fs, myopen = make_myopen(urlpath, compression, text='b' not in mode,
+                             encoding='utf8', **kwargs)
+    if "*" in urlpath:
+        paths = fs.glob(urlpath, **kwargs)
+    else:
+        paths = [urlpath]
+    return [delayed(myopen)(path, mode) for path in paths]
 
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
-    protocol = storage_options.pop('protocol')
-    ensure_protocol(protocol)
-    try:
-        open_files_backend = _open_files[protocol]
-    except KeyError:
-        raise NotImplementedError("Unknown protocol %s (%s)" %
-                                  (protocol, urlpath))
 
-    return open_files_by(open_files_backend, storage_options.pop('path'),
-                         compression=compression, mode=mode, **storage_options)
+def open_text_files(urlpath, compression=None, mode='rb', encoding='utf8',
+                    errors='strict', **kwargs):
+    open_files(urlpath, compression, mode.replace('b', 't'), encoding, **kwargs)
+
+
+def opener(myopen, path, compression, mode, text, encoding):
+    mode = mode.replace('t', '').replace('b', '') + 'b'
+    f = f2 = f3 = f4 = myopen(path, mode=mode)
+    CompressFile = merge(seekable_files, compress_files)[compression]
+    if PY2:
+        f2 = SeekableFile(f)
+    f3 = CompressFile(f2)
+    if text:
+        f4 = io.TextIOWrapper(f3, encoding=encoding)
+    else:
+        f4 = f3
+
+    def closer(closers=[f4.close, f3.close, f2.close, f.close]):
+        [_() for _ in closers]
+    f4.close = closer
+    return f4
 
 
 def _expand_paths(path, name_function, num):
@@ -386,3 +416,47 @@ def ensure_protocol(protocol):
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)
+
+
+class TemplateFileSytem(object):
+    """API spec for the methods a filesystem
+
+    A filesystem must provide these methods, if it is to be registered as
+    a backend for dask.
+    """
+    sep = '/'  # path separator
+
+    def __init__(self, **storage_options):
+        """
+        Parameters
+        ----------
+        storage_options: key-value
+            May be credentials, or other configuration specific to the backend.
+        """
+        raise NotImplementedError
+
+    def glob(self, path):
+        """For a template path, return matching files"""
+        raise NotImplementedError
+
+    def mkdirs(self, path):
+        """Make any intermediate directories to make path writable"""
+        raise NotImplementedError
+
+    def open(self, path, mode='rb', **kwargs):
+        """Make a file-like object
+
+        Parameters
+        ----------
+        mode: string
+            normally "rb" or "wb", but may accept "ab" or other.
+        kwargs: key-value
+            Any other parameters, such as buffer size. May be better to set
+            these on the filesystem instance, to apply to all files created by
+            it.
+        """
+        raise NotImplementedError
+
+_filesystems = dict()
+
+
