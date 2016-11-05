@@ -1764,15 +1764,16 @@ class Series(_Frame):
                               convert_dtype, args, meta=meta, **kwds)
 
     @derived_from(pd.Series)
-    def cov(self, other, min_periods=None):
+    def cov(self, other, min_periods=None, split_every=False):
         from .multi import concat
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         df = concat([self, other], axis=1)
-        return cov_corr(df, min_periods, scalar=True)
+        return cov_corr(df, min_periods, scalar=True, split_every=split_every)
 
     @derived_from(pd.Series)
-    def corr(self, other, method='pearson', min_periods=None):
+    def corr(self, other, method='pearson', min_periods=None,
+             split_every=False):
         from .multi import concat
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
@@ -1780,7 +1781,8 @@ class Series(_Frame):
             raise NotImplementedError("Only Pearson correlation has been "
                                       "implemented")
         df = concat([self, other], axis=1)
-        return cov_corr(df, min_periods, corr=True, scalar=True)
+        return cov_corr(df, min_periods, corr=True, scalar=True,
+                        split_every=split_every)
 
 
 class Index(Series):
@@ -2387,15 +2389,15 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
-    def cov(self, min_periods=None):
-        return cov_corr(self, min_periods)
+    def cov(self, min_periods=None, split_every=False):
+        return cov_corr(self, min_periods, split_every=split_every)
 
     @derived_from(pd.DataFrame)
-    def corr(self, method='pearson', min_periods=None):
+    def corr(self, method='pearson', min_periods=None, split_every=False):
         if method != 'pearson':
             raise NotImplementedError("Only Pearson correlation has been "
                                       "implemented")
-        return cov_corr(self, min_periods, True)
+        return cov_corr(self, min_periods, True, split_every=split_every)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
@@ -2906,7 +2908,7 @@ def quantile(df, q):
     return return_type(dsk, name3, meta, new_divisions)
 
 
-def cov_corr(df, min_periods=None, corr=False, scalar=False):
+def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     """DataFrame covariance and pearson correlation.
 
     Computes pairwise covariance or correlation of columns, excluding NA/null
@@ -2925,25 +2927,52 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False):
         If True, compute covariance between two variables as a scalar. Only
         valid if `df` has 2 columns.  If False [default], compute the entire
         covariance/correlation matrix.
+    split_every : int, optional
+        Group partitions into groups of this size while performing a
+        tree-reduction. If set to False, no tree-reduction will be used.
+        Default is False.
     """
     if min_periods is None:
         min_periods = 2
     elif min_periods < 2:
         raise ValueError("min_periods must be >= 2")
-    prefix = 'corr' if corr else 'cov'
+
+    if split_every is False:
+        split_every = df.npartitions
+    elif split_every < 2 or not isinstance(split_every, int):
+        raise ValueError("split_every must be an integer >= 2")
+
     df = df._get_numeric_data()
-    name = '{0}-agg-{1}'.format(prefix, tokenize(df, min_periods, scalar))
+
     if scalar and len(df.columns) != 2:
         raise ValueError("scalar only valid for 2 column dataframe")
-    k = '{0}-chunk-{1}'.format(prefix, df._name)
-    dsk = dict(((k, i), (cov_corr_chunk, f, corr))
-               for (i, f) in enumerate(df._keys()))
-    dsk[(name, 0)] = (cov_corr_agg, list(dsk.keys()), df._meta, min_periods,
-                      corr, scalar)
-    dsk = merge(df.dask, dsk)
+
+    token = tokenize(df, min_periods, scalar, split_every)
+
+    funcname = 'corr' if corr else 'cov'
+    a = '{0}-chunk-{1}'.format(funcname, df._name)
+    dsk = {(a, i): (cov_corr_chunk, f, corr)
+           for (i, f) in enumerate(df._keys())}
+
+    prefix = '{0}-combine-{1}-'.format(funcname, df._name)
+    k = df.npartitions
+    b = a
+    depth = 0
+    while k > split_every:
+        b = prefix + str(depth)
+        for part_i, inds in enumerate(partition_all(split_every, range(k))):
+            dsk[(b, part_i)] = (cov_corr_combine, [(a, i) for i in inds], corr)
+        k = part_i + 1
+        a = b
+        depth += 1
+
+    name = '{0}-{1}'.format(funcname, token)
+    dsk[(name, 0)] = (cov_corr_agg, [(a, i) for i in range(k)],
+                      df.columns, min_periods, corr, scalar)
+    dsk.update(df.dask)
     if scalar:
         return Scalar(dsk, name, 'f8')
-    meta = make_meta([(c, 'f8') for c in df.columns], index=df._meta.columns)
+    meta = make_meta([(c, 'f8') for c in df.columns], index=df.columns)
     return DataFrame(dsk, name, meta, (df.columns[0], df.columns[-1]))
 
 
@@ -2971,8 +3000,7 @@ def cov_corr_chunk(df, corr=False):
     return out
 
 
-def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
-    """Aggregation part of a covariance or correlation computation"""
+def cov_corr_combine(data, corr=False):
     data = np.concatenate(data).reshape((len(data),) + data[0].shape)
     sums = np.nan_to_num(data['sum'])
     counts = data['count']
@@ -2985,23 +3013,39 @@ def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     n1 = cum_counts[:-1]
     n2 = counts[1:]
     d = (s2 / n2) - (s1 / n1)
+
     C = (np.nansum((n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
          np.nansum(data['cov'], 0))
 
-    C[cum_counts[-1] < min_periods] = np.nan
-    nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
+    out = np.empty(C.shape, dtype=data.dtype)
+    out['sum'] = cum_sums[-1]
+    out['count'] = cum_counts[-1]
+    out['cov'] = C
+
     if corr:
+        nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
         mu = cum_sums[-1] / nobs
         counts_na = np.where(counts, counts, np.nan)
-        m2 = np.nansum(data['m'] + counts * (sums / counts_na - mu) ** 2,
-                       axis=0)
+        m = np.nansum(data['m'] + counts * (sums / counts_na - mu) ** 2,
+                      axis=0)
+        out['m'] = m
+    return out
+
+
+def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
+    out = cov_corr_combine(data, corr)
+    counts = out['count']
+    C = out['cov']
+    C[counts < min_periods] = np.nan
+    if corr:
+        m2 = out['m']
         den = np.sqrt(m2 * m2.T)
     else:
-        den = nobs - 1
+        den = np.where(counts, counts, np.nan) - 1
     mat = C / den
     if scalar:
         return mat[0, 1]
-    return pd.DataFrame(mat, columns=meta.columns, index=meta.columns)
+    return pd.DataFrame(mat, columns=cols, index=cols)
 
 
 def pd_split(df, p, random_state=None):
