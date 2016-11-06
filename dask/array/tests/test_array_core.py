@@ -2033,7 +2033,7 @@ def test_cumulative():
 
     a = np.random.random((20, 24, 13))
     x = da.from_array(a, chunks=(6, 5, 4))
-    for axis in [0, 1, 2]:
+    for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
         assert_eq(x.cumprod(axis=axis), a.cumprod(axis=axis))
 
@@ -2044,9 +2044,15 @@ def test_cumulative():
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
-    for axis in [0, 1, 2]:
+    for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(da.nancumsum(x, axis=axis), nancumsum(a, axis=axis))
         assert_eq(da.nancumprod(x, axis=axis), nancumprod(a, axis=axis))
+
+    with pytest.raises(ValueError):
+        x.cumsum(axis=3)
+
+    with pytest.raises(ValueError):
+        x.cumsum(axis=-4)
 
 
 def test_eye():

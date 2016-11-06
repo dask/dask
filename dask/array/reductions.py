@@ -28,7 +28,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
         axis = (axis,)
-    axis = tuple(i if i >= 0 else x.ndim + i for i in axis)
+    axis = tuple(validate_axis(x.ndim, a) for a in axis)
 
     if dtype is not None and 'dtype' in getargspec(chunk).args:
         chunk = partial(chunk, dtype=dtype)
@@ -607,6 +607,8 @@ def cumreduction(func, binop, ident, x, axis, dtype=None):
     if dtype is None:
         dtype = func(np.empty((0,), dtype=x.dtype)).dtype
     assert isinstance(axis, int)
+    axis = validate_axis(x.ndim, axis)
+
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
     name = '%s-axis=%d-%s' % (func.__name__, axis, tokenize(x, dtype))
@@ -644,3 +646,14 @@ def cumsum(x, axis, dtype=None):
 @wraps(np.cumprod)
 def cumprod(x, axis, dtype=None):
     return cumreduction(np.cumprod, operator.mul, 1, x, axis, dtype)
+
+
+def validate_axis(ndim, axis):
+    """ Validate single axis dimension against number of dimensions """
+    if axis > ndim - 1 or axis < -ndim:
+        raise ValueError("Axis must be between -%d and %d, got %d" %
+                         (ndim, ndim - 1, axis))
+    if axis < 0:
+        return axis + ndim
+    else:
+        return axis
