@@ -7,7 +7,7 @@ from toolz import merge
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
-from .utils import SeekableFile
+from .utils import SeekableFile, read_block
 from ..compatibility import PY2, unicode
 from ..base import tokenize
 from ..delayed import delayed, Delayed, apply
@@ -15,7 +15,7 @@ from ..utils import (infer_storage_options, system_encoding,
                      build_name_function, infer_compression,
                      import_required)
 
-delayed = delayed(pure=True)
+# delayed = delayed(pure=True)
 
 # Global registration dictionaries for backend storage functions
 # See docstrings to functions below for more information
@@ -25,7 +25,7 @@ _open_files = dict()
 _open_text_files = dict()
 
 
-def write_block_to_file(data, f, compression, encoding):
+def write_block_to_file(data, f):
     """
     Parameters
     ----------
@@ -40,27 +40,15 @@ def write_block_to_file(data, f, compression, encoding):
         if a string (e.g., 'ascii', 'utf8'), implies text mode, otherwise no
         encoding and binary mode.
     """
-    original = False
-    f2 = f
-    f = SeekableFile(f)
-    if compression:
-        original = True
-        f = compress_files[compression](f, mode='wb')
     try:
         if isinstance(data, (str, bytes)):
-            if encoding:
-                f.write(data.encode(encoding=encoding))
-            else:
-                f.write(data)
+            f.write(data)
         elif isinstance(data, io.IOBase):
             # file-like
             out = '1'
             while out:
                 out = data.read(64 * 2 ** 10)
-                if encoding:
-                    f.write(out.encode(encoding=encoding))
-                else:
-                    f.write(out)
+                f.write(out)
         else:
             # iterable, e.g., bag contents
             start = False
@@ -69,14 +57,9 @@ def write_block_to_file(data, f, compression, encoding):
                     f.write(b'\n')
                 else:
                     start = True
-                if encoding:
-                    f.write(d.encode(encoding=encoding))
-                else:
-                    f.write(d)
+                f.write(d)
     finally:
         f.close()
-        if original:
-            f2.close()
 
 
 def write_bytes(data, urlpath, name_function=None, compression=None,
@@ -153,6 +136,16 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
             for key, v, p in zip(keys, data, paths)]
 
 
+def write_bytes(data, urlpath, name_function=None, compression=None,
+                encoding=None, **kwargs):
+    dfiles = open_files(urlpath, compression, mode='wb',
+                        name_function=name_function, num=len(data), **kwargs)
+    keys = ['write-block-%s' % tokenize(d.key, i, urlpath,
+            compression, encoding, kwargs) for (i, d) in enumerate(data)]
+    return [delayed(write_block_to_file, pure=False)(d, f, dask_key_name=k)
+            for d, f, k in zip(data, dfiles, keys)]
+
+
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                sample=True, compression=None, **kwargs):
     """ Convert path to a list of delayed values
@@ -194,22 +187,27 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     10kB sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
-
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
-    protocol = storage_options.pop('protocol')
-    ensure_protocol(protocol)
-    try:
-        read_bytes = _read_bytes[protocol]
-    except KeyError:
-        raise NotImplementedError("Unknown protocol for reading %s (%s)" %
-                                  (protocol, urlpath))
-
-    return read_bytes(storage_options.pop('path'), delimiter=delimiter,
-                      not_zero=not_zero, blocksize=blocksize, sample=sample,
-                      compression=compression, **storage_options)
+    fs, names = open_files(urlpath, mode='rb', names_only=True, **kwargs)
+    sizes = [fs.size(f) for f in names]
+    dfiles = open_files(urlpath, compression, mode='rb', **kwargs)
+    out = []
+    for f, size, name in zip(dfiles, sizes, names):
+        offsets = range(0, size, blocksize)
+        if not_zero:
+            offsets[0] = 1
+        keys = ['read-block-%s-%s-%s' % (name, offset, tokenize(f.key,
+                compression, offset, kwargs)) for offset in offsets]
+        out.append([delayed(read_block)(f, offset, blocksize, delimiter,
+                                        dask_key_name=key)
+                    for (offset, key) in zip(offsets, keys)])
+    if sample is not True:
+        nbytes = sample
+    else:
+        nbytes = 10000
+    if sample:
+        fs, myopen = make_myopen(urlpath, compression)
+        sample = myopen(names[0], 'rb').read(nbytes)
+    return sample, out
 
 
 def make_myopen(urlpath, compression=None, text=False, encoding='utf8',
@@ -259,7 +257,8 @@ def make_myopen(urlpath, compression=None, text=False, encoding='utf8',
 
 
 def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
-               errors=None, **kwargs):
+               errors=None, name_function=None, num=1,
+               names_only=False, **kwargs):
     """ Given path return dask.delayed file-like objects
 
     Parameters
@@ -269,6 +268,21 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
         ``s3://``), or globstring pointing to data.
     compression: string
         Compression to use.  See ``dask.bytes.compression.files`` for options.
+    mode: 'rb', 'wt', etc.
+    encoding: str
+        For text mode only
+    errors: None or str
+        Passed to TextIOWrapper in text mode
+    name_function: function or None
+        if opening a set of files for writing, those files do not yet exist,
+        so we need to generate their names by formatting the urlpath for
+        each sequence number
+    num: int [1]
+        if writing mode, number of files we expect to create (passed to
+        name+function)
+    names_only: bool [False]
+        if true, don't actually make delayed file openers, just return list
+        of paths that would be opened and the filesystem handle.
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -282,18 +296,63 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
-    fs, myopen = make_myopen(urlpath, compression, text='b' not in mode,
-                             encoding='utf8', **kwargs)
-    if "*" in urlpath:
-        paths = fs.glob(urlpath, **kwargs)
+    if isinstance(urlpath, str):
+        fs, myopen = make_myopen(urlpath, compression, text='b' not in mode,
+                                 encoding='utf8', **kwargs)
+        if 'w' in mode:
+            if num > 1 or "*" in urlpath:
+                paths = _expand_paths(urlpath, name_function, num)
+            else:
+                paths = [urlpath]
+        elif "*" in urlpath:
+            paths = fs.glob(urlpath, **kwargs)
+        else:
+            paths = [urlpath]
     else:
-        paths = [urlpath]
-    return [delayed(myopen)(path, mode) for path in paths]
+        fs, myopen = make_myopen(urlpath[0], compression, text='b' not in mode,
+                                 encoding='utf8', **kwargs)
+        paths = urlpath
+
+    if names_only:
+        return fs, paths
+
+    if 'w' in mode:
+        return [delayed(myopen, pure=False)(path, mode) for path in
+                paths]
+    keys = ["open-file-%s-%s" %(p, tokenize(urlpath, compression, mode, encoding,
+            errors, fs.ukey(p))) for p in paths]
+    return [delayed(myopen)(path, mode, dask_key_name=key) for (path, key) in
+            zip(paths, keys)]
 
 
 def open_text_files(urlpath, compression=None, mode='rb', encoding='utf8',
                     errors='strict', **kwargs):
-    open_files(urlpath, compression, mode.replace('b', 't'), encoding, **kwargs)
+    """ Given path return dask.delayed file-like objects in text mode
+
+    Parameters
+    ----------
+    urlpath: string
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), or globstring pointing to data.
+    encoding: string
+    errors: string
+    compression: string
+        Compression to use.  See ``dask.bytes.compression.files`` for options.
+    **kwargs: dict
+        Extra options that make sense to a particular storage connection, e.g.
+        host, port, username, password, etc.
+
+    Examples
+    --------
+    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
+    >>> files = open_text_files('s3://bucket/2015-*-*.csv')  # doctest: +SKIP
+
+    Returns
+    -------
+    List of ``dask.delayed`` objects that compute to text file-like objects
+    """
+    return open_files(urlpath, compression, mode.replace('b', 't'), encoding,
+                      **kwargs)
 
 
 def opener(myopen, path, compression, mode, text, encoding):
@@ -342,59 +401,6 @@ def _expand_paths(path, name_function, num):
     return paths
 
 
-def open_text_files(urlpath, encoding=system_encoding, errors='strict',
-                    compression=None, **kwargs):
-    """ Given path return dask.delayed file-like objects in text mode
-
-    Parameters
-    ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    encoding: string
-    errors: string
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
-    **kwargs: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
-
-    Examples
-    --------
-    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
-    >>> files = open_text_files('s3://bucket/2015-*-*.csv')  # doctest: +SKIP
-
-    Returns
-    -------
-    List of ``dask.delayed`` objects that compute to text file-like objects
-    """
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
-
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
-    path = storage_options.pop('path')
-    protocol = storage_options.pop('protocol')
-    ensure_protocol(protocol)
-    if protocol in _open_text_files and compression is None:
-        return _open_text_files[protocol](path,
-                                          encoding=encoding,
-                                          errors=errors,
-                                          **storage_options)
-    elif protocol in _open_files:
-        files = open_files_by(_open_files[protocol],
-                              path,
-                              compression=compression,
-                              **storage_options)
-        if PY2:
-            files = [delayed(SeekableFile)(file) for file in files]
-        return [delayed(io.TextIOWrapper)(file, encoding=encoding,
-                                          errors=errors) for file in files]
-    else:
-        raise NotImplementedError("Unknown protocol %s (%s)" %
-                                  (protocol, urlpath))
-
-
 def ensure_protocol(protocol):
     if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
        (protocol in _open_files))):
@@ -433,15 +439,12 @@ class TemplateFileSytem(object):
         storage_options: key-value
             May be credentials, or other configuration specific to the backend.
         """
-        raise NotImplementedError
 
     def glob(self, path):
         """For a template path, return matching files"""
-        raise NotImplementedError
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
-        raise NotImplementedError
 
     def open(self, path, mode='rb', **kwargs):
         """Make a file-like object
@@ -455,7 +458,12 @@ class TemplateFileSytem(object):
             these on the filesystem instance, to apply to all files created by
             it.
         """
-        raise NotImplementedError
+
+    def ukey(self, path):
+        """Unique identifier, so we can tell if a file changed"""
+
+    def size(self, path):
+        """Size in bytes of the file at path"""
 
 _filesystems = dict()
 

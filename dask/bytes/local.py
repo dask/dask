@@ -156,7 +156,6 @@ class LocalFileSystem(object):
         pass
 
     def glob(self, path):
-        """For a template path, return matching files"""
         return glob(path)
 
     def mkdirs(self, path):
@@ -173,5 +172,11 @@ class LocalFileSystem(object):
         kwargs: not used
         """
         return open(path, mode=mode)
+
+    def ukey(self, path):
+        return tokenize(path, os.path.getmtime(path))
+
+    def size(self, path):
+        return os.path.getsize(path)
 
 core._filesystems['file'] = LocalFileSystem

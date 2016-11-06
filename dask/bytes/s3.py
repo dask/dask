@@ -242,7 +242,7 @@ class DaskS3FileSystem(S3FileSystem):
         bucket = kwargs.pop('host', '')
         s3_path = bucket + path
         return S3FileSystem.open(self, s3_path, mode=mode,
-                                     block_size=self.blocksize)
+                                 block_size=self.blocksize)
 
     def glob(self, path, **kwargs):
         bucket = kwargs.pop('host', '')
@@ -251,5 +251,11 @@ class DaskS3FileSystem(S3FileSystem):
 
     def makedirs(self, path):
         pass  # no need to pre-make paths on S3
+
+    def ukey(self, path):
+        return self.info(path)['ETag']
+
+    def size(self, path):
+        return self.info(path)['Size']
 
 core._filesystems['s3'] = DaskS3FileSystem
