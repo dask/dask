@@ -64,7 +64,7 @@ def getarray_nofancy(a, b, lock=None):
     return getarray(a, b, lock=lock)
 
 
-from .optimization import optimize
+from .optimization import optimize, fuse_slice
 
 
 def slices_from_chunks(chunks):
@@ -736,7 +736,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, lock=True, compute=True, **kwargs):
+def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -757,6 +757,10 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular ``threading.Lock`` object to be shared among all writes.
+    regions: tuple of slices or iterable of tuple of slices
+        Each ``region`` tuple in ``regions`` should be such that
+        ``target[region].shape = source.shape``
+        for the corresponding source and target in sources and targets, respectively.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
 
@@ -787,8 +791,18 @@ def store(sources, targets, lock=True, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d]"
                          % (len(sources), len(targets)))
 
-    updates = [insert_to_ooc(tgt, src, lock=lock)
-               for tgt, src in zip(targets, sources)]
+    if isinstance(regions, tuple) or regions is None:
+        regions = [regions]
+
+    if len(sources) > 1 and len(regions) == 1:
+        regions *= len(sources)
+
+    if len(sources) != len(regions):
+        raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
+                         % (len(sources), len(targets), len(regions)))
+
+    updates = [insert_to_ooc(tgt, src, lock=lock, region=reg)
+               for tgt, src, reg in zip(targets, sources, regions)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
     if compute:
@@ -2364,15 +2378,18 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-def insert_to_ooc(out, arr, lock=True):
+def insert_to_ooc(out, arr, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    def store(x, index, lock):
+    def store(x, index, lock, region):
         if lock:
             lock.acquire()
         try:
-            out[index] = np.asanyarray(x)
+            if region is None:
+                out[index] = np.asanyarray(x)
+            else:
+                out[fuse_slice(region, index)] = np.asanyarray(x)
         finally:
             if lock:
                 lock.release()
@@ -2382,7 +2399,7 @@ def insert_to_ooc(out, arr, lock=True):
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, t, slc, lock))
+    dsk = dict(((name,) + t[1:], (store, t, slc, lock, region))
                for t, slc in zip(core.flatten(arr._keys()), slices))
     return dsk
 

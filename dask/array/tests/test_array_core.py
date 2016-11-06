@@ -928,6 +928,34 @@ def test_store():
     pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_store_regions():
+    d = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(8, 4, 6))
+    bt = np.zeros(shape=(8, 4, 6))
+
+    region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
+
+    # Single region:
+    v = store([a, b], [at, bt], regions=region, compute=False)
+    assert (at == 0).all() and (bt[region] == 0).all()
+    v.compute()
+    assert (at[region] == 2).all() and (bt[region] == 3).all()
+    assert not (bt == 3).all() and not ( bt == 0 ).all()
+    assert not (at == 3).all() and not ( at == 0 ).all()
+
+    # Multiple regions:
+    at = np.zeros(shape=(8, 4, 6))
+    bt = np.zeros(shape=(8, 4, 6))
+    v = store([a, b], [at, bt], regions=[region, region], compute=False)
+    assert (at == 0).all() and (bt[region] == 0).all()
+    v.compute()
+    assert (at[region] == 2).all() and (bt[region] == 3).all()
+    assert not (bt == 3).all() and not ( bt == 0 ).all()
+    assert not (at == 3).all() and not ( at == 0 ).all()
+
+
 def test_store_compute_false():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
