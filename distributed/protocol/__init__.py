@@ -12,3 +12,6 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     from . import h5py
+
+with ignoring(ImportError):
+    from . import netcdf4
