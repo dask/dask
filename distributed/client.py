@@ -1951,7 +1951,8 @@ class Client(object):
 
         magic_names: str or list(str) (optional)
             If defined, register IPython magics with these names for
-            executing code on the workers.
+            executing code on the workers.  If string has asterix then expand
+            asterix into 0, 1, ..., n for n workers
 
         qtconsole: bool (optional)
             If True, launch a Jupyter QtConsole connected to the worker(s).
@@ -1971,6 +1972,14 @@ class Client(object):
 
         >>> c.start_ipython_workers('192.168.1.101:5752', qtconsole=True) # doctest: +SKIP
 
+        Add asterix * in magic names to add one magic per worker
+
+        >>> c.start_ipython_workers(magic_names='w_*') # doctest: +SKIP
+        >>> %w_0 worker.data  # doctest: +SKIP
+        {'x': 1, 'y': 100}
+        >>> %w_1 worker.data  # doctest: +SKIP
+        {'z': 5}
+
         Returns
         -------
         iter_connection_info: list
@@ -1981,13 +1990,17 @@ class Client(object):
         --------
         Client.start_ipython_scheduler: start ipython on the scheduler
         """
-
-        if magic_names and isinstance(magic_names, six.string_types):
-            magic_names = [magic_names]
         if isinstance(workers, six.string_types):
             workers = [workers]
 
         (workers, info_dict) = sync(self.loop, self._start_ipython_workers, workers)
+
+        if magic_names and isinstance(magic_names, six.string_types):
+            if '*' in magic_names:
+                magic_names = [magic_names.replace('*', str(i))
+                                for i in range(len(workers))]
+            else:
+                magic_names = [magic_names]
 
         if 'IPython' in sys.modules:
             from ._ipython_utils import register_remote_magic

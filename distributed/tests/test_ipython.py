@@ -88,6 +88,30 @@ def test_start_ipython_workers_magic(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+def test_start_ipython_workers_magic_asterix(loop, zmq_ctx):
+    with cluster(2) as (s, [a, b]):
+
+        with Client(('127.0.0.1', s['port']), loop=loop) as e, mock_ipython() as ip:
+            workers = list(e.ncores())[:2]
+            info_dict = e.start_ipython_workers(workers, magic_names='magic_*')
+
+        expected = [
+            {'magic_kind': 'line', 'magic_name': 'remote'},
+            {'magic_kind': 'cell', 'magic_name': 'remote'},
+            {'magic_kind': 'line', 'magic_name': 'magic_0'},
+            {'magic_kind': 'cell', 'magic_name': 'magic_0'},
+            {'magic_kind': 'line', 'magic_name': 'magic_1'},
+            {'magic_kind': 'cell', 'magic_name': 'magic_1'},
+        ]
+        call_kwargs_list = [ kwargs for (args, kwargs) in ip.register_magic_function.call_args_list ]
+        assert call_kwargs_list == expected
+        assert ip.register_magic_function.call_count == 6
+        magics = [ args[0][0] for args in ip.register_magic_function.call_args_list[2:] ]
+        magics[-1](line="", cell="worker")
+        [ m.client.stop_channels() for m in magics ]
+
+
+@pytest.mark.ipython
 def test_start_ipython_remote(loop, zmq_ctx):
     from distributed._ipython_utils import remote_magic
     with cluster(1) as (s, [a]):
