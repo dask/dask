@@ -67,18 +67,7 @@ def read_text(urlpath, blocksize=None, compression='infer',
                       storage_options=storage_options)
                      for fn in urlpath], [])
     else:
-        if compression == 'infer':
-            compression = infer_compression(urlpath)
-
-        if blocksize and compression not in seekable_files:
-            msg = ("Compression %s does not support breaking apart files\n"
-                   "Use ``blocksize=None`` or decompress file externally")
-            raise ValueError(msg % compression)
-        if compression not in seekable_files and compression not in cfiles:
-            raise NotImplementedError("Compression format %s not installed" %
-                                      compression)
-
-        elif blocksize is None:
+        if blocksize is None:
             files = open_text_files(urlpath, encoding=encoding, errors=errors,
                                     compression=compression,
                                     **(storage_options or {}))

@@ -544,7 +544,7 @@ def test_read_text_large_gzip():
         f.close()
 
         with pytest.raises(ValueError):
-            db.read_text(fn, blocksize=100, linedelimiter='\n')
+            db.read_text(fn, blocksize=50, linedelimiter='\n')
 
         c = db.read_text(fn)
         assert c.npartitions == 1
