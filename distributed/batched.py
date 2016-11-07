@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from datetime import timedelta
 import logging
 from timeit import default_timer
 
@@ -42,6 +43,8 @@ class BatchedSend(object):
         self.stream = None
         self.last_payload = []
         self.last_send = gen.sleep(0)
+        self.message_count = 0
+        self.batch_count = 0
 
     def start(self, stream):
         self.stream = stream
@@ -62,14 +65,19 @@ class BatchedSend(object):
                                 self.interval)
                 yield gen.sleep(wait_time)
             while self.stream._write_buffer:
-                yield gen.with_timeout(timedelta(milliseconds=10),
-                                       self.last_send)  # hangs otherwise?
+                try:
+                    yield gen.with_timeout(timedelta(milliseconds=10),
+                                           self.last_send)  # hangs otherwise?
+                except gen.TimeoutError:
+                    pass
             self.buffer, payload = [], self.buffer
             self.last_payload = payload
             self.last_transmission = now
+            self.batch_count += 1
             self.last_send = write(self.stream, payload)
         except Exception as e:
             logger.exception(e)
+            raise
 
     @gen.coroutine
     def _write(self, payload):
@@ -82,6 +90,7 @@ class BatchedSend(object):
         This completes quickly and synchronously
         """
         try:
+            self.message_count += 1
             if self.stream is None:  # not yet started
                 self.buffer.append(msg)
                 return
@@ -112,7 +121,8 @@ class BatchedSend(object):
     def close(self, ignore_closed=False):
         """ Flush existing messages and then close stream """
         try:
-            yield self.last_send
+            if self.stream._write_buffer:
+                yield self.last_send
             if self.buffer:
                 self.buffer, payload = [], self.buffer
                 yield write(self.stream, payload)
