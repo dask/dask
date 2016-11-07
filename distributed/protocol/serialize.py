@@ -44,7 +44,10 @@ def register_serialization(cls, serialize, deserialize):
     serialize
     deserialize
     """
-    name = typename(cls)
+    if isinstance(cls, type):
+        name = typename(cls)
+    elif isinstance(cls, str):
+        name = cls
     serializers[name] = serialize
     deserializers[name] = deserialize
 
