@@ -215,6 +215,8 @@ core._open_files_write['s3'] = open_file_write_direct
 
 class DaskS3FileSystem(S3FileSystem):
 
+    sep = '/'
+
     def __init__(self, key=None, username=None, secret=None, password=None,
                  blocksize=5 * 2 ** 20, **kwargs):
         if username is not None:
@@ -249,7 +251,7 @@ class DaskS3FileSystem(S3FileSystem):
         s3_path = bucket + path
         return S3FileSystem.glob(self, s3_path)
 
-    def makedirs(self, path):
+    def mkdirs(self, path):
         pass  # no need to pre-make paths on S3
 
     def ukey(self, path):

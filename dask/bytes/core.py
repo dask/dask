@@ -119,6 +119,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     """
     fs, names, myopen = get_fs_paths_myopen(urlpath, compression, 'rb',
                                             None, **kwargs)
+    if len(names) == 0:
+        raise IOError("%s resolved to no files" % urlpath)
     sizes = [fs.size(f) for f in names]
     out = []
     for size, name in zip(sizes, names):
@@ -186,8 +188,8 @@ def make_myopen(urlpath, compression=None, text=False, encoding='utf8',
     ensure_protocol(protocol)
     try:
         fs = _filesystems[protocol](**storage_options)
-        myopen = lambda path, mode: opener(fs.open, path, compression, mode,
-                                           text, encoding)
+        myopen = lambda path, mode='rb': opener(fs.open, path, compression, mode,
+                                                text, encoding)
     except KeyError:
         raise NotImplementedError("Unknown protocol %s (%s)" %
                                   (protocol, urlpath))
@@ -249,10 +251,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
         fs, myopen = make_myopen(urlpath, compression, text='b' not in mode,
                                  encoding=encoding, **kwargs)
         if 'w' in mode:
-            if num > 1 or "*" in urlpath:
-                paths = _expand_paths(urlpath, name_function, num)
-            else:
-                paths = [urlpath]
+            paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
             paths = fs.glob(urlpath, **kwargs)
         else:

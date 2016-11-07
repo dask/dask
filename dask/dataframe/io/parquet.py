@@ -1,6 +1,6 @@
 import struct
 import dask
-from dask.bytes.core import open_files
+from dask.bytes.core import open_files, make_myopen
 import dask.dataframe as dd
 from dask import delayed
 
@@ -17,13 +17,14 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
                               categories=None, **kwargs):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
+    fs, myopen = make_myopen(url, compression=None, text=False)
+
     try:
-        f = open_files(url+'/_metadata')[0].compute(get=dask.get)
-        pf = fastparquet.ParquetFile(f)
+        pf = fastparquet.ParquetFile(url+'/_metadata', open_with=myopen,
+                                     sep=fs.sep)
         root = url
     except:
-        f = open_files(url)[0].compute(get=dask.get)
-        pf = ParquetFile(f)
+        pf = fastparquet.ParquetFile(url, open_with=myopen, sep=fs.sep)
         root = os.path.dirname(url)
 
     columns = columns or (pf.columns + list(pf.cats))
@@ -31,10 +32,10 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
-    infiles = [open_files('/'.join([root, rg.columns[0].file_path]))[0]
+    infiles = ['/'.join([root, rg.columns[0].file_path])
                for rg in pf.row_groups]
     tot = [delayed(pf.read_row_group)(rg, columns, categories,
-                                      infile=infile, **kwargs)
+                                      **kwargs)
            for rg, infile in zip(rgs, infiles)]
     if len(tot) == 0:
         raise ValueError("All partitions failed filtering")
@@ -56,13 +57,20 @@ def dask_dataframe_to_parquet(
     from dask import delayed, compute
     # mkdirs(filename)
     fn = sep.join([url, '_metadata'])
+
+    fs, myopen = make_myopen(url, compression=None, text=False)
+    fs.mkdirs(url)
+
     fmd = fastparquet.writer.make_metadata(data.head(10))
 
     delayed_parts = data.to_delayed()
     parts = ['part.%i.parquet' % i for i in range(len(delayed_parts))]
-    outfiles = [open_files(sep.join([url, part]), mode='wb')[0] for part in parts]
-    dfunc = delayed(fastparquet.writer.make_part_file)
-    out = compute(*(dfunc(outfile, data, fmd.schema, compression=compression)
+    outfiles = [sep.join([url, part]) for part in parts]
+    func = lambda outfile, data: fastparquet.writer.make_part_file(
+            myopen(outfile, 'wb'), data, fmd.schema,
+            compression=compression)
+    dfunc = delayed(func)
+    out = compute(*(dfunc(outfile, data)
                     for data, outfile in zip(delayed_parts, outfiles)))
 
     for part, rg in zip(parts, out):
@@ -70,7 +78,7 @@ def dask_dataframe_to_parquet(
             chunk.file_path = part
         fmd.row_groups.append(rg)
 
-    f = open_files(fn, mode='wb')[0].compute(get=dask.get)
+    f = myopen(fn, mode='wb')
 
     f.write(b'PAR1')
     foot_size = fastparquet.writer.write_thrift(f, fmd)
@@ -78,7 +86,6 @@ def dask_dataframe_to_parquet(
     f.write(b'PAR1')
     f.close()
 
-    f = open_files(sep.join([url, '_common_metadata']),
-                   mode='wb')[0].compute(get=dask.get)
+    f = myopen(sep.join([url, '_common_metadata']), mode='wb')
 
     fastparquet.writer.write_common_metadata(f, fmd)
