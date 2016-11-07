@@ -52,7 +52,10 @@ def dumps(msg):
                 head['lengths'] = list(map(len, frames))
             if 'compression' not in head:
                 frames = frame_split_size(frames)
-                compression, frames = zip(*map(maybe_compress, frames))
+                if frames:
+                    compression, frames = zip(*map(maybe_compress, frames))
+                else:
+                    compression = []
                 head['compression'] = compression
             head['count'] = len(frames)
             header['headers'][key] = head

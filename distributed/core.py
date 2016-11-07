@@ -148,6 +148,7 @@ class Server(TCPServer):
                     logger.info("Lost connection: %s", str(address))
                     break
                 except Exception as e:
+                    logger.exception(e)
                     yield write(stream, error_message(e, status='uncaught-error'))
                     continue
                 if not isinstance(msg, dict):
