@@ -363,47 +363,6 @@ def ensure_protocol(protocol):
         raise ValueError("Unknown protocol %s" % protocol)
 
 
-class TemplateFileSytem(object):
-    """API spec for the methods a filesystem
-
-    A filesystem must provide these methods, if it is to be registered as
-    a backend for dask.
-    """
-    sep = '/'  # path separator
-
-    def __init__(self, **storage_options):
-        """
-        Parameters
-        ----------
-        storage_options: key-value
-            May be credentials, or other configuration specific to the backend.
-        """
-
-    def glob(self, path):
-        """For a template path, return matching files"""
-
-    def mkdirs(self, path):
-        """Make any intermediate directories to make path writable"""
-
-    def open(self, path, mode='rb', **kwargs):
-        """Make a file-like object
-
-        Parameters
-        ----------
-        mode: string
-            normally "rb" or "wb", but may accept "ab" or other.
-        kwargs: key-value
-            Any other parameters, such as buffer size. May be better to set
-            these on the filesystem instance, to apply to all files created by
-            it.
-        """
-
-    def ukey(self, path):
-        """Unique identifier, so we can tell if a file changed"""
-
-    def size(self, path):
-        """Size in bytes of the file at path"""
-
 _filesystems = dict()
-
+# see .local.LocalFileSystem for reference implementation
 

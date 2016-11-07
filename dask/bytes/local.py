@@ -148,14 +148,26 @@ def getsize(path, compression=None):
 
 
 class LocalFileSystem(object):
-    """Implements bytes.core.TemplateFileSystem for local disc"""
+    """API spec for the methods a filesystem
+
+    A filesystem must provide these methods, if it is to be registered as
+    a backend for dask.
+
+    Implementation for local disc"""
     sep = os.sep
 
     def __init__(self, **storage_options):
+        """
+        Parameters
+        ----------
+        storage_options: key-value
+            May be credentials, or other configuration specific to the backend.
+        """
         # no configuration necessary
         pass
 
     def glob(self, path):
+        """For a template path, return matching files"""
         return glob(path)
 
     def mkdirs(self, path):
@@ -169,14 +181,19 @@ class LocalFileSystem(object):
         ----------
         mode: string
             normally "rb", "wb" or "ab" or other.
-        kwargs: not used
+        kwargs: key-value
+            Any other parameters, such as buffer size. May be better to set
+            these on the filesystem instance, to apply to all files created by
+            it. Not used for local.
         """
         return open(path, mode=mode)
 
     def ukey(self, path):
+        """Unique identifier, so we can tell if a file changed"""
         return tokenize(path, os.path.getmtime(path))
 
     def size(self, path):
+        """Size in bytes of the file at path"""
         return os.path.getsize(path)
 
 core._filesystems['file'] = LocalFileSystem
