@@ -437,14 +437,9 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def _nonempty_data(x):
-    if isinstance(x, Array):
-        return np.ones((1,) * x.ndim, dtype=x.dtype)
-    return x
-
-
 def apply_infer_dtype(func, args, kwargs, funcname=None):
-    args = list(map(_nonempty_data, args))
+    args = [np.ones((1,) * x.ndim, dtype=x.dtype)
+            if isinstance(x, Array) else x for x in args]
     try:
         o = func(*args, **kwargs)
     except Exception as e:
@@ -464,28 +459,31 @@ def apply_infer_dtype(func, args, kwargs, funcname=None):
 
 
 def map_blocks(func, *args, **kwargs):
-    """ Map a function across all blocks of a dask array
+    """ Map a function across all blocks of a dask array.
 
     Parameters
     ----------
-    func: callable
-        Function to apply to every block in the array
-    args: dask arrays or constants
-    dtype: np.dtype
-        Datatype of resulting array
-    chunks: tuple (optional)
-        Chunk shape of resulting blocks if the function does not preserve shape
-    drop_axis: number or iterable (optional)
-        Dimensions lost by the function
-    new_axis: number or iterable (optional)
-        New dimensions created by the function
-    **kwargs:
-        Other keyword arguments to pass to function.
-        Values must be constants (not dask.arrays)
-
-    You must also specify the chunks and dtype of the resulting array.  If you
-    don't then we assume that the resulting array has the same block structure
-    as the input.
+    func : callable
+        Function to apply to every block in the array.
+    args : dask arrays or constants
+    dtype : np.dtype, optional
+        The ``dtype`` of the output array. It is recommended to provide this.
+        If not provided, will be inferred by applying the function to a small
+        set of fake data.
+    chunks : tuple, optional
+        Chunk shape of resulting blocks if the function does not preserve
+        shape. If not provided, the resulting array is assumed to have the same
+        block structure as the first input array.
+    drop_axis : number or iterable, optional
+        Dimensions lost by the function.
+    new_axis : number or iterable, optional
+        New dimensions created by the function.
+    name : string, optional
+        The key name to use for the array. If not provided, will be determined
+        by a hash of the arguments.
+    **kwargs :
+        Other keyword arguments to pass to function. Values must be constants
+        (not dask.arrays)
 
     Examples
     --------
@@ -495,7 +493,7 @@ def map_blocks(func, *args, **kwargs):
     >>> x.map_blocks(lambda x: x * 2).compute()
     array([ 0,  2,  4,  6,  8, 10])
 
-    The ``da.map_blocks`` function can also accept multiple arrays
+    The ``da.map_blocks`` function can also accept multiple arrays.
 
     >>> d = da.arange(5, chunks=2)
     >>> e = da.arange(5, chunks=2)
@@ -504,7 +502,7 @@ def map_blocks(func, *args, **kwargs):
     >>> f.compute()
     array([ 0,  2,  6, 12, 20])
 
-    If function changes shape of the blocks then please provide chunks
+    If the function changes shape of the blocks then you must provide chunks
     explicitly.
 
     >>> y = x.map_blocks(lambda x: x[::2], chunks=((2, 2),))
@@ -521,14 +519,14 @@ def map_blocks(func, *args, **kwargs):
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
     ...                  new_axis=[0, 2])
 
-    Map_blocks aligns blocks by block positions without regard to shape.  In
-    the following example we have two arrays with the same number of blocks but
+    Map_blocks aligns blocks by block positions without regard to shape. In the
+    following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
 
     >>> x = da.arange(1000, chunks=(100,))
     >>> y = da.arange(100, chunks=(10,))
 
-    The relevant attribute to match is numblocks
+    The relevant attribute to match is numblocks.
 
     >>> x.numblocks
     (10,)
