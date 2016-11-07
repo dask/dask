@@ -51,6 +51,14 @@ def test_nanny(s):
     yield n._close()
 
 
+@gen_cluster(Worker=Nanny)
+def test_str(s, a, b):
+    assert a.worker_address in str(a)
+    assert a.worker_address in repr(a)
+    assert str(a.ncores) in str(a)
+    assert str(a.ncores) in repr(a)
+
+
 @gen_cluster(ncores=[], timeout=20)
 def test_nanny_process_failure(s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)

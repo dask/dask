@@ -68,6 +68,11 @@ class Nanny(Server):
 
         super(Nanny, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
+    def __str__(self):
+        return "<Nanny: %s, threads: %d>" % (self.worker_address, self.ncores)
+
+    __repr__ = __str__
+
     @gen.coroutine
     def _start(self, port=0):
         """ Start nanny, start local process, start watching """
