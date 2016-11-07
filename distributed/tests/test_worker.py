@@ -22,7 +22,7 @@ from distributed.scheduler import Scheduler
 from distributed.protocol import to_serialize
 from distributed.protocol.pickle import dumps, loads
 from distributed.sizeof import sizeof
-from distributed.worker import Worker, error_message, logger
+from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import ignoring
 from distributed.utils_test import (loop, inc, gen_cluster,
         slow, slowinc, throws, current_loop, gen_test)
@@ -565,3 +565,13 @@ def test_Executor(c, s):
         assert e._threads  # had to do some work
 
         yield w._close()
+
+
+@slow
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_str(c, s, w):
+    da = pytest.importorskip('dask.array')
+    x = da.ones(int(TOTAL_MEMORY * 0.7), chunks=10000000, dtype='u1')
+    y = c.persist(x)
+    yield _wait(y)
+    assert len(w.data.slow)  # something is on disk
