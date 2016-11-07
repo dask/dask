@@ -122,12 +122,14 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     sizes = [fs.size(f) for f in names]
     out = []
     for size, name in zip(sizes, names):
+        blocksize = blocksize if blocksize is not None else size
         offsets = list(range(0, size, blocksize))
         if len(offsets) > 1 and infer_compression(urlpath):
-            raise ValueError('Cannot chop compressed files into byte chunks')
+            raise ValueError('Cannot read compressed files (%s) in byte chunks,'
+                             'use blocksize=None' % infer_compression(urlpath))
         if not_zero:
             offsets[0] = 1
-        keys = ['read-block-%s-%s-%s' % (name, offset, tokenize(
+        keys = ['read-block-%s-%s' % (offset, tokenize(name,
                 compression, offset, kwargs)) for offset in offsets]
         # TODO: check fs for preferred locations of blocks here;
         # and preferred blocksize?
@@ -140,7 +142,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         nbytes = 10000
     if sample:
         fs, myopen = make_myopen(urlpath, compression)
-        sample = myopen(names[0], 'rb').read(nbytes)
+        sample = read_block(myopen(names[0], 'rb'), 0, nbytes, delimiter)
     return sample, out
 
 
@@ -235,7 +237,7 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
     if 'w' in mode:
         return [delayed(myopen, pure=False)(path, mode) for path in
                 paths]
-    keys = ["open-file-%s-%s" % (p, tokenize(urlpath, compression, mode,
+    keys = ["open-file-%s" % (tokenize(p, compression, mode,
             encoding, errors, fs.ukey(p))) for p in paths]
     return [delayed(myopen)(path, mode, dask_key_name=key) for (path, key) in
             zip(paths, keys)]
@@ -337,6 +339,7 @@ def _expand_paths(path, name_function, num):
 1.  A list of paths -- ['foo.json', 'bar.json', ...]
 2.  A directory -- 'foo/
 3.  A path with a * in it -- 'foo.*.json'""")
+    print(path, paths)
     return paths
 
 

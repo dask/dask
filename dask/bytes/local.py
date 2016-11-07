@@ -190,10 +190,10 @@ class LocalFileSystem(object):
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
-        return tokenize(path, os.path.getmtime(path))
+        return tokenize(path, os.stat(path).st_mtime)
 
     def size(self, path):
         """Size in bytes of the file at path"""
-        return os.path.getsize(path)
+        return os.stat(path).st_size
 
 core._filesystems['file'] = LocalFileSystem
