@@ -9,6 +9,7 @@ from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
 from distributed.utils import tmpfile
 from distributed.utils_test import slow
 from distributed.protocol.numpy import itemsize
+from distributed.protocol.compression import maybe_compress
 
 import distributed.protocol.numpy
 
@@ -84,3 +85,17 @@ def test_dumps_serialize_numpy_large():
 
 def test_itemsize(dt, size):
     assert itemsize(np.dtype(dt)) == size
+
+
+def test_compress_numpy():
+    x = np.ones(10000000, dtype='i4')
+    compression, compressed = maybe_compress(x.data)
+    if compression:
+        assert len(compressed) < x.nbytes
+
+
+def test_compress_memoryview():
+    mv = memoryview(b'0' * 1000000)
+    compression, compressed = maybe_compress(mv)
+    if compression:
+        assert len(compressed) < len(mv)
