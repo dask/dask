@@ -88,7 +88,10 @@ class TaskStream(DashboardComponent):
         )
 
         self.root.add_tools(
-            hover, ResetTool(), PanTool(dimensions="width"), WheelZoomTool(dimensions="width")
+            hover,
+            ResetTool(reset_size=False),
+            PanTool(dimensions="width"),
+            WheelZoomTool(dimensions="width")
         )
 
         # Required for update callback
@@ -277,7 +280,7 @@ class ResourceProfiles(DashboardComponent):
         )
         g2 = resource_plot.add_glyph(
             self.source,
-            Line(x='time', y='cpu', line_color="#1f78b4"    , **line_opts)
+            Line(x='time', y='cpu', line_color="#1f78b4", **line_opts)
         )
 
         resource_plot.add_layout(
@@ -400,7 +403,6 @@ class WorkerTable(DashboardComponent):
             Circle(x='memory_percent', y=0, size=10, fill_alpha=0.5)
         )
 
-        mem_plot.add_layout(LinearAxis(), 'left')
         mem_plot.add_layout(LinearAxis(), 'below')
 
         hover = HoverTool(

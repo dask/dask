@@ -18,7 +18,7 @@ doc = curdoc()
 processing_stacks = ProcessingStacks(sizing_mode=SIZING_MODE, width=WIDTH, height=150)
 doc.add_periodic_callback(lambda: processing_stacks.update(messages), 200)
 
-worker_table = WorkerTable(sizing_mode=SIZING_MODE, width=WIDTH)
+worker_table = WorkerTable(sizing_mode=SIZING_MODE, width=WIDTH, plot_height=80)
 doc.add_periodic_callback(lambda: worker_table.update(messages), messages['workers']['interval'])
 
 layout = column(
