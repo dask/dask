@@ -231,6 +231,12 @@ class Worker(Server):
             logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
         logger.info('Waiting to connect to: %20s:%d',
                     self.scheduler.ip, self.scheduler.port)
+        logger.info('-' * 49)
+        logger.info('              Threads: %26d', self.ncores)
+        if self.memory_limit:
+            logger.info('               Memory: %23.2f GB', self.memory_limit / 1e9)
+        logger.info('      Local Directory: %26s', self.local_dir)
+        logger.info('-' * 49)
         while True:
             try:
                 resp = yield self.scheduler.register(
@@ -250,6 +256,7 @@ class Worker(Server):
             raise ValueError(resp)
         logger.info('        Registered to: %20s:%d',
                     self.scheduler.ip, self.scheduler.port)
+        logger.info('-' * 49)
         self.status = 'running'
 
     def start(self, port=0):
