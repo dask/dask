@@ -209,6 +209,8 @@ def test_raise_on_meta_error():
     except Exception as e:
         assert e.args[0].startswith("Metadata inference failed.\n")
         assert 'RuntimeError' in e.args[0]
+    else:
+        assert False, "should have errored"
 
     try:
         with raise_on_meta_error("myfunc"):
@@ -216,3 +218,5 @@ def test_raise_on_meta_error():
     except Exception as e:
         assert e.args[0].startswith("Metadata inference failed in `myfunc`.\n")
         assert 'RuntimeError' in e.args[0]
+    else:
+        assert False, "should have errored"
