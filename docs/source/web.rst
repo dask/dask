@@ -1,21 +1,9 @@
 Web Interface
 =============
 
-.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-resources.gif
-   :alt: Resource plot of Dask web interface
-   :width: 70%
-
-.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-memory-use.gif
-   :alt: Memory use plot of Dask web interface
-   :width: 70%
-
-.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-task-stream.gif
-   :alt: Task stream plot of Dask web interface
-   :width: 70%
-
-.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-progress.gif
-   :alt: Progress plot of Dask web interface
-   :width: 70%
+.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/daskboard.gif
+   :alt: Dask Bokeh Dashboard
+   :width: 80%
 
 Information about the current state of the network helps to track progress,
 identify performance issues, and debug failures.
