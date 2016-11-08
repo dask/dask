@@ -139,7 +139,10 @@ def test_registered_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k] for k in sorted(files)]
 
 
@@ -149,7 +152,10 @@ def test_registered_open_text_files(encoding):
     with filetexts(files, mode='b'):
         myfiles = open_text_files('.test.accounts.*', encoding=encoding)
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k].decode(encoding)
                               for k in sorted(files)]
 
@@ -168,7 +174,10 @@ def test_compression_binary(fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_files('.test.accounts.*', compression=fmt)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k] for k in sorted(files)]
 
 
@@ -177,7 +186,10 @@ def test_compression_text(fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_text_files('.test.accounts.*', compression=fmt)
-        data = compute(*[file.read() for file in myfiles])
+        data = []
+        for file in myfiles:
+            with file as f:
+                data.append(f.read())
         assert list(data) == [files[k].decode() for k in sorted(files)]
 
 

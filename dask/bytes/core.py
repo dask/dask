@@ -36,7 +36,7 @@ def write_block_to_file(data, f):
         backend-dependent file-like object
     """
     binary = 'b' in str(getattr(f, 'mode', 'b'))
-    try:
+    with f as f:
         if isinstance(data, (str, bytes)):
             f.write(data)
         elif isinstance(data, io.IOBase):
@@ -61,8 +61,6 @@ def write_block_to_file(data, f):
                 else:
                     start = True
                 f.write(d)
-    finally:
-        f.close()
 
 
 def write_bytes(data, urlpath, name_function=None, compression=None,
@@ -72,8 +70,8 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
                    name_function=name_function, num=len(data),
                    encoding=encoding, **kwargs)
 
-    func = lambda d, f: write_block_to_file(d, myopen(f, mode=mode))
-    return [delayed(func, pure=False)(d, f) for d, f in zip(data, names)]
+    return [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
+            for d, f in zip(data, names)]
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -123,9 +121,12 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         raise IOError("%s resolved to no files" % urlpath)
     sizes = [fs.size(f) for f in names]
     out = []
+    # TODO: check fs for preferred locations of blocks here;
+    # and preferred blocksize?
+
     for size, name in zip(sizes, names):
-        blocksize = blocksize if blocksize is not None else size
-        offsets = list(range(0, size, blocksize))
+        bs = blocksize if blocksize is not None else size
+        offsets = list(range(0, size, bs))
         if len(offsets) > 1 and infer_compression(urlpath):
             raise ValueError('Cannot read compressed files (%s) in byte chunks,'
                              'use blocksize=None' % infer_compression(urlpath))
@@ -133,9 +134,10 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
             offsets[0] = 1
         keys = ['read-block-%s-%s' % (offset, tokenize(name,
                 compression, offset, kwargs)) for offset in offsets]
-        # TODO: check fs for preferred locations of blocks here;
-        # and preferred blocksize?
-        func = lambda f, off: read_block(myopen(f, 'rb'), off, blocksize, delimiter)
+
+        def func(f, off):
+            with myopen(f, 'rb') as f:
+                return read_block(f, off, bs, delimiter)
         out.append([delayed(func)(name, off, dask_key_name=key)
                     for (off, key) in zip(offsets, keys)])
     if sample is not True:
@@ -143,57 +145,73 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     else:
         nbytes = 10000
     if sample:
-        fs, myopen = make_myopen(urlpath, compression)
-        sample = read_block(myopen(names[0], 'rb'), 0, nbytes, delimiter)
+        myopen = MakeMyopen(urlpath, compression)
+        with myopen(names[0], 'rb') as f:
+            sample = read_block(f, 0, nbytes, delimiter)
     return sample, out
 
 
-def make_myopen(urlpath, compression=None, text=False, encoding='utf8',
-                errors=None, **kwargs):
-    """ Makes a lambda which opens a file in one of the registered backends.
+class MakeMyopen(object):
+    def __init__(self, urlpath, compression=None, text=False, encoding='utf8',
+                 errors=None, **kwargs):
+        if compression == 'infer':
+            compression = infer_compression(urlpath)
+        if compression is not None and compression not in compress_files:
+            raise ValueError("Compression type %s not supported" % compression)
+        self.urlpath = urlpath
+        self.compression = compression
+        self.text = text
+        self.encoding = encoding
+        self.storage_options = infer_storage_options(
+                urlpath, inherit_storage_options=kwargs)
+        self.protocol = self.storage_options.pop('protocol')
+        ensure_protocol(self.protocol)
+        try:
+            self.fs = _filesystems[self.protocol](**self.storage_options)
+        except KeyError:
+            raise NotImplementedError("Unknown protocol %s (%s)" %
+                                      (protocol, urlpath))
 
-    Parameters
-    ----------
-    urlpath: string
-        Absolute or relative template filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
-    text: bool [False]
-        If not binary, file object will be wrapped with a textwrapper
-    encoding: string
-        If in text mode, the encoding to use
-    errors: string or None
-        To pass to TextIOWrapper, if using
-    **kwargs: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
+    def __call__(self, path, mode='rb'):
+        return OpenFile(self.fs.open, path, self.compression, mode,
+                        self.text, self.encoding)
 
-    Examples
-    --------
-    >>> files = open_files('2015-*-*.csv')  # doctest: +SKIP
-    >>> files = open_files('s3://bucket/2015-*-*.csv.gz', compression='gzip')  # doctest: +SKIP
 
-    Returns
-    -------
-    List of ``dask.delayed`` objects that compute to file-like objects
-    """
-    if compression == 'infer':
-        compression = infer_compression(urlpath)
-    if compression is not None and compression not in compress_files:
-        raise ValueError("Compression type %s not supported" % compression)
-    storage_options = infer_storage_options(urlpath,
-                                            inherit_storage_options=kwargs)
-    protocol = storage_options.pop('protocol')
-    ensure_protocol(protocol)
-    try:
-        fs = _filesystems[protocol](**storage_options)
-        myopen = lambda path, mode='rb': opener(fs.open, path, compression, mode,
-                                                text, encoding)
-    except KeyError:
-        raise NotImplementedError("Unknown protocol %s (%s)" %
-                                  (protocol, urlpath))
-    return fs, myopen
+class OpenFile(object):
+    def __init__(self, myopen, path, compression, mode, text, encoding):
+        self.myopen = myopen
+        self.path = path
+        self.compression = compression
+        self.mode = mode
+        self.text = text
+        self.encoding = encoding
+        self.closers = None
+        self.fobjects = None
+        self.f = None
+
+    def __enter__(self):
+        mode = self.mode.replace('t', '').replace('b', '') + 'b'
+        f = f2 = self.myopen(self.path, mode=mode)
+        CompressFile = merge(seekable_files, compress_files)[self.compression]
+        if PY2:
+            f2 = SeekableFile(f)
+        f3 = CompressFile(f2, mode=mode)
+        if self.text:
+            f4 = io.TextIOWrapper(f3, encoding=self.encoding)
+        else:
+            f4 = f3
+
+        self.closers = [f4.close, f3.close, f2.close, f.close]
+        self.fobjects = [f4, f3, f2, f]
+        self.f = f4
+        f4.close = self.close
+        return f4
+
+    def __exit__(self, *args):
+        self.close()
+
+    def close(self):
+        [_() for _ in self.closers]
 
 
 def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
@@ -236,33 +254,27 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
                                             encoding=encoding, num=num,
                                             name_function=name_function,
                                             **kwargs)
-    if 'w' in mode:
-        return [delayed(myopen, pure=False)(path, mode) for path in
-                paths]
-    keys = ["open-file-%s" % (tokenize(p, compression, mode,
-            encoding, errors, fs.ukey(p))) for p in paths]
-    return [delayed(myopen)(path, mode, dask_key_name=key) for (path, key) in
-            zip(paths, keys)]
+    return [myopen(path, mode) for path in paths]
 
 
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         num=1, name_function=None, **kwargs):
     if isinstance(urlpath, (str, unicode)):
-        fs, myopen = make_myopen(urlpath, compression, text='b' not in mode,
-                                 encoding=encoding, **kwargs)
+        myopen = MakeMyopen(urlpath, compression, text='b' not in mode,
+                            encoding=encoding, **kwargs)
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
-            paths = fs.glob(urlpath, **kwargs)
+            paths = myopen.fs.glob(urlpath, **kwargs)
         else:
             paths = [urlpath]
     elif isinstance(urlpath, (list, set, tuple, dict)):
-        fs, myopen = make_myopen(urlpath[0], compression, text='b' not in mode,
-                                 encoding='utf8', **kwargs)
+        myopen = MakeMyopen(urlpath[0], compression, text='b' not in mode,
+                            encoding='utf8', **kwargs)
         paths = urlpath
     else:
         raise ValueError('url type not understood: %s' % urlpath)
-    return fs, paths, myopen
+    return myopen.fs, paths, myopen
 
 
 def open_text_files(urlpath, compression=None, mode='rb', encoding='utf8',
@@ -293,24 +305,6 @@ def open_text_files(urlpath, compression=None, mode='rb', encoding='utf8',
     """
     return open_files(urlpath, compression, mode.replace('b', 't'), encoding,
                       **kwargs)
-
-
-def opener(myopen, path, compression, mode, text, encoding):
-    mode = mode.replace('t', '').replace('b', '') + 'b'
-    f = f2 = f3 = f4 = myopen(path, mode=mode)
-    CompressFile = merge(seekable_files, compress_files)[compression]
-    if PY2:
-        f2 = SeekableFile(f)
-    f3 = CompressFile(f2, mode=mode)
-    if text:
-        f4 = io.TextIOWrapper(f3, encoding=encoding)
-    else:
-        f4 = f3
-
-    def closer(closers=[f4.close, f3.close, f2.close, f.close]):
-        [_() for _ in closers]
-    f4.close = closer
-    return f4
 
 
 def _expand_paths(path, name_function, num):
