@@ -167,7 +167,7 @@ class Nanny(Server):
             self.environment = environment
 
         with log_errors():
-            if self.process and isalive(self.process):
+            if isalive(self.process):
                 raise ValueError("Existing process still alive. Please kill first")
 
             if self.environment != nanny_environment:
@@ -376,7 +376,9 @@ def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
 
 
 def isalive(proc):
-    if isinstance(proc, subprocess.Popen):
+    if proc is None:
+        return False
+    elif isinstance(proc, subprocess.Popen):
         return proc.poll() is None
     else:
         return proc.is_alive()
