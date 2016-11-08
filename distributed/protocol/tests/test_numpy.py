@@ -28,8 +28,19 @@ def test_serialize():
 
 @pytest.mark.parametrize('x',
         [np.ones(5),
+         np.array(5),
          np.asfortranarray(np.random.random((5, 5))),
          np.random.random(5).astype('f4'),
+         np.random.random(5).astype('>i8'),
+         np.random.random(5).astype('<i8'),
+         np.arange(5).astype('M8[us]'),
+         np.arange(5).astype('M8[ms]'),
+         np.arange(5).astype('m8'),
+         np.arange(5).astype('m8[s]'),
+         np.arange(5).astype('c16'),
+         np.arange(5).astype('c8'),
+         np.array([True, False, True]),
+         np.ones(shape=5, dtype=[('a', 'i4'), ('b', 'M8[us]')]),
          np.array(['abc'], dtype='S3'),
          np.array(['abc'], dtype='U3'),
          np.array(['abc'], dtype=object),
@@ -75,14 +86,17 @@ def test_dumps_serialize_numpy_large():
 
 @pytest.mark.parametrize('dt,size', [('f8', 8),
                                      ('i4', 4),
+                                     ('c16', 16),
+                                     ('b', 1),
                                      ('S3', 3),
+                                     ('M8[us]', 8),
+                                     ('M8[s]', 8),
                                      ('U3', 12),
                                      ([('a', 'i4'), ('b', 'f8')], 12),
                                      (('i4', 100), 4),
                                      ([('a', 'i4', 100)], 8),
                                      ([('a', 'i4', 20), ('b', 'f8')], 20*4 + 8),
                                      ([('a', 'i4', 200), ('b', 'f8')], 8)])
-
 def test_itemsize(dt, size):
     assert itemsize(np.dtype(dt)) == size
 

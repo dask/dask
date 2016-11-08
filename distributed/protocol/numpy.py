@@ -47,15 +47,17 @@ def serialize_numpy_ndarray(x):
               'strides': x.strides,
               'shape': x.shape}
 
+    data = x.view('u1').data
+
     if blosc:
-        frames = frame_split_size([x.data])
+        frames = frame_split_size([data])
         if sys.version_info.major == 2:
             frames = [ensure_bytes(frame) for frame in frames]
         frames = [blosc.compress(frame, typesize=size,
                                  cname='lz4', clevel=5) for frame in frames]
         header['compression'] = ['blosc'] * len(frames)
     else:
-        frames = [x.data]
+        frames = [data]
 
     header['lengths'] = [x.nbytes]
 
