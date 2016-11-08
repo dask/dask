@@ -1414,7 +1414,7 @@ def test_from_array_with_lock():
 
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
 
-    assert isinstance(tasks[0][3], type(Lock()))
+    assert hasattr(tasks[0][3], 'acquire')
     assert len(set(task[3] for task in tasks)) == 1
 
     assert_eq(d, x)
