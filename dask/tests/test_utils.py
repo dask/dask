@@ -227,7 +227,7 @@ def test_lock():
             pass
 
     with a:
-        assert not a.acquire(blocking=False)
+        assert not a.acquire(False)
 
     a2 = pickle.loads(pickle.dumps(a))
     a3 = pickle.loads(pickle.dumps(a))
@@ -236,7 +236,7 @@ def test_lock():
     for x in [a, a2, a3, a4]:
         for y in [a, a2, a3, a4]:
             with x:
-                assert not y.acquire(blocking=False)
+                assert not y.acquire(False)
 
     b2 = pickle.loads(pickle.dumps(b))
     b3 = pickle.loads(pickle.dumps(b2))

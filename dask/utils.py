@@ -909,11 +909,11 @@ class SerializableLock(object):
         self.token = token or str(uuid.uuid4())
         SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args, **kwargs):
-        return self.lock.acquire(*args, **kwargs)
+    def acquire(self, *args):
+        return self.lock.acquire(*args)
 
-    def release(self, *args, **kwargs):
-        return self.lock.release(*args, **kwargs)
+    def release(self, *args):
+        return self.lock.release(*args)
 
     def __enter__(self):
         self.lock.__enter__()
