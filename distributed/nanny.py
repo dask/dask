@@ -97,8 +97,11 @@ class Nanny(Server):
         while not self.worker_port:
             yield gen.sleep(0.1)
 
-        if self.process is not None:
-            process, self.process = self.process, None  # avoid race with _watch
+        if self.process is None:
+            raise gen.Return('OK')
+
+        process, self.process = self.process, None  # avoid race with _watch
+        if isalive(process):
             try:
                 # Ask worker to close
                 with rpc(ip='127.0.0.1', port=self.worker_port) as worker:
@@ -111,7 +114,7 @@ class Nanny(Server):
                 logger.info("Worker non-responsive.  Terminating.")
             except StreamClosedError:
                 pass
-            except Exception as e:
+            except BaseException as e:
                 logger.exception(e)
 
             try:
@@ -135,21 +138,21 @@ class Nanny(Server):
             except Exception as e:
                 logger.exception(e)
 
-            self.process = process  # re-instantiate self.process
-            if self.process:
-                with ignoring(OSError):
-                    self.process.terminate()
-                if self.process in processes_to_close:
-                    processes_to_close.remove(self.process)
+        self.process = process  # re-instantiate self.process
+        if self.process:
+            with ignoring(OSError):
+                self.process.terminate()
+            if self.process in processes_to_close:
+                processes_to_close.remove(self.process)
 
-                start = time()
-                while isalive(self.process) and time() < start + timeout:
-                    sleep(0.01)
+            start = time()
+            while isalive(self.process) and time() < start + timeout:
+                sleep(0.01)
 
-                self.process = None
-                self.cleanup()
-                logger.info("Nanny %s:%d kills worker process %s:%d",
-                            self.ip, self.port, self.ip, self.worker_port)
+            self.process = None
+            self.cleanup()
+            logger.info("Nanny %s:%d kills worker process %s:%d",
+                        self.ip, self.port, self.ip, self.worker_port)
         raise gen.Return('OK')
 
     @gen.coroutine
