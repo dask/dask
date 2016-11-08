@@ -33,12 +33,13 @@ class Nanny(Server):
     """
     def __init__(self, scheduler_ip, scheduler_port, ip=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, memory_limit=TOTAL_MEMORY,
+                 name=None, memory_limit=TOTAL_MEMORY, reconnect=True,
                  environment=nanny_environment, quiet=False, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self._given_worker_port = worker_port
         self.ncores = ncores or _ncores
+        self.reconnect = reconnect
         if not local_dir:
             local_dir = tempfile.mkdtemp(prefix='nanny-')
             self._should_cleanup_local_dir = True
@@ -192,7 +193,7 @@ class Nanny(Server):
                                              self.scheduler.port, self.ncores,
                                              self.port, self._given_worker_port,
                                              self.local_dir, self.services, self.name,
-                                             self.memory_limit))
+                                             self.memory_limit, self.reconnect))
                 self.process.daemon = True
                 self.process.start()
                 while True:
@@ -235,10 +236,17 @@ class Nanny(Server):
                 yield self._close()
                 break
             elif self.process and not isalive(self.process):
-                logger.warn("Discovered failed worker.  Restarting. Status: %s",
-                            self.status)
+                logger.warn("Discovered failed worker")
                 self.cleanup()
-                yield self.scheduler.unregister(address=self.worker_address)
+                try:
+                    yield self.scheduler.unregister(address=self.worker_address)
+                except StreamClosedError:
+                    if self.reconnect:
+                        yield gen.sleep(wait_seconds)
+                    else:
+                        yield self._close()
+                        break
+                logger.warn('Restarting worker...')
                 yield self.instantiate()
             else:
                 yield gen.sleep(wait_seconds)
@@ -329,7 +337,7 @@ def run_worker_subprocess(environment, ip, scheduler_ip, scheduler_port, ncores,
 
 
 def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
-        worker_port, local_dir, services, name, memory_limit):
+        worker_port, local_dir, services, name, memory_limit, reconnect):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker  # pragma: no cover
     from tornado.ioloop import IOLoop  # pragma: no cover
@@ -339,10 +347,10 @@ def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
     worker = Worker(scheduler_ip, scheduler_port, ncores=ncores, ip=ip,
                     service_ports={'nanny': nanny_port}, local_dir=local_dir,
                     services=services, name=name, memory_limit=memory_limit,
-                    loop=loop)  # pragma: no cover
+                    reconnect=reconnect, loop=loop)  # pragma: no cover
 
     @gen.coroutine  # pragma: no cover
-    def start():
+    def run():
         try:  # pragma: no cover
             yield worker._start(worker_port)  # pragma: no cover
         except Exception as e:  # pragma: no cover
@@ -352,9 +360,13 @@ def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
             assert worker.port  # pragma: no cover
             q.put({'port': worker.port, 'dir': worker.local_dir})  # pragma: no cover
 
-    loop.add_callback(start)  # pragma: no cover
+        while worker.status != 'closed':
+            yield gen.sleep(0.1)
+
+        logger.info("Worker closed")
+
     try:
-        loop.start()  # pragma: no cover
+        loop.run_sync(run)
     finally:
         loop.stop()
         loop.close(all_fds=True)
