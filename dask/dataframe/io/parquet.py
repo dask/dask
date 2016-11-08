@@ -2,7 +2,7 @@ import os
 import struct
 
 import dask
-from dask.bytes.core import open_files, MakeMyopen
+from dask.bytes.core import open_files, OpenFileCreator
 import dask.dataframe as dd
 from dask import delayed
 
@@ -19,7 +19,7 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
                               categories=None, **kwargs):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
-    myopen = MakeMyopen(url, compression=None, text=False)
+    myopen = OpenFileCreator(url, compression=None, text=False)
 
     try:
         pf = fastparquet.ParquetFile(url+'/_metadata', open_with=myopen,
@@ -60,7 +60,7 @@ def dask_dataframe_to_parquet(
     # mkdirs(filename)
     fn = sep.join([url, '_metadata'])
 
-    myopen = MakeMyopen(url, compression=None, text=False)
+    myopen = OpenFileCreator(url, compression=None, text=False)
     myopen.fs.mkdirs(url)
 
     fmd = fastparquet.writer.make_metadata(data.head(10))

@@ -25,18 +25,18 @@ _open_files = dict()
 _open_text_files = dict()
 
 
-def write_block_to_file(data, f):
+def write_block_to_file(data, lazy_file):
     """
     Parameters
     ----------
     data : data to write
         Either str/bytes, or iterable producing those, or something file-like
         which can be read.
-    f : file-like
-        backend-dependent file-like object
+    lazy_file : file-like or file context
+        gives writable backend-dependent file-like object when used with `with`
     """
-    binary = 'b' in str(getattr(f, 'mode', 'b'))
-    with f as f:
+    binary = 'b' in str(getattr(lazy_file, 'mode', 'b'))
+    with lazy_file as f:
         if isinstance(data, (str, bytes)):
             f.write(data)
         elif isinstance(data, io.IOBase):
@@ -65,6 +65,23 @@ def write_block_to_file(data, f):
 
 def write_bytes(data, urlpath, name_function=None, compression=None,
                 encoding=None, **kwargs):
+    """Write dask data to a set of files
+
+    Parameters
+    ----------
+    data: list of delayed objects
+        Producing data to write
+    urlpath: list or template
+        Location(s) to write to, including backend specifier.
+    name_function: function or None
+        If urlpath is a template, use this function to create a string out
+        of the sequence number.
+    compression: str or None
+        Compression algorithm to apply (e.g., gzip), if any
+    encoding: str or None
+        If None, data must produce bytes, else will be encoded.
+    kwargs: passed to filesystem constructor
+    """
     mode = 'wb' if encoding is None else 'wt'
     fs, names, myopen = get_fs_paths_myopen(urlpath, compression, mode,
                    name_function=name_function, num=len(data),
@@ -136,23 +153,56 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                 compression, offset, kwargs, fs.ukey(name)))
                 for offset in offsets]
 
-        def func(f, off):
-            with myopen(f, 'rb') as f:
-                return read_block(f, off, bs, delimiter)
-        out.append([delayed(func)(name, off, dask_key_name=key)
+        out.append([delayed(read_block_from_file)(
+                myopen, name, off, bs, delimiter, dask_key_name=key)
                     for (off, key) in zip(offsets, keys)])
     if sample is not True:
         nbytes = sample
     else:
         nbytes = 10000
     if sample:
-        myopen = MakeMyopen(urlpath, compression)
+        myopen = OpenFileCreator(urlpath, compression)
         with myopen(names[0], 'rb') as f:
             sample = read_block(f, 0, nbytes, delimiter)
     return sample, out
 
 
-class MakeMyopen(object):
+def read_block_from_file(myopen, fn, off, bs, delimiter):
+    with myopen(fn, 'rb') as f:
+        return read_block(f, off, bs, delimiter)
+
+
+class OpenFileCreator(object):
+    """
+    Produces a function-like instance, which generates open file contexts
+
+    Analyses the passed URL to determine the appropriate backend (local file,
+    s3, etc.), and then acts something like the builtin `open` in
+    with a context, where the further options such as compression are applied
+    to the file to be opened.
+
+    Parameters
+    ----------
+    urlpath: str
+        Template URL, like the files we wish to access, with optional
+        backend-specific parts
+    compression: str or None
+        One of the keys of `compress_files` or None; all files opened will use
+        this compression. If `'infer'`, will choose based on the urlpath
+    text: bool
+        Whether files should be binary or text
+    encoding: str
+        If files are text, the encoding to use
+    errors: str ['strict']
+        How to handle encoding errors for text files
+    kwargs: passed to filesystem instance constructor
+
+    Examples
+    --------
+    >>> ofc = OpenFileCreator('2015-*-*.csv')  # doctest: +SKIP
+    >>> with ofc('2015-12-10.csv', 'rb') as f: # doctest: +SKIP
+    ...     f.read(10)                         # doctest: +SKIP
+    """
     def __init__(self, urlpath, compression=None, text=False, encoding='utf8',
                  errors=None, **kwargs):
         if compression == 'infer':
@@ -174,12 +224,34 @@ class MakeMyopen(object):
                                       (protocol, urlpath))
 
     def __call__(self, path, mode='rb'):
+        """Produces `OpenFile` instance"""
         return OpenFile(self.fs.open, path, self.compression, mode,
                         self.text, self.encoding)
 
 
 class OpenFile(object):
-    def __init__(self, myopen, path, compression, mode, text, encoding):
+    """File-like object to be used in a context
+
+    These instances are safe to serialize, as the low-level file object
+    is not created until invoked using `with`.
+
+    Parameters
+    ----------
+    myopen: function
+        Opens the backend file. Should accept path and mode, as the builtin open
+    path: str
+        Location to open
+    compression: str or None
+        Compression to apply
+    mode: str like 'rb'
+        Mode of the opened file
+    text: bool
+        Whether to wrap the file to be text-like
+    encoding: if using text
+    errors: if using text
+    """
+    def __init__(self, myopen, path, compression, mode, text, encoding,
+                 errors=None):
         self.myopen = myopen
         self.path = path
         self.compression = compression
@@ -188,6 +260,7 @@ class OpenFile(object):
         self.encoding = encoding
         self.closers = None
         self.fobjects = None
+        self.errors = errors
         self.f = None
 
     def __enter__(self):
@@ -198,7 +271,8 @@ class OpenFile(object):
             f2 = SeekableFile(f)
         f3 = CompressFile(f2, mode=mode)
         if self.text:
-            f4 = io.TextIOWrapper(f3, encoding=self.encoding)
+            f4 = io.TextIOWrapper(f3, encoding=self.encoding,
+                                  errors=self.errors)
         else:
             f4 = f3
 
@@ -212,6 +286,8 @@ class OpenFile(object):
         self.close()
 
     def close(self):
+        """ Close all encapsulated file objects
+        """
         [_() for _ in self.closers]
 
 
@@ -261,7 +337,7 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         num=1, name_function=None, **kwargs):
     if isinstance(urlpath, (str, unicode)):
-        myopen = MakeMyopen(urlpath, compression, text='b' not in mode,
+        myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
                             encoding=encoding, **kwargs)
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
@@ -270,7 +346,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
         else:
             paths = [urlpath]
     elif isinstance(urlpath, (list, set, tuple, dict)):
-        myopen = MakeMyopen(urlpath[0], compression, text='b' not in mode,
+        myopen = OpenFileCreator(urlpath[0], compression, text='b' not in mode,
                             encoding='utf8', **kwargs)
         paths = urlpath
     else:

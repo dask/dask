@@ -71,7 +71,8 @@ def read_text(urlpath, blocksize=None, compression='infer',
             files = open_text_files(urlpath, encoding=encoding, errors=errors,
                                     compression=compression,
                                     **(storage_options or {}))
-            blocks = [delayed(file_to_blocks)(file) for file in files]
+            blocks = [delayed(list, pure=True)(delayed(file_to_blocks)(file))
+                      for file in files]
 
         else:
             _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
@@ -94,7 +95,8 @@ def read_text(urlpath, blocksize=None, compression='infer',
 
 def file_to_blocks(f):
     with f as f:
-        return list(f)
+        for line in f:
+            yield line
 
 
 def decode(block, encoding, errors):
