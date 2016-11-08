@@ -15,6 +15,8 @@ from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+from threading import Lock
+import uuid
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
                             urlsplit, unicode)
@@ -897,3 +899,39 @@ class MethodCache(object):
 
 
 M = MethodCache()
+
+
+class SerializableLock(object):
+    _locks = {}
+    """ A serializable lock """
+    def __init__(self, token=None):
+        self.lock = Lock()
+        self.token = token or str(uuid.uuid4())
+        SerializableLock._locks[self.token] = self.lock
+
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
+
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
+
+    def __enter__(self):
+        self.lock.__enter__()
+
+    def __exit__(self, *args):
+        self.lock.__exit__(*args)
+
+    @property
+    def locked(self):
+        return self.locked
+
+    def __getstate__(self):
+        return self.token
+
+    def __setstate__(self, token):
+        self.token = token
+        if token in SerializableLock._locks:
+            self.lock = SerializableLock._locks[token]
+        else:
+            self.lock = Lock()
+            SerializableLock._locks[token] = self.lock
