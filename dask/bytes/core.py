@@ -133,7 +133,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         if not_zero:
             offsets[0] = 1
         keys = ['read-block-%s-%s' % (offset, tokenize(name,
-                compression, offset, kwargs)) for offset in offsets]
+                compression, offset, kwargs, fs.ukey(name)))
+                for offset in offsets]
 
         def func(f, off):
             with myopen(f, 'rb') as f:
