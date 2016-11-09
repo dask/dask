@@ -1,4 +1,4 @@
-FROM ubuntu:trusty
+FROM ubuntu:14.04
 
 # conda
 RUN apt-get update && apt-get install -y -q curl bzip2 git
@@ -8,20 +8,20 @@ RUN rm /tmp/miniconda.sh
 ENV PATH /opt/conda/bin:$PATH
 
 # hdfs3 - python 2
-RUN apt-get install -y -q protobuf-compiler libprotobuf-dev
+RUN apt-get install -y -q protobuf-compiler libprotobuf-dev --fix-missing
 ENV LIBHDFS3_CONF /etc/hadoop/conf/hdfs-site.xml
 RUN /opt/conda/bin/conda install -y -q libxml2 krb5 boost ipython pytest pip pandas cython mock
 RUN /opt/conda/bin/conda install -y -q libhdfs3 libgsasl libntlm -c dask
 RUN /opt/conda/bin/pip install git+https://github.com/dask/hdfs3 --upgrade
 RUN /opt/conda/bin/pip install git+https://github.com/dask/s3fs --upgrade
-RUN /opt/conda/bin/pip install git+https://github.com/blaze/dask --upgrade
+RUN /opt/conda/bin/pip install git+https://github.com/dask/dask --upgrade
 # hdfs3 - python 3
 RUN conda create -n py3 -y python=3
 RUN conda install -n py3 -y -q libxml2 krb5 boost ipython pytest pip pandas cython mock
 RUN conda install -n py3 libhdfs3 libgsasl libntlm -c dask
 RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/dask/hdfs3 --upgrade
 RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/dask/s3fs --upgrade
-RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/blaze/dask --upgrade
+RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/dask/dask --upgrade
 
 # Cloudera repositories
 RUN curl -s http://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh/archive.key | apt-key add -

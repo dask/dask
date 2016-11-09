@@ -19,7 +19,7 @@ from .client import default_client, ensure_default_get
 logger = logging.getLogger(__name__)
 
 
-class DaskHDFSFileSystem(HDFileSystem):
+class DaskHDFileSystem(HDFileSystem):
 
     sep = '/'
 
@@ -48,7 +48,7 @@ class DaskHDFSFileSystem(HDFileSystem):
     def glob(self, path):
         if path.startswith('hdfs://'):
             path = path[len('hdfs://'):]
-        return HDFileSystem.glob(self, path)
+        return sorted(HDFileSystem.glob(self, path))
 
     def ukey(self, path):
         if path.startswith('hdfs://'):
@@ -74,4 +74,4 @@ class DaskHDFSFileSystem(HDFileSystem):
         return offsets, lengths, machines
 
 
-core._filesystems['hdfs'] = DaskHDFSFileSystem
+core._filesystems['hdfs'] = DaskHDFileSystem
