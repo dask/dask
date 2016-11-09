@@ -432,6 +432,86 @@ class _Frame(Base):
         return map_partitions(func, self, *args, **kwargs)
 
     @insert_meta_param_description(pad=12)
+    def map_overlap(self, func, before, after, *args, **kwargs):
+        """Apply a function to each partition, sharing rows with adjacent partitions.
+
+        This can be useful for implementing windowing functions such as
+        ``df.rolling(...).mean()`` or ``df.diff()``.
+
+        Parameters
+        ----------
+        func : function
+            Function applied to each partition.
+        before : int
+            The number of rows to prepend to partition ``i`` from the end of
+            partition ``i - 1``.
+        after : int
+            The number of rows to append to partition ``i`` from the beginning
+            of partition ``i + 1``.
+        args, kwargs :
+            Arguments and keywords to pass to the function. The partition will
+            be the first argument, and these will be passed *after*.
+        $META
+
+        Notes
+        -----
+        Given positive integers ``before`` and ``after``, and a function
+        ``func``, ``map_overlap`` does the following:
+
+        1. Prepend ``before`` rows to each partition ``i`` from the end of
+           partition ``i - 1``. The first partition has no rows prepended.
+
+        2. Append ``after`` rows to each partition ``i`` from the beginning of
+           partition ``i + 1``. The last partition has no rows appended.
+
+        3. Apply ``func`` to each partition, passing in any extra ``args`` and
+           ``kwargs`` if provided.
+
+        4. Trim ``before`` rows from the beginning of all but the first
+           partition.
+
+        5. Trim ``after`` rows from the end of all but the last partition.
+
+        Note that the index and divisions are assumed to remain unchanged. If
+        this is untrue, you can use ``set_partition`` to set them explicitly.
+
+        Examples
+        --------
+        Given a DataFrame, Series, or Index, such as:
+
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'x': [1, 2, 4, 7, 11],
+        ...                    'y': [1., 2., 3., 4., 5.]})
+        >>> ddf = dd.from_pandas(df, npartitions=2)
+
+        The pandas ``diff`` method computes a discrete difference shifted by a
+        number of periods (can be positive or negative).  This can be
+        implemented by mapping calls to ``df.diff`` to each partition after
+        prepending/appending that many rows, depending on sign:
+
+        >>> def diff(df, periods=1):
+        ...     before, after = (periods, 0) if periods > 0 else (0, -periods)
+        ...     return df.map_overlap(lambda df, periods=1: df.diff(periods),
+        ...                           periods, 0, periods=periods)
+        >>> ddf.compute()
+            x    y
+        0   1  1.0
+        1   2  2.0
+        2   4  3.0
+        3   7  4.0
+        4  11  5.0
+        >>> diff(ddf, 1).compute()
+             x    y
+        0  NaN  NaN
+        1  1.0  1.0
+        2  2.0  1.0
+        3  3.0  1.0
+        4  4.0  1.0
+        """
+        from .rolling import map_overlap
+        return map_overlap(func, self, before, after, *args, **kwargs)
+
+    @insert_meta_param_description(pad=12)
     def reduction(self, chunk, aggregate=None, combine=None, meta=no_default,
                   token=None, split_every=None, chunk_kwargs=None,
                   aggregate_kwargs=None, combine_kwargs=None, **kwargs):
@@ -1049,19 +1129,17 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
-        from .rolling import map_overlap
-
         axis = self._validate_axis(axis)
         if not isinstance(periods, int):
             raise TypeError("periods must be an integer")
 
         if axis == 1:
             return self.map_partitions(M.diff, token='diff', periods=periods,
-                                       axis=axis)
+                                       axis=1)
 
-        overlap = (periods, 0) if periods > 0 else (0, -periods)
-        return map_overlap(M.diff, self, overlap, axis=axis, token='diff',
-                           periods=periods)
+        before, after = (periods, 0) if periods > 0 else (0, -periods)
+        return self.map_overlap(M.diff, before, after, token='diff',
+                                periods=periods)
 
     def _reduction_agg(self, name, axis=None, skipna=True,
                        split_every=False):

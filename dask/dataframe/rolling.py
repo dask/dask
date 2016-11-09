@@ -11,32 +11,55 @@ from .core import _emulate
 from .utils import make_meta
 
 
-def overlap_chunk(func, prev_part, current_part, next_part, n_before, n_after,
+def overlap_chunk(func, prev_part, current_part, next_part, before, after,
                   args, kwargs):
-    if ((prev_part is not None and prev_part.shape[0] != n_before) or
-            (next_part is not None and next_part.shape[0] != n_after)):
-        raise NotImplementedError("Window requires larger inter-partition "
-                                  "view than partition size")
+    if ((prev_part is not None and prev_part.shape[0] != before) or
+            (next_part is not None and next_part.shape[0] != after)):
+        raise NotImplementedError("Partition size is less than overlapping "
+                                  "window size. Try using ``df.repartition`` "
+                                  "to increase the partition size.")
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
     combined = pd.concat(parts)
     out = func(combined, *args, **kwargs)
     if prev_part is None:
-        n_before = None
+        before = None
     if next_part is None:
-        return out.iloc[n_before:]
-    return out.iloc[n_before:-n_after]
+        return out.iloc[before:]
+    return out.iloc[before:-after]
 
 
-def map_overlap(func, df, overlap, *args, **kwargs):
-    """Map `func` across `df`, with overlap of size `window`"""
-    n_before, n_after = overlap
+def map_overlap(func, df, before, after, *args, **kwargs):
+    """Apply a function to each partition, sharing rows with adjacent partitions.
+
+    Parameters
+    ----------
+    func : function
+        Function applied to each partition.
+    df : dd.DataFrame, dd.Series
+    before : int
+        The number of rows to prepend to partition ``i`` from the end of
+        partition ``i - 1``.
+    after : int
+        The number of rows to append to partition ``i`` from the beginning
+        of partition ``i + 1``.
+    args, kwargs :
+        Arguments and keywords to pass to the function. The partition will
+        be the first argument, and these will be passed *after*.
+
+    See Also
+    --------
+    dd.DataFrame.map_overlap
+    """
+    if not (isinstance(before, int) and before >= 0 and
+            isinstance(after, int) and after >= 0):
+        raise ValueError("before and after must be positive integers")
 
     if 'token' in kwargs:
         func_name = kwargs.pop('token')
-        token = tokenize(df, n_before, n_after, *args, **kwargs)
+        token = tokenize(df, before, after, *args, **kwargs)
     else:
         func_name = 'overlap-' + funcname(func)
-        token = tokenize(func, df, n_before, n_after, *args, **kwargs)
+        token = tokenize(func, df, before, after, *args, **kwargs)
 
     if 'meta' in kwargs:
         meta = kwargs.pop('meta')
@@ -45,28 +68,28 @@ def map_overlap(func, df, overlap, *args, **kwargs):
     meta = make_meta(meta)
 
     name = '{0}-{1}'.format(func_name, token)
-    name_a = 'overlap-slice-a-' + tokenize(df, n_before)
-    name_b = 'overlap-slice-b-' + tokenize(df, n_after)
+    name_a = 'overlap-prepend-' + tokenize(df, before)
+    name_b = 'overlap-append-' + tokenize(df, after)
     df_name = df._name
 
     dsk = df.dask.copy()
-    if n_before:
-        dsk.update({(name_a, i): (M.tail, (df_name, i), n_before)
+    if before:
+        dsk.update({(name_a, i): (M.tail, (df_name, i), before)
                     for i in range(df.npartitions - 1)})
         prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
     else:
         prevs = [None] * df.npartitions
 
-    if n_after:
-        dsk.update({(name_b, i): (M.head, (df_name, i), n_after)
+    if after:
+        dsk.update({(name_b, i): (M.head, (df_name, i), after)
                     for i in range(1, df.npartitions)})
         nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
     else:
         nexts = [None] * df.npartitions
 
     for i, (prev, current, next) in enumerate(zip(prevs, df._keys(), nexts)):
-        dsk[(name, i)] = (overlap_chunk, func, prev, current, next, n_before,
-                          n_after, args, kwargs)
+        dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
+                          after, args, kwargs)
 
     return df._constructor(dsk, name, meta, df.divisions)
 
@@ -163,7 +186,7 @@ class Rolling(object):
             before = self.window - 1
             after = 0
 
-        return map_overlap(pandas_rolling_method, self.obj, (before, after),
+        return map_overlap(pandas_rolling_method, self.obj, before, after,
                            rolling_kwargs, method_name, *args,
                            token=method_name, meta=meta, **kwargs)
 
