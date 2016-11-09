@@ -132,43 +132,53 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     10kB sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
-    fs, names, myopen = get_fs_paths_myopen(urlpath, compression, 'rb',
+    fs, paths, myopen = get_fs_paths_myopen(urlpath, compression, 'rb',
                                             None, **kwargs)
-    if len(names) == 0:
+    if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
-    sizes = [fs.size(f) for f in names]
+
+    if blocksize is None:
+        offsets = [[0]] * len(paths)
+    else:
+        offsets = []
+        for path in paths:
+            try:
+                size = fs.logical_size(path, compression)
+            except KeyError:
+                raise ValueError('Cannot read compressed files (%s) in byte chunks,'
+                                 'use blocksize=None' % infer_compression(urlpath))
+            off = list(range(0, size, blocksize))
+            if not_zero:
+                off[0] = 1
+            offsets.append(off)
+
     out = []
+    for path, offset in zip(paths, offsets):
+        ukey = fs.ukey(path)
+        keys = ['read-block-%s-%s' %
+                (o, tokenize(path, compression, offset, ukey, kwargs, delimiter))
+                for o in offset]
+        L = [delayed(read_block_from_file)(myopen(path, mode='rb'), off,
+                    blocksize, delimiter, dask_key_name=key)
+             for (off, key) in zip(offset, keys)]
+        out.append(L)
+
     # TODO: check fs for preferred locations of blocks here;
     # and preferred blocksize?
 
-    for size, name in zip(sizes, names):
-        bs = blocksize if blocksize is not None else size
-        offsets = list(range(0, size, bs))
-        if len(offsets) > 1 and infer_compression(urlpath):
-            raise ValueError('Cannot read compressed files (%s) in byte chunks,'
-                             'use blocksize=None' % infer_compression(urlpath))
-        if not_zero:
-            offsets[0] = 1
-        keys = ['read-block-%s-%s' % (offset, tokenize(name,
-                compression, offset, kwargs, fs.ukey(name)))
-                for offset in offsets]
-
-        out.append([delayed(read_block_from_file)(
-                myopen, name, off, bs, delimiter, dask_key_name=key)
-                    for (off, key) in zip(offsets, keys)])
     if sample is not True:
         nbytes = sample
     else:
         nbytes = 10000
     if sample:
-        myopen = OpenFileCreator(urlpath, compression)
-        with myopen(names[0], 'rb') as f:
+        # myopen = OpenFileCreator(urlpath, compression)
+        with myopen(paths[0], 'rb') as f:
             sample = read_block(f, 0, nbytes, delimiter)
     return sample, out
 
 
-def read_block_from_file(myopen, fn, off, bs, delimiter):
-    with myopen(fn, 'rb') as f:
+def read_block_from_file(lazy_file, off, bs, delimiter):
+    with lazy_file as f:
         return read_block(f, off, bs, delimiter)
 
 
@@ -338,7 +348,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         num=1, name_function=None, **kwargs):
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
-                            encoding=encoding, **kwargs)
+                                 encoding=encoding, **kwargs)
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
@@ -347,7 +357,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
             paths = [urlpath]
     elif isinstance(urlpath, (list, set, tuple, dict)):
         myopen = OpenFileCreator(urlpath[0], compression, text='b' not in mode,
-                            encoding='utf8', **kwargs)
+                                 encoding=encoding, **kwargs)
         paths = urlpath
     else:
         raise ValueError('url type not understood: %s' % urlpath)
@@ -414,8 +424,9 @@ def _expand_paths(path, name_function, num):
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
-       (protocol in _open_files))):
+    if (protocol not in ('s3', 'hdfs') and
+        ((protocol in _read_bytes) or
+        (protocol in _filesystems))):
         return
 
     if protocol == 's3':
@@ -439,3 +450,15 @@ def ensure_protocol(protocol):
 _filesystems = dict()
 # see .local.LocalFileSystem for reference implementation
 
+class FileSystem(object):
+    def logical_size(self, path, compression):
+        if compression is None:
+            return self.size(path)
+        else:
+            with self.open(path, 'rb') as f:
+                f = SeekableFile(f)
+                g = seekable_files[compression](f)
+                g.seek(0, 2)
+                result = g.tell()
+                g.close()
+            return result

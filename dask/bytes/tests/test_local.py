@@ -10,8 +10,9 @@ from dask import compute, get, delayed
 from dask.compatibility import FileNotFoundError
 from dask.utils import filetexts
 from dask.bytes import compression
-from dask.bytes.local import read_bytes, open_files, getsize, open_file_write
-from dask.bytes.core import open_text_files, write_bytes
+from dask.bytes.local import LocalFileSystem
+from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
+        open_files)
 
 compute = partial(compute, get=get)
 
@@ -135,7 +136,6 @@ def test_registered_read_bytes():
 
 
 def test_registered_open_files():
-    from dask.bytes.core import open_files
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
@@ -164,13 +164,14 @@ def test_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
-        data = compute(*[file.read() for file in myfiles])
-        assert list(data) == [files[k] for k in sorted(files)]
+        for lazy_file, data_file in zip(myfiles, sorted(files)):
+            with lazy_file as f:
+                x = f.read()
+                assert x == files[data_file]
 
 
 @pytest.mark.parametrize('fmt', list(compression.files))
 def test_compression_binary(fmt):
-    from dask.bytes.core import open_files
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
         myfiles = open_files('.test.accounts.*', compression=fmt)
@@ -195,13 +196,13 @@ def test_compression_text(fmt):
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
+    fs = LocalFileSystem()
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
-        assert getsize('.tmp.getsize', fmt) == 10
+        assert fs.logical_size('.tmp.getsize', fmt) == 10
 
 
 def test_bad_compression():
-    from dask.bytes.core import read_bytes, open_files, open_text_files
     with filetexts(files, mode='b'):
         for func in [read_bytes, open_files, open_text_files]:
             with pytest.raises(ValueError):
@@ -269,8 +270,7 @@ def test_compressed_write(tmpdir):
 
 def test_open_files_write(tmpdir):
     tmpdir = str(tmpdir)
-    f = open_file_write([os.path.join(tmpdir, 'test1'),
-                         os.path.join(tmpdir, 'test2')])
-    assert len(f) == 2
-    files = compute(*f)
+    files = open_files([os.path.join(tmpdir, 'test1'),
+                        os.path.join(tmpdir, 'test2')], mode='wb')
+    assert len(files) == 2
     assert files[0].mode == 'wb'
