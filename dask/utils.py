@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from importlib import import_module
 from threading import Lock
 import uuid
+from weakref import WeakValueDictionary
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
                             urlsplit, unicode)
@@ -902,7 +903,7 @@ M = MethodCache()
 
 
 class SerializableLock(object):
-    _locks = {}
+    _locks = WeakValueDictionary()
     """ A Serializable per-process Lock
 
     This wraps a normal ``threading.Lock`` object and satisfies the same
