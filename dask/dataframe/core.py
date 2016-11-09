@@ -1047,6 +1047,22 @@ class _Frame(Base):
         return Rolling(self, window=window, min_periods=min_periods,
                        freq=freq, center=center, win_type=win_type, axis=axis)
 
+    @derived_from(pd.DataFrame)
+    def diff(self, periods=1, axis=0):
+        from .rolling import map_overlap
+
+        axis = self._validate_axis(axis)
+        if not isinstance(periods, int):
+            raise TypeError("periods must be an integer")
+
+        if axis == 1:
+            return self.map_partitions(M.diff, token='diff', periods=periods,
+                                       axis=axis)
+
+        overlap = (periods, 0) if periods > 0 else (0, -periods)
+        return map_overlap(M.diff, self, overlap, axis=axis, token='diff',
+                           periods=periods)
+
     def _reduction_agg(self, name, axis=None, skipna=True,
                        split_every=False):
         axis = self._validate_axis(axis)

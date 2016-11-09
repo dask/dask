@@ -11,7 +11,7 @@ from .core import _emulate
 from .utils import make_meta
 
 
-def rolling_chunk(func, prev_part, current_part, next_part, n_before, n_after,
+def overlap_chunk(func, prev_part, current_part, next_part, n_before, n_after,
                   args, kwargs):
     if ((prev_part is not None and prev_part.shape[0] != n_before) or
             (next_part is not None and next_part.shape[0] != n_after)):
@@ -35,7 +35,7 @@ def map_overlap(func, df, overlap, *args, **kwargs):
         func_name = kwargs.pop('token')
         token = tokenize(df, n_before, n_after, *args, **kwargs)
     else:
-        func_name = funcname(func)
+        func_name = 'overlap-' + funcname(func)
         token = tokenize(func, df, n_before, n_after, *args, **kwargs)
 
     if 'meta' in kwargs:
@@ -44,9 +44,9 @@ def map_overlap(func, df, overlap, *args, **kwargs):
         meta = _emulate(func, df, *args, **kwargs)
     meta = make_meta(meta)
 
-    name = 'rolling-{0}-{1}'.format(func_name, token)
-    name_a = 'rolling-slice-a-' + tokenize(df, n_before)
-    name_b = 'rolling-slice-b-' + tokenize(df, n_after)
+    name = '{0}-{1}'.format(func_name, token)
+    name_a = 'overlap-slice-a-' + tokenize(df, n_before)
+    name_b = 'overlap-slice-b-' + tokenize(df, n_after)
     df_name = df._name
 
     dsk = df.dask.copy()
@@ -65,7 +65,7 @@ def map_overlap(func, df, overlap, *args, **kwargs):
         nexts = [None] * df.npartitions
 
     for i, (prev, current, next) in enumerate(zip(prevs, df._keys(), nexts)):
-        dsk[(name, i)] = (rolling_chunk, func, prev, current, next, n_before,
+        dsk[(name, i)] = (overlap_chunk, func, prev, current, next, n_before,
                           n_after, args, kwargs)
 
     return df._constructor(dsk, name, meta, df.divisions)
