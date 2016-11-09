@@ -263,7 +263,8 @@ class OpenFileCreator(object):
 
 
 class OpenFile(object):
-    """File-like object to be used in a context
+    """
+    File-like object to be used in a context
 
     These instances are safe to serialize, as the low-level file object
     is not created until invoked using `with`.
@@ -322,6 +323,9 @@ class OpenFile(object):
         """ Close all encapsulated file objects
         """
         [_() for _ in self.closers]
+        del self.closers[:]
+        del self.fobjects[:]
+        self.f = None
 
 
 def open_files(urlpath, compression=None, mode='rb', encoding='utf8',

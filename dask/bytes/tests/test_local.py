@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import os
+import pickle
 from time import sleep
 
 import pytest
@@ -12,7 +13,7 @@ from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-        open_files)
+        open_files, OpenFileCreator)
 
 compute = partial(compute, get=get)
 
@@ -274,3 +275,22 @@ def test_open_files_write(tmpdir):
                         os.path.join(tmpdir, 'test2')], mode='wb')
     assert len(files) == 2
     assert files[0].mode == 'wb'
+
+
+def test_pickability_of_lazy_files(tmpdir):
+    with open(os.path.join(str(tmpdir), 'foo'), 'wb') as f:
+        pass
+
+    opener = OpenFileCreator('file://foo.py', open=open)
+    opener2 = pickle.loads(pickle.dumps(opener))
+    assert type(opener2.fs) == type(opener.fs)
+
+    lazy_file = opener('foo', mode='rt')
+    lazy_file2 = pickle.loads(pickle.dumps(lazy_file))
+    assert lazy_file.path == lazy_file2.path
+
+    with lazy_file as f:
+        pass
+
+    lazy_file3 = pickle.loads(pickle.dumps(lazy_file))
+    assert lazy_file.path == lazy_file3.path
