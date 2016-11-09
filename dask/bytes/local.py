@@ -33,10 +33,14 @@ class LocalFileSystem(core.FileSystem):
 
     def glob(self, path):
         """For a template path, return matching files"""
+        if path.startswith('file://'):
+            path = path[len('file://'):]
         return sorted(glob(path))
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
+        if path.startswith('file://'):
+            path = path[len('file://'):]
         return os.makedirs(path, exist_ok=True)
 
     def open(self, path, mode='rb', **kwargs):
@@ -51,14 +55,20 @@ class LocalFileSystem(core.FileSystem):
             these on the filesystem instance, to apply to all files created by
             it. Not used for local.
         """
+        if path.startswith('file://'):
+            path = path[len('file://'):]
         return open(path, mode=mode)
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
+        if path.startswith('file://'):
+            path = path[len('file://'):]
         return tokenize(path, os.stat(path).st_mtime)
 
     def size(self, path):
         """Size in bytes of the file at path"""
+        if path.startswith('file://'):
+            path = path[len('file://'):]
         return os.stat(path).st_size
 
 

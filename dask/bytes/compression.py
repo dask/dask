@@ -43,13 +43,14 @@ with ignoring(ImportError):
     decompress['xz'] = lzma_decompress
     files['xz'] = LZMAFile
 
-with ignoring(ImportError):
-    import lzma
-    seekable_files['xz'] = lzma.LZMAFile
-
-with ignoring(ImportError):
-    import lzmaffi
-    seekable_files['xz'] = lzmaffi.LZMAFile
+# Seekable xz files actually tend to scan whole file - see `get_xz_blocks`
+# with ignoring(ImportError):
+#     import lzma
+#     seekable_files['xz'] = lzma.LZMAFile
+#
+# with ignoring(ImportError):
+#     import lzmaffi
+#     seekable_files['xz'] = lzmaffi.LZMAFile
 
 
 if sys.version_info[0] >= 3:
@@ -85,6 +86,7 @@ def get_xz_blocks(fp):
     return {'offsets': [b.compressed_file_offset for i, b in index],
             'lengths': [b.unpadded_size for i, b in index],
             'check': stream_flags.check}
+
 
 def xz_decompress(data, check):
     from lzmaffi import decode_block_header_size, LZMADecompressor, FORMAT_BLOCK
