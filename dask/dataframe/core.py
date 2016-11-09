@@ -472,8 +472,7 @@ class _Frame(Base):
 
         5. Trim ``after`` rows from the end of all but the last partition.
 
-        Note that the index and divisions are assumed to remain unchanged. If
-        this is untrue, you can use ``set_partition`` to set them explicitly.
+        Note that the index and divisions are assumed to remain unchanged.
 
         Examples
         --------
@@ -484,15 +483,10 @@ class _Frame(Base):
         ...                    'y': [1., 2., 3., 4., 5.]})
         >>> ddf = dd.from_pandas(df, npartitions=2)
 
-        The pandas ``diff`` method computes a discrete difference shifted by a
-        number of periods (can be positive or negative).  This can be
-        implemented by mapping calls to ``df.diff`` to each partition after
-        prepending/appending that many rows, depending on sign:
+        A rolling sum with a trailing moving window of size 2 can be computed by
+        overlapping 2 rows before each partition, and then mapping calls to
+        ``df.rolling(2).sum()``:
 
-        >>> def diff(df, periods=1):
-        ...     before, after = (periods, 0) if periods > 0 else (0, -periods)
-        ...     return df.map_overlap(lambda df, periods=1: df.diff(periods),
-        ...                           periods, 0, periods=periods)
         >>> ddf.compute()
             x    y
         0   1  1.0
@@ -500,6 +494,23 @@ class _Frame(Base):
         2   4  3.0
         3   7  4.0
         4  11  5.0
+        >>> ddf.map_overlap(lambda df: df.rolling(2).sum(), 2, 0).compute()
+              x    y
+        0   NaN  NaN
+        1   3.0  3.0
+        2   6.0  5.0
+        3  11.0  7.0
+        4  18.0  9.0
+
+        The pandas ``diff`` method computes a discrete difference shifted by a
+        number of periods (can be positive or negative). This can be
+        implemented by mapping calls to ``df.diff`` to each partition after
+        prepending/appending that many rows, depending on sign:
+
+        >>> def diff(df, periods=1):
+        ...     before, after = (periods, 0) if periods > 0 else (0, -periods)
+        ...     return df.map_overlap(lambda df, periods=1: df.diff(periods),
+        ...                           periods, 0, periods=periods)
         >>> diff(ddf, 1).compute()
              x    y
         0  NaN  NaN
