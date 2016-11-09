@@ -18,6 +18,8 @@ from bokeh.plotting import figure
 from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
 from distributed.utils import log_errors
 
+from .export_tool import ExportTool
+
 
 class DashboardComponent(object):
     """ Base class for Dask.distributed UI dashboard components.
@@ -87,8 +89,12 @@ class TaskStream(DashboardComponent):
                 """
         )
 
+        export = ExportTool()
+        export.register_plot(self.root)
+
         self.root.add_tools(
             hover,
+            export,
             ResetTool(reset_size=False),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
