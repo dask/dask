@@ -40,7 +40,7 @@ else:
 
 
 def initialize_logging(config):
-    loggers = config.get('logging', None)
+    loggers = config.get('logging', {})
     loggers.setdefault('distributed', 'info')
 
     fmt = '%(name)s - %(levelname)s - %(message)s'
