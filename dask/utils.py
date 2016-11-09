@@ -958,9 +958,4 @@ class SerializableLock(object):
         return self.token
 
     def __setstate__(self, token):
-        self.token = token
-        if token in SerializableLock._locks:
-            self.lock = SerializableLock._locks[token]
-        else:
-            self.lock = Lock()
-            SerializableLock._locks[token] = self.lock
+        self.__init__(token)
