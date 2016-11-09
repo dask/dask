@@ -216,7 +216,7 @@ def test_skip_doctest():
     assert skip_doctest(None) == ''
 
 
-def test_lock():
+def test_SerializableLock():
     a = SerializableLock()
     b = SerializableLock()
     with a:
@@ -249,3 +249,14 @@ def test_lock():
             with y:
                 with x:
                     pass
+
+
+def test_SerializableLock_name_collision():
+    a = SerializableLock('a')
+    b = SerializableLock('b')
+    c = SerializableLock('a')
+    d = SerializableLock()
+
+    assert a.lock is not b.lock
+    assert a.lock is c.lock
+    assert d.lock not in (a.lock, b.lock, c.lock)

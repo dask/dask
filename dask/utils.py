@@ -930,9 +930,12 @@ class SerializableLock(object):
     The creation of locks is itself not threadsafe.
     """
     def __init__(self, token=None):
-        self.lock = Lock()
         self.token = token or str(uuid.uuid4())
-        SerializableLock._locks[self.token] = self.lock
+        if self.token in SerializableLock._locks:
+            self.lock = SerializableLock._locks[self.token]
+        else:
+            self.lock = Lock()
+            SerializableLock._locks[self.token] = self.lock
 
     def acquire(self, *args):
         return self.lock.acquire(*args)
