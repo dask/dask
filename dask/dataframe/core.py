@@ -529,6 +529,7 @@ class _Frame(Base):
 
             The input to ``aggregate`` depends on the output of ``chunk``.
             If the output of ``chunk`` is a:
+
             - scalar: Input is a Series, with one row per partition.
             - Series: Input is a DataFrame, with one row per partition. Columns
               are the rows in the output series.

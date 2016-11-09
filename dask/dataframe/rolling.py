@@ -4,9 +4,10 @@ import warnings
 from functools import wraps
 
 import pandas as pd
+from pandas.core.window import Rolling as pd_Rolling
 
 from ..base import tokenize
-from ..utils import M, funcname
+from ..utils import M, funcname, derived_from
 from .core import _emulate
 from .utils import make_meta
 
@@ -190,41 +191,53 @@ class Rolling(object):
                            rolling_kwargs, method_name, *args,
                            token=method_name, meta=meta, **kwargs)
 
-    def count(self, *args, **kwargs):
-        return self._call_method('count', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def count(self):
+        return self._call_method('count')
 
-    def sum(self, *args, **kwargs):
-        return self._call_method('sum', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def sum(self):
+        return self._call_method('sum')
 
-    def mean(self, *args, **kwargs):
-        return self._call_method('mean', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def mean(self):
+        return self._call_method('mean')
 
-    def median(self, *args, **kwargs):
-        return self._call_method('median', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def median(self):
+        return self._call_method('median')
 
-    def min(self, *args, **kwargs):
-        return self._call_method('min', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def min(self):
+        return self._call_method('min')
 
-    def max(self, *args, **kwargs):
-        return self._call_method('max', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def max(self):
+        return self._call_method('max')
 
-    def std(self, *args, **kwargs):
-        return self._call_method('std', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def std(self, ddof=1):
+        return self._call_method('std', ddof=1)
 
-    def var(self, *args, **kwargs):
-        return self._call_method('var', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def var(self, ddof=1):
+        return self._call_method('var', ddof=1)
 
-    def skew(self, *args, **kwargs):
-        return self._call_method('skew', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def skew(self):
+        return self._call_method('skew')
 
-    def kurt(self, *args, **kwargs):
-        return self._call_method('kurt', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def kurt(self):
+        return self._call_method('kurt')
 
-    def quantile(self, *args, **kwargs):
-        return self._call_method('quantile', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def quantile(self, quantile):
+        return self._call_method('quantile', quantile)
 
-    def apply(self, *args, **kwargs):
-        return self._call_method('apply', *args, **kwargs)
+    @derived_from(pd_Rolling)
+    def apply(self, func, args=(), kwargs={}):
+        return self._call_method('apply', func, args=args, kwargs=kwargs)
 
     def __repr__(self):
         return 'Rolling [{}]'.format(','.join(
