@@ -134,13 +134,20 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     """
     fs, paths, myopen = get_fs_paths_myopen(urlpath, compression, 'rb',
                                             None, **kwargs)
+    client = None
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
 
-    if blocksize is None:
+    blocks, lengths, machines = fs.get_block_locations(paths)
+    if blocks:
+        offsets = blocks
+    elif blocksize is None:
         offsets = [[0]] * len(paths)
+        lengths = [[None]] * len(offsets)
+        machines = [[None]] * len(offsets)
     else:
         offsets = []
+        lengths = []
         for path in paths:
             try:
                 size = fs.logical_size(path, compression)
@@ -148,23 +155,39 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                 raise ValueError('Cannot read compressed files (%s) in byte chunks,'
                                  'use blocksize=None' % infer_compression(urlpath))
             off = list(range(0, size, blocksize))
+            length = [blocksize] * len(off)
             if not_zero:
                 off[0] = 1
+                length[0] -= 1
             offsets.append(off)
+            lengths.append(length)
+        machines = [[None]] * len(offsets)
 
     out = []
-    for path, offset in zip(paths, offsets):
+    for path, offset, length, machine in zip(paths, offsets, lengths, machines):
         ukey = fs.ukey(path)
         keys = ['read-block-%s-%s' %
                 (o, tokenize(path, compression, offset, ukey, kwargs, delimiter))
                 for o in offset]
         L = [delayed(read_block_from_file)(myopen(path, mode='rb'), off,
-                    blocksize, delimiter, dask_key_name=key)
-             for (off, key) in zip(offset, keys)]
+                     l, delimiter, dask_key_name=key)
+             for (off, key, l) in zip(offset, keys, length)]
         out.append(L)
-
-    # TODO: check fs for preferred locations of blocks here;
-    # and preferred blocksize?
+        if machine is not None:  # blocks are in preferred locations
+            if client is None:
+                try:
+                    from distributed.client import default_client
+                    client = default_client()
+                except (ImportError, ValueError):  # no distributed client
+                    client = False
+            if client:
+                restrictions = {key: w for key, w in zip(keys, machine)}
+                client._send_to_scheduler(
+                        {'op': 'update-graph', 'tasks': {},
+                         'dependencies': [], 'keys': [],
+                         'restrictions': restrictions,
+                         'loose_restrictions': list(restrictions),
+                         'client': client.id})
 
     if sample is not True:
         nbytes = sample
@@ -450,6 +473,7 @@ def ensure_protocol(protocol):
 _filesystems = dict()
 # see .local.LocalFileSystem for reference implementation
 
+
 class FileSystem(object):
     def logical_size(self, path, compression):
         if compression is None:
@@ -462,3 +486,6 @@ class FileSystem(object):
                 result = g.tell()
                 g.close()
             return result
+
+    def get_block_locations(self, path):
+        return None, None, None
