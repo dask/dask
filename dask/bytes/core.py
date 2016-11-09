@@ -476,6 +476,8 @@ _filesystems = dict()
 
 class FileSystem(object):
     def logical_size(self, path, compression):
+        if compression == 'infer':
+            compression = infer_compression(path)
         if compression is None:
             return self.size(path)
         else:
