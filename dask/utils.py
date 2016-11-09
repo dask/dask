@@ -903,7 +903,32 @@ M = MethodCache()
 
 class SerializableLock(object):
     _locks = {}
-    """ A serializable lock """
+    """ A Serializable per-process Lock
+
+    This wraps a normal ``threading.Lock`` object and satisfies the same
+    interface.  However, this lock can also be serialized and sent to different
+    processes.  It will not block concurrent operations between processes (for
+    this you should look at ``multiprocessing.Lock`` or ``locket.lock_file``
+    but will consistently deserialize into the same lock.
+
+    So if we make a lock in one process::
+
+        lock = SerializableLock()
+
+    And then send it over to another process multiple times::
+
+        bytes = pickle.dumps(lock)
+        a = pickle.loads(bytes)
+        b = pickle.loads(bytes)
+
+    Then the deserialized objects will operate as though they were the same
+    lock, and collide as appropriate.
+
+    This is useful for consistently protecting resources on a per-process
+    level.
+
+    The creation of locks is itself not threadsafe.
+    """
     def __init__(self, token=None):
         self.lock = Lock()
         self.token = token or str(uuid.uuid4())
