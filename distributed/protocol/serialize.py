@@ -162,6 +162,11 @@ class Serialized(object):
         self.header = header
         self.frames = frames
 
+    def deserialize(self):
+        from .core import decompress
+        frames = decompress(self.header, self.frames)
+        return deserialize(self.header, frames)
+
 
 def container_copy(c):
     typ = type(c)
@@ -175,12 +180,15 @@ def container_copy(c):
 def extract_serialize(x):
     """ Pull out Serialize objects from message
 
+    This also remove large bytestrings from the message into a second
+    dictionary.
+
     Examples
     --------
     >>> from distributed.protocol import to_serialize
     >>> msg = {'op': 'update', 'data': to_serialize(123)}
     >>> extract_serialize(msg)
-    ({'op': 'update'}, {('data',): <Serialize: 123>})
+    ({'op': 'update'}, {('data',): <Serialize: 123>}, set())
     """
     ser = {}
     _extract_serialize(x, ser)
@@ -193,10 +201,12 @@ def extract_serialize(x):
             else:
                 t[path[-1]] = None
 
+    bytestrings = set()
     for k, v in ser.items():
         if type(v) is bytes:
             ser[k] = to_serialize(v)
-    return x, ser
+            bytestrings.add(k)
+    return x, ser, bytestrings
 
 
 def _extract_serialize(x, ser, path=()):

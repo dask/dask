@@ -29,7 +29,7 @@ def dumps(msg):
         data = {}
         # Only lists and dicts can contain serialized values
         if isinstance(msg, (list, dict)):
-            msg, data = extract_serialize(msg)
+            msg, data, bytestrings = extract_serialize(msg)
         small_header, small_payload = dumps_msgpack(msg)
 
         if not data:  # fast path without serialized data
@@ -44,7 +44,9 @@ def dumps(msg):
                      if type(value) is Serialize}
 
         header = {'headers': {},
-                  'keys': []}
+                  'keys': [],
+                  'bytestrings': list(bytestrings)}
+
         out_frames = []
 
         for key, (head, frames) in data.items():
@@ -91,6 +93,7 @@ def loads(frames, deserialize=True):
         header = msgpack.loads(header, encoding='utf8', use_list=False)
         keys = header['keys']
         headers = header['headers']
+        bytestrings = set(header['bytestrings'])
 
         for key in keys:
             head = headers[key]
@@ -98,7 +101,7 @@ def loads(frames, deserialize=True):
             count = head['count']
             fs, frames = frames[:count], frames[count:]
 
-            if deserialize:
+            if deserialize or key in bytestrings:
                 fs = decompress(head, fs)
                 fs = merge_frames(head, fs)
                 value = _deserialize(head, fs)

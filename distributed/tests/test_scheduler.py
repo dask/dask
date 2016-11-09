@@ -582,6 +582,28 @@ def test_feed_setup_teardown(s, a, b):
         assert time() - start < 5
 
 
+@gen_cluster()
+def test_feed_large_bytestring(s, a, b):
+    np = pytest.importorskip('numpy')
+
+    x = np.ones(10000000)
+
+    def func(scheduler):
+        y = x
+        return True
+
+    stream = yield connect(s.ip, s.port)
+    yield write(stream, {'op': 'feed',
+                         'function': dumps(func),
+                         'interval': 0.01})
+
+    for i in range(5):
+        response = yield read(stream)
+        assert response == True
+
+    stream.close()
+
+
 @gen_test(timeout=None)
 def test_scheduler_as_center():
     s = Scheduler(validate=True)

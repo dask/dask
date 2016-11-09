@@ -87,6 +87,7 @@ def test_large_bytes():
     assert len(frames[0]) < 1000
     assert len(frames[1]) < 1000
 
+    assert loads(frames, deserialize=False) == msg
 
 @slow
 def test_large_messages():
