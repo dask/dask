@@ -53,11 +53,6 @@ def test_bokeh(loop):
         with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             pass
 
-        while True:
-            line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
-                break
-
         names = ['localhost', '127.0.0.1', get_ip()]
         if 'linux' in sys.platform:
             names.append(socket.gethostname())
@@ -87,11 +82,6 @@ def test_bokeh_non_standard_ports(loop):
         with Client('127.0.0.1:3448', loop=loop) as c:
             pass
 
-        while True:
-            line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
-                break
-
         start = time()
         while True:
             try:
@@ -102,7 +92,7 @@ def test_bokeh_non_standard_ports(loop):
                 sleep(0.1)
                 assert time() < start + 20
     with pytest.raises(Exception):
-        requests.get('http://127.0.0.1:4832/status/')
+        requests.get('http://localhost:4832/status/')
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
@@ -116,11 +106,6 @@ def test_bokeh_whitelist(loop):
                                   '--bokeh-whitelist', '127.0.0.3:8787']) as proc:
         with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             pass
-
-        while True:
-            line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
-                break
 
         start = time()
         while True:

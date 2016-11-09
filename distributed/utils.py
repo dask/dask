@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import logging
 import os
 import re
+import shutil
 import socket
 import six
 import sys
@@ -355,26 +356,6 @@ def str_graph(dsk, extra_values=()):
         return task
 
     return {tokey(k): convert(v) for k, v in dsk.items()}
-
-
-import logging
-from .compatibility import logging_names
-logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-
-for name, level in config.get('logging', {}).items():
-    LEVEL = logging_names[level.upper()]
-    logging.getLogger(name).setLevel(LEVEL)
-
-# http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
-stream = logging.StreamHandler(sys.stderr)
-stream.setLevel(logging.CRITICAL)
-logging.getLogger('tornado').addHandler(stream)
-logging.getLogger('tornado').propagate = False
-
-
-from contextlib import contextmanager
-import shutil
 
 
 def seek_delimiter(file, delimiter, blocksize):
