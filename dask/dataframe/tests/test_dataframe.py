@@ -2548,3 +2548,24 @@ def test_set_index_sorted_min_max_same():
 
     df2 = df.set_index('y', sorted=True)
     assert df2.divisions == (0, 1, 1)
+
+
+def test_diff():
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(df, 5)
+
+    assert_eq(ddf.diff(), df.diff())
+    assert_eq(ddf.diff(0), df.diff(0))
+    assert_eq(ddf.diff(2), df.diff(2))
+    assert_eq(ddf.diff(-2), df.diff(-2))
+
+    assert_eq(ddf.diff(2, axis=1), df.diff(2, axis=1))
+
+    assert_eq(ddf.a.diff(), df.a.diff())
+    assert_eq(ddf.a.diff(0), df.a.diff(0))
+    assert_eq(ddf.a.diff(2), df.a.diff(2))
+    assert_eq(ddf.a.diff(-2), df.a.diff(-2))
+
+    assert ddf.diff(2)._name == ddf.diff(2)._name
+    assert ddf.diff(2)._name != ddf.diff(3)._name
+    pytest.raises(TypeError, lambda: ddf.diff(1.5))

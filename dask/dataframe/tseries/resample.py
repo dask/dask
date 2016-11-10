@@ -4,9 +4,11 @@ import warnings
 
 import pandas as pd
 import numpy as np
+from pandas.tseries.resample import Resampler as pd_Resampler
 
 from ..core import DataFrame, Series
 from ...base import tokenize
+from ...utils import derived_from
 
 
 def getnanos(rule):
@@ -121,41 +123,54 @@ class Resampler(object):
             return DataFrame(dsk, name, meta, outdivs)
         return Series(dsk, name, meta, outdivs)
 
+    @derived_from(pd_Resampler)
     def count(self):
         return self._agg('count', fill_value=0)
 
+    @derived_from(pd_Resampler)
     def first(self):
         return self._agg('first')
 
+    @derived_from(pd_Resampler)
     def last(self):
         return self._agg('last')
 
+    @derived_from(pd_Resampler)
     def mean(self):
         return self._agg('mean')
 
+    @derived_from(pd_Resampler)
     def min(self):
         return self._agg('min')
 
+    @derived_from(pd_Resampler)
     def median(self):
         return self._agg('median')
 
+    @derived_from(pd_Resampler)
     def max(self):
         return self._agg('max')
 
+    @derived_from(pd_Resampler)
     def ohlc(self):
         return self._agg('ohlc')
 
+    @derived_from(pd_Resampler)
     def prod(self):
         return self._agg('prod')
 
+    @derived_from(pd_Resampler)
     def sem(self):
         return self._agg('sem')
 
+    @derived_from(pd_Resampler)
     def std(self):
         return self._agg('std')
 
+    @derived_from(pd_Resampler)
     def sum(self):
         return self._agg('sum')
 
+    @derived_from(pd_Resampler)
     def var(self):
         return self._agg('var')
