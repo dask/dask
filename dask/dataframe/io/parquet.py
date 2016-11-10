@@ -1,6 +1,8 @@
 import os
 import struct
 
+from toolz import first
+
 import dask
 from dask import delayed, compute
 from dask.bytes.core import open_files, OpenFileCreator
@@ -17,7 +19,7 @@ except:
 
 
 def parquet_to_dask_dataframe(url, columns=None, filters=[],
-                              categories=None, **kwargs):
+                              categories=None, index=None, **kwargs):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
     myopen = OpenFileCreator(url, compression=None, text=False)
@@ -47,11 +49,30 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
               pf.dtypes.items() if k in columns}
 
     # TODO: if categories vary from one rg to next, need to cope
-    return dd.from_delayed(tot, meta=dtypes)
+    df = dd.from_delayed(tot, meta=dtypes)
+
+    minmax = fastparquet.api.sorted_partitioned_columns(pf)
+    if len(minmax) > 1:
+        if index:
+            index_col = index
+        else:
+            raise ValueError("Multiple possible indexes exist: %s.  "
+                             "Please select one with index='index-name'"
+                             % sorted(minmax))
+    elif len(minmax) == 1:
+        index_col = first(minmax)
+    else:
+        index_col = None
+
+    if index_col:
+        divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
+        df = df.set_index(index_col, sorted=True, divisions=divisions)
+
+    return df
 
 
 def dask_dataframe_to_parquet(
-        url, df, encoding=default_encoding, compression=None):
+        url, df, encoding=default_encoding, compression=None, write_index=None):
     """Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
@@ -65,7 +86,10 @@ def dask_dataframe_to_parquet(
     myopen = OpenFileCreator(url, compression=None, text=False)
     myopen.fs.mkdirs(url)
 
-    fmd = fastparquet.writer.make_metadata(df.head(10))
+    if write_index is True or write_index is None and df.known_divisions:
+        df = df.reset_index()
+
+    fmd = fastparquet.writer.make_metadata(df._meta_nonempty)
 
     partitions = df.to_delayed()
     filenames = ['part.%i.parquet' % i for i in range(len(partitions))]
