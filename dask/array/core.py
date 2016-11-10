@@ -27,7 +27,7 @@ from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
-                     IndexCallable, funcname, derived_from)
+                     IndexCallable, funcname, derived_from, SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..optimize import cull
 from .. import threaded, core
@@ -1772,7 +1772,7 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
     original_name = (name or 'array-') + 'original-' + token
     name = name or 'array-' + token
     if lock is True:
-        lock = Lock()
+        lock = SerializableLock()
     dsk = getem(original_name, chunks, out_name=name, fancy=fancy, lock=lock)
     return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
 
