@@ -17,7 +17,7 @@ def test_local(tmpdir):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
-                         'bhello': np.random.choice([b'hello', b'you', b'people'], size=1000).astype("O")})
+                         'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
     df = dd.from_pandas(data, chunksize=500)
 
     dask_dataframe_to_parquet(tmpdir, df, write_index=False)
@@ -26,7 +26,7 @@ def test_local(tmpdir):
     assert '_metadata' in files
     assert 'part.0.parquet' in files
 
-    df2 = parquet_to_dask_dataframe(tmpdir)
+    df2 = parquet_to_dask_dataframe(tmpdir, index=False)
 
     pf = fastparquet.ParquetFile(tmpdir)
 

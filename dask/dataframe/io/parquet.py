@@ -20,6 +20,7 @@ except:
 
 def parquet_to_dask_dataframe(url, columns=None, filters=[],
                               categories=None, index=None, **kwargs):
+    """ Read Dask DataFrame from ParquetFile """
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
     myopen = OpenFileCreator(url, compression=None, text=False)
@@ -52,7 +53,10 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
     df = dd.from_delayed(tot, meta=dtypes)
 
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
-    if len(minmax) > 1:
+
+    if index is False:
+        index_col = None
+    elif len(minmax) > 1:
         if index:
             index_col = index
         else:
@@ -71,9 +75,12 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
     return df
 
 
-def dask_dataframe_to_parquet(
-        url, df, encoding=default_encoding, compression=None, write_index=None):
-    """Same signature as write, but with file_scheme always hive-like, each
+def dask_dataframe_to_parquet(url, df, encoding=default_encoding,
+        compression=None, write_index=None):
+    """
+    Write Dask.dataframe to parquet
+
+    Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
     if fastparquet is False:
