@@ -8,8 +8,7 @@ fastparquet = pytest.importorskip('fastparquet')
 
 from dask.utils import tmpdir
 import dask.dataframe as dd
-from dask.dataframe.io.parquet import (parquet_to_dask_dataframe,
-                                       dask_dataframe_to_parquet)
+from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
 
 def test_local(tmpdir):
@@ -20,13 +19,13 @@ def test_local(tmpdir):
                          'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
     df = dd.from_pandas(data, chunksize=500)
 
-    dask_dataframe_to_parquet(tmpdir, df, write_index=False)
+    to_parquet(tmpdir, df, write_index=False)
 
     files = os.listdir(tmpdir)
     assert '_metadata' in files
     assert 'part.0.parquet' in files
 
-    df2 = parquet_to_dask_dataframe(tmpdir, index=False)
+    df2 = read_parquet(tmpdir, index=False)
 
     pf = fastparquet.ParquetFile(tmpdir)
 
@@ -46,11 +45,8 @@ def test_index(tmpdir):
                       index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
 
     ddf = dd.from_pandas(df, npartitions=3)
-
-    dask_dataframe_to_parquet(tmpdir, ddf)
-
+    to_parquet(tmpdir, ddf)
     pf = fastparquet.ParquetFile(tmpdir)
 
-    ddf2 = parquet_to_dask_dataframe(tmpdir)
-
+    ddf2 = read_parquet(tmpdir)
     assert_eq(ddf, ddf2)

@@ -18,8 +18,8 @@ except:
     default_encoding = None
 
 
-def parquet_to_dask_dataframe(url, columns=None, filters=[],
-                              categories=None, index=None, **kwargs):
+def read_parquet(url, columns=None, filters=[], categories=None, index=None,
+        **kwargs):
     """ Read Dask DataFrame from ParquetFile """
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
@@ -75,8 +75,8 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
     return df
 
 
-def dask_dataframe_to_parquet(url, df, encoding=default_encoding,
-        compression=None, write_index=None):
+def to_parquet(url, df, encoding=default_encoding, compression=None,
+        write_index=None):
     """
     Write Dask.dataframe to parquet
 
