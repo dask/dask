@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import Iterator
 from functools import partial
 import io
+import logging
 from time import time, sleep
 from threading import Thread
 import threading
@@ -18,7 +19,8 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
         funcname, ensure_bytes)
-from distributed.utils_test import loop, inc, throws, div
+from distributed.utils_test import (loop, inc, throws, div, captured_handler,
+                                    captured_logger)
 from distributed.compatibility import Queue, isqueue, PY2
 
 
@@ -282,3 +284,49 @@ def test_ensure_bytes():
         result = ensure_bytes(d)
         assert isinstance(result, bytes)
         assert result == b'1'
+
+
+def test_logging():
+    """
+    Test default logging configuration.
+    """
+    d = logging.getLogger('distributed')
+    assert len(d.handlers) == 1
+    assert isinstance(d.handlers[0], logging.StreamHandler)
+
+    root = logging.getLogger('')
+    dfb = logging.getLogger('distributed.foo.bar')
+    f = logging.getLogger('foo')
+    fb = logging.getLogger('foo.bar')
+
+    with captured_handler(d.handlers[0]) as distributed_log:
+        with captured_logger(root) as foreign_log:
+            h = logging.StreamHandler(foreign_log)
+            fmt = '[%(levelname)s in %(name)s] - %(message)s'
+            h.setFormatter(logging.Formatter(fmt))
+            fb.addHandler(h)
+            fb.propagate = False
+
+            d.debug("1: debug")
+            d.info("2: info")
+            dfb.info("3: info")
+            fb.info("4: info")
+            fb.error("5: error")
+            f.info("6: info")
+            f.error("7: error")
+
+    distributed_log = distributed_log.getvalue().splitlines()
+    foreign_log = foreign_log.getvalue().splitlines()
+
+    # distributed log is configured at INFO level by default
+    assert distributed_log == [
+        "distributed - INFO - 2: info",
+        "distributed.foo.bar - INFO - 3: info",
+        ]
+
+    # foreign logs should be unaffected by distributed's logging
+    # configuration.  They get the default ERROR level from logging.
+    assert foreign_log == [
+        "[ERROR in foo.bar] - 5: error",
+        "7: error",
+        ]
