@@ -1153,6 +1153,27 @@ class _Frame(Base):
         return self.map_overlap(M.diff, before, after, token='diff',
                                 periods=periods)
 
+    @derived_from(pd.DataFrame)
+    def shift(self, periods=1, freq=None, axis=0):
+        axis = self._validate_axis(axis)
+        if not isinstance(periods, int):
+            raise TypeError("periods must be an integer")
+
+        if axis == 1:
+            return self.map_partitions(M.shift, token='shift', periods=periods,
+                                       freq=freq, axis=1)
+
+        if freq is None:
+            before, after = (periods, 0) if periods > 0 else (0, -periods)
+            return self.map_overlap(M.shift, before, after, token='shift',
+                                    periods=periods)
+
+        # Let pandas error on invalid arguments
+        meta = self._meta_nonempty.shift(periods, freq=freq)
+        out = self.map_partitions(M.shift, token='shift', periods=periods,
+                                  freq=freq, meta=meta)
+        return maybe_shift_divisions(out, periods, freq=freq)
+
     def _reduction_agg(self, name, axis=None, skipna=True,
                        split_every=False):
         axis = self._validate_axis(axis)
@@ -1935,6 +1956,23 @@ class Index(Series):
         return self.reduction(methods.index_count, np.sum,
                               token='index-count', meta=int,
                               split_every=split_every)
+
+    @derived_from(pd.Index)
+    def shift(self, periods=1, freq=None):
+        if isinstance(self._meta, pd.PeriodIndex):
+            if freq is not None:
+                raise ValueError("PeriodIndex doesn't accept `freq` argument")
+            meta = self._meta_nonempty.shift(periods)
+            out = self.map_partitions(M.shift, periods, meta=meta,
+                                      token='shift')
+        else:
+            # Pandas will raise for other index types that don't implement shift
+            meta = self._meta_nonempty.shift(periods, freq=freq)
+            out = self.map_partitions(M.shift, periods, token='shift',
+                                      meta=meta, freq=freq)
+        if freq is None:
+            freq = meta.freq
+        return maybe_shift_divisions(out, periods, freq=freq)
 
 
 class DataFrame(_Frame):
@@ -3512,3 +3550,33 @@ def safe_head(df, n):
                "`npartitions` to `head`.")
         warnings.warn(msg.format(n, len(r)))
     return r
+
+
+def maybe_shift_divisions(df, periods, freq):
+    """Maybe shift divisions by periods of size freq
+
+    Used to shift the divisions for the `shift` method. If freq isn't a fixed
+    size (not anchored or relative), then the divisions are shifted
+    appropriately. Otherwise the divisions are cleared.
+
+    Parameters
+    ----------
+    df : dd.DataFrame, dd.Series, or dd.Index
+    periods : int
+        The number of periods to shift.
+    freq : DateOffset, timedelta, or time rule string
+        The frequency to shift by.
+    """
+    if isinstance(freq, str):
+        freq = pd.tseries.frequencies.to_offset(freq)
+    if (isinstance(freq, pd.DateOffset) and
+            (freq.isAnchored() or not hasattr(freq, 'delta'))):
+        # Can't infer divisions on relative or anchored offsets, as
+        # divisions may now split identical index value.
+        # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
+        return df.clear_divisions()
+    if df.known_divisions:
+        divs = pd.Series(range(len(df.divisions)), index=df.divisions)
+        divisions = divs.shift(periods, freq=freq).index
+        return type(df)(df.dask, df._name, df._meta, divisions)
+    return df
