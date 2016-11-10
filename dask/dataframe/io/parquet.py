@@ -2,6 +2,7 @@ import os
 import struct
 
 import dask
+from dask import delayed, compute
 from dask.bytes.core import open_files, OpenFileCreator
 import dask.dataframe as dd
 from dask import delayed
@@ -22,12 +23,13 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
     myopen = OpenFileCreator(url, compression=None, text=False)
 
     try:
-        pf = fastparquet.ParquetFile(url+'/_metadata', open_with=myopen,
+        pf = fastparquet.ParquetFile(url + '/_metadata',
+                                     open_with=myopen,
                                      sep=myopen.fs.sep)
         root = url
     except:
         pf = fastparquet.ParquetFile(url, open_with=myopen, sep=myopen.fs.sep)
-        root = os.path.dirname(url)
+        root = os.path.dirname(url)  # TODO: this might fail on S3 + Windows
 
     columns = columns or (pf.columns + list(pf.cats))
     rgs = [rg for rg in pf.row_groups if
@@ -49,38 +51,39 @@ def parquet_to_dask_dataframe(url, columns=None, filters=[],
 
 
 def dask_dataframe_to_parquet(
-        url, data, encoding=default_encoding, compression=None):
+        url, df, encoding=default_encoding, compression=None):
     """Same signature as write, but with file_scheme always hive-like, each
     data partition becomes a row group in a separate file.
     """
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
+
     sep = '/'
-    from dask import delayed, compute
     # mkdirs(filename)
-    fn = sep.join([url, '_metadata'])
+    metadata_fn = sep.join([url, '_metadata'])
 
     myopen = OpenFileCreator(url, compression=None, text=False)
     myopen.fs.mkdirs(url)
 
-    fmd = fastparquet.writer.make_metadata(data.head(10))
+    fmd = fastparquet.writer.make_metadata(df.head(10))
 
-    delayed_parts = data.to_delayed()
-    parts = ['part.%i.parquet' % i for i in range(len(delayed_parts))]
-    outfiles = [sep.join([url, part]) for part in parts]
-    func = lambda outfile, data: fastparquet.writer.make_part_file(
-            myopen(outfile, 'wb'), data, fmd.schema,
-            compression=compression)
-    dfunc = delayed(func)
-    out = compute(*(dfunc(outfile, data)
-                    for data, outfile in zip(delayed_parts, outfiles)))
+    partitions = df.to_delayed()
+    filenames = ['part.%i.parquet' % i for i in range(len(partitions))]
+    outfiles = [sep.join([url, fn]) for fn in filenames]
 
-    for part, rg in zip(parts, out):
+    writes = [delayed(fastparquet.writer.make_part_file)(
+                myopen(outfile, 'wb'), partition, fmd.schema,
+                compression=compression)
+              for outfile, partition in zip(outfiles, partitions)]
+
+    out = compute(*writes)
+
+    for fn, rg in zip(filenames, out):
         for chunk in rg.columns:
-            chunk.file_path = part
+            chunk.file_path = fn
         fmd.row_groups.append(rg)
 
-    with myopen(fn, mode='wb') as f:
+    with myopen(metadata_fn, mode='wb') as f:
         f.write(b'PAR1')
         foot_size = fastparquet.writer.write_thrift(f, fmd)
         f.write(struct.pack(b"<i", foot_size))
