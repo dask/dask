@@ -83,13 +83,17 @@ def dumps(msg):
 
 def loads(frames, deserialize=True):
     """ Transform bytestream back into Python value """
+    frames = frames[::-1]  # reverse order to improve pop efficiency
+    if not isinstance(frames, list):
+        frames = list(frames)
     try:
-        small_header, small_payload, frames = frames[0], frames[1], frames[2:]
+        small_header = frames.pop()
+        small_payload = frames.pop()
         msg = loads_msgpack(small_header, small_payload)
         if not frames:
             return msg
 
-        header, frames = frames[0], frames[1:]
+        header = frames.pop()
         header = msgpack.loads(header, encoding='utf8', use_list=False)
         keys = header['keys']
         headers = header['headers']
@@ -99,7 +103,8 @@ def loads(frames, deserialize=True):
             head = headers[key]
             lengths = head['lengths']
             count = head['count']
-            fs, frames = frames[:count], frames[count:]
+            fs = frames[-count::][::-1]
+            del frames[-count:]
 
             if deserialize or key in bytestrings:
                 fs = decompress(head, fs)
