@@ -75,7 +75,7 @@ def test_h5py_serialize(c, s, a, b):
             f.flush()
         with h5py.File(fn, mode='r') as f:
             dset = f['/group/x']
-            x = da.from_array(dset, chunks=x.chunks)
+            x = da.from_array(dset, chunks=dset.chunks)
             y = c.compute(x)
             y = yield y._result()
             assert (y[:] == dset[:]).all()
