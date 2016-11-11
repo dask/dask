@@ -1514,6 +1514,11 @@ class _Frame(Base):
         return result1, result2
 
     @derived_from(pd.DataFrame)
+    def combine(self, other, func, fill_value=None, overwrite=True):
+        return self.map_partitions(M.combine, other, func,
+                                   fill_value=fill_value, overwrite=overwrite)
+
+    @derived_from(pd.DataFrame)
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
@@ -1757,6 +1762,11 @@ class Series(_Frame):
     def align(self, other, join='outer', axis=None, fill_value=None):
         return super(Series, self).align(other, join=join, axis=axis,
                                          fill_value=fill_value)
+
+    @derived_from(pd.Series)
+    def combine(self, other, func, fill_value=None):
+        return self.map_partitions(M.combine, other, func,
+                                   fill_value=fill_value)
 
     @derived_from(pd.Series)
     def combine_first(self, other):

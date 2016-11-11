@@ -1,6 +1,6 @@
-from copy import copy
-from operator import getitem
 import sys
+from copy import copy
+from operator import getitem, add
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -1282,6 +1282,31 @@ def test_align_axis(join):
 
     with tm.assertRaises(ValueError):
         ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
+
+
+def test_combine():
+    df1 = pd.DataFrame({'A': np.random.choice([1, 2, np.nan], 100),
+                        'B': np.random.choice(['a', 'b', np.nan], 100)})
+
+    df2 = pd.DataFrame({'A': np.random.choice([1, 2, 3], 100),
+                        'B': np.random.choice(['a', 'b', 'c'], 100)})
+    ddf1 = dd.from_pandas(df1, 4)
+    ddf2 = dd.from_pandas(df2, 5)
+
+    first = lambda a, b: a
+
+    # DataFrame
+    for da, db, a, b in [(ddf1, ddf2, df1, df2),
+                         (ddf1.A, ddf2.A, df1.A, df2.A),
+                         (ddf1.B, ddf2.B, df1.B, df2.B)]:
+        for func, fill_value in [(add, None), (add, 100), (first, None)]:
+            sol = a.combine(b, func, fill_value=fill_value)
+            assert_eq(da.combine(db, func, fill_value=fill_value), sol)
+            assert_eq(da.combine(b, func, fill_value=fill_value), sol)
+
+    assert_eq(ddf1.combine(ddf2, add, overwrite=False),
+              df1.combine(df2, add, overwrite=False))
+    assert da.combine(db, add)._name == da.combine(db, add)._name
 
 
 def test_combine_first():
