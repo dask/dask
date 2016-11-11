@@ -1716,7 +1716,13 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def nlargest(self, n=5, split_every=None):
         return aca(self, chunk=M.nlargest, aggregate=M.nlargest,
-                   meta=self._meta, token='series-nlargest-n={0}'.format(n),
+                   meta=self._meta, token='series-nlargest',
+                   split_every=split_every, n=n)
+
+    @derived_from(pd.Series)
+    def nsmallest(self, n=5, split_every=None):
+        return aca(self, chunk=M.nsmallest, aggregate=M.nsmallest,
+                   meta=self._meta, token='series-nsmallest',
                    split_every=split_every, n=n)
 
     @derived_from(pd.Series)
@@ -2179,8 +2185,15 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
-        token = 'dataframe-nlargest-n={0}'.format(n)
+        token = 'dataframe-nlargest'
         return aca(self, chunk=M.nlargest, aggregate=M.nlargest,
+                   meta=self._meta, token=token, split_every=split_every,
+                   n=n, columns=columns)
+
+    @derived_from(pd.DataFrame)
+    def nsmallest(self, n=5, columns=None, split_every=None):
+        token = 'dataframe-nsmallest'
+        return aca(self, chunk=M.nsmallest, aggregate=M.nsmallest,
                    meta=self._meta, token=token, split_every=split_every,
                    n=n, columns=columns)
 
