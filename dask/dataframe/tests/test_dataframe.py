@@ -2193,33 +2193,36 @@ def test_index_time_properties():
     assert (i.index.month == a.index.month.compute()).all()
 
 
-def test_nlargest():
+def test_nlargest_nsmallest():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(20),
                        'b': list(ascii_lowercase[:20]),
                        'c': np.random.permutation(20).astype('float64')})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    res = ddf.nlargest(5, 'a')
-    res2 = ddf.nlargest(5, 'a', split_every=2)
-    sol = df.nlargest(5, 'a')
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+    for m in ['nlargest', 'nsmallest']:
+        f = lambda df, *args, **kwargs: getattr(df, m)(*args, **kwargs)
 
-    res = ddf.nlargest(5, ['a', 'b'])
-    res2 = ddf.nlargest(5, ['a', 'b'], split_every=2)
-    sol = df.nlargest(5, ['a', 'b'])
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+        res = f(ddf, 5, 'a')
+        res2 = f(ddf, 5, 'a', split_every=2)
+        sol = f(df, 5, 'a')
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
 
-    res = ddf.a.nlargest(5)
-    res2 = ddf.a.nlargest(5, split_every=2)
-    sol = df.a.nlargest(5)
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+        res = f(ddf, 5, ['a', 'b'])
+        res2 = f(ddf, 5, ['a', 'b'], split_every=2)
+        sol = f(df, 5, ['a', 'b'])
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
+
+        res = f(ddf.a, 5)
+        res2 = f(ddf.a, 5, split_every=2)
+        sol = f(df.a, 5)
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
 
 
 def test_reset_index():
