@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from copy import copy
 from distutils.version import LooseVersion
 import operator
 from operator import getitem, setitem

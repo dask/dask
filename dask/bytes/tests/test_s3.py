@@ -213,7 +213,7 @@ fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
 
 @pytest.mark.parametrize('fmt,blocksize', fmt_bs)
 def test_compression(s3, fmt, blocksize):
-    with s3_context('compress', valmap(compress[fmt], files)) as s3:
+    with s3_context('compress', valmap(compress[fmt], files)):
         sample, values = read_bytes('s3://compress/test/accounts.*',
                                     compression=fmt, blocksize=blocksize)
         assert sample.startswith(files[sorted(files)[0]][:10])
@@ -242,13 +242,13 @@ double = lambda x: x * 2
 
 
 def test_modification_time_read_bytes():
-    with s3_context('compress', files) as s3:
+    with s3_context('compress', files):
         _, a = read_bytes('s3://compress/test/accounts.*')
         _, b = read_bytes('s3://compress/test/accounts.*')
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
-    with s3_context('compress', valmap(double, files)) as s3:
+    with s3_context('compress', valmap(double, files)):
         _, c = read_bytes('s3://compress/test/accounts.*')
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
@@ -256,13 +256,13 @@ def test_modification_time_read_bytes():
 
 @pytest.mark.xfail()
 def test_modification_time_open_files():
-    with s3_context('compress', files) as s3:
+    with s3_context('compress', files):
         a = open_files('s3://compress/test/accounts.*')
         b = open_files('s3://compress/test/accounts.*')
 
         assert [aa._key for aa in a] == [bb._key for bb in b]
 
-    with s3_context('compress', valmap(double, files)) as s3:
+    with s3_context('compress', valmap(double, files)):
         c = open_files('s3://compress/test/accounts.*')
 
     assert [aa._key for aa in a] != [cc._key for cc in c]

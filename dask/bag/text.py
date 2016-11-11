@@ -5,9 +5,8 @@ import os
 
 from toolz import concat
 
-from ..utils import infer_compression, system_encoding
+from ..utils import system_encoding
 from ..delayed import delayed
-from ..bytes.compression import files as cfiles, seekable_files
 from ..bytes import open_text_files, read_bytes
 from .core import from_delayed
 

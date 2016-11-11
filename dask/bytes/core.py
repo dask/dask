@@ -10,10 +10,9 @@ from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile, read_block
 from ..compatibility import PY2, unicode
 from ..base import tokenize
-from ..delayed import delayed, Delayed, apply
-from ..utils import (infer_storage_options, system_encoding,
-                     build_name_function, infer_compression,
-                     import_required, ensure_bytes, ensure_unicode)
+from ..delayed import delayed
+from ..utils import (build_name_function, infer_compression, import_required,
+                     ensure_bytes, ensure_unicode, infer_storage_options)
 
 # delayed = delayed(pure=True)
 
@@ -90,8 +89,9 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
     """
     mode = 'wb' if encoding is None else 'wt'
     fs, names, myopen = get_fs_paths_myopen(urlpath, compression, mode,
-                   name_function=name_function, num=len(data),
-                   encoding=encoding, **kwargs)
+                                            name_function=name_function,
+                                            num=len(data), encoding=encoding,
+                                            **kwargs)
 
     return [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
             for d, f in zip(data, names)]
@@ -175,9 +175,9 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         keys = ['read-block-%s-%s' %
                 (o, tokenize(path, compression, offset, ukey, kwargs, delimiter))
                 for o in offset]
-        L = [delayed(read_block_from_file)(myopen(path, mode='rb'), off,
-                     l, delimiter, dask_key_name=key)
-             for (off, key, l) in zip(offset, keys, length)]
+        L = [delayed(read_block_from_file)(myopen(path, mode='rb'), o,
+                                           l, delimiter, dask_key_name=key)
+             for (o, key, l) in zip(offset, keys, length)]
         out.append(L)
         if machine is not None:  # blocks are in preferred locations
             if client is None:
@@ -188,12 +188,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                     client = False
             if client:
                 restrictions = {key: w for key, w in zip(keys, machine)}
-                client._send_to_scheduler(
-                        {'op': 'update-graph', 'tasks': {},
-                         'dependencies': [], 'keys': [],
-                         'restrictions': restrictions,
-                         'loose_restrictions': list(restrictions),
-                         'client': client.id})
+                client._send_to_scheduler({'op': 'update-graph', 'tasks': {},
+                                           'dependencies': [], 'keys': [],
+                                           'restrictions': restrictions,
+                                           'loose_restrictions': list(restrictions),
+                                           'client': client.id})
 
     if sample is not True:
         nbytes = sample
@@ -252,15 +251,14 @@ class OpenFileCreator(object):
         self.compression = compression
         self.text = text
         self.encoding = encoding
-        self.storage_options = infer_storage_options(
-                urlpath, inherit_storage_options=kwargs)
+        self.storage_options = infer_storage_options(urlpath, inherit_storage_options=kwargs)
         self.protocol = self.storage_options.pop('protocol')
         ensure_protocol(self.protocol)
         try:
             self.fs = _filesystems[self.protocol](**self.storage_options)
         except KeyError:
             raise NotImplementedError("Unknown protocol %s (%s)" %
-                                      (protocol, urlpath))
+                                      (self.protocol, urlpath))
 
     def __call__(self, path, mode='rb'):
         """Produces `OpenFile` instance"""
@@ -457,9 +455,8 @@ def _expand_paths(path, name_function, num):
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and
-        ((protocol in _read_bytes) or
-        (protocol in _filesystems))):
+    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
+       (protocol in _filesystems))):
         return
 
     if protocol == 's3':

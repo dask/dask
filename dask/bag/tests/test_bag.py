@@ -708,6 +708,8 @@ def test_to_dataframe():
 ext_open = [('gz', GzipFile), ('', open)]
 if not PY2:
     ext_open.append(('bz2', BZ2File))
+
+
 @pytest.mark.parametrize('ext,myopen', ext_open)
 def test_to_textfiles(ext, myopen):
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)

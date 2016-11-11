@@ -13,7 +13,7 @@ from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-        open_files, OpenFileCreator)
+                             open_files, OpenFileCreator)
 
 compute = partial(compute, get=get)
 

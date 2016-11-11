@@ -59,7 +59,8 @@ if sys.version_info[0] >= 3:
 
 
 def get_xz_blocks(fp):
-    from lzmaffi import STREAM_HEADER_SIZE, decode_stream_footer, decode_index
+    from lzmaffi import (STREAM_HEADER_SIZE, decode_stream_footer,
+                         decode_index, LZMAError)
     fp.seek(0, 2)
 
     def _peek(f, size):
@@ -95,4 +96,3 @@ def xz_decompress(data, check):
     dc = LZMADecompressor(format=FORMAT_BLOCK, header=header,
                           unpadded_size=len(data), check=check)
     return dc.decompress(data[len(header):])
-
