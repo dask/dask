@@ -64,12 +64,7 @@ class BatchedSend(object):
                 wait_time = min(self.last_transmission + self.interval - now,
                                 self.interval)
                 yield gen.sleep(wait_time)
-            while self.stream._write_buffer:
-                try:
-                    yield gen.with_timeout(timedelta(milliseconds=10),
-                                           self.last_send)  # hangs otherwise?
-                except gen.TimeoutError:
-                    pass
+            yield self.last_send
             self.buffer, payload = [], self.buffer
             self.last_payload = payload
             self.last_transmission = now
