@@ -8,7 +8,7 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
-from dask.compatibility import FileNotFoundError
+from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
