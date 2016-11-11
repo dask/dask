@@ -1925,6 +1925,14 @@ class Series(_Frame):
         return cov_corr(df, min_periods, corr=True, scalar=True,
                         split_every=split_every)
 
+    @derived_from(pd.Series)
+    def autocorr(self, lag=1):
+        if not isinstance(lag, int):
+            raise TypeError("lag must be an integer")
+        if lag == 0:
+            return self.corr(self)
+        return self.corr(self.shift(lag))
+
 
 class Index(Series):
 

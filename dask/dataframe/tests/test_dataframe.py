@@ -2140,6 +2140,15 @@ def test_cov_corr_stable():
     assert_eq(ddf.corr(split_every=8), df.corr())
 
 
+def test_autocorr():
+    x = tm.makeFloatSeries()
+    dx = dd.from_pandas(x, npartitions=4)
+    assert_eq(dx.autocorr(2), x.autocorr(2))
+    assert_eq(dx.autocorr(0), x.autocorr(0))
+    assert_eq(dx.autocorr(-2), x.autocorr(-2))
+    pytest.raises(TypeError, dx.autocorr(1.5))
+
+
 def test_apply_infer_columns():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
