@@ -22,7 +22,8 @@ from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
-from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
+from dask.array.core import (getem, getarray, getarray_vector, getarray_outer,
+                             getarray_nofancy, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
@@ -53,7 +54,8 @@ def same_keys(a, b):
 
 
 def test_getem():
-    for fancy, getter in [(True, getarray), (False, getarray_nofancy)]:
+    for fancy, getter in [(True, getarray_vector), (False, getarray_nofancy),
+                          ('outer', getarray_outer)]:
         sol = {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
                ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
                ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),

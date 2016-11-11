@@ -414,6 +414,13 @@ def test_empty_slice():
     assert_eq(y, np.ones((5, 5), dtype='i4')[:0])
 
 
+def test_singleton_slicing():
+    a = np.arange(15).reshape((1, 5, 3))
+    d1 = da.from_array(a, chunks=(1, 3, 3))
+    d2 = d1[0, :, [0, 2]]
+    assert_eq(d2, a[0,...][:, [0, 2]])
+
+
 def test_multiple_list_slicing():
     x = np.random.rand(6, 7, 8)
     a = da.from_array(x, chunks=(3, 3, 3))
