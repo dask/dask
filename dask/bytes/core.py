@@ -313,7 +313,6 @@ class OpenFile(object):
         if self.text:
             f4 = io.TextIOWrapper(f3, encoding=self.encoding,
                                   errors=self.errors)
-            f4.read1 = f4.read
         else:
             f4 = f3
 
@@ -398,7 +397,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
     return myopen.fs, paths, myopen
 
 
-def open_text_files(urlpath, compression=None, mode='rb', encoding='utf8',
+def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
                     errors='strict', **kwargs):
     """ Given path return dask.delayed file-like objects in text mode
 
