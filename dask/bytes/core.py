@@ -13,7 +13,7 @@ from ..base import tokenize
 from ..delayed import delayed, Delayed, apply
 from ..utils import (infer_storage_options, system_encoding,
                      build_name_function, infer_compression,
-                     import_required)
+                     import_required, ensure_bytes, ensure_unicode)
 
 # delayed = delayed(pure=True)
 
@@ -37,14 +37,20 @@ def write_block_to_file(data, lazy_file):
     """
     binary = 'b' in str(getattr(lazy_file, 'mode', 'b'))
     with lazy_file as f:
-        if isinstance(data, (str, bytes)):
-            f.write(data)
+        if isinstance(f, io.TextIOWrapper):
+            binary = False
+        if binary:
+            ensure = ensure_bytes
+        else:
+            ensure = ensure_unicode
+        if isinstance(data, (str, bytes, unicode)):
+            f.write(ensure(data))
         elif isinstance(data, io.IOBase):
             # file-like
-            out = '1'
+            out = True
             while out:
                 out = data.read(64 * 2 ** 10)
-                f.write(out)
+                f.write(ensure(out))
         else:
             # iterable, e.g., bag contents
             start = False
@@ -57,10 +63,10 @@ def write_block_to_file(data, lazy_file):
                             binary = False
                             f.write('\n')
                     else:
-                        f.write('\n')
+                        f.write(u'\n')
                 else:
                     start = True
-                f.write(d)
+                f.write(ensure(d))
 
 
 def write_bytes(data, urlpath, name_function=None, compression=None,
@@ -307,6 +313,7 @@ class OpenFile(object):
         if self.text:
             f4 = io.TextIOWrapper(f3, encoding=self.encoding,
                                   errors=self.errors)
+            f4.read1 = f4.read
         else:
             f4 = f3
 

@@ -213,7 +213,7 @@ def test_bad_compression():
 
 def test_not_found():
     fn = 'not-a-file'
-    with pytest.raises(FileNotFoundError) as e:
+    with pytest.raises((FileNotFoundError, OSError)) as e:
         read_bytes(fn)
     assert fn in str(e)
 

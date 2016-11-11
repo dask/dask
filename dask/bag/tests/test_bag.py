@@ -705,22 +705,23 @@ def test_to_dataframe():
     assert list(df4.compute()) == list(pd.DataFrame(list(b)))
 
 
-def test_to_textfiles():
+ext_open = [('gz', GzipFile), ('', open)]
+if not PY2:
+    ext_open.append(('bz2', BZ2File))
+@pytest.mark.parametrize('ext,myopen', ext_open)
+def test_to_textfiles(ext, myopen):
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
-    for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        if ext == 'bz2' and PY2:
-            continue
-        with tmpdir() as dir:
-            c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-            dask.compute(*c)
-            assert os.path.exists(os.path.join(dir, '1.' + ext))
+    with tmpdir() as dir:
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
+        dask.compute(*c, get=dask.get)
+        assert os.path.exists(os.path.join(dir, '1.' + ext))
 
-            f = myopen(os.path.join(dir, '1.' + ext), 'rb')
-            text = f.read()
-            if hasattr(text, 'decode'):
-                text = text.decode()
-            assert 'xyz' in text
-            f.close()
+        f = myopen(os.path.join(dir, '1.' + ext), 'rb')
+        text = f.read()
+        if hasattr(text, 'decode'):
+            text = text.decode()
+        assert 'xyz' in text
+        f.close()
 
 
 def test_to_textfiles_name_function_preserves_order():

@@ -93,8 +93,8 @@ def read_text(urlpath, blocksize=None, compression='infer',
         return from_delayed(blocks)
 
 
-def file_to_blocks(f):
-    with f as f:
+def file_to_blocks(lazy_file):
+    with lazy_file as f:
         for line in f:
             yield line
 

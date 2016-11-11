@@ -25,9 +25,11 @@ if sys.version_info[0] < 3:
             except AttributeError:
                 return 'w' in self.file.mode
 
-        @property
-        def read1(self):  # https://bugs.python.org/issue12591
-            return self.file.read
+        def read1(self, *args, **kwargs):  # https://bugs.python.org/issue12591
+            return self.file.read(*args, **kwargs)
+
+        def __iter__(self):
+            return self.file.__iter__()
 
         def __getattr__(self, key):
             return getattr(self.file, key)
