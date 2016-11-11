@@ -1190,6 +1190,11 @@ class _Frame(Base):
                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
+    def abs(self):
+        meta = self._meta_nonempty.abs()
+        return self.map_partitions(M.abs, meta=meta)
+
+    @derived_from(pd.DataFrame)
     def all(self, axis=None, skipna=True, split_every=False):
         return self._reduction_agg('all', axis=axis, skipna=skipna,
                                    split_every=split_every)

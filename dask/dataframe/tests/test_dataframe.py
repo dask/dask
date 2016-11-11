@@ -2012,6 +2012,17 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
 
 
+def test_abs():
+    df = pd.DataFrame({'A': [1, -2, 3, -4, 5],
+                       'B': [-6., -7, -8, -9, 10],
+                       'C': ['a', 'b', 'c', 'd', 'e']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.A.abs(), df.A.abs())
+    assert_eq(ddf[['A', 'B']].abs(), df[['A', 'B']].abs())
+    pytest.raises(TypeError, lambda: ddf.C.abs())
+    pytest.raises(TypeError, lambda: ddf.abs())
+
+
 def test_round():
     df = pd.DataFrame({'col1': [1.123, 2.123, 3.123],
                        'col2': [1.234, 2.234, 3.234]})
