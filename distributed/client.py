@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, Iterator, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from contextlib import contextmanager
 import copy
@@ -72,6 +73,9 @@ class Future(WrappedKey):
     --------
     Client:  Creates futures
     """
+    _cb_executor = None
+    _cb_executor_pid = None
+
     def __init__(self, key, client):
         self.key = key
         tkey = tokey(key)
@@ -154,8 +158,15 @@ class Future(WrappedKey):
         The callback ``fn`` should take the future as its only argument.  This
         will be called regardless of if the future completes successfully,
         errs, or is cancelled
+
+        The callback is executed in a separate thread.
         """
-        self.client.loop.add_callback(done_callback, self, fn)
+        cls = Future
+        if cls._cb_executor is None or cls._cb_executor_pid != os.getpid():
+            cls._cb_executor = ThreadPoolExecutor(1)
+            cls._cb_executor_pid = os.getpid()
+        self.client.loop.add_callback(done_callback, self,
+                                      partial(cls._cb_executor.submit, fn))
 
     def cancel(self):
         """ Returns True if the future has been cancelled """
@@ -263,7 +274,7 @@ class FutureState(object):
 
 @gen.coroutine
 def done_callback(future, callback):
-    """ Wait on future, then call callback """
+    """ Coroutine that waits on future, then calls callback """
     while future.status == 'pending':
         yield future.event.wait()
     callback(future)

@@ -3697,18 +3697,28 @@ def test_add_done_callback(c, s, a, b):
     S = set()
 
     def f(future):
+        f.add_done_callback(g)
+
+    def f(future):
         S.add((future.key, future.status))
 
-    x = c.submit(inc, 1)
-    y = c.submit(throws, "hello")
-    z = c.submit(slowinc, 2, delay=0.3)
+    u = c.submit(inc, 1, key='u')
+    v = c.submit(throws, "hello", key='v')
+    w = c.submit(slowinc, 2, delay=0.3, key='w')
+    x = c.submit(inc, 3, key='x')
+    u.add_done_callback(f)
+    v.add_done_callback(f)
+    w.add_done_callback(f)
+
+    yield _wait((u, v, w, x))
+
     x.add_done_callback(f)
-    y.add_done_callback(f)
-    z.add_done_callback(f)
 
-    yield _wait([x, y, z])
+    t = time()
+    while len(S) < 4 and time() - t < 2.0:
+        yield gen.sleep(0.01)
 
-    assert S == {(x.key, x.status), (y.key, y.status), (z.key, z.status)}
+    assert S == {(f.key, f.status) for f in (u, v, w, x)}
 
 
 @gen_cluster(client=True)
