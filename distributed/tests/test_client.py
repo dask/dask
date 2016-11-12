@@ -2915,7 +2915,7 @@ def test_shutdown_idempotent(loop):
 @gen_cluster(client=True)
 def test_get_returns_early(c, s, a, b):
     start = time()
-    with ignoring(Exception):
+    with ignoring(RuntimeError):
         result = yield c._get({'x': (throws, 1), 'y': (sleep, 1)}, ['x', 'y'])
     assert time() < start + 0.5
     assert not c.futures
@@ -2928,7 +2928,7 @@ def test_get_returns_early(c, s, a, b):
     x = c.submit(inc, 1)
     yield x._result()
 
-    with ignoring(Exception):
+    with ignoring(RuntimeError):
         result = yield c._get({'x': (throws, 1),
                                x.key: (inc, 1)}, ['x', x.key])
     assert x.key in s.tasks

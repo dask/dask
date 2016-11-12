@@ -119,7 +119,7 @@ def deep(n):
 
 
 def throws(x):
-    raise Exception('hello!')
+    raise RuntimeError('hello!')
 
 
 def double(x):
@@ -255,7 +255,7 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}):
                 loop.run_sync(lambda: disconnect('127.0.0.1', port),
                               timeout=0.5)
         for proc in [w['proc'] for w in workers]:
-            with ignoring(Exception):
+            with ignoring(EnvironmentError):
                 proc.terminate()
                 proc.join(timeout=2)
         for q in [w['queue'] for w in workers]:
