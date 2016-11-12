@@ -3697,9 +3697,9 @@ def test_add_done_callback(c, s, a, b):
     S = set()
 
     def f(future):
-        f.add_done_callback(g)
+        future.add_done_callback(g)
 
-    def f(future):
+    def g(future):
         S.add((future.key, future.status))
 
     u = c.submit(inc, 1, key='u')

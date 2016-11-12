@@ -165,8 +165,15 @@ class Future(WrappedKey):
         if cls._cb_executor is None or cls._cb_executor_pid != os.getpid():
             cls._cb_executor = ThreadPoolExecutor(1)
             cls._cb_executor_pid = os.getpid()
+
+        def execute_callback(fut):
+            try:
+                fn(fut)
+            except BaseException:
+                logger.exception("Error in callback %s of %s:", fn, fut)
+
         self.client.loop.add_callback(done_callback, self,
-                                      partial(cls._cb_executor.submit, fn))
+                                      partial(cls._cb_executor.submit, execute_callback))
 
     def cancel(self):
         """ Returns True if the future has been cancelled """
