@@ -549,7 +549,7 @@ def test_tokenize_on_futures(c, s, a, b):
     assert tokenize(x) == tokenize(x)
     assert tokenize(x) == tokenize(y)
 
-    c.futures[x.key]['status'] = 'finished'
+    c.futures[x.key].finish()
 
     assert tok == tokenize(y)
 
@@ -2039,8 +2039,8 @@ def test_long_traceback(c, s, a, b):
     try:
         x = c.submit(deep, 1000)
         yield _wait([x])
-        assert len(dumps(c.futures[x.key]['traceback'])) < 10000
-        assert isinstance(c.futures[x.key]['exception'], RuntimeError)
+        assert len(dumps(c.futures[x.key].traceback)) < 10000
+        assert isinstance(c.futures[x.key].exception, RuntimeError)
     finally:
         sys.setrecursionlimit(n)
 
@@ -3694,18 +3694,21 @@ def test_distribute_tasks_by_ncores(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_add_done_callback(c, s, a, b):
-    x = c.submit(inc, 1)
+    S = set()
 
-    L = []
     def f(future):
-        L.append(future.key)
-        L.append(future.status)
+        S.add((future.key, future.status))
 
+    x = c.submit(inc, 1)
+    y = c.submit(throws, "hello")
+    z = c.submit(slowinc, 2, delay=0.3)
     x.add_done_callback(f)
+    y.add_done_callback(f)
+    z.add_done_callback(f)
 
-    yield _wait(x)
+    yield _wait([x, y, z])
 
-    assert L == [x.key, x.status]
+    assert S == {(x.key, x.status), (y.key, y.status), (z.key, z.status)}
 
 
 @gen_cluster(client=True)
