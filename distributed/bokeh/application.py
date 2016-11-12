@@ -1,3 +1,4 @@
+from __future__ import print_function, division, absolute_import
 
 import atexit
 import json
@@ -14,6 +15,7 @@ from toolz import get_in, concat
 from ..utils import ignoring
 from ..compatibility import logging_names
 from ..config import config
+
 
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)

@@ -18,7 +18,7 @@ from bokeh.plotting import figure
 from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
 from distributed.utils import log_errors
 
-from .export_tool import ExportTool
+# from .export_tool import ExportTool
 
 
 class DashboardComponent(object):
@@ -90,12 +90,12 @@ class TaskStream(DashboardComponent):
                 """
         )
 
-        export = ExportTool()
-        export.register_plot(self.root)
+        # export = ExportTool()
+        # export.register_plot(self.root)
 
         self.root.add_tools(
             hover,
-            export,
+            # export,
             ResetTool(reset_size=False),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
