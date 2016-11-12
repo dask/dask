@@ -46,11 +46,12 @@ class TaskStream(DashboardComponent):
 
     The start and stop time of tasks as they occur on each core of the cluster.
     """
-    def __init__(self, n_rectangles=1000, **kwargs):
+    def __init__(self, n_rectangles=1000, clear_interval=20000, **kwargs):
         """
         kwargs are applied to the bokeh.models.plots.Plot constructor
         """
         self.n_rectangles = n_rectangles
+        self.clear_interval = clear_interval
 
         self.source = ColumnDataSource(data=dict(
             start=[], duration=[], key=[], name=[], color=[],
@@ -116,10 +117,10 @@ class TaskStream(DashboardComponent):
                           for k, v in rectangles.items()}
             self.task_stream_index[0] = index[-1]
 
-            # If there has been a five second delay, clear old rectangles
+            # If there has been a significant delay then clear old rectangles
             if rectangles['start']:
                 last_end = old['start'][ind - 1] + old['duration'][ind - 1]
-                if min(rectangles['start']) > last_end + 20000:  # long delay
+                if min(rectangles['start']) > last_end + self.clear_interval:
                     self.source.data.update(rectangles)
                     return
 
