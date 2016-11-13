@@ -1,3 +1,10 @@
+1.14.3 - November 13th, 2016
+----------------------------
+
+*  Remove custom Bokeh export tool that implicitly relied on nodejs #655
+*  Clean up scheduler logging #657
+
+
 1.14.2 - November 11th, 2016
 ----------------------------
 
