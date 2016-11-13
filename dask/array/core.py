@@ -978,6 +978,11 @@ class Array(Base):
         """ Number of bytes in array """
         return self.size * self.dtype.itemsize
 
+    @property
+    def itemsize(self):
+        """ Length of one array element in bytes """
+        return self.dtype.itemsize
+
     def _keys(self, *args):
         if not args:
             try:
