@@ -23,7 +23,7 @@ paths = [os.path.join(dirname, 'bokeh', name)
              'memory-usage.py', 'task-stream.py', 'task-progress.py',
              'resource-profiles.py', 'worker-table.py', 'processing-stacks.py']]
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
 if not os.path.exists(dask_dir):
@@ -92,7 +92,7 @@ class BokehWebInterface(object):
         atexit.register(cleanup_process)
 
         if not quiet:
-            logger.info(" Bokeh UI at:  http://%s:%d/status/"
+            logger.info("Web UI: http://%s:%d/status/"
                          % (ip, bokeh_port))
 
     def close(self, join=True, timeout=None):

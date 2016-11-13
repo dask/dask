@@ -55,7 +55,7 @@ def test_bokeh(loop):
 
         while True:
             line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
+            if b'Web UI' in line:
                 break
 
         names = ['localhost', '127.0.0.1', get_ip()]
@@ -89,7 +89,7 @@ def test_bokeh_non_standard_ports(loop):
 
         while True:
             line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
+            if b'Web UI' in line:
                 break
 
         start = time()
@@ -119,7 +119,7 @@ def test_bokeh_whitelist(loop):
 
         while True:
             line = proc.stderr.readline()
-            if b'Bokeh UI' in line:
+            if b'Web UI' in line:
                 break
 
         start = time()
@@ -162,7 +162,7 @@ def test_pid_file(loop):
             assert pid
         else:
             assert proc.pid == pid
-    
+
     with tmpfile() as s:
         with popen(['dask-scheduler', '--pid-file', s]) as sched:
             check_pidfile(sched, s)
