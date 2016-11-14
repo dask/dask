@@ -977,3 +977,8 @@ class SerializableLock(object):
 
     def __setstate__(self, token):
         self.__init__(token)
+
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.token)
+
+    __repr__ = __str__
