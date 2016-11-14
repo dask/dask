@@ -228,10 +228,10 @@ def write(stream, msg):
                [struct.pack('Q', len(frame)) for frame in frames])
     stream.write(b''.join(lengths))
 
-    for frame in frames[:-1]:
+    for frame in frames:
         stream.write(frame)
 
-    yield stream.write(frames[-1])
+    yield gen.moment
 
 
 def pingpong(stream):
