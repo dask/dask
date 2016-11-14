@@ -10,7 +10,7 @@ from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .core import read, write, flush
+from .core import read, write, close
 from .utils import ignoring, log_errors
 
 
@@ -112,8 +112,7 @@ class BatchedSend(object):
             if self.buffer:
                 self.buffer, payload = [], self.buffer
                 yield write(self.stream, payload)
-            yield flush(self.stream)
         except StreamClosedError:
             if not ignore_closed:
                 raise
-        self.stream.close()
+        yield close(self.stream)

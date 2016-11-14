@@ -238,22 +238,16 @@ def write(stream, msg):
 
 
 @gen.coroutine
-def flush(stream):
-    """Flush the stream's output buffer.
-    This should be the last operation before closing, otherwise this
-    coroutine may never return.
-    """
-    if stream.writing():
-        yield stream.write(b'')
-
-
-@gen.coroutine
 def close(stream):
-    """Close a stream safely.
+    """Close a stream after flushing it.
+    No concurrent write() should be issued during execution of this
+    coroutine.
     """
     if not stream.closed():
         try:
-            yield flush(stream)
+            # Flush the stream's write buffer by waiting for a last write.
+            if stream.writing():
+                yield stream.write(b'')
         except StreamClosedError:
             pass
         finally:
