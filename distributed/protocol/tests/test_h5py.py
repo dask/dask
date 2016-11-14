@@ -67,15 +67,16 @@ import dask.array as da
 
 @gen_cluster(client=True)
 def test_h5py_serialize(c, s, a, b):
+    from dask.utils import SerializableLock
+    lock = SerializableLock('hdf5')
     with tmpfile() as fn:
         with h5py.File(fn, mode='a') as f:
             x = f.create_dataset('/group/x', shape=(4,), dtype='i4',
                                  chunks=(2,))
             x[:] = [1, 2, 3, 4]
-            f.flush()
         with h5py.File(fn, mode='r') as f:
             dset = f['/group/x']
-            x = da.from_array(dset, chunks=dset.chunks)
+            x = da.from_array(dset, chunks=dset.chunks, lock=lock)
             y = c.compute(x)
             y = yield y._result()
             assert (y[:] == dset[:]).all()

@@ -13,6 +13,8 @@ import sys
 from time import time, sleep
 import uuid
 
+import six
+
 from toolz import merge
 from tornado import gen, queues
 from tornado.ioloop import IOLoop, TimeoutError
@@ -182,11 +184,9 @@ def readone(stream):
 def run_scheduler(q, scheduler_port=0, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     IOLoop.clear_instance()
     loop = IOLoop(); loop.make_current()
     PeriodicCallback(lambda: None, 500).start()
-    logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
     scheduler = Scheduler(loop=loop, validate=True, **kwargs)
     done = scheduler.start(scheduler_port)
@@ -201,12 +201,10 @@ def run_scheduler(q, scheduler_port=0, **kwargs):
 def run_worker(q, scheduler_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     with log_errors():
         IOLoop.clear_instance()
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
-        logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Worker('127.0.0.1', scheduler_port, ip='127.0.0.1',
                         loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
@@ -220,12 +218,10 @@ def run_worker(q, scheduler_port, **kwargs):
 def run_nanny(q, scheduler_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     with log_errors():
         IOLoop.clear_instance()
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
-        logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Nanny('127.0.0.1', scheduler_port, ip='127.0.0.1',
                        loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
@@ -352,10 +348,12 @@ from .worker import Worker
 from .client import Client
 
 @gen.coroutine
-def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={}):
+def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
+                  worker_kwargs={}):
     s = Scheduler(ip='127.0.0.1', loop=loop, validate=True, **scheduler_kwargs)
     done = s.start(0)
-    workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop)
+    workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i, loop=loop,
+                      **worker_kwargs)
                 for i, (k, v) in enumerate(ncores)]
     for w in workers:
         w.rpc = workers[0].rpc
@@ -383,7 +381,7 @@ def end_cluster(s, workers):
 
 
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
-        Worker=Worker, client=False, scheduler_kwargs={}):
+        Worker=Worker, client=False, scheduler_kwargs={}, worker_kwargs={}):
     from distributed import Client
     """ Coroutine test with small cluster
 
@@ -405,7 +403,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
             loop.make_current()
 
             s, workers = loop.run_sync(lambda: start_cluster(ncores, loop,
-                            Worker=Worker, scheduler_kwargs=scheduler_kwargs))
+                            Worker=Worker, scheduler_kwargs=scheduler_kwargs,
+                            worker_kwargs=worker_kwargs))
             args = [s] + workers
 
             if client:
@@ -490,3 +489,29 @@ def popen(*args, **kwargs):
                 while line:
                     print(line)
                     line = proc.stdout.readline()
+
+
+@contextmanager
+def captured_logger(logger):
+    """Capture output from the given Logger.
+    """
+    orig_handlers = logger.handlers[:]
+    sio = six.StringIO()
+    logger.handlers[:] = [logging.StreamHandler(sio)]
+    try:
+        yield sio
+    finally:
+        logger.handlers[:] = orig_handlers
+
+
+@contextmanager
+def captured_handler(handler):
+    """Capture output from the given logging.StreamHandler.
+    """
+    assert isinstance(handler, logging.StreamHandler)
+    orig_stream = handler.stream
+    handler.stream = six.StringIO()
+    try:
+        yield handler.stream
+    finally:
+        handler.stream = orig_stream

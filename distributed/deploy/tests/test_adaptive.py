@@ -33,7 +33,7 @@ def test_adaptive_local_cluster(loop):
             assert not c.ncores()
 
 
-@gen_test(timeout=120)
+@gen_test(timeout=30)
 def test_adaptive_local_cluster_multi_workers():
     loop = IOLoop.current()
     cluster = LocalCluster(0, scheduler_port=0, silence_logs=False, nanny=False,
@@ -43,11 +43,27 @@ def test_adaptive_local_cluster_multi_workers():
     c = Client(cluster, start=False, loop=loop)
     yield c._start()
 
-    for i in range(20):
-        futures = c.map(slowinc, range(100), delay=0.01)
-        yield c._gather(futures)
-        del futures
-        yield gen.sleep(0.1)
+    futures = c.map(slowinc, range(100), delay=0.01)
+
+    start = time()
+    while not cluster.workers:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    yield c._gather(futures)
+    del futures
+
+    start = time()
+    while cluster.workers:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert not cluster.workers
+    yield gen.sleep(0.2)
+    assert not cluster.workers
+
+    futures = c.map(slowinc, range(100), delay=0.01)
+    yield c._gather(futures)
 
     yield c._shutdown()
     yield cluster._close()

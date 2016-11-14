@@ -119,7 +119,7 @@ class Worker(Server):
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
-                 name=None, heartbeat_interval=5000,
+                 name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit=int(TOTAL_MEMORY * 0.6), executor=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
@@ -140,6 +140,7 @@ class Worker(Server):
             self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
+        self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
         self.active = set()
@@ -469,7 +470,11 @@ class Worker(Server):
                 try:
                     msgs = yield read(stream)
                 except StreamClosedError:
-                    break
+                    if self.reconnect:
+                        break
+                    else:
+                        yield self._close(report=False)
+                        break
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
