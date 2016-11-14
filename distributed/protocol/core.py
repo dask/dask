@@ -117,7 +117,7 @@ def loads(frames, deserialize=True):
 
         return msg
     except Exception as e:
-        logger.critical("Failed to deerialize", exc_info=True)
+        logger.critical("Failed to deserialize", exc_info=True)
         raise
 
 

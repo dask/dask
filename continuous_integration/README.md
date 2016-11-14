@@ -10,7 +10,7 @@ Build the container:
 docker build -t distributed-hdfs .
 ```
 
-Start the container and wait for the it to be ready:
+Start the container and wait for it to be ready:
 
 ```bash
 docker run -it -p 8020:8020 -p 50070:50070 -v $(pwd):/distributed distributed-hdfs
