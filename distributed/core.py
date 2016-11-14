@@ -186,7 +186,7 @@ class Server(TCPServer):
                     break
         finally:
             try:
-                stream.close()
+                yield close(stream)
             except Exception as e:
                 logger.warn("Failed while closing writer",  exc_info=True)
         logger.info("Close connection from %s:%d to %s", address[0], address[1],
@@ -229,9 +229,34 @@ def write(stream, msg):
     stream.write(b''.join(lengths))
 
     for frame in frames:
+        # Can't wait for the write() Future as it may be lost
+        # ("If write is called again before that Future has resolved,
+        #   the previous future will be orphaned and will never resolve")
         stream.write(frame)
 
     yield gen.moment
+
+
+@gen.coroutine
+def flush(stream):
+    """Flush the stream's output buffer.
+    This is recommended before closing the stream.
+    """
+    if stream.writing():
+        yield stream.write(b'')
+
+
+@gen.coroutine
+def close(stream):
+    """Close a stream safely.
+    """
+    if not stream.closed():
+        try:
+            flush(stream)
+        except StreamClosedError:
+            pass
+        finally:
+            stream.close()
 
 
 def pingpong(stream):
@@ -295,7 +320,7 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True,
     else:
         response = None
     if kwargs.get('close'):
-        stream.close()
+        close(stream)
     raise gen.Return(response)
 
 
@@ -398,7 +423,7 @@ class rpc(object):
         for stream in self.streams:
             if stream and not stream.closed():
                 try:
-                    stream.close()
+                    close(stream)
                 except (OSError, IOError, StreamClosedError):
                     pass
         self.streams.clear()
@@ -551,15 +576,15 @@ class ConnectionPool(object):
                     self.open, self.active)
         for streams in list(self.available.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
 
     def close(self):
         for streams in list(self.available.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
         for streams in list(self.occupied.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
 
 
 def coerce_to_address(o, out=str):

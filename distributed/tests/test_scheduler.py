@@ -20,7 +20,7 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker
-from distributed.core import connect, read, write, rpc
+from distributed.core import connect, read, write, close, rpc
 from distributed.scheduler import (validate_state, decide_worker,
         Scheduler)
 from distributed.client import _wait
@@ -402,7 +402,7 @@ def test_scheduler(s, a, b):
             break
 
     write(stream, {'op': 'close'})
-    stream.close()
+    close(stream)
 
 
 @gen_cluster()
@@ -467,7 +467,7 @@ def test_server(s, a, b):
     assert msg == {'op': 'stream-closed'}
     with pytest.raises(StreamClosedError):
         yield readone(stream)
-    stream.close()
+    close(stream)
 
 
 @gen_cluster()
@@ -547,7 +547,7 @@ def test_feed(s, a, b):
         expected = s.processing, s.stacks
         assert cloudpickle.loads(response) == expected
 
-    stream.close()
+    close(stream)
 
 
 @gen_cluster()
@@ -573,7 +573,7 @@ def test_feed_setup_teardown(s, a, b):
         response = yield read(stream)
         assert response == 'OK'
 
-    stream.close()
+    close(stream)
     start = time()
     while not hasattr(s, 'flag'):
         yield gen.sleep(0.01)
@@ -599,7 +599,7 @@ def test_feed_large_bytestring(s, a, b):
         response = yield read(stream)
         assert response == True
 
-    stream.close()
+    close(stream)
 
 
 @gen_test(timeout=None)

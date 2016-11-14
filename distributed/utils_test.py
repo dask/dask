@@ -20,7 +20,7 @@ from tornado import gen, queues
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
-from .core import connect, read, write, rpc
+from .core import connect, read, write, close, rpc
 from .utils import ignoring, log_errors, sync
 import pytest
 
@@ -303,7 +303,7 @@ def disconnect(ip, port):
         yield write(stream, {'op': 'terminate', 'close': True})
         response = yield read(stream)
     finally:
-        stream.close()
+        yield close(stream)
 
 
 import pytest

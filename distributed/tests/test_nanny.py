@@ -12,7 +12,7 @@ from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from distributed import Nanny, rpc, Scheduler
-from distributed.core import connect, read, write
+from distributed.core import connect, read, write, close
 from distributed.protocol.pickle import dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster
@@ -120,7 +120,7 @@ def test_monitor_resources(s):
         assert isinstance(msg, dict)
         assert {'cpu_percent', 'memory_percent'}.issubset(msg)
 
-    stream.close()
+    close(stream)
     yield n._close()
     s.stop()
 
