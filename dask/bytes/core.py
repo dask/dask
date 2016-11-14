@@ -450,7 +450,6 @@ def _expand_paths(path, name_function, num):
 1.  A list of paths -- ['foo.json', 'bar.json', ...]
 2.  A directory -- 'foo/
 3.  A path with a * in it -- 'foo.*.json'""")
-    print(path, paths)
     return paths
 
 

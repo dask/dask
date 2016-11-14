@@ -254,7 +254,7 @@ def test_modification_time_read_bytes():
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.xfail()
+@pytest.mark.skip()
 def test_modification_time_open_files():
     with s3_context('compress', files):
         a = open_files('s3://compress/test/accounts.*')
