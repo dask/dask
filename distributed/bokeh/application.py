@@ -1,3 +1,4 @@
+from __future__ import print_function, division, absolute_import
 
 import atexit
 import json
@@ -15,13 +16,14 @@ from ..utils import ignoring
 from ..compatibility import logging_names
 from ..config import config
 
+
 dirname = os.path.dirname(distributed.__file__)
 paths = [os.path.join(dirname, 'bokeh', name)
          for name in ['background', 'status', 'tasks', 'workers',
              'memory-usage.py', 'task-stream.py', 'task-progress.py',
              'resource-profiles.py', 'worker-table.py', 'processing-stacks.py']]
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 dask_dir = os.path.join(os.path.expanduser('~'), '.dask')
 if not os.path.exists(dask_dir):
@@ -90,7 +92,7 @@ class BokehWebInterface(object):
         atexit.register(cleanup_process)
 
         if not quiet:
-            logger.info(" Bokeh UI at:  http://%s:%d/status/"
+            logger.info("Web UI: http://%s:%d/status/"
                          % (ip, bokeh_port))
 
     def close(self, join=True, timeout=None):

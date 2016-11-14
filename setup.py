@@ -12,7 +12,7 @@ if sys.version_info < (3, 4):
     requires.append('singledispatch')
 
 setup(name='distributed',
-      version='1.14.1',
+      version='1.14.3',
       description='Distributed computing',
       url='https://distributed.readthedocs.io/en/latest/',
       maintainer='Matthew Rocklin',

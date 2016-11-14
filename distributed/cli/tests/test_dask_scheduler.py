@@ -147,7 +147,7 @@ def test_pid_file(loop):
             assert pid
         else:
             assert proc.pid == pid
-    
+
     with tmpfile() as s:
         with popen(['dask-scheduler', '--pid-file', s]) as sched:
             check_pidfile(sched, s)

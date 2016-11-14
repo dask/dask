@@ -242,10 +242,12 @@ def write(stream, msg):
 
         futures.append(stream.write(frames[-1]))
 
-        if WINDOWS:
-            yield futures[-1]
-        else:
-            yield futures
+        while stream._write_buffer:
+            try:
+                yield gen.with_timeout(timedelta(seconds=0.01), futures[-1])
+                break
+            except gen.TimeoutError:
+                pass
 
 
 def pingpong(stream):

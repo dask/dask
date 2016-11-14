@@ -1,3 +1,21 @@
+1.14.3 - November 13th, 2016
+----------------------------
+
+*  Remove custom Bokeh export tool that implicitly relied on nodejs #655
+*  Clean up scheduler logging #657
+
+
+1.14.2 - November 11th, 2016
+----------------------------
+
+*  Support more numpy dtypes in custom serialization, #627, #630, #636
+*  Update Bokeh plots #628
+*  Improve spill to disk heuristics #633
+*  Add Export tool to Task Stream plot
+*  Reverse frame order in loads for very many frames #651
+*  Add timeout when waiting on write #653
+
+
 1.14.0 - November 3rd, 2016
 ---------------------------
 
