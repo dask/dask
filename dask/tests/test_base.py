@@ -18,6 +18,7 @@ def import_or_none(path):
         return pytest.importorskip(path)
     return None
 
+
 tz = pytest.importorskip('toolz')
 da = import_or_none('dask.array')
 db = import_or_none('dask.bag')

@@ -13,6 +13,7 @@ from ..utils import ignoring
 def noop_file(file, **kwargs):
     return file
 
+
 compress = {'gzip': gzip_compress,
             'zlib': zlib.compress,
             'bz2': bz2.compress,

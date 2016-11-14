@@ -544,6 +544,7 @@ def merge_sync(dsk1, dsk2):
         new_dsk[new_key] = task
     return new_dsk, sd
 
+
 # store the name iterator in the function
 merge_sync.names = ('merge_%d' % i for i in count(1))
 

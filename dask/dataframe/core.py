@@ -2646,6 +2646,7 @@ def elemwise_property(attr, s):
     meta = pd.Series([], dtype=getattr(s._meta, attr).dtype)
     return map_partitions(getattr, s, attr, meta=meta)
 
+
 for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
              'hour', 'day', 'dayofweek', 'dayofyear', 'week', 'weekday',
              'weekofyear', 'month', 'quarter', 'year']:

@@ -257,6 +257,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None):
                      split_every=split_every,
                      combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
+
 with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
 
@@ -385,6 +386,7 @@ def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
+
 
 with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
