@@ -37,7 +37,7 @@ class EchoServer(TCPServer):
                 self.count += 1
                 yield write(stream, msg)
             except StreamClosedError as e:
-                pass
+                return
 
     def listen(self, port=0):
         while True:
@@ -113,7 +113,6 @@ def test_BatchedSend():
         assert str(len(b.buffer)) in str(b)
         assert str(len(b.buffer)) in repr(b)
         b.start(stream)
-        yield b.last_send
 
         yield gen.sleep(0.020)
 
@@ -135,41 +134,30 @@ def test_send_before_start():
         stream = yield client.connect('127.0.0.1', e.port)
 
         b = BatchedSend(interval=10)
-        yield b.last_send
 
         b.send('hello')
-        b.send('hello')
+        b.send('world')
 
         b.start(stream)
-        result = yield read(stream); assert result == ['hello', 'hello']
+        result = yield read(stream); assert result == ['hello', 'world']
 
 
 @gen_test()
-def test_send_after_stream_start_before_stream_finish():
+def test_send_after_stream_start():
     with echo_server() as e:
         client = TCPClient()
         stream = yield client.connect('127.0.0.1', e.port)
 
         b = BatchedSend(interval=10)
-        yield b.last_send
 
         b.start(stream)
         b.send('hello')
-        result = yield read(stream); assert result == ['hello']
+        b.send('world')
+        result = yield read(stream)
+        if len(result) < 2:
+            result += yield read(stream)
+        assert result == ['hello', 'world']
 
-
-@gen_test()
-def test_send_after_stream_finish():
-    with echo_server() as e:
-        client = TCPClient()
-        stream = yield client.connect('127.0.0.1', e.port)
-
-        b = BatchedSend(interval=10)
-        b.start(stream)
-        yield b.last_send
-
-        b.send('hello')
-        result = yield read(stream); assert result == ['hello']
 
 @gen_test()
 def test_send_before_close():
@@ -179,7 +167,6 @@ def test_send_before_close():
 
         b = BatchedSend(interval=10)
         b.start(stream)
-        yield b.last_send
 
         cnt = int(e.count)
         b.send('hello')
@@ -203,12 +190,29 @@ def test_close_closed():
 
         b = BatchedSend(interval=10)
         b.start(stream)
-        yield b.last_send
 
         b.send(123)
         stream.close()  # external closing
 
         yield b.close(ignore_closed=True)
+
+
+@gen_test()
+def test_close_not_started():
+    b = BatchedSend(interval=10)
+    yield b.close()
+
+
+@gen_test()
+def test_close_twice():
+    with echo_server() as e:
+        client = TCPClient()
+        stream = yield client.connect('127.0.0.1', e.port)
+
+        b = BatchedSend(interval=10)
+        b.start(stream)
+        yield b.close()
+        yield b.close()
 
 
 @slow
@@ -253,14 +257,12 @@ def test_sending_traffic_jam():
 
         b = BatchedSend(interval=0.01)
         b.start(stream)
-        yield b.last_send
 
         n = 50
 
         msg = {'x': to_serialize(data)}
         for i in range(n):
             b.send(assoc(msg, 'i', i))
-            print(len(b.buffer))
             yield gen.sleep(0.001)
 
         results = []
