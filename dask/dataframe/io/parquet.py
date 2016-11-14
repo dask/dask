@@ -3,11 +3,9 @@ import struct
 
 from toolz import first
 
-import dask
 from dask import delayed, compute
-from dask.bytes.core import open_files, OpenFileCreator
+from dask.bytes.core import OpenFileCreator
 import dask.dataframe as dd
-from dask import delayed
 
 try:
     import fastparquet
@@ -19,8 +17,9 @@ except:
 
 
 def read_parquet(path, columns=None, filters=[], categories=None, index=None,
-        **kwargs):
-    """ Read Dask DataFrame from ParquetFile
+                 **kwargs):
+    """
+    Read Dask DataFrame from ParquetFile
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
@@ -50,13 +49,11 @@ def read_parquet(path, columns=None, filters=[], categories=None, index=None,
     myopen = OpenFileCreator(path, compression=None, text=False)
 
     try:
-        pf = fastparquet.ParquetFile(path + '/_metadata',
+        pf = fastparquet.ParquetFile(path + sep + '_metadata',
                                      open_with=myopen,
                                      sep=myopen.fs.sep)
-        root = path
     except:
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
-        root = os.path.dirname(path)  # TODO: this might fail on S3 + Windows
 
     columns = columns or (pf.columns + list(pf.cats))
     rgs = [rg for rg in pf.row_groups if
@@ -97,7 +94,7 @@ def read_parquet(path, columns=None, filters=[], categories=None, index=None,
 
 
 def to_parquet(path, df, encoding=default_encoding, compression=None,
-        write_index=None):
+               write_index=None):
     """
     Write Dask.dataframe to parquet
 
@@ -131,12 +128,10 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
 
-    sep = '/'
-    # mkdirs(filename)
-    metadata_fn = sep.join([path, '_metadata'])
-
     myopen = OpenFileCreator(path, compression=None, text=False)
     myopen.fs.mkdirs(path)
+    sep = myopen.fs.sep
+    metadata_fn = sep.join([path, '_metadata'])
 
     if write_index is True or write_index is None and df.known_divisions:
         df = df.reset_index()
@@ -148,8 +143,8 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
     outfiles = [sep.join([path, fn]) for fn in filenames]
 
     writes = [delayed(fastparquet.writer.make_part_file)(
-                myopen(outfile, 'wb'), partition, fmd.schema,
-                compression=compression)
+              myopen(outfile, 'wb'), partition, fmd.schema,
+              compression=compression)
               for outfile, partition in zip(outfiles, partitions)]
 
     out = compute(*writes)

@@ -1,15 +1,14 @@
 import os
-
-import pytest
-
-import pandas as pd
 import numpy as np
-fastparquet = pytest.importorskip('fastparquet')
+import pandas as pd
+import pytest
 
 from dask.utils import tmpdir
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
+fastparquet = pytest.importorskip('fastparquet')
+
 
 def test_local(tmpdir):
     tmpdir = str(tmpdir)
@@ -26,8 +25,6 @@ def test_local(tmpdir):
     assert 'part.0.parquet' in files
 
     df2 = read_parquet(tmpdir, index=False)
-
-    pf = fastparquet.ParquetFile(tmpdir)
 
     assert len(df2.divisions) > 1
 
@@ -46,7 +43,6 @@ def test_index(tmpdir):
 
     ddf = dd.from_pandas(df, npartitions=3)
     to_parquet(tmpdir, ddf)
-    pf = fastparquet.ParquetFile(tmpdir)
 
     ddf2 = read_parquet(tmpdir)
     assert_eq(ddf, ddf2)
