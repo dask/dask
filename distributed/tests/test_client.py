@@ -2868,7 +2868,7 @@ def test_get_stacks_processing_sync(loop):
 
             futures = c.map(slowinc, range(10), delay=0.1,
                             workers=[('127.0.0.1', a['port'])],
-                            allow_other_workers=True)
+                            allow_other_workers=False)
 
             sleep(0.2)
 
@@ -2877,7 +2877,6 @@ def test_get_stacks_processing_sync(loop):
             stacks = c.stacks()
             processing = c.processing()
 
-            assert stacks[aa]
             assert all(k.startswith('slowinc') for k in stacks[aa])
             assert stacks[bb] == []
 
