@@ -15,7 +15,6 @@ from toolz import pluck
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
-from distributed.batched import BatchedStream
 from distributed.core import rpc, connect, read, write
 from distributed.client import _wait
 from distributed.scheduler import Scheduler
@@ -25,7 +24,7 @@ from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import ignoring
 from distributed.utils_test import (loop, inc, gen_cluster,
-        slow, slowinc, throws, current_loop, gen_test)
+        slow, slowinc, throws, current_loop, gen_test, readone)
 
 
 
@@ -459,16 +458,16 @@ def test_gather(s, a, b):
 @gen_cluster()
 def test_compute_stream(s, a, b):
     stream = yield connect(a.ip, a.port)
+
     yield write(stream, {'op': 'compute-stream'})
     msgs = [{'op': 'compute-task', 'function': dumps(inc), 'args': dumps((i,)), 'key': 'x-%d' % i}
             for i in range(10)]
 
-    bstream = BatchedStream(stream, 0)
     for msg in msgs[:5]:
         yield write(stream, msg)
 
     for i in range(5):
-        msg = yield read(bstream)
+        msg = yield readone(stream)
         assert msg['status'] == 'OK'
         assert msg['key'][0] == 'x'
 
@@ -476,7 +475,7 @@ def test_compute_stream(s, a, b):
         yield write(stream, msg)
 
     for i in range(5):
-        msg = yield read(bstream)
+        msg = yield readone(stream)
         assert msg['status'] == 'OK'
         assert msg['key'][0] == 'x'
 

@@ -14,7 +14,7 @@ from time import time, sleep
 import uuid
 
 from toolz import merge
-from tornado import gen
+from tornado import gen, queues
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
@@ -143,6 +143,40 @@ def slowadd(x, y, delay=0.02):
     from time import sleep
     sleep(delay)
     return x + y
+
+
+_readone_queues = {}
+
+@gen.coroutine
+def readone(stream):
+    """
+    Read one message at a time from a stream that reads lists of
+    messages.
+    """
+    try:
+        q = _readone_queues[stream]
+    except KeyError:
+        q = _readone_queues[stream] = queues.Queue()
+
+        @gen.coroutine
+        def background_read():
+            while True:
+                try:
+                    messages = yield read(stream)
+                except StreamClosedError:
+                    break
+                for msg in messages:
+                    q.put_nowait(msg)
+            q.put_nowait(None)
+            del _readone_queues[stream]
+
+        background_read()
+
+    msg = yield q.get()
+    if msg is None:
+        raise StreamClosedError
+    else:
+        raise gen.Return(msg)
 
 
 def run_scheduler(q, scheduler_port=0, **kwargs):
