@@ -24,6 +24,9 @@ class BatchedSend(object):
     more than one message every interval milliseconds.  We send lists of
     messages.
 
+    Batching several messages at once helps performance when sending
+    a myriad of tiny messages.
+
     Example
     -------
     >>> stream = yield connect(ip, port)
@@ -74,12 +77,12 @@ class BatchedSend(object):
                 continue
             payload, self.buffer = self.buffer, []
             self.batch_count += 1
+            self.next_deadline = self.loop.time() + self.interval
             try:
                 yield write(self.stream, payload)
             except Exception:
                 logger.exception("Error in batched write")
                 break
-            self.next_deadline = self.loop.time() + self.interval
 
         self.stopped.set()
 
@@ -93,7 +96,9 @@ class BatchedSend(object):
 
         self.message_count += 1
         self.buffer.append(msg)
-        self.waker.set()
+        # Avoid spurious wakeups if possible
+        if self.next_deadline is None:
+            self.waker.set()
 
     @gen.coroutine
     def close(self, ignore_closed=False):
@@ -105,10 +110,6 @@ class BatchedSend(object):
         yield self.stopped.wait()
         try:
             if self.buffer:
-                if self.next_deadline is not None:
-                    delay = self.next_deadline - self.loop.time()
-                    if delay > 0:
-                        yield gen.sleep(delay)
                 self.buffer, payload = [], self.buffer
                 yield write(self.stream, payload)
         except StreamClosedError:
