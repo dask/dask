@@ -13,6 +13,8 @@ import sys
 from time import time, sleep
 import uuid
 
+import six
+
 from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
@@ -148,11 +150,9 @@ def slowadd(x, y, delay=0.02):
 def run_scheduler(q, scheduler_port=0, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     IOLoop.clear_instance()
     loop = IOLoop(); loop.make_current()
     PeriodicCallback(lambda: None, 500).start()
-    logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
     scheduler = Scheduler(loop=loop, validate=True, **kwargs)
     done = scheduler.start(scheduler_port)
@@ -167,12 +167,10 @@ def run_scheduler(q, scheduler_port=0, **kwargs):
 def run_worker(q, scheduler_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     with log_errors():
         IOLoop.clear_instance()
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
-        logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Worker('127.0.0.1', scheduler_port, ip='127.0.0.1',
                         loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
@@ -186,12 +184,10 @@ def run_worker(q, scheduler_port, **kwargs):
 def run_nanny(q, scheduler_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
-    import logging
     with log_errors():
         IOLoop.clear_instance()
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
-        logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Nanny('127.0.0.1', scheduler_port, ip='127.0.0.1',
                        loop=loop, **kwargs)
         loop.run_sync(lambda: worker._start(0))
@@ -456,3 +452,29 @@ def popen(*args, **kwargs):
                 while line:
                     print(line)
                     line = proc.stdout.readline()
+
+
+@contextmanager
+def captured_logger(logger):
+    """Capture output from the given Logger.
+    """
+    orig_handlers = logger.handlers[:]
+    sio = six.StringIO()
+    logger.handlers[:] = [logging.StreamHandler(sio)]
+    try:
+        yield sio
+    finally:
+        logger.handlers[:] = orig_handlers
+
+
+@contextmanager
+def captured_handler(handler):
+    """Capture output from the given logging.StreamHandler.
+    """
+    assert isinstance(handler, logging.StreamHandler)
+    orig_stream = handler.stream
+    handler.stream = six.StringIO()
+    try:
+        yield handler.stream
+    finally:
+        handler.stream = orig_stream

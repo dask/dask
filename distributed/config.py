@@ -1,7 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import logging
 import os
-from .compatibility import FileExistsError
+import sys
+
+from .compatibility import FileExistsError, logging_names
+
 try:
     import yaml
 except ImportError:
@@ -33,3 +37,26 @@ else:
 
     ensure_config_file()
     config = load_config_file()
+
+
+def initialize_logging(config):
+    loggers = config.get('logging', {})
+    loggers.setdefault('distributed', 'info')
+
+    fmt = '%(name)s - %(levelname)s - %(message)s'
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(fmt))
+    for name, level in loggers.items():
+        LEVEL = logging_names[level.upper()]
+        logger = logging.getLogger(name)
+        logger.setLevel(LEVEL)
+        logger.addHandler(handler)
+        logger.propagate = False
+
+    # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
+    # XXX this silences legitimate error messages
+    logging.getLogger('tornado').setLevel(logging.CRITICAL)
+
+
+initialize_logging(config)
