@@ -17,7 +17,7 @@ from distributed.utils import get_ip, All
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.cli.utils import check_python_3
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, TimeoutError
 from tornado import gen
 
 logger = logging.getLogger('distributed.dask_worker')
@@ -58,16 +58,20 @@ def handle_signal(sig, frame):
 @click.option('--memory-limit', default='auto',
               help="Number of bytes before spilling data to disk. "
               "This can be an integer (nbytes) float (fraction of total memory) or auto")
-@click.option('--no-nanny', is_flag=True)
+@click.option('--reconnect/--no-reconnect', default=True,
+              help="Try to automatically reconnect to scheduler if disconnected")
+@click.option('--nanny/--no-nanny', default=True,
+              help="Start workers in nanny process for management")
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
-@click.option('--temp-filename', default=None, help="Internal use only")
+@click.option('--temp-filename', default=None,
+              help="Internal use only")
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        no_nanny, name, memory_limit, pid_file, temp_filename):
-    if no_nanny:
-        port = worker_port
-    else:
+        nanny, name, memory_limit, pid_file, temp_filename, reconnect):
+    if nanny:
         port = nanny_port
+    else:
+        port = worker_port
 
     try:
         scheduler_host, scheduler_port = scheduler.split(':')
@@ -112,14 +116,14 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         memory_limit /= nprocs
         memory_limit = int(memory_limit)
 
-    if no_nanny:
+    if nanny:
+        kwargs = {'worker_port': worker_port}
+        t = Nanny
+    else:
         kwargs = {}
         if nanny_port:
             kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
-    else:
-        kwargs = {'worker_port': worker_port}
-        t = Nanny
 
     if host is not None:
         ip = socket.gethostbyname(host)
@@ -129,13 +133,13 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         ip = get_ip(scheduler_ip, scheduler_port)
     nannies = [t(scheduler_ip, scheduler_port, ncores=nthreads, ip=ip,
                  services=services, name=name, loop=loop,
-                 memory_limit=memory_limit, **kwargs)
+                 memory_limit=memory_limit, reconnect=reconnect, **kwargs)
                for i in range(nprocs)]
 
-    for nanny in nannies:
-        nanny.start(port)
+    for n in nannies:
+        n.start(port)
         if t is Nanny:
-            global_nannies.append(nanny)
+            global_nannies.append(n)
 
     if temp_filename:
         @gen.coroutine
@@ -149,9 +153,18 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                 json.dump(msg, f)
         loop.add_callback(f)
 
-    loop.start()
-    logger.info("End worker")
-    loop.close()
+    @gen.coroutine
+    def run():
+        while all(n.status != 'closed' for n in nannies):
+            yield gen.sleep(0.2)
+
+    try:
+        loop.run_sync(run)
+    except (KeyboardInterrupt, TimeoutError):
+        pass
+    finally:
+        logger.info("End worker")
+        loop.close()
 
     loop2 = IOLoop()
 
@@ -159,18 +172,19 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
     def f():
         scheduler = rpc(ip=nannies[0].scheduler.ip,
                         port=nannies[0].scheduler.port)
-        if not no_nanny:
+        if nanny:
             yield gen.with_timeout(timedelta(seconds=2),
                     All([scheduler.unregister(address=n.worker_address, close=True)
                         for n in nannies if n.process and n.worker_port]), io_loop=loop2)
 
     loop2.run_sync(f)
 
-    if not no_nanny:
+    if nanny:
         for n in nannies:
-            n.process.terminate()
+            if isalive(n.process):
+                n.process.terminate()
 
-    if not no_nanny:
+    if nanny:
         start = time()
         while (any(isalive(n.process) for n in nannies)
                 and time() < start + 1):

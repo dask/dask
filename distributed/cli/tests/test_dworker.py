@@ -11,8 +11,9 @@ from time import time, sleep
 
 from distributed import Scheduler, Client
 from distributed.core import rpc
+from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
-from distributed.utils_test import loop, popen
+from distributed.utils_test import loop, popen, slow
 
 
 def test_nanny_worker_ports(loop):
@@ -36,3 +37,15 @@ def test_no_nanny(loop):
         with popen(['dask-worker', '127.0.0.1:8786', '--no-nanny']) as worker:
             assert any(b'Registered' in worker.stderr.readline()
                        for i in range(10))
+
+
+@slow
+@pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])
+def test_no_reconnect(nanny, loop):
+    with popen(['dask-worker', '127.0.0.1:8786', '--no-reconnect', nanny]) as worker:
+        with popen(['dask-scheduler']) as sched:
+            sleep(1)
+        start = time()
+        while isalive(worker):
+            sleep(0.1)
+            assert time() < start + 10

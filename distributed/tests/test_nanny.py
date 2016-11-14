@@ -137,3 +137,16 @@ def test_run(s):
         assert response['result'] == 1
 
     yield n._close()
+
+
+
+@gen_cluster(Worker=Nanny,
+             ncores=[('127.0.0.1', 1)],
+             worker_kwargs={'reconnect': False})
+def test_close_on_disconnect(s, w):
+    yield s.close()
+
+    start = time()
+    while w.status != 'closed':
+        yield gen.sleep(0.01)
+        assert time() < start + 5

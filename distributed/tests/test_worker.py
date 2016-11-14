@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sys
+from time import time
 import traceback
 
 import pytest
@@ -575,3 +576,14 @@ def test_str(c, s, w):
     y = c.persist(x)
     yield _wait(y)
     assert len(w.data.slow)  # something is on disk
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)],
+             worker_kwargs={'reconnect': False})
+def test_close_on_disconnect(s, w):
+    yield s.close()
+
+    start = time()
+    while w.status != 'closed':
+        yield gen.sleep(0.01)
+        assert time() < start + 5
