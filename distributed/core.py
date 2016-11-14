@@ -240,7 +240,8 @@ def write(stream, msg):
 @gen.coroutine
 def flush(stream):
     """Flush the stream's output buffer.
-    This is recommended before closing the stream.
+    This should be the last operation before closing, otherwise this
+    coroutine may never return.
     """
     if stream.writing():
         yield stream.write(b'')
@@ -252,7 +253,7 @@ def close(stream):
     """
     if not stream.closed():
         try:
-            flush(stream)
+            yield flush(stream)
         except StreamClosedError:
             pass
         finally:
