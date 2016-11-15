@@ -146,11 +146,21 @@ def vsum(*args):
 def test_stress_communication(c, s, *workers):
     s.validate = False # very slow otherwise
     da = pytest.importorskip('dask.array')
+    # Test consumes many file descriptors and can hang if the limit is too low
+    resource = pytest.importorskip('resource')
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        lim = 8192
+        if soft < lim:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (lim, max(hard, lim)))
+    except Exception as e:
+        pytest.skip("file descriptor limit too low and couldn't be increased :"
+                    + str(e))
 
     n = 40
     xs = [da.random.random((100, 100), chunks=(5, 5)) for i in range(n)]
     ys = [x + x.T for x in xs]
-    z = da.atop(vsum, 'ij', *concat(zip(ys, ['ij'] * n)))
+    z = da.atop(vsum, 'ij', *concat(zip(ys, ['ij'] * n)), dtype='float64')
 
     future = c.compute(z.sum())
 
