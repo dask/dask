@@ -255,7 +255,7 @@ def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
     yield y._result()
 
 
-@gen_cluster(client=True, timeout=60)
+@gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
 def test_broken_worker_during_computation(c, s, a, b):
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     n.start(0)
