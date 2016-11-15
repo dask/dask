@@ -1,4 +1,3 @@
-import os
 import struct
 
 from toolz import first
@@ -49,7 +48,7 @@ def read_parquet(path, columns=None, filters=[], categories=None, index=None,
     myopen = OpenFileCreator(path, compression=None, text=False)
 
     try:
-        pf = fastparquet.ParquetFile(path + sep + '_metadata',
+        pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
                                      open_with=myopen,
                                      sep=myopen.fs.sep)
     except:

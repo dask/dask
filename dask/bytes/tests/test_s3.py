@@ -295,9 +295,10 @@ def test_parquet(s3):
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
-                         'bhello': np.random.choice(['hello', 'you',
-                            'people'], size=1000).astype("O")},
-                         index=pd.Index(np.arange(1000), name='foo'))
+                         'bhello': np.random.choice(
+                                 ['hello', 'you','people'],
+                                 size=1000).astype("O")},
+                        index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
     to_parquet(url, df)
 
