@@ -493,7 +493,7 @@ def test_active_holds_tasks(e, s, w):
     assert future.key not in w.active
 
     future = e.submit(throws, 1)
-    with ignoring(Exception):
+    with ignoring(RuntimeError):
         yield _wait([future])
     assert not w.active
 

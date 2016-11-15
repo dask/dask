@@ -549,7 +549,7 @@ def test_tokenize_on_futures(c, s, a, b):
     assert tokenize(x) == tokenize(x)
     assert tokenize(x) == tokenize(y)
 
-    c.futures[x.key]['status'] = 'finished'
+    c.futures[x.key].finish()
 
     assert tok == tokenize(y)
 
@@ -2039,8 +2039,8 @@ def test_long_traceback(c, s, a, b):
     try:
         x = c.submit(deep, 1000)
         yield _wait([x])
-        assert len(dumps(c.futures[x.key]['traceback'])) < 10000
-        assert isinstance(c.futures[x.key]['exception'], RuntimeError)
+        assert len(dumps(c.futures[x.key].traceback)) < 10000
+        assert isinstance(c.futures[x.key].exception, RuntimeError)
     finally:
         sys.setrecursionlimit(n)
 
@@ -2914,7 +2914,7 @@ def test_shutdown_idempotent(loop):
 @gen_cluster(client=True)
 def test_get_returns_early(c, s, a, b):
     start = time()
-    with ignoring(Exception):
+    with ignoring(RuntimeError):
         result = yield c._get({'x': (throws, 1), 'y': (sleep, 1)}, ['x', 'y'])
     assert time() < start + 0.5
     assert not c.futures
@@ -2927,7 +2927,7 @@ def test_get_returns_early(c, s, a, b):
     x = c.submit(inc, 1)
     yield x._result()
 
-    with ignoring(Exception):
+    with ignoring(RuntimeError):
         result = yield c._get({'x': (throws, 1),
                                x.key: (inc, 1)}, ['x', x.key])
     assert x.key in s.tasks
@@ -3693,18 +3693,31 @@ def test_distribute_tasks_by_ncores(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_add_done_callback(c, s, a, b):
-    x = c.submit(inc, 1)
+    S = set()
 
-    L = []
     def f(future):
-        L.append(future.key)
-        L.append(future.status)
+        future.add_done_callback(g)
+
+    def g(future):
+        S.add((future.key, future.status))
+
+    u = c.submit(inc, 1, key='u')
+    v = c.submit(throws, "hello", key='v')
+    w = c.submit(slowinc, 2, delay=0.3, key='w')
+    x = c.submit(inc, 3, key='x')
+    u.add_done_callback(f)
+    v.add_done_callback(f)
+    w.add_done_callback(f)
+
+    yield _wait((u, v, w, x))
 
     x.add_done_callback(f)
 
-    yield _wait(x)
+    t = time()
+    while len(S) < 4 and time() - t < 2.0:
+        yield gen.sleep(0.01)
 
-    assert L == [x.key, x.status]
+    assert S == {(f.key, f.status) for f in (u, v, w, x)}
 
 
 @gen_cluster(client=True)
