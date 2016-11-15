@@ -117,7 +117,7 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
 
     Examples
     --------
-    >>> df = dd.read_csv(...)
+    >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> to_parquet('/path/to/output/', df, compression='SNAPPY')  # doctest: +SKIP
 
     See Also
