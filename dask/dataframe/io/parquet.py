@@ -15,7 +15,7 @@ except:
     default_encoding = None
 
 
-def read_parquet(path, columns=None, filters=[], categories=None, index=None,
+def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                  **kwargs):
     """
     Read Dask DataFrame from ParquetFile
@@ -34,6 +34,10 @@ def read_parquet(path, columns=None, filters=[], categories=None, index=None,
         List of filters to apply, like ``[('x', '>' 0), ...]``
     index: string or None
         Name of index column to use if that column is sorted
+    categories: list or None
+        For any fields listed here, if the parquet encoding is Dictionary,
+        the column will be created with dtype category. Use only if it is
+        guaranteed that the column is encoded as dictionary in all row-groups.
 
     Examples
     --------
@@ -45,6 +49,8 @@ def read_parquet(path, columns=None, filters=[], categories=None, index=None,
     """
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
+    if filters is None:
+        filters = []
     myopen = OpenFileCreator(path, compression=None, text=False)
 
     try:
