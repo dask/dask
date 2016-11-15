@@ -105,7 +105,7 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
 
     Notes
     -----
-    Each partition will be written to a separte file.
+    Each partition will be written to a separate file.
 
     Parameters
     ----------
