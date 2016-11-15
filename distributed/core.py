@@ -155,7 +155,7 @@ class Server(TCPServer):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
                 op = msg.pop('op')
-                close = msg.pop('close', False)
+                close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
@@ -182,13 +182,13 @@ class Server(TCPServer):
                     except StreamClosedError:
                         logger.info("Lost connection: %s" % str(address))
                         break
-                if close:
+                if close_desired:
                     break
         finally:
             try:
                 yield close(stream)
             except Exception as e:
-                logger.warn("Failed while closing writer",  exc_info=True)
+                logger.warn("Failed while closing writer", exc_info=True)
         logger.info("Close connection from %s:%d to %s", address[0], address[1],
                     type(self).__name__)
 
