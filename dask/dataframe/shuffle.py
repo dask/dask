@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
+from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat
 
 from ..base import tokenize
@@ -135,8 +136,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
                               max_branch=max_branch, shuffle=shuffle,
                               compute=compute)
-
-    df4 = df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
     return df4
 
 
@@ -148,7 +148,9 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)
-    return df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
+    df4 = df3.drop('_partitions', axis=1)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
+    return df4
 
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,

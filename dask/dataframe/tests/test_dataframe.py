@@ -1920,10 +1920,17 @@ def test_gh_517():
 
 
 def test_drop_axis_1():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [5, 6, 7, 8],
+                       'z': [9, 10, 11, 12]})
+    ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(a.drop('y', axis=1), df.drop('y', axis=1))
+    assert_eq(ddf.drop('y', axis=1), df.drop('y', axis=1))
+    assert_eq(ddf.drop(['y', 'z'], axis=1), df.drop(['y', 'z'], axis=1))
+    with pytest.raises(ValueError):
+        ddf.drop(['a', 'x'], axis=1)
+    assert_eq(ddf.drop(['a', 'x'], axis=1, errors='ignore'),
+              df.drop(['a', 'x'], axis=1, errors='ignore'))
 
 
 def test_gh580():

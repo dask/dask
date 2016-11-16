@@ -2370,14 +2370,11 @@ class DataFrame(_Frame):
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, dtype=None):
-        if axis != 1:
-            raise NotImplementedError("Drop currently only works for axis=1")
-
-        if dtype is not None:
-            return elemwise(drop_columns, self, labels, dtype)
-        else:
-            return elemwise(M.drop, self, labels, axis)
+    def drop(self, labels, axis=0, errors='raise'):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
+        raise NotImplementedError("Drop currently only works for axis=1")
 
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
@@ -3003,11 +3000,13 @@ def _rename(columns, df):
     if isinstance(df, pd.DataFrame):
         if isinstance(columns, pd.DataFrame):
             columns = columns.columns
-        columns = pd.Index(columns)
-        if len(columns) == len(df.columns):
-            if columns.equals(df.columns):
-                # if target is identical, rename is not necessary
-                return df
+        if not isinstance(columns, pd.Index):
+            columns = pd.Index(columns)
+        if (len(columns) == len(df.columns) and
+                type(columns) is type(df.columns) and
+                columns.equals(df.columns)):
+            # if target is identical, rename is not necessary
+            return df
         # deep=False doesn't doesn't copy any data/indices, so this is cheap
         df = df.copy(deep=False)
         df.columns = columns
@@ -3553,12 +3552,6 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
     if isinstance(x, list):
         x = pd.Series(x)
     return aca_aggregate(x, **kwargs)
-
-
-def drop_columns(df, columns, dtype):
-    df = df.drop(columns, axis=1)
-    df.columns = df.columns.astype(dtype)
-    return df
 
 
 def idxmaxmin_chunk(x, fn=None, skipna=True):
