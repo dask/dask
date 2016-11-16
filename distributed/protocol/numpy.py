@@ -41,7 +41,7 @@ def serialize_numpy_ndarray(x):
     else:
         dt = x.dtype.str
 
-    x = np.ascontiguousarray(x)  # np.frombuffer requires this
+    x = np.ascontiguousarray(x)  # cannot get .data attribute from discontiguous
 
     header = {'dtype': dt,
               'strides': x.strides,
@@ -74,12 +74,9 @@ def deserialize_numpy_ndarray(header, frames):
         dt = header['dtype']
         if isinstance(dt, tuple):
             dt = list(dt)
-        dt = np.dtype(dt)
 
-        buffer = frames[0]
-
-        x = np.frombuffer(buffer, dt)
-        x = np.lib.stride_tricks.as_strided(x, header['shape'], header['strides'])
+        x = np.ndarray(header['shape'], dtype=dt, buffer=frames[0],
+                       strides=header['strides'])
 
         return x
 

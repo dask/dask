@@ -40,8 +40,8 @@ def dumps(msg):
                if type(value) is Serialized}
 
         data = {key: serialize(value.data)
-                     for key, value in data.items()
-                     if type(value) is Serialize}
+                for key, value in data.items()
+                if type(value) is Serialize}
 
         header = {'headers': {},
                   'keys': [],
