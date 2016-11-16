@@ -1295,7 +1295,7 @@ class _Frame(Base):
             x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
             x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var-%s' % tokenize(self, axis, skipna, ddof)
+            name = self._token_prefix + 'var'
             return map_partitions(methods.var_aggregate, x2, x, n,
                                   token=name, meta=meta, ddof=ddof)
 
@@ -1309,9 +1309,23 @@ class _Frame(Base):
                                   axis=axis, skipna=skipna, ddof=ddof)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            token = tokenize(self, axis, skipna, ddof)
-            name = self._token_prefix + 'std-finish--%s' % token
+            name = self._token_prefix + 'std'
             return map_partitions(np.sqrt, v, meta=meta, token=name)
+
+    @derived_from(pd.DataFrame)
+    def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
+        if axis == 1:
+            return map_partitions(M.sem, self, meta=meta,
+                                  token=self._token_prefix + 'sem',
+                                  axis=axis, skipna=skipna, ddof=ddof)
+        else:
+            num = self._get_numeric_data()
+            v = num.var(skipna=skipna, ddof=ddof, split_every=split_every)
+            n = num.count(split_every=split_every)
+            name = self._token_prefix + 'sem'
+            return map_partitions(np.sqrt, v / n, meta=meta, token=name)
 
     def quantile(self, q=0.5, axis=0):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
