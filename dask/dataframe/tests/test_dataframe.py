@@ -15,7 +15,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, aca, _concat,
                                  _Frame, Scalar)
-from dask.dataframe.methods import _loc_repartition
+from dask.dataframe.methods import boundary_slice
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 
 
@@ -1489,16 +1489,16 @@ def test_repartition():
 
 def test_repartition_divisions():
     result = repartition_divisions([0, 6], [0, 6, 6], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc_repartition, ('a', 0), 0, 6, False),
-                      ('b', 1): (_loc_repartition, ('a', 0), 6, 6, True),
+    assert result == {('b', 0): (boundary_slice, ('a', 0), 0, 6, False),
+                      ('b', 1): (boundary_slice, ('a', 0), 6, 6, True),
                       ('c', 0): ('b', 0),
                       ('c', 1): ('b', 1)}
 
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc_repartition, ('a', 0), 1, 3, False),
-                      ('b', 1): (_loc_repartition, ('a', 1), 3, 4, False),
-                      ('b', 2): (_loc_repartition, ('a', 1), 4, 6, False),
-                      ('b', 3): (_loc_repartition, ('a', 1), 6, 7, True),
+    assert result == {('b', 0): (boundary_slice, ('a', 0), 1, 3, False),
+                      ('b', 1): (boundary_slice, ('a', 1), 3, 4, False),
+                      ('b', 2): (boundary_slice, ('a', 1), 4, 6, False),
+                      ('b', 3): (boundary_slice, ('a', 1), 6, 7, True),
                       ('c', 0): (pd.concat, [('b', 0), ('b', 1)]),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
@@ -2148,12 +2148,13 @@ def test_cov_corr_stable():
 
 
 def test_autocorr():
-    x = tm.makeFloatSeries()
-    dx = dd.from_pandas(x, npartitions=4)
+    x = pd.Series(np.random.random(100))
+    dx = dd.from_pandas(x, npartitions=10)
     assert_eq(dx.autocorr(2), x.autocorr(2))
     assert_eq(dx.autocorr(0), x.autocorr(0))
     assert_eq(dx.autocorr(-2), x.autocorr(-2))
-    pytest.raises(TypeError, dx.autocorr(1.5))
+    assert_eq(dx.autocorr(2, split_every=3), x.autocorr(2))
+    pytest.raises(TypeError, lambda: dx.autocorr(1.5))
 
 
 def test_apply_infer_columns():
@@ -2706,3 +2707,18 @@ def test_shift_with_freq():
     pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq='S'))
     pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq='S'))
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
+
+
+@pytest.mark.parametrize('method', ['first', 'last'])
+def test_first_and_last(method):
+    f = lambda x, offset: getattr(x, method)(offset)
+    freqs = ['12h', 'D']
+    offsets = ['0d', '100h', '20d', '20B', '3W', '3M', '400d', '13M']
+    for freq in freqs:
+        index = pd.date_range('1/1/2000', '1/1/2001', freq=freq)[::4]
+        df = pd.DataFrame(np.random.random((len(index), 4)), index=index,
+                          columns=['A', 'B', 'C', 'D'])
+        ddf = dd.from_pandas(df, npartitions=10)
+        for offset in offsets:
+            assert_eq(f(ddf, offset), f(df, offset))
+            assert_eq(f(ddf.A, offset), f(df.A, offset))
