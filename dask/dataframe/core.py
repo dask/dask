@@ -1210,6 +1210,11 @@ class _Frame(Base):
                                    split_every=split_every)
 
     @derived_from(pd.DataFrame)
+    def prod(self, axis=None, skipna=True, split_every=False):
+        return self._reduction_agg('prod', axis=axis, skipna=skipna,
+                                   split_every=split_every)
+
+    @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False):
         return self._reduction_agg('max', axis=axis, skipna=skipna,
                                    split_every=split_every)
