@@ -474,7 +474,6 @@ def test_server(s, a, b):
 
 @gen_cluster()
 def test_remove_client(s, a, b):
-    s.add_client(client='ident')
     s.update_graph(tasks={'x': dumps_task((inc, 1)),
                           'y': dumps_task((inc, 'x'))},
                    dependencies={'x': [], 'y': ['x']},
@@ -499,7 +498,7 @@ def test_server_listens_to_other_ops(s, a, b):
 
 @gen_cluster()
 def test_remove_worker_from_scheduler(s, a, b):
-    dsk = {('x', i): (inc, i) for i in range(20)}
+    dsk = {('x-%d' % i): (inc, i) for i in range(20)}
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk),
                    dependencies={k: set() for k in dsk})
     assert s.ready
@@ -520,7 +519,7 @@ def test_add_worker(s, a, b):
     w.data['y'] = 1
     yield w._start(0)
 
-    dsk = {('x-%d' % i).encode(): (inc, i) for i in range(10)}
+    dsk = {('x-%d' % i): (inc, i) for i in range(10)}
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk), client='client',
                    dependencies={k: set() for k in dsk})
 
@@ -757,7 +756,6 @@ def test_dumps_task():
 
 @gen_cluster()
 def test_ready_remove_worker(s, a, b):
-    s.add_client(client='client')
     s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
                    keys=['x-%d' % i for i in range(20)],
                    client='client',
@@ -781,7 +779,6 @@ def test_ready_remove_worker(s, a, b):
 
 @gen_cluster(Worker=Nanny)
 def test_restart(s, a, b):
-    s.add_client(client='client')
     s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
                    keys=['x-%d' % i for i in range(20)],
                    client='client',
@@ -805,7 +802,6 @@ def test_restart(s, a, b):
 
 @gen_cluster()
 def test_ready_add_worker(s, a, b):
-    s.add_client(client='client')
     s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
                    keys=['x-%d' % i for i in range(20)],
                    client='client',
@@ -922,7 +918,6 @@ def test_file_descriptors_dont_leak(s):
 
 @gen_cluster()
 def test_update_graph_culls(s, a, b):
-    s.add_client(client='client')
     s.update_graph(tasks={'x': dumps_task((inc, 1)),
                           'y': dumps_task((inc, 'x')),
                           'z': dumps_task((inc, 2))},

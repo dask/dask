@@ -187,7 +187,7 @@ def test_iterator_to_queue():
 
 
 def test_str_graph():
-    dsk = {b'x': 1}
+    dsk = {'x': 1}
     assert str_graph(dsk) == dsk
 
     dsk = {('x', 1): (inc, 1)}
@@ -205,7 +205,7 @@ def test_str_graph():
         sdsk = str_graph(dsk)
         keys = list(dsk)
         skeys = [str(k) for k in keys]
-        assert all(isinstance(k, (str, bytes)) for k in sdsk)
+        assert all(isinstance(k, str) for k in sdsk)
         assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
 
 

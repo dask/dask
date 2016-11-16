@@ -32,7 +32,8 @@ from .core import (rpc, Server, pingpong, coerce_to_address,
 from .protocol.pickle import dumps, loads
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
-from .utils import funcname, get_ip, _maybe_complex, log_errors, All, ignoring
+from .utils import (funcname, get_ip, _maybe_complex, log_errors, All,
+                    ignoring, validate_key)
 
 _ncores = multiprocessing.cpu_count()
 
@@ -481,6 +482,8 @@ class Worker(Server):
                 batch = []
                 for msg in msgs:
                     op = msg.pop('op', None)
+                    if 'key' in msg:
+                        validate_key(msg['key'])
                     if op == 'close':
                         closed = True
                         break

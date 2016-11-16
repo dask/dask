@@ -314,23 +314,33 @@ def iterator_to_queue(seq, maxsize=0):
 
 
 def tokey(o):
-    """ Convert an object to a bytestring, using str
+    """ Convert an object to a string.
 
     Examples
     --------
 
     >>> tokey(b'x')
-    b'x'
+    'x'
     >>> tokey('x')
     'x'
     >>> tokey(1)
     '1'
     """
     t = type(o)
-    if t is str or t is bytes:
+    if t is str:
         return o
+    elif t is bytes:
+        return o.decode('latin1')
     else:
         return str(o)
+
+
+def validate_key(k):
+    """Validate a key as received on a stream.
+    """
+    if type(k) is not str:
+        raise TypeError("Unexpected key type %s (value: %r)"
+                        % (type(k), k))
 
 
 def _maybe_complex(task):
