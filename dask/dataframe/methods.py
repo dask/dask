@@ -72,7 +72,7 @@ def mean_aggregate(s, n):
     try:
         return s / n
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def var_aggregate(x2, x, n, ddof):
@@ -82,7 +82,7 @@ def var_aggregate(x2, x, n, ddof):
             result = result * n / (n - ddof)
         return result
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def describe_aggregate(values):

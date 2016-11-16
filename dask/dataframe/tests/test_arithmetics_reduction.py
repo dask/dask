@@ -636,8 +636,10 @@ def test_reductions(split_every):
         assert_eq(dds.count(split_every=split_every), pds.count())
         assert_eq(dds.std(split_every=split_every), pds.std())
         assert_eq(dds.var(split_every=split_every), pds.var())
+        assert_eq(dds.sem(split_every=split_every), pds.sem())
         assert_eq(dds.std(ddof=0, split_every=split_every), pds.std(ddof=0))
         assert_eq(dds.var(ddof=0, split_every=split_every), pds.var(ddof=0))
+        assert_eq(dds.sem(ddof=0, split_every=split_every), pds.sem(ddof=0))
         assert_eq(dds.mean(split_every=split_every), pds.mean())
         assert_eq(dds.nunique(split_every=split_every), pds.nunique())
 
@@ -651,10 +653,14 @@ def test_reductions(split_every):
                   pds.std(skipna=False))
         assert_eq(dds.var(skipna=False, split_every=split_every),
                   pds.var(skipna=False))
+        assert_eq(dds.sem(skipna=False, split_every=split_every),
+                  pds.sem(skipna=False))
         assert_eq(dds.std(skipna=False, ddof=0, split_every=split_every),
                   pds.std(skipna=False, ddof=0))
         assert_eq(dds.var(skipna=False, ddof=0, split_every=split_every),
                   pds.var(skipna=False, ddof=0))
+        assert_eq(dds.sem(skipna=False, ddof=0, split_every=split_every),
+                  pds.sem(skipna=False, ddof=0))
         assert_eq(dds.mean(skipna=False, split_every=split_every),
                   pds.mean(skipna=False))
 
@@ -664,8 +670,10 @@ def test_reductions(split_every):
     assert_dask_graph(ddf1.b.count(split_every=split_every), 'series-count')
     assert_dask_graph(ddf1.b.std(split_every=split_every), 'series-std')
     assert_dask_graph(ddf1.b.var(split_every=split_every), 'series-var')
+    assert_dask_graph(ddf1.b.sem(split_every=split_every), 'series-sem')
     assert_dask_graph(ddf1.b.std(ddof=0, split_every=split_every), 'series-std')
     assert_dask_graph(ddf1.b.var(ddof=0, split_every=split_every), 'series-var')
+    assert_dask_graph(ddf1.b.sem(ddof=0, split_every=split_every), 'series-sem')
     assert_dask_graph(ddf1.b.mean(split_every=split_every), 'series-mean')
     # nunique is performed using drop-duplicates
     assert_dask_graph(ddf1.b.nunique(split_every=split_every), 'drop-duplicates')
@@ -712,6 +720,8 @@ def test_deterministic_reduction_names(split_every):
                 x.std(split_every=split_every)._name)
         assert (x.var(split_every=split_every)._name ==
                 x.var(split_every=split_every)._name)
+        assert (x.sem(split_every=split_every)._name ==
+                x.sem(split_every=split_every)._name)
         assert (x.mean(split_every=split_every)._name ==
                 x.mean(split_every=split_every)._name)
 
@@ -739,6 +749,7 @@ def test_reduction_series_invalid_axis():
             pytest.raises(TypeError, lambda: s.count(axis=axis))
             pytest.raises(ValueError, lambda: s.std(axis=axis))
             pytest.raises(ValueError, lambda: s.var(axis=axis))
+            pytest.raises(ValueError, lambda: s.sem(axis=axis))
             pytest.raises(ValueError, lambda: s.mean(axis=axis))
 
 
@@ -759,6 +770,7 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.count(), pds.count())
     check_raises(dds, pds, 'std')
     check_raises(dds, pds, 'var')
+    check_raises(dds, pds, 'sem')
     check_raises(dds, pds, 'mean')
     assert_eq(dds.nunique(), pds.nunique())
 
@@ -773,6 +785,7 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.count(), pds.count())
         check_raises(dds, pds, 'std')
         check_raises(dds, pds, 'var')
+        check_raises(dds, pds, 'sem')
         check_raises(dds, pds, 'mean')
         assert_eq(dds.nunique(), pds.nunique())
 
@@ -813,8 +826,10 @@ def test_reductions_frame(split_every):
     assert_eq(ddf1.count(split_every=split_every), pdf1.count())
     assert_eq(ddf1.std(split_every=split_every), pdf1.std())
     assert_eq(ddf1.var(split_every=split_every), pdf1.var())
+    assert_eq(ddf1.sem(split_every=split_every), pdf1.sem())
     assert_eq(ddf1.std(ddof=0, split_every=split_every), pdf1.std(ddof=0))
     assert_eq(ddf1.var(ddof=0, split_every=split_every), pdf1.var(ddof=0))
+    assert_eq(ddf1.sem(ddof=0, split_every=split_every), pdf1.sem(ddof=0))
     assert_eq(ddf1.mean(split_every=split_every), pdf1.mean())
 
     for axis in [0, 1, 'index', 'columns']:
@@ -830,10 +845,14 @@ def test_reductions_frame(split_every):
                   pdf1.std(axis=axis))
         assert_eq(ddf1.var(axis=axis, split_every=split_every),
                   pdf1.var(axis=axis))
+        assert_eq(ddf1.sem(axis=axis, split_every=split_every),
+                  pdf1.sem(axis=axis))
         assert_eq(ddf1.std(axis=axis, ddof=0, split_every=split_every),
                   pdf1.std(axis=axis, ddof=0))
         assert_eq(ddf1.var(axis=axis, ddof=0, split_every=split_every),
                   pdf1.var(axis=axis, ddof=0))
+        assert_eq(ddf1.sem(axis=axis, ddof=0, split_every=split_every),
+                  pdf1.sem(axis=axis, ddof=0))
         assert_eq(ddf1.mean(axis=axis, split_every=split_every),
                   pdf1.mean(axis=axis))
 
@@ -844,11 +863,13 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.min(split_every=split_every), 'dataframe-min')
     assert_dask_graph(ddf1.max(split_every=split_every), 'dataframe-max')
     assert_dask_graph(ddf1.count(split_every=split_every), 'dataframe-count')
-    # std, var, mean consists from sum and count operations
+    # std, var, sem, and mean consist of sum and count operations
     assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-sum')
     assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-count')
     assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-sum')
     assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-count')
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'dataframe-count')
     assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-sum')
     assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-count')
 
@@ -865,6 +886,8 @@ def test_reductions_frame(split_every):
                       'dataframe-std')
     assert_dask_graph(ddf1.var(axis=1, split_every=split_every),
                       'dataframe-var')
+    assert_dask_graph(ddf1.sem(axis=1, split_every=split_every),
+                      'dataframe-sem')
     assert_dask_graph(ddf1.mean(axis=1, split_every=split_every),
                       'dataframe-mean')
 
@@ -881,8 +904,10 @@ def test_reductions_frame_dtypes():
     assert_eq(df.count(), ddf.count())
     assert_eq(df.std(), ddf.std())
     assert_eq(df.var(), ddf.var())
+    assert_eq(df.sem(), ddf.sem())
     assert_eq(df.std(ddof=0), ddf.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
+    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
     assert_eq(df.mean(), ddf.mean())
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
@@ -903,8 +928,10 @@ def test_reductions_frame_nan(split_every):
     assert_eq(df.count(), ddf.count(split_every=split_every))
     assert_eq(df.std(), ddf.std(split_every=split_every))
     assert_eq(df.var(), ddf.var(split_every=split_every))
+    assert_eq(df.sem(), ddf.sem(split_every=split_every))
     assert_eq(df.std(ddof=0), ddf.std(ddof=0, split_every=split_every))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0, split_every=split_every))
+    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0, split_every=split_every))
     assert_eq(df.mean(), ddf.mean(split_every=split_every))
 
     assert_eq(df.sum(skipna=False),
@@ -917,10 +944,14 @@ def test_reductions_frame_nan(split_every):
               ddf.std(skipna=False, split_every=split_every))
     assert_eq(df.var(skipna=False),
               ddf.var(skipna=False, split_every=split_every))
+    assert_eq(df.sem(skipna=False),
+              ddf.sem(skipna=False, split_every=split_every))
     assert_eq(df.std(skipna=False, ddof=0),
               ddf.std(skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.var(skipna=False, ddof=0),
               ddf.var(skipna=False, ddof=0, split_every=split_every))
+    assert_eq(df.sem(skipna=False, ddof=0),
+              ddf.sem(skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.mean(skipna=False),
               ddf.mean(skipna=False, split_every=split_every))
 
@@ -934,9 +965,13 @@ def test_reductions_frame_nan(split_every):
               ddf.std(axis=1, skipna=False, split_every=split_every))
     assert_eq(df.var(axis=1, skipna=False),
               ddf.var(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.sem(axis=1, skipna=False),
+              ddf.sem(axis=1, skipna=False, split_every=split_every))
     assert_eq(df.std(axis=1, skipna=False, ddof=0),
               ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.var(axis=1, skipna=False, ddof=0),
               ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
+    assert_eq(df.sem(axis=1, skipna=False, ddof=0),
+              ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.mean(axis=1, skipna=False),
               ddf.mean(axis=1, skipna=False, split_every=split_every))
