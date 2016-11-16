@@ -200,6 +200,9 @@ def test_method_caller():
     assert pickle.loads(pickle.dumps(f)) is f
     assert 'count' in dir(M)
 
+    assert 'count' in str(methodcaller('count'))
+    assert 'count' in repr(methodcaller('count'))
+
 
 def test_skip_doctest():
     example = """>>> xxx

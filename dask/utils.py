@@ -902,6 +902,11 @@ class methodcaller(object):
     def __reduce__(self):
         return (methodcaller, (self.method,))
 
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.method)
+
+    __repr__ = __str__
+
 
 class MethodCache(object):
     """Attribute access on this object returns a methodcaller for that
