@@ -1551,6 +1551,55 @@ class _Frame(Base):
         from .tseries.resample import _resample
         return _resample(self, rule, how=how, closed=closed, label=label)
 
+    @derived_from(pd.DataFrame)
+    def first(self, offset):
+        # Let pandas error on bad args
+        self._meta_nonempty.first(offset)
+
+        if not self.known_divisions:
+            raise ValueError("`first` is not implemented for unknown divisions")
+
+        offset = pd.tseries.frequencies.to_offset(offset)
+        date = self.divisions[0] + offset
+        end = self.loc._partition_of_index_value(date)
+
+        include_right = offset.isAnchored() or not hasattr(offset, '_inc')
+
+        if end == self.npartitions - 1:
+            divs = self.divisions
+        else:
+            divs = self.divisions[:end + 1] + (date,)
+
+        name = 'first-' + tokenize(self, offset)
+        dsk = {(name, i): (self._name, i) for i in range(end)}
+        dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
+                            None, date, include_right, True, 'ix')
+        return new_dd_object(merge(self.dask, dsk), name, self, divs)
+
+    @derived_from(pd.DataFrame)
+    def last(self, offset):
+        # Let pandas error on bad args
+        self._meta_nonempty.first(offset)
+
+        if not self.known_divisions:
+            raise ValueError("`last` is not implemented for unknown divisions")
+
+        offset = pd.tseries.frequencies.to_offset(offset)
+        date = self.divisions[-1] - offset
+        start = self.loc._partition_of_index_value(date)
+
+        if start == 0:
+            divs = self.divisions
+        else:
+            divs = (date,) + self.divisions[start + 1:]
+
+        name = 'last-' + tokenize(self, offset)
+        dsk = {(name, i + 1): (self._name, j + 1)
+               for i, j in enumerate(range(start, self.npartitions))}
+        dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
+                          date, None, True, False, 'ix')
+        return new_dd_object(merge(self.dask, dsk), name, self, divs)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -1946,12 +1995,11 @@ class Series(_Frame):
                         split_every=split_every)
 
     @derived_from(pd.Series)
-    def autocorr(self, lag=1):
+    def autocorr(self, lag=1, split_every=False):
         if not isinstance(lag, int):
             raise TypeError("lag must be an integer")
-        if lag == 0:
-            return self.corr(self)
-        return self.corr(self.shift(lag))
+        return self.corr(self if lag == 0 else self.shift(lag),
+                         split_every=split_every)
 
 
 class Index(Series):
@@ -3315,10 +3363,10 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     --------
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
-    {('b', 0): (<function _loc_repartition at ...>, ('a', 0), 1, 3, False),
-     ('b', 1): (<function _loc_repartition at ...>, ('a', 1), 3, 4, False),
-     ('b', 2): (<function _loc_repartition at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function _loc_repartition at ...>, ('a', 1), 6, 7, False)
+    {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
+     ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
+     ('b', 2): (<function boundary_slice at ...>, ('a', 1), 4, 6, False),
+     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, False)
      ('c', 0): (<function concat at ...>,
                 (<type 'list'>, [('b', 0), ('b', 1)])),
      ('c', 1): ('b', 2),
@@ -3374,16 +3422,16 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
             # tuple is something like:
-            # (methods._loc_partition, ('from_pandas-#', 0), 3, 4, False))
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, a[i], False)
+            # (methods.boundary_slice, ('from_pandas-#', 0), 3, 4, False))
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, a[i], False)
             low = a[i]
             i += 1
         elif a[i] > b[j]:
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
             j += 1
         else:
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
             i += 1
             j += 1
@@ -3396,7 +3444,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             # always use right-most of old division
             # because it may contain last element
             m = len(a) - 2
-            d[(out1, k)] = (methods._loc_repartition, (name, m), low, b[_j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, m), low, b[_j], False)
             low = b[_j]
             c.append(low)
             k += 1
@@ -3404,7 +3452,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         # even if new division is processed through,
         # right-most element of old division can remain
         if last_elem and i < len(a):
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), a[i], a[i], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), a[i], a[i], False)
             k += 1
         c.append(a[-1])
 
@@ -3427,7 +3475,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         if len(tmp) == 0:
             # dummy slice to return empty DataFrame or Series,
             # which retain original data attributes (columns / name)
-            d[(out2, j - 1)] = (methods._loc_repartition, (name, 0), a[0], a[0], False)
+            d[(out2, j - 1)] = (methods.boundary_slice, (name, 0), a[0], a[0], False)
         elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:
