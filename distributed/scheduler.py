@@ -646,9 +646,9 @@ class Scheduler(Server):
             recommendations = {}
 
         if self.task_state[key] == 'memory':
-            self.who_has[key].add(worker)
             if key not in self.has_what[worker]:
                 self.worker_bytes[worker] += self.nbytes.get(key, 1000)
+            self.who_has[key].add(worker)
             self.has_what[worker].add(key)
 
         return recommendations
@@ -912,6 +912,14 @@ class Scheduler(Server):
         for w in self.stacks:
             assert abs(sum(self.stack_durations[w]) - self.stack_duration[w]) < 1e-8
             assert len(self.stack_durations[w]) == len(self.stacks[w])
+
+        for key, workers in self.who_has.items():
+            for worker in workers:
+                assert key in self.has_what[worker]
+
+        for worker, keys in self.has_what.items():
+            for key in keys:
+                assert worker in self.who_has[key]
 
     ###################
     # Manage Messages #
@@ -1622,11 +1630,13 @@ class Scheduler(Server):
                 if key not in self.dependencies:
                     self.dependencies[key] = set()
                 self.task_state[key] = 'memory'
-                self.who_has[key] = set(workers)
+                if key not in self.who_has:
+                    self.who_has[key] = set()
                 for w in workers:
                     if key not in self.has_what[w]:
                         self.worker_bytes[w] += self.nbytes.get(key, 1000)
                     self.has_what[w].add(key)
+                    self.who_has[key].add(w)
                 self.waiting_data[key] = set()
                 self.report({'op': 'key-in-memory',
                              'key': key,

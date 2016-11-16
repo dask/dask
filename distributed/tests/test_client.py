@@ -776,10 +776,12 @@ def test__scatter_types(c, s, a, b):
         L = yield c._scatter(seq)
         assert isinstance(L, type(seq))
         assert len(L) == 1
+        s.validate_state()
 
     seq = yield c._scatter(range(5))
     assert isinstance(seq, list)
     assert len(seq) == 5
+    s.validate_state()
 
 
 @gen_cluster(client=True)
@@ -788,6 +790,7 @@ def test_scatter_hash(c, s, a, b):
     [b] = yield c._scatter([1])
 
     assert a.key == b.key
+    s.validate_state()
 
 
 @gen_cluster(client=True)
