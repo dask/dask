@@ -631,6 +631,7 @@ def test_reductions(split_every):
         assert isinstance(dds, dd.Series)
         assert isinstance(pds, pd.Series)
         assert_eq(dds.sum(split_every=split_every), pds.sum())
+        assert_eq(dds.prod(split_every=split_every), pds.prod())
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
@@ -645,6 +646,8 @@ def test_reductions(split_every):
 
         assert_eq(dds.sum(skipna=False, split_every=split_every),
                   pds.sum(skipna=False))
+        assert_eq(dds.prod(skipna=False, split_every=split_every),
+                  pds.prod(skipna=False))
         assert_eq(dds.min(skipna=False, split_every=split_every),
                   pds.min(skipna=False))
         assert_eq(dds.max(skipna=False, split_every=split_every),
@@ -665,6 +668,7 @@ def test_reductions(split_every):
                   pds.mean(skipna=False))
 
     assert_dask_graph(ddf1.b.sum(split_every=split_every), 'series-sum')
+    assert_dask_graph(ddf1.b.prod(split_every=split_every), 'series-prod')
     assert_dask_graph(ddf1.b.min(split_every=split_every), 'series-min')
     assert_dask_graph(ddf1.b.max(split_every=split_every), 'series-max')
     assert_dask_graph(ddf1.b.count(split_every=split_every), 'series-count')
@@ -710,6 +714,8 @@ def test_deterministic_reduction_names(split_every):
     for x in [ddf, ddf.x]:
         assert (x.sum(split_every=split_every)._name ==
                 x.sum(split_every=split_every)._name)
+        assert (x.prod(split_every=split_every)._name ==
+                x.prod(split_every=split_every)._name)
         assert (x.min(split_every=split_every)._name ==
                 x.min(split_every=split_every)._name)
         assert (x.max(split_every=split_every)._name ==
@@ -743,6 +749,7 @@ def test_reduction_series_invalid_axis():
     for axis in [1, 'columns']:
         for s in [ddf1.a, pdf1.a]:    # both must behave the same
             pytest.raises(ValueError, lambda: s.sum(axis=axis))
+            pytest.raises(ValueError, lambda: s.prod(axis=axis))
             pytest.raises(ValueError, lambda: s.min(axis=axis))
             pytest.raises(ValueError, lambda: s.max(axis=axis))
             # only count doesn't have axis keyword
@@ -765,6 +772,7 @@ def test_reductions_non_numeric_dtypes():
     pds = pd.Series(['a', 'b', 'c', 'd', 'e'])
     dds = dd.from_pandas(pds, 2)
     assert_eq(dds.sum(), pds.sum())
+    check_raises(dds, pds, 'prod')
     assert_eq(dds.min(), pds.min())
     assert_eq(dds.max(), pds.max())
     assert_eq(dds.count(), pds.count())
@@ -780,6 +788,7 @@ def test_reductions_non_numeric_dtypes():
         dds = dd.from_pandas(pds, 2)
 
         check_raises(dds, pds, 'sum')
+        check_raises(dds, pds, 'prod')
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
@@ -821,6 +830,7 @@ def test_reductions_frame(split_every):
     pdf1 = ddf1.compute()
 
     assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
+    assert_eq(ddf1.prod(split_every=split_every), pdf1.prod())
     assert_eq(ddf1.min(split_every=split_every), pdf1.min())
     assert_eq(ddf1.max(split_every=split_every), pdf1.max())
     assert_eq(ddf1.count(split_every=split_every), pdf1.count())
@@ -835,6 +845,8 @@ def test_reductions_frame(split_every):
     for axis in [0, 1, 'index', 'columns']:
         assert_eq(ddf1.sum(axis=axis, split_every=split_every),
                   pdf1.sum(axis=axis))
+        assert_eq(ddf1.prod(axis=axis, split_every=split_every),
+                  pdf1.prod(axis=axis))
         assert_eq(ddf1.min(axis=axis, split_every=split_every),
                   pdf1.min(axis=axis))
         assert_eq(ddf1.max(axis=axis, split_every=split_every),
@@ -860,6 +872,7 @@ def test_reductions_frame(split_every):
 
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), 'dataframe-sum')
+    assert_dask_graph(ddf1.prod(split_every=split_every), 'dataframe-prod')
     assert_dask_graph(ddf1.min(split_every=split_every), 'dataframe-min')
     assert_dask_graph(ddf1.max(split_every=split_every), 'dataframe-max')
     assert_dask_graph(ddf1.count(split_every=split_every), 'dataframe-count')
@@ -876,6 +889,8 @@ def test_reductions_frame(split_every):
     # axis=1
     assert_dask_graph(ddf1.sum(axis=1, split_every=split_every),
                       'dataframe-sum')
+    assert_dask_graph(ddf1.prod(axis=1, split_every=split_every),
+                      'dataframe-prod')
     assert_dask_graph(ddf1.min(axis=1, split_every=split_every),
                       'dataframe-min')
     assert_dask_graph(ddf1.max(axis=1, split_every=split_every),
@@ -899,6 +914,7 @@ def test_reductions_frame_dtypes():
                        'str': list('abcdefgh')})
     ddf = dd.from_pandas(df, 3)
     assert_eq(df.sum(), ddf.sum())
+    assert_eq(df.prod(), ddf.prod())
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
@@ -923,6 +939,7 @@ def test_reductions_frame_nan(split_every):
                        'c': [np.nan] * 8})
     ddf = dd.from_pandas(df, 3)
     assert_eq(df.sum(), ddf.sum(split_every=split_every))
+    assert_eq(df.prod(), ddf.prod(split_every=split_every))
     assert_eq(df.min(), ddf.min(split_every=split_every))
     assert_eq(df.max(), ddf.max(split_every=split_every))
     assert_eq(df.count(), ddf.count(split_every=split_every))
@@ -936,6 +953,8 @@ def test_reductions_frame_nan(split_every):
 
     assert_eq(df.sum(skipna=False),
               ddf.sum(skipna=False, split_every=split_every))
+    assert_eq(df.prod(skipna=False),
+              ddf.prod(skipna=False, split_every=split_every))
     assert_eq(df.min(skipna=False),
               ddf.min(skipna=False, split_every=split_every))
     assert_eq(df.max(skipna=False),
@@ -957,6 +976,8 @@ def test_reductions_frame_nan(split_every):
 
     assert_eq(df.sum(axis=1, skipna=False),
               ddf.sum(axis=1, skipna=False, split_every=split_every))
+    assert_eq(df.prod(axis=1, skipna=False),
+              ddf.prod(axis=1, skipna=False, split_every=split_every))
     assert_eq(df.min(axis=1, skipna=False),
               ddf.min(axis=1, skipna=False, split_every=split_every))
     assert_eq(df.max(axis=1, skipna=False),
