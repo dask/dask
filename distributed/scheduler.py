@@ -29,7 +29,7 @@ from dask.order import order
 
 from .batched import BatchedSend
 from .config import config
-from .core import (rpc, connect, read, write, MAX_BUFFER_SIZE,
+from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
@@ -410,7 +410,7 @@ class Scheduler(Server):
     def close_streams(self):
         """ Close all active IOStreams """
         for stream in self.streams.values():
-            stream.stream.close()
+            close(stream.stream)
         self.rpc.close()
 
     @gen.coroutine
@@ -711,8 +711,7 @@ class Scheduler(Server):
                 return 'already-removed'
             with ignoring(AttributeError):
                 stream = self.worker_streams[address].stream
-                if not stream.closed():
-                    stream.close()
+                close(stream)
 
             host, port = address.split(':')
 
@@ -1155,8 +1154,7 @@ class Scheduler(Server):
                 import pdb; pdb.set_trace()
             raise
         finally:
-            if not stream.closed():
-                stream.close()
+            close(stream)
             self.remove_worker(address=worker)
 
     def correct_time_delay(self, worker, msg):

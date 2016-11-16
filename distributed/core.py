@@ -155,7 +155,7 @@ class Server(TCPServer):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
                 op = msg.pop('op')
-                close = msg.pop('close', False)
+                close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
@@ -182,13 +182,13 @@ class Server(TCPServer):
                     except StreamClosedError:
                         logger.info("Lost connection: %s" % str(address))
                         break
-                if close:
+                if close_desired:
                     break
         finally:
             try:
-                stream.close()
+                yield close(stream)
             except Exception as e:
-                logger.warn("Failed while closing writer",  exc_info=True)
+                logger.warn("Failed while closing writer", exc_info=True)
         logger.info("Close connection from %s:%d to %s", address[0], address[1],
                     type(self).__name__)
 
@@ -196,58 +196,62 @@ class Server(TCPServer):
 @gen.coroutine
 def read(stream, deserialize=True):
     """ Read a message from a stream """
-    if isinstance(stream, BatchedStream):
-        msg = yield stream.recv()
-        raise gen.Return(msg)
-    else:
-        n_frames = yield stream.read_bytes(8)
-        n_frames = struct.unpack('Q', n_frames)[0]
+    n_frames = yield stream.read_bytes(8)
+    n_frames = struct.unpack('Q', n_frames)[0]
 
-        lengths = yield stream.read_bytes(8 * n_frames)
-        lengths = struct.unpack('Q' * n_frames, lengths)
+    lengths = yield stream.read_bytes(8 * n_frames)
+    lengths = struct.unpack('Q' * n_frames, lengths)
 
-        frames = []
-        for length in lengths:
-            if length:
-                frame = yield stream.read_bytes(length)
-            else:
-                frame = b''
-            frames.append(frame)
+    frames = []
+    for length in lengths:
+        if length:
+            frame = yield stream.read_bytes(length)
+        else:
+            frame = b''
+        frames.append(frame)
 
-        msg = protocol.loads(frames, deserialize=deserialize)
-        raise gen.Return(msg)
+    msg = protocol.loads(frames, deserialize=deserialize)
+    raise gen.Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
     """ Write a message to a stream """
-    if isinstance(stream, BatchedStream):
-        stream.send(msg)
-    else:
+    try:
+        frames = protocol.dumps(msg)
+    except Exception as e:
+        logger.info("Unserializable Message: %s", msg)
+        logger.exception(e)
+        raise
+
+    lengths = ([struct.pack('Q', len(frames))] +
+               [struct.pack('Q', len(frame)) for frame in frames])
+    stream.write(b''.join(lengths))
+
+    for frame in frames:
+        # Can't wait for the write() Future as it may be lost
+        # ("If write is called again before that Future has resolved,
+        #   the previous future will be orphaned and will never resolve")
+        stream.write(frame)
+
+    yield gen.moment
+
+
+@gen.coroutine
+def close(stream):
+    """Close a stream after flushing it.
+    No concurrent write() should be issued during execution of this
+    coroutine.
+    """
+    if not stream.closed():
         try:
-            frames = protocol.dumps(msg)
-        except Exception as e:
-            logger.info("Unserializable Message: %s", msg)
-            logger.exception(e)
-            raise
-
-        futures = []
-
-        lengths = ([struct.pack('Q', len(frames))] +
-                   [struct.pack('Q', len(frame)) for frame in frames])
-        futures.append(stream.write(b''.join(lengths)))
-
-        for frame in frames[:-1]:
-            futures.append(stream.write(frame))
-
-        futures.append(stream.write(frames[-1]))
-
-        while stream._write_buffer:
-            try:
-                yield gen.with_timeout(timedelta(seconds=0.01), futures[-1])
-                break
-            except gen.TimeoutError:
-                pass
+            # Flush the stream's write buffer by waiting for a last write.
+            if stream.writing():
+                yield stream.write(b'')
+        except StreamClosedError:
+            pass
+        finally:
+            stream.close()
 
 
 def pingpong(stream):
@@ -311,7 +315,7 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True,
     else:
         response = None
     if kwargs.get('close'):
-        stream.close()
+        close(stream)
     raise gen.Return(response)
 
 
@@ -414,7 +418,7 @@ class rpc(object):
         for stream in self.streams:
             if stream and not stream.closed():
                 try:
-                    stream.close()
+                    close(stream)
                 except (OSError, IOError, StreamClosedError):
                     pass
         self.streams.clear()
@@ -567,15 +571,15 @@ class ConnectionPool(object):
                     self.open, self.active)
         for streams in list(self.available.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
 
     def close(self):
         for streams in list(self.available.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
         for streams in list(self.occupied.values()):
             for stream in streams:
-                stream.close()
+                close(stream)
 
 
 def coerce_to_address(o, out=str):
@@ -658,6 +662,3 @@ def clean_exception(exception, traceback, **kwargs):
     if isinstance(traceback, str):
         traceback = None
     return type(exception), exception, traceback
-
-
-from .batched import BatchedStream

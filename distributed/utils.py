@@ -63,7 +63,7 @@ def get_ip(host='8.8.8.8', port=80):
 def ignoring(*exceptions):
     try:
         yield
-    except exceptions:
+    except exceptions as e:
         pass
 
 

@@ -20,15 +20,14 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker
-from distributed.batched import BatchedStream
-from distributed.core import connect, read, write, rpc
+from distributed.core import connect, read, write, close, rpc
 from distributed.scheduler import (validate_state, decide_worker,
         Scheduler)
 from distributed.client import _wait
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
-        loop)
+        loop, readone)
 from distributed.utils import All
 from dask.compatibility import apply
 
@@ -345,8 +344,7 @@ def div(x, y):
 def test_scheduler(s, a, b):
     stream = yield connect(s.ip, s.port)
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
-    stream = BatchedStream(stream, 10)
-    msg = yield read(stream)
+    msg = yield readone(stream)
     assert msg['op'] == 'stream-start'
 
     # Test update graph
@@ -360,7 +358,7 @@ def test_scheduler(s, a, b):
                          'keys': ['x', 'z'],
                          'client': 'ident'})
     while True:
-        msg = yield read(stream)
+        msg = yield readone(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
@@ -376,7 +374,7 @@ def test_scheduler(s, a, b):
                          'client': 'ident'})
 
     while True:
-        msg = yield read(stream)
+        msg = yield readone(stream)
         if msg['op'] == 'task-erred' and msg['key'] == 'b':
             break
 
@@ -385,7 +383,7 @@ def test_scheduler(s, a, b):
     s.ensure_occupied()
 
     while True:
-        msg = yield read(stream)
+        msg = yield readone(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
@@ -399,12 +397,12 @@ def test_scheduler(s, a, b):
                          'keys': ['zz'],
                          'client': 'ident'})
     while True:
-        msg = yield read(stream)
+        msg = yield readone(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
             break
 
     write(stream, {'op': 'close'})
-    stream.close()
+    close(stream)
 
 
 @gen_cluster()
@@ -452,24 +450,24 @@ def test_multi_queues(s, a, b):
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
-    stream = BatchedStream(stream, 0)
-    stream.send({'op': 'update-graph',
-                 'tasks': {'x': dumps_task((inc, 1)),
-                           'y': dumps_task((inc, 'x'))},
-                 'dependencies': {'x': [], 'y': ['x']},
-                 'keys': ['y'],
-                 'client': 'ident'})
+    yield write(stream, {'op': 'update-graph',
+                         'tasks': {'x': dumps_task((inc, 1)),
+                                   'y': dumps_task((inc, 'x'))},
+                         'dependencies': {'x': [], 'y': ['x']},
+                         'keys': ['y'],
+                         'client': 'ident'})
 
     while True:
-        msg = yield read(stream)
+        msg = yield readone(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
             break
 
-    stream.send({'op': 'close-stream'})
-    msg = yield read(stream)
+    yield write(stream, {'op': 'close-stream'})
+    msg = yield readone(stream)
     assert msg == {'op': 'stream-closed'}
-    assert stream.closed()
-    stream.close()
+    with pytest.raises(StreamClosedError):
+        yield readone(stream)
+    close(stream)
 
 
 @gen_cluster()
@@ -548,7 +546,7 @@ def test_feed(s, a, b):
         expected = s.processing, s.stacks
         assert cloudpickle.loads(response) == expected
 
-    stream.close()
+    close(stream)
 
 
 @gen_cluster()
@@ -574,7 +572,7 @@ def test_feed_setup_teardown(s, a, b):
         response = yield read(stream)
         assert response == 'OK'
 
-    stream.close()
+    close(stream)
     start = time()
     while not hasattr(s, 'flag'):
         yield gen.sleep(0.01)
@@ -600,7 +598,7 @@ def test_feed_large_bytestring(s, a, b):
         response = yield read(stream)
         assert response == True
 
-    stream.close()
+    close(stream)
 
 
 @gen_test(timeout=None)
@@ -700,8 +698,6 @@ def test_filtered_communication(s, a, b):
     yield write(f, {'op': 'register-client', 'client': 'f'})
     yield read(c)
     yield read(f)
-    c = BatchedStream(c, 0)
-    f = BatchedStream(f, 0)
 
     assert set(s.streams) == {'c', 'f'}
 
@@ -719,10 +715,10 @@ def test_filtered_communication(s, a, b):
                     'client': 'f',
                     'keys': ['z']})
 
-    msg = yield read(c)
+    msg, = yield read(c)
     assert msg['op'] == 'key-in-memory'
     assert msg['key'] == 'y'
-    msg = yield read(f)
+    msg, = yield read(f)
     assert msg['op'] == 'key-in-memory'
     assert msg['key'] == 'z'
 
