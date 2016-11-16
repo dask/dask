@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .core import DataFrame, Series, aca, map_partitions, no_default
+from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
 from ..base import tokenize
@@ -800,13 +801,19 @@ class _GroupBy(object):
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
-            df4 = df3.drop(cols, axis=1, dtype=meta.columns.dtype if
-                           isinstance(meta, pd.DataFrame) else None)
+            if isinstance(meta, pd.DataFrame):
+                df4 = df3.map_partitions(drop_columns, columns,
+                                         meta.columns.dtype)
+            else:
+                df4 = df3.drop(cols, axis=1)
         elif isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
-            df4 = df3.drop('_index', axis=1, dtype=meta.columns.dtype if
-                           isinstance(meta, DataFrame) else None)
+            if isinstance(meta, pd.DataFrame):
+                df4 = df3.map_partitions(drop_columns, '_index',
+                                         meta.columns.dtype)
+            else:
+                df4 = df3.drop('_index', axis=1)
         else:
             df4 = df3
             index2 = self.index
