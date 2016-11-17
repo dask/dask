@@ -6,14 +6,14 @@ services:
 matrix:
   fast_finish: true
   include:
-    #- python: "2.7"
-    #- python: "3.4"
-      #env: COVERAGE=true
-    #- python: "3.5"
-    #- python: "2.7"
-      #env: HDFS=true
-      #sudo: true
-      #dist: trusty
+    - python: "2.7"
+    - python: "3.4"
+      env: COVERAGE=true
+    - python: "3.5"
+    - python: "2.7"
+      env: HDFS=true
+      sudo: true
+      dist: trusty
     - python: "3.5"
       env: HDFS=true
       sudo: true
@@ -34,6 +34,8 @@ before_install:
     fi;
 
 install:
+  # Note we disable progress bars to make Travis log loading much faster
+
   # Install conda
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
   - bash miniconda.sh -b -p $HOME/miniconda
