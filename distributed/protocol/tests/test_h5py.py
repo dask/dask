@@ -1,12 +1,37 @@
+import functools
+import sys
+import traceback
+
 import pytest
 
 h5py = pytest.importorskip('h5py')
 
 from distributed.protocol import serialize, deserialize, dumps, loads
 
-from distributed.utils import tmpfile
+from distributed.utils import PY3, tmpfile
 
 
+def silence_h5py_issue775(func):
+    @functools.wraps(func)
+    def wrapper():
+        if PY3:
+            try:
+                func()
+            except RuntimeError as e:
+                # https://github.com/h5py/h5py/issues/775
+                if str(e) != "dictionary changed size during iteration":
+                    raise
+                tb = traceback.extract_tb(e.__traceback__)
+                filename, lineno, _, _ = tb[-1]
+                if not filename.endswith("h5py/_objects.pyx"):
+                    raise
+        else:
+            func()
+
+    return wrapper
+
+
+@silence_h5py_issue775
 def test_serialize_deserialize_file():
     with tmpfile() as fn:
         with h5py.File(fn, mode='a') as f:
@@ -20,6 +45,7 @@ def test_serialize_deserialize_file():
             assert g['x'].shape == (2, 2)
 
 
+@silence_h5py_issue775
 def test_serialize_deserialize_group():
     with tmpfile() as fn:
         with h5py.File(fn, mode='a') as f:
@@ -34,6 +60,7 @@ def test_serialize_deserialize_group():
             assert group2['x'].shape == (2, 2)
 
 
+@silence_h5py_issue775
 def test_serialize_deserialize_dataset():
     with tmpfile() as fn:
         with h5py.File(fn, mode='a') as f:
@@ -47,6 +74,7 @@ def test_serialize_deserialize_dataset():
             assert (x[:] == y[:]).all()
 
 
+@silence_h5py_issue775
 def test_raise_error_on_serialize_write_permissions():
     with tmpfile() as fn:
         with h5py.File(fn, mode='a') as f:
@@ -65,6 +93,7 @@ from tornado import gen
 
 import dask.array as da
 
+@silence_h5py_issue775
 @gen_cluster(client=True)
 def test_h5py_serialize(c, s, a, b):
     from dask.utils import SerializableLock
