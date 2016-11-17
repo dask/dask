@@ -100,7 +100,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         index_col = None
 
     if index_col:
-        divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
+        divisions = tuple(minmax[index_col]['min']) + (minmax[index_col]['max'][-1],)
         df = df.set_index(index_col, sorted=True, divisions=divisions)
 
     return df
