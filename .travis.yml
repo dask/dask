@@ -3,12 +3,17 @@ sudo: false
 services:
   - docker
 
+env:
+  global:
+    - CACHE_DIR=$HOME/.cache/docker
+    - CACHE_HADOOP_IMAGE=$CACHE_DIR/hadoop-image.tar.gz
+
 matrix:
   fast_finish: true
   include:
     #- python: "2.7"
-    - python: "3.4"
-      env: COVERAGE=true
+    #- python: "3.4"
+      #env: COVERAGE=true
     #- python: "3.5"
     #- python: "2.7"
       #env: HDFS=true
@@ -18,15 +23,27 @@ matrix:
       env: HDFS=true
       sudo: true
       dist: trusty
+      cache:
+        directories:
+          - $CACHE_DIR
 
 before_install:
   - |
     if [[ $HDFS == true ]]; then
-        sudo bash -c 'echo "127.0.0.1 hdfs-container" >> /etc/hosts'
+        # See http://rundef.com/fast-travis-ci-docker-build
+        mkdir -p $CACHE_DIR
+        if [ -f ${CACHE_HADOOP_IMAGE} ]; then
+            gunzip -c ${CACHE_HADOOP_IMAGE} | docker load
+        fi
         pushd continuous_integration
         docker build -t distributed-hdfs-test .
+        if [ ! -f ${CACHE_HADOOP_IMAGE} ]; then
+            docker save sequenceiq/hadoop-docker:2.7.1 | gzip > ${CACHE_HADOOP_IMAGE}
+        fi
+        # Run HDFS
         ./run-hdfs.sh || exit 1
         popd
+        sudo bash -c 'echo "127.0.0.1 hdfs-container" >> /etc/hosts'
     fi;
 
 install:
