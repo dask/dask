@@ -37,7 +37,6 @@ def setup_module(module):
 
 def test_get_block_locations():
     with make_hdfs() as hdfs:
-        1/0
         data = b'a' * int(1e8)  # todo: reduce block size to speed up test
         fn_1 = '/tmp/test/file1'
         fn_2 = '/tmp/test/file2'
