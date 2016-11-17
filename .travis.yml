@@ -7,9 +7,9 @@ matrix:
   fast_finish: true
   include:
     #- python: "2.7"
-    #- python: "3.4"
+    - python: "3.4"
+      env: COVERAGE=true
     #- python: "3.5"
-      #env: HDFS=false
     #- python: "2.7"
       #env: HDFS=true
       #sudo: true
@@ -22,21 +22,11 @@ matrix:
 before_install:
   - |
     if [[ $HDFS == true ]]; then
-        #if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-          #export DOCKER_ENV=/opt/conda;
-        #else
-          #export DOCKER_ENV=/opt/conda/envs/py3;
-        #fi
-        #echo $DOCKER_ENV
-        #pwd
         sudo bash -c 'echo "127.0.0.1 hdfs-container" >> /etc/hosts'
         pushd continuous_integration
         docker build -t distributed-hdfs-test .
         ./run-hdfs.sh || exit 1
         popd
-        #docker run -d -p 8020:8020 -p 50070:50070 -v $(pwd):/distributed distributed-hdfs
-        #export CONTAINER_ID=$(docker ps -q)
-        #sleep 60  # Wait for namenode and datanode
     fi;
 
 install:
@@ -45,16 +35,16 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
-  - conda update conda
+  - conda update -q conda
 
   # Install dependencies
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
   - |
     if [[ $HDFS == true ]]; then
-        conda install libxml2 krb5 boost
-        conda install -c dask libhdfs3 libgsasl libntlm
+        conda install -q libxml2 krb5 boost
+        conda install -q -c dask libhdfs3 libgsasl libntlm
         pip install git+https://github.com/dask/hdfs3 --upgrade
     fi;
   - pip install git+https://github.com/dask/dask.git --upgrade
@@ -63,26 +53,19 @@ install:
 
   # Install distributed
   - python setup.py install
-  #- |
-    #if [[ $HDFS == true ]]; then
-        #pwd
-        #docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/python setup.py install
-    #fi;
 
 script:
     - |
       if [[ $HDFS == true ]]; then
         py.test distributed/tests/test_hdfs.py --verbose -r s --timeout-method=thread --timeout=20
-      elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
+      elif [[ $COVERAGE == true ]]; then
         coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
       else
         py.test -m "not avoid_travis" distributed --verbose;
       fi;
-    #pwd
-    #docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py --verbose
 
 after_success:
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report; pip install coveralls ; coveralls ; fi
+    - if [[ $COVERAGE == true ]]; then coverage report; pip install coveralls ; coveralls ; fi
 
 notifications:
   email: false

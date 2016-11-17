@@ -26,7 +26,7 @@ ip = get_ip()
 
 def setup_module(module):
     try:
-        # Quick check the port is open and HDFS is running
+        # Fail fast if the port isn't open or HDFS isn't functional
         socket.create_connection(('localhost', 8020)).close()
         hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
         hdfs.df()
