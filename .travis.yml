@@ -27,6 +27,9 @@ before_install:
         # Run HDFS
         ./run-hdfs.sh || exit 1
         popd
+        # Need to make the container's hostname resolvable, since the HDFS
+        # client will contact it back.
+        # XXX there's probably a way to avoid this.
         sudo bash -c 'echo "127.0.0.1 hdfs-container" >> /etc/hosts'
     fi;
 
@@ -44,10 +47,9 @@ install:
   - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
   - |
     if [[ $HDFS == true ]]; then
-        conda install -c conda-forge hdfs3
-        #conda install -q libxml2 krb5 boost
-        #conda install -q -c dask libhdfs3 libgsasl libntlm
-        #pip install -q git+https://github.com/dask/hdfs3 --upgrade
+        conda install -q libxml2 krb5 boost
+        conda install -q -c conda-forge libhdfs3 libgsasl libntlm
+        pip install -q git+https://github.com/dask/hdfs3 --upgrade
     fi;
   - pip install -q git+https://github.com/dask/dask.git --upgrade
   - pip install -q git+https://github.com/joblib/joblib.git --upgrade
@@ -59,7 +61,15 @@ install:
 script:
     - |
       if [[ $HDFS == true ]]; then
-        py.test distributed/tests/test_hdfs.py --verbose -r s --timeout-method=thread --timeout=20
+        py.test distributed/tests/test_hdfs.py --verbose -r s --timeout-method=thread --timeout=30
+        if [ $? -ne 0 ]; then
+            # Diagnose test error
+            echo "--"
+            echo "-- HDFS namenode log follows"
+            echo "--"
+            docker exec -it $(docker ps -q) bash -c "tail -n50 /usr/local/hadoop/logs/hadoop-root-namenode-hdfs-container.log"
+            (exit 1)
+        fi
       elif [[ $COVERAGE == true ]]; then
         coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
       else
