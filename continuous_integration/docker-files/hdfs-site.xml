@@ -1,0 +1,27 @@
+<configuration>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.safemode.extension</name>
+        <value>10</value>
+        <description>
+            Determines extension of safe mode in milliseconds
+            after the threshold level is reached.
+        </description>
+    </property>
+
+    <property>
+        <name>dfs.permissions</name>
+        <value>false</value>
+        <description>
+            If "true", enable permission checking in HDFS.
+            If "false", permission checking is turned off,
+            but all other behavior is unchanged.
+            Switching from one parameter value to the other does not change the mode,
+            owner or group of files or directories.
+        </description>
+    </property>
+</configuration>

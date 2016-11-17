@@ -1,10 +1,22 @@
-#!/bin/bash
+#!bin/bash
 
-# Start HDFS
-sudo service hadoop-hdfs-namenode start
-sudo service hadoop-hdfs-datanode start
+set -e
 
-echo "Ready"
+export HADOOP_PREFIX=/usr/local/hadoop
+$HADOOP_PREFIX/etc/hadoop/hadoop-env.sh
 
-# Block
+service sshd start
+
+rm -f /tmp/*.pid
+$HADOOP_PREFIX/sbin/start-dfs.sh
+
+echo "--"
+echo "-- HDFS started!"
+echo "--"
+
+# Wait for nodes to be fully initialized
+sleep 5
+touch /host/hdfs-initialized
+
+# Stay alive
 sleep infinity

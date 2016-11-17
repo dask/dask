@@ -6,14 +6,14 @@ services:
 matrix:
   fast_finish: true
   include:
-    - python: "2.7"
-    - python: "3.4"
-    - python: "3.5"
-      env: HDFS=false
-    - python: "2.7"
-      env: HDFS=true
-      sudo: true
-      dist: trusty
+    #- python: "2.7"
+    #- python: "3.4"
+    #- python: "3.5"
+      #env: HDFS=false
+    #- python: "2.7"
+      #env: HDFS=true
+      #sudo: true
+      #dist: trusty
     - python: "3.5"
       env: HDFS=true
       sudo: true
@@ -22,19 +22,21 @@ matrix:
 before_install:
   - |
     if [[ $HDFS == true ]]; then
-        if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-          export DOCKER_ENV=/opt/conda;
-        else
-          export DOCKER_ENV=/opt/conda/envs/py3;
-        fi
-        echo $DOCKER_ENV
-        pwd
+        #if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+          #export DOCKER_ENV=/opt/conda;
+        #else
+          #export DOCKER_ENV=/opt/conda/envs/py3;
+        #fi
+        #echo $DOCKER_ENV
+        #pwd
+        sudo bash -c 'echo "127.0.0.1 hdfs-container" >> /etc/hosts'
         pushd continuous_integration
-        docker build -t distributed-hdfs .
+        docker build -t distributed-hdfs-test .
+        ./run-hdfs.sh || exit 1
         popd
-        docker run -d -p 8020:8020 -p 50070:50070 -v $(pwd):/distributed distributed-hdfs
-        export CONTAINER_ID=$(docker ps -l -q)
-        sleep 60  # Wait for namenode and datanode
+        #docker run -d -p 8020:8020 -p 50070:50070 -v $(pwd):/distributed distributed-hdfs
+        #export CONTAINER_ID=$(docker ps -q)
+        #sleep 60  # Wait for namenode and datanode
     fi;
 
 install:
@@ -48,25 +50,25 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
+  - conda install pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
   - pip install git+https://github.com/dask/dask.git --upgrade
   - pip install git+https://github.com/joblib/joblib.git --upgrade
   - pip install git+https://github.com/dask/s3fs.git --upgrade
 
   # Install distributed
   - python setup.py install
-
-  - |
-    if [[ $HDFS == true ]]; then
-        pwd
-        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/python setup.py install
-    fi;
+  #- |
+    #if [[ $HDFS == true ]]; then
+        #pwd
+        #docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/python setup.py install
+    #fi;
 
 script:
     - |
       if [[ $HDFS == true ]]; then
-        pwd
-        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py --verbose
+        py.test distributed/tests/test_hdfs.py --verbose --timeout-method=thread --timeout=20
+        #pwd
+        #docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py --verbose
       elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
         coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
       else
