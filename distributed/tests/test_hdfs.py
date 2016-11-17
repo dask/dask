@@ -1,8 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-import pytest
+import socket
 from toolz import concat
 from tornado import gen
+
+import pytest
 
 from dask.delayed import Delayed
 import dask.bag as db
@@ -19,14 +21,18 @@ from distributed.client import _wait, Future
 hdfs3 = pytest.importorskip('hdfs3')
 from dask.bytes.core import read_bytes, write_bytes
 
-try:
-    hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
-    hdfs.df()
-    del hdfs
-except:
-    pytestmark = pytest.skip()
 
 ip = get_ip()
+
+def setup_module(module):
+    try:
+        # Fail fast if the port isn't open or HDFS isn't functional
+        socket.create_connection(('localhost', 8020)).close()
+        hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
+        hdfs.df()
+        del hdfs
+    except Exception as e:
+        raise RuntimeError("Failed connecting to HDFS: " + str(e))
 
 
 def test_get_block_locations():

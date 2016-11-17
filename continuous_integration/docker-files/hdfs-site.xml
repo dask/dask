@@ -1,0 +1,51 @@
+<configuration>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+
+<!--    <property>
+        <name>dfs.namenode.rpc-address</name>
+        <value>0.0.0.0:8020</value>
+        <description>
+            RPC address that handles all clients requests. In the case of HA/Federation where multiple namenodes exist,
+            the name service id is added to the name e.g. dfs.namenode.rpc-address.ns1
+            dfs.namenode.rpc-address.EXAMPLENAMESERVICE
+            The value of this property will take the form of nn-host1:rpc-port.
+        </description>
+    </property>-->
+
+<!--    <property>
+        <name>dfs.namenode.rpc-bind-host</name>
+        <value>0.0.0.0</value>
+        <description>
+            The actual address the RPC server will bind to. If this optional address is
+            set, it overrides only the hostname portion of dfs.namenode.rpc-address.
+            It can also be specified per name node or name service for HA/Federation.
+            This is useful for making the name node listen on all interfaces by
+            setting it to 0.0.0.0.
+        </description>
+    </property>-->
+
+    <property>
+        <name>dfs.namenode.safemode.extension</name>
+        <value>10</value>
+        <description>
+            Determines extension of safe mode in milliseconds
+            after the threshold level is reached.
+        </description>
+    </property>
+
+    <property>
+        <name>dfs.permissions</name>
+        <value>false</value>
+        <description>
+            If "true", enable permission checking in HDFS.
+            If "false", permission checking is turned off,
+            but all other behavior is unchanged.
+            Switching from one parameter value to the other does not change the mode,
+            owner or group of files or directories.
+        </description>
+    </property>
+
+</configuration>
