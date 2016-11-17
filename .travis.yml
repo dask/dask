@@ -3,11 +3,6 @@ sudo: false
 services:
   - docker
 
-env:
-  global:
-    - CACHE_DIR=$HOME/.cache/docker
-    - CACHE_HADOOP_IMAGE=$CACHE_DIR/hadoop-image.tar.gz
-
 matrix:
   fast_finish: true
   include:
@@ -23,23 +18,12 @@ matrix:
       env: HDFS=true
       sudo: true
       dist: trusty
-      cache:
-        directories:
-          - $CACHE_DIR
 
 before_install:
   - |
     if [[ $HDFS == true ]]; then
-        # See http://rundef.com/fast-travis-ci-docker-build
-        mkdir -p $CACHE_DIR
-        if [ -f ${CACHE_HADOOP_IMAGE} ]; then
-            gunzip -c ${CACHE_HADOOP_IMAGE} | docker load
-        fi
         pushd continuous_integration
         docker build -t distributed-hdfs-test .
-        if [ ! -f ${CACHE_HADOOP_IMAGE} ]; then
-            docker save sequenceiq/hadoop-docker:2.7.1 | gzip > ${CACHE_HADOOP_IMAGE}
-        fi
         # Run HDFS
         ./run-hdfs.sh || exit 1
         popd
@@ -60,13 +44,14 @@ install:
   - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
   - |
     if [[ $HDFS == true ]]; then
-        conda install -q libxml2 krb5 boost
-        conda install -q -c dask libhdfs3 libgsasl libntlm
-        pip install git+https://github.com/dask/hdfs3 --upgrade
+        conda install -c conda-forge hdfs3
+        #conda install -q libxml2 krb5 boost
+        #conda install -q -c dask libhdfs3 libgsasl libntlm
+        #pip install -q git+https://github.com/dask/hdfs3 --upgrade
     fi;
-  - pip install git+https://github.com/dask/dask.git --upgrade
-  - pip install git+https://github.com/joblib/joblib.git --upgrade
-  - pip install git+https://github.com/dask/s3fs.git --upgrade
+  - pip install -q git+https://github.com/dask/dask.git --upgrade
+  - pip install -q git+https://github.com/joblib/joblib.git --upgrade
+  - pip install -q git+https://github.com/dask/s3fs.git --upgrade
 
   # Install distributed
   - python setup.py install
@@ -82,7 +67,7 @@ script:
       fi;
 
 after_success:
-    - if [[ $COVERAGE == true ]]; then coverage report; pip install coveralls ; coveralls ; fi
+    - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
 
 notifications:
   email: false
