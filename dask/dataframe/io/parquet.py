@@ -1,5 +1,6 @@
 import struct
 
+import pandas as pd
 from toolz import first
 
 from dask import delayed, compute
@@ -65,14 +66,21 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
+    # get category values from first row-group
+    categories = categories or []
+    cats = pf.grab_cats(categories)
+    categories = [cat for cat in categories if cats.get(cat, None) is not None]
+
     parts = [delayed(pf.read_row_group_file)(rg, columns, categories, **kwargs)
              for rg in rgs]
 
     # TODO: if categories vary from one rg to next, need to cope
-    dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
+    dtypes = {k: ('category' if k in categories else v) for k, v in
               pf.dtypes.items() if k in columns}
 
     df = dd.from_delayed(parts, meta=dtypes)
+    for cat in categories:
+        df._meta[cat] = pd.Series(pd.Categorical([], categories=cats[cat]))
 
     # Find an index among the partially sorted columns
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
