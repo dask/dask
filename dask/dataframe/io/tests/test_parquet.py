@@ -77,7 +77,6 @@ def test_names(fn):
             set(read_parquet(fn, columns=['x']).dask))
 
 
-
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
 def test_optimize(fn, c):
     ddf = read_parquet(fn)

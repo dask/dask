@@ -11,7 +11,6 @@ except ImportError:
     read_parquet_row_group = False
 
 
-
 def fuse_castra_index(dsk):
     from castra import Castra
 
