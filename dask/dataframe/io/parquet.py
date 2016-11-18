@@ -88,7 +88,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     else:
         index_col = None
 
-    all_columns = columns or tuple(pf.columns + list(pf.cats))
+    if columns is None:
+        all_columns = tuple(pf.columns + list(pf.cats))
+    else:
+        all_columns = columns
     if not isinstance(all_columns, tuple):
         out_type = Series
         all_columns = (all_columns,)
