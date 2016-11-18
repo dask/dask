@@ -9,6 +9,7 @@ import dask.dataframe as dd
 try:
     import fastparquet
     from fastparquet import parquet_thrift
+    from fastparquet.core import read_row_group_file
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
@@ -65,7 +66,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
-    parts = [delayed(pf.read_row_group_file)(rg, columns, categories, **kwargs)
+    parts = [delayed(read_row_group_file)(pf.row_group_filename(rg),
+                                          rg, columns, categories, pf.helper,
+                                          pf.cats, open=pf.open, **kwargs)
              for rg in rgs]
 
     # TODO: if categories vary from one rg to next, need to cope
