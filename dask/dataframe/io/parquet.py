@@ -123,6 +123,11 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
 
 
 def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
+    if not isinstance(columns, (tuple, list)):
+        columns = (columns,)
+        series = True
+    if index not in columns:
+        columns = columns + type(columns)([index])
     df = read_row_group_file(fn, rg, columns, *args, open=open)
     if index:
         df = df.set_index(index)
