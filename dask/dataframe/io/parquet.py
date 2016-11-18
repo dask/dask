@@ -112,7 +112,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
-    dsk = {(name, i): (read_parquet_row_group, open, pf.row_group_filename(rg),
+    dsk = {(name, i): (read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
                        categories, pf.helper, pf.cats)
            for i, rg in enumerate(rgs)}
