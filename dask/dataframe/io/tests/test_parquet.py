@@ -64,6 +64,16 @@ def test_index_column(fn):
     assert_eq(df[[]], ddf)
 
 
+def test_index_column_no_index(fn):
+    ddf = read_parquet(fn, columns=['myindex'])
+    assert_eq(df[[]], ddf)
+
+
+def test_index_column_no_index(fn):
+    ddf = read_parquet(fn, columns=['myindex'], index=False)
+    assert_eq(pd.DataFrame(df.index), ddf, check_index=False)
+
+
 def test_no_columns_yes_index(fn):
     ddf = read_parquet(fn, columns=[], index='myindex')
     assert_eq(df[[]], ddf)
