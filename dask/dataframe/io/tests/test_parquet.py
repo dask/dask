@@ -69,7 +69,7 @@ def test_index_column_no_index(fn):
     assert_eq(df[[]], ddf)
 
 
-def test_index_column_no_index(fn):
+def test_index_column_false_index(fn):
     ddf = read_parquet(fn, columns=['myindex'], index=False)
     assert_eq(pd.DataFrame(df.index), ddf, check_index=False)
 
