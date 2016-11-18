@@ -1,9 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-import pickle
+import sys
 
 import cloudpickle
+
+if sys.version_info.major == 2:
+    import cPickle as pickle
+else:
+    import pickle
 
 from ..utils import ignoring
 
