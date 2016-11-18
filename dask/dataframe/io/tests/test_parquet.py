@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 from dask.utils import tmpdir
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
@@ -29,10 +30,10 @@ def test_local():
 
         assert len(df2.divisions) > 1
 
-        out, out2 = df.compute(), df2.compute().reset_index()
+        out = df2.compute(get=dask.get).reset_index()
 
         for column in df.columns:
-            assert (out[column] == out2[column]).all()
+            assert (data[column] == out[column]).all()
 
 
 def test_index():
