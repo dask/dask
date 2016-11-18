@@ -54,6 +54,11 @@ def test_index(fn):
     assert_eq(df, ddf)
 
 
+def test_auto_add_index(fn):
+    ddf = read_parquet(fn, columns=['x'], index='myindex')
+    assert_eq(df[['x']], ddf)
+
+
 def test_series(fn):
     ddf = read_parquet(fn, columns=['x'])
     assert_eq(df[['x']], ddf)
