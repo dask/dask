@@ -55,6 +55,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         filters = []
     myopen = OpenFileCreator(path, compression=None, text=False)
 
+    if isinstance(columns, list):
+        columns = tuple(columns)
+
     try:
         pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
                                      open_with=myopen,
@@ -85,11 +88,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     else:
         index_col = None
 
-    all_columns = columns or (pf.columns + list(pf.cats))
-    if isinstance(all_columns, list):
-        all_columns = tuple(all_columns)
+    all_columns = columns or tuple(pf.columns + list(pf.cats))
     if not isinstance(all_columns, tuple):
+        out_type = Series
         all_columns = (all_columns,)
+    else:
+        out_type = DataFrame
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
@@ -101,12 +105,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     if index_col:
         meta = meta.set_index(index_col)
 
-    if columns is not None and not isinstance(columns, (tuple, list)):
+    if out_type == Series:
         assert len(meta.columns) == 1
-        out_type = Series
         meta = meta[meta.columns[0]]
-    else:
-        out_type = DataFrame
 
     dsk = {(name, i): (read_parquet_row_group, open, pf.row_group_filename(rg),
                         index_col, all_columns, rg, out_type == Series,
@@ -206,4 +207,4 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
 
 @partial(normalize_token.register, fastparquet.ParquetFile)
 def normalize_ParquetFile(pf):
-    return (type(pf), pf.fn, pf.open, pf.sep)
+    return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)

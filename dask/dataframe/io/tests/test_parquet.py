@@ -36,33 +36,40 @@ def test_local():
             assert (data[column] == out[column]).all()
 
 
-def test_index():
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-
-        df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
-                           'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
-                          index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
-
-        ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf)
-
-        ddf2 = read_parquet(tmp)
-        assert_eq(ddf, ddf2)
+df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
+                   'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
+                  index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
 
 
-def test_series():
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-        df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
-                           'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
-                          index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
+@pytest.fixture
+def fn(tmpdir):
+    ddf = dd.from_pandas(df, npartitions=3)
+    to_parquet(str(tmpdir), ddf)
 
-        ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf)
+    return str(tmpdir)
 
-        ddf2 = read_parquet(tmp, columns=['x'])
-        assert_eq(df[['x']], ddf2)
 
-        ddf2 = read_parquet(tmp, columns='x', index='myindex')
-        assert_eq(df.x, ddf2)
+def test_index(fn):
+    ddf = read_parquet(fn)
+    assert_eq(df, ddf)
+
+
+def test_series(fn):
+    ddf = read_parquet(fn, columns=['x'])
+    assert_eq(df[['x']], ddf)
+
+    ddf = read_parquet(fn, columns='x', index='myindex')
+    assert_eq(df.x, ddf)
+
+
+def test_names(fn):
+    assert set(read_parquet(fn).dask) == set(read_parquet(fn).dask)
+    assert (set(read_parquet(fn).dask) !=
+            set(read_parquet(fn, columns=['x']).dask))
+    assert (set(read_parquet(fn, columns='x').dask) !=
+            set(read_parquet(fn, columns=['x']).dask))
+    assert (set(read_parquet(fn, columns=('x',)).dask) ==
+            set(read_parquet(fn, columns=['x']).dask))
+
+
+

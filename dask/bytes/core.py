@@ -3,13 +3,13 @@ from __future__ import print_function, division, absolute_import
 import io
 import os
 
-from toolz import merge
+from toolz import merge, partial
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
 from .utils import SeekableFile, read_block
 from ..compatibility import PY2, unicode
-from ..base import tokenize
+from ..base import tokenize, normalize_token
 from ..delayed import delayed
 from ..utils import (build_name_function, infer_compression, import_required,
                      ensure_bytes, ensure_unicode, infer_storage_options)
@@ -247,7 +247,6 @@ class OpenFileCreator(object):
             compression = infer_compression(urlpath)
         if compression is not None and compression not in compress_files:
             raise ValueError("Compression type %s not supported" % compression)
-        self.urlpath = urlpath
         self.compression = compression
         self.text = text
         self.encoding = encoding
@@ -264,6 +263,11 @@ class OpenFileCreator(object):
         """Produces `OpenFile` instance"""
         return OpenFile(self.fs.open, path, self.compression, mode,
                         self.text, self.encoding)
+
+
+@partial(normalize_token.register, OpenFileCreator)
+def normalize_OpenFileCreator(ofc):
+    return ofc.compression, ofc.text, ofc.encoding, ofc.protocol, ofc.storage_options
 
 
 class OpenFile(object):
