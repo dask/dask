@@ -213,6 +213,7 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
         fastparquet.writer.write_common_metadata(f, fmd)
 
 
-@partial(normalize_token.register, fastparquet.ParquetFile)
-def normalize_ParquetFile(pf):
-    return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+if fastparquet:
+    @partial(normalize_token.register, fastparquet.ParquetFile)
+    def normalize_ParquetFile(pf):
+        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
