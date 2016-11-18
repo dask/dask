@@ -49,3 +49,20 @@ def test_index():
 
         ddf2 = read_parquet(tmp)
         assert_eq(ddf, ddf2)
+
+
+def test_series():
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
+                           'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
+                          index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
+
+        ddf = dd.from_pandas(df, npartitions=3)
+        to_parquet(tmp, ddf)
+
+        ddf2 = read_parquet(tmp, columns=['x'])
+        assert_eq(df[['x']], ddf2)
+
+        ddf2 = read_parquet(tmp, columns='x', index='myindex')
+        assert_eq(df.x, ddf2)

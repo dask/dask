@@ -2,7 +2,7 @@ import struct
 
 from toolz import first, partial
 
-from ..core import DataFrame
+from ..core import DataFrame, Series
 from ..utils import make_meta
 from ...base import compute, tokenize, normalize_token
 from ...delayed import delayed
@@ -62,7 +62,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     except:
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
-    columns = columns or (pf.columns + list(pf.cats))
+    name = 'read-parquet-' + tokenize(pf, columns, categories)
+
     rgs = [rg for rg in pf.row_groups if
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
@@ -84,17 +85,32 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     else:
         index_col = None
 
+    all_columns = columns or (pf.columns + list(pf.cats))
+    if isinstance(all_columns, list):
+        all_columns = tuple(all_columns)
+    if not isinstance(all_columns, tuple):
+        all_columns = (all_columns,)
+    if index_col and index_col not in all_columns:
+        all_columns = all_columns + (index_col,)
+
     # TODO: if categories vary from one rg to next, need to cope
     dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
-              pf.dtypes.items() if k in columns}
+              pf.dtypes.items() if k in all_columns}
 
     meta = make_meta(dtypes)
     if index_col:
         meta = meta.set_index(index_col)
 
-    name = 'read-parquet-' + tokenize(pf, columns, categories)
-    dsk = {(name, i): (read_parquet_row_group, index_col, open, pf.row_group_filename(rg),
-                        rg, columns, categories, pf.helper, pf.cats)
+    if columns is not None and not isinstance(columns, (tuple, list)):
+        assert len(meta.columns) == 1
+        out_type = Series
+        meta = meta[meta.columns[0]]
+    else:
+        out_type = DataFrame
+
+    dsk = {(name, i): (read_parquet_row_group, open, pf.row_group_filename(rg),
+                        index_col, all_columns, rg, out_type == Series,
+                        categories, pf.helper, pf.cats)
              for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -102,15 +118,18 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     else:
         divisions = (None,) * (len(rgs) + 1)
 
-    return DataFrame(dsk, name, meta, divisions)
+    return out_type(dsk, name, meta, divisions)
 
 
-def read_parquet_row_group(index, open, *args):
-    df = read_row_group_file(*args, open=open)
+def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
+    df = read_row_group_file(fn, rg, columns, *args, open=open)
     if index:
         df = df.set_index(index)
 
-    return df
+    if series:
+        return df[df.columns[0]]
+    else:
+        return df
 
 
 def to_parquet(path, df, encoding=default_encoding, compression=None,
