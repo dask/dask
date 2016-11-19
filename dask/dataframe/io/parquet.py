@@ -1,22 +1,24 @@
 import struct
 
-from toolz import first
+from toolz import first, partial
 
-from dask import delayed, compute
-from dask.bytes.core import OpenFileCreator
-import dask.dataframe as dd
+from ..core import DataFrame, Series
+from ..utils import make_meta
+from ...base import compute, tokenize, normalize_token
+from ...delayed import delayed
+from ...bytes.core import OpenFileCreator
 
 try:
     import fastparquet
     from fastparquet import parquet_thrift
+    from fastparquet.core import read_row_group_file
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
     default_encoding = None
 
 
-def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 **kwargs):
+def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     """
     Read Dask DataFrame from ParquetFile
 
@@ -53,6 +55,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         filters = []
     myopen = OpenFileCreator(path, compression=None, text=False)
 
+    if isinstance(columns, list):
+        columns = tuple(columns)
+
     try:
         pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
                                      open_with=myopen,
@@ -60,19 +65,11 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     except:
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
-    columns = columns or (pf.columns + list(pf.cats))
+    name = 'read-parquet-' + tokenize(pf, columns, categories)
+
     rgs = [rg for rg in pf.row_groups if
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
-
-    parts = [delayed(pf.read_row_group_file)(rg, columns, categories, **kwargs)
-             for rg in rgs]
-
-    # TODO: if categories vary from one rg to next, need to cope
-    dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
-              pf.dtypes.items() if k in columns}
-
-    df = dd.from_delayed(parts, meta=dtypes)
 
     # Find an index among the partially sorted columns
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
@@ -91,11 +88,57 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     else:
         index_col = None
 
+    if columns is None:
+        all_columns = tuple(pf.columns + list(pf.cats))
+    else:
+        all_columns = columns
+    if not isinstance(all_columns, tuple):
+        out_type = Series
+        all_columns = (all_columns,)
+    else:
+        out_type = DataFrame
+    if index_col and index_col not in all_columns:
+        all_columns = all_columns + (index_col,)
+
+    # TODO: if categories vary from one rg to next, need to cope
+    dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
+              pf.dtypes.items() if k in all_columns}
+
+    meta = make_meta(dtypes)
+    if index_col:
+        meta = meta.set_index(index_col)
+
+    if out_type == Series:
+        assert len(meta.columns) == 1
+        meta = meta[meta.columns[0]]
+
+    dsk = {(name, i): (read_parquet_row_group, myopen, pf.row_group_filename(rg),
+                       index_col, all_columns, rg, out_type == Series,
+                       categories, pf.helper, pf.cats)
+           for i, rg in enumerate(rgs)}
+
     if index_col:
         divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
-        df = df.set_index(index_col, sorted=True, divisions=divisions)
+    else:
+        divisions = (None,) * (len(rgs) + 1)
 
-    return df
+    return out_type(dsk, name, meta, divisions)
+
+
+def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
+    if not isinstance(columns, (tuple, list)):
+        columns = (columns,)
+        series = True
+    if index and index not in columns:
+        columns = columns + type(columns)([index])
+    df = read_row_group_file(fn, rg, columns, *args, open=open)
+    if index:
+        df = df.set_index(index)
+
+    if series:
+        return df[df.columns[0]]
+    else:
+        return df
 
 
 def to_parquet(path, df, encoding=default_encoding, compression=None,
@@ -168,3 +211,9 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
 
     with myopen(sep.join([path, '_common_metadata']), mode='wb') as f:
         fastparquet.writer.write_common_metadata(f, fmd)
+
+
+if fastparquet:
+    @partial(normalize_token.register, fastparquet.ParquetFile)
+    def normalize_ParquetFile(pf):
+        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)

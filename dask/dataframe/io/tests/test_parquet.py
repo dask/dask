@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 from dask.utils import tmpdir
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
@@ -29,22 +30,84 @@ def test_local():
 
         assert len(df2.divisions) > 1
 
-        out, out2 = df.compute(), df2.compute().reset_index()
+        out = df2.compute(get=dask.get).reset_index()
 
         for column in df.columns:
-            assert (out[column] == out2[column]).all()
+            assert (data[column] == out[column]).all()
 
 
-def test_index():
-    with tmpdir() as tmp:
-        tmp = str(tmp)
+df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
+                   'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
+                  index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
 
-        df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
-                           'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
-                          index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
 
-        ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf)
+@pytest.fixture
+def fn(tmpdir):
+    ddf = dd.from_pandas(df, npartitions=3)
+    to_parquet(str(tmpdir), ddf)
 
-        ddf2 = read_parquet(tmp)
-        assert_eq(ddf, ddf2)
+    return str(tmpdir)
+
+
+def test_index(fn):
+    ddf = read_parquet(fn)
+    assert_eq(df, ddf)
+
+
+def test_auto_add_index(fn):
+    ddf = read_parquet(fn, columns=['x'], index='myindex')
+    assert_eq(df[['x']], ddf)
+
+
+def test_index_column(fn):
+    ddf = read_parquet(fn, columns=['myindex'], index='myindex')
+    assert_eq(df[[]], ddf)
+
+
+def test_index_column_no_index(fn):
+    ddf = read_parquet(fn, columns=['myindex'])
+    assert_eq(df[[]], ddf)
+
+
+def test_index_column_false_index(fn):
+    ddf = read_parquet(fn, columns=['myindex'], index=False)
+    assert_eq(pd.DataFrame(df.index), ddf, check_index=False)
+
+
+def test_no_columns_yes_index(fn):
+    ddf = read_parquet(fn, columns=[], index='myindex')
+    assert_eq(df[[]], ddf)
+
+
+def test_no_columns_no_index(fn):
+    ddf = read_parquet(fn, columns=[])
+    assert_eq(df[[]], ddf)
+
+
+def test_series(fn):
+    ddf = read_parquet(fn, columns=['x'])
+    assert_eq(df[['x']], ddf)
+
+    ddf = read_parquet(fn, columns='x', index='myindex')
+    assert_eq(df.x, ddf)
+
+
+def test_names(fn):
+    assert set(read_parquet(fn).dask) == set(read_parquet(fn).dask)
+    assert (set(read_parquet(fn).dask) !=
+            set(read_parquet(fn, columns=['x']).dask))
+    assert (set(read_parquet(fn, columns='x').dask) !=
+            set(read_parquet(fn, columns=['x']).dask))
+    assert (set(read_parquet(fn, columns=('x',)).dask) ==
+            set(read_parquet(fn, columns=['x']).dask))
+
+
+@pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
+def test_optimize(fn, c):
+    ddf = read_parquet(fn)
+    assert_eq(df[c], ddf[c])
+    x = ddf[c]
+
+    dsk = x._optimize(x.dask, x._keys())
+    assert len(dsk) == x.npartitions
+    assert all(v[4] == c for v in dsk.values())
