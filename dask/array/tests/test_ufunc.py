@@ -75,6 +75,19 @@ def test_ufunc_2args(ufunc):
     assert isinstance(dafunc(arr1, arr2), np.ndarray)
     assert_eq(dafunc(arr1, arr2), npfunc(arr1, arr2))
 
+    # with scalar
+    assert isinstance(dafunc(darr1, 10), da.Array)
+    assert_eq(dafunc(darr1, 10), npfunc(arr1, 10))
+
+    assert isinstance(dafunc(10, darr1), da.Array)
+    assert_eq(dafunc(10, darr1), npfunc(10, arr1))
+
+    assert isinstance(dafunc(arr1, 10), np.ndarray)
+    assert_eq(dafunc(arr1, 10), npfunc(arr1, 10))
+
+    assert isinstance(dafunc(10, arr1), np.ndarray)
+    assert_eq(dafunc(10, arr1), npfunc(10, arr1))
+
 
 @pytest.mark.parametrize('ufunc', ['isreal', 'iscomplex', 'real', 'imag'])
 def test_complex(ufunc):
