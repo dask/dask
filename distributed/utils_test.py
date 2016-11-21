@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
+import gc
 from glob import glob
 import logging
 from multiprocessing import Process, Queue
@@ -249,6 +250,9 @@ def run_nanny(q, scheduler_port, **kwargs):
 
 @contextmanager
 def check_active_rpc(loop, active_rpc_timeout=0):
+    if rpc.active > 0:
+        # Streams from a previous test dangling around?
+        gc.collect()
     rpc_active = rpc.active
     yield
     if rpc.active > rpc_active and active_rpc_timeout:

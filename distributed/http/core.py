@@ -10,6 +10,7 @@ from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
+from .. import metrics
 from ..utils import log_errors
 
 
@@ -43,8 +44,8 @@ def resource_collect(pid=None):
             'status': p.status(),
             'memory_percent': p.memory_percent(),
             'memory_info_ex': p.memory_info_ex(),
-            'disk_io_counters': psutil.disk_io_counters(),
-            'net_io_counters': psutil.net_io_counters()}
+            'disk_io_counters': metrics.disk_io_counters(),
+            'net_io_counters': metrics.net_io_counters()}
 
 
 class Resources(RequestHandler):

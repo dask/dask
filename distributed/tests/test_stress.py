@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from concurrent.futures import CancelledError
 from datetime import timedelta
 from operator import add
+import sys
 from time import sleep, time
 
 from dask import delayed
@@ -41,6 +42,8 @@ def test_stress_gc(loop, func, n):
             assert x.result() == n + 2
 
 
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="test can leave dangling RPC objects")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4, timeout=None)
 def test_cancel_stress(c, s, *workers):
     da = pytest.importorskip('dask.array')

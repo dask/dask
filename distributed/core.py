@@ -445,6 +445,14 @@ class rpc(object):
     def __exit__(self, *args):
         self.close_rpc()
 
+    def __del__(self):
+        if self.status != 'closed':
+            rpc.active -= 1
+            n_open = sum(not stream.closed() for stream in self.streams)
+            if n_open:
+                logger.warn("rpc object %s deleted with %d open streams",
+                            self, n_open)
+
 
 class RPCCall(object):
     """ The result of ConnectionPool()('host:port')

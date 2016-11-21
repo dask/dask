@@ -65,8 +65,13 @@ def test_health():
     except ImportError:
         pass
     else:
-        assert 'disk-read' in d
-        assert 'disk-write' in d
+        try:
+            psutil.disk_io_counters()
+        except RuntimeError:
+            pass
+        else:
+            assert 'disk-read' in d
+            assert 'disk-write' in d
         assert 'network-recv' in d
         assert 'network-send' in d
 

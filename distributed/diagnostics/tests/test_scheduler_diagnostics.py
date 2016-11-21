@@ -1,4 +1,5 @@
 import json
+import pytest
 
 from tornado import gen
 
@@ -48,7 +49,13 @@ def test_workers(c, s, a, b):
     assert 0 < d[a.ip]['memory_percent'] < 100
     assert set(map(int, d[a.ip]['ports'])) == {a.port, b.port}
     assert d[a.ip]['processing'] == {}
-    assert 0 <= d[a.ip]['disk-read']
-    assert 0 <= d[a.ip]['disk-write']
+    try:
+        assert 0 <= d[a.ip]['disk-read']
+        assert 0 <= d[a.ip]['disk-write']
+    except KeyError:
+        import psutil
+        with pytest.raises(RuntimeError):
+            psutil.disk_io_counters()
+
     assert 0 <= d[a.ip]['network-send']
     assert 0 <= d[a.ip]['network-recv']

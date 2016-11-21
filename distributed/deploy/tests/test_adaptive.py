@@ -48,7 +48,7 @@ def test_adaptive_local_cluster_multi_workers():
     start = time()
     while not cluster.workers:
         yield gen.sleep(0.01)
-        assert time() < start + 5
+        assert time() < start + 15
 
     yield c._gather(futures)
     del futures

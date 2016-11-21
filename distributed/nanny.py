@@ -17,6 +17,7 @@ from tornado import gen
 
 from .compatibility import JSONDecodeError
 from .core import Server, rpc, write, RPCClosed
+from .metrics import disk_io_counters, net_io_counters
 from .protocol import to_serialize
 from .utils import get_ip, ignoring, log_errors, tmpfile
 from .worker import _ncores, Worker, run, TOTAL_MEMORY
@@ -294,8 +295,8 @@ class Nanny(Server):
                 'status': p.status(),
                 'memory_percent': p.memory_percent(),
                 'memory_info_ex': p.memory_info_ex()._asdict(),
-                'disk_io_counters': psutil.disk_io_counters()._asdict(),
-                'net_io_counters': psutil.net_io_counters()._asdict()}
+                'disk_io_counters': disk_io_counters()._asdict(),
+                'net_io_counters': net_io_counters()._asdict()}
 
     @gen.coroutine
     def monitor_resources(self, stream, interval=1):
