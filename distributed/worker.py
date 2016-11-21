@@ -121,22 +121,28 @@ class Worker(Server):
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
-                 memory_limit=int(TOTAL_MEMORY * 0.6), executor=None, **kwargs):
+                 memory_limit='auto', executor=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
+
+        if memory_limit == 'auto':
+            memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
+        if isinstance(memory_limit, float) and memory_limit <= 1:
+            memory_limit = memory_limit * TOTAL_MEMORY
         self.memory_limit = memory_limit
-        if memory_limit:
+
+        if self.memory_limit:
             try:
                 from zict import Buffer, File, Func
             except ImportError:
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
             storage = Func(dumps_to_disk, loads_from_disk, File(path))
-            self.data = Buffer({}, storage, int(float(memory_limit)), weight)
+            self.data = Buffer({}, storage, int(float(self.memory_limit)), weight)
         else:
             self.data = dict()
         self.loop = loop or IOLoop.current()

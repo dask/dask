@@ -104,18 +104,6 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     loop = IOLoop.current()
 
-    if memory_limit == 'auto':
-        import psutil
-        memory_limit = psutil.virtual_memory().total * 0.60
-
-    if memory_limit:
-        memory_limit = float(memory_limit)
-        if memory_limit < 1.0:
-            import psutil
-            memory_limit = psutil.virtual_memory().total * memory_limit
-        memory_limit /= nprocs
-        memory_limit = int(memory_limit)
-
     if nanny:
         kwargs = {'worker_port': worker_port}
         t = Nanny

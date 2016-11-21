@@ -586,3 +586,17 @@ def test_close_on_disconnect(s, w):
     while w.status != 'closed':
         yield gen.sleep(0.01)
         assert time() < start + 5
+
+
+def test_memory_limit_auto():
+    a = Worker('127.0.0.1', 8099, ncores=1)
+    b = Worker('127.0.0.1', 8099, ncores=2)
+    c = Worker('127.0.0.1', 8099, ncores=100)
+    d = Worker('127.0.0.1', 8099, ncores=200)
+
+    assert isinstance(a.memory_limit, int)
+    assert isinstance(b.memory_limit, int)
+
+    assert a.memory_limit < b.memory_limit
+
+    assert c.memory_limit == d.memory_limit
