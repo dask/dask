@@ -14,7 +14,7 @@ import dask
 from toolz import merge
 
 from ...async import get_sync
-from ...base import tokenize
+from ...base import compute, tokenize
 from ...context import _globals
 from ...delayed import Delayed, delayed
 import dask.multiprocessing
@@ -315,8 +315,9 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         raise ValueError("When assuming pre-partitioned data, data must be "
                          "read in its entirety using the same chunksizes")
     from ..multi import concat
-    return concat([_read_single_hdf(path, key, start=start, stop=stop,
-                                    columns=columns, chunksize=chunksize,
-                                    sorted_index=sorted_index,
-                                    lock=lock, mode=mode)
-                   for path in paths])
+    return concat(list(compute(*[
+        delayed(_read_single_hdf)(path, key, start=start, stop=stop,
+                                  columns=columns, chunksize=chunksize,
+                                  sorted_index=sorted_index,
+                                  lock=lock, mode=mode)
+        for path in paths])))
