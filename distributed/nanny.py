@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from datetime import datetime, timedelta
 import json
 import logging
-from multiprocessing import Process, Queue, queues
+from multiprocessing.queues import Empty
 import os
 import shutil
 import subprocess
@@ -19,7 +19,7 @@ from .compatibility import JSONDecodeError
 from .core import Server, rpc, write, RPCClosed
 from .metrics import disk_io_counters, net_io_counters
 from .protocol import to_serialize
-from .utils import get_ip, ignoring, log_errors, tmpfile
+from .utils import get_ip, ignoring, log_errors, mp_context, tmpfile
 from .worker import _ncores, Worker, run, TOTAL_MEMORY
 
 nanny_environment = os.path.dirname(sys.executable)
@@ -191,13 +191,14 @@ class Nanny(Server):
                         except JSONDecodeError:
                             yield gen.sleep(0.01)
             else:
-                q = Queue()
-                self.process = Process(target=run_worker_fork,
-                                       args=(q, self.ip, self.scheduler.ip,
-                                             self.scheduler.port, self.ncores,
-                                             self.port, self._given_worker_port,
-                                             self.local_dir, self.services, self.name,
-                                             self.memory_limit, self.reconnect))
+                q = mp_context.Queue()
+                self.process = mp_context.Process(
+                    target=run_worker_fork,
+                    args=(q, self.ip, self.scheduler.ip,
+                          self.scheduler.port, self.ncores,
+                          self.port, self._given_worker_port,
+                          self.local_dir, self.services, self.name,
+                          self.memory_limit, self.reconnect))
                 self.process.daemon = True
                 self.process.start()
                 while True:
@@ -209,7 +210,7 @@ class Nanny(Server):
                         self.worker_dir = msg['dir']
                         assert self.worker_port
                         break
-                    except queues.Empty:
+                    except Empty:
                         yield gen.sleep(0.1)
 
             logger.info("Nanny %s:%d starts worker process %s:%d",

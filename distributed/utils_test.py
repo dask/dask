@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import gc
 from glob import glob
 import logging
-from multiprocessing import Process, Queue
 import os
 import shutil
 import signal
@@ -22,7 +21,7 @@ from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
 from .core import connect, read, write, close, rpc
-from .utils import ignoring, log_errors, sync
+from .utils import ignoring, log_errors, sync, mp_context
 import pytest
 
 
@@ -280,17 +279,18 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0):
                 _run_worker = run_nanny
             else:
                 _run_worker = run_worker
-            scheduler_q = Queue()
-            scheduler = Process(target=run_scheduler, args=(scheduler_q,))
+            scheduler_q = mp_context.Queue()
+            scheduler = mp_context.Process(
+                target=run_scheduler, args=(scheduler_q,))
             scheduler.daemon = True
             scheduler.start()
             sport = scheduler_q.get()
 
             workers = []
             for i in range(nworkers):
-                q = Queue()
+                q = mp_context.Queue()
                 fn = '_test_worker-%s' % uuid.uuid1()
-                proc = Process(target=_run_worker, args=(q, sport),
+                proc = mp_context.Process(target=_run_worker, args=(q, sport),
                                 kwargs=merge({'ncores': 1, 'local_dir': fn},
                                              worker_kwargs))
                 workers.append({'proc': proc, 'queue': q, 'dir': fn})
@@ -457,16 +457,17 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
 def make_hdfs():
     from hdfs3 import HDFileSystem
     # from .hdfs import DaskHDFileSystem
+    basedir = '/tmp/test-distributed'
     hdfs = HDFileSystem(host='localhost', port=8020)
-    if hdfs.exists('/tmp/test'):
-        hdfs.rm('/tmp/test')
-    hdfs.mkdir('/tmp/test')
+    if hdfs.exists(basedir):
+        hdfs.rm(basedir)
+    hdfs.mkdir(basedir)
 
     try:
-        yield hdfs
+        yield hdfs, basedir
     finally:
-        if hdfs.exists('/tmp/test'):
-            hdfs.rm('/tmp/test')
+        if hdfs.exists(basedir):
+            hdfs.rm(basedir)
 
 
 def raises(func, exc=Exception):

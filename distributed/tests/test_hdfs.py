@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import socket
+import sys
 from toolz import concat
 from tornado import gen
 
@@ -22,6 +23,14 @@ hdfs3 = pytest.importorskip('hdfs3')
 from dask.bytes.core import read_bytes, write_bytes
 
 
+_orig_cluster = cluster
+
+def cluster(*args, **kwargs):
+    if sys.version_info < (3,) and not sys.platform.startswith('win'):
+        pytest.skip("hdfs3 is not fork safe, test can hang on Python 2")
+    return _orig_cluster(*args, **kwargs)
+
+
 ip = get_ip()
 
 def setup_module(module):
@@ -36,10 +45,10 @@ def setup_module(module):
 
 
 def test_get_block_locations():
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'a' * int(1e8)  # todo: reduce block size to speed up test
-        fn_1 = '/tmp/test/file1'
-        fn_2 = '/tmp/test/file2'
+        fn_1 = '%s/file1' % basedir
+        fn_2 = '%s/file2' % basedir
 
         with hdfs.open(fn_1, 'wb', replication=1) as f:
             f.write(data)
@@ -60,8 +69,8 @@ def test_get_block_locations():
 def dont_test_dataframes(e, s, a):  # slow
     pytest.importorskip('pandas')
     n = 3000000
-    fn = '/tmp/test/file.csv'
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
+        fn = '%s/file.csv' % basedir
         data = (b'name,amount,id\r\n' +
                 b'Alice,100,1\r\nBob,200,2\r\n' * n)
         with hdfs.open(fn, 'wb') as f:
@@ -83,27 +92,27 @@ def dont_test_dataframes(e, s, a):  # slow
 
 
 def test_get_block_locations_nested():
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'a'
 
         for i in range(3):
-            hdfs.mkdir('/tmp/test/data-%d' % i)
+            hdfs.mkdir('%s/data-%d' % (basedir, i))
             for j in range(2):
-                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                fn = '%s/data-%d/file-%d.csv' % (basedir, i, j)
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
         L =  [hdfs.get_block_locations(fn)
-              for fn in hdfs.glob('/tmp/test/*/*.csv')]
+              for fn in hdfs.glob('%s/*/*.csv' % basedir)]
         L = list(concat(L))
         assert len(L) == 6
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_read_bytes(c, s, a, b):
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'a' * int(1e8)
-        fn = '/tmp/test/file'
+        fn = '%s/file' % basedir
 
         with hdfs.open(fn, 'wb', replication=1) as f:
             f.write(data)
@@ -131,36 +140,36 @@ def test_read_bytes(c, s, a, b):
 @pytest.mark.parametrize('nworkers', [1, 3])
 def test_read_bytes_sync(loop, nworkers):
     with cluster(nworkers=nworkers) as (s, workers):
-        with make_hdfs() as hdfs:
+        with make_hdfs() as (hdfs, basedir):
             data = b'a' * int(1e3)
 
-            for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
+            for fn in ['%s/file.%d' % (basedir, i) for i in range(100)]:
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
             with Client(('127.0.0.1', s['port']), loop=loop) as e:
-                sample, values = read_bytes('hdfs:///tmp/test/file.*')
+                sample, values = read_bytes('hdfs://%s/file.*' % basedir)
                 results = delayed(values).compute()
                 assert [b''.join(r) for r in results] == 100 * [data]
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_get_block_locations_nested_2(e, s, a, b):
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'a'
 
         for i in range(3):
-            hdfs.mkdir('/tmp/test/data-%d' % i)
+            hdfs.mkdir('%s/data-%d' % (basedir, i))
             for j in range(2):
-                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                fn = '%s/data-%d/file-%d.csv' % (basedir, i, j)
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
         L =  list(concat(hdfs.get_block_locations(fn)
-                         for fn in hdfs.glob('/tmp/test/data-*/*.csv')))
+                         for fn in hdfs.glob('%s/data-*/*.csv' % basedir)))
         assert len(L) == 6
 
-        sample, values = read_bytes('hdfs:///tmp/test/*/*.csv')
+        sample, values = read_bytes('hdfs://%s/*/*.csv' % basedir)
         futures = e.compute(list(concat(values)))
         results = yield e._gather(futures)
         assert len(results) == 6
@@ -169,17 +178,17 @@ def test_get_block_locations_nested_2(e, s, a, b):
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_lazy_values(e, s, a, b):
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'a'
 
         for i in range(3):
-            hdfs.mkdir('/tmp/test/data-%d' % i)
+            hdfs.mkdir('%s/data-%d' % (basedir, i))
             for j in range(2):
-                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                fn = '%s/data-%d/file-%d.csv' % (basedir, i, j)
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
-        sample, values = read_bytes('hdfs:///tmp/test/*/*.csv')
+        sample, values = read_bytes('hdfs://%s/*/*.csv' % basedir)
         assert all(isinstance(v, list) for v in values)
         assert all(isinstance(v, Delayed) for vv in values for v in vv)
 
@@ -195,50 +204,52 @@ def test_lazy_values(e, s, a, b):
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_write_bytes(c, s, a, b):
-    with make_hdfs() as hdfs:
-        hdfs.mkdir('/tmp/test/data/')
+    with make_hdfs() as (hdfs, basedir):
+        hdfs.mkdir('%s/data/' % basedir)
         data = [b'123', b'456', b'789']
         remote_data = yield c._scatter(data)
 
         futures = c.compute(write_bytes(remote_data,
-            'hdfs:///tmp/test/data/file.*.dat'))
+            'hdfs://%s/data/file.*.dat' % basedir))
         yield _wait(futures)
 
         yield futures[0]._result()
 
-        assert len(hdfs.ls('/tmp/test/data/')) == 3
-        with hdfs.open('/tmp/test/data/file.1.dat') as f:
+        assert len(hdfs.ls('%s/data/' % basedir)) == 3
+        with hdfs.open('%s/data/file.1.dat' % basedir) as f:
             assert f.read() == b'456'
 
-        hdfs.mkdir('/tmp/test/data2/')
+        hdfs.mkdir('%s/data2/' % basedir)
         futures = c.compute(write_bytes(remote_data,
-            'hdfs:///tmp/test/data2/'))
+            'hdfs://%s/data2/' % basedir))
         yield _wait(futures)
 
-        assert len(hdfs.ls('/tmp/test/data2/')) == 3
+        assert len(hdfs.ls('%s/data2/' % basedir)) == 3
 
 
 def test_read_csv_sync(loop):
     import dask.dataframe as dd
     import pandas as pd
     with cluster(nworkers=3) as (s, [a, b, c]):
-        with make_hdfs() as hdfs:
-            with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+        with make_hdfs() as (hdfs, basedir):
+            with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-            with hdfs.open('/tmp/test/2.csv', 'wb') as f:
+            with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
             with Client(('127.0.0.1', s['port']), loop=loop) as e:
-                values = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n',
-                                   collection=False, header=0)
+                values = dd.read_csv('hdfs://%s/*.csv' % basedir,
+                                     lineterminator='\n',
+                                     collection=False, header=0)
                 futures = e.compute(values)
                 assert all(isinstance(f, Future) for f in futures)
                 L = e.gather(futures)
                 assert isinstance(L[0], pd.DataFrame)
                 assert list(L[0].columns) == ['name', 'amount', 'id']
 
-                df = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n',
+                df = dd.read_csv('hdfs://%s/*.csv' % basedir,
+                                 lineterminator='\n',
                                  collection=True, header=0)
                 assert isinstance(df, dd.DataFrame)
                 assert list(df.head().iloc[0]) == ['Alice', 100, 1]
@@ -246,28 +257,28 @@ def test_read_csv_sync(loop):
 
 def test_read_csv_sync_compute(loop):
     with cluster(nworkers=1) as (s, [a]):
-        with make_hdfs() as hdfs:
-            with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+        with make_hdfs() as (hdfs, basedir):
+            with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-            with hdfs.open('/tmp/test/2.csv', 'wb') as f:
+            with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
             with Client(('127.0.0.1', s['port']), loop=loop) as e:
-                df = dd.read_csv('hdfs:///tmp/test/*.csv', collection=True)
+                df = dd.read_csv('hdfs://%s/*.csv' % basedir, collection=True)
                 assert df.amount.sum().compute(get=e.get) == 1000
 
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv(e, s, a, b):
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        with hdfs.open('/tmp/test/2.csv', 'wb') as f:
+        with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n')
+        df = dd.read_csv('hdfs://%s/*.csv' % basedir, lineterminator='\n')
         result = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
@@ -275,25 +286,26 @@ def test_read_csv(e, s, a, b):
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv_with_names(e, s, a, b):
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        df = dd.read_csv('hdfs:///tmp/test/*.csv', names=['amount', 'name'],
-                             lineterminator='\n')
+        df = dd.read_csv('hdfs://%s/*.csv' % basedir,
+                         names=['amount', 'name'],
+                         lineterminator='\n')
         assert list(df.columns) == ['amount', 'name']
 
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test_read_csv_lazy(e, s, a, b):
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        with hdfs.open('/tmp/test/2.csv', 'wb') as f:
+        with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = dd.read_csv('hdfs:///tmp/test/*.csv', lineterminator='\n')
+        df = dd.read_csv('hdfs://%s/*.csv' % basedir, lineterminator='\n')
         yield gen.sleep(0.5)
         assert not s.tasks
 
@@ -303,17 +315,17 @@ def test_read_csv_lazy(e, s, a, b):
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test__read_text(c, s, a, b):
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/text.1.txt', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/text.1.txt' % basedir, 'wb') as f:
             f.write('Alice 100\nBob 200\nCharlie 300'.encode())
 
-        with hdfs.open('/tmp/test/text.2.txt', 'wb') as f:
+        with hdfs.open('%s/text.2.txt' % basedir, 'wb') as f:
             f.write('Dan 400\nEdith 500\nFrank 600'.encode())
 
-        with hdfs.open('/tmp/test/other.txt', 'wb') as f:
+        with hdfs.open('%s/other.txt' % basedir, 'wb') as f:
             f.write('a b\nc d'.encode())
 
-        b = db.read_text('hdfs:///tmp/test/text.*.txt')
+        b = db.read_text('hdfs://%s/text.*.txt' % basedir)
         yield gen.sleep(0.5)
         assert not s.tasks
 
@@ -327,7 +339,7 @@ def test__read_text(c, s, a, b):
         result = yield future._result()
         assert result == [2, 2, 2, 2, 2, 2]
 
-        b = db.read_text('hdfs:///tmp/test/other.txt')
+        b = db.read_text('hdfs://%s/other.txt' % basedir)
         b = c.persist(b)
         future = c.compute(b.str.split().concat())
         result = yield future._result()
@@ -337,11 +349,11 @@ def test__read_text(c, s, a, b):
 @gen_cluster([(ip, 1)], timeout=60, client=True)
 def test__read_text_json_endline(e, s, a):
     import json
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/text.1.txt', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/text.1.txt' % basedir, 'wb') as f:
             f.write(b'{"x": 1}\n{"x": 2}\n')
 
-        b = db.read_text('hdfs:///tmp/test/text.1.txt').map(json.loads)
+        b = db.read_text('hdfs://%s/text.1.txt' % basedir).map(json.loads)
         result = yield e.compute(b)._result()
 
         assert result == [{"x": 1}, {"x": 2}]
@@ -350,9 +362,9 @@ def test__read_text_json_endline(e, s, a):
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, client=True)
 def test__read_text_unicode(e, s, a, b):
-    fn = '/tmp/test/data.txt'
     data = b'abcd\xc3\xa9'
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
+        fn = '%s/data.txt' % basedir
         with hdfs.open(fn, 'wb') as f:
             f.write(b'\n'.join([data, data]))
 
@@ -364,28 +376,28 @@ def test__read_text_unicode(e, s, a, b):
 
 
 def test_read_text_sync(loop):
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/data.txt', 'wb') as f:
+    with make_hdfs() as (hdfs, basedir):
+        with hdfs.open('%s/data.txt' % basedir, 'wb') as f:
             f.write(b'hello\nworld')
 
         with cluster(nworkers=3) as (s, [a, b, c]):
             with Client(('127.0.0.1', s['port']), loop=loop):
-                b = db.read_text('hdfs:///tmp/test/*.txt')
+                b = db.read_text('hdfs://%s/*.txt' % basedir)
                 assert list(b.str.strip().str.upper()) == ['HELLO', 'WORLD']
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_deterministic_key_names(e, s, a, b):
-    with make_hdfs() as hdfs:
+    with make_hdfs() as (hdfs, basedir):
         data = b'abc\n' * int(1e3)
-        fn = '/tmp/test/file'
+        fn = '%s/file' % basedir
 
         with hdfs.open(fn, 'wb', replication=1) as f:
             f.write(data)
 
-        _, x = read_bytes('hdfs:///tmp/test/*', delimiter=b'\n')
-        _, y = read_bytes('hdfs:///tmp/test/*', delimiter=b'\n')
-        _, z = read_bytes('hdfs:///tmp/test/*', delimiter=b'c')
+        _, x = read_bytes('hdfs://%s/*' % basedir, delimiter=b'\n')
+        _, y = read_bytes('hdfs://%s/*' % basedir, delimiter=b'\n')
+        _, z = read_bytes('hdfs://%s/*' % basedir, delimiter=b'c')
 
         assert [f.key for f in concat(x)] == [f.key for f in concat(y)]
         assert [f.key for f in concat(x)] != [f.key for f in concat(z)]
@@ -393,16 +405,16 @@ def test_deterministic_key_names(e, s, a, b):
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60, client=True)
 def test_write_bytes_2(c, s, a, b):
-    with make_hdfs() as hdfs:
-        path = 'hdfs:///tmp/test/'
+    with make_hdfs() as (hdfs, basedir):
+        path = 'hdfs://%s/' % basedir
         data = [b'test data %i' % i for i in range(5)]
         values = [delayed(d) for d in data]
         out = write_bytes(values, path)
         futures = c.compute(out)
         results = yield c._gather(futures)
-        assert len(hdfs.ls('/tmp/test/')) == 5
+        assert len(hdfs.ls(basedir)) == 5
 
-        sample, vals = read_bytes('hdfs:///tmp/test/*.part')
+        sample, vals = read_bytes('hdfs://%s/*.part' % basedir)
         futures = c.compute(list(concat(vals)))
         results = yield c._gather(futures)
         assert data == results

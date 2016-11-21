@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from functools import partial
-from multiprocessing import Process
 import socket
 from time import time
 
@@ -12,6 +11,7 @@ import pytest
 from distributed.core import (read, write, pingpong, Server, rpc, connect,
         coerce_to_rpc, send_recv, coerce_to_address, ConnectionPool)
 from distributed.utils_test import slow, loop, gen_test
+
 
 def test_server(loop):
     @gen.coroutine

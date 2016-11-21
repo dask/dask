@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from datetime import timedelta
 from importlib import import_module
 import logging
-import multiprocessing
 import os
 import pkg_resources
 import tempfile
@@ -33,9 +32,9 @@ from .protocol.pickle import dumps, loads
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, _maybe_complex, log_errors, All,
-                    ignoring, validate_key)
+                    ignoring, validate_key, mp_context)
 
-_ncores = multiprocessing.cpu_count()
+_ncores = mp_context.cpu_count()
 
 thread_state = local()
 

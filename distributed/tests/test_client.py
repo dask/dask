@@ -6,7 +6,6 @@ from collections import Iterator
 from concurrent.futures import CancelledError
 from datetime import timedelta
 import itertools
-from multiprocessing import Process
 import os
 import pickle
 from random import random, choice
@@ -34,7 +33,7 @@ from distributed.client import (Client, Future, CompatibleExecutor, _wait,
         temp_default_client, get_restrictions)
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
-from distributed.utils import sync, tmp_text, ignoring, tokey, All
+from distributed.utils import sync, tmp_text, ignoring, tokey, All, mp_context
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
         loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep)
 
@@ -1614,7 +1613,7 @@ def long_running_client_connection(ip, port):
 
 @gen_cluster()
 def test_cleanup_after_broken_client_connection(s, a, b):
-    proc = Process(target=long_running_client_connection, args=(s.ip, s.port))
+    proc = mp_context.Process(target=long_running_client_connection, args=(s.ip, s.port))
     proc.daemon = True
     proc.start()
 

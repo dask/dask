@@ -48,7 +48,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
@@ -63,9 +63,10 @@ install:
   - python setup.py install
 
 script:
+    - export PYTEST_OPTIONS="--verbose -r s --timeout-method=thread --timeout=300"
     - |
       if [[ $HDFS == true ]]; then
-        py.test distributed/tests/test_hdfs.py --verbose -r s --timeout-method=thread --timeout=30
+        py.test distributed/tests/test_hdfs.py $PYTEST_OPTIONS
         if [ $? -ne 0 ]; then
             # Diagnose test error
             echo "--"
@@ -75,9 +76,9 @@ script:
             (exit 1)
         fi
       elif [[ $COVERAGE == true ]]; then
-        coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
+        coverage run $(which py.test) distributed -m "not avoid_travis" $PYTEST_OPTIONS;
       else
-        py.test -m "not avoid_travis" distributed --verbose;
+        py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS;
       fi;
 
 after_success:
