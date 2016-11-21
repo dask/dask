@@ -175,7 +175,13 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         key.
         """
         with pd.HDFStore(path, mode=mode) as hdf:
-            keys = [k for k in hdf.keys() if fnmatch(k, key)]
+            # If the key doesn't use any special characters, we can avoid
+            # listing the entire HDF file
+            if any(c in key for c in ['*', '?', '[']):
+                keys = [k for k in hdf.keys() if fnmatch(k, key)]
+            else:
+                keys = [key]
+
             stops = []
             divisions = []
             for k in keys:
