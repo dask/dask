@@ -29,6 +29,7 @@ from ..base import Base, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, concrete, is_integer,
                      IndexCallable, funcname, derived_from, SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..delayed import to_task_dasks
 from ..optimize import cull
 from .. import threaded, core
 
@@ -390,14 +391,26 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
             args.append(tups2)
         valtups.append(tuple(args))
 
+    dsk = {}
+
     # Add heads to tuples
     keys = [(output,) + kt for kt in keytups]
+
+    # Unpack delayed objects in kwargs
     if kwargs:
-        vals = [(apply, func, list(vt), kwargs) for vt in valtups]
+        task, dasks = to_task_dasks(kwargs)
+        if dasks:
+            for d in dasks:
+                dsk.update(d)
+            kwargs2 = task
+        else:
+            kwargs2 = kwargs
+        vals = [(apply, func, list(vt), kwargs2) for vt in valtups]
     else:
         vals = [(func,) + vt for vt in valtups]
 
-    return dict(zip(keys, vals))
+    dsk.update(dict(zip(keys, vals)))
+    return dsk
 
 
 def _concatenate2(arrays, axes=[]):

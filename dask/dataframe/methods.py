@@ -32,34 +32,36 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def _loc_repartition(df, start, stop, include_right_boundary=True):
-    """
-    .loc for repartition, can switch include/exclude right boundary.
-    No need to handle column slicing
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
+                   kind='loc'):
+    """Index slice start/stop. Can switch include/exclude boundaries.
 
     >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
-    >>> _loc_repartition(df, 2, None)
+    >>> boundary_slice(df, 2, None)
         x
     2  20
     2  30
     3  40
     4  50
-    >>> _loc_repartition(df, 1, 3)
+    >>> boundary_slice(df, 1, 3)
         x
     1  10
     2  20
     2  30
     3  40
-    >>> _loc_repartition(df, 1, 3, include_right_boundary=False)
+    >>> boundary_slice(df, 1, 3, right_boundary=False)
         x
     1  10
     2  20
     2  30
     """
-    result = df.loc[start:stop]
-    if not include_right_boundary:
-        right_index = result.index.get_slice_bound(stop, 'left', 'loc')
+    result = getattr(df, kind)[start:stop]
+    if not right_boundary:
+        right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
+    if not left_boundary:
+        left_index = result.index.get_slice_bound(start, 'right', kind)
+        result = result.iloc[left_index:]
     return result
 
 
@@ -72,7 +74,7 @@ def mean_aggregate(s, n):
     try:
         return s / n
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def var_aggregate(x2, x, n, ddof):
@@ -82,7 +84,7 @@ def var_aggregate(x2, x, n, ddof):
             result = result * n / (n - ddof)
         return result
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def describe_aggregate(values):
@@ -139,6 +141,12 @@ def size(x):
 def sample(df, state, frac, replace):
     rs = np.random.RandomState(state)
     return df.sample(random_state=rs, frac=frac, replace=replace)
+
+
+def drop_columns(df, columns, dtype):
+    df = df.drop(columns, axis=1)
+    df.columns = df.columns.astype(dtype)
+    return df
 
 
 # ---------------------------------

@@ -1190,6 +1190,11 @@ class _Frame(Base):
                                   split_every=split_every)
 
     @derived_from(pd.DataFrame)
+    def abs(self):
+        meta = self._meta_nonempty.abs()
+        return self.map_partitions(M.abs, meta=meta)
+
+    @derived_from(pd.DataFrame)
     def all(self, axis=None, skipna=True, split_every=False):
         return self._reduction_agg('all', axis=axis, skipna=skipna,
                                    split_every=split_every)
@@ -1202,6 +1207,11 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def sum(self, axis=None, skipna=True, split_every=False):
         return self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                   split_every=split_every)
+
+    @derived_from(pd.DataFrame)
+    def prod(self, axis=None, skipna=True, split_every=False):
+        return self._reduction_agg('prod', axis=axis, skipna=skipna,
                                    split_every=split_every)
 
     @derived_from(pd.DataFrame)
@@ -1290,7 +1300,7 @@ class _Frame(Base):
             x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
             x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var-%s' % tokenize(self, axis, skipna, ddof)
+            name = self._token_prefix + 'var'
             return map_partitions(methods.var_aggregate, x2, x, n,
                                   token=name, meta=meta, ddof=ddof)
 
@@ -1304,9 +1314,23 @@ class _Frame(Base):
                                   axis=axis, skipna=skipna, ddof=ddof)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            token = tokenize(self, axis, skipna, ddof)
-            name = self._token_prefix + 'std-finish--%s' % token
+            name = self._token_prefix + 'std'
             return map_partitions(np.sqrt, v, meta=meta, token=name)
+
+    @derived_from(pd.DataFrame)
+    def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
+        if axis == 1:
+            return map_partitions(M.sem, self, meta=meta,
+                                  token=self._token_prefix + 'sem',
+                                  axis=axis, skipna=skipna, ddof=ddof)
+        else:
+            num = self._get_numeric_data()
+            v = num.var(skipna=skipna, ddof=ddof, split_every=split_every)
+            n = num.count(split_every=split_every)
+            name = self._token_prefix + 'sem'
+            return map_partitions(np.sqrt, v / n, meta=meta, token=name)
 
     def quantile(self, q=0.5, axis=0):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
@@ -1514,6 +1538,11 @@ class _Frame(Base):
         return result1, result2
 
     @derived_from(pd.DataFrame)
+    def combine(self, other, func, fill_value=None, overwrite=True):
+        return self.map_partitions(M.combine, other, func,
+                                   fill_value=fill_value, overwrite=overwrite)
+
+    @derived_from(pd.DataFrame)
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
@@ -1526,6 +1555,55 @@ class _Frame(Base):
     def resample(self, rule, how=None, closed=None, label=None):
         from .tseries.resample import _resample
         return _resample(self, rule, how=how, closed=closed, label=label)
+
+    @derived_from(pd.DataFrame)
+    def first(self, offset):
+        # Let pandas error on bad args
+        self._meta_nonempty.first(offset)
+
+        if not self.known_divisions:
+            raise ValueError("`first` is not implemented for unknown divisions")
+
+        offset = pd.tseries.frequencies.to_offset(offset)
+        date = self.divisions[0] + offset
+        end = self.loc._partition_of_index_value(date)
+
+        include_right = offset.isAnchored() or not hasattr(offset, '_inc')
+
+        if end == self.npartitions - 1:
+            divs = self.divisions
+        else:
+            divs = self.divisions[:end + 1] + (date,)
+
+        name = 'first-' + tokenize(self, offset)
+        dsk = {(name, i): (self._name, i) for i in range(end)}
+        dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
+                            None, date, include_right, True, 'ix')
+        return new_dd_object(merge(self.dask, dsk), name, self, divs)
+
+    @derived_from(pd.DataFrame)
+    def last(self, offset):
+        # Let pandas error on bad args
+        self._meta_nonempty.first(offset)
+
+        if not self.known_divisions:
+            raise ValueError("`last` is not implemented for unknown divisions")
+
+        offset = pd.tseries.frequencies.to_offset(offset)
+        date = self.divisions[-1] - offset
+        start = self.loc._partition_of_index_value(date)
+
+        if start == 0:
+            divs = self.divisions
+        else:
+            divs = (date,) + self.divisions[start + 1:]
+
+        name = 'last-' + tokenize(self, offset)
+        dsk = {(name, i + 1): (self._name, j + 1)
+               for i, j in enumerate(range(start, self.npartitions))}
+        dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
+                          date, None, True, False, 'ix')
+        return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
@@ -1706,7 +1784,13 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def nlargest(self, n=5, split_every=None):
         return aca(self, chunk=M.nlargest, aggregate=M.nlargest,
-                   meta=self._meta, token='series-nlargest-n={0}'.format(n),
+                   meta=self._meta, token='series-nlargest',
+                   split_every=split_every, n=n)
+
+    @derived_from(pd.Series)
+    def nsmallest(self, n=5, split_every=None):
+        return aca(self, chunk=M.nsmallest, aggregate=M.nsmallest,
+                   meta=self._meta, token='series-nsmallest',
                    split_every=split_every, n=n)
 
     @derived_from(pd.Series)
@@ -1757,6 +1841,11 @@ class Series(_Frame):
     def align(self, other, join='outer', axis=None, fill_value=None):
         return super(Series, self).align(other, join=join, axis=axis,
                                          fill_value=fill_value)
+
+    @derived_from(pd.Series)
+    def combine(self, other, func, fill_value=None):
+        return self.map_partitions(M.combine, other, func,
+                                   fill_value=fill_value)
 
     @derived_from(pd.Series)
     def combine_first(self, other):
@@ -1909,6 +1998,13 @@ class Series(_Frame):
         df = concat([self, other], axis=1)
         return cov_corr(df, min_periods, corr=True, scalar=True,
                         split_every=split_every)
+
+    @derived_from(pd.Series)
+    def autocorr(self, lag=1, split_every=False):
+        if not isinstance(lag, int):
+            raise TypeError("lag must be an integer")
+        return self.corr(self if lag == 0 else self.shift(lag),
+                         split_every=split_every)
 
 
 class Index(Series):
@@ -2156,8 +2252,15 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
-        token = 'dataframe-nlargest-n={0}'.format(n)
+        token = 'dataframe-nlargest'
         return aca(self, chunk=M.nlargest, aggregate=M.nlargest,
+                   meta=self._meta, token=token, split_every=split_every,
+                   n=n, columns=columns)
+
+    @derived_from(pd.DataFrame)
+    def nsmallest(self, n=5, columns=None, split_every=None):
+        token = 'dataframe-nsmallest'
+        return aca(self, chunk=M.nsmallest, aggregate=M.nsmallest,
                    meta=self._meta, token=token, split_every=split_every,
                    n=n, columns=columns)
 
@@ -2320,14 +2423,11 @@ class DataFrame(_Frame):
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, dtype=None):
-        if axis != 1:
-            raise NotImplementedError("Drop currently only works for axis=1")
-
-        if dtype is not None:
-            return elemwise(drop_columns, self, labels, dtype)
-        else:
-            return elemwise(M.drop, self, labels, axis)
+    def drop(self, labels, axis=0, errors='raise'):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
+        raise NotImplementedError("Drop currently only works for axis=1")
 
     @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
@@ -2953,11 +3053,13 @@ def _rename(columns, df):
     if isinstance(df, pd.DataFrame):
         if isinstance(columns, pd.DataFrame):
             columns = columns.columns
-        columns = pd.Index(columns)
-        if len(columns) == len(df.columns):
-            if columns.equals(df.columns):
-                # if target is identical, rename is not necessary
-                return df
+        if not isinstance(columns, pd.Index):
+            columns = pd.Index(columns)
+        if (len(columns) == len(df.columns) and
+                type(columns) is type(df.columns) and
+                columns.equals(df.columns)):
+            # if target is identical, rename is not necessary
+            return df
         # deep=False doesn't doesn't copy any data/indices, so this is cheap
         df = df.copy(deep=False)
         df.columns = columns
@@ -3266,10 +3368,10 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     --------
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
-    {('b', 0): (<function _loc_repartition at ...>, ('a', 0), 1, 3, False),
-     ('b', 1): (<function _loc_repartition at ...>, ('a', 1), 3, 4, False),
-     ('b', 2): (<function _loc_repartition at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function _loc_repartition at ...>, ('a', 1), 6, 7, False)
+    {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
+     ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
+     ('b', 2): (<function boundary_slice at ...>, ('a', 1), 4, 6, False),
+     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, False)
      ('c', 0): (<function concat at ...>,
                 (<type 'list'>, [('b', 0), ('b', 1)])),
      ('c', 1): ('b', 2),
@@ -3325,16 +3427,16 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
             # tuple is something like:
-            # (methods._loc_partition, ('from_pandas-#', 0), 3, 4, False))
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, a[i], False)
+            # (methods.boundary_slice, ('from_pandas-#', 0), 3, 4, False))
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, a[i], False)
             low = a[i]
             i += 1
         elif a[i] > b[j]:
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
             j += 1
         else:
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), low, b[j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
             i += 1
             j += 1
@@ -3347,7 +3449,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             # always use right-most of old division
             # because it may contain last element
             m = len(a) - 2
-            d[(out1, k)] = (methods._loc_repartition, (name, m), low, b[_j], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, m), low, b[_j], False)
             low = b[_j]
             c.append(low)
             k += 1
@@ -3355,7 +3457,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         # even if new division is processed through,
         # right-most element of old division can remain
         if last_elem and i < len(a):
-            d[(out1, k)] = (methods._loc_repartition, (name, i - 1), a[i], a[i], False)
+            d[(out1, k)] = (methods.boundary_slice, (name, i - 1), a[i], a[i], False)
             k += 1
         c.append(a[-1])
 
@@ -3378,7 +3480,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         if len(tmp) == 0:
             # dummy slice to return empty DataFrame or Series,
             # which retain original data attributes (columns / name)
-            d[(out2, j - 1)] = (methods._loc_repartition, (name, 0), a[0], a[0], False)
+            d[(out2, j - 1)] = (methods.boundary_slice, (name, 0), a[0], a[0], False)
         elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:
@@ -3503,12 +3605,6 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
     if isinstance(x, list):
         x = pd.Series(x)
     return aca_aggregate(x, **kwargs)
-
-
-def drop_columns(df, columns, dtype):
-    df = df.drop(columns, axis=1)
-    df.columns = df.columns.astype(dtype)
-    return df
 
 
 def idxmaxmin_chunk(x, fn=None, skipna=True):

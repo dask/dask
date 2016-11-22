@@ -1,6 +1,6 @@
-from copy import copy
-from operator import getitem
 import sys
+from copy import copy
+from operator import getitem, add
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -15,7 +15,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, aca, _concat,
                                  _Frame, Scalar)
-from dask.dataframe.methods import _loc_repartition
+from dask.dataframe.methods import boundary_slice
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 
 
@@ -1284,6 +1284,31 @@ def test_align_axis(join):
         ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
 
 
+def test_combine():
+    df1 = pd.DataFrame({'A': np.random.choice([1, 2, np.nan], 100),
+                        'B': np.random.choice(['a', 'b', np.nan], 100)})
+
+    df2 = pd.DataFrame({'A': np.random.choice([1, 2, 3], 100),
+                        'B': np.random.choice(['a', 'b', 'c'], 100)})
+    ddf1 = dd.from_pandas(df1, 4)
+    ddf2 = dd.from_pandas(df2, 5)
+
+    first = lambda a, b: a
+
+    # DataFrame
+    for da, db, a, b in [(ddf1, ddf2, df1, df2),
+                         (ddf1.A, ddf2.A, df1.A, df2.A),
+                         (ddf1.B, ddf2.B, df1.B, df2.B)]:
+        for func, fill_value in [(add, None), (add, 100), (first, None)]:
+            sol = a.combine(b, func, fill_value=fill_value)
+            assert_eq(da.combine(db, func, fill_value=fill_value), sol)
+            assert_eq(da.combine(b, func, fill_value=fill_value), sol)
+
+    assert_eq(ddf1.combine(ddf2, add, overwrite=False),
+              df1.combine(df2, add, overwrite=False))
+    assert da.combine(db, add)._name == da.combine(db, add)._name
+
+
 def test_combine_first():
     df1 = pd.DataFrame({'A': np.random.choice([1, 2, np.nan], 100),
                         'B': np.random.choice(['a', 'b', np.nan], 100)})
@@ -1464,16 +1489,16 @@ def test_repartition():
 
 def test_repartition_divisions():
     result = repartition_divisions([0, 6], [0, 6, 6], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc_repartition, ('a', 0), 0, 6, False),
-                      ('b', 1): (_loc_repartition, ('a', 0), 6, 6, True),
+    assert result == {('b', 0): (boundary_slice, ('a', 0), 0, 6, False),
+                      ('b', 1): (boundary_slice, ('a', 0), 6, 6, True),
                       ('c', 0): ('b', 0),
                       ('c', 1): ('b', 1)}
 
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
-    assert result == {('b', 0): (_loc_repartition, ('a', 0), 1, 3, False),
-                      ('b', 1): (_loc_repartition, ('a', 1), 3, 4, False),
-                      ('b', 2): (_loc_repartition, ('a', 1), 4, 6, False),
-                      ('b', 3): (_loc_repartition, ('a', 1), 6, 7, True),
+    assert result == {('b', 0): (boundary_slice, ('a', 0), 1, 3, False),
+                      ('b', 1): (boundary_slice, ('a', 1), 3, 4, False),
+                      ('b', 2): (boundary_slice, ('a', 1), 4, 6, False),
+                      ('b', 3): (boundary_slice, ('a', 1), 6, 7, True),
                       ('c', 0): (pd.concat, [('b', 0), ('b', 1)]),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
@@ -1895,10 +1920,17 @@ def test_gh_517():
 
 
 def test_drop_axis_1():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
+    df = pd.DataFrame({'x': [1, 2, 3, 4],
+                       'y': [5, 6, 7, 8],
+                       'z': [9, 10, 11, 12]})
+    ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(a.drop('y', axis=1), df.drop('y', axis=1))
+    assert_eq(ddf.drop('y', axis=1), df.drop('y', axis=1))
+    assert_eq(ddf.drop(['y', 'z'], axis=1), df.drop(['y', 'z'], axis=1))
+    with pytest.raises(ValueError):
+        ddf.drop(['a', 'x'], axis=1)
+    assert_eq(ddf.drop(['a', 'x'], axis=1, errors='ignore'),
+              df.drop(['a', 'x'], axis=1, errors='ignore'))
 
 
 def test_gh580():
@@ -1985,6 +2017,17 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
 
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
+def test_abs():
+    df = pd.DataFrame({'A': [1, -2, 3, -4, 5],
+                       'B': [-6., -7, -8, -9, 10],
+                       'C': ['a', 'b', 'c', 'd', 'e']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.A.abs(), df.A.abs())
+    assert_eq(ddf[['A', 'B']].abs(), df[['A', 'B']].abs())
+    pytest.raises(TypeError, lambda: ddf.C.abs())
+    pytest.raises(TypeError, lambda: ddf.abs())
 
 
 def test_round():
@@ -2104,6 +2147,16 @@ def test_cov_corr_stable():
     assert_eq(ddf.corr(split_every=8), df.corr())
 
 
+def test_autocorr():
+    x = pd.Series(np.random.random(100))
+    dx = dd.from_pandas(x, npartitions=10)
+    assert_eq(dx.autocorr(2), x.autocorr(2))
+    assert_eq(dx.autocorr(0), x.autocorr(0))
+    assert_eq(dx.autocorr(-2), x.autocorr(-2))
+    assert_eq(dx.autocorr(2, split_every=3), x.autocorr(2))
+    pytest.raises(TypeError, lambda: dx.autocorr(1.5))
+
+
 def test_apply_infer_columns():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2148,33 +2201,36 @@ def test_index_time_properties():
     assert (i.index.month == a.index.month.compute()).all()
 
 
-def test_nlargest():
+def test_nlargest_nsmallest():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(20),
                        'b': list(ascii_lowercase[:20]),
                        'c': np.random.permutation(20).astype('float64')})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    res = ddf.nlargest(5, 'a')
-    res2 = ddf.nlargest(5, 'a', split_every=2)
-    sol = df.nlargest(5, 'a')
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+    for m in ['nlargest', 'nsmallest']:
+        f = lambda df, *args, **kwargs: getattr(df, m)(*args, **kwargs)
 
-    res = ddf.nlargest(5, ['a', 'b'])
-    res2 = ddf.nlargest(5, ['a', 'b'], split_every=2)
-    sol = df.nlargest(5, ['a', 'b'])
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+        res = f(ddf, 5, 'a')
+        res2 = f(ddf, 5, 'a', split_every=2)
+        sol = f(df, 5, 'a')
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
 
-    res = ddf.a.nlargest(5)
-    res2 = ddf.a.nlargest(5, split_every=2)
-    sol = df.a.nlargest(5)
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert res._name != res2._name
+        res = f(ddf, 5, ['a', 'b'])
+        res2 = f(ddf, 5, ['a', 'b'], split_every=2)
+        sol = f(df, 5, ['a', 'b'])
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
+
+        res = f(ddf.a, 5)
+        res2 = f(ddf.a, 5, split_every=2)
+        sol = f(df.a, 5)
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
+        assert res._name != res2._name
 
 
 def test_reset_index():
@@ -2651,3 +2707,18 @@ def test_shift_with_freq():
     pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq='S'))
     pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq='S'))
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
+
+
+@pytest.mark.parametrize('method', ['first', 'last'])
+def test_first_and_last(method):
+    f = lambda x, offset: getattr(x, method)(offset)
+    freqs = ['12h', 'D']
+    offsets = ['0d', '100h', '20d', '20B', '3W', '3M', '400d', '13M']
+    for freq in freqs:
+        index = pd.date_range('1/1/2000', '1/1/2001', freq=freq)[::4]
+        df = pd.DataFrame(np.random.random((len(index), 4)), index=index,
+                          columns=['A', 'B', 'C', 'D'])
+        ddf = dd.from_pandas(df, npartitions=10)
+        for offset in offsets:
+            assert_eq(f(ddf, offset), f(df, offset))
+            assert_eq(f(ddf.A, offset), f(df.A, offset))
