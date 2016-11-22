@@ -278,6 +278,11 @@ class FutureState(object):
         self.traceback = traceback
         self.event.set()
 
+    def __str__(self):
+        return '<%s: %s>' % (self.__class__.__name__, self.status)
+
+    __repr__ = __str__
+
 
 @gen.coroutine
 def done_callback(future, callback):

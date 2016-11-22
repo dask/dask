@@ -796,6 +796,7 @@ class Scheduler(Server):
 
     def client_releases_keys(self, keys=None, client=None):
         """ Remove keys from client desired list """
+        keys2 = set()
         for key in list(keys):
             if key in self.wants_what[client]:
                 self.wants_what[client].remove(key)
@@ -803,12 +804,15 @@ class Scheduler(Server):
                 s.remove(client)
                 if not s:
                     del self.who_wants[key]
-                    if key in self.waiting_data and not self.waiting_data[key]:
-                        r = self.transition(key, 'released')
-                        self.transitions(r)
-                    if key in self.dependents and not self.dependents[key]:
-                        r = self.transition(key, 'forgotten')
-                        self.transitions(r)
+                    keys2.add(key)
+
+        for key in keys2:
+            if key in self.waiting_data and not self.waiting_data[key]:
+                r = self.transition(key, 'released')
+                self.transitions(r)
+            if key in self.dependents and not self.dependents[key]:
+                r = self.transition(key, 'forgotten')
+                self.transitions(r)
 
     def client_wants_keys(self, keys=None, client=None):
         for k in keys:

@@ -404,12 +404,13 @@ def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
 @gen.coroutine
 def end_cluster(s, workers):
     logger.debug("Closing out test cluster")
+    scheduler_close = s.close()  # shut down periodic callbacks immediately
     for w in workers:
         with ignoring(TimeoutError, StreamClosedError, OSError):
             yield w._close(report=False)
         if w.local_dir and os.path.exists(w.local_dir):
             shutil.rmtree(w.local_dir)
-    yield s.close()
+    yield scheduler_close  # wait until scheduler stops completely
     s.stop()
 
 

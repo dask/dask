@@ -154,6 +154,7 @@ def test_future(c, s, a, b):
     x = c.submit(inc, 10)
     assert str(x.key) in repr(x)
     assert str(x.status) in repr(x)
+    assert str(x.status) in repr(c.futures[x.key])
 
 
 @gen_cluster(client=True)
@@ -2810,16 +2811,17 @@ def test_get_stacks_processing(c, s, a, b):
     yield gen.sleep(0.2)
 
     x = yield c.scheduler.stacks()
-    assert x == valmap(list, s.stacks)
+    assert set(x) == {a.address, b.address}
 
     x = yield c.scheduler.stacks(workers=[a.address])
-    assert x == {a.address: list(s.stacks[a.address])}
+    assert set(x) == {a.address}
+    assert isinstance(x[a.address], list)
 
     x = yield c.scheduler.processing()
-    assert x == valmap(list, s.processing)
+    assert set(x) == {a.address, b.address}
 
     x = yield c.scheduler.processing(workers=[a.address])
-    assert x == {a.address: list(s.processing[a.address])}
+    assert isinstance(x[a.address], list)
 
 @gen_cluster(client=True)
 def test_get_foo(c, s, a, b):

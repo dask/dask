@@ -198,7 +198,7 @@ class Worker(Server):
         self.loop.add_callback(self.heartbeat_callback.start)
 
     def __str__(self):
-        return "<Worker: %s, threads: %d>" % (self.address, self.ncores)
+        return "<Worker: %s, threads: %d/%d>" % (self.address, len(self.active), self.ncores)
 
     __repr__ = __str__
 
@@ -664,7 +664,7 @@ class Worker(Server):
             for key in keys:
                 if key in self.data:
                     del self.data[key]
-            logger.info("Deleted %d keys", len(keys))
+            logger.debug("Deleted %d keys", len(keys))
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
                 yield self.scheduler.remove_keys(address=self.address,

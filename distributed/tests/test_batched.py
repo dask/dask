@@ -13,7 +13,7 @@ from tornado.iostream import StreamClosedError
 
 from distributed.core import read, write
 from distributed.utils import sync, All
-from distributed.utils_test import gen_test, slow
+from distributed.utils_test import gen_test, slow, gen_cluster
 from distributed.batched import BatchedSend
 
 

@@ -44,6 +44,8 @@ def test_str(s, a, b):
     assert a.address in repr(a)
     assert str(a.ncores) in str(a)
     assert str(a.ncores) in repr(a)
+    assert str(len(a.active)) in str(a)
+    assert str(len(a.active)) in repr(a)
 
 
 def test_identity():

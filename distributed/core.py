@@ -137,8 +137,8 @@ class Server(TCPServer):
         """
         stream.set_nodelay(True)
         ip, port = address
-        logger.info("Connection from %s:%d to %s", ip, port,
-                    type(self).__name__)
+        logger.debug("Connection from %s:%d to %s", ip, port,
+                     type(self).__name__)
         try:
             while True:
                 try:
@@ -189,8 +189,8 @@ class Server(TCPServer):
                 yield close(stream)
             except Exception as e:
                 logger.warn("Failed while closing writer", exc_info=True)
-        logger.info("Close connection from %s:%d to %s", address[0], address[1],
-                    type(self).__name__)
+        logger.debug("Close connection from %s:%d to %s", address[0], address[1],
+                     type(self).__name__)
 
 
 @gen.coroutine
