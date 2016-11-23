@@ -2805,7 +2805,7 @@ def _maybe_from_pandas(dfs):
 def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
                        meta=no_default, token=None, split_every=None,
                        chunk_kwargs=None, aggregate_kwargs=None,
-                       combine_kwargs=None, **kwargs):
+                       combine_kwargs=None, split_out=None, **kwargs):
     """Apply a function to blocks, then concat, then apply again
 
     Parameters
