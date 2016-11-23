@@ -5,12 +5,13 @@ from operator import add
 from collections import Iterator
 from concurrent.futures import CancelledError
 from datetime import timedelta
+import gc
 import itertools
 import os
 import pickle
 from random import random, choice
 import sys
-from threading import Thread
+from threading import Thread, Semaphore
 from time import sleep, time
 import traceback
 
@@ -35,7 +36,8 @@ from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All, mp_context
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
-        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep)
+        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep,
+        popen)
 
 
 @gen_cluster(client=True, timeout=None)
@@ -487,6 +489,7 @@ def test_missing_data_heals(c, s, a, b):
     assert result == 3 + 4
 
 
+@pytest.mark.xfail(reason="Test creates inconsistent scheduler state")
 @slow
 @gen_cluster()
 def test_missing_worker(s, a, b):
@@ -3113,7 +3116,6 @@ def test_synchronize_missing_data_on_one_worker(c, s, a, b):
     # assert set(s.has_what[b.address]) == set(a.data)
 
 
-from distributed.utils_test import popen
 @slow
 def test_reconnect(loop):
     w = Worker('127.0.0.1', 9393, loop=loop)
@@ -3143,13 +3145,12 @@ def test_reconnect(loop):
     with popen(['dask-scheduler', '--port', '9393', '--no-bokeh']) as s:
         start = time()
         while c.status != 'running':
-            sleep(0.01)
+            sleep(0.1)
             assert time() < start + 5
-
         start = time()
         while len(c.ncores()) != 1:
-            sleep(0.01)
-            assert time() < start + 5
+            sleep(0.05)
+            assert time() < start + 15
 
         x = c.submit(inc, 1)
         assert x.result() == 2
@@ -3179,16 +3180,20 @@ def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
 
-    with cluster(nworkers=0) as (s, []):
+    with cluster(nworkers=0, active_rpc_timeout=20) as (s, []):
+        gc.collect()
         before = proc.num_fds()
+        done = Semaphore(0)
+
         @gen.coroutine
         def start_worker(sleep, duration, repeat=1):
             for i in range(repeat):
                 yield gen.sleep(sleep)
-                w = worker('127.0.0.1', s['port'], loop=loop)
+                w = worker('127.0.0.1', s['port'], ip='127.0.0.1', loop=loop)
                 yield w._start()
                 yield gen.sleep(duration)
                 yield w._close()
+            done.release()
 
         for i in range(count):
             loop.add_callback(start_worker, random() / 5, random() / 5,
@@ -3196,13 +3201,19 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
             sleep(1)
+
+            for i in range(count):
+                done.acquire()
+
             start = time()
             while c.ncores():
                 sleep(0.2)
                 assert time() < start + 10
 
-    after = proc.num_fds()
-    assert before >= after
+    start = time()
+    while proc.num_fds() > before:
+        sleep(0.1)
+        assert time() < start + 10
 
 
 @gen_cluster(client=False, timeout=None)

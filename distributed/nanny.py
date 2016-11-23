@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from time import time, sleep
+import weakref
 
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
@@ -89,7 +90,7 @@ class Nanny(Server):
         self.loop.add_callback(self._start, port)
 
     @gen.coroutine
-    def _kill(self, stream=None, timeout=5):
+    def _kill(self, stream=None, timeout=10):
         """ Kill the local worker process
 
         Blocks until both the process is down and the scheduler is properly
@@ -131,7 +132,7 @@ class Nanny(Server):
                     logger.info("Unregister worker %s:%d from scheduler",
                                 self.ip, self.worker_port)
             except gen.TimeoutError:
-                logger.info("Nanny %s:%d failed to unregister worker %s:%d",
+                logger.warn("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
             except (StreamClosedError, RPCClosed):
@@ -143,8 +144,8 @@ class Nanny(Server):
         if self.process:
             with ignoring(OSError):
                 self.process.terminate()
-            if self.process in processes_to_close:
-                processes_to_close.remove(self.process)
+            join(process, timeout)
+            processes_to_close.discard(self.process)
 
             start = time()
             while isalive(self.process) and time() < start + timeout:
@@ -336,7 +337,7 @@ def run_worker_subprocess(environment, ip, scheduler_ip, scheduler_port, ncores,
     proc = subprocess.Popen([executable] + list(map(str, args)),
             stderr=subprocess.PIPE if quiet else None)
 
-    processes_to_close.append(proc)
+    processes_to_close.add(proc)
 
     return proc
 
@@ -386,11 +387,17 @@ def isalive(proc):
         return proc.is_alive()
 
 
+def join(proc, timeout):
+    if proc is None or isinstance(proc, subprocess.Popen):
+        return
+    proc.join(timeout)
+
+
 import atexit
 
 closing = [False]
 
-processes_to_close = []
+processes_to_close = weakref.WeakSet()
 
 def _closing():
     for proc in processes_to_close:

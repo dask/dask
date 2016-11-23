@@ -12,6 +12,7 @@ from tornado import gen
 
 from distributed.compatibility import PY3
 from distributed.client import _wait
+from distributed.core import coerce_to_address
 from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
@@ -49,10 +50,14 @@ def test_gather_then_submit_after_failed_workers(loop):
             total = c.submit(sum, L)
             wait([total])
 
-            (_, port) = first(c.scheduler.who_has[total.key])
+            addr = c.who_has()[total.key][0]
+            _, port = coerce_to_address(addr, out=tuple)
             for d in [x, y, z]:
                 if d['port'] == port:
                     d['proc'].terminate()
+                    break
+            else:
+                assert 0, "Could not find worker"
 
             result = c.gather([total])
             assert result == [sum(map(inc, range(20)))]

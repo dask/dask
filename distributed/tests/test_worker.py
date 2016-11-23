@@ -575,8 +575,8 @@ def test_Executor(c, s):
 
 
 @slow
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
-def test_str(c, s, w):
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)], timeout=30)
+def test_spill_by_default(c, s, w):
     da = pytest.importorskip('dask.array')
     x = da.ones(int(TOTAL_MEMORY * 0.7), chunks=10000000, dtype='u1')
     y = c.persist(x)

@@ -20,7 +20,7 @@ from tornado import gen, queues
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
-from .core import connect, read, write, close, rpc
+from .core import connect, read, write, close, rpc, coerce_to_address
 from .utils import ignoring, log_errors, sync, mp_context
 import pytest
 
@@ -266,15 +266,18 @@ def check_active_rpc(loop, active_rpc_timeout=0):
         def wait_a_bit():
             yield gen.sleep(0.01)
 
+        logger.info("Waiting for active RPC count to drop down")
         while rpc.active > rpc_active and loop.time() < deadline:
             loop.run_sync(wait_a_bit)
+        logger.info("... Finished waiting for active RPC count to drop down")
+
     assert rpc.active == rpc_active
 
 
 @contextmanager
 def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0):
     with pristine_loop() as loop:
-        with check_active_rpc(loop):
+        with check_active_rpc(loop, active_rpc_timeout):
             if nanny:
                 _run_worker = run_nanny
             else:
@@ -479,6 +482,23 @@ def raises(func, exc=Exception):
         return True
 
 
+def terminate_process(proc):
+    if proc.poll() is None:
+        if sys.platform.startswith('win'):
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.send_signal(signal.SIGINT)
+        try:
+            if sys.version_info[0] == 3:
+                proc.wait(10)
+            else:
+                proc.wait()
+        finally:
+            # Make sure we don't leave the process lingering around
+            with ignoring(OSError):
+                proc.kill()
+
+
 @contextmanager
 def popen(*args, **kwargs):
     kwargs['stdout'] = subprocess.PIPE
@@ -495,20 +515,9 @@ def popen(*args, **kwargs):
         raise
 
     finally:
-        if sys.platform.startswith('win'):
-            proc.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            proc.send_signal(signal.SIGINT)
         try:
-            if sys.version_info[0] == 3:
-                proc.wait(10)
-            else:
-                proc.wait()
+            terminate_process(proc)
         finally:
-            # Make sure we don't leave the process lingering around
-            with ignoring(OSError):
-                proc.kill()
-
             # XXX Also dump stdout if return code != 0 ?
             if dump_stdout:
                 line = '\n\nPrint from stderr\n=================\n'
@@ -520,6 +529,23 @@ def popen(*args, **kwargs):
                 while line:
                     print(line)
                     line = proc.stdout.readline()
+
+
+def wait_for_port(address, timeout=5):
+    address = coerce_to_address(address, out=tuple)
+    deadline = time() + timeout
+
+    while True:
+        timeout = deadline - time()
+        if timeout < 0:
+            raise RuntimeError("Failed to connect to %s" % (address,))
+        try:
+            sock = socket.create_connection(address, timeout=timeout)
+        except EnvironmentError:
+            pass
+        else:
+            sock.close()
+            break
 
 
 @contextmanager

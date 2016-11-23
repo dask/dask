@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from zlib import crc32
+
 import numpy as np
 import pytest
 
@@ -75,13 +77,18 @@ def test_memmap():
 @slow
 def test_dumps_serialize_numpy_large():
     psutil = pytest.importorskip('psutil')
-    if psutil.virtual_memory().total < 4e9:
+    if psutil.virtual_memory().total < 2e9:
         return
-    x = np.random.randint(0, 255, size=int(BIG_BYTES_SHARD_SIZE * 2)).astype('u1')
+    x = np.random.random(size=int(BIG_BYTES_SHARD_SIZE * 2 // 8)).view('u1')
+    assert x.nbytes == BIG_BYTES_SHARD_SIZE * 2
     frames = dumps([to_serialize(x)])
+    dtype, shape = x.dtype, x.shape
+    checksum = crc32(x)
+    del x
     [y] = loads(frames)
 
-    np.testing.assert_equal(x, y)
+    assert (y.dtype, y.shape) == (dtype, shape)
+    assert crc32(y) == checksum, "Arrays are unequal"
 
 
 @pytest.mark.parametrize('dt,size', [('f8', 8),
