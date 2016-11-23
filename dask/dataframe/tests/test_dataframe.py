@@ -2724,13 +2724,23 @@ def test_first_and_last(method):
             assert_eq(f(ddf.A, offset), f(df.A, offset))
 
 
-def test_hash_split():
+@pytest.mark.parametrize('npartitions', [1, 4, 20])
+@pytest.mark.parametrize('split_every', [2, 5])
+@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
+def test_hash_split(npartitions, split_every, split_out):
     from string import ascii_lowercase
     s = pd.Series(np.random.choice(list(ascii_lowercase), 1000, replace=True))
-    ds = dd.from_pandas(s, npartitions=20)
+    ds = dd.from_pandas(s, npartitions=npartitions)
 
-    dropped = ds.unique(split_every=5, split_out=4)
+    dropped = ds.unique(split_every=split_every, split_out=split_out)
 
-    assert_eq(dropped, s.unique())
+    dsk = dropped._optimize(dropped.dask, dropped._keys())
+    from dask.core import get_deps
+    dependencies, dependents = get_deps(dsk)
 
-    assert dropped.npartitions == 4
+    dropped.visualize('dask.pdf')
+    assert len([k for k, v in dependencies.items() if not v]) == npartitions
+    assert dropped.npartitions == (split_out or 1)
+
+
+    assert sorted(dropped.compute()) ==  sorted(s.unique())
