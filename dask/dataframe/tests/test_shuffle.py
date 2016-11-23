@@ -7,7 +7,7 @@ import numpy as np
 import dask.dataframe as dd
 from dask.threaded import get as threaded_get
 from dask.multiprocessing import get as mp_get
-from dask.dataframe.shuffle import (shuffle, hash_series,
+from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
@@ -111,18 +111,21 @@ df2 = pd.DataFrame({'i32': np.array([1, 2, 3] * 3, dtype='int32'),
 
 def test_partitioning_index():
     res = partitioning_index(df2.i32, 3)
-    exp = np.array([1, 2, 0] * 3)
-    np.testing.assert_equal(res, exp)
+    assert ((res < 3) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
+
+    assert (partitioning_index(df2.i32, 3) == partitioning_index(df2.i32, 3)).all()
 
     res = partitioning_index(df2[['i32']], 3)
-    np.testing.assert_equal(res, exp)
+    assert ((res < 3) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
 
     res = partitioning_index(df2[['cat', 'bool', 'f32']], 2)
     assert ((0 <= res) & (res < 2)).all()
 
     res = partitioning_index(df2.index, 4)
-    exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
-    np.testing.assert_equal(res, exp)
+    assert ((res < 4) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
 
 
 @pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])

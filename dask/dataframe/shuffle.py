@@ -282,8 +282,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
-        parts = partitioning_index(pd.Series(range(npartitions)),
-                                   df.npartitions)
+        parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
                for i, k in enumerate(df2._keys())}
@@ -306,7 +305,8 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
 
 
 def partitioning_index(df, npartitions):
-    """Computes a deterministic index mapping each record to a partition.
+    """
+    Computes a deterministic index mapping each record to a partition.
 
     Identical rows are mapped to the same partition.
 
@@ -355,7 +355,10 @@ def shuffle_group_get(g_head, i):
 
 
 def shuffle_group(df, col, stage, k, npartitions):
-    ind = partitioning_index(df[col], npartitions)
+    if col == '_partitions':
+        ind = df[col].values % npartitions
+    else:
+        ind = partitioning_index(df[col], npartitions)
     c = ind // k ** stage % k
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
