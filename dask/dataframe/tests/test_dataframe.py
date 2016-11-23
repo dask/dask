@@ -2738,7 +2738,6 @@ def test_hash_split_unique(npartitions, split_every, split_out):
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 
-    dropped.visualize('dask.pdf')
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
 
@@ -2761,9 +2760,23 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 
-    result.visualize('dask.pdf')
-
     assert result.npartitions == (split_out or 1)
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert_eq(result, df.groupby('x').y.var())
+
+
+def test_hash_split_drop_duplicates():
+    df = pd.DataFrame({'x': [1, 2, 3] * 100})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert ddf.drop_duplicates(split_out=10).npartitions == 10
+    assert_eq(ddf.drop_duplicates(split_out=10), df.drop_duplicates())
+
+
+def test_hash_split_value_counts():
+    df = pd.DataFrame({'x': [1, 2, 3] * 100})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert ddf.x.value_counts(split_out=10).npartitions == 10
+    assert_eq(ddf.x.value_counts(split_out=10), df.x.value_counts())

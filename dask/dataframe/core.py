@@ -350,12 +350,12 @@ class _Frame(Base):
         return new_dd_object(dsk2, name, self._meta, self.divisions)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, **kwargs):
-        split_every = kwargs.pop('split_every', None)
+    def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
         assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
         chunk = M.drop_duplicates
         return aca(self, chunk=chunk, aggregate=chunk, meta=self._meta,
-                   token='drop-duplicates', split_every=split_every, **kwargs)
+                   token='drop-duplicates', split_every=split_every,
+                   split_out=split_out, split_index=False, **kwargs)
 
     def __len__(self):
         return self.reduction(len, np.sum, token='len', meta=int,
@@ -1805,12 +1805,13 @@ class Series(_Frame):
         return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
-    def value_counts(self, split_every=None):
+    def value_counts(self, split_every=None, split_out=1):
         return aca(self, chunk=M.value_counts,
                    aggregate=methods.value_counts_aggregate,
                    combine=methods.value_counts_combine,
                    meta=self._meta.value_counts(), token='value-counts',
-                   split_every=split_every)
+                   split_every=split_every, split_out=split_out,
+                   split_index=True)
 
     @derived_from(pd.Series)
     def nlargest(self, n=5, split_every=None):
