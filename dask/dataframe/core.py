@@ -1631,6 +1631,7 @@ class _Frame(Base):
             [self],
             chunk=_hyperloglog.compute_hll_array,
             aggregate=_hyperloglog.estimate_count,
+            split_every=False,
             b=b,
             meta=float)
 

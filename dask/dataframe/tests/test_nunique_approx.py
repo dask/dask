@@ -1,3 +1,5 @@
+
+import dask
 import dask.dataframe as dd
 
 import pandas as pd
@@ -31,16 +33,19 @@ rs = np.random.RandomState(96)
         'x': np.zeros((20000,)),
         'y': np.zeros((20000,)) + 4803592,
         'z': np.zeros((20000,))}),
+    pd.DataFrame({'x': [1, 2, 3] * 1000}),
+    pd.DataFrame({'x': np.random.random(1000)}),
+    pd.Series([1, 2, 3] * 1000),
+    pd.Series(np.random.random(1000)),
+    pd.Series(np.random.random(1000), index=np.ones(1000)),
+    pd.Series(np.random.random(1000), index=np.random.random(1000)),
 ])
-def test_basic(df):
-    ddf = dd.from_pandas(df, 2)
+@pytest.mark.parametrize('npartitions', [2, 20])
+def test_basic(df, npartitions):
+    ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    approx = ddf.nunique_approx().compute()
+    approx = ddf.nunique_approx().compute(get=dask.async.get_sync)
     exact = len(df.drop_duplicates())
-    assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
-
-    approx = ddf.x.nunique_approx().compute()
-    exact = len(df.x.unique())
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
 
 
