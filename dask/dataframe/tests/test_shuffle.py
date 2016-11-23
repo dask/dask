@@ -65,8 +65,9 @@ def test_shuffle_npatitions_task():
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
 def test_index_with_non_series(method):
-    tm.assert_frame_equal(shuffle(d, d.b, shuffle=method).compute(),
-                          shuffle(d, 'b', shuffle=method).compute())
+    from dask.dataframe.tests.test_multi import list_eq
+    list_eq(shuffle(d, d.b, shuffle=method),
+            shuffle(d, 'b', shuffle=method))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
