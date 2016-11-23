@@ -40,8 +40,8 @@ def hash_array(vals):
         vals = vals.astype('u8')
 
     if (np.issubdtype(vals.dtype, np.datetime64) or
-        np.issubdtype(vals.dtype, np.timedelta64) or
-        np.issubdtype(vals.dtype, np.number)) and vals.dtype.itemsize <= 8:
+       np.issubdtype(vals.dtype, np.timedelta64) or
+       np.issubdtype(vals.dtype, np.number)) and vals.dtype.itemsize <= 8:
 
         vals = vals.view('u{}'.format(vals.dtype.itemsize)).astype('u8')
     else:
