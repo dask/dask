@@ -2834,8 +2834,10 @@ def _maybe_from_pandas(dfs):
 
 def hash_shard(df, nparts, index):
     if index:
-        df = df.index
-    h = hash_pandas_object(df) % nparts
+        h = df.index
+    else:
+        h = df
+    h = hash_pandas_object(h) % nparts
 
     return {i: df.iloc[h == i] for i in range(nparts)}
 
@@ -2927,7 +2929,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
                          chunk_kwargs, aggregate_kwargs, combine_kwargs,
-                         split_every)
+                         split_every, split_out)
 
     # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)

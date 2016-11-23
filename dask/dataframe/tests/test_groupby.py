@@ -455,7 +455,8 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf.groupby('b').size(), 'dataframe-groupby-size')
 
 
-def test_groupby_reduction_split_every():
+@pytest.mark.parametrize('keyword', ['split_every', 'split_out'])
+def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100})
     ddf = dd.from_pandas(pdf, npartitions=15)
@@ -465,12 +466,12 @@ def test_groupby_reduction_split_every():
 
     # DataFrame
     for m in ['sum', 'min', 'max', 'count', 'mean', 'size', 'var', 'std']:
-        res = call(ddf.groupby('b'), m, split_every=2)
+        res = call(ddf.groupby('b'), m, **{keyword: 2})
         sol = call(pdf.groupby('b'), m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b'), m)._name != res._name
 
-    res = call(ddf.groupby('b'), 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b'), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b'), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b'), 'var', ddof=2)._name != res._name
@@ -478,12 +479,12 @@ def test_groupby_reduction_split_every():
     # Series, post select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.groupby('b').a, m, split_every=2)
+        res = call(ddf.groupby('b').a, m, **{keyword: 2})
         sol = call(pdf.groupby('b').a, m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b').a, m)._name != res._name
 
-    res = call(ddf.groupby('b').a, 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b').a, 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b').a, 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b').a, 'var', ddof=2)._name != res._name
@@ -491,14 +492,14 @@ def test_groupby_reduction_split_every():
     # Series, pre select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.a.groupby(ddf.b), m, split_every=2)
+        res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
         assert call(ddf.a.groupby(ddf.b), m)._name != res._name
 
-    res = call(ddf.a.groupby(ddf.b), 'var', split_every=2, ddof=2)
+    res = call(ddf.a.groupby(ddf.b), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
