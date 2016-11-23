@@ -2722,3 +2722,15 @@ def test_first_and_last(method):
         for offset in offsets:
             assert_eq(f(ddf, offset), f(df, offset))
             assert_eq(f(ddf.A, offset), f(df.A, offset))
+
+
+def test_hash_split():
+    from string import ascii_lowercase
+    s = pd.Series(np.random.choice(list(ascii_lowercase), 1000, replace=True))
+    ds = dd.from_pandas(s, npartitions=20)
+
+    dropped = ds.unique(split_every=5, split_out=4)
+
+    assert_eq(dropped, s.unique())
+
+    assert dropped.npartitions == 4
