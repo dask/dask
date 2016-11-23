@@ -10,17 +10,17 @@ rs = np.random.RandomState(96)
 
 @pytest.mark.parametrize("df", [
     pd.DataFrame({
-        'a': [1, 2, 3] * 3,
-        'b': [1.2, 3.4, 5.6] * 3,
-        'c': -np.arange(9, dtype=np.int8)}),
+        'x': [1, 2, 3] * 3,
+        'y': [1.2, 3.4, 5.6] * 3,
+        'z': -np.arange(9, dtype=np.int8)}),
     pd.DataFrame({
-        'i': rs.randint(0, 1000000, (10000,)),
-        'j': rs.randn(10000),
-        'k': rs.uniform(0, 9999999, (10000,))}),
+        'x': rs.randint(0, 1000000, (10000,)),
+        'y': rs.randn(10000),
+        'z': rs.uniform(0, 9999999, (10000,))}),
     pd.DataFrame({
-        'i': np.repeat(rs.randint(0, 1000000, (1000,)), 3),
-        'j': np.repeat(rs.randn(1000), 3),
-        'k': np.repeat(rs.uniform(0, 9999999, (1000,)), 3)}),
+        'x': np.repeat(rs.randint(0, 1000000, (1000,)), 3),
+        'y': np.repeat(rs.randn(1000), 3),
+        'z': np.repeat(rs.uniform(0, 9999999, (1000,)), 3)}),
     pd.DataFrame({
         'x': rs.randint(0, 1000000, (10000,))}),
     pd.DataFrame({
@@ -37,6 +37,10 @@ def test_basic(df):
 
     approx = ddf.nunique_approx().compute()
     exact = len(df.drop_duplicates())
+    assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
+
+    approx = ddf.x.nunique_approx().compute()
+    exact = len(df.x.unique())
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
 
 
