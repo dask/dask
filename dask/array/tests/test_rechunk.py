@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
-from dask.array.rechunk import plan_rechunk, divide_to_width
+from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
 import dask.array as da
 
 
@@ -205,10 +205,46 @@ def test_divide_to_width():
                       )
 
 
+def test_merge_to_number():
+    chunks = merge_to_number((10, 10, 10, 10), 5)
+    assert chunks == (10, 10, 10, 10)
+    chunks = merge_to_number((10, 10, 10, 10), 4)
+    assert chunks == (10, 10, 10, 10)
+    chunks = merge_to_number((10, 10, 10, 10), 3)
+    assert chunks == (20, 10, 10)
+    chunks = merge_to_number((10, 10, 10, 10), 2)
+    assert chunks == (20, 20)
+    chunks = merge_to_number((10, 10, 10, 10), 1)
+    assert chunks == (40,)
+
+    chunks = merge_to_number((5, 1, 1, 15, 10), 4)
+    assert chunks == (5, 2, 15, 10)
+    chunks = merge_to_number((5, 1, 1, 15, 10), 3)
+    assert chunks == (7, 15, 10)
+    chunks = merge_to_number((5, 1, 1, 15, 10), 2)
+    assert chunks == (22, 10)
+    chunks = merge_to_number((5, 1, 1, 15, 10), 1)
+    assert chunks == (32,)
+
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 6)
+    assert chunks == (2, 1, 1, 3, 1, 1)
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 5)
+    assert chunks == (2, 2, 3, 1, 1)
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 4)
+    assert chunks == (2, 2, 3, 2)
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 3)
+    assert chunks == (4, 3, 2)
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 2)
+    assert chunks == (4, 5)
+    chunks = merge_to_number((1, 1, 1, 1, 3, 1, 1), 1)
+    assert chunks == (9,)
+
+
 def _plan(old_chunks, new_chunks, itemsize=1, block_size_limit=1e7):
     return plan_rechunk(old_chunks, new_chunks,
                         itemsize=itemsize,
                         block_size_limit=block_size_limit)
+
 
 def _assert_steps(steps, expected):
     assert len(steps) == len(expected)
@@ -216,8 +252,8 @@ def _assert_steps(steps, expected):
 
 
 def test_plan_rechunk():
-    c = coarse = ((20,) * 2)
-    f = fine = ((2,) * 20)
+    c = ((20,) * 2)   # coarse
+    f = ((2,) * 20)   # fine
 
     # Trivial cases
     steps = _plan((), ())
@@ -249,7 +285,7 @@ def test_plan_rechunk():
     _assert_steps(steps, [(c, c), (c, f)])
 
     # Hitting the memory limit => the intermediate is a partial merge
-    m = mid = ((10,) * 4)
+    m = ((10,) * 4)   # mid
 
     steps = _plan((f, c), (c, f), block_size_limit=399)
     _assert_steps(steps, [(m, c), (c, f)])
@@ -263,8 +299,8 @@ def test_plan_rechunk():
 
 def test_plan_rechunk_5d():
     # 5d problem
-    c = coarse = ((10,) * 1)
-    f = fine = ((1,) * 10)
+    c = ((10,) * 1)    # coarse
+    f = ((1,) * 10)    # fine
 
     steps = _plan((c, c, c, c, c), (f, f, f, f, f))
     _assert_steps(steps, [(f, f, f, f, f)])
@@ -276,8 +312,8 @@ def test_plan_rechunk_5d():
 
 
 def test_plan_rechunk_heterogenous():
-    c = coarse = ((10,) * 1)
-    f = fine = ((1,) * 10)
+    c = ((10,) * 1)    # coarse
+    f = ((1,) * 10)    # fine
     cf = c + f
     cc = c + c
     ff = f + f

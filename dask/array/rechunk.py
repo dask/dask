@@ -7,6 +7,8 @@ The rechunk module defines:
 """
 from __future__ import absolute_import, division, print_function
 
+import heapq
+
 from itertools import product, chain
 from operator import getitem, add, mul, itemgetter
 
@@ -208,14 +210,27 @@ def rechunk(x, chunks):
         raise ValueError("Provided chunks are not consistent with shape")
 
     steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize)
-    for chunks in steps:
-        x = _compute_rechunk(x, chunks)
+    for c in steps:
+        x = _compute_rechunk(x, c)
 
     return x
 
 
 def _number_of_blocks(chunks):
     return reduce(mul, map(len, chunks))
+
+def _largest_block_size(chunks):
+    return reduce(mul, map(max, chunks))
+
+
+def estimate_graph_size(old_chunks, new_chunks):
+    """ Estimate the graph size during a rechunk computation.
+    """
+    # Estimate the number of intermediate blocks that will be produced
+    # (we don't use intersect_chunks() which is much more expensive)
+    crossed_size = reduce(mul, (len(oc) + len(nc)
+                                for oc, nc in zip(old_chunks, new_chunks)))
+    return crossed_size
 
 
 def estimate_rechunk_cost(old_chunks, new_chunks):
@@ -224,17 +239,11 @@ def estimate_rechunk_cost(old_chunks, new_chunks):
     """
     oldsize = _number_of_blocks(old_chunks)
     newsize = _number_of_blocks(new_chunks)
-    if oldsize == 0:
-        return 0.0
-    # Estimate the number of intermediate blocks that will be produced
-    # (we don't use intersect_chunks() which is much more expensive)
-    crossed_size = reduce(mul, (len(oc) + len(nc)
-                                for oc, nc in zip(old_chunks, new_chunks)))
-    return crossed_size / (oldsize + newsize)
+    return estimate_graph_size(old_chunks, new_chunks) / (oldsize + newsize)
 
 
 def divide_to_width(desired_chunks, max_width):
-    """ Minimally divide the given chunks so to make the largest chunk
+    """ Minimally divide the given chunks so as to make the largest chunk
     width less or equal than *max_width*.
     """
     chunks = []
@@ -248,7 +257,46 @@ def divide_to_width(desired_chunks, max_width):
     return tuple(chunks)
 
 
-def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
+def merge_to_number(desired_chunks, max_number):
+    """ Minimally merge the given chunks so as to drop the number of
+    chunks below *max_number*, while minimizing the largest width.
+    """
+    heap = [(desired_chunks[i] + desired_chunks[i + 1], i, i + 1)
+            for i in range(len(desired_chunks) - 1)]
+    heapq.heapify(heap)
+
+    chunks = list(desired_chunks)
+    nmerges = len(desired_chunks) - max_number
+
+    while nmerges > 0:
+        # Find smallest interval to merge
+        width, i, j = heapq.heappop(heap)
+        # If interval was made invalid by another merge, recompute
+        # it, re-insert it and retry.
+        if chunks[j] == 0:
+            j = j + 1
+            while chunks[j] == 0:
+                j = j + 1
+            heapq.heappush(heap, (chunks[i] + chunks[j], i, j))
+            continue
+        elif chunks[i] + chunks[j] != width:
+            heapq.heappush(heap, (chunks[i] + chunks[j], i, j))
+            continue
+        # Merge
+        assert chunks[i] != 0
+        chunks[i] = 0   # mark deleted
+        chunks[j] = width
+        nmerges -= 1
+
+    return tuple(filter(None, chunks))
+
+
+def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
+    """
+    Find an intermediate rechunk that would merge some adjacent blocks
+    together in order to get us nearer the *new_chunks* target, without
+    violating the *block_size_limit* (in number of elements).
+    """
     ndim = len(old_chunks)
 
     old_largest_width = [max(c) for c in old_chunks]
@@ -256,13 +304,13 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
 
     graph_size_effect = {
         dim: len(nc) / len(oc)
-            for dim, (oc, nc) in enumerate(zip(old_chunks, new_chunks))
-        }
+        for dim, (oc, nc) in enumerate(zip(old_chunks, new_chunks))
+    }
 
     block_size_effect = {
         dim: new_largest_width[dim] / old_largest_width[dim]
-            for dim in range(ndim)
-        }
+        for dim in range(ndim)
+    }
 
     # Our goal is to reduce the number of nodes in the rechunk graph
     # by merging some adjacent chunks, so consider dimensions where we can
@@ -279,11 +327,13 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
     sorted_candidates = sorted(
         merge_candidates,
         key=lambda k: np.log(graph_size_effect[k]) / np.log(block_size_effect[k]),
-        )
+    )
 
     largest_block_size = reduce(mul, old_largest_width)
 
     chunks = list(old_chunks)
+    memory_limit_hit = False
+
     for dim in sorted_candidates:
         # Examine this dimension for possible graph reduction
         new_largest_block_size = (
@@ -303,8 +353,41 @@ def find_intermediate_rechunk(old_chunks, new_chunks, block_size_limit):
                 chunks[dim] = c
                 largest_block_size = largest_block_size * max(c) // largest_width
 
-    assert largest_block_size == reduce(mul, map(max, chunks))
+            memory_limit_hit = True
+
+    assert largest_block_size == _largest_block_size(chunks)
     assert largest_block_size <= block_size_limit
+    return tuple(chunks), memory_limit_hit
+
+
+def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
+    """
+    Find an intermediate rechunk that would split some chunks to
+    get us nearer *new_chunks*, without violating the *graph_size_limit*.
+    """
+    ndim = len(old_chunks)
+
+    chunks = list(old_chunks)
+
+    for dim in range(ndim):
+        graph_size = estimate_graph_size(chunks, new_chunks)
+        if graph_size > graph_size_limit:
+            break
+        if len(old_chunks[dim]) > len(new_chunks[dim]):
+            # It's not interesting to split
+            continue
+        # Merge the new chunks so as to stay within the graph size budget
+        max_number = len(old_chunks[dim]) * graph_size_limit // graph_size
+        print("merge_to_number: %d -> (%d) -> %d"
+              % (len(old_chunks[dim]), max_number, len(new_chunks[dim]), ))
+        c = merge_to_number(new_chunks[dim], max_number)
+        assert len(c) <= max_number
+        # Consider the merge successful if its result has a greater length
+        # and smaller max width than the old chunks
+        if len(c) >= len(old_chunks[dim]) and max(c) <= max(old_chunks[dim]):
+            print("  => split:", old_chunks[dim], c)
+            chunks[dim] = c
+
     return tuple(chunks)
 
 
@@ -319,38 +402,59 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     threshold: the graph growth factor under which we don't bother
         introducing an intermediate step
     block_size_limit: the maximum block size (in bytes)
-        we want to produce during the intermediate step
+        we want to produce during an intermediate step
     """
-    steps = [new_chunks]
-    if not new_chunks or not all(new_chunks):
-        # 0d or empty array
-        return steps
-
     ndim = len(new_chunks)
+    steps = []
+    if ndim <= 1 or not all(new_chunks):
+        # Trivial array => no need for an intermediate
+        return steps + [new_chunks]
+
     # Make it a number ef elements
     block_size_limit /= itemsize
 
-    largest_old_block = reduce(mul, map(max, old_chunks))
-    largest_new_block = reduce(mul, map(max, new_chunks))
-
-    # Is block_size_limit too small for source / target chunks?
+    # Fix block_size_limit if too small for either old_chunks or new_chunks
+    largest_old_block = _largest_block_size(old_chunks)
+    largest_new_block = _largest_block_size(new_chunks)
     block_size_limit = max([block_size_limit,
                             largest_old_block,
                             largest_new_block,
                             ])
 
-    overhead = estimate_rechunk_cost(old_chunks, new_chunks)
-    if overhead < threshold:
-        return steps
+    # The graph size above which to optimize
+    graph_size_threshold = threshold * (_number_of_blocks(old_chunks) +
+                                        _number_of_blocks(new_chunks))
 
-    chunks = find_intermediate_rechunk(old_chunks, new_chunks,
-                                       block_size_limit)
-    if chunks == old_chunks or chunks == new_chunks:
-        # XXX warn the user no solution could be found?
-        return steps
+    current_chunks = old_chunks
 
-    steps.insert(0, chunks)
-    return steps
+    while True:
+        graph_size = estimate_graph_size(current_chunks, new_chunks)
+        #graph_growth = estimate_rechunk_cost(current_chunks, new_chunks)
+        if graph_size < graph_size_threshold:
+            break
+
+        chunks, memory_limit_hit = find_merge_rechunk(current_chunks, new_chunks,
+                                                      block_size_limit)
+        if chunks == current_chunks or chunks == new_chunks:
+            break
+        steps.append(chunks)
+        current_chunks = chunks
+        if not memory_limit_hit:
+            break
+
+        graph_size = estimate_graph_size(current_chunks, new_chunks)
+        # Accept a moderate increase in graph size in exchange for
+        # getting nearer the goal, and allowing for further
+        # merges despite the memory limit.
+        # To see this pass in action, make the block_size_limit very small.
+        chunks = find_split_rechunk(current_chunks, new_chunks,
+                                    graph_size * 1.5)
+        if chunks == current_chunks or chunks == new_chunks:
+            break
+        steps.append(chunks)
+        current_chunks = chunks
+
+    return steps + [new_chunks]
 
 
 def _compute_rechunk(x, chunks):

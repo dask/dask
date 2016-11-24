@@ -1,7 +1,6 @@
 import pytest
 pytest.importorskip('numpy')
 
-import dask.array as da
 from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
