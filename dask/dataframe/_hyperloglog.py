@@ -39,7 +39,7 @@ def compute_hll_array(obj, b):
 
     # Of the first b bits, which is the first nonzero?
     j = hashes >> num_bits_discarded
-    first_bit = compute_first_bit(j)
+    first_bit = compute_first_bit(hashes)
 
     # Pandas can do the max aggregation
     df = pd.DataFrame({'j': j, 'first_bit': first_bit})
@@ -58,8 +58,8 @@ def estimate_count(Ms, b):
 
     # We concatenated all of the states, now we need to get the max
     # value for each j in both
-    Ms = Ms.reshape((m, len(Ms) // m))
-    M = Ms.max(axis=1)
+    Ms = Ms.reshape((len(Ms) // m), m)
+    M = Ms.max(axis=0)
 
     alpha = 0.7213 / (1 + 1.079 / m)
 
