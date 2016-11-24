@@ -6,6 +6,7 @@ import logging
 import six
 import socket
 import struct
+import sys
 from time import time
 import traceback
 import uuid
@@ -25,6 +26,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode, WINDOWS
+from .config import config
 from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
@@ -136,6 +138,8 @@ class Server(TCPServer):
         Coroutines should expect a single IOStream object.
         """
         stream.set_nodelay(True)
+        set_tcp_timeout(stream)
+
         ip, port = address
         logger.debug("Connection from %s:%d to %s", ip, port,
                      type(self).__name__)
@@ -191,6 +195,59 @@ class Server(TCPServer):
                 logger.warn("Failed while closing writer", exc_info=True)
         logger.debug("Close connection from %s:%d to %s", address[0], address[1],
                      type(self).__name__)
+
+
+def set_tcp_timeout(stream):
+    """
+    Set kernel-level TCP timeout on the stream.
+    """
+    timeout = int(config.get('tcp-timeout', 30))
+
+    sock = stream.socket
+
+    # Default (unsettable) value on Windows
+    # https://msdn.microsoft.com/en-us/library/windows/desktop/dd877220(v=vs.85).aspx
+    nprobes = 10
+    assert timeout >= nprobes + 1, "Timeout too low"
+
+    idle = max(2, timeout // 4)
+    interval = max(1, (timeout - idle) // nprobes)
+    idle = timeout - interval * nprobes
+    assert idle > 0
+
+    try:
+        if sys.platform.startswith("win"):
+            logger.debug("Setting TCP keepalive: idle=%d, interval=%d",
+                         idle, interval)
+            sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, idle * 1000, interval * 1000))
+        else:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            try:
+                TCP_KEEPIDLE = socket.TCP_KEEPIDLE
+                TCP_KEEPINTVL = socket.TCP_KEEPINTVL
+                TCP_KEEPCNT = socket.TCP_KEEPCNT
+            except AttributeError:
+                if sys.platform == "darwin":
+                    TCP_KEEPIDLE = 0x10  # (named "TCP_KEEPALIVE" in C)
+                    TCP_KEEPINTVL = 0x101
+                    TCP_KEEPCNT = 0x102
+                else:
+                    TCP_KEEPIDLE = None
+
+            if TCP_KEEPIDLE is not None:
+                logger.debug("Setting TCP keepalive: nprobes=%d, idle=%d, interval=%d",
+                             nprobes, idle, interval)
+                sock.setsockopt(socket.SOL_TCP, TCP_KEEPCNT, nprobes)
+                sock.setsockopt(socket.SOL_TCP, TCP_KEEPIDLE, idle)
+                sock.setsockopt(socket.SOL_TCP, TCP_KEEPINTVL, interval)
+
+        if sys.platform.startswith("linux"):
+            logger.debug("Setting TCP user timeout: %d ms",
+                         timeout * 1000)
+            TCP_USER_TIMEOUT = 18  # since Linux 2.6.37
+            sock.setsockopt(socket.SOL_TCP, TCP_USER_TIMEOUT, timeout * 1000)
+    except EnvironmentError as e:
+        logger.warn("Could not set timeout on TCP stream: %s", e)
 
 
 @gen.coroutine
@@ -267,6 +324,7 @@ def connect(ip, port, timeout=3):
         try:
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             stream.set_nodelay(True)
+            set_tcp_timeout(stream)
             raise gen.Return(stream)
         except StreamClosedError:
             if time() - start < timeout:
