@@ -544,6 +544,7 @@ def merge_sync(dsk1, dsk2):
         new_dsk[new_key] = task
     return new_dsk, sd
 
+
 # store the name iterator in the function
 merge_sync.names = ('merge_%d' % i for i in count(1))
 
@@ -566,6 +567,8 @@ def fuse_selections(dsk, head1, head2, merge):
         Takes ``task1`` and ``task2`` and returns a merged task to
         replace ``task1``.
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
@@ -600,6 +603,8 @@ def fuse_getitem(dsk, func, place):
     place: int
         Location in task to insert the getitem key
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),

@@ -13,7 +13,7 @@ LICENSE
 New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
 
 .. _documentation: http://dask.pydata.org/en/latest/
-.. |Build Status| image:: https://travis-ci.org/dask/dask.svg
+.. |Build Status| image:: https://travis-ci.org/dask/dask.svg?branch=master
    :target: https://travis-ci.org/dask/dask
 .. |Coverage| image:: https://coveralls.io/repos/dask/dask/badge.svg
    :target: https://coveralls.io/r/dask/dask

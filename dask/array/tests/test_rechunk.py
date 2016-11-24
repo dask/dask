@@ -139,7 +139,7 @@ def test_rechunk_blockshape():
 
 def test_dtype():
     x = da.ones(5, chunks=(2,))
-    assert x.rechunk(chunks=(1,))._dtype == x._dtype
+    assert x.rechunk(chunks=(1,)).dtype == x.dtype
 
 
 def test_rechunk_with_dict():

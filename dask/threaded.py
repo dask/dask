@@ -19,8 +19,12 @@ def _thread_get_id():
     return current_thread().ident
 
 
-default_pool = ThreadPool()
+default_pool = None
+
+
 default_thread = _thread_get_id()
+
+
 main_thread = current_thread()
 
 pools = defaultdict(dict)
@@ -51,12 +55,15 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
     >>> get(dsk, ['w', 'y'])
     (4, 2)
     """
+    global default_pool
     pool = _globals['pool']
     thread = current_thread()
 
     with pools_lock:
         if pool is None:
             if num_workers is None and thread is main_thread:
+                if default_pool is None:
+                    default_pool = ThreadPool()
                 pool = default_pool
             elif thread in pools and num_workers in pools[thread]:
                 pool = pools[thread][num_workers]

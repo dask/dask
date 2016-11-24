@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 from toolz import merge, partial
 
 from ..base import tokenize
@@ -89,9 +90,8 @@ def predict(model, x):
 
     Parameters
     ----------
-
-    model: scikit learn classifier
-    x: dask Array
+    model : scikit learn classifier
+    x : dask Array
 
     See docstring for ``da.learn.fit``
     """
@@ -99,4 +99,6 @@ def predict(model, x):
     if len(x.chunks[1]) > 1:
         x = x.reblock(chunks=(x.chunks[0], sum(x.chunks[1])))
     func = partial(_predict, model)
-    return x.map_blocks(func, chunks=(x.chunks[0], (1,))).squeeze()
+    xx = np.zeros((1, x.shape[1]), dtype=x.dtype)
+    dt = model.predict(xx).dtype
+    return x.map_blocks(func, chunks=(x.chunks[0], (1,)), dtype=dt).squeeze()

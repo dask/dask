@@ -79,6 +79,8 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
     assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
+    assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
+    assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
     assert_eq(da_func(darr, axis=1, keepdims=True),
               np_func(narr, axis=1, keepdims=True))
     assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
@@ -104,6 +106,14 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
         assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
         assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
                   np_func(narr, axis=1, keepdims=True))
+
+
+def test_reduction_errors():
+    x = da.ones((5, 5), chunks=(3, 3))
+    with pytest.raises(ValueError):
+        x.sum(axis=2)
+    with pytest.raises(ValueError):
+        x.sum(axis=-3)
 
 
 @pytest.mark.parametrize('dtype', ['f4', 'i4'])

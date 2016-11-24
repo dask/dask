@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from toolz import partition
 
+from .utils import PANDAS_VERSION
+
 
 # ---------------------------------
 # indexing
@@ -30,34 +32,36 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def _loc_repartition(df, start, stop, include_right_boundary=True):
-    """
-    .loc for repartition, can switch include/exclude right boundary.
-    No need to handle column slicing
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
+                   kind='loc'):
+    """Index slice start/stop. Can switch include/exclude boundaries.
 
     >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
-    >>> _loc_repartition(df, 2, None)
+    >>> boundary_slice(df, 2, None)
         x
     2  20
     2  30
     3  40
     4  50
-    >>> _loc_repartition(df, 1, 3)
+    >>> boundary_slice(df, 1, 3)
         x
     1  10
     2  20
     2  30
     3  40
-    >>> _loc_repartition(df, 1, 3, include_right_boundary=False)
+    >>> boundary_slice(df, 1, 3, right_boundary=False)
         x
     1  10
     2  20
     2  30
     """
-    result = df.loc[start:stop]
-    if not include_right_boundary:
-        right_index = result.index.get_slice_bound(stop, 'left', 'loc')
+    result = getattr(df, kind)[start:stop]
+    if not right_boundary:
+        right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
+    if not left_boundary:
+        left_index = result.index.get_slice_bound(start, 'right', kind)
+        result = result.iloc[left_index:]
     return result
 
 
@@ -70,7 +74,7 @@ def mean_aggregate(s, n):
     try:
         return s / n
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def var_aggregate(x2, x, n, ddof):
@@ -80,7 +84,7 @@ def var_aggregate(x2, x, n, ddof):
             result = result * n / (n - ddof)
         return result
     except ZeroDivisionError:
-        return np.nan
+        return np.float64(np.nan)
 
 
 def describe_aggregate(values):
@@ -139,6 +143,12 @@ def sample(df, state, frac, replace):
     return df.sample(random_state=rs, frac=frac, replace=replace)
 
 
+def drop_columns(df, columns, dtype):
+    df = df.drop(columns, axis=1)
+    df.columns = df.columns.astype(dtype)
+    return df
+
+
 # ---------------------------------
 # reshape
 # ---------------------------------
@@ -158,3 +168,62 @@ def pivot_count(df, index, columns, values):
     # make dtype deterministic, always coerce to np.float64
     return pd.pivot_table(df, index=index, columns=columns,
                           values=values, aggfunc='count').astype(np.float64)
+
+
+# ---------------------------------
+# concat
+# ---------------------------------
+
+def concat(dfs, axis=0, join='outer'):
+    """ Concatenate caring empty Series """
+
+    # can be removed after pandas 0.18.1 or later
+    # see https://github.com/pandas-dev/pandas/pull/12846
+    if PANDAS_VERSION >= '0.18.1':
+        return pd.concat(dfs, axis=axis, join=join)
+
+    # Concat with empty Series with axis=1 will not affect to the
+    # result. Special handling is needed in each partition
+    if axis == 1:
+        # becahse dfs is a generator, once convert to list
+        dfs = list(dfs)
+
+        if join == 'outer':
+            # outer concat should keep all empty Series
+
+            # input must include one non-empty data at least
+            # because of the alignment
+            first = [df for df in dfs if len(df) > 0][0]
+
+            def _pad(base, fillby):
+                if isinstance(base, pd.Series) and len(base) == 0:
+                    # use aligned index to keep index for outer concat
+                    return pd.Series([np.nan] * len(fillby),
+                                     index=fillby.index, name=base.name)
+                else:
+                    return base
+
+            dfs = [_pad(df, first) for df in dfs]
+        else:
+            # inner concat should result in empty if any input is empty
+            if any(len(df) == 0 for df in dfs):
+                dfs = [pd.DataFrame(columns=df.columns)
+                       if isinstance(df, pd.DataFrame) else
+                       pd.Series(name=df.name) for df in dfs]
+
+    return pd.concat(dfs, axis=axis, join=join)
+
+
+def merge(left, right, how, left_on, right_on,
+          left_index, right_index, indicator, suffixes,
+          default_left, default_right):
+
+    if not len(left):
+        left = default_left
+
+    if not len(right):
+        right = default_right
+
+    return pd.merge(left, right, how=how, left_on=left_on, right_on=right_on,
+                    left_index=left_index, right_index=right_index,
+                    suffixes=suffixes, indicator=indicator)

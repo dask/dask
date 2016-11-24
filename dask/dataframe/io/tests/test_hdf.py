@@ -12,7 +12,6 @@ from time import sleep
 import dask.dataframe as dd
 
 from dask.utils import tmpfile, tmpdir, dependency_depth
-from dask.async import get_sync
 
 from dask.dataframe.utils import assert_eq
 
@@ -314,83 +313,33 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, '/data_*_*')
 
 
-def test_to_hdf_sync():
+@pytest.mark.parametrize('get', [dask.async.get_sync,
+                                 dask.threaded.get,
+                                 dask.multiprocessing.get])
+@pytest.mark.parametrize('npartitions', [1, 4, 10])
+def test_to_hdf_schedulers(get, npartitions):
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
                       index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
-    a = dd.from_pandas(df, 16)
+    a = dd.from_pandas(df, npartitions=npartitions)
 
     # test single file single node
     with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data', get=get_sync)
+        a.to_hdf(fn, '/data', get=get)
         out = pd.read_hdf(fn, '/data')
         assert_eq(df, out)
 
     # test multiple files single node
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data', get=get_sync)
+        a.to_hdf(fn, '/data', get=get)
         out = dd.read_hdf(fn, '/data')
         assert_eq(df, out)
 
     # test single file multiple nodes
     with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data*', get=get_sync)
-        out = dd.read_hdf(fn, '/data*')
-        assert_eq(df, out)
-
-
-def test_to_hdf_thread():
-    pytest.importorskip('tables')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
-    a = dd.from_pandas(df, 16)
-
-    # test single file single node
-    with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data', get=dask.threaded.get)
-        out = pd.read_hdf(fn, '/data')
-        assert_eq(df, out)
-
-    # test multiple files single node
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data', get=dask.threaded.get)
-        out = dd.read_hdf(fn, '/data')
-        assert_eq(df, out)
-
-    # test single file multiple nodes
-    with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data*', get=dask.threaded.get)
-        out = dd.read_hdf(fn, '/data*')
-        assert_eq(df, out)
-
-
-def test_to_hdf_process():
-    pytest.importorskip('tables')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
-                       'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
-                      index=[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.])
-    a = dd.from_pandas(df, 16)
-
-    # test single file single node
-    with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
-        out = pd.read_hdf(fn, '/data')
-        assert_eq(df, out)
-
-    # test multiple files single node
-    with tmpdir() as dn:
-        fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data', get=dask.multiprocessing.get)
-        out = dd.read_hdf(fn, '/data')
-        assert_eq(df, out)
-
-    # test single file multiple nodes
-    with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data*', get=dask.multiprocessing.get)
+        a.to_hdf(fn, '/data*', get=get)
         out = dd.read_hdf(fn, '/data*')
         assert_eq(df, out)
 

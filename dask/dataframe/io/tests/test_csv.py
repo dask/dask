@@ -486,7 +486,7 @@ def test_read_csv_raises_on_no_files():
     try:
         dd.read_csv(fn)
         assert False
-    except IOError as e:
+    except (OSError, IOError) as e:
         assert fn in str(e)
 
 
