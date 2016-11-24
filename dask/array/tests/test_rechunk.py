@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
-from dask.array.rechunk import plan_rechunk
+from dask.array.rechunk import plan_rechunk, divide_to_width
 import dask.array as da
 
 
@@ -191,41 +191,118 @@ def test_rechunk_intermediates():
     assert len(y.dask) > 30
 
 
+def test_divide_to_width():
+    chunks = divide_to_width((8, 9, 10), 10)
+    assert chunks == (8, 9, 10)
+    chunks = divide_to_width((8, 2, 9, 10, 11, 12), 4)
+    # Note how 9 gives (3, 3, 3), not (4, 4, 1) or whatever
+    assert chunks == (4, 4,
+                      2,
+                      3, 3, 3,
+                      3, 3, 4,
+                      3, 4, 4,
+                      4, 4, 4,
+                      )
+
+
 def _plan(old_chunks, new_chunks, itemsize=1, block_size_limit=1e7):
     return plan_rechunk(old_chunks, new_chunks,
                         itemsize=itemsize,
                         block_size_limit=block_size_limit)
 
+def _assert_steps(steps, expected):
+    assert len(steps) == len(expected)
+    assert steps == expected
+
+
 def test_plan_rechunk():
-    c = coarse = ((100,) * 1)
-    f = fine = ((1,) * 100)
+    c = coarse = ((20,) * 2)
+    f = fine = ((2,) * 20)
+
+    # Trivial cases
+    steps = _plan((), ())
+    _assert_steps(steps, [()])
+    steps = _plan((c, ()), (f, ()))
+    _assert_steps(steps, [(f, ())])
 
     # No intermediate required
+    steps = _plan((c,), (f,))
+    _assert_steps(steps, [(f,)])
+    steps = _plan((f,), (c,))
+    _assert_steps(steps, [(c,)])
     steps = _plan((c, c), (f, f))
-    assert steps == [(f, f)]
+    _assert_steps(steps, [(f, f)])
     steps = _plan((f, f), (c, c))
-    assert steps == [(c, c)]
+    _assert_steps(steps, [(c, c)])
     steps = _plan((f, c), (c, c))
-    assert steps == [(c, c)]
+    _assert_steps(steps, [(c, c)])
 
     # An intermediate is used to reduce graph size
     steps = _plan((f, c), (c, f))
-    assert steps == [(c, c), (c, f)]
+    _assert_steps(steps, [(c, c), (c, f)])
 
-    # Hitting the memory limit => no intermediate
-    steps = _plan((f, c), (c, f), block_size_limit=1e3)
-    assert steps == [(c, f)]
-    steps = _plan((f, c), (c, f), itemsize=10000)
-    assert steps == [(c, f)]
+    steps = _plan((c + c, c + f), (f + f, c + c))
+    _assert_steps(steps, [(c + c, c + c), (f + f, c + c)])
 
+    # Just at the memory limit => an intermediate is used
+    steps = _plan((f, c), (c, f), block_size_limit=400)
+    _assert_steps(steps, [(c, c), (c, f)])
+
+    # Hitting the memory limit => the intermediate is a partial merge
+    m = mid = ((10,) * 4)
+
+    steps = _plan((f, c), (c, f), block_size_limit=399)
+    _assert_steps(steps, [(m, c), (c, f)])
+    steps = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
+    _assert_steps(steps, [(m, c), (c, f)])
+
+    # Memory limit too low => no intermediate
+    steps = _plan((f, c), (c, f), block_size_limit=40)
+    _assert_steps(steps, [(c, f)])
+
+
+def test_plan_rechunk_5d():
     # 5d problem
     c = coarse = ((10,) * 1)
     f = fine = ((1,) * 10)
 
     steps = _plan((c, c, c, c, c), (f, f, f, f, f))
-    assert steps == [(f, f, f, f, f)]
+    _assert_steps(steps, [(f, f, f, f, f)])
     steps = _plan((f, f, f, f, c), (c, c, c, f, f))
-    assert steps == [(c, c, c, f, c), (c, c, c, f, f)]
+    _assert_steps(steps, [(c, c, c, f, c), (c, c, c, f, f)])
     # Only 1 dim can be merged at first
     steps = _plan((c, c, f, f, c), (c, c, c, f, f), block_size_limit=2e4)
-    assert steps == [(c, c, c, f, c), (c, c, c, f, f)]
+    _assert_steps(steps, [(c, c, c, f, c), (c, c, c, f, f)])
+
+
+def test_plan_rechunk_heterogenous():
+    c = coarse = ((10,) * 1)
+    f = fine = ((1,) * 10)
+    cf = c + f
+    cc = c + c
+    ff = f + f
+    fc = f + c
+
+    # No intermediate required
+    steps = _plan((cc, cf), (ff, ff))
+    _assert_steps(steps, [(ff, ff)])
+    steps = _plan((cf, fc), (ff, cf))
+    _assert_steps(steps, [(ff, cf)])
+
+    # An intermediate is used to reduce graph size
+    steps = _plan((cc, cf), (ff, cc))
+    _assert_steps(steps, [(cc, cc), (ff, cc)])
+
+    steps = _plan((cc, cf, cc), (ff, cc, cf))
+    _assert_steps(steps, [(cc, cc, cc), (ff, cc, cf)])
+
+    # Imposing a memory limit => the best intermediate is chosen:
+    #  * cc -> ff would increase the graph size: no
+    #  * ff -> cf would increase the block size too much: no
+    #  * cf -> cc fits the bill (graph size /= 10, block size neutral)
+    #  * cf -> fc also fits the bill (graph size and block size neutral)
+    steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
+    _assert_steps(steps, [(cc, ff, cc), (ff, cf, cc)])
+
+    steps = _plan((cc, ff, cf, cf), (ff, cf, cc, fc), block_size_limit=1000)
+    _assert_steps(steps, [(cc, ff, cc, fc), (ff, cf, cc, fc)])
