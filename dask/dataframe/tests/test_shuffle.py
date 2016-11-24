@@ -1,5 +1,4 @@
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 import pickle
 import numpy as np
