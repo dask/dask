@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import dask
-from dask.utils import tmpdir
+from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
@@ -111,3 +111,12 @@ def test_optimize(fn, c):
     dsk = x._optimize(x.dask, x._keys())
     assert len(dsk) == x.npartitions
     assert all(v[4] == c for v in dsk.values())
+
+
+def test_roundtrip_from_pandas():
+    with tmpfile() as fn:
+        df = pd.DataFrame({'x': [1, 2, 3]})
+        fastparquet.write(fn, df)
+        ddf = dd.io.parquet.read_parquet(fn)
+        import pdb; pdb.set_trace()
+        assert_eq(df, ddf)
