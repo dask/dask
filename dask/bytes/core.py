@@ -116,7 +116,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), or globstring pointing to data.
     delimiter: bytes
-        An optional delimiter, like ``b'\n'`` on which to split blocks of bytes
+        An optional delimiter, like ``b'\\n'`` on which to split blocks of
+        bytes.
     not_zero: force seek of start-of-file delimiter, discarding header
     blocksize: int (=128MB)
         Chunk size
