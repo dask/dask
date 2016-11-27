@@ -124,17 +124,17 @@ def test_read_bytes(c, s, a, b):
         assert sample[:5] == b'aaaaa'
         assert len(values[0]) == len(blocks)
 
-        while not s.restrictions:
+        while not s.host_restrictions:
             yield gen.sleep(0.01)
         assert not s.tasks
 
-        assert {v.key for v in values[0]} == set(s.restrictions)
+        assert {v.key for v in values[0]} == set(s.host_restrictions)
         assert {v.key for v in values[0]} == set(s.loose_restrictions)
 
         futures = c.compute(values[0])
         results = yield c._gather(futures)
         assert b''.join(results) == data
-        assert s.restrictions
+        assert s.host_restrictions
 
 
 @pytest.mark.parametrize('nworkers', [1, 3])
@@ -192,7 +192,7 @@ def test_lazy_values(e, s, a, b):
         assert all(isinstance(v, list) for v in values)
         assert all(isinstance(v, Delayed) for vv in values for v in vv)
 
-        while not s.restrictions:
+        while not s.host_restrictions:
             yield gen.sleep(0.01)
         assert not s.tasks
 

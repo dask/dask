@@ -565,10 +565,10 @@ def test_restrictions_submit(c, s, a, b):
     y = c.submit(inc, x, workers={b.ip})
     yield _wait([x, y])
 
-    assert s.restrictions[x.key] == {a.ip}
+    assert s.host_restrictions[x.key] == {a.ip}
     assert x.key in a.data
 
-    assert s.restrictions[y.key] == {b.ip}
+    assert s.host_restrictions[y.key] == {b.ip}
     assert y.key in b.data
 
 
@@ -578,10 +578,10 @@ def test_restrictions_ip_port(c, s, a, b):
     y = c.submit(inc, x, workers={b.address})
     yield _wait([x, y])
 
-    assert s.restrictions[x.key] == {a.address}
+    assert s.worker_restrictions[x.key] == {a.address}
     assert x.key in a.data
 
-    assert s.restrictions[y.key] == {b.address}
+    assert s.worker_restrictions[y.key] == {b.address}
     assert y.key in b.data
 
 
@@ -595,16 +595,16 @@ def test_restrictions_map(c, s, a, b):
     assert set(a.data) == {x.key for x in L}
     assert not b.data
     for x in L:
-        assert s.restrictions[x.key] == {a.ip}
+        assert s.host_restrictions[x.key] == {a.ip}
 
     L = c.map(inc, [10, 11, 12], workers=[{a.ip},
                                           {a.ip, b.ip},
                                           {b.ip}])
     yield _wait(L)
 
-    assert s.restrictions[L[0].key] == {a.ip}
-    assert s.restrictions[L[1].key] == {a.ip, b.ip}
-    assert s.restrictions[L[2].key] == {b.ip}
+    assert s.host_restrictions[L[0].key] == {a.ip}
+    assert s.host_restrictions[L[1].key] == {a.ip, b.ip}
+    assert s.host_restrictions[L[2].key] == {b.ip}
 
     with pytest.raises(ValueError):
         c.map(inc, [10, 11, 12], workers=[{a.ip}])
@@ -1445,7 +1445,8 @@ def test_forget_simple(c, s, a, b):
     assert x.key in s.tasks
     s.client_releases_keys(keys=[z.key], client=c.id)
     for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
-            s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
+            s.waiting_data, s.who_has, s.worker_restrictions,
+            s.host_restrictions, s.loose_restrictions,
             s.released, s.priority, s.exceptions, s.who_wants,
             s.exceptions_blame, s.nbytes, s.task_state]:
         assert x.key not in coll
@@ -2610,8 +2611,8 @@ def test_client_replicate(c, s, *workers):
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1),
-                                    ('127.0.0.2', 1),
-                                    ('127.0.0.2', 1)], timeout=None)
+                                  ('127.0.0.2', 1),
+                                  ('127.0.0.2', 1)], timeout=None)
 def test_client_replicate_host(e, s, a, b, c):
     x = e.submit(inc, 1, workers='127.0.0.2')
     yield _wait([x])
@@ -3603,10 +3604,10 @@ def test_compute_workers(e, s, a, b, c):
 
     yield _wait(out)
     for v in L1:
-        assert s.restrictions[v.key] == {a.address}
+        assert s.worker_restrictions[v.key] == {a.address}
     for v in L2:
-        assert s.restrictions[v.key] == {c.address}
-    assert s.restrictions[total.key] == {b.address}
+        assert s.worker_restrictions[v.key] == {c.address}
+    assert s.worker_restrictions[total.key] == {b.address}
 
     assert s.loose_restrictions == {total.key} | {v.key for v in L1}
 

@@ -51,3 +51,15 @@ def test_no_reconnect(nanny, loop):
         while isalive(worker):
             sleep(0.1)
             assert time() < start + 10
+
+
+def test_resources(loop):
+    with popen(['dask-scheduler']) as sched:
+        with popen(['dask-worker', '127.0.0.1:8786',
+                    '--resources', 'A=1 B=2,C=3']) as worker:
+            with Client('127.0.0.1:8786', loop=loop) as c:
+                while not c.scheduler_info()['workers']:
+                    sleep(0.1)
+                info = c.scheduler_info()
+                worker = list(info['workers'].values())[0]
+                assert worker['resources'] == {'A': 1, 'B': 2, 'C': 3}

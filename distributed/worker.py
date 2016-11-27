@@ -120,11 +120,13 @@ class Worker(Server):
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
-                 memory_limit='auto', executor=None, **kwargs):
+                 memory_limit='auto', executor=None, resources=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
+        self.total_resources = resources or {}
+        self.available_resources = (resources or {}).copy()
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
 
@@ -254,6 +256,7 @@ class Worker(Server):
                         host_info=self.host_health(),
                         services=self.service_ports,
                         memory_limit=self.memory_limit,
+                        resources=self.total_resources,
                         **self.process_health())
                 break
             except (OSError, StreamClosedError):
@@ -499,7 +502,7 @@ class Worker(Server):
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
                 # self.loop.add_callback(self.compute_many, bstream, msgs)
-                last = self.compute_many(bstream, msgs)
+                last = self.compute_many(msgs, bstream.send)
 
             try:
                 yield last  # TODO: there might be more than one lingering
@@ -510,7 +513,7 @@ class Worker(Server):
             logger.info("Close compute stream")
 
     @gen.coroutine
-    def compute_many(self, bstream, msgs, report=False):
+    def compute_many(self, msgs, send, report=False):
         good, bad, data, num_transferred, diagnostics = yield self.gather_many(msgs)
 
         if bad:
@@ -520,10 +523,11 @@ class Worker(Server):
             msg.pop('who_has', None)
 
         for k, v in bad.items():
-            bstream.send({'status': 'missing-data',
-                          'key': k,
-                          'keys': list(v)})
+            send({'status': 'missing-data',
+                  'key': k,
+                  'keys': list(v)})
 
+        out = []
         if good:
             futures = [self.compute_one(data, report=report, **msg)
                                      for msg in good]
@@ -531,10 +535,13 @@ class Worker(Server):
             result = yield wait_iterator.next()
             if diagnostics:
                 result.update(diagnostics)
-            bstream.send(result)
+            send(result)
+            out.append(result)
             while not wait_iterator.done():
                 msg = yield wait_iterator.next()
-                bstream.send(msg)
+                send(msg)
+                out.append(msg)
+        raise gen.Return(out)
 
     @gen.coroutine
     def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
@@ -591,57 +598,9 @@ class Worker(Server):
         raise Return(result)
 
     @gen.coroutine
-    def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
-            task=None, who_has=None, report=True):
-        """ Execute function """
-        self.active.add(key)
-
-        # Ready function for computation
-        msg = yield self._ready_task(function=function, key=key, args=args,
-            kwargs=kwargs, task=task, who_has=who_has)
-        if msg['status'] != 'OK':
-            try:
-                self.active.remove(key)
-            except KeyError:
-                pass
-            raise Return(msg)
-        else:
-            function = msg['function']
-            args = msg['args']
-            kwargs = msg['kwargs']
-
-        # Log and compute in separate thread
-        result = yield self.executor_submit(key, apply_function, function,
-                                            args, kwargs, self.execution_state,
-                                            key)
-
-        result['key'] = key
-        result.update(msg['diagnostics'])
-
-        if result['status'] == 'OK':
-            self.data[key] = result.pop('result')
-            if report:
-                response = yield self.scheduler.add_keys(address=(self.ip, self.port),
-                                                         keys=[key])
-                if not response == 'OK':
-                    logger.warn('Could not report results to scheduler: %s',
-                                str(response))
-        else:
-            logger.warn(" Compute Failed\n"
-                "Function: %s\n"
-                "args:     %s\n"
-                "kwargs:   %s\n",
-                str(funcname(function))[:1000],
-                convert_args_to_str(args, max_len=1000),
-                convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
-
-        logger.debug("Send compute response to scheduler: %s, %s", key,
-            get_msg_safe_str(msg))
-        try:
-            self.active.remove(key)
-        except KeyError:
-            pass
-        raise Return(result)
+    def compute(self, stream=None, report=True, **msg):
+        out = yield self.compute_many([msg], lambda msg: None)
+        raise gen.Return(out[0])
 
     def run(self, stream, function=None, args=(), kwargs={}):
         return run(self, stream, function=function, args=args, kwargs=kwargs)

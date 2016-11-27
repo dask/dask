@@ -17,6 +17,7 @@ from distributed.utils import get_ip, All
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.cli.utils import check_python_3
+from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado import gen
 
@@ -66,8 +67,11 @@ def handle_signal(sig, frame):
               help="File to write the process PID")
 @click.option('--temp-filename', default=None,
               help="Internal use only")
+@click.option('--resources', type=str, default='',
+              help='Resources for task constraints like "GPU=2 MEM=10e9"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        nanny, name, memory_limit, pid_file, temp_filename, reconnect):
+        nanny, name, memory_limit, pid_file, temp_filename, reconnect,
+        resources):
     if nanny:
         port = nanny_port
     else:
@@ -102,6 +106,13 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     services = {('http', http_port): HTTPWorker}
 
+    if resources:
+        resources = resources.replace(',', ' ').split()
+        resources = dict(pair.split('=') for pair in resources)
+        resources = valmap(float, resources)
+    else:
+        resources = None
+
     loop = IOLoop.current()
 
     if nanny:
@@ -120,7 +131,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         # reach the scheduler
         ip = get_ip(scheduler_ip, scheduler_port)
     nannies = [t(scheduler_ip, scheduler_port, ncores=nthreads, ip=ip,
-                 services=services, name=name, loop=loop,
+                 services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect, **kwargs)
                for i in range(nprocs)]
 
