@@ -201,6 +201,9 @@ def set_tcp_timeout(stream):
     """
     Set kernel-level TCP timeout on the stream.
     """
+    if stream.closed():
+        return
+
     timeout = int(config.get('tcp-timeout', 30))
 
     sock = stream.socket
