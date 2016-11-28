@@ -929,3 +929,24 @@ def test_groupy_series_wrong_grouper():
 
     with pytest.raises(ValueError):
         s.groupby([s, df])
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 20])
+@pytest.mark.parametrize('split_every', [2, 5])
+@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
+def test_hash_groupby_aggregate(npartitions, split_every, split_out):
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100)})
+    ddf = dd.from_pandas(df, npartitions)
+
+    result = ddf.groupby('x').y.var(split_every=split_every,
+            split_out=split_out)
+
+    dsk = result._optimize(result.dask, result._keys())
+    from dask.core import get_deps
+    dependencies, dependents = get_deps(dsk)
+
+    assert result.npartitions == (split_out or 1)
+    assert len([k for k, v in dependencies.items() if not v]) == npartitions
+
+    assert_eq(result, df.groupby('x').y.var())

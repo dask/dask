@@ -2740,43 +2740,23 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
+    assert sorted(dropped.compute()) == sorted(s.unique())
 
 
-    assert sorted(dropped.compute()) ==  sorted(s.unique())
-
-
-@pytest.mark.parametrize('npartitions', [1, 4, 20])
-@pytest.mark.parametrize('split_every', [2, 5])
-@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
-def test_hash_groupby_aggregate(npartitions, split_every, split_out):
-    df = pd.DataFrame({'x': np.arange(100) % 10,
-                       'y': np.ones(100)})
-    ddf = dd.from_pandas(df, npartitions)
-
-    result = ddf.groupby('x').y.var(split_every=split_every,
-            split_out=split_out)
-
-    dsk = result._optimize(result.dask, result._keys())
-    from dask.core import get_deps
-    dependencies, dependents = get_deps(dsk)
-
-    assert result.npartitions == (split_out or 1)
-    assert len([k for k, v in dependencies.items() if not v]) == npartitions
-
-    assert_eq(result, df.groupby('x').y.var())
-
-
-def test_hash_split_drop_duplicates():
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_split_out_drop_duplicates(split_every):
     df = pd.DataFrame({'x': [1, 2, 3] * 100})
     ddf = dd.from_pandas(df, npartitions=5)
 
-    assert ddf.drop_duplicates(split_out=10).npartitions == 10
-    assert_eq(ddf.drop_duplicates(split_out=10), df.drop_duplicates())
+    assert ddf.drop_duplicates(split_out=10, split_every=split_every).npartitions == 10
+    assert_eq(ddf.drop_duplicates(split_out=10, split_every=split_every),
+              df.drop_duplicates())
 
 
-def test_hash_split_value_counts():
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_split_out_value_counts(split_every):
     df = pd.DataFrame({'x': [1, 2, 3] * 100})
     ddf = dd.from_pandas(df, npartitions=5)
 
-    assert ddf.x.value_counts(split_out=10).npartitions == 10
-    assert_eq(ddf.x.value_counts(split_out=10), df.x.value_counts())
+    assert ddf.x.value_counts(split_out=10, split_every=split_every).npartitions == 10
+    assert_eq(ddf.x.value_counts(split_out=10, split_every=split_every), df.x.value_counts())

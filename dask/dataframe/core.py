@@ -2930,15 +2930,16 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
                          chunk_kwargs, aggregate_kwargs, combine_kwargs,
-                         split_every, split_out)
+                         split_every, split_out, split_index)
 
     # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
         dsk = {(a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0]._keys())}
     else:
-        dsk = {(a, 0, i, 0): (apply, chunk, [(x._name, i) if isinstance(x, _Frame)
-                                       else x for x in args], chunk_kwargs)
+        dsk = {(a, 0, i, 0): (apply, chunk,
+                               [(x._name, i) if isinstance(x, _Frame)
+                                else x for x in args], chunk_kwargs)
                for i in range(args[0].npartitions)}
 
     # Split
@@ -2954,13 +2955,12 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         split_out = 1
 
     # Combine
-    prefix = '{0}-combine-{1}'.format(token or funcname(combine), token_key)
+    b = '{0}-combine-{1}'.format(token or funcname(combine), token_key)
     k = npartitions
-    b = prefix
     depth = 0
     while k > split_every:
-        for j in range(split_out):
-            for part_i, inds in enumerate(partition_all(split_every, range(k))):
+        for part_i, inds in enumerate(partition_all(split_every, range(k))):
+            for j in range(split_out):
                 conc = (_concat, [(a, depth, i, j) for i in inds])
                 if combine_kwargs:
                     dsk[(b, depth + 1, part_i, j)] = (apply, combine, [conc], combine_kwargs)
