@@ -1599,6 +1599,16 @@ def test_fillna():
               ddf.fillna(method='pad', limit=3))
 
 
+def test_ffill_bfill():
+    df = tm.makeMissingDataframe(0.8, 42)
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.bfill(axis=1), df.bfill(axis=1))
+
+
 def test_sample():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])

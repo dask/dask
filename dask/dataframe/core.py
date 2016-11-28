@@ -841,6 +841,14 @@ class _Frame(Base):
         return parts.map_overlap(M.fillna, before, after, method=method,
                                  limit=limit, meta=meta)
 
+    @derived_from(pd.DataFrame)
+    def ffill(self, axis=None, limit=None):
+        return self.fillna(method='ffill', limit=limit, axis=axis)
+
+    @derived_from(pd.DataFrame)
+    def bfill(self, axis=None, limit=None):
+        return self.fillna(method='bfill', limit=limit, axis=axis)
+
     def sample(self, frac, replace=False, random_state=None):
         """ Random sample of items
 
