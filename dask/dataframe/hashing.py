@@ -21,7 +21,6 @@ except ImportError:
             raise TypeError("Unexpected type %s" % type(obj))
         return h
 
-
     def hash_array(vals):
         """Given a 1d array, return an array of deterministic integers."""
         # work with cagegoricals as ints. (This check is above the complex
@@ -42,9 +41,9 @@ except ImportError:
         if vals.dtype == np.bool:
             vals = vals.astype('u8')
 
-        if (np.issubdtype(vals.dtype, np.datetime64) or
-           np.issubdtype(vals.dtype, np.timedelta64) or
-           np.issubdtype(vals.dtype, np.number)) and vals.dtype.itemsize <= 8:
+        elif (np.issubdtype(vals.dtype, np.datetime64) or
+              np.issubdtype(vals.dtype, np.timedelta64) or
+              np.issubdtype(vals.dtype, np.number)) and vals.dtype.itemsize <= 8:
 
             vals = vals.view('u{}'.format(vals.dtype.itemsize)).astype('u8')
         else:
