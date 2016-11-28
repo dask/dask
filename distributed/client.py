@@ -1975,8 +1975,14 @@ class Client(object):
         """
         return sync(self.loop, self.scheduler.identity)
 
-    def get_versions(self):
+    def get_versions(self, check=False):
         """ Return version info for the scheduler, all workers and myself
+
+        Parameters
+        ----------
+        check : boolean, default False
+            raise ValueError if all required & optional packages
+            do not match
 
         Examples
         --------
@@ -1998,7 +2004,36 @@ class Client(object):
                 return None
 
         workers = sync(self.loop, self._run, f)
-        return {'scheduler': scheduler, 'workers': workers, 'client': client}
+        result = {'scheduler': scheduler, 'workers': workers, 'client': client}
+
+        if check:
+            # we care about the required & optional packages matching
+            extract = lambda x: merge(result[x]['packages'].values())
+            client_versions = extract('client')
+            scheduler_versions = extract('scheduler')
+
+            for pkg, cv in client_versions.items():
+                sv = scheduler_versions[pkg]
+                if sv != cv:
+                    raise ValueError("package [{package}] is version [{client}] "
+                                     "on client and [{scheduler}] on scheduler!".format(
+                                         package=pkg,
+                                         client=cv,
+                                         scheduler=sv))
+
+            for w, d in workers.items():
+                worker_versions = merge(d['packages'].values())
+                for pkg, cv in client_versions.items():
+                    wv = worker_versions[pkg]
+                    if wv != cv:
+                        raise ValueError("package [{package}] is version [{client}] "
+                                         "on client and [{worker}] on worker [{w}]!".format(
+                                             package=pkg,
+                                             client=cv,
+                                             worker=wv,
+                                             w=w))
+
+        return result
 
     def futures_of(self, futures):
         return futures_of(futures, client=self)

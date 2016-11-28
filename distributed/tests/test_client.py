@@ -3281,6 +3281,10 @@ def test_get_versions(loop):
             for k, v in v['workers'].items():
                 assert v is not None
 
+            c.get_versions(check=True)
+            # smoke test for versions
+            # that this does not raise
+
 
 def test_threaded_get_within_distributed(loop):
     with cluster() as (s, [a, b]):

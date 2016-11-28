@@ -1,3 +1,9 @@
+1.14.x -
+----------------------------
+
+*  Add ``check`` (default is ``False``) option to ``Client.get_versions``
+   to raise if the versions don't match on client, scheduler & workers #664
+
 1.14.3 - November 13th, 2016
 ----------------------------
 
