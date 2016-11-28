@@ -321,7 +321,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    return hash_pandas_object(df) % int(npartitions)
+    return hash_pandas_object(df, index=False) % int(npartitions)
 
 
 def barrier(args):

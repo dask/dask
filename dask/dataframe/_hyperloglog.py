@@ -35,7 +35,7 @@ def compute_hll_array(obj, b):
     m = 1 << b
 
     # Get an array of the hashes
-    hashes = hash_pandas_object(obj).astype(np.uint32)
+    hashes = hash_pandas_object(obj, index=False).astype(np.uint32)
 
     # Of the first b bits, which is the first nonzero?
     j = hashes >> num_bits_discarded
