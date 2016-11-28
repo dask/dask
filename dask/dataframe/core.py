@@ -807,9 +807,39 @@ class _Frame(Base):
             raise ValueError(
                 "Provide either divisions= or npartitions= to repartition")
 
-    @derived_from(pd.Series)
-    def fillna(self, value):
-        return self.map_partitions(M.fillna, value=value)
+    @derived_from(pd.DataFrame)
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        axis = self._validate_axis(axis)
+        if method is None and limit is not None:
+            raise NotImplementedError("fillna with set limit and method=None")
+        meta = self._meta_nonempty.fillna(value=value, method=method,
+                                          limit=limit, axis=axis)
+
+        if axis == 1 or method is None:
+            return self.map_partitions(M.fillna, value=value, method=method,
+                                       limit=limit, axis=axis, meta=meta)
+
+        if method in ('pad', 'ffill'):
+            method = 'ffill'
+            skip_check = 0
+            before, after = 1 if limit is None else limit, 0
+        else:
+            method = 'bfill'
+            skip_check = self.npartitions - 1
+            before, after = 0, 1 if limit is None else limit
+
+        if limit is None:
+            name = 'fillna-chunk-' + tokenize(self, method)
+            dsk = {(name, i): (methods.fillna_check, (self._name, i),
+                               method, i != skip_check)
+                   for i in range(self.npartitions)}
+            parts = new_dd_object(merge(dsk, self.dask), name, meta,
+                                  self.divisions)
+        else:
+            parts = self
+
+        return parts.map_overlap(M.fillna, before, after, method=method,
+                                 limit=limit, meta=meta)
 
     def sample(self, frac, replace=False, random_state=None):
         """ Random sample of items
