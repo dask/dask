@@ -2,12 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 from itertools import count
 from operator import getitem
+from collections import defaultdict
 
 from .compatibility import zip_longest
 
 from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, ishashable, preorder_traversal)
+from .base import tokenize
 from .rewrite import END
 
 
@@ -611,3 +613,77 @@ def fuse_getitem(dsk, func, place):
     """
     return fuse_selections(dsk, getitem, func,
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
+
+
+def _extract_constants(task, predicate):
+    if istask(task) or type(task) is list:
+        for x in task:
+            for const in _extract_constants(x, predicate):
+                yield const
+    elif predicate(task):
+        yield task
+
+
+def _sub_constants(task, sub_lk):
+    if istask(task):
+        return task[:1] + tuple(_sub_constants(x, sub_lk) for x in task[1:])
+    elif isinstance(task, list):
+        return [_sub_constants(x, sub_lk) for x in task]
+    elif id(task) in sub_lk:
+        return sub_lk[id(task)]
+    return task
+
+
+def dedupe_constants(dsk, predicate):
+    """Extract duplicate constants, based on a predicate.
+
+    Duplicate constants are extracted to their own key, reducing serialization
+    overhead. This is useful for expensive to serialize values, such as large
+    arrays. Note that constant equivalence is determined by reference equality
+    rather than value equality (e.g. ``is`` instead of ``==``).
+
+    Parameters
+    ----------
+    dsk : dict
+        The dask graph
+    predicate : callable
+        Called on values in the dask graph. Should return True if the constant
+        may be extracted, False otherwise.
+
+    Examples
+    --------
+    Here we deduplicate large strings from a graph:
+
+    >>> big_str = 'abcde' * 1000
+    >>> d = {'a': (len, big_str), 'b': (len, big_str), 'c': (add, 'a', 'b')}
+    >>> def is_big_str(x):
+    ...     return isinstance(x, str) and len(x) > 1000
+    >>> dsk = dedupe_constants(d, is_big_str)
+    >>> dsk    # doctest: +SKIP
+    {'a': (len, 'const-ee82b7de828a74a003c1228ff7e186cf'),
+     'b': (len, 'const-ee82b7de828a74a003c1228ff7e186cf'),
+     'c': (add, 'a', 'b'),
+     'const-ee82b7de828a74a003c1228ff7e186cf': 'abcdeabcdeab...'}
+    """
+    constants = {}
+    key_lk = defaultdict(set)
+    for k, v in dsk.items():
+        for const in _extract_constants(v, predicate):
+            const_id = id(const)
+            constants[const_id] = const
+            key_lk[const_id].add(k)
+    key_lk = {c_id: k for c_id, k in key_lk.items() if len(k) > 1}
+    keys = set()
+    keys.update(*key_lk.values())
+    dsk2 = {}
+    sub_lk = {}
+    for const_id in key_lk:
+        constant = constants[const_id]
+        token = 'const-' + tokenize(constant)
+        dsk2[token] = constant
+        sub_lk[const_id] = token
+
+    for k, v in dsk.items():
+        dsk2[k] = _sub_constants(v, sub_lk) if k in keys else v
+
+    return dsk2

@@ -7,7 +7,7 @@ import pytest
 from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
                            dealias, equivalent, sync_keys, merge_sync,
-                           fuse_getitem, fuse_selections)
+                           fuse_getitem, fuse_selections, dedupe_constants)
 
 
 def double(x):
@@ -282,6 +282,9 @@ class Uncomparable(object):
     def __eq__(self, other):
         raise TypeError("Uncomparable type")
 
+    def __hash__(self):
+        raise TypeError("Unhashable type")
+
 
 def test_equivalence_uncomparable():
     t1 = Uncomparable()
@@ -390,3 +393,28 @@ def test_inline_cull_dependencies():
 
     d2, dependencies = cull(d, ['d', 'e'])
     inline(d2, {'b'}, dependencies=dependencies)
+
+
+def test_dedupe_constants():
+    x = Uncomparable()
+    y = Uncomparable()
+    z = Uncomparable()
+    d = {'a': x,
+         'b': y,
+         'c': (add, 'a', x),
+         'd': (add, 'b', y),
+         'e': (add, 'a', z),
+         'f': (sum, ['a', 'b', 'c', (add, 'd', z), 4])}
+    res = dedupe_constants(d, lambda x: isinstance(x, Uncomparable))
+    tx = [k for k in res if res[k] is x][0]
+    ty = [k for k in res if res[k] is y][0]
+    tz = [k for k in res if res[k] is z][0]
+    sol = {tx: x, ty: y, tz: z,
+           'a': tx,
+           'b': ty,
+           'c': (add, 'a', tx),
+           'd': (add, 'b', ty),
+           'e': (add, 'a', tz),
+           'f': (sum, ['a', 'b', 'c', (add, 'd', tz), 4])}
+    assert set(sol.keys()) == set(res.keys())
+    assert all(equivalent(sol[k], res[k]) for k in sol)
