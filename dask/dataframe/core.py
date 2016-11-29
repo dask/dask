@@ -1624,10 +1624,10 @@ class _Frame(Base):
         -------
         a float representing the approximate number of elements
         """
-        from . import _hyperloglog # here to avoid circular import issues
+        from . import hyperloglog # here to avoid circular import issues
 
-        return aca([self], chunk=_hyperloglog.compute_hll_array,
-                   aggregate=_hyperloglog.estimate_count, split_every=False,
+        return aca([self], chunk=hyperloglog.compute_hll_array,
+                   aggregate=hyperloglog.estimate_count, split_every=False,
                    b=b, meta=float)
 
 
