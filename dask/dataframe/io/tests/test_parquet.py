@@ -124,4 +124,5 @@ def test_categorical():
 
         assert ddf2.x.cat.categories.tolist() == ['a', 'b', 'c']
         out = ddf2.loc[:1000].compute()
-        assert all(out.x == df.x)
+        df.index.name = 'index'  # defaults to 'index' in this case
+        assert assert_eq(df, ddf2)
