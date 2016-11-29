@@ -289,13 +289,13 @@ def test_plan_rechunk():
     steps = _plan((f, c), (c, f), block_size_limit=400)
     _assert_steps(steps, [(c, c), (c, f)])
 
-    # Hitting the memory limit => the intermediate is a partial merge
+    # Hitting the memory limit => intermediate steps added for partial merge
     m = ((10,) * 4)   # mid
 
     steps = _plan((f, c), (c, f), block_size_limit=399)
-    _assert_steps(steps, [(m, c), (c, f)])
+    _assert_steps(steps, [(m, c), (m, m), (c, f)])
     steps = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
-    _assert_steps(steps, [(m, c), (c, f)])
+    _assert_steps(steps, [(m, c), (m, m), (c, f)])
 
     # Memory limit too low => no intermediate
     steps = _plan((f, c), (c, f), block_size_limit=40)
@@ -337,13 +337,13 @@ def test_plan_rechunk_heterogenous():
     steps = _plan((cc, cf, cc), (ff, cc, cf))
     _assert_steps(steps, [(cc, cc, cc), (ff, cc, cf)])
 
-    # Imposing a memory limit => the best intermediate is chosen:
+    # Imposing a memory limit => the first intermediate is constrained:
     #  * cc -> ff would increase the graph size: no
     #  * ff -> cf would increase the block size too much: no
     #  * cf -> cc fits the bill (graph size /= 10, block size neutral)
     #  * cf -> fc also fits the bill (graph size and block size neutral)
-    steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
-    _assert_steps(steps, [(cc, ff, cc), (ff, cf, cc)])
+    m = ((5,) * 2)   # mid
+    mm = m + m
 
-    steps = _plan((cc, ff, cf, cf), (ff, cf, cc, fc), block_size_limit=1000)
-    _assert_steps(steps, [(cc, ff, cc, fc), (ff, cf, cc, fc)])
+    steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
+    _assert_steps(steps, [(cc, ff, cc), (mm, ff, cc), (ff, cf, cc)])

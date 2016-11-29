@@ -219,6 +219,7 @@ def rechunk(x, chunks):
 def _number_of_blocks(chunks):
     return reduce(mul, map(len, chunks))
 
+
 def _largest_block_size(chunks):
     return reduce(mul, map(max, chunks))
 
@@ -231,15 +232,6 @@ def estimate_graph_size(old_chunks, new_chunks):
     crossed_size = reduce(mul, (len(oc) + len(nc)
                                 for oc, nc in zip(old_chunks, new_chunks)))
     return crossed_size
-
-
-def estimate_rechunk_cost(old_chunks, new_chunks):
-    """ Estimate the factor by which graph size grows during a rechunk
-    computation.
-    """
-    oldsize = _number_of_blocks(old_chunks)
-    newsize = _number_of_blocks(new_chunks)
-    return estimate_graph_size(old_chunks, new_chunks) / (oldsize + newsize)
 
 
 def divide_to_width(desired_chunks, max_width):
@@ -396,14 +388,11 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
             continue
         # Merge the new chunks so as to stay within the graph size budget
         max_number = int(len(old_chunks[dim]) * graph_size_limit / graph_size)
-        print("merge_to_number: %d -> (%d) -> %d"
-              % (len(old_chunks[dim]), max_number, len(new_chunks[dim]), ))
         c = merge_to_number(new_chunks[dim], max_number)
         assert len(c) <= max_number
         # Consider the merge successful if its result has a greater length
         # and smaller max width than the old chunks
         if len(c) >= len(old_chunks[dim]) and max(c) <= max(old_chunks[dim]):
-            print("  => split:", old_chunks[dim], c)
             chunks[dim] = c
 
     return tuple(chunks)
@@ -447,7 +436,6 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
 
     while True:
         graph_size = estimate_graph_size(current_chunks, new_chunks)
-        #graph_growth = estimate_rechunk_cost(current_chunks, new_chunks)
         if graph_size < graph_size_threshold:
             break
 
@@ -563,8 +551,8 @@ def format_blocks(blocks):
     >>> format_blocks((10, 10, 5, 6, 2, 2, 2, 7))
     2*[10] | [5, 6] | 3*[2] | [7]
     """
-    assert (isinstance(blocks, tuple)
-            and all(isinstance(x, int) for x in blocks))
+    assert (isinstance(blocks, tuple) and
+            all(isinstance(x, int) for x in blocks))
     return _PrettyBlocks(blocks)
 
 
