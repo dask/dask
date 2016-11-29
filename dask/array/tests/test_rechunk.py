@@ -289,17 +289,11 @@ def test_plan_rechunk():
     steps = _plan((f, c), (c, f), block_size_limit=400)
     _assert_steps(steps, [(c, c), (c, f)])
 
-    # Hitting the memory limit => intermediate steps added for partial merge
+    # Hitting the memory limit => partial merge
     m = ((10,) * 4)   # mid
 
     steps = _plan((f, c), (c, f), block_size_limit=399)
-    assert len(steps) == 3
-    assert steps[0] == (m, c)
-    assert steps[2] == (c, f)
-    # Second intermediate step is a split along the second dimension
-    x, y = steps[1]
-    assert x == m
-    assert len(c) < len(y) <= len(f)
+    _assert_steps(steps, [(m, c), (c, f)])
 
     steps2 = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
     _assert_steps(steps2, steps)
@@ -307,6 +301,20 @@ def test_plan_rechunk():
     # Memory limit too low => no intermediate
     steps = _plan((f, c), (c, f), block_size_limit=40)
     _assert_steps(steps, [(c, f)])
+
+    # Larger problem size => more intermediates
+    c = ((1000,) * 2)   # coarse
+    f = ((2,) * 1000)   # fine
+
+    steps = _plan((f, c), (c, f), block_size_limit=99999)
+    assert len(steps) == 3
+    assert steps[-1] == (c, f)
+    for i in range(len(steps) - 1):
+        prev = steps[i]
+        succ = steps[i + 1]
+        # Merging on the first dim, splitting on the second dim
+        assert len(succ[0]) <= len(prev[0]) / 2.0
+        assert len(succ[1]) >= len(prev[1]) * 2.0
 
 
 def test_plan_rechunk_5d():
@@ -350,11 +358,4 @@ def test_plan_rechunk_heterogenous():
     #  * cf -> cc fits the bill (graph size /= 10, block size neutral)
     #  * cf -> fc also fits the bill (graph size and block size neutral)
     steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
-    assert len(steps) == 3
-    assert steps[0] == (cc, ff, cc)
-    assert steps[2] == (ff, cf, cc)
-    # Second intermediate step is a split along the first dimension
-    x, y, z = steps[1]
-    assert len(cc) < len(x) <= len(ff)
-    assert y == ff
-    assert z == cc
+    _assert_steps(steps, [(cc, ff, cc), (ff, cf, cc)])

@@ -433,13 +433,24 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
                                         _number_of_blocks(new_chunks))
 
     current_chunks = old_chunks
+    first_pass = True
 
     while True:
         graph_size = estimate_graph_size(current_chunks, new_chunks)
         if graph_size < graph_size_threshold:
             break
 
-        chunks, memory_limit_hit = find_merge_rechunk(current_chunks, new_chunks,
+        if first_pass:
+            chunks = current_chunks
+        else:
+            # We hit the block_size_limit in a previous merge pass =>
+            # accept a significant increase in graph size in exchange for
+            # 1) getting nearer the goal 2) reducing the largest block size
+            # to make place for the following merge.
+            # To see this pass in action, make the block_size_limit very small.
+            chunks = find_split_rechunk(current_chunks, new_chunks,
+                                        graph_size * threshold)
+        chunks, memory_limit_hit = find_merge_rechunk(chunks, new_chunks,
                                                       block_size_limit)
         if chunks == current_chunks or chunks == new_chunks:
             break
@@ -447,18 +458,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
         current_chunks = chunks
         if not memory_limit_hit:
             break
-
-        graph_size = estimate_graph_size(current_chunks, new_chunks)
-        # Accept a significant increase in graph size in exchange for
-        # 1) getting nearer the goal 2) reducing the largest block size
-        # to allow for further merges.
-        # To see this pass in action, make the block_size_limit very small.
-        chunks = find_split_rechunk(current_chunks, new_chunks,
-                                    graph_size * threshold)
-        if chunks == current_chunks or chunks == new_chunks:
-            break
-        steps.append(chunks)
-        current_chunks = chunks
+        first_pass = False
 
     return steps + [new_chunks]
 
