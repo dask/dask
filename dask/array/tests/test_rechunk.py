@@ -293,9 +293,16 @@ def test_plan_rechunk():
     m = ((10,) * 4)   # mid
 
     steps = _plan((f, c), (c, f), block_size_limit=399)
-    _assert_steps(steps, [(m, c), (m, m), (c, f)])
-    steps = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
-    _assert_steps(steps, [(m, c), (m, m), (c, f)])
+    assert len(steps) == 3
+    assert steps[0] == (m, c)
+    assert steps[2] == (c, f)
+    # Second intermediate step is a split along the second dimension
+    x, y = steps[1]
+    assert x == m
+    assert len(c) < len(y) <= len(f)
+
+    steps2 = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
+    _assert_steps(steps2, steps)
 
     # Memory limit too low => no intermediate
     steps = _plan((f, c), (c, f), block_size_limit=40)
@@ -342,8 +349,12 @@ def test_plan_rechunk_heterogenous():
     #  * ff -> cf would increase the block size too much: no
     #  * cf -> cc fits the bill (graph size /= 10, block size neutral)
     #  * cf -> fc also fits the bill (graph size and block size neutral)
-    m = ((5,) * 2)   # mid
-    mm = m + m
-
     steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
-    _assert_steps(steps, [(cc, ff, cc), (mm, ff, cc), (ff, cf, cc)])
+    assert len(steps) == 3
+    assert steps[0] == (cc, ff, cc)
+    assert steps[2] == (ff, cf, cc)
+    # Second intermediate step is a split along the first dimension
+    x, y, z = steps[1]
+    assert len(cc) < len(x) <= len(ff)
+    assert y == ff
+    assert z == cc
