@@ -1609,11 +1609,11 @@ class _Frame(Base):
         """Approximate number of unique rows.
 
         This method uses the HyperLogLog algorithm for cardinality
-        estimation to compute the approximate number of rows.
+        estimation to compute the approximate number of unique rows.
 
         Parameters
         ----------
-        b : integer, default 16
+        b : int, default 16
             The number of bits of the hash to use for approximating
             the number of unique elements. Large values of b require more
             time and memory to compute. b should be between 8 and 16 (inclusive)
