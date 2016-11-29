@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*
+# -*- coding: utf-8 -*-
 u"""Implementation of HyperLogLog
 
 This implements the HyperLogLog algorithm for cardinality estimation, found
