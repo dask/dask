@@ -1008,6 +1008,7 @@ def test_queue_gather(loop):
             assert qout == qin
 
 
+@pytest.mark.skip(reason="intermittent blocking failures")
 def test_iterator_gather(loop):
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as ee:
