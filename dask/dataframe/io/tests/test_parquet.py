@@ -123,6 +123,6 @@ def test_categorical():
         ddf2 = read_parquet(tmp, categories=['x'])
 
         assert ddf2.x.cat.categories.tolist() == ['a', 'b', 'c']
-        out = ddf2.loc[:1000].compute()
+        ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
