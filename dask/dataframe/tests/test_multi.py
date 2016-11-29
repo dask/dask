@@ -758,8 +758,9 @@ def test_merge_index_without_divisions(shuffle):
     aa = dd.from_pandas(a, npartitions=3, sort=False)
     bb = dd.from_pandas(b, npartitions=2)
 
-    assert_eq(aa.join(bb, how='inner', shuffle=shuffle),
-              a.join(b, how='inner'))
+    result = aa.join(bb, how='inner', shuffle=shuffle)
+    expected = a.join(b, how='inner')
+    assert_eq(result, expected)
 
 
 def test_half_indexed_dataframe_avoids_shuffle():
