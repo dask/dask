@@ -206,16 +206,21 @@ def test_divide_to_width():
 
 
 def test_merge_to_number():
-    chunks = merge_to_number((10, 10, 10, 10), 5)
+    chunks = merge_to_number((10,) * 4, 5)
     assert chunks == (10, 10, 10, 10)
-    chunks = merge_to_number((10, 10, 10, 10), 4)
+    chunks = merge_to_number((10,) * 4, 4)
     assert chunks == (10, 10, 10, 10)
-    chunks = merge_to_number((10, 10, 10, 10), 3)
+    chunks = merge_to_number((10,) * 4, 3)
     assert chunks == (20, 10, 10)
-    chunks = merge_to_number((10, 10, 10, 10), 2)
+    chunks = merge_to_number((10,) * 4, 2)
     assert chunks == (20, 20)
-    chunks = merge_to_number((10, 10, 10, 10), 1)
+    chunks = merge_to_number((10,) * 4, 1)
     assert chunks == (40,)
+
+    chunks = merge_to_number((10,) * 10, 2)
+    assert chunks == (50,) * 2
+    chunks = merge_to_number((10,) * 10, 3)
+    assert chunks == (40, 30, 30)
 
     chunks = merge_to_number((5, 1, 1, 15, 10), 4)
     assert chunks == (5, 2, 15, 10)

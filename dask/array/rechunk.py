@@ -261,12 +261,30 @@ def merge_to_number(desired_chunks, max_number):
     """ Minimally merge the given chunks so as to drop the number of
     chunks below *max_number*, while minimizing the largest width.
     """
+    if len(desired_chunks) <= max_number:
+        return desired_chunks
+
+    distinct = set(desired_chunks)
+    if len(distinct) == 1:
+        # Fast path for homogeneous target, also ensuring a regular result
+        w = distinct.pop()
+        n = len(desired_chunks)
+        total = n * w
+
+        desired_width = total // max_number
+        width = w * (desired_width // w)
+        adjust = (total - max_number * width) // w
+
+        return (width + w,) * adjust + (width,) * (max_number - adjust)
+
+    desired_width = sum(desired_chunks) // max_number
+    nmerges = len(desired_chunks) - max_number
+
     heap = [(desired_chunks[i] + desired_chunks[i + 1], i, i + 1)
             for i in range(len(desired_chunks) - 1)]
     heapq.heapify(heap)
 
     chunks = list(desired_chunks)
-    nmerges = len(desired_chunks) - max_number
 
     while nmerges > 0:
         # Find smallest interval to merge
@@ -377,7 +395,7 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
             # It's not interesting to split
             continue
         # Merge the new chunks so as to stay within the graph size budget
-        max_number = len(old_chunks[dim]) * graph_size_limit // graph_size
+        max_number = int(len(old_chunks[dim]) * graph_size_limit / graph_size)
         print("merge_to_number: %d -> (%d) -> %d"
               % (len(old_chunks[dim]), max_number, len(new_chunks[dim]), ))
         c = merge_to_number(new_chunks[dim], max_number)
@@ -448,7 +466,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
         # merges despite the memory limit.
         # To see this pass in action, make the block_size_limit very small.
         chunks = find_split_rechunk(current_chunks, new_chunks,
-                                    graph_size * 1.5)
+                                    graph_size * 2.0)
         if chunks == current_chunks or chunks == new_chunks:
             break
         steps.append(chunks)
@@ -492,3 +510,76 @@ def _compute_rechunk(x, chunks):
         x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2, intermediates)
     return Array(x2, temp_name, chunks, dtype=x.dtype)
+
+
+class _PrettyBlocks(object):
+
+    def __init__(self, blocks):
+        self.blocks = blocks
+
+    def __str__(self):
+        runs = []
+        run = []
+        repeats = 0
+        for c in self.blocks:
+            if run and run[-1] == c:
+                if repeats == 0 and len(run) > 1:
+                    runs.append((None, run[:-1]))
+                    run = run[-1:]
+                repeats += 1
+            else:
+                if repeats > 0:
+                    assert len(run) == 1
+                    runs.append((repeats + 1, run[-1]))
+                    run = []
+                    repeats = 0
+                run.append(c)
+        if run:
+            if repeats == 0:
+                runs.append((None, run))
+            else:
+                assert len(run) == 1
+                runs.append((repeats + 1, run[-1]))
+
+        parts = []
+        for repeats, run in runs:
+            if repeats is None:
+                parts.append(str(run))
+            else:
+                parts.append("%d*[%s]" % (repeats, run))
+        return " | ".join(parts)
+
+    __repr__ = __str__
+
+
+def format_blocks(blocks):
+    """
+    Pretty-format *blocks*.
+
+    >>> format_blocks((10, 10, 10))
+    3*[10]
+    >>> format_blocks((2, 3, 4))
+    [2, 3, 4]
+    >>> format_blocks((10, 10, 5, 6, 2, 2, 2, 7))
+    2*[10] | [5, 6] | 3*[2] | [7]
+    """
+    assert (isinstance(blocks, tuple)
+            and all(isinstance(x, int) for x in blocks))
+    return _PrettyBlocks(blocks)
+
+
+def format_chunks(chunks):
+    """
+    >>> format_chunks((10 * (3,), 3 * (10,)))
+    (10*[3], 3*[10])
+    """
+    assert isinstance(chunks, tuple)
+    return tuple(format_blocks(c) for c in chunks)
+
+
+def format_plan(plan):
+    """
+    >>> format_plan([((10, 10, 10), (15, 15)), ((30,), (10, 10, 10))])
+    [(3*[10], 2*[15]), ([30], 3*[10])]
+    """
+    return [format_chunks(c) for c in plan]
