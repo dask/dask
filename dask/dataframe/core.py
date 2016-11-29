@@ -1605,7 +1605,7 @@ class _Frame(Base):
                           date, None, True, False, 'ix')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
-    def nunique_approx(self, b=16, split_every=None):
+    def nunique_approx(self, split_every=None):
         """Approximate number of unique rows.
 
         This method uses the HyperLogLog algorithm for cardinality
@@ -1630,13 +1630,10 @@ class _Frame(Base):
         """
         from . import hyperloglog # here to avoid circular import issues
 
-        if not 8 <= b <= 16:
-            raise ValueError('b must be between 8 and 16')
-
         return aca([self], chunk=hyperloglog.compute_hll_array,
                    combine=hyperloglog.reduce_state,
                    aggregate=hyperloglog.estimate_count,
-                   split_every=split_every, b=b, meta=float)
+                   split_every=split_every, b=16, meta=float)
 
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
