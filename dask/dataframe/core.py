@@ -1610,15 +1610,10 @@ class _Frame(Base):
 
         This method uses the HyperLogLog algorithm for cardinality
         estimation to compute the approximate number of unique rows.
+        The approximate error is 0.406%.
 
         Parameters
         ----------
-        b : int, default 16
-            The number of bits of the hash to use for approximating
-            the number of unique elements. Large values of b require more
-            time and memory to compute. b should be between 8 and 16 (inclusive)
-            for the current implementation. The relative error in the
-            number of elements is approximated by 1.04 / sqrt(2**b)
         split_every : int, optional
             Group partitions into groups of this size while performing a
             tree-reduction. If set to False, no tree-reduction will be used.
