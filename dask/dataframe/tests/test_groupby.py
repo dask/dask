@@ -141,7 +141,8 @@ def test_groupby_dir():
     assert 'b c d e' not in dir(g)
 
 
-def test_groupby_on_index():
+@pytest.mark.parametrize('get', [dask.async.get_sync, dask.threaded.get])
+def test_groupby_on_index(get):
     full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                          'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
@@ -152,16 +153,17 @@ def test_groupby_on_index():
     assert_eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
 
     def func(df):
-        df.loc[:, 'b'] = df.b - df.b.mean()
-        return df
+        return df.assign(b=df.b - df.b.mean())
 
-    assert_eq(d.groupby('a').apply(func).set_index('a'),
-              e.groupby(e.index).apply(func))
-    assert_eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
-    assert_eq(d.groupby('a').apply(func).set_index('a'),
-              full.groupby('a').apply(func).set_index('a'))
-    assert_eq(efull.groupby(efull.index).apply(func),
-              e.groupby(e.index).apply(func))
+    with dask.set_options(get=get):
+        assert_eq(d.groupby('a').apply(func),
+                  full.groupby('a').apply(func))
+
+        assert_eq(d.groupby('a').apply(func).set_index('a'),
+                  full.groupby('a').apply(func).set_index('a'))
+
+        assert_eq(efull.groupby(efull.index).apply(func),
+                  e.groupby(e.index).apply(func))
 
 
 def test_groupby_multilevel_getitem():
