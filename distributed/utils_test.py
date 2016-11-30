@@ -123,6 +123,10 @@ def dec(x):
     return x - 1
 
 
+def mul(x, y):
+    return x * y
+
+
 def div(x, y):
     return x / y
 
@@ -220,7 +224,7 @@ def run_worker(q, scheduler_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         worker = Worker('127.0.0.1', scheduler_port, ip='127.0.0.1',
-                        loop=loop, **kwargs)
+                        loop=loop, validate=True, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -237,7 +241,7 @@ def run_nanny(q, scheduler_port, **kwargs):
         loop = IOLoop(); loop.make_current()
         PeriodicCallback(lambda: None, 500).start()
         worker = Nanny('127.0.0.1', scheduler_port, ip='127.0.0.1',
-                       loop=loop, **kwargs)
+                       loop=loop, validate=True, **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
         try:
@@ -389,7 +393,8 @@ def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
                   worker_kwargs={}):
     s = Scheduler(ip='127.0.0.1', loop=loop, validate=True, **scheduler_kwargs)
     done = s.start(0)
-    workers = [Worker(s.ip, s.port, ncores=ncore[1], ip=ncore[0], name=i, loop=loop,
+    workers = [Worker(s.ip, s.port, ncores=ncore[1], ip=ncore[0], name=i,
+                      loop=loop, validate=True,
                       **(merge(worker_kwargs, ncore[2])
                          if len(ncore) > 2
                          else worker_kwargs))
@@ -455,6 +460,9 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                         if client:
                             loop.run_sync(e._shutdown)
                         loop.run_sync(lambda: end_cluster(s, workers))
+
+                    for w in workers:
+                        assert not w._listen_streams
 
         return test_func
     return _

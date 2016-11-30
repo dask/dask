@@ -40,16 +40,18 @@ def local_client():
     >>> future = e.submit(func, 1)  # submit func(1) on cluster
     """
     address = thread_state.execution_state['scheduler']
+    worker = thread_state.execution_state['worker']
     secede()  # have this thread secede from the thread pool
               # so that it doesn't take up a fixed resource while waiting
+    worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
     with WorkerClient(address) as e:
-        e.worker.loop.add_callback(e.worker.scheduler.change_worker_cores,
-                                   worker=e.worker.address, diff=+1)
+        worker.loop.add_callback(worker.scheduler.change_worker_cores,
+                                 worker=worker.address, diff=+1)
         try:
             yield e
         finally:
-            e.worker.loop.add_callback(e.worker.scheduler.change_worker_cores,
-                                       worker=e.worker.address, diff=-1)
+            worker.loop.add_callback(worker.scheduler.change_worker_cores,
+                                     worker=worker.address, diff=-1)
 
 
 def get_worker():

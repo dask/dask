@@ -8,7 +8,7 @@ from time import sleep, time
 
 from dask import delayed
 import pytest
-from toolz import concat, sliding_window
+from toolz import concat, sliding_window, first
 
 from distributed import Client, wait, Nanny
 from distributed.utils import All
@@ -135,6 +135,7 @@ def test_stress_scatter_death(c, s, *workers):
     try:
         yield gen.with_timeout(timedelta(seconds=10), c._gather(futures))
     except gen.TimeoutError:
+        ws = {w.address: w for w in workers if w.status != 'closed'}
         import pdb; pdb.set_trace()
     except CancelledError:
         pass
@@ -144,6 +145,7 @@ def vsum(*args):
     return sum(args)
 
 
+@pytest.mark.avoid_travis
 @slow
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 80, timeout=1000)
 def test_stress_communication(c, s, *workers):

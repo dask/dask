@@ -24,7 +24,10 @@ def test_server(loop):
 
         stream = yield connect('127.0.0.1', 8887)
 
-        yield write(stream, {'op': 'ping'})
+        n = yield write(stream, {'op': 'ping'})
+        assert isinstance(n, int)
+        assert 4 <= n <= 1000
+
         response = yield read(stream)
         assert response == b'pong'
 

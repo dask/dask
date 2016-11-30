@@ -11,6 +11,7 @@ import sys
 from time import time
 import traceback
 
+from dask import delayed
 import pytest
 from toolz import pluck
 from tornado import gen
@@ -24,7 +25,7 @@ from distributed.protocol.pickle import dumps, loads
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import ignoring
-from distributed.utils_test import (loop, inc, gen_cluster,
+from distributed.utils_test import (loop, inc, mul, gen_cluster,
         slow, slowinc, throws, current_loop, gen_test, readone)
 
 
@@ -44,14 +45,13 @@ def test_str(s, a, b):
     assert a.address in repr(a)
     assert str(a.ncores) in str(a)
     assert str(a.ncores) in repr(a)
-    assert str(len(a.active)) in str(a)
-    assert str(len(a.active)) in repr(a)
+    assert str(len(a.executing)) in repr(a)
 
 
 def test_identity():
     w = Worker('127.0.0.1', 8019)
     ident = w.identity(None)
-    assert ident['type'] == 'Worker'
+    assert 'Worker' in ident['type']
     assert ident['scheduler'] == ('127.0.0.1', 8019)
     assert isinstance(ident['ncores'], int)
     assert isinstance(ident['memory_limit'], int)
@@ -78,11 +78,8 @@ def test_health():
         assert 'network-send' in d
 
 
-@gen_cluster()
-def test_worker_bad_args(c, a, b):
-    aa = rpc(ip=a.ip, port=a.port)
-    bb = rpc(ip=b.ip, port=b.port)
-
+@gen_cluster(client=True)
+def test_worker_bad_args(c, s, a, b):
     class NoReprObj(object):
         """ This object cannot be properly represented as a string. """
         def __str__(self):
@@ -90,16 +87,10 @@ def test_worker_bad_args(c, a, b):
         def __repr__(self):
             raise ValueError("I have no repr representation.")
 
-    response = yield aa.compute(key='x',
-                                function=dumps(NoReprObj),
-                                args=dumps(()),
-                                who_has={})
-    assert not a.active
-    assert response['status'] == 'OK'
-    assert a.data['x']
-    assert isinstance(response['compute_start'], float)
-    assert isinstance(response['compute_stop'], float)
-    assert isinstance(response['thread'], Integral)
+    x = c.submit(NoReprObj, workers=a.address)
+    yield _wait(x)
+    assert not a.executing
+    assert a.data
 
     def bad_func(*args, **kwargs):
         1 / 0
@@ -127,146 +118,32 @@ def test_worker_bad_args(c, a, b):
     old_level = logger.level
     logger.setLevel(logging.DEBUG)
     logger.addHandler(hdlr)
-    response = yield bb.compute(key='y',
-                                function=dumps(bad_func),
-                                args=dumps(['x']),
-                                kwargs=dumps({'k': 'x'}),
-                                who_has={'x': [a.address]})
-    assert not b.active
-    assert response['status'] == 'error'
+    y = c.submit(bad_func, x, k=x, workers=b.address)
+    yield _wait(y)
+
+    assert not b.executing
+    assert y.status == 'error'
     # Make sure job died because of bad func and not because of bad
     # argument.
-    assert isinstance(loads(response['exception']), ZeroDivisionError)
+    with pytest.raises(ZeroDivisionError):
+        yield y._result()
+
     if sys.version_info[0] >= 3:
+        tb = yield y._traceback()
         assert any('1 / 0' in line
-                  for line in pluck(3, traceback.extract_tb(
-                      loads(response['traceback'])))
+                  for line in pluck(3, traceback.extract_tb(tb))
                   if line)
     assert "Compute Failed" in hdlr.messages['warning'][0]
     logger.setLevel(old_level)
 
     # Now we check that both workers are still alive.
 
-    assert not a.active
-    response = yield aa.compute(key='z',
-                                function=dumps(add),
-                                args=dumps([1, 2]),
-                                who_has={},
-                                close=True)
-    assert not a.active
-    assert response['status'] == 'OK'
-    assert a.data['z'] == 3
-    assert isinstance(response['compute_start'], float)
-    assert isinstance(response['compute_stop'], float)
-    assert isinstance(response['thread'], Integral)
+    xx = c.submit(add, 1, 2, workers=a.address)
+    yy = c.submit(add, 3, 4, workers=b.address)
 
-    assert not b.active
-    response = yield bb.compute(key='w',
-                                function=dumps(add),
-                                args=dumps([1, 2]),
-                                who_has={},
-                                close=True)
-    assert not b.active
-    assert response['status'] == 'OK'
-    assert b.data['w'] == 3
-    assert isinstance(response['compute_start'], float)
-    assert isinstance(response['compute_stop'], float)
-    assert isinstance(response['thread'], Integral)
+    results = yield c._gather([xx, yy])
 
-    aa.close_rpc()
-    bb.close_rpc()
-
-
-@gen_cluster()
-def test_worker(c, a, b):
-    aa = rpc(ip=a.ip, port=a.port)
-    bb = rpc(ip=b.ip, port=b.port)
-
-    result = yield aa.identity()
-    assert not a.active
-    response = yield aa.compute(key='x',
-                                function=dumps(add),
-                                args=dumps([1, 2]),
-                                who_has={},
-                                close=True)
-    assert not a.active
-    assert response['status'] == 'OK'
-    assert a.data['x'] == 3
-    assert isinstance(response['compute_start'], float)
-    assert isinstance(response['compute_stop'], float)
-    assert isinstance(response['thread'], Integral)
-
-    response = yield bb.compute(key='y',
-                                function=dumps(add),
-                                args=dumps(['x', 10]),
-                                who_has={'x': [a.address]})
-    assert response['status'] == 'OK'
-    assert b.data['y'] == 13
-    assert response['nbytes'] == sizeof(b.data['y'])
-    assert isinstance(response['transfer_start'], float)
-    assert isinstance(response['transfer_stop'], float)
-
-    def bad_func():
-        1 / 0
-
-    response = yield bb.compute(key='z',
-                                function=dumps(bad_func),
-                                args=dumps(()),
-                                close=True)
-    assert not b.active
-    assert response['status'] == 'error'
-    assert isinstance(loads(response['exception']), ZeroDivisionError)
-    if sys.version_info[0] >= 3:
-        assert any('1 / 0' in line
-                  for line in pluck(3, traceback.extract_tb(
-                      loads(response['traceback'])))
-                  if line)
-
-    aa.close_rpc()
-    yield a._close()
-
-    assert a.address not in c.ncores and b.address in c.ncores
-
-    assert list(c.ncores.keys()) == [b.address]
-
-    assert isinstance(b.address, str)
-    assert b.ip in b.address
-    assert str(b.port) in b.address
-
-    bb.close_rpc()
-
-
-def test_compute_who_has(current_loop):
-    @gen.coroutine
-    def f():
-        s = Scheduler()
-        s.listen(0)
-        x = Worker(s.ip, s.port, ip='127.0.0.1')
-        y = Worker(s.ip, s.port, ip='127.0.0.1')
-        z = Worker(s.ip, s.port, ip='127.0.0.1')
-        x.data['a'] = 1
-        y.data['a'] = 2
-        yield [x._start(), y._start(), z._start()]
-
-        zz = rpc(ip=z.ip, port=z.port)
-        yield zz.compute(function=dumps(inc),
-                         args=dumps(('a',)),
-                         who_has={'a': [x.address]},
-                         key='b')
-        assert z.data['b'] == 2
-
-        if 'a' in z.data:
-            del z.data['a']
-        yield zz.compute(function=dumps(inc),
-                         args=dumps(('a',)),
-                         who_has={'a': [y.address]},
-                         key='c')
-        assert z.data['c'] == 3
-
-        yield [x._close(), y._close(), z._close()]
-        zz.close_rpc()
-
-    current_loop.run_sync(f, timeout=5)
+    assert tuple(results) == (3, 7)
 
 
 @gen_cluster()
@@ -310,8 +187,8 @@ def dont_test_delete_data_with_missing_worker(c, a, b):
     cc.close_rpc()
 
 
-@gen_cluster()
-def test_upload_file(s, a, b):
+@gen_cluster(client=True)
+def test_upload_file(c, s, a, b):
     assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
     assert not os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
     assert a.local_dir != b.local_dir
@@ -328,10 +205,9 @@ def test_upload_file(s, a, b):
         import foobar
         return foobar.x
 
-    yield aa.compute(function=dumps(g),
-                     key='x')
-    result = yield aa.get_data(keys=['x'])
-    assert result == {'x': 123}
+    future = c.submit(g, workers=a.address)
+    result = yield future._result()
+    assert result == 123
 
     yield a._close()
     yield b._close()
@@ -340,8 +216,8 @@ def test_upload_file(s, a, b):
     assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
 
 
-@gen_cluster()
-def test_upload_egg(s, a, b):
+@gen_cluster(client=True)
+def test_upload_egg(c, s, a, b):
     eggname = 'mytestegg-1.0.0-py3.4.egg'
     local_file = __file__.replace('test_worker.py', eggname)
     assert not os.path.exists(os.path.join(a.local_dir, eggname))
@@ -362,9 +238,9 @@ def test_upload_egg(s, a, b):
         import testegg
         return testegg.inc(x)
 
-    yield aa.compute(function=dumps(g), key='x', args=dumps((10,)))
-    result = yield aa.get_data(keys=['x'])
-    assert result == {'x': 10 + 1}
+    future = c.submit(g, 10, workers=a.address)
+    result = yield future._result()
+    assert result == 10 + 1
 
     yield a._close()
     yield b._close()
@@ -403,30 +279,12 @@ def test_worker_waits_for_center_to_come_up(current_loop):
         pass
 
 
-@gen_cluster()
-def test_worker_task(s, a, b):
-    with rpc(ip=a.ip, port=a.port) as aa:
-        yield aa.compute(task=to_serialize((inc, 1)), key='x', report=False)
-        assert a.data['x'] == 2
-
-
-@gen_cluster()
-def test_worker_task_data(s, a, b):
-    with rpc(ip=a.ip, port=a.port) as aa:
-        yield aa.compute(task=2, key='x', report=False)
-
-    assert a.data['x'] == 2
-
-
-@gen_cluster()
-def test_worker_task_bytes(s, a, b):
-    with rpc(ip=a.ip, port=a.port) as aa:
-        yield aa.compute(task=to_serialize((inc, 1)), key='x', report=False)
-        assert a.data['x'] == 2
-
-        yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y',
-                report=False)
-        assert a.data['y'] == 11
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_worker_task_data(c, s, w):
+    x = delayed(2)
+    xx = c.persist(x)
+    yield _wait(xx)
+    assert w.data[x.key] == 2
 
 
 def test_error_message():
@@ -450,47 +308,6 @@ def test_gather(s, a, b):
 
         assert a.data['x'] == b.data['x']
         assert a.data['y'] == b.data['y']
-
-
-@gen_cluster()
-def test_compute_stream(s, a, b):
-    stream = yield connect(a.ip, a.port)
-
-    yield write(stream, {'op': 'compute-stream'})
-    msgs = [{'op': 'compute-task', 'function': dumps(inc), 'args': dumps((i,)), 'key': 'x-%d' % i}
-            for i in range(10)]
-
-    for msg in msgs[:5]:
-        yield write(stream, msg)
-
-    for i in range(5):
-        msg = yield readone(stream)
-        assert msg['status'] == 'OK'
-        assert msg['key'][0] == 'x'
-
-    for msg in msgs[5:]:
-        yield write(stream, msg)
-
-    for i in range(5):
-        msg = yield readone(stream)
-        assert msg['status'] == 'OK'
-        assert msg['key'][0] == 'x'
-
-    yield write(stream, {'op': 'close'})
-
-
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
-def test_active_holds_tasks(e, s, w):
-    future = e.submit(slowinc, 1, delay=0.2)
-    yield gen.sleep(0.1)
-    assert future.key in w.active
-    yield future._result()
-    assert future.key not in w.active
-
-    future = e.submit(throws, 1)
-    with ignoring(RuntimeError):
-        yield _wait([future])
-    assert not w.active
 
 
 def test_io_loop(loop):
@@ -596,3 +413,48 @@ def test_memory_limit_auto():
     assert a.memory_limit < b.memory_limit
 
     assert c.memory_limit == d.memory_limit
+
+
+@gen_cluster(client=True)
+def test_inter_worker_communication(c, s, a, b):
+    [x, y] = yield c._scatter([1, 2], workers=a.address)
+
+    future = c.submit(add, x, y, workers=b.address)
+    result = yield future._result()
+    assert result == 3
+
+
+@gen_cluster(client=True)
+def test_clean(c, s, a, b):
+    x = c.submit(inc, 1, workers=a.address)
+    y = c.submit(inc, x, workers=b.address)
+
+    yield y._result()
+
+    collections = [a.tasks, a.task_state, a.response, a.data, a.nbytes,
+                   a.durations, a.priorities]
+    for c in collections:
+        assert c
+
+    x.release()
+    y.release()
+
+    while x.key in a.task_state:
+        yield gen.sleep(0.01)
+
+    for c in collections:
+        assert not c
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3, 4), reason="mul bytes fails")
+@gen_cluster(client=True)
+def test_message_breakup(c, s, a, b):
+    xs = [c.submit(mul, b'%d' % i, 1000000, workers=a.address) for i in range(30)]
+    y = c.submit(lambda *args: None, xs, workers=b.address)
+    yield y._result()
+
+    assert 2 <= len(b.incoming_transfer_log) <= 20
+    assert 2 <= len(a.outgoing_transfer_log) <= 20
+
+    assert all(msg['who'] == b.address for msg in a.outgoing_transfer_log)
+    assert all(msg['who'] == a.address for msg in a.incoming_transfer_log)

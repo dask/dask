@@ -80,6 +80,9 @@ class BatchedSend(object):
             self.next_deadline = self.loop.time() + self.interval
             try:
                 yield write(self.stream, payload)
+            except StreamClosedError:
+                logger.info("Batched Stream Closed")
+                break
             except Exception:
                 logger.exception("Error in batched write")
                 break

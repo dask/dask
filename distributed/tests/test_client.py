@@ -480,8 +480,10 @@ def test_missing_data_heals(c, s, a, b):
     # Secretly delete y's key
     if y.key in a.data:
         del a.data[y.key]
+        a.forget_key(y.key)
     if y.key in b.data:
         del b.data[y.key]
+        b.forget_key(y.key)
 
     w = c.submit(add, y, z)
 
@@ -515,11 +517,11 @@ def test_gather_robust_to_missing_data(c, s, a, b):
     x, y, z = c.map(inc, range(3))
     yield _wait([x, y, z])  # everything computed
 
-    for q in [x, y]:
-        if q.key in a.data:
-            del a.data[q.key]
-        if q.key in b.data:
-            del b.data[q.key]
+    for f in [x, y]:
+        for w in [a, b]:
+            if f.key in w.data:
+                del w.data[f.key]
+                w.forget_key(f.key)
 
     xx, yy, zz = yield c._gather([x, y, z])
     assert (xx, yy, zz) == (1, 2, 3)
@@ -538,6 +540,7 @@ def test_gather_robust_to_nested_missing_data(c, s, a, b):
         for datum in [y, z]:
             if datum.key in worker.data:
                 del worker.data[datum.key]
+                worker.forget_key(datum.key)
 
     result = yield c._gather([z])
 

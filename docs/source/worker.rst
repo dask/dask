@@ -1,17 +1,19 @@
 Worker
 ======
 
+Overview
+--------
+
 Workers provide two functions:
 
-1.  Workers compute tasks as directed by the scheduler
-2.  Workers hold and serve computed results, both for each other and for the
-    clients
+1.  Compute tasks as directed by the scheduler
+2.  Store and serve computed results to other workers or clients
 
 Each worker contains a ThreadPool that it uses to evaluate tasks as requested
 by the scheduler.  It stores the results of these tasks locally and serves them
-to the scheduler or to other workers on demand.  If the worker is asked to
-evaluate a task for which it does not have all of the necessary data then it
-will reach out to its peer workers to gather the necessary dependencies.
+to other workers or clients on demand.  If the worker is asked to evaluate a
+task for which it does not have all of the necessary data then it will reach
+out to its peer workers to gather the necessary dependencies.
 
 A typical conversation between a scheduler and two workers Alice and Bob may
 look like the following::
@@ -40,6 +42,10 @@ maps keys to the results of function calls.
     '(df, 0)': pd.DataFrame(...),
     ...
     }
+
+This ``.data`` attribute is a ``MutableMapping`` that is typically a
+combination of in-memory and on-disk storage with an LRU policy to move data
+between them.
 
 Spill Excess Data to Disk
 -------------------------
@@ -136,6 +142,38 @@ are the available options::
      --memory-limit TEXT     Number of bytes before spilling data to disk
      --no-nanny
      --help                 Show this message and exit.
+
+
+Internal Scheduling
+-------------------
+
+Internally tasks that come to the scheduler proceed through the following
+pipeline:
+
+.. image:: images/worker-task-state.svg
+    :alt: Dask worker task states
+
+As tasks arrive they are prioritized and put into a heap.  They are then taken
+from this heap in turn to have any remote dependencies collected.  For each
+dependency we select a worker at random that has that data and collect the
+dependency from that worker.  To improve bandwidth we opportunistically gather
+other dependencies of other tasks are known to be on that worker, up to a
+maximum of 100MB of data (too little data and bandwidth suffers, too much data
+and responsiveness suffers).  We use a fixed number of connections (around
+10-20) so as to avoid overly-fragmenting our network bandwidth.  After all
+dependencies for a task are in memory we transition the task to the ready state
+and put the task again into a heap of tasks that are ready to run.
+
+We collect from this heap and put the task into a thread from a local thread
+pool to execute.
+
+Optionally, this task may identify itself as a long-running task (see
+:doc:`Tasks launching tasks <task-launch>`), at which point it secedes from the
+thread pool.
+
+A task either errs or its result is put into memory.  In either case a response
+is sent back to the scheduler.
+
 
 
 API Documentation

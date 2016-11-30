@@ -94,10 +94,17 @@ class Server(TCPServer):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
+        self._listen_streams = set()
         self.rpc = ConnectionPool(limit=connection_limit,
                                   deserialize=deserialize)
         self.deserialize = deserialize
+        self.__stopped = False
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
+
+    def stop(self):
+        if not self.__stopped:
+            self.__stopped = True
+            super(Server, self).stop()
 
     @property
     def port(self):
@@ -141,15 +148,17 @@ class Server(TCPServer):
         set_tcp_timeout(stream)
 
         ip, port = address
-        logger.debug("Connection from %s:%d to %s", ip, port,
-                     type(self).__name__)
+        logger.info("Connection from %s:%d to %s", ip, port,
+                    type(self).__name__)
+        self._listen_streams.add(stream)
         try:
             while True:
                 try:
                     msg = yield read(stream, deserialize=self.deserialize)
                     logger.debug("Message from %s:%d: %s", ip, port, msg)
-                except StreamClosedError:
-                    logger.info("Lost connection: %s", str(address))
+                except EnvironmentError as e:
+                    logger.warn("Lost connection to %s while reading message: %s",
+                                str(address), e)
                     break
                 except Exception as e:
                     logger.exception(e)
@@ -175,26 +184,31 @@ class Server(TCPServer):
                     try:
                         result = yield gen.maybe_future(handler(stream, **msg))
                     except StreamClosedError as e:
-                        logger.info("%s", e)
-                        result = error_message(e, status='uncaught-error')
+                        logger.warn("Lost connection to %s: %s", str(address), e)
+                        break
                     except Exception as e:
                         logger.exception(e)
                         result = error_message(e, status='uncaught-error')
-                if reply:
+                if reply and result != 'dont-reply':
                     try:
                         yield write(stream, result)
-                    except StreamClosedError:
-                        logger.info("Lost connection: %s" % str(address))
+                    except EnvironmentError as e:
+                        logger.warn("Lost connection to %s while sending result: %s",
+                                    str(address), e)
                         break
                 if close_desired:
                     break
         finally:
+            logger.info("Closing connection from %s:%d to %s", ip, port,
+                        type(self).__name__)
+            self._listen_streams.remove(stream)
             try:
                 yield close(stream)
             except Exception as e:
-                logger.warn("Failed while closing writer", exc_info=True)
-        logger.debug("Close connection from %s:%d to %s", address[0], address[1],
-                     type(self).__name__)
+                logger.error("Failed while closing connection to %s: %s",
+                             address, e)
+            finally:
+                stream.close()
 
 
 def set_tcp_timeout(stream):
@@ -295,6 +309,7 @@ def write(stream, msg):
         stream.write(frame)
 
     yield gen.moment
+    raise gen.Return(sum(map(len, frames)))
 
 
 @gen.coroutine
@@ -308,7 +323,7 @@ def close(stream):
             # Flush the stream's write buffer by waiting for a last write.
             if stream.writing():
                 yield stream.write(b'')
-        except StreamClosedError:
+        except EnvironmentError:
             pass
         finally:
             stream.close()
@@ -329,7 +344,7 @@ def connect(ip, port, timeout=3):
             stream.set_nodelay(True)
             set_tcp_timeout(stream)
             raise gen.Return(stream)
-        except StreamClosedError:
+        except EnvironmentError:
             if time() - start < timeout:
                 yield gen.sleep(0.01)
                 logger.debug("sleeping on connect")
@@ -480,16 +495,21 @@ class rpc(object):
             if stream and not stream.closed():
                 try:
                     close(stream)
-                except (OSError, IOError, StreamClosedError):
+                except EnvironmentError:
                     pass
         self.streams.clear()
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
-            stream = yield self.live_stream()
-            result = yield send_recv(stream=stream, op=key,
-                    deserialize=self.deserialize, **kwargs)
+            try:
+                stream = yield self.live_stream()
+                result = yield send_recv(stream=stream, op=key,
+                        deserialize=self.deserialize, **kwargs)
+            except (RPCClosed, StreamClosedError) as e:
+                raise e.__class__("%s: while trying to call remote method %r"
+                                  % (e, key,))
+
             self.streams[stream] = True  # mark as open
             raise gen.Return(result)
         return send_recv_from_rpc

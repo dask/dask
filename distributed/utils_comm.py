@@ -66,8 +66,7 @@ def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
         try:
             coroutines = [rpcs[address].get_data(keys=keys, close=close)
                           for address, keys in d.items()]
-            response = yield ignore_exceptions(coroutines, socket.error,
-                                               StreamClosedError)
+            response = yield ignore_exceptions(coroutines, EnvironmentError)
         finally:
             for r in rpcs.values():
                 r.close_rpc()
@@ -206,7 +205,7 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
         return o
 
 
-def pack_data(o, d):
+def pack_data(o, d, key_types=object):
     """ Merge known data into tuple or dict
 
     Parameters
@@ -228,19 +227,14 @@ def pack_data(o, d):
     """
     typ = type(o)
     try:
-        if o in d:
+        if isinstance(o, key_types) and  o in d:
             return d[o]
     except TypeError:
         pass
 
     if typ in collection_types:
-        return typ([pack_data(x, d) for x in o])
+        return typ([pack_data(x, d, key_types=key_types) for x in o])
     elif typ is dict:
-        return {k: pack_data(v, d) for k, v in o.items()}
+        return {k: pack_data(v, d, key_types=key_types) for k, v in o.items()}
     else:
-        try:
-            if o in d:
-                return d[o]
-        except TypeError:
-            pass
         return o

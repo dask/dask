@@ -59,8 +59,8 @@ def test_str(s, a, b):
     assert str(a.ncores) in repr(a)
 
 
-@gen_cluster(ncores=[], timeout=20)
-def test_nanny_process_failure(s):
+@gen_cluster(ncores=[], timeout=20, client=True)
+def test_nanny_process_failure(c, s):
     n = Nanny(s.ip, s.port, ncores=2, ip='127.0.0.1', loop=s.loop)
     yield n._start()
     first_dir = n.worker_dir
@@ -71,9 +71,7 @@ def test_nanny_process_failure(s):
     ww = rpc(ip=n.ip, port=n.worker_port)
     yield ww.update_data(data=valmap(dumps, {'x': 1, 'y': 2}))
     with ignoring(StreamClosedError):
-        yield ww.compute(function=dumps(sys.exit),
-                         args=dumps((0,)),
-                         key='z')
+        yield c._run(sys.exit, 0, workers=[n.worker_address])
 
     start = time()
     while n.process is original_process:  # wait while process dies

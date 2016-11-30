@@ -514,7 +514,7 @@ class Client(object):
                 try:
                     msgs = yield read(self.scheduler_stream.stream)
                 except StreamClosedError:
-                    logger.debug("Stream closed to scheduler", exc_info=True)
+                    logger.warn("Client report stream closed to scheduler")
                     if self.status == 'running':
                         logger.info("Reconnecting...")
                         self.status = 'connecting'
@@ -879,7 +879,7 @@ class Client(object):
             response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
-                logger.debug("Couldn't gather keys %s", response['keys'])
+                logger.warn("Couldn't gather keys %s", response['keys'])
                 self._send_to_scheduler({'op': 'missing-data',
                                          'keys': response['keys']})
                 for key in response['keys']:

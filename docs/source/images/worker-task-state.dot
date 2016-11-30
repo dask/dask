@@ -1,0 +1,13 @@
+digraph{
+    graph [
+        bgcolor="#FFFFFFF00",
+        rankdir=LR,
+        ];
+    waiting -> ready;
+    ready -> executing;
+    executing -> "long-running";
+    executing -> memory;
+    executing -> error;
+    "long-running" -> memory;
+    "long-running" -> error;
+}

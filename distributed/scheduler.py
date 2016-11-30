@@ -30,7 +30,7 @@ from dask.order import order
 from .batched import BatchedSend
 from .config import config
 from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address, error_message)
+        Server, send_recv, coerce_to_address, error_message, clean_exception)
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
         divide_n_among_bins, validate_key)
@@ -433,6 +433,8 @@ class Scheduler(Server):
         --------
         Scheduler.cleanup
         """
+        if self.status == 'closed':
+            return
         self._delete_periodic_callback.stop()
         self._synchronize_data_periodic_callback.stop()
         for service in self.services.values():
@@ -702,28 +704,29 @@ class Scheduler(Server):
     def stimulus_missing_data(self, keys=None, key=None, worker=None,
             ensure=True, **kwargs):
         """ Mark that certain keys have gone missing.  Recover. """
-        logger.debug("Stimulus missing data %s, %s", key, worker)
-        if worker:
-            self.maybe_idle.add(worker)
+        with log_errors():
+            logger.debug("Stimulus missing data %s, %s", key, worker)
+            if worker:
+                self.maybe_idle.add(worker)
 
-        recommendations = OrderedDict()
-        for k in set(keys):
-            if self.task_state.get(k) == 'memory':
-                for w in set(self.who_has[k]):
-                    self.has_what[w].remove(k)
-                    self.who_has[k].remove(w)
-                    self.worker_bytes[w] -= self.nbytes.get(k, 1000)
-                recommendations[k] = 'released'
+            recommendations = OrderedDict()
+            for k in set(keys):
+                if self.task_state.get(k) == 'memory':
+                    for w in set(self.who_has[k]):
+                        self.has_what[w].remove(k)
+                        self.who_has[k].remove(w)
+                        self.worker_bytes[w] -= self.nbytes.get(k, 1000)
+                    recommendations[k] = 'released'
 
-        if key:
-            recommendations[key] = 'released'
+            if key:
+                recommendations[key] = 'released'
 
-        self.transitions(recommendations)
+            self.transitions(recommendations)
 
-        if ensure:
-            self.ensure_occupied()
+            if ensure:
+                self.ensure_occupied()
 
-        return {}
+            return {}
 
     def remove_worker(self, stream=None, address=None, safe=False):
         """
@@ -1102,12 +1105,15 @@ class Scheduler(Server):
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
         msg = {'op': 'compute-task',
-               'key': key}
+               'key': key,
+               'priority': self.priority[key],
+               'duration': self.task_duration.get(key_split(key), 0.5)}
 
         deps = self.dependencies[key]
         if deps:
             msg['who_has'] = {dep: tuple(self.who_has.get(dep, ()))
                               for dep in deps}
+            msg['nbytes'] = {dep: self.nbytes.get(dep) for dep in deps}
 
         task = self.tasks[key]
         if type(task) is dict:
@@ -1156,6 +1162,10 @@ class Scheduler(Server):
                             break
 
                         self.correct_time_delay(worker, msg)
+
+                        if msg['status'] == 'uncaught-error':
+                            logger.exception(clean_exception(**msg)[1])
+                            continue
 
                         key = msg['key']
                         validate_key(key)
