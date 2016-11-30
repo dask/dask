@@ -2934,8 +2934,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         dsk = {(a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0]._keys())}
     else:
         dsk = {(a, 0, i, 0): (apply, chunk,
-                               [(x._name, i) if isinstance(x, _Frame)
-                                else x for x in args], chunk_kwargs)
+                              [(x._name, i) if isinstance(x, _Frame)
+                               else x for x in args], chunk_kwargs)
                for i in range(args[0].npartitions)}
 
     # Split
