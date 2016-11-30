@@ -1,5 +1,6 @@
 import struct
 
+import pandas as pd
 from toolz import first, partial
 
 from ..core import DataFrame, Series
@@ -71,6 +72,11 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
+    # get category values from first row-group
+    categories = categories or []
+    cats = pf.grab_cats(categories)
+    categories = [cat for cat in categories if cats.get(cat, None) is not None]
+
     # Find an index among the partially sorted columns
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
 
@@ -105,6 +111,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
               pf.dtypes.items() if k in all_columns}
 
     meta = make_meta(dtypes)
+    for cat in categories:
+        meta[cat] = pd.Series(pd.Categorical([], categories=cats[cat]))
+
     if index_col:
         meta = meta.set_index(index_col)
 

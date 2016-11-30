@@ -1,5 +1,4 @@
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 import pickle
 import numpy as np
@@ -7,11 +6,12 @@ import numpy as np
 import dask.dataframe as dd
 from dask.threaded import get as threaded_get
 from dask.multiprocessing import get as mp_get
-from dask.dataframe.shuffle import (shuffle, hash_series,
+from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd)
+
 from dask.async import get_sync
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -64,8 +64,9 @@ def test_shuffle_npatitions_task():
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
 def test_index_with_non_series(method):
-    tm.assert_frame_equal(shuffle(d, d.b, shuffle=method).compute(),
-                          shuffle(d, 'b', shuffle=method).compute())
+    from dask.dataframe.tests.test_multi import list_eq
+    list_eq(shuffle(d, d.b, shuffle=method),
+            shuffle(d, 'b', shuffle=method))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -108,25 +109,23 @@ df2 = pd.DataFrame({'i32': np.array([1, 2, 3] * 3, dtype='int32'),
                     'td': pd.Series(pd.timedelta_range('2000', periods=9))})
 
 
-def test_hash_series():
-    for name, s in df2.iteritems():
-        np.testing.assert_equal(hash_series(s), hash_series(s))
-
-
 def test_partitioning_index():
     res = partitioning_index(df2.i32, 3)
-    exp = np.array([1, 2, 0] * 3)
-    np.testing.assert_equal(res, exp)
+    assert ((res < 3) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
+
+    assert (partitioning_index(df2.i32, 3) == partitioning_index(df2.i32, 3)).all()
 
     res = partitioning_index(df2[['i32']], 3)
-    np.testing.assert_equal(res, exp)
+    assert ((res < 3) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
 
     res = partitioning_index(df2[['cat', 'bool', 'f32']], 2)
     assert ((0 <= res) & (res < 2)).all()
 
     res = partitioning_index(df2.index, 4)
-    exp = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0])
-    np.testing.assert_equal(res, exp)
+    assert ((res < 4) & (res >= 0)).all()
+    assert len(np.unique(res)) > 1
 
 
 @pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
