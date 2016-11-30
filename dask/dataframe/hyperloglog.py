@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*
+# -*- coding: utf-8 -*-
 u"""Implementation of HyperLogLog
 
 This implements the HyperLogLog algorithm for cardinality estimation, found
@@ -35,11 +35,14 @@ def compute_hll_array(obj, b):
     m = 1 << b
 
     # Get an array of the hashes
-    hashes = hash_pandas_object(obj).astype(np.uint32)
+    hashes = hash_pandas_object(obj, index=False)
+    if isinstance(hashes, pd.Series):
+        hashes = hashes._values
+    hashes = hashes.astype(np.uint32)
 
     # Of the first b bits, which is the first nonzero?
     j = hashes >> num_bits_discarded
-    first_bit = compute_first_bit(j)
+    first_bit = compute_first_bit(hashes)
 
     # Pandas can do the max aggregation
     df = pd.DataFrame({'j': j, 'first_bit': first_bit})
@@ -50,21 +53,25 @@ def compute_hll_array(obj, b):
     return series.reindex(np.arange(m), fill_value=0).values.astype(np.uint8)
 
 
-def estimate_count(Ms, b):
-    if b < 8:
-        # Smaller is incompatible with the alpha below
-        raise ValueError('p must be at least 7')
+def reduce_state(Ms, b):
     m = 1 << b
 
     # We concatenated all of the states, now we need to get the max
     # value for each j in both
-    Ms = Ms.reshape((m, len(Ms) // m))
-    M = Ms.max(axis=1)
+    Ms = Ms.reshape((len(Ms) // m), m)
+    return Ms.max(axis=0)
 
+
+def estimate_count(Ms, b):
+    m = 1 << b
+
+    # Combine one last time
+    M = reduce_state(Ms, b)
+
+    # Estimate cardinality, no adjustments
     alpha = 0.7213 / (1 + 1.079 / m)
-
-    # Estimate cardinality
     E = alpha * m / (2.0 ** -M).sum() * m
+
     # Apply adjustments for small / big cardinalities, if applicable
     if E < 2.5 * m:
         V = (M == 0).sum()

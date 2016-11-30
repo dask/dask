@@ -116,14 +116,17 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), or globstring pointing to data.
     delimiter: bytes
-        An optional delimiter, like ``b'\n'`` on which to split blocks of bytes
-    not_zero: force seek of start-of-file delimiter, discarding header
+        An optional delimiter, like ``b'\\n'`` on which to split blocks of
+        bytes.
+    not_zero: bool
+        Force seek of start-of-file delimiter, discarding header.
     blocksize: int (=128MB)
         Chunk size
     compression: string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
-    sample: bool, int
-        Whether or not to return a sample from the first 10k bytes
+    sample: bool or int
+        Whether or not to return a header sample. If an integer is given it is
+        used as sample size, otherwise the default sample size is 10kB.
     **kwargs: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -135,7 +138,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
 
     Returns
     -------
-    10kB sample header and list of ``dask.Delayed`` objects or list of lists of
+    A sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
     fs, paths, myopen = get_fs_paths_myopen(urlpath, compression, 'rb',

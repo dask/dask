@@ -1606,34 +1606,30 @@ class _Frame(Base):
                           date, None, True, False, 'ix')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
-    def nunique_approx(self, b=16):
+    def nunique_approx(self, split_every=None):
         """Approximate number of unique rows.
 
         This method uses the HyperLogLog algorithm for cardinality
-        estimation to compute the approximate number of rows.
+        estimation to compute the approximate number of unique rows.
+        The approximate error is 0.406%.
 
         Parameters
         ----------
-        b : integer, default 16
-            The number of bits of the hash to use for approximating
-            the number of unique elements. Large values of b require more
-            time and memory to compute. b should be between 8 and 16 (inclusive)
-            for the current implementation. The relative error in the
-            number of elements is approximated by 1.04 / sqrt(2**b)
+        split_every : int, optional
+            Group partitions into groups of this size while performing a
+            tree-reduction. If set to False, no tree-reduction will be used.
+            Default is 8.
 
         Returns
         -------
         a float representing the approximate number of elements
         """
+        from . import hyperloglog # here to avoid circular import issues
 
-        from . import _hyperloglog # here to avoid circular import issues
-
-        return aca(
-            [self],
-            chunk=_hyperloglog.compute_hll_array,
-            aggregate=_hyperloglog.estimate_count,
-            b=b,
-            meta=float)
+        return aca([self], chunk=hyperloglog.compute_hll_array,
+                   combine=hyperloglog.reduce_state,
+                   aggregate=hyperloglog.estimate_count,
+                   split_every=split_every, b=16, meta=float)
 
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
