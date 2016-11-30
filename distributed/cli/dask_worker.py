@@ -13,7 +13,7 @@ from time import time, sleep
 import click
 from distributed import Nanny, Worker, sync, rpc
 from distributed.nanny import isalive
-from distributed.utils import get_ip, All
+from distributed.utils import get_ip, All, ignoring
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.cli.utils import check_python_3

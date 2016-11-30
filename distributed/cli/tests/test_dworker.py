@@ -7,6 +7,7 @@ import os
 import requests
 import signal
 from time import time, sleep
+from toolz import first
 
 from distributed import Scheduler, Client
 from distributed.core import rpc
@@ -30,6 +31,18 @@ def test_nanny_worker_ports(loop):
                         assert time() - start < 5
                         sleep(0.1)
                 assert d['workers']['127.0.0.1:8788']['services']['nanny'] == 8789
+
+
+def test_memory_limit(loop):
+    with popen(['dask-scheduler']) as sched:
+        with popen(['dask-worker', '127.0.0.1:8786', '--memory-limit', '2e9']) as worker:
+            with Client('127.0.0.1:8786', loop=loop) as c:
+                while not c.ncores():
+                    sleep(0.1)
+                info = c.scheduler_info()
+                d = first(info['workers'].values())
+                assert isinstance(d['memory_limit'], float)
+                assert d['memory_limit'] == 2e9
 
 
 def test_no_nanny(loop):

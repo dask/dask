@@ -145,6 +145,8 @@ class WorkerBase(Server):
 
         if memory_limit == 'auto':
             memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
+        with ignoring(TypeError):
+            memory_limit = float(memory_limit)
         if isinstance(memory_limit, float) and memory_limit <= 1:
             memory_limit = memory_limit * TOTAL_MEMORY
         self.memory_limit = memory_limit

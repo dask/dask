@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from numbers import Integral
+from numbers import Integral, Number
 from operator import add
 import os
 import re
@@ -54,7 +54,7 @@ def test_identity():
     assert 'Worker' in ident['type']
     assert ident['scheduler'] == ('127.0.0.1', 8019)
     assert isinstance(ident['ncores'], int)
-    assert isinstance(ident['memory_limit'], int)
+    assert isinstance(ident['memory_limit'], Number)
 
 
 def test_health():
@@ -407,8 +407,8 @@ def test_memory_limit_auto():
     c = Worker('127.0.0.1', 8099, ncores=100)
     d = Worker('127.0.0.1', 8099, ncores=200)
 
-    assert isinstance(a.memory_limit, int)
-    assert isinstance(b.memory_limit, int)
+    assert isinstance(a.memory_limit, Number)
+    assert isinstance(b.memory_limit, Number)
 
     assert a.memory_limit < b.memory_limit
 
