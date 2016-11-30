@@ -120,7 +120,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels))
+    return aggfunc(df.groupby(level=levels, sort=False))
 
 
 def _apply_chunk(df, *index, **kwargs):
@@ -145,11 +145,11 @@ def _var_chunk(df, *index):
 
 
 def _var_combine(g, levels):
-    return g.groupby(level=levels).sum()
+    return g.groupby(level=levels, sort=False).sum()
 
 
 def _var_agg(g, levels, ddof):
-    g = g.groupby(level=levels).sum()
+    g = g.groupby(level=levels, sort=False).sum()
     nc = len(g.columns)
     x = g[g.columns[:nc // 3]]
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
@@ -188,7 +188,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
 
 def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels).apply(pd.DataFrame.drop_duplicates)
+    result = df.groupby(level=levels, sort=False).apply(pd.DataFrame.drop_duplicates)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays([
@@ -201,7 +201,7 @@ def _nunique_df_combine(df, levels):
 
 
 def _nunique_df_aggregate(df, levels, name):
-    return df.groupby(level=levels)[name].nunique()
+    return df.groupby(level=levels, sort=False)[name].nunique()
 
 
 def _nunique_series_chunk(df, *index, **_ignored_):
