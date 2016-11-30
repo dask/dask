@@ -2740,7 +2740,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
-    assert sorted(dropped.compute()) == sorted(s.unique())
+    assert sorted(dropped.compute(get=dask.get)) == sorted(s.unique())
 
 
 @pytest.mark.parametrize('split_every', [None, 2])

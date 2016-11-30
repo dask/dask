@@ -2832,10 +2832,14 @@ def _maybe_from_pandas(dfs):
 def hash_shard(df, nparts, index):
     if index:
         h = df.index
+        if isinstance(h, pd.MultiIndex):
+            h = pd.DataFrame([], index=h).reset_index()
     else:
         h = df
-    h = hash_pandas_object(h) % nparts
-
+    h = hash_pandas_object(h, index=False)
+    if isinstance(h, pd.Series):
+        h = h._values
+    h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
 
 
