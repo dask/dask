@@ -950,3 +950,16 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert_eq(result, df.groupby('x').y.var())
+
+
+def test_split_out_multi_column_groupby():
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100),
+                       'z': [1, 2, 3, 4, 5] * 20})
+
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    result = ddf.groupby(['x', 'y']).z.mean(split_out=4)
+    expected = df.groupby(['x', 'y']).z.mean()
+
+    assert_eq(result, expected, check_dtype=False)
