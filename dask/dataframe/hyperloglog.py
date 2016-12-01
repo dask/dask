@@ -70,7 +70,9 @@ def estimate_count(Ms, b):
 
     # Estimate cardinality, no adjustments
     alpha = 0.7213 / (1 + 1.079 / m)
-    E = alpha * m / (2.0 ** -M).sum() * m
+    E = alpha * m / (2.0 ** -M.astype('f8')).sum() * m
+    #                        ^^^^ starts as unsigned, need a signed type for
+    #                             negation operator to do something useful
 
     # Apply adjustments for small / big cardinalities, if applicable
     if E < 2.5 * m:
