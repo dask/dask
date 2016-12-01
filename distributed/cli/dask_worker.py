@@ -106,6 +106,14 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     services = {('http', http_port): HTTPWorker}
 
+    try:
+        import bokeh
+    except ImportError:
+        pass
+    else:
+        from distributed.bokeh.worker import BokehWorker
+        services[('bokeh', 8789)] = BokehWorker
+
     if resources:
         resources = resources.replace(',', ' ').split()
         resources = dict(pair.split('=') for pair in resources)

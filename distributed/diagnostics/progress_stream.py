@@ -34,6 +34,10 @@ def incrementing_index(o):
     return next(counter)
 
 
+def color_of(o, palette=task_stream_palette):
+    return palette[incrementing_index(o) % len(palette)]
+
+
 @gen.coroutine
 def progress_stream(address, interval):
     """ Open a TCP connection to scheduler, receive progress messages
@@ -97,8 +101,7 @@ def nbytes_bar(nbytes):
         d['left'].append(left)
         d['right'].append(right)
         d['center'].append(center)
-        d['color'].append(task_stream_palette[incrementing_index(name)
-                                            % len(task_stream_palette)])
+        d['color'].append(color_of(name))
         d['name'].append(name)
         if right - left > 0.1:
             d['text'].append(name)
@@ -143,9 +146,7 @@ def progress_quads(msg, nrows=8, ncols=3):
     d['right'] = [i // nrows + width for i in range(n)]
     d['top'] = [-(i % nrows) for i in range(n)]
     d['bottom'] = [-(i % nrows) - 0.8 for i in range(n)]
-    d['color'] = [task_stream_palette[incrementing_index(name)
-                                    % len(task_stream_palette)]
-                    for name in names]
+    d['color'] = [color_of(name) for name in names]
 
     d['released-loc'] = []
     d['memory-loc'] = []
@@ -171,7 +172,7 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
     key = msg['key']
     name = key_split(key)
     if msg['status'] == 'OK':
-        color = palette[incrementing_index(name) % len(palette)]
+        color = color_of(name, palette=palette)
     else:
         color = 'black'
     lists['key'].append(key)

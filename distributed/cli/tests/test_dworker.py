@@ -18,10 +18,10 @@ from distributed.utils_test import (loop, popen, slow, terminate_process,
 
 
 def test_nanny_worker_ports(loop):
-    with popen(['dask-scheduler', '--port', '8989']) as sched:
-        with popen(['dask-worker', '127.0.0.1:8989', '--host', '127.0.0.1',
-                    '--worker-port', '8788', '--nanny-port', '8789']) as worker:
-            with Client('127.0.0.1:8989', loop=loop) as c:
+    with popen(['dask-scheduler', '--port', '9359']) as sched:
+        with popen(['dask-worker', '127.0.0.1:9359', '--host', '127.0.0.1',
+                    '--worker-port', '9684', '--nanny-port', '5273']) as worker:
+            with Client('127.0.0.1:9359', loop=loop) as c:
                 start = time()
                 while True:
                     d = sync(c.loop, c.scheduler.identity)
@@ -30,7 +30,7 @@ def test_nanny_worker_ports(loop):
                     else:
                         assert time() - start < 5
                         sleep(0.1)
-                assert d['workers']['127.0.0.1:8788']['services']['nanny'] == 8789
+                assert d['workers']['127.0.0.1:9684']['services']['nanny'] == 5273
 
 
 def test_memory_limit(loop):
@@ -49,7 +49,7 @@ def test_no_nanny(loop):
     with popen(['dask-scheduler']) as sched:
         with popen(['dask-worker', '127.0.0.1:8786', '--no-nanny']) as worker:
             assert any(b'Registered' in worker.stderr.readline()
-                       for i in range(10))
+                       for i in range(15))
 
 
 @slow

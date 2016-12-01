@@ -458,3 +458,25 @@ def test_message_breakup(c, s, a, b):
 
     assert all(msg['who'] == b.address for msg in a.outgoing_transfer_log)
     assert all(msg['who'] == a.address for msg in a.incoming_transfer_log)
+
+
+@gen_cluster(client=True)
+def test_types(c, s, a, b):
+    assert not a.types
+    assert not b.types
+    x = c.submit(inc, 1, workers=a.address)
+    yield _wait(x)
+    assert a.types[x.key] == int
+
+    y = c.submit(inc, x, workers=b.address)
+    yield _wait(y)
+    assert b.types == {x.key: int, y.key: int}
+
+    yield c._cancel(y)
+
+    start = time()
+    while y.key in b.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert y.key not in b.types
