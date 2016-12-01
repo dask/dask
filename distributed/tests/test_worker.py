@@ -480,3 +480,9 @@ def test_types(c, s, a, b):
         assert time() < start + 5
 
     assert y.key not in b.types
+
+
+@gen_cluster()
+def test_system_monitor(s, a, b):
+    assert b.monitor
+    b.monitor.update()

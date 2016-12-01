@@ -22,11 +22,12 @@ from tornado import gen
 from tornado.locks import Event
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode, WINDOWS
 from .config import config
+from .system_monitor import SystemMonitor
 from .utils import get_traceback, truncate_exception, ignoring
 from . import protocol
 
@@ -98,6 +99,10 @@ class Server(TCPServer):
         self.rpc = ConnectionPool(limit=connection_limit,
                                   deserialize=deserialize)
         self.deserialize = deserialize
+        self.monitor = SystemMonitor()
+        if hasattr(self, 'loop'):
+            pc = PeriodicCallback(self.monitor.update, 500, io_loop=self.loop)
+            self.loop.add_callback(pc.start)
         self.__stopped = False
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 

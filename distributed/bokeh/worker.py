@@ -18,6 +18,7 @@ from bokeh.plotting import figure
 from toolz import frequencies
 
 from .components import DashboardComponent
+from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..utils import log_errors, key_split
 
@@ -100,12 +101,12 @@ class CommunicatingStream(DashboardComponent):
         with log_errors():
             outgoing = self.worker.outgoing_transfer_log
             n = self.worker.outgoing_count - self.last_outgoing
-            outgoing = [outgoing[-i].copy() for i in range(1, n)]
+            outgoing = [outgoing[-i].copy() for i in range(1, n + 1)]
             self.last_outgoing = self.worker.outgoing_count
 
             incoming = self.worker.incoming_transfer_log
             n = self.worker.incoming_count - self.last_incoming
-            incoming = [incoming[-i].copy() for i in range(1, n)]
+            incoming = [incoming[-i].copy() for i in range(1, n + 1)]
             self.last_incoming = self.worker.incoming_count
 
             for [msgs, source] in [[incoming, self.incoming],
@@ -147,7 +148,7 @@ class CommunicatingTimeSeries(DashboardComponent):
         self.worker = worker
         self.source = ColumnDataSource({'x': [], 'in': [], 'out': []})
 
-        x_range = DataRange1d(follow='end', follow_interval=30000)
+        x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
 
         fig = figure(title="Communication History",
                      x_axis_type='datetime',
@@ -177,7 +178,7 @@ class ExecutingTimeSeries(DashboardComponent):
         self.worker = worker
         self.source = ColumnDataSource({'x': [], 'y': []})
 
-        x_range = DataRange1d(follow='end', follow_interval=30000)
+        x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
 
         fig = figure(title="Executing History",
                      x_axis_type='datetime', y_range=[-0.1, worker.ncores + 0.1],
@@ -196,133 +197,6 @@ class ExecutingTimeSeries(DashboardComponent):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
                                 'y': [len(self.worker.executing)]}, 1000)
-
-
-from bokeh.server.server import Server
-from bokeh.application.handlers.function import FunctionHandler
-from bokeh.application import Application
-
-cf = []
-
-def main_doc(worker, doc):
-    with log_errors():
-        statetable = StateTable(worker)
-        executing_ts = ExecutingTimeSeries(worker, sizing_mode='scale_width')
-        communicating_ts = CommunicatingTimeSeries(worker,
-                sizing_mode='scale_width')
-        communicating_stream = CommunicatingStream(worker,
-                sizing_mode='scale_width')
-
-        xr = executing_ts.root.x_range
-        communicating_ts.root.x_range = xr
-        communicating_stream.root.x_range = xr
-
-        doc.add_periodic_callback(statetable.update, 100)
-        doc.add_periodic_callback(executing_ts.update, 100)
-        doc.add_periodic_callback(communicating_ts.update, 100)
-        doc.add_periodic_callback(communicating_stream.update, 100)
-        doc.add_root(column(statetable.root,
-                            executing_ts.root,
-                            communicating_ts.root,
-                            communicating_stream.root,
-                            sizing_mode='scale_width'))
-
-
-def crossfilter_doc(worker, doc):
-    with log_errors():
-        statetable = StateTable(worker)
-        crossfilter = CrossFilter(worker)
-
-        doc.add_periodic_callback(statetable.update, 100)
-        doc.add_periodic_callback(crossfilter.update, 200)
-
-        doc.add_root(column(statetable.root, crossfilter.root))
-
-
-class BokehWorker(object):
-    def __init__(self, worker, io_loop=None):
-        self.worker = worker
-        main = Application(FunctionHandler(partial(main_doc, worker)))
-        crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker)))
-        self.apps = {'/main': main,
-                     '/crossfilter': crossfilter}
-
-        self.loop = io_loop or worker.loop
-        self.server = None
-
-    def listen(self, port):
-        if self.server:
-            return
-        try:
-            self.server = Server(self.apps, io_loop=self.loop, port=port,
-                                 host=['*'])
-            self.server.start(start_loop=False)
-        except (SystemExit, EnvironmentError):
-            self.server = Server(self.apps, io_loop=self.loop, port=0,
-                                 host=['*'])
-            self.server.start(start_loop=False)
-
-    @property
-    def port(self):
-        return (self.server.port or
-                list(self.server._http._sockets.values())[0].getsockname()[1])
-
-    def stop(self):
-        for context in self.server._tornado._applications.values():
-            context.run_unload_hook()
-
-        self.server._tornado._stats_job.stop()
-        self.server._tornado._cleanup_job.stop()
-        if self.server._tornado._ping_job is not None:
-            self.server._tornado._ping_job.stop()
-
-        # self.server.stop()
-        # https://github.com/bokeh/bokeh/issues/5494
-
-
-def transpose(lod):
-    keys = list(lod[0].keys())
-    return {k: [d[k] for d in lod] for k in keys}
-
-
-def format_bytes(n):
-    """ Format bytes as text
-
-    >>> format_bytes(1)
-    '1 B'
-    >>> format_bytes(1234)
-    '1.23 kB'
-    >>> format_bytes(12345678)
-    '12.35 MB'
-    >>> format_bytes(1234567890)
-    '1.23 GB'
-    """
-    if n > 1e9:
-        return '%0.2f GB' % (n / 1e9)
-    if n > 1e6:
-        return '%0.2f MB' % (n / 1e6)
-    if n > 1e3:
-        return '%0.2f kB' % (n / 1000)
-    return '%d B' % n
-
-
-def format_time(n):
-    """ format integers as time
-
-    >>> format_time(1)
-    '1.00 s'
-    >>> format_time(0.001234)
-    '1.23 ms'
-    >>> format_time(0.00012345)
-    '123.45 us'
-    >>> format_time(123.456)
-    '123.46 s'
-    """
-    if n >= 1:
-        return '%.2f s' % n
-    if n >= 1e-3:
-        return '%.2f ms' % (n * 1e3)
-    return '%.2f us' % (n * 1e6)
 
 
 class CrossFilter(DashboardComponent):
@@ -468,3 +342,210 @@ class CrossFilter(DashboardComponent):
         except Exception as e:
             logger.exception(e)
             raise
+
+
+class SystemMonitor(DashboardComponent):
+    def __init__(self, worker, height=150, **kwargs):
+        self.worker = worker
+
+        self.names = ['cpu', 'memory', 'read_bytes', 'write_bytes', 'time']
+        if not WINDOWS:
+            self.names.append('num_fds')
+        self.source = ColumnDataSource({name: [] for name in self.names})
+
+        x_range = DataRange1d(follow='end', follow_interval=30000,
+                              range_padding=0)
+
+        tools = 'reset,pan,wheel_zoom'
+
+        self.cpu = figure(title="CPU", x_axis_type='datetime',
+                          y_range=[-0.1, 100 * self.worker.ncores],
+                          height=height, tools=tools, x_range=x_range, **kwargs)
+        self.cpu.line(source=self.source, x='time', y='cpu')
+        self.cpu.yaxis.axis_label = 'Percentage'
+        self.mem = figure(title="Memory", x_axis_type='datetime',
+                          height=height, tools=tools, x_range=x_range, **kwargs)
+        self.mem.line(source=self.source, x='time', y='memory')
+        self.mem.yaxis.axis_label = 'Bytes'
+        self.bandwidth = figure(title='Bandwidth', x_axis_type='datetime',
+                                height=height,
+                                x_range=x_range, tools=tools, **kwargs)
+        self.bandwidth.line(source=self.source, x='time', y='read_bytes',
+                            color='red')
+        self.bandwidth.line(source=self.source, x='time', y='write_bytes',
+                            color='blue')
+        plots = [self.cpu, self.mem, self.bandwidth]
+
+        if not WINDOWS:
+            self.num_fds = figure(title='Number of File Descriptors',
+                                  x_axis_type='datetime', height=height,
+                                  x_range=x_range, tools=tools, **kwargs)
+
+            self.num_fds.line(source=self.source, x='time', y='num_fds')
+            plots.append(self.num_fds)
+
+        if 'sizing_mode' in kwargs:
+            kw = {'sizing_mode': kwargs['sizing_mode']}
+        else:
+            kw = {}
+
+        self.last = 0
+        self.root = column(*plots, **kw)
+        self.worker.monitor.update()
+
+    def update(self):
+        with log_errors():
+            monitor = self.worker.monitor
+
+            n = monitor.count - self.last
+            if not n:
+                return
+
+            seq = [-i for i in range(1, n + 1)][::-1]
+
+            d = {attr: [getattr(monitor, attr)[i] for i in seq]
+                 for attr in self.names}
+
+            d['time'] = [monitor.time[i] * 1000 for i in seq]
+
+            self.source.stream(d, 1000)
+            if not WINDOWS:
+                self.num_fds.y_range.start = 0
+            self.mem.y_range.start = 0
+            self.last = monitor.count
+
+
+from bokeh.server.server import Server
+from bokeh.application.handlers.function import FunctionHandler
+from bokeh.application import Application
+
+
+def main_doc(worker, doc):
+    with log_errors():
+        statetable = StateTable(worker)
+        executing_ts = ExecutingTimeSeries(worker, sizing_mode='scale_width')
+        communicating_ts = CommunicatingTimeSeries(worker,
+                sizing_mode='scale_width')
+        communicating_stream = CommunicatingStream(worker,
+                sizing_mode='scale_width')
+
+        xr = executing_ts.root.x_range
+        communicating_ts.root.x_range = xr
+        communicating_stream.root.x_range = xr
+
+        doc.add_periodic_callback(statetable.update, 100)
+        doc.add_periodic_callback(executing_ts.update, 100)
+        doc.add_periodic_callback(communicating_ts.update, 100)
+        doc.add_periodic_callback(communicating_stream.update, 100)
+        doc.add_root(column(statetable.root,
+                            executing_ts.root,
+                            communicating_ts.root,
+                            communicating_stream.root,
+                            sizing_mode='scale_width'))
+
+
+def crossfilter_doc(worker, doc):
+    with log_errors():
+        statetable = StateTable(worker)
+        crossfilter = CrossFilter(worker)
+
+        doc.add_periodic_callback(statetable.update, 100)
+        doc.add_periodic_callback(crossfilter.update, 200)
+
+        doc.add_root(column(statetable.root, crossfilter.root))
+
+
+def systemmonitor_doc(worker, doc):
+    with log_errors():
+        sysmon = SystemMonitor(worker, sizing_mode='scale_width')
+        doc.add_periodic_callback(sysmon.update, 100)
+
+        doc.add_root(sysmon.root)
+
+
+class BokehWorker(object):
+    def __init__(self, worker, io_loop=None):
+        self.worker = worker
+        main = Application(FunctionHandler(partial(main_doc, worker)))
+        crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker)))
+        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker)))
+        self.apps = {'/main': main,
+                     '/crossfilter': crossfilter,
+                     '/system': systemmonitor}
+
+        self.loop = io_loop or worker.loop
+        self.server = None
+
+    def listen(self, port):
+        if self.server:
+            return
+        try:
+            self.server = Server(self.apps, io_loop=self.loop, port=port,
+                                 host=['*'])
+            self.server.start(start_loop=False)
+        except (SystemExit, EnvironmentError):
+            self.server = Server(self.apps, io_loop=self.loop, port=0,
+                                 host=['*'])
+            self.server.start(start_loop=False)
+
+    @property
+    def port(self):
+        return (self.server.port or
+                list(self.server._http._sockets.values())[0].getsockname()[1])
+
+    def stop(self):
+        for context in self.server._tornado._applications.values():
+            context.run_unload_hook()
+
+        self.server._tornado._stats_job.stop()
+        self.server._tornado._cleanup_job.stop()
+        if self.server._tornado._ping_job is not None:
+            self.server._tornado._ping_job.stop()
+
+        # self.server.stop()
+        # https://github.com/bokeh/bokeh/issues/5494
+
+
+def transpose(lod):
+    keys = list(lod[0].keys())
+    return {k: [d[k] for d in lod] for k in keys}
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    """
+    if n > 1e9:
+        return '%0.2f GB' % (n / 1e9)
+    if n > 1e6:
+        return '%0.2f MB' % (n / 1e6)
+    if n > 1e3:
+        return '%0.2f kB' % (n / 1000)
+    return '%d B' % n
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return '%.2f s' % n
+    if n >= 1e-3:
+        return '%.2f ms' % (n * 1e3)
+    return '%.2f us' % (n * 1e6)

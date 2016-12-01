@@ -12,7 +12,8 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import _wait
 from distributed.utils_test import gen_cluster, inc, dec
 from distributed.bokeh.worker import (BokehWorker, StateTable, CrossFilter,
-        CommunicatingStream, ExecutingTimeSeries, CommunicatingTimeSeries)
+        CommunicatingStream, ExecutingTimeSeries, CommunicatingTimeSeries,
+        SystemMonitor)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -36,7 +37,7 @@ def test_simple(c, s, a, b):
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
     for component in [StateTable, ExecutingTimeSeries,
-            CommunicatingTimeSeries, CrossFilter]:
+            CommunicatingTimeSeries, CrossFilter, SystemMonitor]:
 
         aa = component(a)
         bb = component(b)
