@@ -642,7 +642,8 @@ def test_drop_duplicates():
     assert_eq(res2, sol)
     assert res._name != res2._name
 
-    pytest.raises(NotImplementedError, lambda: d.drop_duplicates(keep=False))
+    with pytest.raises(NotImplementedError):
+        d.drop_duplicates(keep=False)
 
 
 def test_drop_duplicates_subset():

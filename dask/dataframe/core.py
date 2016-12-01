@@ -359,7 +359,7 @@ class _Frame(Base):
         else:
             split_out_setup = split_out_setup_kwargs = None
 
-        if 'keep' in kwargs and kwargs['keep'] is False:
+        if kwargs.get('keep', True) is False:
             raise NotImplementedError("drop_duplicates with keep=False")
 
         chunk = M.drop_duplicates
