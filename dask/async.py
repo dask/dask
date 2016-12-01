@@ -505,11 +505,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 finish(dsk, state, True)
         raise
 
-    # Final reporting
-    # XXX: this may not be needed anymore
-    while state['running'] or not queue.empty():
-        queue.get()
-
     for _, _, _, _, finish in started_cbs:
         if finish:
             finish(dsk, state, False)
