@@ -9,7 +9,7 @@ from __future__ import absolute_import, division, print_function
 
 import heapq
 
-from itertools import product, chain
+from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
 
 import numpy as np
@@ -56,12 +56,12 @@ def _intersect_1d(breaks):
     >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
 
     >>> _intersect_1d(_breakpoints(old[0], new[0]))  # doctest: +NORMALIZE_WHITESPACE
-    (((0, slice(0, 2, None)),),
-     ((1, slice(0, 2, None)), (2, slice(0, 1, None))))
+    [[(0, (0, 2))],
+     [(1, (0, 2)), (2, (0, 1))]]
     >>> _intersect_1d(_breakpoints(old[1], new[1]))  # doctest: +NORMALIZE_WHITESPACE
-    (((0, slice(0, 2, None)),),
-     ((0, slice(2, 4, None)),),
-     ((0, slice(4, 5, None)),))
+    [[(0, (0, 2))],
+     [(0, (2, 4))],
+     [(0, (4, 5))]]
 
     Parameters
     ----------
@@ -77,12 +77,16 @@ def _intersect_1d(breaks):
     start = 0
     last_end = 0
     old_idx = 0
+
     ret = []
+    ret_next = []
     for idx in range(1, len(breaks)):
         label, br = breaks[idx]
         last_label, last_br = breaks[idx - 1]
         if last_label == 'n':
-            ret.append([])
+            if ret_next:
+                ret.append(ret_next)
+                ret_next = []
         if last_label == 'o':
             start = 0
         else:
@@ -91,11 +95,18 @@ def _intersect_1d(breaks):
         last_end = end
         if br == last_br:
             continue
-        ret[-1].append((old_idx, slice(start, end)))
+        # Represent intervals as tuples rather than slices
+        # This makes _compute_rechunk() faster and may reduce the graph's
+        # footprint.
+        ret_next.append((old_idx, (start, end)))
         if label == 'o':
             old_idx += 1
             start = 0
-    return tuple(map(tuple, filter(None, ret)))
+
+    if ret_next:
+        ret.append(ret_next)
+
+    return ret
 
 
 def intersect_chunks(old_chunks=None,
@@ -106,10 +117,10 @@ def intersect_chunks(old_chunks=None,
 
     >>> intersect_chunks(((4, 4), (2,)),
     ...                  ((8,), (1, 1)))  # doctest: +NORMALIZE_WHITESPACE
-    ((((0, slice(0, 4, None)), (0, slice(0, 1, None))),
-      ((1, slice(0, 4, None)), (0, slice(0, 1, None)))),
-     (((0, slice(0, 4, None)), (0, slice(1, 2, None))),
-      ((1, slice(0, 4, None)), (0, slice(1, 2, None)))))
+    ((((0, (0, 4)), (0, (0, 1))),
+      ((1, (0, 4)), (0, (0, 1)))),
+     (((0, (0, 4)), (0, (1, 2))),
+      ((1, (0, 4)), (0, (1, 2)))))
 
     Parameters
     ----------
@@ -136,9 +147,9 @@ def intersect_chunks(old_chunks=None,
     sums2 = [sum(n) for n in old_chunks]
     if not sums == sums2:
         raise ValueError('Cannot change dimensions from to %r' % sums2)
-    old_to_new = tuple(
-        _intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn))
-    cross1 = tuple(product(*old_to_new))
+    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1]))
+                  for cm in zip(cmo, cmn)]
+    cross1 = product(*old_to_new)
     cross = tuple(chain(tuple(product(*cr)) for cr in cross1))
     return cross
 
@@ -471,33 +482,45 @@ def _compute_rechunk(x, chunks):
     x2 = dict()
     intermediates = dict()
     token = tokenize(x, chunks)
-    temp_name = 'rechunk-merge-' + token
-    new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
-    for flat_idx, cross1 in enumerate(crossed):
-        new_idx = new_index[flat_idx]
-        key = (temp_name,) + new_idx
-        cr2 = iter(cross1)
-        old_blocks = [[ind for ind, _ in cr] for cr in cross1]
-        subdims = [len(set([ss[i] for ss in old_blocks])) for i in range(ndim)]
-        rec_cat_arg = np.empty(subdims).tolist()
-        inds_in_block = product(*[range(s) for s in subdims])
-        for old_block in old_blocks:
-            ind_slics = next(cr2)
-            old_inds = [[s[0] for s in ind_slics] for i in range(ndim)]
-            # list of nd slices
-            slic = [[s[1] for s in ind_slics] for i in range(ndim)]
-            ind_in_blk = next(inds_in_block)
-            temp = rec_cat_arg
-            for i in range(ndim - 1):
-                temp = getitem(temp, ind_in_blk[i])
-            for ind, slc in zip(old_inds, slic):
-                name = (('rechunk-split-' + token, ) + tuple(ind) +
-                        sum([(s.start, s.stop) for s in slc], ()))
-                intermediates[name] = (getitem, (x.name,) + tuple(ind), tuple(slc))
-                temp[ind_in_blk[-1]] = name
-        x2[key] = (concatenate3, rec_cat_arg)
+    merge_temp_name = 'rechunk-merge-' + token
+    split_temp_name = 'rechunk-split-' + token
+    split_name_suffixes = count()
+
+    # Iterate over all new blocks
+    new_index = product(*(tuple(range(len(c))) for c in chunks))
+
+    for new_idx, cross1 in zip(new_index, crossed):
+        key = (merge_temp_name,) + new_idx
+        old_block_indices = [[cr[i][0] for cr in cross1] for i in range(ndim)]
+        subdims1 = [len(set(old_block_indices[i]))
+                    for i in range(ndim)]
+
+        rec_cat_arg = np.empty(subdims1, dtype='O')
+        rec_cat_arg_flat = rec_cat_arg.flat
+
+        # Iterate over the old blocks required to build the new block
+        for rec_cat_index, ind_intervals in enumerate(cross1):
+            old_block_index, intervals = zip(*ind_intervals)
+            name = (split_temp_name, next(split_name_suffixes))
+            intermediates[name] = (multislice,
+                                   (x.name,) + old_block_index, intervals)
+            rec_cat_arg_flat[rec_cat_index] = name
+
+        assert rec_cat_index == rec_cat_arg.size - 1
+        # New block is formed by concatenation of sliced old blocks
+        x2[key] = (concatenate3, rec_cat_arg.tolist())
+
+    assert new_idx == tuple(len(c) - 1 for c in chunks)
+
     x2 = merge(x.dask, x2, intermediates)
-    return Array(x2, temp_name, chunks, dtype=x.dtype)
+    return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
+
+
+def multislice(arr, intervals):
+    """
+    Slice *arr* along each a (start, stop) interval for each dimension.
+    """
+    return arr[tuple(slice(*i) for i in intervals)]
 
 
 class _PrettyBlocks(object):
