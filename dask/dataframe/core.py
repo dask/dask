@@ -351,11 +351,22 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
-        assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
+        # Let pandas error on bad inputs
+        self._meta_nonempty.drop_duplicates(**kwargs)
+        if 'subset' in kwargs and kwargs['subset'] is not None:
+            split_out_setup = split_out_on_cols
+            split_out_setup_kwargs = {'cols': kwargs['subset']}
+        else:
+            split_out_setup = split_out_setup_kwargs = None
+
+        if kwargs.get('keep', True) is False:
+            raise NotImplementedError("drop_duplicates with keep=False")
+
         chunk = M.drop_duplicates
         return aca(self, chunk=chunk, aggregate=chunk, meta=self._meta,
                    token='drop-duplicates', split_every=split_every,
-                   split_out=split_out, split_index=False, **kwargs)
+                   split_out=split_out, split_out_setup=split_out_setup,
+                   split_out_setup_kwargs=split_out_setup_kwargs, **kwargs)
 
     def __len__(self):
         return self.reduction(len, np.sum, token='len', meta=int,
@@ -1831,8 +1842,7 @@ class Series(_Frame):
         """
         return aca(self, chunk=methods.unique, aggregate=methods.unique,
                    meta=self._meta, token='unique', split_every=split_every,
-                   series_name=self.name, split_out=split_out,
-                   split_index=False)
+                   series_name=self.name, split_out=split_out)
 
     @derived_from(pd.Series)
     def nunique(self, split_every=None):
@@ -1845,7 +1855,7 @@ class Series(_Frame):
                    combine=methods.value_counts_combine,
                    meta=self._meta.value_counts(), token='value-counts',
                    split_every=split_every, split_out=split_out,
-                   split_index=True)
+                   split_out_setup=split_out_on_index)
 
     @derived_from(pd.Series)
     def nlargest(self, n=5, split_every=None):
@@ -2867,11 +2877,9 @@ def _maybe_from_pandas(dfs):
     return dfs
 
 
-def hash_shard(df, nparts, index):
-    if index:
-        h = df.index
-        if isinstance(h, pd.MultiIndex):
-            h = pd.DataFrame([], index=h).reset_index()
+def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
+    if split_out_setup:
+        h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
     h = hash_pandas_object(h, index=False)
@@ -2881,11 +2889,23 @@ def hash_shard(df, nparts, index):
     return {i: df.iloc[h == i] for i in range(nparts)}
 
 
+def split_out_on_index(df):
+    h = df.index
+    if isinstance(h, pd.MultiIndex):
+        h = pd.DataFrame([], index=h).reset_index()
+    return h
+
+
+def split_out_on_cols(df, cols=None):
+    return df[cols]
+
+
 @insert_meta_param_description
 def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
-                       meta=no_default, token=None, split_every=None,
-                       chunk_kwargs=None, aggregate_kwargs=None,
-                       combine_kwargs=None, split_out=None, split_index=None, **kwargs):
+                       meta=no_default, token=None, chunk_kwargs=None,
+                       aggregate_kwargs=None, combine_kwargs=None,
+                       split_every=None, split_out=None, split_out_setup=None,
+                       split_out_setup_kwargs=None, **kwargs):
     """Apply a function to blocks, then concat, then apply again
 
     Parameters
@@ -2903,22 +2923,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     $META
     token : str, optional
         The name to use for the output keys.
+    chunk_kwargs : dict, optional
+        Keywords for the chunk function only.
+    aggregate_kwargs : dict, optional
+        Keywords for the aggregate function only.
+    combine_kwargs : dict, optional
+        Keywords for the combine function only.
     split_every : int, optional
         Group partitions into groups of this size while performing a
         tree-reduction. If set to False, no tree-reduction will be used,
         and all intermediates will be concatenated and passed to ``aggregate``.
         Default is 8.
     split_out : int, optional
-        Number of output partitions.  Split occurs after first chunk reduction
-    split_index : bool
-        When hashing to produce output partitions, should we hash only the
-        output or all columns.
-    chunk_kwargs : dict, optional
-        Keywords for the chunk function only.
-    aggregate_kwargs : dict, optional
-        Keywords for the aggregate function only.
-    combine_kwargs : dict, optional
-        Keywords for the combine function only
+        Number of output partitions. Split occurs after first chunk reduction.
+    split_out_setup : callable, optional
+        If provided, this function is called on each chunk before performing
+        the hash-split. It should return a pandas object, where each row
+        (excluding the index) is hashed. If not provided, the chunk is hashed
+        as is.
+    split_out_setup_kwargs : dict, optional
+        Keywords for the `split_out_setup` function only.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -2968,7 +2992,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
                          chunk_kwargs, aggregate_kwargs, combine_kwargs,
-                         split_every, split_out, split_index)
+                         split_every, split_out, split_out_setup,
+                         split_out_setup_kwargs)
 
     # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
@@ -2985,7 +3010,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         split_prefix = 'split-%s' % token_key
         shard_prefix = 'shard-%s' % token_key
         for i in range(args[0].npartitions):
-            dsk[(split_prefix, i)] = (hash_shard, (a, 0, i, 0), split_out, split_index)
+            dsk[(split_prefix, i)] = (hash_shard, (a, 0, i, 0), split_out,
+                                      split_out_setup, split_out_setup_kwargs)
             for j in range(split_out):
                 dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
         a = shard_prefix

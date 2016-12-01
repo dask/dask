@@ -1,6 +1,7 @@
 import sys
 from copy import copy
 from operator import getitem, add
+from itertools import product
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -640,6 +641,9 @@ def test_drop_duplicates():
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
+
+    with pytest.raises(NotImplementedError):
+        d.drop_duplicates(keep=False)
 
 
 def test_drop_duplicates_subset():
@@ -2791,12 +2795,22 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
 @pytest.mark.parametrize('split_every', [None, 2])
 def test_split_out_drop_duplicates(split_every):
-    df = pd.DataFrame({'x': [1, 2, 3] * 100})
-    ddf = dd.from_pandas(df, npartitions=5)
+    x = np.concatenate([np.arange(10)] * 100)[:, None]
+    y = x.copy()
+    z = np.concatenate([np.arange(20)] * 50)[:, None]
+    rs = np.random.RandomState(1)
+    rs.shuffle(x)
+    rs.shuffle(y)
+    rs.shuffle(z)
+    df = pd.DataFrame(np.concatenate([x, y, z], axis=1), columns=['x', 'y', 'z'])
+    ddf = dd.from_pandas(df, npartitions=20)
 
-    assert ddf.drop_duplicates(split_out=10, split_every=split_every).npartitions == 10
-    assert_eq(ddf.drop_duplicates(split_out=10, split_every=split_every),
-              df.drop_duplicates())
+    for subset, keep in product([None, ['x', 'z']], ['first', 'last']):
+        sol = df.drop_duplicates(subset=subset, keep=keep)
+        res = ddf.drop_duplicates(subset=subset, keep=keep,
+                                  split_every=split_every, split_out=10)
+        assert res.npartitions == 10
+        assert_eq(sol, res)
 
 
 @pytest.mark.parametrize('split_every', [None, 2])
