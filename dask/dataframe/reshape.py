@@ -50,14 +50,20 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                               columns=columns, sparse=sparse,
                               drop_first=drop_first)
 
+    not_cat_msg = ("`get_dummies` with non-categorical dtypes is not "
+                   "supported. Please use `df.categorize()` beforehand to "
+                   "convert to categorical dtype.")
+
     if isinstance(data, Series) and not is_categorical_dtype(data):
-        raise ValueError('data must have category dtype')
+        raise NotImplementedError(not_cat_msg)
     elif isinstance(data, DataFrame):
         if columns is None:
+            if (data.dtypes == 'object').any():
+                raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=['category']).columns
         else:
             if not all(is_categorical_dtype(data[c]) for c in columns):
-                raise ValueError('target columns must have category dtype')
+                raise NotImplementedError(not_cat_msg)
 
     if sparse:
         raise NotImplementedError('sparse=True is not supported')
