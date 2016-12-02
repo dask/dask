@@ -300,8 +300,26 @@ class _Frame(Base):
         return Index(merge(dsk, self.dask), name,
                      self._meta.index, self.divisions)
 
-    @derived_from(pd.DataFrame)
     def reset_index(self, drop=False):
+        """Reset the index to the default index.
+
+        Note that unlike in ``pandas``, the reset ``dask.dataframe`` index will
+        not be monotonically increasing from 0. Instead, it will restart at 0
+        for each partition (e.g. ``index1 = [0, ..., 10], index2 = [0, ...]``).
+        This is due to the inability to statically know the full length of the
+        index.
+
+        For DataFrame with multi-level index, returns a new DataFrame with
+        labeling information in the columns under the index names, defaulting
+        to 'level_0', 'level_1', etc. if any are None. For a standard index,
+        the index name will be used (if set), otherwise a default 'index' or
+        'level_0' (if 'index' is already taken) will be used.
+
+        Parameters
+        ----------
+        drop : boolean, default False
+            Do not try to insert index into dataframe columns.
+        """
         return self.map_partitions(M.reset_index, drop=drop).clear_divisions()
 
     @property
@@ -1744,10 +1762,6 @@ class Series(_Frame):
     def dt(self):
         from .accessor import DatetimeAccessor
         return DatetimeAccessor(self)
-
-    @derived_from(pd.Series)
-    def reset_index(self, drop=False):
-        return super(Series, self).reset_index(drop=drop)
 
     @cache_readonly
     def cat(self):
