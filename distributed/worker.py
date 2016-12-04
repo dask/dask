@@ -10,7 +10,6 @@ import pkg_resources
 import random
 import tempfile
 from threading import current_thread, Lock, local
-from time import time
 from timeit import default_timer
 import shutil
 import sys
@@ -35,6 +34,7 @@ from .utils_comm import pack_data, gather_from_workers
 from .compatibility import reload, unicode
 from .core import (read, write, connect, close, send_recv, error_message,
                    rpc, Server, pingpong, coerce_to_address, RPCClosed)
+from .metrics import time
 from .protocol.pickle import dumps, loads
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
