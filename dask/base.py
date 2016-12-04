@@ -13,7 +13,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import bind_method, unicode
 from .context import _globals
-from .utils import Dispatch, ignoring
+from .utils import Dispatch
 
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
