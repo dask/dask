@@ -3,6 +3,7 @@
 import os
 import pytest
 from operator import add, mul
+import subprocess
 import sys
 
 import dask
@@ -350,3 +351,24 @@ def test_optimizations_keyword():
         assert x.compute() == 0
 
     assert x.compute() == 2
+
+
+def test_default_imports():
+    """
+    Startup time: `import dask` should not import too many modules.
+    """
+    code = """if 1:
+        import dask
+        import sys
+
+        print(sorted(sys.modules))
+        """
+
+    out = subprocess.check_output([sys.executable, '-c', code])
+    modules = set(eval(out.decode()))
+    assert 'dask' in modules
+    assert len(modules) < 250
+    blacklist = ['dask.array', 'dask.dataframe', 'numpy', 'pandas',
+                 'partd', 's3fs', 'distributed']
+    for mod in blacklist:
+        assert mod not in modules

@@ -512,6 +512,7 @@ class Dispatch(object):
     """Simple single dispatch."""
     def __init__(self):
         self._lookup = {}
+        self._lazy = {}
 
     def register(self, type, func):
         """Register dispatch of `func` on arguments of type `type`"""
@@ -521,16 +522,36 @@ class Dispatch(object):
         else:
             self._lookup[type] = func
 
+    def register_lazy(self, toplevel, func):
+        """
+        Register a registration function which will be called if the
+        *toplevel* module (e.g. 'pandas') is ever loaded.
+        """
+        self._lazy[toplevel] = func
+
     def __call__(self, arg):
-        # We dispatch first on type(arg), and fall back to iterating through
-        # the mro. This is significantly faster in the common case where
-        # type(arg) is in the lookup, with only a small penalty on fall back.
+        # Fast path with direct lookup on type
         lk = self._lookup
         typ = type(arg)
-        if typ in lk:
-            return lk[typ](arg)
+        try:
+            impl = lk[typ]
+        except KeyError:
+            pass
+        else:
+            return impl(arg)
+        # Is a lazy registration function present?
+        toplevel, _, _ = typ.__module__.partition('.')
+        try:
+            register = self._lazy.pop(toplevel)
+        except KeyError:
+            pass
+        else:
+            register()
+            return self(arg)  # recurse
+        # Walk the MRO and cache the lookup result
         for cls in inspect.getmro(typ)[1:]:
             if cls in lk:
+                lk[typ] = lk[cls]
                 return lk[cls](arg)
         raise TypeError("No dispatch for {0} type".format(typ))
 

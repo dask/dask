@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
 from functools import partial
 from hashlib import md5
 from operator import attrgetter
@@ -271,6 +272,11 @@ def normalize_dict(d):
     return normalize_token(sorted(d.items(), key=str))
 
 
+@partial(normalize_token.register, OrderedDict)
+def normalize_ordered_dict(d):
+    return type(d).__name__, normalize_token(list(d.items()))
+
+
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
@@ -289,7 +295,8 @@ def normalize_base(b):
     return type(b).__name__, b.key
 
 
-with ignoring(ImportError):
+@partial(normalize_token.register_lazy, "pandas")
+def register_pandas():
     import pandas as pd
 
     @partial(normalize_token.register, pd.Index)
@@ -315,7 +322,8 @@ with ignoring(ImportError):
         return list(map(normalize_token, data))
 
 
-with ignoring(ImportError):
+@partial(normalize_token.register_lazy, "numpy")
+def register_numpy():
     import numpy as np
 
     @partial(normalize_token.register, np.ndarray)
@@ -344,14 +352,6 @@ with ignoring(ImportError):
 
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
-
-
-with ignoring(ImportError):
-    from collections import OrderedDict
-
-    @partial(normalize_token.register, OrderedDict)
-    def normalize_ordered_dict(d):
-        return type(d).__name__, normalize_token(list(d.items()))
 
 
 def tokenize(*args, **kwargs):
