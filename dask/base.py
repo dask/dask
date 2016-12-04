@@ -267,22 +267,22 @@ normalize_token.register((int, float, str, unicode, bytes, type(None), type,
                          identity)
 
 
-@partial(normalize_token.register, dict)
+@normalize_token.register(dict)
 def normalize_dict(d):
     return normalize_token(sorted(d.items(), key=str))
 
 
-@partial(normalize_token.register, OrderedDict)
+@normalize_token.register(OrderedDict)
 def normalize_ordered_dict(d):
     return type(d).__name__, normalize_token(list(d.items()))
 
 
-@partial(normalize_token.register, (tuple, list, set))
+@normalize_token.register((tuple, list, set))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
 
 
-@partial(normalize_token.register, object)
+@normalize_token.register(object)
 def normalize_object(o):
     if callable(o):
         return normalize_function(o)
@@ -290,43 +290,43 @@ def normalize_object(o):
         return uuid.uuid4().hex
 
 
-@partial(normalize_token.register, Base)
+@normalize_token.register(Base)
 def normalize_base(b):
     return type(b).__name__, b.key
 
 
-@partial(normalize_token.register_lazy, "pandas")
+@normalize_token.register_lazy("pandas")
 def register_pandas():
     import pandas as pd
 
-    @partial(normalize_token.register, pd.Index)
+    @normalize_token.register(pd.Index)
     def normalize_index(ind):
         return [ind.name, normalize_token(ind.values)]
 
-    @partial(normalize_token.register, pd.Categorical)
+    @normalize_token.register(pd.Categorical)
     def normalize_categorical(cat):
         return [normalize_token(cat.codes),
                 normalize_token(cat.categories),
                 cat.ordered]
 
-    @partial(normalize_token.register, pd.Series)
+    @normalize_token.register(pd.Series)
     def normalize_series(s):
         return [s.name, s.dtype,
                 normalize_token(s._data.blocks[0].values),
                 normalize_token(s.index)]
 
-    @partial(normalize_token.register, pd.DataFrame)
+    @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
         data = [block.values for block in df._data.blocks]
         data += [df.columns, df.index]
         return list(map(normalize_token, data))
 
 
-@partial(normalize_token.register_lazy, "numpy")
+@normalize_token.register_lazy("numpy")
 def register_numpy():
     import numpy as np
 
-    @partial(normalize_token.register, np.ndarray)
+    @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)

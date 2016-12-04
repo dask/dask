@@ -514,20 +514,28 @@ class Dispatch(object):
         self._lookup = {}
         self._lazy = {}
 
-    def register(self, type, func):
+    def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
-        if isinstance(type, tuple):
-            for t in type:
-                self.register(t, func)
-        else:
-            self._lookup[type] = func
+        def wrapper(func):
+            if isinstance(type, tuple):
+                for t in type:
+                    self.register(t, func)
+            else:
+                self._lookup[type] = func
+            return func
 
-    def register_lazy(self, toplevel, func):
+        return wrapper(func) if func is not None else wrapper
+
+    def register_lazy(self, toplevel, func=None):
         """
         Register a registration function which will be called if the
         *toplevel* module (e.g. 'pandas') is ever loaded.
         """
-        self._lazy[toplevel] = func
+        def wrapper(func):
+            self._lazy[toplevel] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
 
     def __call__(self, arg):
         # Fast path with direct lookup on type
