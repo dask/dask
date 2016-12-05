@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from tornado import gen
+
 from dask import delayed
 
 from distributed import Worker
@@ -146,3 +148,29 @@ def test_persist_tuple(c, s, a, b):
     assert x.key in a.data
     assert y.key in a.data
     assert not b.data
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 4, {'resources': {'A': 2}}),
+                                  ('127.0.0.1', 4, {'resources': {'A': 1}})])
+def test_submit_many_non_overlapping(c, s, a, b):
+    futures = c.map(slowinc, range(100), resources={'A': 1}, delay=0.02)
+
+    while len(a.data) + len(b.data) < 100:
+        yield gen.sleep(0.01)
+        assert len(a.executing) <= 2
+        assert len(b.executing) <= 1
+
+    yield _wait(futures)
+    assert a.total_resources == a.available_resources
+    assert b.total_resources == b.available_resources
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 4, {'resources': {'A': 2, 'B': 1}})])
+def test_minimum_resource(c, s, a):
+    futures = c.map(slowinc, range(30), resources={'A': 1, 'B': 1}, delay=0.02)
+
+    while len(a.data) < 30:
+        yield gen.sleep(0.01)
+        assert len(a.executing) <= 1
+
+    yield _wait(futures)
+    assert a.total_resources == a.available_resources

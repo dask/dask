@@ -58,7 +58,7 @@ except ImportError:
 
 
 IN_PLAY = ('waiting', 'ready', 'executing', 'long-running')
-PENDING = ('waiting', 'ready')
+PENDING = ('waiting', 'ready', 'constrained')
 
 
 class WorkerBase(Server):
@@ -775,6 +775,7 @@ class Worker(WorkerBase):
         self.resource_restrictions = dict()
 
         self.ready = list()
+        self.constrained = deque()
         self.executing = set()
         self.executed_count = 0
         self.long_running = set()
@@ -789,6 +790,7 @@ class Worker(WorkerBase):
         self._transitions = {
                 ('waiting', 'ready'): self.transition_waiting_ready,
                 ('ready', 'executing'): self.transition_ready_executing,
+                ('constrained', 'executing'): self.transition_constrained_executing,
                 ('executing', 'memory'): self.transition_executing_done,
                 ('executing', 'error'): self.transition_executing_done,
                 ('executing', 'long-running'): self.transition_executing_long_running,
@@ -938,9 +940,9 @@ class Worker(WorkerBase):
     def transition(self, key, finish, **kwargs):
         start = self.task_state[key]
         func = self._transitions[start, finish]
-        func(key, **kwargs)
-        self.log.append((key, start, finish))
-        self.task_state[key] = finish
+        state = func(key, **kwargs)
+        self.log.append((key, start, state or finish))
+        self.task_state[key] = state or finish
 
     def transition_waiting_ready(self, key):
         try:
@@ -953,7 +955,11 @@ class Worker(WorkerBase):
                 assert key not in self.ready
 
             del self.waiting_for_data[key]
-            heapq.heappush(self.ready, (self.priorities[key], key))
+            if key in self.resource_restrictions:
+                self.constrained.append(key)
+                return 'constrained'
+            else:
+                heapq.heappush(self.ready, (self.priorities[key], key))
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -965,7 +971,7 @@ class Worker(WorkerBase):
             if self.validate:
                 assert key not in self.waiting_for_data
                 # assert key not in self.data
-                assert self.task_state[key] == 'ready'
+                assert self.task_state[key] in ('ready', 'constrained')
                 assert key not in self.ready
                 assert all(dep in self.data for dep in self.dependencies[key])
 
@@ -977,12 +983,24 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
+    def transition_constrained_executing(self, key):
+        self.transition_ready_executing(key)
+        for resource, quantity in self.resource_restrictions[key].items():
+            self.available_resources[resource] -= quantity
+
+        if self.validate:
+            assert all(v >= 0 for v in self.available_resources.values())
+
     def transition_executing_done(self, key):
         try:
             if self.validate:
                 assert key in self.executing or key in self.long_running
                 assert key not in self.waiting_for_data
                 assert key not in self.ready
+
+            if key in self.resource_restrictions:
+                for resource, quantity in self.resource_restrictions[key].items():
+                    self.available_resources[resource] += quantity
 
             if self.task_state[key] == 'executing':
                 self.executing.remove(key)
@@ -1339,8 +1357,27 @@ class Worker(WorkerBase):
     # Execute Task #
     ################
 
+    def meets_resource_constraints(self, key):
+        if key not in self.resource_restrictions:
+            return True
+        for resource, needed in self.resource_restrictions[key].items():
+            if self.available_resources[resource] < needed:
+                return False
+
+        return True
+
     def ensure_computing(self):
         try:
+            while self.constrained and len(self.executing) < self.ncores:
+                key = self.constrained[0]
+                if self.task_state.get(key) != 'constrained':
+                    self.constrained.popleft()
+                    continue
+                if self.meets_resource_constraints(key):
+                    self.constrained.popleft()
+                    self.transition(key, 'executing')
+                else:
+                    break
             while self.ready and len(self.executing) < self.ncores:
                 _, key = heapq.heappop(self.ready)
                 if key not in self.task_state:
@@ -1477,7 +1514,9 @@ class Worker(WorkerBase):
         with log_errors():
             heap = []
             total_duration = 0
-            for k in concat([self.waiting_for_data, pluck(1, self.ready)]):
+            for k in concat([self.waiting_for_data,
+                             pluck(1, self.ready),
+                             self.constrained]):
                 if k in self.steal_offered:
                     continue
                 if self.task_state.get(k) in PENDING:
@@ -1519,6 +1558,12 @@ class Worker(WorkerBase):
                 d['duration'] = self.durations[k]
                 d['nbytes'] = {dep: self.nbytes.get(dep) for dep in
                                self.dependencies[k]}
+                if k in self.host_restrictions:
+                    d['host_restrictions'] = self.host_restrictions[k]
+                if k in self.worker_restrictions:
+                    d['worker_restrictions'] = self.worker_restrictions[k]
+                if k in self.resource_restrictions:
+                    d['resource_restrictions'] = self.resource_restrictions[k]
                 msgs[k] = d
 
             self.steal_offered.update(good)
