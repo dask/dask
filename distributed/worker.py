@@ -774,7 +774,7 @@ class Worker(WorkerBase):
         self.worker_restrictions = dict()
         self.resource_restrictions = dict()
 
-        self.heap = list()
+        self.ready = list()
         self.executing = set()
         self.executed_count = 0
         self.long_running = set()
@@ -806,7 +806,7 @@ class Worker(WorkerBase):
     def __str__(self):
         return "<%s: %s, threads: %d, running: %d, ready: %d, in-flight: %d, waiting: %d>" % (
                 self.__class__.__name__, self.address, self.ncores, len(self.executing),
-                len(self.heap), len(self.in_flight), len(self.waiting_for_data))
+                len(self.ready), len(self.in_flight), len(self.waiting_for_data))
 
     __repr__ = __str__
 
@@ -950,10 +950,10 @@ class Worker(WorkerBase):
                 assert not self.waiting_for_data[key]
                 assert all(dep in self.data for dep in self.dependencies[key])
                 assert key not in self.executing
-                assert key not in self.heap
+                assert key not in self.ready
 
             del self.waiting_for_data[key]
-            heapq.heappush(self.heap, (self.priorities[key], key))
+            heapq.heappush(self.ready, (self.priorities[key], key))
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -966,7 +966,7 @@ class Worker(WorkerBase):
                 assert key not in self.waiting_for_data
                 # assert key not in self.data
                 assert self.task_state[key] == 'ready'
-                assert key not in self.heap
+                assert key not in self.ready
                 assert all(dep in self.data for dep in self.dependencies[key])
 
             self.executing.add(key)
@@ -982,7 +982,7 @@ class Worker(WorkerBase):
             if self.validate:
                 assert key in self.executing or key in self.long_running
                 assert key not in self.waiting_for_data
-                assert key not in self.heap
+                assert key not in self.ready
 
             if self.task_state[key] == 'executing':
                 self.executing.remove(key)
@@ -1341,8 +1341,8 @@ class Worker(WorkerBase):
 
     def ensure_computing(self):
         try:
-            while self.heap and len(self.executing) < self.ncores:
-                _, key = heapq.heappop(self.heap)
+            while self.ready and len(self.executing) < self.ncores:
+                _, key = heapq.heappop(self.ready)
                 if key not in self.task_state:
                     continue
                 if self.task_state[key] in ('memory', 'error', 'executing'):
@@ -1477,7 +1477,7 @@ class Worker(WorkerBase):
         with log_errors():
             heap = []
             total_duration = 0
-            for k in concat([self.waiting_for_data, pluck(1, self.heap)]):
+            for k in concat([self.waiting_for_data, pluck(1, self.ready)]):
                 if k in self.steal_offered:
                     continue
                 if self.task_state.get(k) in PENDING:
@@ -1565,7 +1565,7 @@ class Worker(WorkerBase):
                                 dep in self.executing or
                                 dep in self.data)
                 if state == 'ready':
-                    assert key in pluck(1, self.heap)
+                    assert key in pluck(1, self.ready)
                 if state == 'executing':
                     assert key in self.executing
                 if state == 'long-running':
@@ -1595,7 +1595,7 @@ class Worker(WorkerBase):
     def stateof(self, key):
         return {'executing': key in self.executing,
                 'waiting_for_data': key in self.waiting_for_data,
-                'heap': key in pluck(1, self.heap),
+                'heap': key in pluck(1, self.ready),
                 'data': key in self.data}
 
     def story(self, key):

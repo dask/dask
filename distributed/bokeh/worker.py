@@ -51,7 +51,7 @@ class StateTable(DashboardComponent):
             w = self.worker
             d = {'Stored': [len(w.data)],
                  'Executing': ['%d / %d' % (len(w.executing), w.ncores)],
-                 'Ready': [len(w.heap)],
+                 'Ready': [len(w.ready)],
                  'Waiting': [len(w.waiting_for_data)],
                  'Connections': [len(w.connections)],
                  'Serving': [len(w._listen_streams)]}
