@@ -11,3 +11,5 @@ include requirements.txt
 include distributed/config.yaml
 
 prune docs/_build
+include versioneer.py
+include distributed/_version.py

@@ -3,6 +3,7 @@
 import os
 from setuptools import setup
 import sys
+import versioneer
 
 requires = open('requirements.txt').read().strip().split('\n')
 if sys.version_info[0] < 3:
@@ -12,7 +13,8 @@ if sys.version_info < (3, 4):
     requires.append('singledispatch')
 
 setup(name='distributed',
-      version='1.14.3',
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description='Distributed computing',
       url='https://distributed.readthedocs.io/en/latest/',
       maintainer='Matthew Rocklin',
