@@ -8,7 +8,7 @@ from distributed.bokeh import messages
 
 from distributed.bokeh.components import (
     TaskStream, TaskProgress, MemoryUsage, ResourceProfiles, WorkerTable,
-    ProcessingStacks
+    Processing
 )
 
 @pytest.mark.parametrize('Component', [TaskStream,
@@ -16,7 +16,7 @@ from distributed.bokeh.components import (
                                        MemoryUsage,
                                        ResourceProfiles,
                                        WorkerTable,
-                                       ProcessingStacks])
+                                       Processing])
 def test_basic(Component):
     c = Component()
     assert isinstance(c.source, ColumnDataSource)

@@ -1,5 +1,5 @@
 import requests
-from time import time, sleep
+from time import sleep
 import sys
 
 import pytest
@@ -7,6 +7,7 @@ import pytest
 from distributed.bokeh.application import BokehWebInterface
 from distributed import LocalCluster
 from distributed.http import HTTPScheduler
+from distributed.metrics import time
 from distributed.utils_test import cluster, loop
 from distributed.utils import ignoring
 

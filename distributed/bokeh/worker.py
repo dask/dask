@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from functools import partial
-from time import time
 import logging
 
 from bokeh.layouts import row, column, widgetbox
@@ -20,6 +19,7 @@ from toolz import frequencies
 from .components import DashboardComponent
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
+from ..metrics import time
 from ..utils import log_errors, key_split
 
 
@@ -71,14 +71,14 @@ class CommunicatingStream(DashboardComponent):
             x_range = DataRange1d(range_padding=0)
             y_range = DataRange1d(range_padding=0)
 
-            fig= figure(title='Outgoing Communications',
+            fig= figure(title='Peer Communications',
                     x_axis_type='datetime', x_range=x_range, y_range=y_range,
                     height=height, tools='', **kwargs)
 
             fig.rect(source=self.incoming, x='middle', y='y', width='duration',
-                     height=0.9, color='blue', alpha='alpha')
-            fig.rect(source=self.outgoing, x='middle', y='y', width='duration',
                      height=0.9, color='red', alpha='alpha')
+            fig.rect(source=self.outgoing, x='middle', y='y', width='duration',
+                     height=0.9, color='blue', alpha='alpha')
 
             hover = HoverTool(
                 point_policy="follow_mouse",
@@ -148,11 +148,11 @@ class CommunicatingTimeSeries(DashboardComponent):
         self.worker = worker
         self.source = ColumnDataSource({'x': [], 'in': [], 'out': []})
 
-        x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
+        x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
 
         fig = figure(title="Communication History",
                      x_axis_type='datetime',
-                     y_range=[-0.1, worker.total_connections + 0.1],
+                     y_range=[-0.1, worker.total_connections + 0.5],
                      height=150, tools='', x_range=x_range, **kwargs)
         fig.line(source=self.source, x='x', y='in', color='red')
         fig.line(source=self.source, x='x', y='out', color='blue')
@@ -163,14 +163,13 @@ class CommunicatingTimeSeries(DashboardComponent):
             WheelZoomTool(dimensions="width")
         )
 
-
         self.root = fig
 
     def update(self):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
-                                'in': [len(self.worker._listen_streams)],
-                                'out': [len(self.worker.connections)]}, 1000)
+                                'out': [len(self.worker._listen_streams)],
+                                'in': [len(self.worker.connections)]}, 1000)
 
 
 class ExecutingTimeSeries(DashboardComponent):
@@ -178,7 +177,7 @@ class ExecutingTimeSeries(DashboardComponent):
         self.worker = worker
         self.source = ColumnDataSource({'x': [], 'y': []})
 
-        x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
+        x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
 
         fig = figure(title="Executing History",
                      x_axis_type='datetime', y_range=[-0.1, worker.ncores + 0.1],
@@ -275,14 +274,16 @@ class CrossFilter(DashboardComponent):
             out = []
 
             for msg in incoming:
-                d = self.process_msg(msg)
-                d['inout-color'] = 'red'
-                out.append(d)
+                if msg['keys']:
+                    d = self.process_msg(msg)
+                    d['inout-color'] = 'red'
+                    out.append(d)
 
             for msg in outgoing:
-                d = self.process_msg(msg)
-                d['inout-color'] = 'blue'
-                out.append(d)
+                if msg['keys']:
+                    d = self.process_msg(msg)
+                    d['inout-color'] = 'blue'
+                    out.append(d)
 
             if out:
                 out = transpose(out)
@@ -353,7 +354,7 @@ class SystemMonitor(DashboardComponent):
             self.names.append('num_fds')
         self.source = ColumnDataSource({name: [] for name in self.names})
 
-        x_range = DataRange1d(follow='end', follow_interval=30000,
+        x_range = DataRange1d(follow='end', follow_interval=10000,
                               range_padding=0)
 
         tools = 'reset,pan,wheel_zoom'
@@ -433,10 +434,10 @@ def main_doc(worker, doc):
         communicating_ts.root.x_range = xr
         communicating_stream.root.x_range = xr
 
-        doc.add_periodic_callback(statetable.update, 100)
-        doc.add_periodic_callback(executing_ts.update, 100)
-        doc.add_periodic_callback(communicating_ts.update, 100)
-        doc.add_periodic_callback(communicating_stream.update, 100)
+        doc.add_periodic_callback(statetable.update, 200)
+        doc.add_periodic_callback(executing_ts.update, 200)
+        doc.add_periodic_callback(communicating_ts.update, 200)
+        doc.add_periodic_callback(communicating_stream.update, 200)
         doc.add_root(column(statetable.root,
                             executing_ts.root,
                             communicating_ts.root,
@@ -449,8 +450,8 @@ def crossfilter_doc(worker, doc):
         statetable = StateTable(worker)
         crossfilter = CrossFilter(worker)
 
-        doc.add_periodic_callback(statetable.update, 100)
-        doc.add_periodic_callback(crossfilter.update, 200)
+        doc.add_periodic_callback(statetable.update, 200)
+        doc.add_periodic_callback(crossfilter.update, 500)
 
         doc.add_root(column(statetable.root, crossfilter.root))
 
@@ -458,7 +459,7 @@ def crossfilter_doc(worker, doc):
 def systemmonitor_doc(worker, doc):
     with log_errors():
         sysmon = SystemMonitor(worker, sizing_mode='scale_width')
-        doc.add_periodic_callback(sysmon.update, 100)
+        doc.add_periodic_callback(sysmon.update, 500)
 
         doc.add_root(sysmon.root)
 
@@ -479,14 +480,16 @@ class BokehWorker(object):
     def listen(self, port):
         if self.server:
             return
-        try:
-            self.server = Server(self.apps, io_loop=self.loop, port=port,
-                                 host=['*'])
-            self.server.start(start_loop=False)
-        except (SystemExit, EnvironmentError):
-            self.server = Server(self.apps, io_loop=self.loop, port=0,
-                                 host=['*'])
-            self.server.start(start_loop=False)
+        for i in range(5):
+            try:
+                self.server = Server(self.apps, io_loop=self.loop, port=port,
+                                     host=['*'])
+                self.server.start(start_loop=False)
+                break
+            except (SystemExit, EnvironmentError):
+                port = 0
+                if i == 4:
+                    raise
 
     @property
     def port(self):

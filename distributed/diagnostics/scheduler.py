@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import os
-from time import time
 
 try:
     from cytoolz import valmap
@@ -10,6 +9,7 @@ except ImportError:
 
 from toolz import countby, concat, dissoc
 
+from ..metrics import time
 from ..utils import key_split, log_errors
 
 
@@ -21,8 +21,6 @@ def tasks(s):
         return {'processing': processing,
                 'total': len(s.tasks),
                 'in-memory': len(s.who_has),
-                'ready': len(s.ready)
-                       + sum(map(len, s.stacks.values())),
                 'waiting': len(s.waiting),
                 'failed': len(s.exceptions_blame)}
 
@@ -69,8 +67,6 @@ def workers(s):
 
 def processing(s):
     return {'processing': valmap(len, s.processing),
-            'stacks': valmap(len, s.stacks),
-            'ready': len(s.ready),
             'waiting': len(s.waiting),
             'memory': len(s.who_has),
             'ncores': s.ncores}

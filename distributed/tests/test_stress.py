@@ -4,13 +4,15 @@ from concurrent.futures import CancelledError
 from datetime import timedelta
 from operator import add
 import sys
-from time import sleep, time
+from time import sleep
 
 from dask import delayed
 import pytest
 from toolz import concat, sliding_window, first
 
 from distributed import Client, wait, Nanny
+from distributed.config import config
+from distributed.metrics import time
 from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc, loop,
         slowadd, slow)
@@ -103,6 +105,7 @@ def test_stress_creation_and_deletion(c, s):
 @gen_cluster(ncores=[('127.0.0.1', 1)] * 10, client=True, timeout=60)
 def test_stress_scatter_death(c, s, *workers):
     import random
+    s.allowed_failures = 1000
     np = pytest.importorskip('numpy')
     L = yield c._scatter([np.random.random(10000) for i in range(len(workers))])
     yield c._replicate(L, n=2)
@@ -127,16 +130,25 @@ def test_stress_scatter_death(c, s, *workers):
             s.validate_state()
         except Exception as c:
             logger.exception(c)
-            import pdb; pdb.set_trace()
+            if config.get('log-on-err'):
+                import pdb; pdb.set_trace()
+            else:
+                raise
         w = random.choice(alive)
         yield w._close()
         alive.remove(w)
 
     try:
-        yield gen.with_timeout(timedelta(seconds=10), c._gather(futures))
+        yield gen.with_timeout(timedelta(seconds=20), c._gather(futures))
     except gen.TimeoutError:
         ws = {w.address: w for w in workers if w.status != 'closed'}
-        import pdb; pdb.set_trace()
+        print(s.processing)
+        print(ws)
+        print(futures)
+        if config.get('log-on-err'):
+            import pdb; pdb.set_trace()
+        else:
+            raise
     except CancelledError:
         pass
 

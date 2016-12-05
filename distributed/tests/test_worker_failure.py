@@ -4,21 +4,22 @@ from concurrent.futures import CancelledError
 from datetime import timedelta
 from operator import add
 import os
-from time import time, sleep
+from time import sleep
 
-from dask import delayed
 import pytest
 from toolz import partition_all
 from tornado import gen
 
+from dask import delayed
+from distributed import Client, Nanny, wait
 from distributed.compatibility import PY3
 from distributed.client import _wait
 from distributed.core import coerce_to_address
+from distributed.metrics import time
 from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
-from distributed import Client, Nanny, wait
 
 
 def test_submit_after_failed_worker(loop):
@@ -113,8 +114,9 @@ def test_restart(c, s, a, b):
     f = yield c._restart()
     assert f is c
 
-    assert len(s.stacks) == 2
     assert len(s.processing) == 2
+    assert len(s.occupancy) == 2
+    assert not any(s.occupancy.values())
 
     assert not s.who_has
 

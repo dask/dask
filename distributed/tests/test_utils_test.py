@@ -3,16 +3,17 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import socket
 import threading
-from time import sleep, time
+from time import sleep
 
 import pytest
+from tornado import gen
 
+from distributed import Scheduler, Worker, Client
+from distributed.core import rpc
+from distributed.metrics import time
 from distributed.utils_test import (cluster, loop, gen_cluster,
         gen_test, wait_for_port, slow)
 from distributed.utils import get_ip
-from distributed.core import rpc
-from distributed import Scheduler, Worker, Client
-from tornado import gen
 
 def test_cluster(loop):
     with cluster() as (s, [a, b]):

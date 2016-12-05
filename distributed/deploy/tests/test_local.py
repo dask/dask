@@ -2,15 +2,16 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import sys
-from time import sleep, time
+from time import sleep
 import unittest
 
 from tornado.ioloop import IOLoop
 from tornado import gen
 import pytest
 
-from distributed.deploy.local import LocalCluster
 from distributed import Client, Worker, Nanny
+from distributed.deploy.local import LocalCluster
+from distributed.metrics import time
 from distributed.utils_test import inc, loop, raises, gen_test
 from distributed.utils import ignoring
 

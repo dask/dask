@@ -31,7 +31,7 @@ def test_simple(s, a, b):
 
 
 @gen_cluster()
-def test_processing_stacks(s, a, b):
+def test_processing(s, a, b):
     server = HTTPScheduler(s)
     server.listen(0)
     client = AsyncHTTPClient()
@@ -39,11 +39,6 @@ def test_processing_stacks(s, a, b):
     s.processing[a.address][('foo-1', 1)] = 1
 
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
-    response = json.loads(response.body.decode())
-    assert response == {a.address: ['foo'], b.address: []}
-
-    s.stacks[a.address].append(('foo-1', 2))
-    response = yield client.fetch('http://localhost:%d/stacks.json' % server.port)
     response = json.loads(response.body.decode())
     assert response == {a.address: ['foo'], b.address: []}
 
@@ -159,7 +154,6 @@ def test_with_status(e, s, a, b):
     assert out['processing'] == 0
     assert out['failed'] == 0
     assert out['in-memory'] == 0
-    assert out['ready'] == 0
     assert out['waiting'] == 0
 
     L = e.map(div, range(10), range(10))
@@ -171,7 +165,6 @@ def test_with_status(e, s, a, b):
     out = json.loads(response.body.decode())
     assert out['failed'] == 1
     assert out['in-memory'] == 9
-    assert out['ready'] == 0
     assert out['total'] == 10
     assert out['waiting'] == 0
 

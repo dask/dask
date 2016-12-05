@@ -10,7 +10,7 @@ import signal
 import socket
 import subprocess
 import sys
-from time import time, sleep
+from time import sleep
 import uuid
 
 import six
@@ -21,6 +21,7 @@ from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
 from .core import connect, read, write, close, rpc, coerce_to_address
+from .metrics import time
 from .utils import ignoring, log_errors, sync, mp_context
 import pytest
 
@@ -150,6 +151,12 @@ def slowinc(x, delay=0.02):
     from time import sleep
     sleep(delay)
     return x + 1
+
+
+def slowdec(x, delay=0.02):
+    from time import sleep
+    sleep(delay)
+    return x - 1
 
 
 def randominc(x, scale=1):

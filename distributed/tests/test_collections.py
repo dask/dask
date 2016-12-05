@@ -11,7 +11,7 @@ import dask
 import dask.dataframe as dd
 import dask.bag as db
 from distributed import Client
-from distributed.client import _wait
+from distributed.client import _wait, wait
 from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
@@ -294,7 +294,8 @@ def test_bag_groupby_tasks_default(c, s, a, b):
         assert not any('partd' in k[0] for k in b2.dask)
 
 
-def test_dataframe_set_index_sync(loop):
+@pytest.mark.parametrize('wait', [wait, lambda x: None])
+def test_dataframe_set_index_sync(loop, wait):
     with cluster() as (c, [a, b]):
         with Client(('127.0.0.1', c['port']), loop=loop) as c:
             with dask.set_options(get=c.get):
@@ -302,11 +303,12 @@ def test_dataframe_set_index_sync(loop):
                         {'value': float, 'name': str, 'id': int},
                         freq='2H', partition_freq='1M', seed=1)
                 df = c.persist(df)
+                wait(df)
 
                 df2 = df.set_index('name', shuffle='tasks')
                 df2 = c.persist(df2)
 
-                df2.head()
+                assert len(df2)
 
 
 def test_loc_sync(loop):

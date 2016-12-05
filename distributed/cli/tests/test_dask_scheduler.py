@@ -9,12 +9,13 @@ import requests
 import signal
 import socket
 import sys
-from time import sleep, time
+from time import sleep
 
 
 from distributed import Scheduler, Client
 from distributed.utils import get_ip, ignoring, tmpfile
 from distributed.utils_test import loop, popen
+from distributed.metrics import time
 
 
 def test_defaults(loop):
@@ -122,8 +123,8 @@ def test_bokeh_whitelist(loop):
 
 def test_multiple_workers(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as s:
-        with popen(['dask-worker', 'localhost:8786']) as a:
-            with popen(['dask-worker', 'localhost:8786']) as b:
+        with popen(['dask-worker', 'localhost:8786', '--no-bokeh']) as a:
+            with popen(['dask-worker', 'localhost:8786', '--no-bokeh']) as b:
                 with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
                     start = time()
                     while len(c.ncores()) < 2:
@@ -149,9 +150,10 @@ def test_pid_file(loop):
             assert proc.pid == pid
 
     with tmpfile() as s:
-        with popen(['dask-scheduler', '--pid-file', s]) as sched:
+        with popen(['dask-scheduler', '--pid-file', s, '--no-bokeh']) as sched:
             check_pidfile(sched, s)
 
         with tmpfile() as w:
-            with popen(['dask-worker', '127.0.0.1:8786', '--pid-file', w]) as worker:
+            with popen(['dask-worker', '127.0.0.1:8786', '--pid-file', w,
+                        '--no-bokeh']) as worker:
                 check_pidfile(worker, w)

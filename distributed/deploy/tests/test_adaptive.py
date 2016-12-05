@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from time import sleep, time
+from time import sleep
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -8,6 +8,7 @@ from tornado.ioloop import IOLoop
 from distributed import Client
 from distributed.deploy import Adaptive, LocalCluster
 from distributed.utils_test import loop, slowinc, gen_test
+from distributed.metrics import time
 
 
 def test_adaptive_local_cluster(loop):
@@ -46,7 +47,7 @@ def test_adaptive_local_cluster_multi_workers():
     futures = c.map(slowinc, range(100), delay=0.01)
 
     start = time()
-    while not cluster.workers:
+    while not cluster.scheduler.worker_info:
         yield gen.sleep(0.01)
         assert time() < start + 15
 

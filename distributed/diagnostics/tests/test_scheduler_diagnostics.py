@@ -13,7 +13,6 @@ def test_tasks(c, s, a, b):
 
     assert d['failed'] == 0
     assert d['in-memory'] == 0
-    assert d['ready'] == 0
     assert d['total'] == 0
     assert d['waiting'] == 0
 
@@ -23,7 +22,6 @@ def test_tasks(c, s, a, b):
     d = tasks(s)
     assert d['failed'] == 1
     assert d['in-memory'] == 9
-    assert d['ready'] == 0
     assert d['total'] == 10
     assert d['waiting'] == 0
 

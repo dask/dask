@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from time import time, sleep
+from time import sleep
 import weakref
 
 from tornado.ioloop import IOLoop
@@ -18,7 +18,7 @@ from tornado import gen
 
 from .compatibility import JSONDecodeError
 from .core import Server, rpc, write, RPCClosed
-from .metrics import disk_io_counters, net_io_counters
+from .metrics import disk_io_counters, net_io_counters, time
 from .protocol import to_serialize
 from .utils import get_ip, ignoring, log_errors, mp_context, tmpfile
 from .worker import _ncores, Worker, run, TOTAL_MEMORY
@@ -65,9 +65,11 @@ class Nanny(Server):
         self.memory_limit = memory_limit
         self.environment = environment
         self.quiet = quiet
+        self.should_watch = True
 
         handlers = {'instantiate': self.instantiate,
                     'kill': self._kill,
+                    'restart': self.restart,
                     'terminate': self._close,
                     'monitor_resources': self.monitor_resources,
                     'run': self.run}
@@ -105,8 +107,9 @@ class Nanny(Server):
         if self.process is None:
             raise gen.Return('OK')
 
-        process, self.process = self.process, None  # avoid race with _watch
-        if isalive(process):
+        should_watch, self.should_watch = self.should_watch, False
+
+        if isalive(self.process):
             try:
                 # Ask worker to close
                 with rpc(ip='127.0.0.1', port=self.worker_port) as worker:
@@ -143,11 +146,10 @@ class Nanny(Server):
             except Exception as e:
                 logger.exception(e)
 
-        self.process = process  # re-instantiate self.process
         if self.process:
             with ignoring(OSError):
                 self.process.terminate()
-            join(process, timeout)
+            join(self.process, timeout)
             processes_to_close.discard(self.process)
 
             start = time()
@@ -158,6 +160,8 @@ class Nanny(Server):
             self.cleanup()
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
+
+        self.should_watch = should_watch
         raise gen.Return('OK')
 
     @gen.coroutine
@@ -171,7 +175,9 @@ class Nanny(Server):
                 environment = os.path.join(self.local_dir, environment)
             self.environment = environment
 
-        with log_errors():
+        should_watch, self.should_watch = self.should_watch, False
+
+        try:
             if isalive(self.process):
                 raise ValueError("Existing process still alive. Please kill first")
 
@@ -221,7 +227,21 @@ class Nanny(Server):
 
             logger.info("Nanny %s:%d starts worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
-            raise gen.Return('OK')
+        except Exception as e:
+            logger.exception(e)
+            raise
+        finally:
+            self.should_watch = should_watch
+
+        raise gen.Return('OK')
+
+    @gen.coroutine
+    def restart(self, stream=None, environment=None):
+        self.should_watch = False
+        yield self._kill()
+        yield self.instantiate(environment=environment)
+        self.should_watch = True
+        raise gen.Return('OK')
 
     def run(self, *args, **kwargs):
         return run(self, *args, **kwargs)
@@ -240,13 +260,13 @@ class Nanny(Server):
         self.cleanup()
 
     @gen.coroutine
-    def _watch(self, wait_seconds=0.10):
+    def _watch(self, wait_seconds=0.20):
         """ Watch the local process, if it dies then spin up a new one """
         while True:
             if closing[0] or self.status == 'closed':
                 yield self._close()
                 break
-            elif self.process and not isalive(self.process):
+            elif self.should_watch and self.process and not isalive(self.process):
                 logger.warn("Discovered failed worker")
                 self.cleanup()
                 try:

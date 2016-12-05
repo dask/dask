@@ -10,14 +10,13 @@ more information on how this these policies are enacted efficiently see
 Choosing Workers
 ----------------
 
-When a task transitions from waiting to a ready state we may decide a suitable
+When a task transitions from waiting to a processing state we decide a suitable
 worker for that task.  If the task has significant data dependencies or if the
 workers are under heavy load then this choice of worker can strongly impact
 global performance.  Currently workers for tasks are determined as follows:
 
-1.  If the task has no major dependencies and no restrictions then it goes into
-    a common pool of tasks to be used by the next worker with nothing better to
-    do.
+1.  If the task has no major dependencies and no restrictions then we find the
+    least occupied worker.
 2.  Otherwise, if a task has user-provided restrictions (for example it must
     run on a machine with a GPU) then we restrict the available pool of workers
     to just that set, otherwise we consider all workers

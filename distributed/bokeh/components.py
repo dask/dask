@@ -208,7 +208,7 @@ class TaskProgress(DashboardComponent):
             if messages['tasks']['deque']:
                 self.root.title.text = ("Progress -- total: %(total)s, "
                     "in-memory: %(in-memory)s, processing: %(processing)s, "
-                    "ready: %(ready)s, waiting: %(waiting)s, failed: %(failed)s"
+                    "waiting: %(waiting)s, failed: %(failed)s"
                     % messages['tasks']['deque'][-1])
 
 
@@ -458,15 +458,14 @@ class WorkerTable(DashboardComponent):
             self.source.data.update(data)
 
 
-class ProcessingStacks(DashboardComponent):
-    """ Processing and Stacks distribution per core
+class Processing(DashboardComponent):
+    """ Processing and distribution per core
 
     This shows how many tasks are actively running on each worker and how many
     tasks are enqueued for each worker and how many are in the common pool
     """
     def __init__(self, **kwargs):
-        data = self.processing_update({'processing': {}, 'stacks': {},
-                                  'ncores': {}, 'ready': 0})
+        data = self.processing_update({'processing': {}, 'ncores': {}})
         self.source = ColumnDataSource(data)
 
         x_range = Range1d(-1, 1)
@@ -475,8 +474,6 @@ class ProcessingStacks(DashboardComponent):
              x_range=x_range, id='bk-processing-stacks-plot', **kwargs)
         fig.quad(source=self.source, left=0, right='right', color=Spectral9[0],
                  top='top', bottom='bottom')
-        fig.quad(source=self.source, left='left', right=0, color=Spectral9[1],
-                 top='top', bottom='bottom', alpha='alpha')
 
         fig.xaxis.minor_tick_line_alpha = 0
         fig.yaxis.visible = False
@@ -489,10 +486,6 @@ class ProcessingStacks(DashboardComponent):
         <div>
             <span style="font-size: 14px; font-weight: bold;">Host:</span>&nbsp;
             <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-        </div>
-        <div>
-            <span style="font-size: 14px; font-weight: bold;">Stacks:</span>&nbsp;
-            <span style="font-size: 10px; font-family: Monaco, monospace;">@stacks</span>
         </div>
         <div>
             <span style="font-size: 14px; font-weight: bold;">Processing:</span>&nbsp;
@@ -511,12 +504,7 @@ class ProcessingStacks(DashboardComponent):
             data = self.processing_update(msg)
             x_range = self.root.x_range
             max_right = max(data['right'])
-            min_left = min(data['left'][:-1])
             cores = max(data['ncores'])
-            if min_left < x_range.start:  # not out there enough, jump ahead
-                x_range.start = min_left - 2
-            elif x_range.start < 2 * min_left - cores:  # way out there, walk back
-                x_range.start = x_range.start * 0.95 + min_left * 0.05
             if x_range.end < max_right:
                 x_range.end = max_right + 2
             elif x_range.end > 2 * max_right + cores:  # way out there, walk back
@@ -527,9 +515,7 @@ class ProcessingStacks(DashboardComponent):
     @staticmethod
     def processing_update(msg):
         with log_errors():
-            names = sorted(msg['stacks'])
-            stacks = msg['stacks']
-            stacks = [stacks[name] for name in names]
+            names = sorted(msg['processing'])
             names = sorted(names)
             processing = msg['processing']
             processing = [processing[name] for name in names]
@@ -538,22 +524,11 @@ class ProcessingStacks(DashboardComponent):
             n = len(names)
             d = {'name': list(names),
                  'processing': processing,
-                 'stacks': list(stacks),
                  'right': list(processing),
-                 'left': [-s for s in stacks],
                  'top': list(range(n, 0, -1)),
                  'bottom': list(range(n - 1, -1, -1)),
                  'ncores': ncores}
 
-            d['name'].append('ready')
-            d['processing'].append(0)
-            d['stacks'].append(msg['ready'])
-            d['left'].append(-msg['ready'] / n if n else 0)
-            d['right'].append(0)
-            d['top'].append(n)
-            d['bottom'].append(0)
-            d['ncores'].append(sum(msg['ncores'].values()))
-
-            d['alpha'] = [0.7] * n + [0.2]
+            d['alpha'] = [0.7] * n
 
             return d

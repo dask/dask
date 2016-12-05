@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from datetime import datetime
 import os
 import sys
-from time import time
 
 import pytest
 from toolz import valmap
@@ -13,6 +12,7 @@ from tornado import gen
 
 from distributed import Nanny, rpc, Scheduler
 from distributed.core import connect, read, write, close
+from distributed.metrics import time
 from distributed.protocol.pickle import dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster

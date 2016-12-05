@@ -1,5 +1,6 @@
 from collections import deque
-from time import time
+
+from ..metrics import time
 
 n = 60
 m = 100000
@@ -21,8 +22,7 @@ messages = {
 
     'progress': {},
 
-    'processing': {'stacks': {}, 'processing': {},
-                   'memory': 0, 'waiting': 0, 'ready': 0},
+    'processing': {'processing': {}, 'memory': 0, 'waiting': 0},
 
     'task-events': {'interval': 200,
                     'deque': deque(maxlen=m),

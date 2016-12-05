@@ -8,7 +8,7 @@ import shutil
 import socket
 from sys import argv, exit
 import sys
-from time import time, sleep
+from time import sleep
 
 import click
 from distributed import Nanny, Worker, sync, rpc
@@ -16,6 +16,7 @@ from distributed.nanny import isalive
 from distributed.utils import get_ip, All, ignoring
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
+from distributed.metrics import time
 from distributed.cli.utils import check_python_3
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -48,6 +49,9 @@ def handle_signal(sig, frame):
               help="Serving http port, defaults to randomly assigned")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to randomly assigned")
+@click.option('--bokeh-port', type=int, default=8789, help="Bokeh port")
+@click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
+              required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the scheduler network.")
@@ -71,7 +75,7 @@ def handle_signal(sig, frame):
               help='Resources for task constraints like "GPU=2 MEM=10e9"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         nanny, name, memory_limit, pid_file, temp_filename, reconnect,
-        resources):
+        resources, bokeh, bokeh_port):
     if nanny:
         port = nanny_port
     else:
@@ -106,13 +110,13 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     services = {('http', http_port): HTTPWorker}
 
-    try:
-        import bokeh
-    except ImportError:
-        pass
-    else:
-        from distributed.bokeh.worker import BokehWorker
-        services[('bokeh', 8789)] = BokehWorker
+    if bokeh:
+        try:
+            from distributed.bokeh.worker import BokehWorker
+        except ImportError:
+            pass
+        else:
+            services[('bokeh', bokeh_port)] = BokehWorker
 
     if resources:
         resources = resources.replace(',', ' ').split()

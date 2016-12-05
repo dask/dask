@@ -1,7 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
-import pytest
+from time import sleep
 
+import pytest
 from tornado import gen
 
 from dask import do
@@ -9,9 +10,9 @@ from distributed.core import read
 from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
         nbytes_bar, progress_stream, task_stream_append)
+from distributed.metrics import time
 from distributed.utils_test import inc, div, dec, gen_cluster
 from distributed.worker import dumps_task
-from time import time, sleep
 
 def test_progress_quads():
     msg = {'all': {'inc': 5, 'dec': 1, 'add': 4},

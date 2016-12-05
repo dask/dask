@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import sys
-from time import time
 import traceback
 
 from dask import delayed
@@ -20,6 +19,7 @@ from tornado.ioloop import TimeoutError
 from distributed.core import rpc, connect, read, write
 from distributed.client import _wait
 from distributed.scheduler import Scheduler
+from distributed.metrics import time
 from distributed.protocol import to_serialize
 from distributed.protocol.pickle import dumps, loads
 from distributed.sizeof import sizeof
@@ -449,7 +449,10 @@ def test_clean(c, s, a, b):
 @pytest.mark.skipif(sys.version_info[:2] == (3, 4), reason="mul bytes fails")
 @gen_cluster(client=True)
 def test_message_breakup(c, s, a, b):
-    xs = [c.submit(mul, b'%d' % i, 1000000, workers=a.address) for i in range(30)]
+    n = 100000
+    a.target_message_size = 10 * n
+    b.target_message_size = 10 * n
+    xs = [c.submit(mul, b'%d' % i, n, workers=a.address) for i in range(30)]
     y = c.submit(lambda *args: None, xs, workers=b.address)
     yield y._result()
 
@@ -486,3 +489,50 @@ def test_types(c, s, a, b):
 def test_system_monitor(s, a, b):
     assert b.monitor
     b.monitor.update()
+
+
+
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2, {'resources': {'A': 1}}),
+                                  ('127.0.0.2', 1)])
+def test_restrictions(c, s, a, b):
+    # Worker restrictions
+    x = c.submit(inc, 1, workers=a.address)
+    yield x._result()
+    assert a.host_restrictions == {}
+    assert a.worker_restrictions == {x.key: {a.address}}
+    assert a.resource_restrictions == {}
+
+    yield c._cancel(x)
+
+    while x.key in a.task_state:
+        yield gen.sleep(0.01)
+
+    assert a.worker_restrictions == {}
+
+    # Host restrictions
+    x = c.submit(inc, 1, workers=['127.0.0.1'])
+    yield x._result()
+    assert a.host_restrictions == {x.key: {'127.0.0.1'}}
+    assert a.worker_restrictions == {}
+    assert a.resource_restrictions == {}
+    yield c._cancel(x)
+
+    while x.key in a.task_state:
+        yield gen.sleep(0.01)
+
+    assert a.host_restrictions == {}
+
+    # Resource restrictions
+    x = c.submit(inc, 1, resources={'A': 1})
+    yield x._result()
+    assert a.host_restrictions == {}
+    assert a.worker_restrictions == {}
+    assert a.resource_restrictions == {x.key: {'A': 1}}
+    yield c._cancel(x)
+
+    while x.key in a.task_state:
+        yield gen.sleep(0.01)
+
+    assert a.resource_restrictions == {}

@@ -7,12 +7,10 @@ digraph{
     released2 [label=released];
     new -> released1;
     released1 -> waiting;
-    waiting -> queue;
-    waiting -> stacks;
+    waiting -> processing;
     waiting -> "no-worker";
     "no-worker" -> waiting;
-    queue -> processing;
-    stacks -> processing;
+    "no-worker" -> processing;
     processing -> memory;
     processing -> error;
     error -> forgotten;

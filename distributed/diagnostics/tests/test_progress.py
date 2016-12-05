@@ -3,18 +3,19 @@ from __future__ import print_function, division, absolute_import
 from operator import add
 import pytest
 import sys
-from time import time
+
 from toolz import valmap
 from tornado import gen
 from tornado.queues import Queue
 
 from dask.core import get_deps
-from distributed.client import _wait
-from distributed.worker import dumps_task
 from distributed import Nanny
+from distributed.client import _wait
+from distributed.metrics import time
 from distributed.utils_test import (gen_cluster, cluster, inc, dec, gen_test,
         div)
 from distributed.utils import All, key_split
+from distributed.worker import dumps_task
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
         AllProgress, MultiProgress, dependent_keys)
 from distributed.protocol.pickle import dumps
@@ -24,15 +25,14 @@ def test_dependent_keys():
     a, b, c, d, e, f, g = 'abcdefg'
     who_has = {a: [1], b: [1]}
     processing = {'alice': {c}}
-    stacks = {'bob': [d]}
     exceptions = {}
     dsk = {a: 1, b: 2, c: (add, a, b), d: (inc, a), e: (add, c, d), f: (inc, e)}
     dependencies, dependents = get_deps(dsk)
 
-    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+    assert dependent_keys(f, who_has, processing, dependencies,
             exceptions, complete=False)[0] == {f, e, c, d}
 
-    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+    assert dependent_keys(f, who_has, processing, dependencies,
             exceptions, complete=True)[0] == {a, b, c, d, e, f}
 
 

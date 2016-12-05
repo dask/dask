@@ -1,15 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
-import pytest
+from time import sleep
 
+import pytest
 from tornado import gen
 
 from distributed import Client, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
+from distributed.metrics import time
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, gen_cluster)
 from distributed.worker import dumps_task
-from time import time, sleep
 
 
 def test_text_progressbar(capsys, loop):

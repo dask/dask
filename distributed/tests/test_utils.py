@@ -4,7 +4,7 @@ from collections import Iterator
 from functools import partial
 import io
 import logging
-from time import time, sleep
+from time import sleep
 from threading import Thread
 import threading
 import traceback
@@ -15,13 +15,14 @@ from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
 import dask
+from distributed.compatibility import Queue, isqueue, PY2
+from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
         funcname, ensure_bytes)
 from distributed.utils_test import (loop, inc, throws, div, captured_handler,
                                     captured_logger)
-from distributed.compatibility import Queue, isqueue, PY2
 
 
 def test_All(loop):

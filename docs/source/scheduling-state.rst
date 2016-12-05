@@ -21,11 +21,11 @@ The life of a computation with Dask can be described in the following stages:
     scheduler.
 
 Most relevant logic is in tracking tasks as they evolve from newly submitted,
-to waiting for dependencies, to ready to run, to actively running on some
-worker, to finished in memory, to garbage collected.  Tracking this process,
-and tracking all effects that this task has on other tasks that might depend on
-it, is the majority of the complexity of the dynamic task scheduler.  This
-section describes the system used to perform this tracking.
+to waiting for dependencies, to actively running on some worker, to finished in
+memory, to garbage collected.  Tracking this process, and tracking all effects
+that this task has on other tasks that might depend on it, is the majority of
+the complexity of the dynamic task scheduler.  This section describes the
+system used to perform this tracking.
 
 For more abstract information about the policies used by the scheduler, see
 :doc:`Scheduling Policies<scheduling-policies>`.
@@ -90,8 +90,8 @@ Each of the following is a dictionary keyed by task name (described below):
 * **task_state:** ``{key: string}``:
 
     The ``task_state`` dictionary holds the current state of every key.
-    Current valid states include released, waiting, queue, stacks, no-worker,
-    processing, memory, and erred.  These states are explained further below.
+    Current valid states include released, waiting, no-worker, processing,
+    memory, and erred.  These states are explained further below.
 
 * **priority:** ``{key: tuple}``:
 
@@ -109,23 +109,9 @@ Each of the following is a dictionary keyed by task name (described below):
     but does exert some subtle influence that does significantly shape the long
     term performance of the cluster.
 
-* **ready:** ``deque(key)``
-
-    A deque of keys that are ready to run now but haven't yet been sent to a
-    worker to run.  These keys show no affinity to any particular worker and so
-    can be run equally well by anyone.  This is a common pool of tasks.
-
-* **stacks:** ``{worker: [keys]}``:
-
-    Keys that are ready to run and show some affinity to a particular worker.
-    These keys typically have dependencies that are known to be on that worker
-    or have user-defined restrictions that require them to run on certain
-    nodes.  A worker pulls from this stack first before taking tasks from the
-    common pool of ``ready`` tasks.
-
 * **processing:** ``{worker: {key: cost}}``:
 
-    Keys that are currently running on a worker.  This is keyed by worker
+    Keys that are currently allocated to a worker.  This is keyed by worker
     address and contains the expected cost in seconds of running that task.
 
 * **rprocessing:** ``{key: {worker}}``:
@@ -159,18 +145,40 @@ Each of the following is a dictionary keyed by task name (described below):
     that is not met by any available worker.  These keys are waiting for an
     appropriate worker to join the network before computing.
 
-* **restrictions:** ``{key: {hostnames}}``:
+* **host_restrictions:** ``{key: {hostnames}}``:
 
     A set of hostnames per key of where that key can be run.  Usually this
     is empty unless a key has been specifically restricted to only run on
     certain hosts.  These restrictions don't include a worker port.  Any
     worker on that hostname is deemed valid.
 
+* **worker_restrictions:** ``{key: {worker addresses}}``:
+
+    A set of complete host:port worker addresses per key of where that key can
+    be run.  Usually this is empty unless a key has been specifically
+    restricted to only run on certain workers.
+
 * **loose_restrictions:** ``{key}``:
 
     Set of keys for which we are allowed to violate restrictions (see above) if
     not valid workers are present and the task would otherwise go into the
     ``unrunnable`` set.
+
+* **resource_restrictions:** ``{key: {resource: quantity}}``:
+
+    Resources required by a task, such as ``{'GPU': 1}`` or ``{'memory': 1e9}``.
+    These names must match resources specified when creating workers.
+
+* **worker_resources:** ``{worker: {str: Number}}``:
+
+    The available resources on each worker like ``{'gpu': 2, 'mem': 1e9}``.
+    These are abstract quantities that constrain certain tasks from running at
+    the same time.
+
+* **used_resources:** ``{worker: {str: Number}}``:
+
+    The sum of each resource used by all tasks allocated to a particular
+    worker.
 
 *  **exceptions and tracebacks:** ``{key: Exception/Traceback}``:
 
@@ -213,11 +221,6 @@ Each of the following is a dictionary keyed by task name (described below):
     finished task.  This number is used for diagnostics and to help prioritize
     work.
 
-* **stealable:** ``[[key]]``
-
-    A list of stacks of stealable keys, ordered by stealability.  For more
-    information see :doc:`Work Stealing <work-stealing>`
-
 
 Example Event and Response
 --------------------------
@@ -250,12 +253,9 @@ following:
    for dep in dependents[key]:
       waiting[dep].remove(key)
 
-   if stacks[worker]:
-       next_task = stacks[worker].pop()
-   elif ready:
-       next_task = ready.pop()
-   else:
-       idle.add(worker)
+   for task in ready_tasks():
+       worker = best_wrker(task):
+       send_task_to_worker(task, worker)
 
 
 State Transitions
@@ -264,12 +264,12 @@ State Transitions
 The code presented in the section above is just for demonstration.  In practice
 writing this code for every possible event is highly error prone, resulting in
 hard-to-track-down bugs.  Instead the scheduler moves tasks between a fixed
-set of states, notably ``'released', 'waiting', 'queue', 'stacks', 'no-worker',
-'processing', 'memory', 'error'``.  Transitions between common pairs of states
-are well defined and, if no path exists between a pair, the graph of
-transitions can be traversed to find a valid sequence of transitions.  Along
-with these transitions come consistent logging and optional runtime checks that
-are useful in testing.
+set of states, notably ``'released', 'waiting', 'no-worker', 'processing',
+'memory', 'error'``.  Transitions between common pairs of states are well
+defined and, if no path exists between a pair, the graph of transitions can be
+traversed to find a valid sequence of transitions.  Along with these
+transitions come consistent logging and optional runtime checks that are useful
+in testing.
 
 Tasks fall into the following states with the following allowed transitions
 
@@ -279,8 +279,6 @@ Tasks fall into the following states with the following allowed transitions
 *  Released: known but not actively computing or in memory
 *  Waiting: On track to be computed, waiting on dependencies to arrive in
    memory
-*  Queue (ready): Ready to be computed by any worker
-*  Stacks (ready): Ready to be computed by a particular preferred worker
 *  No-worker (ready, rare): Ready to be computed, but no appropriate worker
    exists
 *  Processing: Actively being computed by one or more workers

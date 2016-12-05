@@ -1,11 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
-from time import time
 
 from tornado import gen
 
 from distributed import local_client
+from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, double
 
 

@@ -29,30 +29,37 @@ class Adaptive(object):
     ...     def scale_down(self, workers):
     ...        """ Remove worker addresses from cluster """
     '''
-    def __init__(self, scheduler, cluster, interval=1000):
+    def __init__(self, scheduler, cluster, interval=1000, startup_cost=1):
         self.scheduler = scheduler
         self.cluster = cluster
+        self.startup_cost = startup_cost
         self._adapt_callback = PeriodicCallback(self._adapt, interval,
                                                 self.scheduler.loop)
         self._adapt_callback.start()
         self._adapting = False
 
     def should_scale_up(self):
-        if (self.scheduler.ready or
-                any(self.scheduler.stealable) and not self.scheduler.idle):
-            return True
+        with log_errors():
+            if self.scheduler.unrunnable and not self.scheduler.ncores:
+                return True
 
-        limit_bytes = {w: self.scheduler.worker_info[w]['memory_limit']
-                        for w in self.scheduler.worker_info}
-        worker_bytes = self.scheduler.worker_bytes
+            total_occupancy = sum(self.scheduler.occupancy.values())
+            total_cores = sum(self.scheduler.ncores.values())
 
-        limit = sum(limit_bytes.values())
-        total = sum(worker_bytes.values())
+            if total_occupancy / (total_cores + 1e-9) > self.startup_cost * 2:
+                return True
 
-        if total > 0.6 * limit:
-            return True
+            limit_bytes = {w: self.scheduler.worker_info[w]['memory_limit']
+                            for w in self.scheduler.worker_info}
+            worker_bytes = self.scheduler.worker_bytes
 
-        return False
+            limit = sum(limit_bytes.values())
+            total = sum(worker_bytes.values())
+
+            if total > 0.6 * limit:
+                return True
+
+            return False
 
     @gen.coroutine
     def _retire_workers(self):
@@ -70,7 +77,7 @@ class Adaptive(object):
     @gen.coroutine
     def _adapt(self):
         if self._adapting:  # Semaphore to avoid overlapping adapt calls
-            raise gen.Return()
+            return
 
         self._adapting = True
         try:

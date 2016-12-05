@@ -2,9 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from collections import deque
 import psutil
-from time import time
 
 from .compatibility import WINDOWS
+from .metrics import time
 
 
 class SystemMonitor(object):

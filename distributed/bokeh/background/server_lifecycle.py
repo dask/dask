@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import sys
-from time import time
 
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPError
@@ -15,6 +14,7 @@ from tornado.ioloop import IOLoop
 
 from distributed.compatibility import ConnectionRefusedError
 from distributed.core import read, connect, write
+from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.diagnostics.eventstream import eventstream
 from distributed.diagnostics.progress_stream import (progress_stream,

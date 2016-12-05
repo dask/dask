@@ -24,15 +24,13 @@ def test_resource_append():
 
 def test_processing_update():
     from distributed.diagnostics.scheduler import processing
-    from distributed.bokeh.components import ProcessingStacks
+    from distributed.bokeh.components import Processing
 
     class C(object):
         pass
 
     s = C()
-    s.stacks = {'alice': ['inc', 'inc', 'add'], 'bob': ['add', 'add']}
     s.processing = {'alice': {'inc', 'add'}, 'bob': {'inc'}}
-    s.ready = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
     s.waiting = {'x': set()}
     s.who_has = {'z': set()}
     s.ncores = {'alice': 4, 'bob': 4}
@@ -40,21 +38,17 @@ def test_processing_update():
     msg = processing(s)
 
     assert msg == {'processing': {'alice': 2, 'bob': 1},
-                   'stacks': {'alice': 3, 'bob': 2},
-                   'ready': 7,
                    'waiting': 1,
                    'memory': 1,
                    'ncores': {'alice': 4, 'bob': 4}}
 
-    data = ProcessingStacks.processing_update(msg)
-    expected = {'name': ['alice', 'bob', 'ready'],
-                'processing': [2, 1, 0],
-                'stacks': [3, 2, 7],
-                'left': [-3, -2, -7/2],
-                'right': [2, 1, 0],
-                'top': [2, 1, 2],
-                'bottom': [1, 0, 0],
-                'ncores': [4, 4, 8],
-                'alpha': [0.7, 0.7, 0.2]}
+    data = Processing.processing_update(msg)
+    expected = {'name': ['alice', 'bob'],
+                'processing': [2, 1],
+                'right': [2, 1],
+                'top': [2, 1],
+                'bottom': [1, 0],
+                'ncores': [4, 4],
+                'alpha': [0.7, 0.7]}
 
     assert data == expected

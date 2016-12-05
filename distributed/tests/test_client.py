@@ -12,7 +12,7 @@ import pickle
 from random import random, choice
 import sys
 from threading import Thread, Semaphore
-from time import sleep, time
+from time import sleep
 import traceback
 
 import mock
@@ -32,12 +32,13 @@ from distributed.client import (Client, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_client,
         default_client, _first_completed, ensure_default_get, futures_of,
         temp_default_client, get_restrictions)
+from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All, mp_context
-from distributed.utils_test import (cluster, slow, slowinc, slowadd, randominc,
-        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep,
-        popen)
+from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
+        randominc, loop, inc, dec, div, throws, gen_cluster, gen_test, double,
+        deep, popen)
 
 
 @gen_cluster(client=True, timeout=None)
@@ -1313,6 +1314,7 @@ def test_allow_restrictions(c, s, a, b):
     """
 
     x = c.submit(inc, 15, workers='127.0.0.3', allow_other_workers=True)
+
     yield x._result()
     assert s.who_has[x.key]
     assert x.key in s.loose_restrictions
@@ -2678,6 +2680,7 @@ def test_even_load_on_startup(c, s, a, b):
     assert len(a.data) == len(b.data) == 1
 
 
+@pytest.mark.xfail
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 2)
 def test_contiguous_load(c, s, a, b):
     w, x, y, z = c.map(inc, [1, 2, 3, 4])
@@ -2705,21 +2708,6 @@ def test_balanced_with_submit_and_resident_data(c, s, *workers):
         assert len(w.data) == 2
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
-def test_balanced_with_submit_and_resident_data(c, s, a, b):
-    slow1 = c.submit(slowinc, 1, delay=0.2, workers=a.address)  # learn slow
-    slow2 = c.submit(slowinc, 2, delay=0.2, workers=b.address)
-    yield _wait([slow1, slow2])
-    aa = c.map(inc, range(100), pure=False, workers=a.address)  # learn fast
-    bb = c.map(inc, range(100), pure=False, workers=b.address)
-    yield _wait(aa + bb)
-
-    cc = c.map(slowinc, range(10), delay=0.1)
-    while not all(c.done() for c in cc):
-        assert all(len(p) < 3 for p in s.processing.values())
-        yield gen.sleep(0.01)
-
-
 @gen_cluster(client=True, ncores=[('127.0.0.1', 20)] * 2)
 def test_scheduler_saturates_cores(c, s, a, b):
     for delay in [0, 0.01, 0.1]:
@@ -2728,21 +2716,6 @@ def test_scheduler_saturates_cores(c, s, a, b):
         while not s.tasks or s.ready:
             if s.tasks:
                 assert all(len(p) >= 20 for p in s.processing.values())
-            yield gen.sleep(0.01)
-
-
-@gen_cluster(client=True, ncores=[('127.0.0.1', 20)] * 2)
-def test_scheduler_saturates_cores_stacks(c, s, a, b):
-    for delay in [0, 0.01, 0.1]:
-        x = c.map(slowinc, range(100), delay=delay, pure=False,
-                  workers=a.address)
-        y = c.map(slowinc, range(100), delay=delay, pure=False,
-                  workers=b.address)
-        while not s.tasks or any(s.stacks.values()):
-            if s.tasks:
-                for w, stack in s.stacks.items():
-                    if stack:
-                        assert len(s.processing[w]) >= s.ncores[w]
             yield gen.sleep(0.01)
 
 
@@ -2806,10 +2779,7 @@ def test_default_get(loop):
 
 
 @gen_cluster(client=True)
-def test_get_stacks_processing(c, s, a, b):
-    stacks = yield c.scheduler.stacks()
-    assert stacks == valmap(list, s.stacks)
-
+def test_get_processing(c, s, a, b):
     processing = yield c.scheduler.processing()
     assert processing == valmap(list, s.processing)
 
@@ -2817,13 +2787,6 @@ def test_get_stacks_processing(c, s, a, b):
                     allow_other_workers=True)
 
     yield gen.sleep(0.2)
-
-    x = yield c.scheduler.stacks()
-    assert set(x) == {a.address, b.address}
-
-    x = yield c.scheduler.stacks(workers=[a.address])
-    assert set(x) == {a.address}
-    assert isinstance(x[a.address], list)
 
     x = yield c.scheduler.processing()
     assert set(x) == {a.address, b.address}
@@ -2869,13 +2832,10 @@ def test_bad_tasks_fail(c, s, a, b):
         yield f._result()
 
 
-def test_get_stacks_processing_sync(loop):
+def test_get_processing_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
-            stacks = c.stacks()
             processing = c.processing()
-            assert len(stacks) == len(processing) == 2
-            assert not any(v for v in stacks.values())
             assert not any(v for v in processing.values())
 
             futures = c.map(slowinc, range(10), delay=0.1,
@@ -2886,14 +2846,7 @@ def test_get_stacks_processing_sync(loop):
 
             aa = '127.0.0.1:%d' % a['port']
             bb = '127.0.0.1:%d' % b['port']
-            stacks = c.stacks()
             processing = c.processing()
-
-            assert all(k.startswith('slowinc') for k in stacks[aa])
-            assert stacks[bb] == []
-
-            assert set(c.stacks(aa)) == {aa}
-            assert set(c.stacks([aa])) == {aa}
 
             assert set(c.processing(aa)) == {aa}
             assert set(c.processing([aa])) == {aa}
@@ -3824,3 +3777,47 @@ def test_auto_normalize_collection_sync(loop):
                 y.sum().compute()
                 end = time()
                 assert end - start < 1
+
+
+@gen_cluster(client=True, timeout=None)
+def test_interleave_computations(c, s, a, b):
+    xs = [delayed(slowinc)(i, delay=0.02) for i in range(30)]
+    ys = [delayed(slowdec)(x, delay=0.02) for x in xs]
+    zs = [delayed(slowadd)(x, y, delay=0.02) for x, y in zip(xs, ys)]
+
+    total = delayed(sum)(zs)
+
+    future = c.compute(total)
+
+    done = ('memory', 'released')
+
+    yield gen.sleep(0.1)
+
+    while not s.tasks or any(s.processing.values()):
+        yield gen.sleep(0.05)
+        x_done = len([k for k in xs if s.task_state[k.key] in done])
+        y_done = len([k for k in ys if s.task_state[k.key] in done])
+        z_done = len([k for k in zs if s.task_state[k.key] in done])
+
+        assert x_done >= y_done >= z_done
+        assert x_done < y_done + 10
+        assert y_done < z_done + 10
+
+
+@gen_cluster(client=True, timeout=None)
+def test_interleave_computations_map(c, s, a, b):
+    xs = c.map(slowinc, range(30), delay=0.02)
+    ys = c.map(slowdec, xs, delay=0.02)
+    zs = c.map(slowadd, xs, ys, delay=0.02)
+
+    done = ('memory', 'released')
+
+    while not s.tasks or any(s.processing.values()):
+        yield gen.sleep(0.05)
+        x_done = len([k for k in xs if s.task_state[k.key] in done])
+        y_done = len([k for k in ys if s.task_state[k.key] in done])
+        z_done = len([k for k in zs if s.task_state[k.key] in done])
+
+        assert x_done >= y_done >= z_done
+        assert x_done < y_done + 10
+        assert y_done < z_done + 10

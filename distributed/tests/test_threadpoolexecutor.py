@@ -1,5 +1,7 @@
+from time import sleep
+
+from distributed.metrics import time
 from distributed.threadpoolexecutor import ThreadPoolExecutor, secede
-from time import time, sleep
 
 def test_tpe():
     e = ThreadPoolExecutor(2)

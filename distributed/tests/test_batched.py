@@ -2,7 +2,6 @@
 from contextlib import contextmanager
 from datetime import timedelta
 import random
-from time import time
 
 import pytest
 from toolz import first, assoc
@@ -11,10 +10,11 @@ from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
 from tornado.iostream import StreamClosedError
 
+from distributed.batched import BatchedSend
 from distributed.core import read, write
+from distributed.metrics import time
 from distributed.utils import sync, All
 from distributed.utils_test import gen_test, slow, gen_cluster
-from distributed.batched import BatchedSend
 
 
 class EchoServer(TCPServer):

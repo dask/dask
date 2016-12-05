@@ -19,7 +19,7 @@ from ..utils import sync, key_split, tokey
 logger = logging.getLogger(__name__)
 
 
-def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions,
+def dependent_keys(keys, who_has, processing, dependencies, exceptions,
                    complete=False):
     """ All keys that need to compute for these keys to finish """
     out = set()
@@ -30,8 +30,7 @@ def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions,
         if key in out:
             continue
         if not complete and (who_has.get(key) or
-                             key in processing or
-                             key in stacks):
+                             key in processing):
             continue
         if key in exceptions:
             errors.add(key)
@@ -85,14 +84,14 @@ class Progress(SchedulerPlugin):
 
         self.scheduler.add_plugin(self)  # subtle race condition here
         self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                self.scheduler.processing, self.scheduler.stacks,
+                self.scheduler.processing,
                 self.scheduler.dependencies, self.scheduler.exceptions,
                 complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
             self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                    self.scheduler.processing, self.scheduler.stacks,
+                    self.scheduler.processing,
                     self.scheduler.dependencies, self.scheduler.exceptions,
                     complete=False)
         self.all_keys.update(keys)
@@ -174,14 +173,14 @@ class MultiProgress(Progress):
 
         self.scheduler.add_plugin(self)  # subtle race condition here
         self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                self.scheduler.processing, self.scheduler.stacks,
+                self.scheduler.processing,
                 self.scheduler.dependencies, self.scheduler.exceptions,
                 complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
             self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                    self.scheduler.processing, self.scheduler.stacks,
+                    self.scheduler.processing,
                     self.scheduler.dependencies, self.scheduler.exceptions,
                     complete=False)
         self.all_keys.update(keys)

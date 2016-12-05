@@ -1,14 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
-from time import sleep, time
+from time import sleep
 
 import pytest
 pytest.importorskip('paramiko')
 
 from distributed import Client
 from distributed.deploy.ssh import SSHCluster
-from distributed.utils_test import slow
-from distributed.utils_test import loop
+from distributed.metrics import time
+from distributed.utils_test import slow, loop
 
 @pytest.mark.avoid_travis
 def test_cluster(loop):
