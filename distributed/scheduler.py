@@ -45,6 +45,7 @@ BANDWIDTH = config.get('bandwidth', 100e6)
 ALLOWED_FAILURES = config.get('allowed-failures', 3)
 
 LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
+DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 
 class Scheduler(Server):
@@ -673,7 +674,8 @@ class Scheduler(Server):
 
         if self.task_state[key] == 'memory':
             if key not in self.has_what[worker]:
-                self.worker_bytes[worker] += self.nbytes.get(key, 1000)
+                self.worker_bytes[worker] += self.nbytes.get(key,
+                                                             DEFAULT_DATA_SIZE)
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
 
@@ -707,7 +709,8 @@ class Scheduler(Server):
                     for w in set(self.who_has[k]):
                         self.has_what[w].remove(k)
                         self.who_has[k].remove(w)
-                        self.worker_bytes[w] -= self.nbytes.get(k, 1000)
+                        self.worker_bytes[w] -= self.nbytes.get(k,
+                                                        DEFAULT_DATA_SIZE)
                     recommendations[k] = 'released'
 
             if key:
@@ -1390,7 +1393,8 @@ class Scheduler(Server):
                 for vv in v:
                     keys_by_worker[vv].add(k)
 
-            worker_bytes = {w: sum(self.nbytes.get(k, 1000) for k in v)
+            worker_bytes = {w: sum(self.nbytes.get(k, DEFAULT_DATA_SIZE)
+                                   for k in v)
                             for w, v in keys_by_worker.items()}
             avg = sum(worker_bytes.values()) / len(worker_bytes)
 
@@ -1401,7 +1405,7 @@ class Scheduler(Server):
             recipient = next(recipients)
             msgs = []  # (sender, recipient, key)
             for sender in sorted_workers[:len(workers) // 2]:
-                sender_keys = {k: self.nbytes.get(k, 1000)
+                sender_keys = {k: self.nbytes.get(k, DEFAULT_DATA_SIZE)
                                 for k in keys_by_worker[sender]}
                 sender_keys = iter(sorted(sender_keys.items(),
                                           key=second, reverse=True))
@@ -1439,7 +1443,8 @@ class Scheduler(Server):
             for sender, recipient, key in msgs:
                 self.who_has[key].add(recipient)
                 self.has_what[recipient].add(key)
-                self.worker_bytes[recipient] += self.nbytes.get(key, 1000)
+                self.worker_bytes[recipient] += self.nbytes.get(key,
+                                                        DEFAULT_DATA_SIZE)
 
             result = yield {r: self.rpc(addr=r).delete_data(keys=v, report=False)
                             for r, v in to_senders.items()}
@@ -1447,7 +1452,8 @@ class Scheduler(Server):
             for sender, recipient, key in msgs:
                 self.who_has[key].remove(sender)
                 self.has_what[sender].remove(key)
-                self.worker_bytes[sender] -= self.nbytes.get(key, 1000)
+                self.worker_bytes[sender] -= self.nbytes.get(key,
+                                                             DEFAULT_DATA_SIZE)
 
             raise Return({'status': 'OK'})
 
@@ -1500,7 +1506,8 @@ class Scheduler(Server):
                 self.has_what[worker] -= keys
                 for key in keys:
                     self.who_has[key].remove(worker)
-                    self.worker_bytes[worker] -= self.nbytes.get(key, 1000)
+                    self.worker_bytes[worker] -= self.nbytes.get(key,
+                                                            DEFAULT_DATA_SIZE)
 
         keys = {k for k in keys if len(self.who_has[k] & workers) < n}
         # Copy not-yet-filled data
@@ -1524,6 +1531,28 @@ class Scheduler(Server):
                     self.add_keys(address=w, keys=list(gathers[w]))
 
     def workers_to_close(self, memory_ratio=2):
+        """
+        Find workers that we can close with low cost
+
+        This returns a list of workers that are good candidates to retire.
+        These workers are idle (not running anything) and are storing
+        relatively little data relative to their peers.  If all workers are
+        idle then we still maintain enough workers to have enough RAM to store
+        our data, with a comfortable buffer.
+
+        This is for use with systems like ``distributed.deploy.adaptive``.
+
+        Parameters
+        ----------
+        memory_factor: Number
+            Amount of extra space we want to have for our stored data.
+            Defaults two 2, or that we want to have twice as much memory as we
+            currently have data.
+
+        Returns
+        -------
+        to_close: list of workers that are OK to close
+        """
         with log_errors():
             if all(self.processing.values()):
                 return []
@@ -1621,7 +1650,8 @@ class Scheduler(Server):
         for key in keys:
             if key in self.who_has:
                 if key not in self.has_what[address]:
-                    self.worker_bytes[address] += self.nbytes.get(key, 1000)
+                    self.worker_bytes[address] += self.nbytes.get(key,
+                                                            DEFAULT_DATA_SIZE)
                 self.has_what[address].add(key)
                 self.who_has[key].add(address)
             # else:
@@ -1658,7 +1688,8 @@ class Scheduler(Server):
                     self.who_has[key] = set()
                 for w in workers:
                     if key not in self.has_what[w]:
-                        self.worker_bytes[w] += self.nbytes.get(key, 1000)
+                        self.worker_bytes[w] += self.nbytes.get(key,
+                                                            DEFAULT_DATA_SIZE)
                     self.has_what[w].add(key)
                     self.who_has[key].add(w)
                 self.waiting_data[key] = set()
@@ -1912,7 +1943,7 @@ class Scheduler(Server):
             if self.dependencies.get(key, None) or valid_workers is not True:
                 worker = decide_worker(self.dependencies, self.occupancy,
                         self.who_has, valid_workers, self.loose_restrictions,
-                        key, objective=partial(self.worker_objective, key))
+                        partial(self.worker_objective, key), key)
             elif self.idle:
                 # TODO: these lines are linear time (in workers) and don't scale
                 worker = min(self.idle, key=partial(self.worker_objective,  key))
@@ -2000,7 +2031,8 @@ class Scheduler(Server):
             if worker:
                 self.who_has[key].add(worker)
                 self.has_what[worker].add(key)
-                self.worker_bytes[worker] += self.nbytes.get(key, 1000)
+                self.worker_bytes[worker] += self.nbytes.get(key,
+                                                             DEFAULT_DATA_SIZE)
 
             if nbytes:
                 self.nbytes[key] = nbytes
@@ -2083,7 +2115,8 @@ class Scheduler(Server):
             for w in workers:
                 if w in self.worker_info:  # in case worker has died
                     self.has_what[w].remove(key)
-                    self.worker_bytes[w] -= self.nbytes.get(key, 1000)
+                    self.worker_bytes[w] -= self.nbytes.get(key,
+                                                            DEFAULT_DATA_SIZE)
                     self.deleted_keys[w].add(key)
 
             self.released.add(key)
@@ -2353,7 +2386,8 @@ class Scheduler(Server):
             for w in workers:
                 if w in self.worker_info:  # in case worker has died
                     self.has_what[w].remove(key)
-                    self.worker_bytes[w] -= self.nbytes.get(key, 1000)
+                    self.worker_bytes[w] -= self.nbytes.get(key,
+                                                            DEFAULT_DATA_SIZE)
                     self.deleted_keys[w].add(key)
 
             if self.validate:
@@ -2790,7 +2824,8 @@ class Scheduler(Server):
 
         Minimize expected start time.  If a tie then break with data storate.
         """
-        comm_bytes = sum([self.nbytes.get(k, 1000) for k in self.dependencies[key]
+        comm_bytes = sum([self.nbytes.get(k, DEFAULT_DATA_SIZE)
+                          for k in self.dependencies[key]
                           if worker not in self.who_has[k]])
         stack_time = self.occupancy[worker] / self.ncores[worker]
         start_time = comm_bytes / BANDWIDTH + stack_time
@@ -2798,9 +2833,7 @@ class Scheduler(Server):
 
 
 def decide_worker(dependencies, occupancy, who_has, valid_workers,
-        loose_restrictions, key, objective=None, has_what=None, nbytes=None,
-        ncores=None):
-
+                  loose_restrictions, objective, key):
     """
     Decide which worker should take task
 
@@ -2859,8 +2892,7 @@ def decide_worker(dependencies, occupancy, who_has, valid_workers,
             if not workers:
                 if key in loose_restrictions:
                     return decide_worker(dependencies, occupancy, who_has,
-                            True, set(), key, objective=objective,
-                            nbytes=nbytes, has_what=has_what, ncores=ncores)
+                            True, set(), objective, key)
 
                 else:
                     return None
@@ -2869,14 +2901,6 @@ def decide_worker(dependencies, occupancy, who_has, valid_workers,
 
     if len(workers) == 1:
         return first(workers)
-
-    if objective is None:
-        def objective(w):
-            comm_bytes = sum([nbytes.get(k, 1000) for k in dependencies[key]
-                              if w not in who_has[k]])
-            stack_time = occupancy[w] / ncores[w]
-            start_time = comm_bytes / BANDWIDTH + stack_time
-            return (start_time, len(has_what[w]))
 
     return min(workers, key=objective)
 
