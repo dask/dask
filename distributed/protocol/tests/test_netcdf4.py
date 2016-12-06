@@ -6,7 +6,6 @@ np = pytest.importorskip('numpy')
 from distributed.protocol import serialize, deserialize, dumps, loads
 
 from distributed.utils import tmpfile
-import distributed.protocol.netcdf4
 
 
 def create_test_dataset(fn):

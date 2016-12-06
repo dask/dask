@@ -13,8 +13,6 @@ from distributed.utils_test import slow
 from distributed.protocol.numpy import itemsize
 from distributed.protocol.compression import maybe_compress
 
-import distributed.protocol.numpy
-
 
 def test_serialize():
     x = np.ones((5, 5))

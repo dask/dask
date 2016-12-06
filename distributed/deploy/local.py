@@ -10,7 +10,6 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado import gen
 
-from ..http.scheduler import HTTPScheduler
 from ..utils import sync, ignoring, All
 from ..client import Client
 from ..nanny import Nanny
@@ -63,7 +62,7 @@ class LocalCluster(object):
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
             silence_logs=logging.CRITICAL, diagnostics_port=8787,
-            services={'http': HTTPScheduler}, **kwargs):
+            services={}, **kwargs):
         self.status = None
         self.nanny = nanny
         if silence_logs:
@@ -192,6 +191,7 @@ class LocalCluster(object):
         except ImportError:
             logger.info("To start diagnostics web server please install Bokeh")
             return
+        from ..http.scheduler import HTTPScheduler
 
         assert self.diagnostics is None
         if 'http' not in self.scheduler.services:

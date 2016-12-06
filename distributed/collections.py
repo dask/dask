@@ -3,11 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 from itertools import product
 
-import dask.array as da
-import dask.bag as db
-import dask.dataframe as dd
 from dask.base import tokenize
-import numpy as np
 from tornado import gen
 
 from .client import (default_client, Future, _first_completed,
@@ -26,6 +22,8 @@ def get_empty(df):
 
 @gen.coroutine
 def _futures_to_dask_dataframe(futures, divisions=None, client=None):
+    import dask.dataframe as dd
+
     client = default_client(client)
     f = yield _first_completed(futures)
     empty = client.submit(get_empty, f)
@@ -77,6 +75,9 @@ def get_dtype(x):
 
 @gen.coroutine
 def _futures_to_dask_array(futures, client=None):
+    import numpy as np
+    import dask.array as da
+
     client = default_client(client)
     futures = np.array(futures, dtype=object)
 
@@ -126,6 +127,8 @@ def futures_to_dask_array(futures, client=None):
 
 @gen.coroutine
 def _futures_to_dask_bag(futures, client=None):
+    import dask.bag as db
+
     client = default_client(client)
 
     name = 'bag-from-futures-' + tokenize(*futures)
@@ -192,6 +195,8 @@ def futures_to_collection(futures, client=None, **kwargs):
 
 @gen.coroutine
 def _future_to_dask_array(future, client=None):
+    import dask.array as da
+
     e = default_client(client)
 
     name = 'array-' + str(future.key)
@@ -223,6 +228,8 @@ def future_to_dask_array(future, client=None):
 
 @gen.coroutine
 def _futures_to_dask_arrays(futures, client=None):
+    import dask.array as da
+
     e = default_client(client)
 
     names = ['array-' + str(future.key) for future in futures]

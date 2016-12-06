@@ -4,9 +4,9 @@ from functools import partial
 import logging
 
 try:
-    import pandas.msgpack as msgpack
-except ImportError:
     import msgpack
+except ImportError:
+    import pandas.msgpack as msgpack
 
 from toolz import get_in
 

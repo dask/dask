@@ -11,6 +11,8 @@ from . import pickle
 serializers = {}
 deserializers = {None: lambda header, frames: pickle.loads(b''.join(frames))}
 
+lazy_registrations = {}
+
 
 def register_serialization(cls, serialize, deserialize):
     """ Register a new class for custom serialization
@@ -52,6 +54,13 @@ def register_serialization(cls, serialize, deserialize):
     deserializers[name] = deserialize
 
 
+def register_serialization_lazy(toplevel, func):
+    """Register a registration function to be called if *toplevel*
+    module is ever loaded.
+    """
+    lazy_registrations[toplevel] = func
+
+
 def typename(typ):
     """ Return name of type
 
@@ -62,6 +71,15 @@ def typename(typ):
     'distributed.scheduler.Scheduler'
     """
     return typ.__module__ + '.' + typ.__name__
+
+
+def _find_lazy_registration(typename):
+    toplevel, _, _ = typename.partition('.')
+    if toplevel in lazy_registrations:
+        lazy_registrations.pop(toplevel)()
+        return True
+    else:
+        return False
 
 
 def serialize(x):
@@ -98,11 +116,14 @@ def serialize(x):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    name = typename(type(x))
+    typ = type(x)
+    name = typename(typ)
     if name in serializers:
         header, frames = serializers[name](x)
         header['type'] = name
     else:
+        if _find_lazy_registration(name):
+            return serialize(x)  # recurse
         header, frames = {}, [pickle.dumps(x)]
 
     return header, frames
@@ -121,6 +142,10 @@ def deserialize(header, frames):
     --------
     serialize
     """
+    name = header.get('type')
+    if name not in deserializers:
+        if _find_lazy_registration(name):
+            return deserialize(header, frames)  # recurse
     f = deserializers[header.get('type')]
     return f(header, frames)
 

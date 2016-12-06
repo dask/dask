@@ -1,18 +1,25 @@
 from __future__ import print_function, division, absolute_import
 
 import sys
-from .compatibility import singledispatch
+
+from dask.utils import Dispatch
+
 from .utils import ignoring
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
-except:  # Monkey patch
+except (AttributeError, TypeError):  # Monkey patch
     getsizeof = lambda x: 100
 
-@singledispatch
-def sizeof(o):
+
+sizeof = Dispatch()
+
+
+@sizeof.register(object)
+def sizeof_default(o):
     return getsizeof(o)
+
 
 @sizeof.register(list)
 @sizeof.register(tuple)
@@ -21,14 +28,17 @@ def sizeof(o):
 def sizeof_python_collection(seq):
     return getsizeof(seq) + sum(map(sizeof, seq))
 
-with ignoring(ImportError):
+
+@sizeof.register_lazy("numpy")
+def register_numpy():
     import numpy as np
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
         return int(x.nbytes)
 
 
-with ignoring(ImportError):
+@sizeof.register_lazy("pandas")
+def register_pandas():
     import pandas as pd
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):

@@ -6,7 +6,6 @@ from importlib import import_module
 import heapq
 import logging
 import os
-import pkg_resources
 import random
 import tempfile
 from threading import current_thread, Lock, local
@@ -471,6 +470,7 @@ class WorkerBase(Server):
                     name = name.split('-')[0]
                     reload(import_module(name))
                 if ext == '.egg':
+                    import pkg_resources
                     sys.path.append(out_filename)
                     pkgs = pkg_resources.find_distributions(out_filename)
                     for pkg in pkgs:

@@ -14,14 +14,20 @@ from ..utils import ignoring
 
 logger = logging.getLogger(__file__)
 
-pickle_types = [str, bytes]
-with ignoring(ImportError):
-    import numpy as np
-    pickle_types.append(np.ndarray)
-with ignoring(ImportError):
-    import pandas as pd
-    pickle_types.append(pd.core.generic.NDFrame)
-pickle_types = tuple(pickle_types)
+
+def _always_use_pickle_for(x):
+    pickle_types = (str, bytes)
+    mod, _, _ = x.__class__.__module__.partition('.')
+    if mod == 'numpy':
+        import numpy as np
+        return isinstance(x, np.ndarray)
+    elif mod == 'pandas':
+        import pandas as pd
+        return isinstance(x, pd.core.generic.NDFrame)
+    elif mod == 'builtins':
+        return isinstance(x, (str, bytes))
+    else:
+        return False
 
 
 def dumps(x):
@@ -39,7 +45,7 @@ def dumps(x):
             else:
                 return result
         else:
-            if isinstance(x, pickle_types) or b'__main__' not in result:
+            if _always_use_pickle_for(x) or b'__main__' not in result:
                 return result
             else:
                 return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
