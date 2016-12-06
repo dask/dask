@@ -362,6 +362,15 @@ class Client(object):
             self._previous_shuffle = _globals.get('shuffle')
             dask.set_options(shuffle='tasks')
 
+        self._handlers = {
+                'key-in-memory': self._handle_key_in_memory,
+                'lost-data': self._handle_lost_data,
+                'cancelled-key': self._handle_cancelled_key,
+                'task-erred': self._handle_task_erred,
+                'restart': self._handle_restart,
+                'error': self._handle_error
+        }
+
         if start:
             self.start(timeout=timeout)
 
@@ -531,49 +540,58 @@ class Client(object):
 
                     if msg.get('status') == 'scheduler-error':
                         six.reraise(*clean_exception(**msg))
-                    elif msg['op'] == 'close':
+
+                    op = msg.pop('op')
+
+                    if op == 'close' or op == 'stream-closed':
                         breakout = True
                         break
-                    elif msg['op'] == 'key-in-memory':
-                        st = self.futures.get(msg['key'])
-                        if st is not None:
-                            typ = (loads(msg['type'])
-                                   if (msg.get('type') and not st.type)
-                                   else None)
-                            st.finish(typ)
-                    elif msg['op'] == 'lost-data':
-                        st = self.futures.get(msg['key'])
-                        if st is not None:
-                            st.lose()
-                    elif msg['op'] == 'cancelled-key':
-                        st = self.futures.pop(msg['key'], None)
-                        if st is not None:
-                            st.cancel()
-                    elif msg['op'] == 'task-erred':
-                        st = self.futures.get(msg['key'])
-                        if st is not None:
-                            try:
-                                exception = loads(msg['exception'])
-                            except TypeError:
-                                exception = Exception(
-                                    'Undeserializable exception',
-                                    msg['exception'])
-                            st.set_error(exception,
-                                         loads(msg['traceback'])
-                                         if msg['traceback']
-                                         else None)
-                    elif msg['op'] == 'restart':
-                        logger.info("Receive restart signal from scheduler")
-                        for st in self.futures.values():
-                            st.cancel()
-                        self.futures.clear()
-                        with ignoring(AttributeError):
-                            self._restart_event.set()
-                    elif 'error' in msg['op']:
-                        logger.warn("Scheduler exception:")
-                        logger.exception(msg['exception'])
+
+                    handler = self._handlers[op]
+                    handler(**msg)
                 if breakout:
                     break
+
+    def _handle_key_in_memory(self, key=None, type=None, workers=None):
+        state = self.futures.get(key)
+        if state is not None:
+            type = loads(type) if type and not state.type else None
+            state.finish(type)
+
+    def _handle_lost_data(self, key=None):
+        state = self.futures.get(key)
+        if state is not None:
+            state.lose()
+
+    def _handle_cancelled_key(self, key=None):
+        state = self.futures.get(key)
+        if state is not None:
+            state.cancel()
+
+    def _handle_task_erred(self, key=None, exception=None, traceback=None):
+        state = self.futures.get(key)
+        if state is not None:
+            try:
+                exception = loads(exception)
+            except TypeError:
+                exception = Exception("Undeserializable exception", exception)
+            if traceback:
+                traceback = loads(traceback)
+            else:
+                traceback = None
+            state.set_error(exception, traceback)
+
+    def _handle_restart(self):
+        logger.info("Receive restart signal from scheduler")
+        for state in self.futures.values():
+            state.cancel()
+        self.futures.clear()
+        with ignoring(AttributeError):
+            self._restart_event.set()
+
+    def _handle_error(self, exception=None):
+        logger.warn("Scheduler exception:")
+        logger.exception(exception)
 
     @gen.coroutine
     def _shutdown(self, fast=False):
