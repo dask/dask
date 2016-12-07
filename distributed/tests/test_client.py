@@ -3402,7 +3402,7 @@ def test_partially_lose_scattered_data(e, s, a, b, c):
 @gen_cluster(client=True)
 def test_scatter_compute_lose(c, s, a, b):
     [x] = yield c._scatter([[1, 2, 3, 4]], workers=a.address)
-    y = c.submit(inc, 1)
+    y = c.submit(inc, 1, workers=b.address)
 
     z = c.submit(slowadd, x, y, delay=0.2)
     yield gen.sleep(0.1)

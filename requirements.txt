@@ -9,3 +9,4 @@ tblib
 psutil
 locket
 zict >= 0.1.0
+sortedcollections

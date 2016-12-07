@@ -12,6 +12,7 @@ import random
 import socket
 from timeit import default_timer
 
+from sortedcollections import ValueSortedDict
 try:
     from cytoolz import frequencies, topk
 except ImportError:
@@ -257,7 +258,7 @@ class Scheduler(Server):
         self.used_resources = dict()
         self.resources = defaultdict(dict)
         self.aliases = dict()
-        self.occupancy = dict()
+        self.occupancy = ValueSortedDict()
 
         self.plugins = []
         self.transition_log = deque(maxlen=config.get('transition-log-length',
@@ -1944,13 +1945,8 @@ class Scheduler(Server):
                 worker = decide_worker(self.dependencies, self.occupancy,
                         self.who_has, valid_workers, self.loose_restrictions,
                         partial(self.worker_objective, key), key)
-            elif self.idle:
-                # TODO: these lines are linear time (in workers) and don't scale
-                worker = min(self.idle, key=partial(self.worker_objective,  key))
-            elif self.ncores:
-                worker = min(self.ncores, key=partial(self.worker_objective,  key))
             else:
-                raise NotImplementedError()
+                worker = first(self.occupancy)
 
             assert worker
 
@@ -2642,16 +2638,22 @@ class Scheduler(Server):
             idle = list()
             saturated = list()
 
-            for worker, duration in self.occupancy.items():
+            for worker, duration in self.occupancy.iteritems():
                 time_until_completion = duration / self.ncores[worker]
-                if time_until_completion < 0.3:
+                if (time_until_completion < 0.3 or
+                    time_until_completion / avg < 0.25):
                     idle.append(worker)
                 else:
-                    ratio = time_until_completion / avg
-                    if ratio < 0.25:
-                        idle.append(worker)
-                    elif ratio > 1.9:
-                        saturated.append(worker)
+                    break
+
+            for worker in self.occupancy.irange(reverse=True):
+                duration = self.occupancy[worker]
+                time_until_completion = duration / self.ncores[worker]
+
+                if time_until_completion > 0.3 and time_until_completion / avg > 1.9:
+                    saturated.append(worker)
+                else:
+                    break
 
             if not saturated or not idle:
                 return

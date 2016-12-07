@@ -59,6 +59,7 @@ install:
   - pip install -q git+https://github.com/joblib/joblib.git --upgrade
   - pip install -q git+https://github.com/dask/s3fs.git --upgrade
   - pip install -q git+https://github.com/dask/zict.git --upgrade
+  - pip install sortedcollections
 
   # Install distributed
   - python setup.py install
