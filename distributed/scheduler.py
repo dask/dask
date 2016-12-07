@@ -139,15 +139,15 @@ class Scheduler(Server):
     * **used_resources:** ``{worker: {str: Number}}``:
         The sum of each resource used by all tasks allocated to a particular
         worker.
-    *  **exceptions:** ``{key: Exception}``:
+    * **exceptions:** ``{key: Exception}``:
         A dict mapping keys to remote exceptions
-    *  **tracebacks:** ``{key: list}``:
+    * **tracebacks:** ``{key: list}``:
         A dict mapping keys to remote tracebacks stored as a list of strings
-    *  **exceptions_blame:** ``{key: key}``:
+    * **exceptions_blame:** ``{key: key}``:
         A dict mapping a key to another key on which it depends that has failed
     * **suspicious_tasks:** ``{key: int}``
         Number of times a task has been involved in a worker failure
-    *  **deleted_keys:** ``{key: {workers}}``
+    * **deleted_keys:** ``{key: {workers}}``
         Locations of workers that have keys that should be deleted
     * **wants_what:** ``{client: {key}}``:
         What keys are wanted by each client..  The transpose of who_wants.
@@ -172,7 +172,7 @@ class Scheduler(Server):
 
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like HTTP
-    *  **loop:** ``IOLoop``:
+    * **loop:** ``IOLoop``:
         The running Tornado IOLoop
     * **streams:** ``[IOStreams]``:
         A list of Tornado IOStreams from which we both accept stimuli and

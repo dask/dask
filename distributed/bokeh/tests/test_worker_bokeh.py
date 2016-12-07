@@ -28,7 +28,7 @@ def test_simple(c, s, a, b):
     yield gen.sleep(0.1)
 
     http_client = AsyncHTTPClient()
-    for suffix in ['main', 'crossfilter']:
+    for suffix in ['main', 'crossfilter', 'system']:
         response = yield http_client.fetch('http://localhost:%d/%s'
                                            % (a.services['bokeh'].port, suffix))
         assert 'bokeh' in response.body.decode().lower()

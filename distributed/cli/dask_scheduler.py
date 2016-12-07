@@ -64,8 +64,12 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     logger.info('-' * 47)
-    scheduler = Scheduler(ip=ip, loop=loop,
-                          services={('http', http_port): HTTPScheduler})
+
+    services = {('http', http_port): HTTPScheduler}
+    if _bokeh:
+        from distributed.bokeh.scheduler import BokehScheduler
+        services[('bokeh', 8788)] = BokehScheduler
+    scheduler = Scheduler(ip=ip, loop=loop, services=services)
     scheduler.start(port)
 
     bokeh_proc = None
