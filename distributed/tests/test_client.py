@@ -400,6 +400,8 @@ def test_as_completed(loop):
             assert isinstance(seq, Iterator)
             assert set(seq) == {x, y, z}
 
+            assert list(as_completed([])) == []
+
 
 def test_wait_sync(loop):
     with cluster() as (s, [a, b]):
