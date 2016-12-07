@@ -58,6 +58,24 @@ def getarray(a, b, lock=None):
     return c
 
 
+def getarray_vector(a, b, lock=None):
+    """ A simple wrapper around ``getarray``.
+
+    Used to indicate to the optimization passes that the backend supports
+    "vector" fancy indexing. "Vector" fancy indexing is like numpy.
+    """
+    return getarray(a, b, lock=lock)
+
+
+def getarray_outer(a, b, lock=None):
+    """ A simple wrapper around ``getarray``.
+
+    Used to indicate to the optimization passes that the backend supports
+    "outer" fancy indexing. "Outer" fancy indexing is like h5py, netcdf4-python.
+    """
+    return getarray(a, b, lock=lock)
+
+
 def getarray_nofancy(a, b, lock=None):
     """ A simple wrapper around ``getarray``.
 
@@ -108,7 +126,13 @@ def getem(arr, chunks, shape=None, out_name=None, fancy=True, lock=False):
 
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
-    getter = getarray if fancy else getarray_nofancy
+    getter = getarray_nofancy if (isinstance(fancy, bool) and not fancy) else getarray_vector
+    if (isinstance(fancy, str) and
+       fancy not in ['vector', 'outer']):
+        raise NotImplemented('fancy indexing ca either be a boolean or a choice in '
+                             '["outer", "vector"].')
+    if fancy == 'outer':
+        getter = getarray_outer
 
     if lock:
         values = [(getter, arr, x, lock) for x in slices]
@@ -1762,9 +1786,12 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
-    fancy : bool, optional
+    fancy : bool or str, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
+        True means that ``x`` supports vector indexing, like numpy.
+        Fancy can also be set to ``outer`` if ``x`` supports outer
+        indexing, like h5py, netcdf4-python, etc.
 
     Examples
     --------

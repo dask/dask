@@ -4,7 +4,7 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy
+from .core import getarray_nofancy, getarray_vector, getarray_outer
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
 
@@ -22,8 +22,8 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
         inline_functions_fast_functions = fast_functions
 
     if inline_functions_fast_functions is None:
-        inline_functions_fast_functions = {getarray, getarray_nofancy,
-                                           np.transpose}
+        inline_functions_fast_functions = {getarray_vector, getarray_outer,
+                                           getarray_nofancy, np.transpose}
 
     dsk2, dependencies = cull(dsk, keys)
     dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies)
@@ -44,7 +44,7 @@ def optimize_slices(dsk):
         fuse_slice_dict
     """
     fancy_ind_types = (list, np.ndarray)
-    getters = (getarray_nofancy, getarray, getitem)
+    getters = (getarray_nofancy, getarray_vector, getarray_outer, getitem)
     dsk = dsk.copy()
     for k, v in dsk.items():
         if type(v) is tuple and v[0] in getters and len(v) == 3:
@@ -63,24 +63,32 @@ def optimize_slices(dsk):
                             any(isinstance(i, fancy_ind_types) for i in indices)):
                         break
                 elif (f2 is getarray_nofancy and
-                        (type(a_index) in fancy_ind_types or
-                         type(b_index) in fancy_ind_types)):
+                      (type(a_index) in fancy_ind_types or
+                       type(b_index) in fancy_ind_types)):
                     break
                 try:
                     c_index = fuse_slice(b_index, a_index)
-                    # rely on fact that nested gets never decrease in
-                    # strictness e.g. `(getarray, (getitem, ...))` never
-                    # happens
-                    getter = f2
                 except NotImplementedError:
                     break
+                if (isinstance(c_index, tuple) and
+                        any(isinstance(i, fancy_ind_types) for i in c_index) and
+                        any(isinstance(i, int) for i in c_index) and
+                        f2 is not getarray_outer):
+                    # Do not not optimize if a fancy index is in any axis
+                    # and single index was requested in any axis unless
+                    # the underlying array supports outer indexing:
+                    break
+                # rely on fact that nested gets never decrease in
+                # strictness e.g. `(getarray_*, (getitem, ...))` never
+                # happens
+                getter = f2
                 a, a_index = b, c_index
             if getter is not getitem:
                 dsk[k] = (getter, a, a_index)
             elif (type(a_index) is slice and
-                    not a_index.start and
-                    a_index.stop is None and
-                    a_index.step is None):
+                  not a_index.start and
+                  a_index.stop is None and
+                  a_index.step is None):
                 dsk[k] = a
             elif type(a_index) is tuple and all(type(s) is slice and
                                                 not s.start and
