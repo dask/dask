@@ -649,17 +649,33 @@ def derived_from(original_klass, version=None, ua_args=[]):
     return wrapper
 
 
-def funcname(func, full=False):
+def funcname(func):
     """Get the name of a function."""
-    while hasattr(func, 'func'):
-        func = func.func
+    # functools.partial
+    if isinstance(func, functools.partial):
+        return funcname(func.func)
+    # methodcaller
+    if isinstance(func, methodcaller):
+        return func.method
+
+    module_name = getattr(func, '__module__', None) or ''
+    type_name = getattr(type(func), '__name__', None) or ''
+
+    # toolz.curry
+    if 'toolz' in module_name and 'curry' == type_name:
+        return func.func_name
+    # multipledispatch objects
+    if 'multipledispatch' in module_name and 'Dispatcher' == type_name:
+        return func.name
+
+    # All other callables
     try:
-        if full:
-            return func.__qualname__.strip('<>')
-        else:
-            return func.__name__.strip('<>')
+        name = func.__name__
+        if name == '<lambda>':
+            return 'lambda'
+        return name
     except:
-        return str(func).strip('<>')
+        return str(func)
 
 
 def ensure_bytes(s):

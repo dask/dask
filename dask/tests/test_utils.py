@@ -1,5 +1,6 @@
 import os
 import pickle
+import functools
 
 import numpy as np
 import pytest
@@ -8,7 +9,8 @@ from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
-                        methodcaller, M, skip_doctest, SerializableLock)
+                        methodcaller, M, skip_doctest, SerializableLock,
+                        funcname)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -263,3 +265,41 @@ def test_SerializableLock_name_collision():
     assert a.lock is not b.lock
     assert a.lock is c.lock
     assert d.lock not in (a.lock, b.lock, c.lock)
+
+
+def test_funcname():
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(functools.partial(foo, a=1)) == 'foo'
+    assert funcname(M.sum) == 'sum'
+    assert funcname(lambda: 1) == 'lambda'
+
+    class Foo(object):
+        pass
+
+    assert funcname(Foo) == 'Foo'
+    assert 'Foo' in funcname(Foo())
+
+
+def test_funcname_toolz():
+    toolz = pytest.importorskip('toolz')
+
+    @toolz.curry
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(foo(1)) == 'foo'
+
+
+def test_funcname_multipledispatch():
+    md = pytest.importorskip('multipledispatch')
+
+    @md.dispatch(int, int, int)
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(functools.partial(foo, a=1)) == 'foo'
