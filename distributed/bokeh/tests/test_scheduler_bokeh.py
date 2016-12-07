@@ -12,7 +12,7 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import _wait
 from distributed.utils_test import gen_cluster, inc, dec
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
-        SystemMonitor)
+        SystemMonitor, Occupancy)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -34,7 +34,7 @@ def test_simple(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
-    for component in [SystemMonitor, StateTable]:
+    for component in [SystemMonitor, StateTable, Occupancy]:
         ss = component(s)
 
         ss.update()
