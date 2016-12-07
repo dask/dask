@@ -278,6 +278,17 @@ def test_gather(c, s, a, b):
     assert result == {'x': 11, 'y': [12]}
 
 
+@gen_cluster(client=True)
+def test_gather_lost(c, s, a, b):
+    [x] = yield c._scatter([1], workers=a.address)
+    y = c.submit(inc, 1, workers=b.address)
+
+    yield a._close()
+
+    with pytest.raises(Exception):
+        yield c._gather([x, y])
+
+
 def test_gather_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:

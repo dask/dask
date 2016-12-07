@@ -806,9 +806,10 @@ class Worker(WorkerBase):
         WorkerBase.__init__(self, *args, **kwargs)
 
     def __str__(self):
-        return "<%s: %s, threads: %d, running: %d, ready: %d, in-flight: %d, waiting: %d>" % (
-                self.__class__.__name__, self.address, self.ncores, len(self.executing),
-                len(self.ready), len(self.in_flight), len(self.waiting_for_data))
+        return "<%s: %s, %s, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
+                self.__class__.__name__, self.address, self.status,
+                len(self.executing), self.ncores, len(self.ready),
+                len(self.in_flight), len(self.waiting_for_data))
 
     __repr__ = __str__
 

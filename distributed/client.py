@@ -871,11 +871,13 @@ class Client(object):
             with ignoring(AllExit):
                 yield All([wait(key) for key in keys if key in self.futures])
 
+            failed = ('error', 'cancelled')
+
             exceptions = set()
             bad_keys = set()
             for key in keys:
                 if (key not in self.futures or
-                    self.futures[key].status == 'error'):
+                    self.futures[key].status in failed):
                     exceptions.add(key)
                     if errors == 'raise':
                         try:
@@ -883,7 +885,7 @@ class Client(object):
                             six.reraise(type(st.exception),
                                         st.exception,
                                         st.traceback)
-                        except KeyError:
+                        except (AttributeError, KeyError):
                             six.reraise(CancelledError,
                                         CancelledError(key),
                                         None)
