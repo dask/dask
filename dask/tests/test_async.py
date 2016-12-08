@@ -155,7 +155,7 @@ def test_order_of_startstate():
     assert result['ready'] == ['b', 'y']
 
 
-def test_nonstandard_exceptions_propagate():
+def test_exceptions_propagate():
     class MyException(Exception):
         def __init__(self, a, b):
             self.a = a

@@ -268,14 +268,14 @@ def execute_task(key, task_info, dumps, loads, get_id, raise_on_exception=False)
         result = _execute_task(task, data)
         id = get_id()
         result = dumps((result, None, id))
-    except Exception as e:
+    except BaseException as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         try:
             result = dumps((e, tb, None))
-        except Exception as e:
+        except BaseException as e:
             if raise_on_exception:
                 raise
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -482,17 +482,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
             key, res_info = queue.get()
-            try:
-                res, tb, worker_id = loads(res_info)
-            except Exception:
-                for _, _, _, _, finish in callbacks:
-                    if finish:
-                        finish(dsk, state, True)
-                raise
-            if isinstance(res, Exception):
-                for _, _, _, _, finish in callbacks:
-                    if finish:
-                        finish(dsk, state, True)
+            res, tb, worker_id = loads(res_info)
+            if isinstance(res, BaseException):
                 if rerun_exceptions_locally:
                     data = dict((dep, state['cache'][dep])
                                 for dep in get_dependencies(dsk, key))
@@ -508,15 +499,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             while state['ready'] and len(state['running']) < num_workers:
                 fire_task()
 
-    except KeyboardInterrupt:
-        for cb in started_cbs:
-            if cb[-1]:
-                cb[-1](dsk, state, True)
+    except BaseException:
+        for _, _, _, _, finish in started_cbs:
+            if finish:
+                finish(dsk, state, True)
         raise
-
-    # Final reporting
-    while state['running'] or not queue.empty():
-        key, res, tb, worker_id = queue.get()
 
     for _, _, _, _, finish in started_cbs:
         if finish:

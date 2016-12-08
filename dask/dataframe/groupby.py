@@ -8,7 +8,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .core import DataFrame, Series, aca, map_partitions, no_default
+from .core import (DataFrame, Series, aca, map_partitions, no_default,
+                   split_out_on_index)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
@@ -120,7 +121,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels))
+    return aggfunc(df.groupby(level=levels, sort=False))
 
 
 def _apply_chunk(df, *index, **kwargs):
@@ -145,11 +146,11 @@ def _var_chunk(df, *index):
 
 
 def _var_combine(g, levels):
-    return g.groupby(level=levels).sum()
+    return g.groupby(level=levels, sort=False).sum()
 
 
 def _var_agg(g, levels, ddof):
-    g = g.groupby(level=levels).sum()
+    g = g.groupby(level=levels, sort=False).sum()
     nc = len(g.columns)
     x = g[g.columns[:nc // 3]]
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
@@ -188,7 +189,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
 
 def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels).apply(pd.DataFrame.drop_duplicates)
+    result = df.groupby(level=levels, sort=False).apply(pd.DataFrame.drop_duplicates)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays([
@@ -201,7 +202,7 @@ def _nunique_df_combine(df, levels):
 
 
 def _nunique_df_aggregate(df, levels, name):
-    return df.groupby(level=levels)[name].nunique()
+    return df.groupby(level=levels, sort=False)[name].nunique()
 
 
 def _nunique_series_chunk(df, *index, **_ignored_):
@@ -611,7 +612,7 @@ class _GroupBy(object):
                    aggregate=_groupby_aggregate,
                    meta=meta, token=token, split_every=split_every,
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
-                   split_out=split_out, split_index=True)
+                   split_out=split_out, split_out_setup=split_out_on_index)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1):
@@ -654,7 +655,7 @@ class _GroupBy(object):
                      aggregate_kwargs={'ddof': ddof, 'levels': levels},
                      combine_kwargs={'levels': levels},
                      split_every=split_every, split_out=split_out,
-                     split_index=True)
+                     split_out_setup=split_out_on_index)
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -740,7 +741,7 @@ class _GroupBy(object):
                   combine=_groupby_apply_funcs,
                   combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   meta=meta, token='aggregate', split_every=split_every,
-                  split_out=split_out, split_index=True)
+                  split_out=split_out, split_out_setup=split_out_on_index)
 
         return map_partitions(_agg_finalize, obj, meta=meta,
                               token='aggregate-finalize', funcs=finalizers)
@@ -928,7 +929,7 @@ class SeriesGroupBy(_GroupBy):
                    aggregate_kwargs={'levels': levels, 'name': name},
                    combine_kwargs={'levels': levels},
                    split_every=split_every, split_out=split_out,
-                   split_index=True)
+                   split_out_setup=split_out_on_index)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
