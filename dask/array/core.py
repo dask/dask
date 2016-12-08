@@ -1594,10 +1594,10 @@ class Array(Base):
     def squeeze(self):
         return squeeze(self)
 
-    def rechunk(self, chunks):
+    def rechunk(self, chunks, threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
-        from .rechunk import rechunk
-        return rechunk(self, chunks)
+        from . import rechunk   # avoid circular import
+        return rechunk(self, chunks, threshold, block_size_limit)
 
     @property
     def real(self):

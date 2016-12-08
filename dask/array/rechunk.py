@@ -19,11 +19,6 @@ from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
 
 
-def cumdims_label_1d(blocks, const):
-    return tuple(zip((const,) * (1 + len(blocks)),
-                     accumulate(add, (0,) + blocks)))
-
-
 def cumdims_label(chunks, const):
     """ Internal utility for cumulative sum with label.
 
@@ -31,7 +26,9 @@ def cumdims_label(chunks, const):
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
      (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
     """
-    return [cumdims_label_1d(bds, const) for bds in chunks]
+    return [tuple(zip((const,) * (1 + len(bds)),
+                      accumulate(add, (0,) + bds)))
+            for bds in chunks]
 
 
 def _breakpoints(cumold, cumnew):
@@ -98,9 +95,7 @@ def _intersect_1d(breaks):
     return tuple(map(tuple, filter(None, ret)))
 
 
-def intersect_chunks(old_chunks=None,
-                     new_chunks=None,
-                     shape=None):
+def intersect_chunks(old_chunks, new_chunks):
     """
     Make dask.array slices as intersection of old and new chunks.
 
@@ -118,18 +113,7 @@ def intersect_chunks(old_chunks=None,
         block sizes along each dimension (convert from old_chunks)
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
-    shape : tuple of ints
-        Shape of the entire array (not needed if using chunks)
-    old_blockshape: size of each old block as tuple
-        (converts from this old_blockshape)
-    new_blockshape: size of each new block as tuple
-        (converts to this old_blockshape)
-
-    Note: shape is only required when omitting old_blockshape or new_blockshape.
     """
-    old_chunks = normalize_chunks(old_chunks, shape)
-    new_chunks = normalize_chunks(new_chunks, shape)
-
     cmo = cumdims_label(old_chunks, 'o')
     cmn = cumdims_label(new_chunks, 'n')
     sums = [sum(o) for o in old_chunks]
@@ -170,7 +154,12 @@ def blockshape_dict_to_tuple(old_chunks, d):
     return tuple(new_chunks)
 
 
-def rechunk(x, chunks):
+DEFAULT_THRESHOLD = 4
+DEFAULT_BLOCK_SIZE_LIMIT = 1e8
+
+
+def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
+            block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -192,8 +181,18 @@ def rechunk(x, chunks):
     ----------
 
     x:   dask array
-    chunks:  the new block dimensions to create
+    chunks:  tuple
+        The new block dimensions to create
+    threshold: int
+        The graph growth factor under which we don't bother
+        introducing an intermediate step
+    block_size_limit: int
+        The maximum block size (in bytes) we want to produce during an
+        intermediate step
     """
+    threshold = threshold or DEFAULT_THRESHOLD
+    block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE_LIMIT
+
     if isinstance(chunks, dict):
         if not chunks or isinstance(next(iter(chunks.values())), int):
             chunks = blockshape_dict_to_tuple(x.chunks, chunks)
@@ -209,7 +208,8 @@ def rechunk(x, chunks):
     if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 
-    steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize)
+    steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize,
+                         threshold, block_size_limit)
     for c in steps:
         x = _compute_rechunk(x, c)
 
@@ -284,9 +284,9 @@ def merge_to_number(desired_chunks, max_number):
         # If interval was made invalid by another merge, recompute
         # it, re-insert it and retry.
         if chunks[j] == 0:
-            j = j + 1
+            j += 1
             while chunks[j] == 0:
-                j = j + 1
+                j += 1
             heapq.heappush(heap, (chunks[i] + chunks[j], i, j))
             continue
         elif chunks[i] + chunks[j] != width:
@@ -399,17 +399,21 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
-                 threshold=4, block_size_limit=1e8):
+                 threshold=DEFAULT_THRESHOLD,
+                 block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
     """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
     Parameters
     ----------
-    itemsize: the item size of the array
-    threshold: the graph growth factor under which we don't bother
+    itemsize: int
+        The item size of the array
+    threshold: int
+        The graph growth factor under which we don't bother
         introducing an intermediate step
-    block_size_limit: the maximum block size (in bytes)
-        we want to produce during an intermediate step
+    block_size_limit: int
+        The maximum block size (in bytes) we want to produce during an
+        intermediate step
     """
     ndim = len(new_chunks)
     steps = []
