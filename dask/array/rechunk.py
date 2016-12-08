@@ -53,12 +53,12 @@ def _intersect_1d(breaks):
     >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
 
     >>> _intersect_1d(_breakpoints(old[0], new[0]))  # doctest: +NORMALIZE_WHITESPACE
-    [[(0, (0, 2))],
-     [(1, (0, 2)), (2, (0, 1))]]
+    [[(0, slice(0, 2, None))],
+     [(1, slice(0, 2, None)), (2, slice(0, 1, None))]]
     >>> _intersect_1d(_breakpoints(old[1], new[1]))  # doctest: +NORMALIZE_WHITESPACE
-    [[(0, (0, 2))],
-     [(0, (2, 4))],
-     [(0, (4, 5))]]
+    [[(0, slice(0, 2, None))],
+     [(0, slice(2, 4, None))],
+     [(0, slice(4, 5, None))]]
 
     Parameters
     ----------
@@ -91,10 +91,7 @@ def _intersect_1d(breaks):
         last_end = end
         if br == last_br:
             continue
-        # Represent intervals as tuples rather than slices
-        # This makes _compute_rechunk() faster and may reduce the graph's
-        # footprint.
-        ret_next.append((old_idx, (start, end)))
+        ret_next.append((old_idx, slice(start, end)))
         if label == 'o':
             old_idx += 1
             start = 0
@@ -111,10 +108,10 @@ def intersect_chunks(old_chunks, new_chunks):
 
     >>> intersect_chunks(((4, 4), (2,)),
     ...                  ((8,), (1, 1)))  # doctest: +NORMALIZE_WHITESPACE
-    ((((0, (0, 4)), (0, (0, 1))),
-      ((1, (0, 4)), (0, (0, 1)))),
-     (((0, (0, 4)), (0, (1, 2))),
-      ((1, (0, 4)), (0, (1, 2)))))
+    ((((0, slice(0, 4, None)), (0, slice(0, 1, None))),
+      ((1, slice(0, 4, None)), (0, slice(0, 1, None)))),
+     (((0, slice(0, 4, None)), (0, slice(1, 2, None))),
+      ((1, slice(0, 4, None)), (0, slice(1, 2, None)))))
 
     Parameters
     ----------
@@ -502,11 +499,11 @@ def _compute_rechunk(x, chunks):
         rec_cat_arg_flat = rec_cat_arg.flat
 
         # Iterate over the old blocks required to build the new block
-        for rec_cat_index, ind_intervals in enumerate(cross1):
-            old_block_index, intervals = zip(*ind_intervals)
+        for rec_cat_index, ind_slices in enumerate(cross1):
+            old_block_index, slices = zip(*ind_slices)
             name = (split_temp_name, next(split_name_suffixes))
-            intermediates[name] = (multislice,
-                                   (x.name,) + old_block_index, intervals)
+            intermediates[name] = (getitem,
+                                   (x.name,) + old_block_index, slices)
             rec_cat_arg_flat[rec_cat_index] = name
 
         assert rec_cat_index == rec_cat_arg.size - 1
@@ -517,13 +514,6 @@ def _compute_rechunk(x, chunks):
 
     x2 = merge(x.dask, x2, intermediates)
     return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
-
-
-def multislice(arr, intervals):
-    """
-    Slice *arr* along each a (start, stop) interval for each dimension.
-    """
-    return arr[tuple(slice(*i) for i in intervals)]
 
 
 class _PrettyBlocks(object):
