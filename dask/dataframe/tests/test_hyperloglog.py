@@ -63,3 +63,10 @@ def test_split_every(split_every, npartitions):
     approx = ddf.nunique_approx(split_every=split_every).compute(get=dask.async.get_sync)
     exact = len(df.drop_duplicates())
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
+
+
+def test_larger_data():
+    df = dd.demo.make_timeseries('2000-01-01', '2000-04-01',
+                                 {'value': float, 'id': int},
+                                 freq='10s', partition_freq='1D', seed=1)
+    assert df.nunique_approx().compute() > 1000

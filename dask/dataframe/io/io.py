@@ -114,7 +114,9 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     df : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a dask DataFrame/Series
     npartitions : int, optional
-        The number of partitions of the index to create.
+        The number of partitions of the index to create. Note that depending on
+        the size and index of the dataframe, the output may have fewer
+        partitions than requested.
     chunksize : int, optional
         The size of the partitions of the index.
     sort: bool

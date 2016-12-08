@@ -28,24 +28,21 @@ def test_get_dummies_object():
     df = pd.DataFrame({'a': pd.Categorical([1, 2, 3, 4, 4, 3, 2, 1]),
                        'b': list('abcdabcd'),
                        'c': pd.Categorical(list('abcdabcd'))})
-    # exclude object columns
+    ddf = dd.from_pandas(df, 2)
+
+    # Explicitly exclude object columns
     exp = pd.get_dummies(df, columns=['a', 'c'])
-
-    ddf = dd.from_pandas(df, 2)
-    res = dd.get_dummies(ddf)
+    res = dd.get_dummies(ddf, columns=['a', 'c'])
     assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
 
-    exp = pd.get_dummies(df, columns=['a'])
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf)
 
-    ddf = dd.from_pandas(df, 2)
-    res = dd.get_dummies(ddf, columns=['a'])
-    assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, exp.columns)
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf.b)
 
-    # cannot target object columns
-    msg = 'target columns must have category dtype'
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(NotImplementedError):
         dd.get_dummies(ddf, columns=['b'])
 
 
@@ -88,8 +85,7 @@ def test_get_dummies_kwargs():
 
 
 def test_get_dummies_errors():
-    msg = 'data must have category dtype'
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(NotImplementedError):
         # not Categorical
         s = pd.Series([1, 1, 1, 2, 2, 1, 3, 4])
         ds = dd.from_pandas(s, 2)
