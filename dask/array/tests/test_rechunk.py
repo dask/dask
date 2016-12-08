@@ -39,12 +39,13 @@ def test_intersect_1():
     """ Convert 1 D chunks"""
     old = ((10, 10, 10, 10, 10), )
     new = ((25, 5, 20), )
-    answer = ((((0, slice(0, 10)), ),
+    answer = [(((0, slice(0, 10)), ),
               ((1, slice(0, 10)), ),
               ((2, slice(0, 5)), )),
               (((2, slice(5, 10)), ), ),
-              (((3, slice(0, 10)), ), ((4, slice(0, 10)), )))
-    cross = intersect_chunks(old_chunks=old, new_chunks=new)
+              (((3, slice(0, 10)), ), ((4, slice(0, 10)), ))
+              ]
+    cross = list(intersect_chunks(old_chunks=old, new_chunks=new))
     assert answer == cross
 
 
@@ -52,13 +53,14 @@ def test_intersect_2():
     """ Convert 1 D chunks"""
     old = ((20, 20, 20, 20, 20), )
     new = ((58, 4, 20, 18),)
-    answer = ((((0, slice(0, 20)), ),
+    answer = [(((0, slice(0, 20)), ),
               ((1, slice(0, 20)), ),
               ((2, slice(0, 18)), )),
               (((2, slice(18, 20)), ), ((3, slice(0, 2)), )),
               (((3, slice(2, 20)), ), ((4, slice(0, 2)), )),
-              (((4, slice(2, 20)), ), ))
-    cross = intersect_chunks(old_chunks=old, new_chunks=new)
+              (((4, slice(2, 20)), ), )
+              ]
+    cross = list(intersect_chunks(old_chunks=old, new_chunks=new))
     assert answer == cross
 
 
