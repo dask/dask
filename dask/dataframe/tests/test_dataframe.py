@@ -2820,3 +2820,16 @@ def test_split_out_value_counts(split_every):
 
     assert ddf.x.value_counts(split_out=10, split_every=split_every).npartitions == 10
     assert_eq(ddf.x.value_counts(split_out=10, split_every=split_every), df.x.value_counts())
+
+
+def test_values():
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    assert_eq(df.values, ddf.values)
+    assert_eq(df.x.values, ddf.x.values)
+    assert_eq(df.y.values, ddf.y.values)
+    assert_eq(df.index.values, ddf.index.values)

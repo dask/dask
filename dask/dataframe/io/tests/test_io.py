@@ -554,5 +554,4 @@ def test_to_records():
                        index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(df, 2)
 
-    import pdb; pdb.set_trace()
     assert_eq(df.to_records(), ddf.to_records())

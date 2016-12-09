@@ -1698,6 +1698,21 @@ class _Frame(Base):
                    aggregate=hyperloglog.estimate_count,
                    split_every=split_every, b=16, meta=float)
 
+    @property
+    def values(self):
+        from ..array.core import Array
+        name = 'values-' + tokenize(self)
+        chunks = ((np.nan,) * self.npartitions,)
+        x = self._meta.values
+        if isinstance(self, DataFrame):
+            chunks = chunks + ((x.shape[1],),)
+            suffix = (0,)
+        else:
+            suffix = ()
+        dsk = {(name, i) + suffix: (getattr, key, 'values')
+               for (i, key) in enumerate(self._keys())}
+        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
