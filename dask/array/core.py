@@ -1957,6 +1957,7 @@ def unify_chunks(*args, **kwargs):
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
     arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
+                                 if not np.isnan(sum(chunkss[j])) else None
                               for n, j in enumerate(i)))
               for a, i in arginds]
     return chunkss, arrays
@@ -2491,7 +2492,8 @@ def is_scalar_for_elemwise(arg):
 
 
 def broadcast_shapes(*shapes):
-    """Determines output shape from broadcasting arrays.
+    """
+    Determines output shape from broadcasting arrays.
 
     Parameters
     ----------
@@ -2512,7 +2514,7 @@ def broadcast_shapes(*shapes):
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=1):
         dim = max(sizes)
-        if any(i != 1 and i != dim for i in sizes):
+        if any(i != 1 and i != dim and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
         out.append(dim)
