@@ -467,6 +467,18 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
+def to_records(df):
+    from ...array.core import Array
+    if not isinstance(df, (DataFrame, Series)):
+        raise TypeError("df must be either DataFrame or Series")
+    name = 'to-records-' + tokenize(df)
+    dsk = {(name, i): (M.to_records, key)
+           for (i, key) in enumerate(df._keys())}
+    x = df._meta.to_records()
+    chunks = ((np.nan,) * df.npartitions,)
+    return Array(merge(df.dask, dsk), name, chunks, x.dtype)
+
+
 @insert_meta_param_description
 def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
                  metadata=None):

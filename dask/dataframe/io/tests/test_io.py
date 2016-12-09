@@ -544,3 +544,15 @@ def test_to_bag():
     assert ddf.to_bag(True).compute() == list(a.itertuples(True))
     assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
     assert ddf.x.to_bag().compute() == list(a.x)
+
+
+def test_to_records():
+    pytest.importorskip('dask.array')
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    import pdb; pdb.set_trace()
+    assert_eq(df.to_records(), ddf.to_records())

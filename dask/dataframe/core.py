@@ -2804,6 +2804,17 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
+    def to_records(self, index=False):
+        """ Convert to a dask array with struct dtype
+
+        Examples
+        --------
+        >>> df.to_records()  # doctest: +SKIP
+        dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+        """
+        from .io import to_records
+        return to_records(self)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
