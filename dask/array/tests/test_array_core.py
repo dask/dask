@@ -2532,6 +2532,8 @@ def test_no_chunks():
     assert_eq((x + 1).std(), (X + 1).std())
     assert_eq((x + x).std(), (X + X).std())
 
+
+def test_no_chunks_2d():
     X = np.arange(24).reshape((4, 6))
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
@@ -2540,3 +2542,13 @@ def test_no_chunks():
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
     assert_eq(x.dot(x.T + 1), X.dot(X.T + 1))
+
+
+def test_no_chunks_yes_chunks():
+    X = np.arange(24).reshape((4, 6))
+    x = da.from_array(X, chunks=(2, 2))
+    x._chunks = ((2, 2), (np.nan, np.nan, np.nan))
+
+    assert (x + 1).chunks == ((2, 2), (np.nan, np.nan, np.nan))
+    assert (x.T).chunks == ((np.nan, np.nan, np.nan), (2, 2))
+    assert (x.dot(x.T)).chunks == ((2, 2), (2, 2))

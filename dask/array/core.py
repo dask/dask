@@ -1956,8 +1956,9 @@ def unify_chunks(*args, **kwargs):
     if warn and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
-    arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
-                                 if not np.isnan(sum(chunkss[j])) else None
+    arrays = [a.rechunk(tuple(chunkss[j]
+                              if a.shape[n] > 1 else 1
+                              if not np.isnan(sum(chunkss[j])) else None
                               for n, j in enumerate(i)))
               for a, i in arginds]
     return chunkss, arrays
