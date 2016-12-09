@@ -551,7 +551,7 @@ def test_to_records():
     from dask.array.utils import assert_eq
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
-                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.to_records(), ddf.to_records())

@@ -2531,6 +2531,7 @@ def test_no_chunks():
     assert_eq(x.sum(), X.sum())
     assert_eq((x + 1).std(), (X + 1).std())
     assert_eq((x + x).std(), (X + X).std())
+    assert_eq((x + x).std(keepdims=True), (X + X).std(keepdims=True))
 
 
 def test_no_chunks_2d():
@@ -2541,6 +2542,7 @@ def test_no_chunks_2d():
     assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
+    assert_eq(x.sum(axis=1, keepdims=True), X.sum(axis=1, keepdims=True))
     assert_eq(x.dot(x.T + 1), X.dot(X.T + 1))
 
 
@@ -2552,3 +2554,38 @@ def test_no_chunks_yes_chunks():
     assert (x + 1).chunks == ((2, 2), (np.nan, np.nan, np.nan))
     assert (x.T).chunks == ((np.nan, np.nan, np.nan), (2, 2))
     assert (x.dot(x.T)).chunks == ((2, 2), (2, 2))
+
+
+def test_raise_informative_errors_no_chunks():
+    X = np.arange(10)
+    a = da.from_array(X, chunks=(5, 5))
+    a._chunks = ((np.nan, np.nan),)
+
+    b = da.from_array(X, chunks=(4, 4, 2))
+    b._chunks = ((np.nan, np.nan, np.nan),)
+
+    for op in [lambda: a + b,
+               lambda: a[1],
+               lambda: a[::2],
+               lambda: a[-5],
+               lambda: a.rechunk(3),
+               lambda: a.reshape(2, 5)]:
+        with pytest.raises(ValueError) as e:
+            op()
+        if 'chunk' not in str(e) or 'unknown' not in str(e):
+            op()
+
+
+def test_no_chunks_slicing_2d():
+    X = np.arange(24).reshape((4, 6))
+    x = da.from_array(X, chunks=(2, 2))
+    x._chunks = ((2, 2), (np.nan, np.nan, np.nan))
+
+    assert_eq(x[0], X[0])
+
+    for op in [lambda: x[:, 4],
+               lambda: x[:, ::2],
+               lambda: x[0, 2:4]]:
+        with pytest.raises(ValueError) as e:
+            op()
+        assert 'chunk' in str(e) and 'unknown' in str(e)

@@ -868,6 +868,9 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
         raise TypeError("Must supply shape= keyword argument")
+    if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
+        raise ValueError("Array chunk sizes are unknown. shape: %s, chunks: %s"
+                         % (shape, chunks))
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
     if not all(map(is_integer, shape)):
@@ -1876,6 +1879,9 @@ def common_blockdim(blockdims):
     if len(non_trivial_dims) == 0:
         return max(blockdims, key=first)
 
+    if np.isnan(sum(map(sum, blockdims))):
+        raise ValueError("Arrays chunk sizes are unknown: %s", blockdims)
+
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
 
@@ -2764,6 +2770,9 @@ def reshape(array, shape):
             raise ValueError('can only specify one unknown dimension')
         missing_size = sanitize_index(array.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
+
+    if np.isnan(sum(array.shape)):
+        raise ValueError("Array chunk size or shape is unknown. shape: %s", array.shape)
 
     if reduce(mul, shape, 1) != array.size:
         raise ValueError('total size of new array must be unchanged')
@@ -3740,3 +3749,15 @@ def repeat(a, repeats, axis=None):
         out.append(result)
 
     return concatenate(out, axis=axis)
+
+
+def _flatten_seq(seq):
+    stack = list(seq)
+    out = []
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (tuple, list)):
+            stack.extend(item)
+        else:
+            out.append(item)
+    return out
