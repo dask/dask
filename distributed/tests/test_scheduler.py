@@ -225,47 +225,6 @@ def test_validate_state():
 
 
 @gen_cluster()
-def test_multi_queues(s, a, b):
-    sched, report = Queue(), Queue()
-    s.handle_queues(sched, report)
-
-    msg = yield report.get()
-    assert msg['op'] == 'stream-start'
-
-    # Test update graph
-    sched.put_nowait({'op': 'update-graph',
-                      'tasks': valmap(dumps_task, {'x': (inc, 1),
-                                                   'y': (inc, 'x'),
-                                                   'z': (inc, 'y')}),
-                      'dependencies': {'x': [],
-                                       'y': ['x'],
-                                       'z': ['y']},
-                      'keys': ['z']})
-
-    while True:
-        msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-            break
-
-    slen, rlen = len(s.scheduler_queues), len(s.report_queues)
-    sched2, report2 = Queue(), Queue()
-    s.handle_queues(sched2, report2)
-    assert slen + 1 == len(s.scheduler_queues)
-    assert rlen + 1 == len(s.report_queues)
-
-    sched2.put_nowait({'op': 'update-graph',
-                       'tasks': {'a': dumps_task((inc, 10))},
-                       'dependencies': {'a': []},
-                       'keys': ['a']})
-
-    for q in [report, report2]:
-        while True:
-            msg = yield q.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'a':
-                break
-
-
-@gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
@@ -478,26 +437,6 @@ def test_delete(c, s, a):
     while x.key in a.data:
         yield gen.sleep(0.01)
         assert time() < start + 5
-
-
-@gen_cluster()
-def test_self_aliases(s, a, b):
-    a.data['a'] = 1
-    s.update_data(who_has={'a': [a.address]},
-                  nbytes={'a': 10}, client='client')
-    s.update_graph(tasks=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
-                   keys=['b'], client='client',
-                   dependencies={'b': ['a']})
-
-    sched, report = Queue(), Queue()
-    s.handle_queues(sched, report)
-    msg = yield report.get()
-    assert msg['op'] == 'stream-start'
-
-    while True:
-        msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == 'b':
-            break
 
 
 @gen_cluster()

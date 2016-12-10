@@ -20,7 +20,6 @@ except ImportError:
 from toolz import memoize, valmap, first, second, keymap, unique, concat, merge
 from tornado import gen
 from tornado.gen import Return
-from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
@@ -35,7 +34,7 @@ from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
 from .metrics import time
 from .publish import PublishExtension
 from .channels import ChannelScheduler
-from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
+from .utils import (All, ignoring, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
         divide_n_among_bins, validate_key)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
@@ -183,10 +182,6 @@ class Scheduler(Server):
         Time we expect certain functions to take, e.g. ``{'sum': 0.25}``
     * **coroutines:** ``[Futures]``:
         A list of active futures that control operation
-    * **scheduler_queues:** ``[Queues]``:
-        A list of Tornado Queues from which we accept stimuli
-    * **report_queues:** ``[Queues]``:
-        A list of Tornado Queues on which we report results
     """
     default_port = 8786
 
@@ -209,8 +204,6 @@ class Scheduler(Server):
 
         # Communication state
         self.loop = loop or IOLoop.current()
-        self.scheduler_queues = [Queue()]
-        self.report_queues = []
         self.worker_streams = dict()
         self.streams = dict()
         self.coroutines = []
@@ -394,10 +387,6 @@ class Scheduler(Server):
                                  io_loop=self.loop)
         self._steal_periodic_callback.start()
 
-
-        if start_queues:
-            self.loop.add_callback(self.handle_queues, self.scheduler_queues[0], None)
-
         for cor in self.coroutines:
             if cor.done():
                 exc = cor.exception()
@@ -458,12 +447,6 @@ class Scheduler(Server):
         for w, bstream in list(self.worker_streams.items()):
             with ignoring(AttributeError):
                 yield bstream.close(ignore_closed=True)
-
-        for s in self.scheduler_queues[1:]:
-            s.put_nowait({'op': 'close-stream'})
-
-        for q in self.report_queues:
-            q.put_nowait({'op': 'close'})
 
     ###########
     # Stimuli #
@@ -957,9 +940,6 @@ class Scheduler(Server):
             except KeyError:
                 pass
 
-        for q in self.report_queues:
-            q.put_nowait(msg)
-
         if 'key' in msg:
             if msg['key'] not in self.who_wants:
                 return
@@ -1014,16 +994,12 @@ class Scheduler(Server):
         Scheduler.worker_stream: The equivalent function for workers
         """
         with log_errors(pdb=LOG_PDB):
-            if isinstance(in_queue, Queue):
-                next_message = in_queue.get
-            elif isinstance(in_queue, IOStream):
+            if isinstance(in_queue, IOStream):
                 next_message = lambda: read(in_queue, deserialize=self.deserialize)
             else:
                 raise NotImplementedError()
 
-            if isinstance(report, Queue):
-                put = report.put_nowait
-            elif isinstance(report, IOStream):
+            if isinstance(report, IOStream):
                 put = lambda msg: write(report, msg)
             elif isinstance(report, BatchedSend):
                 put = report.send
@@ -1080,19 +1056,6 @@ class Scheduler(Server):
 
             self.remove_client(client=client)
             logger.debug('Finished handle_messages coroutine')
-
-    def handle_queues(self, scheduler_queue, report_queue):
-        """
-        Register new control and report queues to the Scheduler
-
-        Queues are not in common use.  This may be deprecated in the future.
-        """
-        self.scheduler_queues.append(scheduler_queue)
-        if report_queue:
-            self.report_queues.append(report_queue)
-        future = self.handle_messages(scheduler_queue, report_queue)
-        self.coroutines.append(future)
-        return future
 
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
@@ -1278,9 +1241,6 @@ class Scheduler(Server):
         n = len(self.ncores)
         with log_errors():
             logger.debug("Send shutdown signal to workers")
-
-            for q in self.scheduler_queues + self.report_queues:
-                clear_queue(q)
 
             nannies = {addr: d['services']['nanny']
                        for addr, d in self.worker_info.items()}
