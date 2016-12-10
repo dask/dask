@@ -108,6 +108,7 @@ Contents
    ipython
    publish
    queues
+   resources
    task-launch
    adaptive
    submitting-applications
