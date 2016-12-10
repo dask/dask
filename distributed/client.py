@@ -543,7 +543,7 @@ class Client(object):
                 for msg in msgs:
                     logger.debug("Client receives message %s", msg)
 
-                    if msg.get('status') == 'scheduler-error':
+                    if 'status' in msg and 'error' in msg['status']:
                         six.reraise(*clean_exception(**msg))
 
                     op = msg.pop('op')

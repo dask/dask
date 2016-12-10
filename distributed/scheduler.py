@@ -514,7 +514,7 @@ class Scheduler(Server):
             #     self.mark_key_in_memory(key, [address])
 
             self.worker_streams[address] = BatchedSend(interval=5, loop=self.loop)
-            self._worker_coroutines.append(self.worker_stream(address))
+            self._worker_coroutines.append(self.handle_worker(address))
 
             if self.ncores[address] > len(self.processing[address]):
                 self.idle.add(address)
@@ -962,16 +962,12 @@ class Scheduler(Server):
         We listen to all future messages from this IOStream.
         """
         logger.info("Receive client connection: %s", client)
-        bstream = BatchedSend(interval=2, loop=self.loop)
-        bstream.start(stream)
-        self.streams[client] = bstream
-
         try:
-            yield self.handle_messages(stream, bstream, client=client)
+            yield self.handle_client(stream, client=client)
         finally:
             if not stream.closed():
-                bstream.send({'op': 'stream-closed'})
-                yield bstream.close(ignore_closed=True)
+                self.streams[client].send({'op': 'stream-closed'})
+                yield self.streams[client].close(ignore_closed=True)
             del self.streams[client]
             logger.info("Close client connection: %s", client)
 
@@ -983,9 +979,9 @@ class Scheduler(Server):
             del self.wants_what[client]
 
     @gen.coroutine
-    def handle_messages(self, in_queue, report, client=None):
+    def handle_client(self, stream, client=None):
         """
-        The master client coroutine.  Handles all inbound messages from clients.
+        Listen and respond to messages from clients
 
         This runs once per Client IOStream or Queue.
 
@@ -993,30 +989,23 @@ class Scheduler(Server):
         --------
         Scheduler.worker_stream: The equivalent function for workers
         """
-        with log_errors(pdb=LOG_PDB):
-            if isinstance(in_queue, IOStream):
-                next_message = lambda: read(in_queue, deserialize=self.deserialize)
-            else:
-                raise NotImplementedError()
+        bstream = BatchedSend(interval=2, loop=self.loop)
+        bstream.start(stream)
+        self.streams[client] = bstream
 
-            if isinstance(report, IOStream):
-                put = lambda msg: write(report, msg)
-            elif isinstance(report, BatchedSend):
-                put = report.send
-            else:
-                put = lambda msg: None
-            put({'op': 'stream-start'})
+        with log_errors(pdb=LOG_PDB):
+            bstream.send({'op': 'stream-start'})
 
             breakout = False
 
             while True:
                 try:
-                    msgs = yield next_message()
+                    msgs = yield read(stream, deserialize=self.deserialize)
                 except (StreamClosedError, AssertionError, GeneratorExit):
                     break
                 except Exception as e:
                     logger.exception(e)
-                    put(error_message(e, status='scheduler-error'))
+                    bstream.send(error_message(e, status='scheduler-error'))
                     continue
 
                 if not isinstance(msgs, list):
@@ -1028,7 +1017,7 @@ class Scheduler(Server):
                         op = msg.pop('op')
                     except Exception as e:
                         logger.exception(e)
-                        put(error_message(e, status='scheduler-error'))
+                        bstream.end(error_message(e, status='scheduler-error'))
 
                     if op == 'close-stream':
                         breakout = True
@@ -1055,7 +1044,7 @@ class Scheduler(Server):
                     break
 
             self.remove_client(client=client)
-            logger.debug('Finished handle_messages coroutine')
+            logger.debug('Finished handle_client coroutine')
 
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
@@ -1102,7 +1091,7 @@ class Scheduler(Server):
         self.transitions(r)
 
     @gen.coroutine
-    def worker_stream(self, worker):
+    def handle_worker(self, worker):
         """
         Listen to responses from a single worker
 
@@ -1110,7 +1099,7 @@ class Scheduler(Server):
 
         See Also
         --------
-        Scheduler.handle_messages: Equivalent coroutine for clients
+        Scheduler.handle_client: Equivalent coroutine for clients
         """
         yield gen.sleep(0)
         ip, port = coerce_to_address(worker, out=tuple)
