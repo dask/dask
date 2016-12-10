@@ -21,17 +21,17 @@ def test_rechunk_internals_1():
                ('o', 3), ('o', 4), ('o', 5), ('n', 6), ('n', 7))
     assert breaks[1] == answer2
     i1d = [_intersect_1d(b) for b in breaks]
-    answer3 = (((0, slice(0, 1, None)), ),
-               ((0, slice(1, 2, None)), ),
-               ((0, slice(2, 4, None)), ))
+    answer3 = [[(0, slice(0, 1))],
+               [(0, slice(1, 2))],
+               [(0, slice(2, 4))]]
     assert i1d[0] == answer3
-    answer4 = (((0, slice(0, 1, None)), ),
-               ((1, slice(0, 1, None)),
-                (2, slice(0, 1, None)),
-                (3, slice(0, 1, None)),
-                (4, slice(0, 1, None)),
-                (5, slice(0, 1, None))),
-               ((5, slice(1, 2, None)), ))
+    answer4 = [[(0, slice(0, 1))],
+               [(1, slice(0, 1)),
+                (2, slice(0, 1)),
+                (3, slice(0, 1)),
+                (4, slice(0, 1)),
+                (5, slice(0, 1))],
+               [(5, slice(1, 2))]]
     assert i1d[1] == answer4
 
 
@@ -39,12 +39,13 @@ def test_intersect_1():
     """ Convert 1 D chunks"""
     old = ((10, 10, 10, 10, 10), )
     new = ((25, 5, 20), )
-    answer = ((((0, slice(0, 10, None)), ),
-              ((1, slice(0, 10, None)), ),
-              ((2, slice(0, 5, None)), )),
-              (((2, slice(5, 10, None)), ), ),
-              (((3, slice(0, 10, None)), ), ((4, slice(0, 10, None)), )))
-    cross = intersect_chunks(old_chunks=old, new_chunks=new)
+    answer = [(((0, slice(0, 10)), ),
+              ((1, slice(0, 10)), ),
+              ((2, slice(0, 5)), )),
+              (((2, slice(5, 10)), ), ),
+              (((3, slice(0, 10)), ), ((4, slice(0, 10)), ))
+              ]
+    cross = list(intersect_chunks(old_chunks=old, new_chunks=new))
     assert answer == cross
 
 
@@ -52,13 +53,14 @@ def test_intersect_2():
     """ Convert 1 D chunks"""
     old = ((20, 20, 20, 20, 20), )
     new = ((58, 4, 20, 18),)
-    answer = ((((0, slice(0, 20, None)), ),
-              ((1, slice(0, 20, None)), ),
-              ((2, slice(0, 18, None)), )),
-              (((2, slice(18, 20, None)), ), ((3, slice(0, 2, None)), )),
-              (((3, slice(2, 20, None)), ), ((4, slice(0, 2, None)), )),
-              (((4, slice(2, 20, None)), ), ))
-    cross = intersect_chunks(old_chunks=old, new_chunks=new)
+    answer = [(((0, slice(0, 20)), ),
+              ((1, slice(0, 20)), ),
+              ((2, slice(0, 18)), )),
+              (((2, slice(18, 20)), ), ((3, slice(0, 2)), )),
+              (((3, slice(2, 20)), ), ((4, slice(0, 2)), )),
+              (((4, slice(2, 20)), ), )
+              ]
+    cross = list(intersect_chunks(old_chunks=old, new_chunks=new))
     assert answer == cross
 
 
