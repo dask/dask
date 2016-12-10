@@ -624,6 +624,7 @@ def apply_function(function, args, kwargs, execution_state, key):
         msg['op'] = 'task-erred'
     else:
         msg = {'op': 'task-finished',
+               'status': 'OK',
                'result': result,
                'nbytes': sizeof(result),
                'type': dumps_function(type(result)) if result is not None else None}
