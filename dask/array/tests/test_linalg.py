@@ -441,7 +441,6 @@ def test_no_chunks_svd():
 
         du, ds, dv = da.linalg.svd(dx)
 
-        du.visualize(filename='dask.pdf')
         assert_eq(s, ds)
         assert_eq(u.dot(np.diag(s)).dot(v),
                   du.dot(da.diag(ds)).dot(dv))
