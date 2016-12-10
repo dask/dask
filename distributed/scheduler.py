@@ -33,6 +33,7 @@ from .config import config
 from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message, clean_exception)
 from .metrics import time
+from .publish import PublishExtension
 from .channels import ChannelScheduler
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
@@ -193,7 +194,8 @@ class Scheduler(Server):
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
             synchronize_worker_interval=60000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
-            validate=False, steal=True, extensions=[ChannelScheduler],
+            validate=False, steal=True, extensions=[ChannelScheduler,
+                PublishExtension],
             **kwargs):
 
         # Attributes
@@ -298,10 +300,6 @@ class Scheduler(Server):
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
                          'start_ipython': self.start_ipython,
-                         'list_datasets': self.list_datasets,
-                         'get_dataset': self.get_dataset,
-                         'publish_dataset': self.publish_dataset,
-                         'unpublish_dataset': self.unpublish_dataset,
                          'update_data': self.update_data,
                          'change_worker_cores': self.change_worker_cores}
 
@@ -1733,27 +1731,6 @@ class Scheduler(Server):
                 result = out
 
             return result
-
-    def publish_dataset(self, stream=None, keys=None, data=None, name=None,
-                        client=None):
-        if name in self.datasets:
-            raise KeyError("Dataset %s already exists" % name)
-        self.client_wants_keys(keys, 'published-%s' % name)
-        self.datasets[name] = {'data': data, 'keys': keys}
-        return {'status':  'OK', 'name': name}
-
-    def unpublish_dataset(self, stream=None, name=None):
-        out = self.datasets.pop(name, {'keys': []})
-        self.client_releases_keys(out['keys'], 'published-%s' % name)
-
-    def list_datasets(self, *args):
-        return list(sorted(self.datasets.keys()))
-
-    def get_dataset(self, stream, name=None, client=None):
-        if name in self.datasets:
-            return self.datasets[name]
-        else:
-            raise KeyError("Dataset '%s' not found" % name)
 
     def change_worker_cores(self, stream=None, worker=None, diff=0):
         """ Add or remove cores from a worker

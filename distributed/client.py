@@ -1136,13 +1136,14 @@ class Client(object):
 
     @gen.coroutine
     def _publish_dataset(self, **kwargs):
-        coroutines = []
-        for name, data in kwargs.items():
-            keys = [tokey(f.key) for f in futures_of(data)]
-            coroutines.append(self.scheduler.publish_dataset(keys=keys,
-                name=tokey(name), data=dumps(data), client=self.id))
+        with log_errors():
+            coroutines = []
+            for name, data in kwargs.items():
+                keys = [tokey(f.key) for f in futures_of(data)]
+                coroutines.append(self.scheduler.publish_put(keys=keys,
+                    name=tokey(name), data=dumps(data), client=self.id))
 
-        outs = yield coroutines
+            outs = yield coroutines
 
     def publish_dataset(self, **kwargs):
         """
@@ -1203,7 +1204,7 @@ class Client(object):
         --------
         Client.publish_dataset
         """
-        return sync(self.loop, self.scheduler.unpublish_dataset, name=name)
+        return sync(self.loop, self.scheduler.publist_delete, name=name)
 
     def list_datasets(self):
         """
@@ -1214,11 +1215,11 @@ class Client(object):
         Client.publish_dataset
         Client.get_dataset
         """
-        return sync(self.loop, self.scheduler.list_datasets)
+        return sync(self.loop, self.scheduler.publish_list)
 
     @gen.coroutine
     def _get_dataset(self, name):
-        out = yield self.scheduler.get_dataset(name=name, client=self.id)
+        out = yield self.scheduler.publish_get(name=name, client=self.id)
 
         with temp_default_client(self):
             data = loads(out['data'])
