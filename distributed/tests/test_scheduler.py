@@ -29,6 +29,7 @@ from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop, readone, slowinc)
 from distributed.utils import All
+from distributed.utils_test import slow
 from dask.compatibility import apply
 
 
@@ -465,24 +466,18 @@ def test_delete_data(c, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster(client=True)
-def test_delete_callback(c, s, a, b):
-    d = yield c._scatter({'x': 1}, workers=a.address)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_delete(c, s, a):
+    x = c.submit(inc, 1)
+    yield x._result()
+    assert x.key in a.data
 
-    assert s.who_has['x'] == {a.address}
-    assert s.has_what[a.address] == {'x'}
+    yield c._cancel(x)
 
-    s.client_releases_keys(client=c.id, keys=['x'])
-
-    assert 'x' not in s.who_has
-    assert 'x' not in s.has_what[a.address]
-    assert a.data['x'] == 1  # still in memory
-    assert s.deleted_keys == {a.address: {'x'}}
-    yield s.clear_data_from_workers()
-    assert not s.deleted_keys
-    assert not a.data
-
-    assert s._delete_periodic_callback.is_running()
+    start = time()
+    while x.key in a.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
 
 
 @gen_cluster()
@@ -830,3 +825,47 @@ def test_retire_workers(c, s, a, b):
 
     workers = yield s.retire_workers()
     assert not workers
+
+
+@slow
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="file descriptors not really a thing")
+@gen_cluster(client=True, ncores=[], timeout=240)
+def test_file_descriptors(c, s):
+    psutil = pytest.importorskip('psutil')
+    da = pytest.importorskip('dask.array')
+    proc = psutil.Process()
+    num_fds_1 = proc.num_fds()
+
+    nannies = [Nanny(s.ip, s.port, loop=s.loop) for i in range(20)]
+    yield [n._start() for n in nannies]
+
+    while len(s.ncores) < 20:
+        yield gen.sleep(0.1)
+
+    num_fds_2 = proc.num_fds()
+
+    yield gen.sleep(0.2)
+
+    num_fds_3 = proc.num_fds()
+    assert num_fds_3 == num_fds_2
+
+    x = da.random.normal(10, 1, size=(1000, 1000), chunks=(10, 10))
+    x = c.persist(x)
+    yield _wait(x)
+
+    num_fds_4 = proc.num_fds()
+    assert num_fds_4 < num_fds_3 + 20
+
+    y = c.persist(x + x.T)
+    yield _wait(y)
+
+    num_fds_5 = proc.num_fds()
+    assert num_fds_5 < num_fds_4 + 20
+
+    yield gen.sleep(1)
+
+    num_fds_6 = proc.num_fds()
+    assert num_fds_6 < num_fds_5 + 20
+
+    yield [n._close() for n in nannies]

@@ -2120,6 +2120,7 @@ def test_futures_of_cancelled_raises(c, s, a, b):
     assert 'y' not in s.tasks
 
 
+@pytest.mark.skip
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True)
 def test_dont_delete_recomputed_results(c, s, w):
     x = c.submit(inc, 1)                        # compute first time
@@ -3015,76 +3016,6 @@ def test_persist_optimize_graph(c, s, a, b):
 def test_scatter_raises_if_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
         yield c._scatter([1])
-
-
-@gen_test()
-def test_synchronize_worker_data():
-    s = Scheduler(synchronize_worker_interval=50)
-    s.start(0)
-    a = Worker(s.ip, s.port, name='alice')
-    yield a._start()
-
-    a.data['x'] = 1
-    response = yield s.synchronize_worker_data()
-
-    assert response == {a.address: {'extra': ['x'], 'missing': []}}
-    assert not a.data
-
-    yield a._close()
-    s.stop()
-
-
-@gen_test()
-def test_synchronize_worker_data_race_condition():
-    s = Scheduler(synchronize_worker_interval=50)
-    s.start(0)
-    a = Worker(s.ip, s.port, name='alice')
-    yield a._start()
-
-    a.data['x'] = 1
-    s.loop.add_callback(s.synchronize_worker_data)
-    yield gen.sleep(0.020)
-    s.has_what[a.address].add('x')
-    s.who_has['x'] = {a.address}
-
-    yield gen.sleep(0.100)
-    assert a.data == {'x': 1}
-
-    yield a._close()
-    s.stop()
-
-
-@gen_test()
-def test_synchronize_worker_data_callback():
-    s = Scheduler(synchronize_worker_interval=50)
-    s.start(0)
-    a = Worker(s.ip, s.port, name='alice')
-    yield a._start()
-
-    a.data['x'] = 1
-
-    yield gen.sleep(0.200)
-
-    assert not a.data
-
-    yield a._close()
-    s.stop()
-
-
-@gen_cluster(client=True)
-def test_synchronize_missing_data_on_one_worker(c, s, a, b):
-    s.synchronize_worker_interval = 10
-    np = pytest.importorskip('numpy')
-    [f] = yield c._scatter([1], broadcast=True)
-    assert a.data and b.data
-
-    del a.data[f.key]
-
-    yield s.synchronize_worker_data()
-
-    assert s.task_state[f.key] == 'memory'
-    assert b.data
-    # assert set(s.has_what[b.address]) == set(a.data)
 
 
 @slow

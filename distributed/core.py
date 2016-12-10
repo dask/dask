@@ -95,7 +95,7 @@ class Server(TCPServer):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
         self._port = None
-        self._listen_streams = set()
+        self._listen_streams = dict()
         self.rpc = ConnectionPool(limit=connection_limit,
                                   deserialize=deserialize)
         self.deserialize = deserialize
@@ -156,7 +156,7 @@ class Server(TCPServer):
         ip, port = address
         logger.info("Connection from %s:%d to %s", ip, port,
                     type(self).__name__)
-        self._listen_streams.add(stream)
+        self._listen_streams[stream] = op
         try:
             while True:
                 try:
@@ -175,6 +175,7 @@ class Server(TCPServer):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
                 op = msg.pop('op')
+                self._listen_streams[stream] = op
                 close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
@@ -208,7 +209,7 @@ class Server(TCPServer):
         finally:
             logger.debug("Closing connection from %s:%d to %s", ip, port,
                          type(self).__name__)
-            self._listen_streams.remove(stream)
+            del self._listen_streams[stream]
             try:
                 yield close(stream)
             except Exception as e:
@@ -638,6 +639,7 @@ class ConnectionPool(object):
             self.event.clear()
             self.collect()
             yield self.event.wait()
+            yield gen.sleep(0.01)
 
         self.open += 1
         stream = yield connect(ip=ip, port=port, timeout=timeout)

@@ -242,7 +242,6 @@ class Scheduler(Server):
         self.has_what = dict()
         self.who_wants = defaultdict(set)
         self.wants_what = defaultdict(set)
-        self.deleted_keys = defaultdict(set)
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
@@ -267,6 +266,11 @@ class Scheduler(Server):
         self.transition_log = deque(maxlen=config.get('transition-log-length',
                                                       100000))
         self._transition_counter = 0
+
+        self.worker_handlers = {'task-finished': self.handle_task_finished,
+                                'task-erred': self.handle_task_erred,
+                                'missing-data': self.handle_missing_data,
+                                'add-keys': self.add_keys}
 
         self.compute_handlers = {'update-graph': self.update_graph,
                                  'client-desires-keys': self.client_desires_keys,
@@ -386,18 +390,6 @@ class Scheduler(Server):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._delete_periodic_callback = \
-                PeriodicCallback(callback=self.clear_data_from_workers,
-                                 callback_time=self.delete_interval,
-                                 io_loop=self.loop)
-        self._delete_periodic_callback.start()
-
-        self._synchronize_data_periodic_callback = \
-                PeriodicCallback(callback=self.synchronize_worker_data,
-                                 callback_time=self.synchronize_worker_interval,
-                                 io_loop=self.loop)
-        self._synchronize_data_periodic_callback.start()
-
         self._steal_periodic_callback = \
                 PeriodicCallback(callback=self.balance_by_stealing,
                                  callback_time=100,
@@ -446,8 +438,6 @@ class Scheduler(Server):
         """
         if self.status == 'closed':
             return
-        self._delete_periodic_callback.stop()
-        self._synchronize_data_periodic_callback.stop()
         self._steal_periodic_callback.stop()
         for service in self.services.values():
             service.stop()
@@ -542,7 +532,7 @@ class Scheduler(Server):
             # for key in keys:  # TODO
             #     self.mark_key_in_memory(key, [address])
 
-            self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
+            self.worker_streams[address] = BatchedSend(interval=5, loop=self.loop)
             self._worker_coroutines.append(self.worker_stream(address))
 
             if self.ncores[address] > len(self.processing[address]):
@@ -1134,6 +1124,22 @@ class Scheduler(Server):
 
         self.worker_streams[worker].send(msg)
 
+    def handle_uncaught_error(self, **msg):
+        logger.exception(clean_exception(**msg)[1])
+
+    def handle_task_finished(self, key=None, **msg):
+        validate_key(key)
+        r = self.stimulus_task_finished(key=key, **msg)
+        self.transitions(r)
+
+    def handle_task_erred(self, key=None, **msg):
+        r = self.stimulus_task_erred(key=key, **msg)
+        self.transitions(r)
+
+    def handle_missing_data(self, key=None, **msg):
+        r = self.stimulus_missing_data(key=key, ensure=False, **msg)
+        self.transitions(r)
+
     @gen.coroutine
     def worker_stream(self, worker):
         """
@@ -1166,39 +1172,13 @@ class Scheduler(Server):
                 if worker in self.worker_info:
                     recommendations = OrderedDict()
                     for msg in msgs:
-                        # logger.debug("Compute response from worker %s, %s",
-                        #              worker, msg)
-
                         if msg == 'OK':  # from close
                             break
 
                         self.correct_time_delay(worker, msg)
-
-                        if msg['status'] == 'uncaught-error':
-                            logger.exception(clean_exception(**msg)[1])
-                            continue
-
-                        key = msg['key']
-                        validate_key(key)
-                        if msg['status'] == 'OK':
-                            r = self.stimulus_task_finished(worker=worker, **msg)
-                            recommendations.update(r)
-                        elif msg['status'] == 'error':
-                            r = self.stimulus_task_erred(worker=worker, **msg)
-                            recommendations.update(r)
-                        elif msg['status'] == 'missing-data':
-                            r = self.stimulus_missing_data(worker=worker,
-                                    ensure=False, **msg)
-                            recommendations.update(r)
-                        else:
-                            logger.warn("Unknown message type, %s, %s",
-                                    msg['status'], msg)
-
-                    self.transitions(recommendations)
-
-                    if self.validate:
-                        logger.debug("Messages: %s\nRecommendations: %s",
-                                     msgs, recommendations)
+                        op = msg.pop('op')
+                        handler = self.worker_handlers[op]
+                        handler(worker=worker, **msg)
 
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", worker)
@@ -1229,32 +1209,6 @@ class Scheduler(Server):
                         'disk_load_stop']:
                 if key in msg:
                     msg[key] += delay
-
-    @gen.coroutine
-    def clear_data_from_workers(self):
-        """ Send delete signals to clear unused data from workers
-
-        This watches the ``.deleted_keys`` attribute, which stores a set of
-        keys to be deleted from each worker.  This function is run periodically
-        by the ``._delete_periodic_callback`` to actually remove the data.
-
-        This runs every ``self.delete_interval`` milliseconds.
-        """
-        if self.deleted_keys:
-            d = self.deleted_keys.copy()
-            self.deleted_keys.clear()
-
-            coroutines = [self.rpc(addr=worker).delete_data(
-                                   keys=list(keys - self.has_what.get(worker,
-                                                                      set())),
-                                   report=False)
-                          for worker, keys in d.items()
-                          if keys]
-            for worker, keys in d.items():
-                logger.debug("Remove %d keys from worker %s", len(keys), worker)
-            yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
-
-        raise Return('OK')
 
     def add_plugin(self, plugin):
         """
@@ -1552,7 +1506,7 @@ class Scheduler(Server):
                                 for w, who_has in gathers.items()}
             for w, v in results.items():
                 if v['status'] == 'OK':
-                    self.add_keys(address=w, keys=list(gathers[w]))
+                    self.add_keys(worker=w, keys=list(gathers[w]))
 
     def workers_to_close(self, memory_ratio=2):
         """
@@ -1631,53 +1585,23 @@ class Scheduler(Server):
                     self.remove_worker(address=w, safe=True)
             raise gen.Return(list(workers))
 
-    @gen.coroutine
-    def synchronize_worker_data(self, stream=None, worker=None):
-        if worker is None:
-            result = yield {w: self.synchronize_worker_data(worker=w)
-                            for w in self.worker_info}
-            result = {k: v for k, v in result.items() if any(v.values())}
-            if result:
-                logger.info("Excess keys found on workers: %d", len(result))
-            raise Return(result or None)
-        else:
-            keys = yield self.rpc(addr=worker).keys()
-            keys = set(keys)
-
-            missing = self.has_what[worker] - keys
-            if missing:
-                logger.info("Expected data missing from worker: %s, %d",
-                            worker, len(missing))
-
-            extra = keys - self.has_what[worker] - self.deleted_keys[worker]
-            if extra:
-                yield gen.sleep(self.synchronize_worker_interval / 1000)  # delay
-                keys = yield self.rpc(addr=worker).keys()  # check again
-                extra &= set(keys)  # make sure the keys are still on worker
-                extra -= self.has_what[worker]  # and still unknown to scheduler
-                if extra:  # still around?  delete them
-                    yield self.rpc(addr=worker).delete_data(keys=list(extra),
-                            report=False)
-
-            raise Return({'extra': list(extra), 'missing': list(missing)})
-
-    def add_keys(self, stream=None, address=None, keys=()):
+    def add_keys(self, stream=None, worker=None, keys=()):
         """
         Learn that a worker has certain keys
 
         This should not be used in practice and is mostly here for legacy
         reasons.
         """
-        address = coerce_to_address(address)
-        if address not in self.worker_info:
+        worker = coerce_to_address(worker)
+        if worker not in self.worker_info:
             return 'not found'
         for key in keys:
             if key in self.who_has:
-                if key not in self.has_what[address]:
-                    self.worker_bytes[address] += self.nbytes.get(key,
+                if key not in self.has_what[worker]:
+                    self.worker_bytes[worker] += self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
-                self.has_what[address].add(key)
-                self.who_has[key].add(address)
+                self.has_what[worker].add(key)
+                self.who_has[key].add(worker)
             # else:
                 # TODO: delete key from worker
         return 'OK'
@@ -1892,6 +1816,10 @@ class Scheduler(Server):
                     self.task_state[key] = 'no-worker'
             else:
                 self.task_state[key] = 'waiting'
+
+            if self.validate:
+                if self.task_state[key] == 'waiting':
+                    assert key in self.waiting
 
             self.released.remove(key)
 
@@ -2137,7 +2065,8 @@ class Scheduler(Server):
                     self.has_what[w].remove(key)
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
-                    self.deleted_keys[w].add(key)
+                    self.worker_streams[w].send({'op': 'delete-data',
+                                                 'keys': [key], 'report': False})
 
             self.released.add(key)
 
@@ -2408,7 +2337,8 @@ class Scheduler(Server):
                     self.has_what[w].remove(key)
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
-                    self.deleted_keys[w].add(key)
+                    self.worker_streams[w].send({'op': 'delete-data',
+                                                 'keys': [key], 'report': False})
 
             if self.validate:
                 assert all(key not in self.dependents[dep]

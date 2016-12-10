@@ -371,21 +371,18 @@ class WorkerBase(Server):
     def run(self, stream, function=None, args=(), kwargs={}):
         return run(self, stream, function=function, args=args, kwargs=kwargs)
 
-    @gen.coroutine
     def update_data(self, stream=None, data=None, report=True):
         self.data.update(data)
         self.nbytes.update(valmap(sizeof, data))
         if report:
-            response = yield self.scheduler.add_keys(
-                                address=(self.ip, self.port),
-                                keys=list(data))
-            assert response == 'OK'
+            self.batched_stream.send({'op': 'add-keys',
+                                      'keys': list(data)})
         info = {'nbytes': {k: sizeof(v) for k, v in data.items()},
                 'status': 'OK'}
-        raise Return(info)
+        return info
 
     @gen.coroutine
-    def delete_data(self, stream, keys=None, report=True):
+    def delete_data(self, stream=None, keys=None, report=True):
         if keys:
             for key in list(keys):
                 if not (key in self.dependents and
@@ -624,8 +621,9 @@ def apply_function(function, args, kwargs, execution_state, key):
         result = function(*args, **kwargs)
     except Exception as e:
         msg = error_message(e)
+        msg['op'] = 'task-erred'
     else:
-        msg = {'status': 'OK',
+        msg = {'op': 'task-finished',
                'result': result,
                'nbytes': sizeof(result),
                'type': dumps_function(type(result)) if result is not None else None}
@@ -848,6 +846,8 @@ class Worker(WorkerBase):
                         priority = [self.priority_counter] + priority
                         priority = tuple(-x for x in priority)
                         self.add_task(priority=priority, **msg)
+                    elif op == 'delete-data':
+                        self.delete_data(**msg)
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
 
@@ -887,6 +887,7 @@ class Worker(WorkerBase):
                 logger.warn("Could not deserialize task", exc_info=True)
                 emsg = error_message(e)
                 emsg['key'] = key
+                emsg['op'] = 'task-erred'
                 self.batched_stream.send(emsg)
                 self.log.append((key, 'deserialize-error'))
                 return
@@ -1210,7 +1211,8 @@ class Worker(WorkerBase):
                 self.put_key_in_memory(d, v)
 
             if response:
-                self.loop.add_callback(self.scheduler.add_keys, address=self.address, keys=list(response))
+                self.batched_stream.send({'op': 'add-keys',
+                                          'keys': list(response)})
 
             for d in deps:
                 if d not in response and d in self.dependents:
@@ -1274,7 +1276,7 @@ class Worker(WorkerBase):
                            if dep not in self.data
                            and not self.who_has.get(dep)]
                 self.log.append(('report-missing-data', key, missing))
-                self.batched_stream.send({'status': 'missing-data',
+                self.batched_stream.send({'op': 'missing-data',
                                           'key': key,
                                           'keys': missing})
             self.forget_key(key)
@@ -1420,7 +1422,7 @@ class Worker(WorkerBase):
             value = result.pop('result', None)
             self.response[key].update(result)
 
-            if result['status'] == 'OK':
+            if result['op'] == 'task-finished':
                 self.put_key_in_memory(key, value)
                 self.transition(key, 'memory')
             else:

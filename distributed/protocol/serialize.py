@@ -3,7 +3,10 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 
 from dask.base import normalize_token
-from toolz import valmap, get_in
+try:
+    from cytoolz import valmap, get_in
+except ImportError:
+    from toolz import valmap, get_in
 
 from . import pickle
 

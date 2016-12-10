@@ -8,7 +8,10 @@ try:
 except ImportError:
     import pandas.msgpack as msgpack
 
-from toolz import get_in
+try:
+    from cytoolz import get_in
+except ImportError:
+    from toolz import get_in
 
 from .compression import compressions, maybe_compress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
