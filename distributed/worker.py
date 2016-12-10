@@ -870,7 +870,8 @@ class Worker(WorkerBase):
                 if state in ('memory', 'error'):
                     if state == 'memory':
                         assert key in self.data
-                    logger.info("Asked to compute prexisting result: %s" , key)
+                    logger.info("Asked to compute prexisting result: %s: %s" ,
+                                key, state)
                     self.batched_stream.send(self.response[key])
                     return
                 if state in IN_PLAY:
@@ -1615,7 +1616,7 @@ class Worker(WorkerBase):
                 if state == 'executing':
                     assert key in self.executing
                 if state == 'long-running':
-                    assert key not in self.execting
+                    assert key not in self.executing
                     assert key in self.long_running
 
             for key in self.tasks:

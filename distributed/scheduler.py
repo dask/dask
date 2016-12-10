@@ -33,6 +33,7 @@ from .config import config
 from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
         Server, send_recv, coerce_to_address, error_message, clean_exception)
 from .metrics import time
+from .channels import ChannelScheduler
 from .utils import (All, ignoring, clear_queue, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
         divide_n_among_bins, validate_key)
@@ -192,7 +193,8 @@ class Scheduler(Server):
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
             synchronize_worker_interval=60000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
-            validate=False, steal=True, **kwargs):
+            validate=False, steal=True, extensions=[ChannelScheduler],
+            **kwargs):
 
         # Attributes
         self.ip = ip or get_ip()
@@ -260,12 +262,14 @@ class Scheduler(Server):
         self.aliases = dict()
         self.occupancy = ValueSortedDict()
 
+        self.extensions = {}
         self.plugins = []
         self.transition_log = deque(maxlen=config.get('transition-log-length',
                                                       100000))
         self._transition_counter = 0
 
         self.compute_handlers = {'update-graph': self.update_graph,
+                                 'client-desires-keys': self.client_desires_keys,
                                  'update-data': self.update_data,
                                  'missing-data': self.stimulus_missing_data,
                                  'client-releases-keys': self.client_releases_keys,
@@ -333,6 +337,9 @@ class Scheduler(Server):
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, io_loop=self.loop,
                 connection_limit=connection_limit, deserialize=False, **kwargs)
+
+        for ext in extensions:
+            ext(self)
 
     ##################
     # Administration #
@@ -562,17 +569,15 @@ class Scheduler(Server):
 
         This happens whenever the Client calls submit, map, get, or compute.
         """
+        original_keys = keys
+        keys = set(keys)
+        self.client_desires_keys(keys=keys, client=client)
+
         for k in list(tasks):
             if tasks[k] is k:
                 del tasks[k]
             if k in self.tasks:
                 del tasks[k]
-
-        original_keys = keys
-        keys = set(keys)
-        for k in keys:
-            self.who_wants[k].add(client)
-            self.wants_what[client].add(k)
 
         n = 0
         while len(tasks) != n:  # walk thorough new tasks, cancel any bad deps
@@ -657,7 +662,7 @@ class Scheduler(Server):
 
         for key in keys:
             if self.task_state[key] in ('memory', 'erred'):
-                self.report_on_key(key)
+                self.report_on_key(key, client=client)
 
         # TODO: balance workers
 
@@ -809,6 +814,14 @@ class Scheduler(Server):
         self.report({'op': 'cancelled-key', 'key': key})
         self.client_releases_keys(keys=[key], client=client)
 
+    def client_desires_keys(self, keys=None, client=None):
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
+
+            if self.task_state.get(k) in ('memory', 'erred'):
+                self.report_on_key(k, client=client)
+
     def client_releases_keys(self, keys=None, client=None):
         """ Remove keys from client desired list """
         keys2 = set()
@@ -940,15 +953,25 @@ class Scheduler(Server):
     # Manage Messages #
     ###################
 
-    def report(self, msg):
+    def report(self, msg, client=None):
         """
         Publish updates to all listening Queues and Streams
 
         If the message contains a key then we only send the message to those
         streams that care about the key.
         """
+        if client is not None:
+            try:
+                stream = self.streams[client]
+                stream.send(msg)
+            except StreamClosedError:
+                logger.critical("Tried writing to closed stream: %s", msg)
+            except KeyError:
+                pass
+
         for q in self.report_queues:
             q.put_nowait(msg)
+
         if 'key' in msg:
             if msg['key'] not in self.who_wants:
                 return
@@ -1698,19 +1721,20 @@ class Scheduler(Server):
                              'key': key,
                              'workers': list(workers)})
 
-    def report_on_key(self, key):
+    def report_on_key(self, key, client=None):
         if key not in self.task_state:
             self.report({'op': 'cancelled-key',
-                         'key': key})
+                         'key': key}, client=client)
         elif self.task_state[key] == 'memory':
             self.report({'op': 'key-in-memory',
-                         'key': key})
+                         'key': key}, client=client)
         elif self.task_state[key] == 'erred':
             failing_key = self.exceptions_blame[key]
             self.report({'op': 'task-erred',
                          'key': key,
                          'exception': self.exceptions[failing_key],
-                         'traceback': self.tracebacks.get(failing_key, None)})
+                         'traceback': self.tracebacks.get(failing_key, None)},
+                         client=client)
 
 
     @gen.coroutine
