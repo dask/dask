@@ -1167,7 +1167,7 @@ class Scheduler(Server):
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
-                if worker in self.worker_info:
+                if worker in self.worker_info and not stream.closed():
                     recommendations = OrderedDict()
                     for msg in msgs:
                         if msg == 'OK':  # from close
