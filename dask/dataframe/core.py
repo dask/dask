@@ -1700,6 +1700,12 @@ class _Frame(Base):
 
     @property
     def values(self):
+        """ Return a dask.array of the values of this dataframe
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
+        """
         from ..array.core import Array
         name = 'values-' + tokenize(self)
         chunks = ((np.nan,) * self.npartitions,)
@@ -2821,6 +2827,10 @@ class DataFrame(_Frame):
 
     def to_records(self, index=False):
         """ Convert to a dask array with struct dtype
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
 
         Examples
         --------
