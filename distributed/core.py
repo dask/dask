@@ -154,7 +154,7 @@ class Server(TCPServer):
         op = None
 
         ip, port = address
-        logger.info("Connection from %s:%d to %s", ip, port,
+        logger.debug("Connection from %s:%d to %s", ip, port,
                     type(self).__name__)
         self._listen_streams[stream] = op
         try:
@@ -163,7 +163,7 @@ class Server(TCPServer):
                     msg = yield read(stream, deserialize=self.deserialize)
                     logger.debug("Message from %s:%d: %s", ip, port, msg)
                 except EnvironmentError as e:
-                    logger.warn("Lost connection to %s while reading message: %s."
+                    logger.debug("Lost connection to %s while reading message: %s."
                                 " Last operation: %s",
                                 str(address), e, op)
                     break

@@ -2516,7 +2516,7 @@ class Scheduler(Server):
 
             try:
                 stream = yield connect(ip, int(port))
-                logger.info("Steal %s percent of work: %s <- %s", int(100 * budget), idle, saturated)
+                logger.debug("Steal %s percent of work: %s <- %s", int(100 * budget), idle, saturated)
                 response = yield send_recv(stream, op='steal', worker=saturated, budget=budget)
                 assert response
                 yield write(stream, 'OK')
@@ -2537,7 +2537,7 @@ class Scheduler(Server):
                                 self.occupancy[idle] += duration
                                 self.consume_resources(key, idle)
 
-                    logger.info("Stolen %d keys:  %s <- %s",
+                    logger.debug("Stolen %d keys:  %s <- %s",
                                  len(response['keys']), idle, saturated)
             except EnvironmentError:
                 logger.info("Stream closed while monitoring stealing")
@@ -2621,7 +2621,7 @@ class Scheduler(Server):
                     logger.debug("cycle balance work steal")
 
             if flag:
-                logger.info("Stealing %d saturated %d idle",
+                logger.debug("Stealing %d saturated %d idle",
                             len(saturated), len(original_idle))
 
     def valid_workers(self, key):
