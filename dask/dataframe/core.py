@@ -1698,6 +1698,27 @@ class _Frame(Base):
                    aggregate=hyperloglog.estimate_count,
                    split_every=split_every, b=16, meta=float)
 
+    @property
+    def values(self):
+        """ Return a dask.array of the values of this dataframe
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
+        """
+        from ..array.core import Array
+        name = 'values-' + tokenize(self)
+        chunks = ((np.nan,) * self.npartitions,)
+        x = self._meta.values
+        if isinstance(self, DataFrame):
+            chunks = chunks + ((x.shape[1],),)
+            suffix = (0,)
+        else:
+            suffix = ()
+        dsk = {(name, i) + suffix: (getattr, key, 'values')
+               for (i, key) in enumerate(self._keys())}
+        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -2803,6 +2824,21 @@ class DataFrame(_Frame):
         from .reshape import pivot_table
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
+
+    def to_records(self, index=False):
+        """ Convert to a dask array with struct dtype
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
+
+        Examples
+        --------
+        >>> df.to_records()  # doctest: +SKIP
+        dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+        """
+        from .io import to_records
+        return to_records(self)
 
 
 # bind operators

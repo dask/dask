@@ -3,8 +3,10 @@ from __future__ import absolute_import, division, print_function
 import operator
 
 import numpy as np
+from toolz import merge
 
 from ..base import tokenize
+from ..compatibility import apply
 from .core import top, dotmany, Array, eye
 from .random import RandomState
 
@@ -15,6 +17,10 @@ def _cumsum_blocks(it):
         total_previous = total
         total += x
         yield (total_previous, total)
+
+
+def _cumsum_part(last, new):
+    return (last[1], last[1] + new)
 
 
 def tsqr(data, name=None, compute_svd=False):
@@ -89,9 +95,36 @@ def tsqr(data, name=None, compute_svd=False):
     name_q_st2_aux = prefix + 'Q_st2_aux'
     dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                               (name_qr_st2, 0, 0), 0)}
-    q2_block_sizes = [min(e, n) for e in data.chunks[0]]
-    block_slices = [(slice(e[0], e[1]), slice(0, n))
-                    for e in _cumsum_blocks(q2_block_sizes)]
+    if not any(np.isnan(c) for cs in data.chunks for c in cs):
+        q2_block_sizes = [min(e, n) for e in data.chunks[0]]
+        block_slices = [(slice(e[0], e[1]), slice(0, n))
+                        for e in _cumsum_blocks(q2_block_sizes)]
+        dsk_q_blockslices = {}
+    else:
+        name_q2bs = prefix + 'q2-shape'
+        dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
+                         for i in range(numblocks[0])}
+        dsk_n = {prefix + 'n': (operator.getitem,
+                                (getattr, (data.name, 0, 0), 'shape'), 1)}
+        name_q2cs = prefix + 'q2-shape-cumsum'
+        dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
+        dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
+                                               (name_q2cs, i - 1),
+                                               (name_q2bs, i))
+                              for i in range(1, numblocks[0])})
+
+        name_blockslice = prefix + 'q2-blockslice'
+        dsk_block_slices = {(name_blockslice, i): (tuple, [
+            (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
+            for i in range(numblocks[0])}
+
+        dsk_q_blockslices = merge(dsk_n,
+                                  dsk_q2_shapes,
+                                  dsk_q2_cumsum,
+                                  dsk_block_slices)
+
+        block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
+
     name_q_st2 = prefix + 'Q_st2'
     dsk_q_st2 = dict(((name_q_st2, i, 0),
                       (operator.getitem, (name_q_st2_aux, 0, 0), b))
@@ -115,6 +148,7 @@ def tsqr(data, name=None, compute_svd=False):
     dsk_q.update(dsk_q_st2_aux)
     dsk_q.update(dsk_q_st2)
     dsk_q.update(dsk_q_st3)
+    dsk_q.update(dsk_q_blockslices)
     dsk_r = {}
     dsk_r.update(data.dask)
     dsk_r.update(dsk_qr_st1)
@@ -172,8 +206,8 @@ def tsqr(data, name=None, compute_svd=False):
 
         u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks,
                   dtype=uu.dtype)
-        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n,), dtype=ss.dtype)
-        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n),
+        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
+        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
                   dtype=vv.dtype)
         return u, s, v
 
