@@ -1161,6 +1161,18 @@ class Array(Base):
     def __complex__(self):
         return complex(self.compute())
 
+    def __setitem__(self, key, value):
+        if isinstance(key, Array):
+            y = where(key, value, self)
+            self.dtype = y.dtype
+            self.dask = y.dask
+            self.name = y.name
+            return self
+        else:
+            raise NotImplementedError("Item assignment with %s not supported"
+                    % type(key))
+        out = 'getitem-' + tokenize(self, index)
+
     def __getitem__(self, index):
         out = 'getitem-' + tokenize(self, index)
 

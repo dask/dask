@@ -2609,3 +2609,29 @@ def test_index_array_with_array_2d():
             sorted(dx[dx % 2 == 0].compute().tolist()))
     assert (sorted(x[x > 6].tolist()) ==
             sorted(dx[dx > 6].compute().tolist()))
+
+
+def test_setitem_1d():
+    x = np.arange(10)
+    dx = da.from_array(x.copy(), chunks=(5,))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+
+def test_setitem_2d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
