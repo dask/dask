@@ -1170,7 +1170,7 @@ class Array(Base):
             return self
         else:
             raise NotImplementedError("Item assignment with %s not supported"
-                    % type(key))
+                                      % type(key))
 
     def __getitem__(self, index):
         out = 'getitem-' + tokenize(self, index)
@@ -3771,7 +3771,7 @@ def slice_with_dask_array(x, index):
     name = 'getitem-' + tokenize(x, index)
 
     dsk = {(name, i): k
-            for i, k in enumerate(core.flatten(y._keys()))}
+           for i, k in enumerate(core.flatten(y._keys()))}
     chunks = ((np.nan,) * y.npartitions,)
 
     return Array(merge(y.dask, dsk), name, chunks, x.dtype)
