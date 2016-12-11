@@ -2589,3 +2589,23 @@ def test_no_chunks_slicing_2d():
         with pytest.raises(ValueError) as e:
             op()
         assert 'chunk' in str(e) and 'unknown' in str(e)
+
+
+def test_index_array_with_array_1d():
+    x = np.arange(10)
+    dx = da.from_array(x, chunks=(5,))
+    dx._chunks = ((np.nan, np.nan),)
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+
+def test_index_array_with_array_2d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+    dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
+
+    assert (sorted(x[x % 2 == 0].tolist()) ==
+            sorted(dx[dx % 2 == 0].compute().tolist()))
+    assert (sorted(x[x > 6].tolist()) ==
+            sorted(dx[dx > 6].compute().tolist()))
