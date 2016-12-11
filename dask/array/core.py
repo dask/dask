@@ -1171,7 +1171,6 @@ class Array(Base):
         else:
             raise NotImplementedError("Item assignment with %s not supported"
                     % type(key))
-        out = 'getitem-' + tokenize(self, index)
 
     def __getitem__(self, index):
         out = 'getitem-' + tokenize(self, index)
