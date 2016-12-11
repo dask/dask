@@ -3749,15 +3749,3 @@ def repeat(a, repeats, axis=None):
         out.append(result)
 
     return concatenate(out, axis=axis)
-
-
-def _flatten_seq(seq):
-    stack = list(seq)
-    out = []
-    while stack:
-        item = stack.pop()
-        if isinstance(item, (tuple, list)):
-            stack.extend(item)
-        else:
-            out.append(item)
-    return out
