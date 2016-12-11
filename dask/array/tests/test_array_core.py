@@ -2599,6 +2599,11 @@ def test_index_array_with_array_1d():
     assert_eq(x[x > 6], dx[dx > 6])
     assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
 
+    dy = da.ones(11, chunks=(3,))
+
+    with pytest.raises(ValueError):
+        dx[dy > 5]
+
 
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
@@ -2626,7 +2631,7 @@ def test_setitem_1d():
 
 def test_setitem_2d():
     x = np.arange(24).reshape((4, 6))
-    dx = da.from_array(x, chunks=(2, 2))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
 
     x[x > 6] = -1
     x[x % 2 == 0] = -2
@@ -2634,4 +2639,17 @@ def test_setitem_2d():
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
 
+    assert_eq(x, dx)
+
+
+def test_setitem_mixed_d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+
+    x[x[0, None] > 2] = -1
+    dx[dx[0, None] > 2] = -1
+    assert_eq(x, dx)
+
+    x[x[None, 0] > 2] = -1
+    dx[dx[None, 0] > 2] = -1
     assert_eq(x, dx)
