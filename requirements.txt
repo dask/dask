@@ -10,3 +10,4 @@ psutil
 locket
 zict >= 0.1.0
 sortedcollections
+futures; python_version < '3.0'
