@@ -62,10 +62,10 @@ will be disappointed.  Notably, Dask array has the following limitations:
     number of excellent BLAS/LAPACK implementations, and is the focus of
     numerous ongoing academic research projects.
 2.  Dask array with unknown shapes do not support all operations
-4.  Dask array does not attempt operations like ``sort`` which are notoriously
+3.  Dask array does not attempt operations like ``sort`` which are notoriously
     difficult to do in parallel, and are of somewhat diminished value on very
     large data (you rarely actually need a full sort).
     Often we include parallel-friendly alternatives like ``topk``.
-5.  It is very inefficient to iterate over a Dask array with for loops.
-6.  Dask development is driven by immediate need, and so many lesser used
+4.  It is very inefficient to iterate over a Dask array with for loops.
+5.  Dask development is driven by immediate need, and so many lesser used
     functions have not been implemented. Community contributions are encouraged.
