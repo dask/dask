@@ -2266,6 +2266,18 @@ def test_copy():
     assert x.copy() is x
 
 
+def test_copy_mutate():
+    x = da.arange(5, chunks=(2,))
+    y = x.copy()
+    x[x % 2 == 0] = -1
+
+    xx = np.arange(5)
+    xx[xx % 2 == 0] = -1
+    assert_eq(x, xx)
+
+    assert_eq(y, np.arange(5))
+
+
 def test_npartitions():
     assert da.ones(5, chunks=(2,)).npartitions == 3
     assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6

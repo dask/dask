@@ -1686,7 +1686,7 @@ class Array(Base):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return self
+        return Array(self.dask, self.name, self.chunks, self.dtype)
 
     def to_delayed(self):
         """ Convert Array into dask Delayed objects
