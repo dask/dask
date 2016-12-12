@@ -2833,3 +2833,17 @@ def test_values():
     assert_eq(df.x.values, ddf.x.values)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
+
+
+def test_copy():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    a = dd.from_pandas(df, npartitions=2)
+    b = a.copy()
+
+    a['y'] = a.x * 2
+
+    assert_eq(b, df)
+
+    df['y'] = df.x * 2
+    assert_eq(a, df)

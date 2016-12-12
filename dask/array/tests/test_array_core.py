@@ -2261,11 +2261,6 @@ def test_A_property():
     assert x.A is x
 
 
-def test_copy():
-    x = da.ones(5, chunks=(2,))
-    assert x.copy() is x
-
-
 def test_copy_mutate():
     x = da.arange(5, chunks=(2,))
     y = x.copy()
