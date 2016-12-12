@@ -45,13 +45,7 @@ def local_client():
               # so that it doesn't take up a fixed resource while waiting
     worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
     with WorkerClient(address) as e:
-        worker.loop.add_callback(worker.scheduler.change_worker_cores,
-                                 worker=worker.address, diff=+1)
-        try:
-            yield e
-        finally:
-            worker.loop.add_callback(worker.scheduler.change_worker_cores,
-                                     worker=worker.address, diff=-1)
+        yield e
 
 
 def get_worker():

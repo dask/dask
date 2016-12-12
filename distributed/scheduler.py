@@ -293,8 +293,7 @@ class Scheduler(Server):
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
                          'start_ipython': self.start_ipython,
-                         'update_data': self.update_data,
-                         'change_worker_cores': self.change_worker_cores}
+                         'update_data': self.update_data}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -1680,14 +1679,6 @@ class Scheduler(Server):
                 result = out
 
             return result
-
-    def change_worker_cores(self, stream=None, worker=None, diff=0):
-        """ Add or remove cores from a worker
-
-        This is used when a worker wants to spin off a long-running task
-        """
-        self.ncores[worker] += diff
-        # self.ensure_occupied()
 
     #####################
     # State Transitions #
