@@ -106,7 +106,6 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    # TODO: if categories vary from one rg to next, need to cope
     dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
@@ -151,7 +150,7 @@ def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
 
 
 def to_parquet(path, df, encoding=default_encoding, compression=None,
-               write_index=None):
+               write_index=None, has_nulls=None, fixed_text=None):
     """
     Write Dask.dataframe to parquet
 
@@ -165,13 +164,19 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     df : Dask.dataframe
-    encoding : parquet_thrift.Encoding
+    encoding : parquet_thrift.Encoding (future use)
     compression : string or dict
         Either a string like "SNAPPY" or a dictionary mapping column names to
         compressors like ``{"name": "GZIP", "values": "SNAPPY"}``
     write_index : boolean
         Whether or not to write the index.  Defaults to True *if* divisions are
         known.
+    has_nulls : bool, list or None
+        Specifies whether to write NULLs information for columns. If bools,
+        apply to all columns, if list, use for only the named columns, if None,
+        use only for columns which don't have a sentinel NULL marker (currently
+        object columns only).
+    fixed_text :
 
     Examples
     --------
@@ -193,7 +198,7 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
     if write_index is True or write_index is None and df.known_divisions:
         df = df.reset_index()
 
-    fmd = fastparquet.writer.make_metadata(df._meta_nonempty)
+    fmd = fastparquet.writer.make_metadata(df._meta)
 
     partitions = df.to_delayed()
     filenames = ['part.%i.parquet' % i for i in range(len(partitions))]
