@@ -300,7 +300,7 @@ def test_parquet(s3):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df)
+    to_parquet(url, df, object_encoding='utf8')
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
     assert '_metadata' in files
