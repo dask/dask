@@ -172,6 +172,12 @@ def slowadd(x, y, delay=0.02):
     return x + y
 
 
+def slowsum(seq, delay=0.02):
+    from time import sleep
+    sleep(delay)
+    return sum(seq)
+
+
 _readone_queues = {}
 
 @gen.coroutine

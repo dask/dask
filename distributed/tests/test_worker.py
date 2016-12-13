@@ -12,7 +12,7 @@ import traceback
 
 from dask import delayed
 import pytest
-from toolz import pluck
+from toolz import pluck, sliding_window
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
@@ -536,3 +536,18 @@ def test_restrictions(c, s, a, b):
         yield gen.sleep(0.01)
 
     assert a.resource_restrictions == {}
+
+
+@pytest.mark.xfail
+@gen_cluster(client=True)
+def test_clean_nbytes(c, s, a, b):
+    L = [delayed(inc)(i) for i in range(10)]
+    for i in range(5):
+        L = [delayed(add)(x, y) for x, y in sliding_window(2, L)]
+    total = delayed(sum)(L)
+
+    future = c.compute(total)
+    yield _wait(future)
+
+    yield gen.sleep(1)
+    assert len(a.nbytes) + len(b.nbytes) == 1

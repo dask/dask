@@ -35,7 +35,7 @@ class Adaptive(object):
         self.startup_cost = startup_cost
         self._adapt_callback = PeriodicCallback(self._adapt, interval,
                                                 self.scheduler.loop)
-        self._adapt_callback.start()
+        self.scheduler.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
 
     def should_scale_up(self):

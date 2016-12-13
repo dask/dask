@@ -1078,7 +1078,9 @@ class Worker(WorkerBase):
                 self.log.append(('gather-dependencies', key, deps))
 
                 while deps and len(self.connections) < self.total_connections:
-                    self.gather_dep(deps.pop(), cause=key)
+                    token = object()
+                    self.connections[token] = None
+                    self.loop.add_callback(self.gather_dep, deps.pop(), token, cause=key)
 
                 if not deps:
                     self.data_needed.popleft()
@@ -1107,7 +1109,8 @@ class Worker(WorkerBase):
                     self.transition(dep, 'ready')
 
     @gen.coroutine
-    def gather_dep(self, dep, cause=None):
+    def gather_dep(self, dep, slot, cause=None):
+        del self.connections[slot]
         try:
             if self.validate:
                 self.validate_state()
@@ -1346,8 +1349,8 @@ class Worker(WorkerBase):
                     del self.dependents[dep]
 
             if key not in self.dependents:
-                if key in self.nbytes:
-                    del self.nbytes[key]
+                # if key in self.nbytes:
+                #     del self.nbytes[key]
                 if key in self.priorities:
                     del self.priorities[key]
                 if key in self.durations:
@@ -1481,23 +1484,28 @@ class Worker(WorkerBase):
                                        available_resources=self.available_resources)
 
             self.priority_counter += 1
+            stolen = list()
             for key, msg in response['msgs'].items():
                 if key not in self.task_state:
+                    self.log.append((key, 'steal-accept', worker))
                     msg.update(msg.pop('task'))
                     priority = msg.pop('priority')
                     priority = [self.priority_counter] + priority
                     priority = tuple(-x for x in priority)
                     self.add_task(key, priority=priority, **msg)
+                    stolen.append(key)
+                else:
+                    self.log.append((key, 'steal-reject', worker))
 
             self.ensure_communicating()
             self.ensure_computing()
 
-            yield write(stream, {'keys': response['keys']})
+            yield write(stream, {'keys': stolen})
             response = yield read(stream)
 
             assert response == 'OK'  # Ack from scheduler, tell victim all's well
 
-            yield write(target, 'OK')
+            yield write(target, stolen)
             yield close(target)
 
             raise gen.Return('dont-reply')
@@ -1572,16 +1580,22 @@ class Worker(WorkerBase):
                 msgs[k] = d
 
             self.steal_offered.update(good)
-            logger.info("Sending %d tasks: %s -> %s", len(good), self.address,
+            for key in good:
+                self.log.append((key, 'steal-offer', worker))
+            logger.info("Sending %3d tasks: %s -> %s", len(good), self.address,
                         worker)
             yield write(stream, {'msgs': msgs, 'keys': list(good)})  # wait on ack
             response = yield read(stream)
-            assert response == "OK"
+            stolen = set(response)
 
             # We're clear to remove these keys.  Scheduler is aware
             for key in good:
                 self.steal_offered.remove(key)
-                self.rescind_key(key)
+                if key in stolen:
+                    self.log.append((key, 'steal-donate', worker))
+                    self.rescind_key(key)
+                else:
+                    self.log.append((key, 'steal-un-offered', worker))
 
             yield close(stream)
             raise gen.Return('dont-reply')
@@ -1621,14 +1635,6 @@ class Worker(WorkerBase):
                 if state == 'long-running':
                     assert key not in self.executing
                     assert key in self.long_running
-
-            for key in self.tasks:
-                state = self.stateof(key)
-                if sum(state.values()) != 1:
-                    if state['data'] and state['executing']:
-                        continue
-                    else:
-                        pass # import pdb; pdb.set_trace()
 
             for key in self.tasks:
                 if self.task_state[key] == 'memory':

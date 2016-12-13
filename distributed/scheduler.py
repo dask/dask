@@ -2486,10 +2486,7 @@ class Scheduler(Server):
                 write(stream, {'op': 'close'})
                 close(stream)
 
-            if response['keys']:
-                raise gen.Return(response['keys'])
-            else:
-                return
+            raise gen.Return(response['keys'])
         except gen.Return:
             raise
         except Exception as e:

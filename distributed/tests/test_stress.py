@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from concurrent.futures import CancelledError
 from datetime import timedelta
 from operator import add
+import random
 import sys
 from time import sleep
 
@@ -15,7 +16,7 @@ from distributed.config import config
 from distributed.metrics import time
 from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc, loop,
-        slowadd, slow)
+        slowadd, slow, slowsum)
 from distributed.client import _wait
 from tornado import gen
 
@@ -183,3 +184,30 @@ def test_stress_communication(c, s, *workers):
 
     result = yield future._result()
     assert isinstance(result, float)
+
+
+@slow
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10, timeout=60)
+def test_stress_steal(c, s, *workers):
+    s.validate = False
+    for w in workers:
+        w.validate = False
+
+    dinc = delayed(slowinc)
+    L = [delayed(slowinc)(i, delay=0.005) for i in range(100)]
+    for i in range(5):
+        L = [delayed(slowsum)(part, delay=0.005)
+             for part in sliding_window(5, L)]
+
+    total = delayed(sum)(L)
+    future = c.compute(total)
+
+    while future.status != 'finished':
+        yield gen.sleep(0.1)
+        for i in range(3):
+            a = random.choice(workers)
+            b = random.choice(workers)
+            if a is not b:
+                s.work_steal(a.address, b.address, 0.5)
+        if not s.processing:
+            break
