@@ -1,5 +1,3 @@
-import struct
-
 import pandas as pd
 from toolz import first, partial
 
