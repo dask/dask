@@ -395,12 +395,15 @@ Streaming data engineering
 
 A data engineer responsible for watching a data feed needs to scale out a
 continuous process.  They `combine dask.distributed with normal Python Queues`_ to
-produce a rudimentary but effective stream processing system.
+produce a rudimentary but effective stream processing system. Alternatively, 
+short lived clients can leave their futures stored on the cluster for later 
+consumption using `channels`_.
 
 Because dask.distributed is elastic, they can scale up or scale down their
 cluster resources in response to demand.
 
 .. _`combine dask.distributed with normal Python Queues`: https://distributed.readthedocs.io/en/latest/queues.html
+.. _`channels`: https://distributed.readthedocs.io/en/latest/channels.html
 
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
 .. _dask.distributed: https://distributed.readthedocs.io/en/latest/
