@@ -216,15 +216,11 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
             chunk.file_path = fn
         fmd.row_groups.append(rg)
 
-    with myopen(metadata_fn, mode='wb') as f:
-        f.write(b'PAR1')
-        foot_size = fastparquet.writer.write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(b'PAR1')
-        f.close()
+    fastparquet.writer.write_common_metadata(metadata_fn, fmd, open_with=myopen,
+                                             no_row_groups=False)
 
-    with myopen(sep.join([path, '_common_metadata']), mode='wb') as f:
-        fastparquet.writer.write_common_metadata(f, fmd)
+    fn = sep.join([path, '_common_metadata'])
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
 
 
 if fastparquet:
