@@ -1982,8 +1982,11 @@ class Scheduler(Server):
                     self.has_what[w].remove(key)
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
-                    self.worker_streams[w].send({'op': 'delete-data',
-                                                 'keys': [key], 'report': False})
+                    try:
+                        self.worker_streams[w].send({'op': 'delete-data',
+                                                     'keys': [key], 'report': False})
+                    except EnvironmentError:
+                        self.loop.add_callback(self.remove_worker, address=w)
 
             self.released.add(key)
 
@@ -2254,8 +2257,11 @@ class Scheduler(Server):
                     self.has_what[w].remove(key)
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
-                    self.worker_streams[w].send({'op': 'delete-data',
-                                                 'keys': [key], 'report': False})
+                    try:
+                        self.worker_streams[w].send({'op': 'delete-data',
+                                                     'keys': [key], 'report': False})
+                    except EnvironmentError:
+                        self.loop.add_callback(self.remove_worker, address=w)
 
             if self.validate:
                 assert all(key not in self.dependents[dep]
