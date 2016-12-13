@@ -842,11 +842,15 @@ class _Frame(Base):
         axis = self._validate_axis(axis)
         if method is None and limit is not None:
             raise NotImplementedError("fillna with set limit and method=None")
-        meta = self._meta_nonempty.fillna(value=value, method=method,
+        if isinstance(value, _Frame):
+            test_value = value._meta_nonempty.values[0]
+        else:
+            test_value = value
+        meta = self._meta_nonempty.fillna(value=test_value, method=method,
                                           limit=limit, axis=axis)
 
         if axis == 1 or method is None:
-            return self.map_partitions(M.fillna, value=value, method=method,
+            return self.map_partitions(M.fillna, value, method=method,
                                        limit=limit, axis=axis, meta=meta)
 
         if method in ('pad', 'ffill'):

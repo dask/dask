@@ -1603,6 +1603,14 @@ def test_fillna():
               ddf.fillna(method='pad', limit=3))
 
 
+def test_fillna_multi_dataframe():
+    df = tm.makeMissingDataframe(0.8, 42)
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B))
+    assert_eq(ddf.B.fillna(ddf.A), df.B.fillna(df.A))
+
+
 def test_ffill_bfill():
     df = tm.makeMissingDataframe(0.8, 42)
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
