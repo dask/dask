@@ -455,7 +455,8 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf.groupby('b').size(), 'dataframe-groupby-size')
 
 
-def test_groupby_reduction_split_every():
+@pytest.mark.parametrize('keyword', ['split_every', 'split_out'])
+def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100})
     ddf = dd.from_pandas(pdf, npartitions=15)
@@ -465,12 +466,12 @@ def test_groupby_reduction_split_every():
 
     # DataFrame
     for m in ['sum', 'min', 'max', 'count', 'mean', 'size', 'var', 'std']:
-        res = call(ddf.groupby('b'), m, split_every=2)
+        res = call(ddf.groupby('b'), m, **{keyword: 2})
         sol = call(pdf.groupby('b'), m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b'), m)._name != res._name
 
-    res = call(ddf.groupby('b'), 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b'), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b'), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b'), 'var', ddof=2)._name != res._name
@@ -478,12 +479,12 @@ def test_groupby_reduction_split_every():
     # Series, post select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.groupby('b').a, m, split_every=2)
+        res = call(ddf.groupby('b').a, m, **{keyword: 2})
         sol = call(pdf.groupby('b').a, m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b').a, m)._name != res._name
 
-    res = call(ddf.groupby('b').a, 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b').a, 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b').a, 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b').a, 'var', ddof=2)._name != res._name
@@ -491,14 +492,14 @@ def test_groupby_reduction_split_every():
     # Series, pre select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.a.groupby(ddf.b), m, split_every=2)
+        res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
         assert call(ddf.a.groupby(ddf.b), m)._name != res._name
 
-    res = call(ddf.a.groupby(ddf.b), 'var', split_every=2, ddof=2)
+    res = call(ddf.a.groupby(ddf.b), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
@@ -928,3 +929,37 @@ def test_groupy_series_wrong_grouper():
 
     with pytest.raises(ValueError):
         s.groupby([s, df])
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 20])
+@pytest.mark.parametrize('split_every', [2, 5])
+@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
+def test_hash_groupby_aggregate(npartitions, split_every, split_out):
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100)})
+    ddf = dd.from_pandas(df, npartitions)
+
+    result = ddf.groupby('x').y.var(split_every=split_every,
+                                    split_out=split_out)
+
+    dsk = result._optimize(result.dask, result._keys())
+    from dask.core import get_deps
+    dependencies, dependents = get_deps(dsk)
+
+    assert result.npartitions == (split_out or 1)
+    assert len([k for k, v in dependencies.items() if not v]) == npartitions
+
+    assert_eq(result, df.groupby('x').y.var())
+
+
+def test_split_out_multi_column_groupby():
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100),
+                       'z': [1, 2, 3, 4, 5] * 20})
+
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    result = ddf.groupby(['x', 'y']).z.mean(split_out=4)
+    expected = df.groupby(['x', 'y']).z.mean()
+
+    assert_eq(result, expected, check_dtype=False)

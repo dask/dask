@@ -1,6 +1,7 @@
 import sys
 from copy import copy
 from operator import getitem, add
+from itertools import product
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -640,6 +641,9 @@ def test_drop_duplicates():
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
+
+    with pytest.raises(NotImplementedError):
+        d.drop_duplicates(keep=False)
 
 
 def test_drop_duplicates_subset():
@@ -1548,9 +1552,6 @@ def test_embarrassingly_parallel_operations():
 
     assert_eq(a.x.dropna(), df.x.dropna())
 
-    assert_eq(a.x.fillna(100), df.x.fillna(100))
-    assert_eq(a.fillna(100), df.fillna(100))
-
     assert_eq(a.x.between(2, 4), df.x.between(2, 4))
 
     assert_eq(a.x.clip(2, 4), df.x.clip(2, 4))
@@ -1561,6 +1562,55 @@ def test_embarrassingly_parallel_operations():
     assert_eq(a.isnull(), df.isnull())
 
     assert len(a.sample(0.5).compute()) < len(df)
+
+
+def test_fillna():
+    df = tm.makeMissingDataframe(0.8, 42)
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.fillna(100), df.fillna(100))
+    assert_eq(ddf.A.fillna(100), df.A.fillna(100))
+
+    assert_eq(ddf.fillna(method='pad'), df.fillna(method='pad'))
+    assert_eq(ddf.A.fillna(method='pad'), df.A.fillna(method='pad'))
+
+    assert_eq(ddf.fillna(method='bfill'), df.fillna(method='bfill'))
+    assert_eq(ddf.A.fillna(method='bfill'), df.A.fillna(method='bfill'))
+
+    assert_eq(ddf.fillna(method='pad', limit=2),
+              df.fillna(method='pad', limit=2))
+    assert_eq(ddf.A.fillna(method='pad', limit=2),
+              df.A.fillna(method='pad', limit=2))
+
+    assert_eq(ddf.fillna(method='bfill', limit=2),
+              df.fillna(method='bfill', limit=2))
+    assert_eq(ddf.A.fillna(method='bfill', limit=2),
+              df.A.fillna(method='bfill', limit=2))
+
+    assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
+    assert_eq(ddf.fillna(method='pad', axis=1), df.fillna(method='pad', axis=1))
+    assert_eq(ddf.fillna(method='pad', limit=2, axis=1),
+              df.fillna(method='pad', limit=2, axis=1))
+
+    pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
+    pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
+    pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
+
+    df = tm.makeMissingDataframe(0.2, 42)
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+    pytest.raises(ValueError, lambda: ddf.fillna(method='pad').compute())
+    assert_eq(df.fillna(method='pad', limit=3),
+              ddf.fillna(method='pad', limit=3))
+
+
+def test_ffill_bfill():
+    df = tm.makeMissingDataframe(0.8, 42)
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.bfill(axis=1), df.bfill(axis=1))
 
 
 def test_sample():
@@ -2722,3 +2772,64 @@ def test_first_and_last(method):
         for offset in offsets:
             assert_eq(f(ddf, offset), f(df, offset))
             assert_eq(f(ddf.A, offset), f(df.A, offset))
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 20])
+@pytest.mark.parametrize('split_every', [2, 5])
+@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
+def test_hash_split_unique(npartitions, split_every, split_out):
+    from string import ascii_lowercase
+    s = pd.Series(np.random.choice(list(ascii_lowercase), 1000, replace=True))
+    ds = dd.from_pandas(s, npartitions=npartitions)
+
+    dropped = ds.unique(split_every=split_every, split_out=split_out)
+
+    dsk = dropped._optimize(dropped.dask, dropped._keys())
+    from dask.core import get_deps
+    dependencies, dependents = get_deps(dsk)
+
+    assert len([k for k, v in dependencies.items() if not v]) == npartitions
+    assert dropped.npartitions == (split_out or 1)
+    assert sorted(dropped.compute(get=dask.get)) == sorted(s.unique())
+
+
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_split_out_drop_duplicates(split_every):
+    x = np.concatenate([np.arange(10)] * 100)[:, None]
+    y = x.copy()
+    z = np.concatenate([np.arange(20)] * 50)[:, None]
+    rs = np.random.RandomState(1)
+    rs.shuffle(x)
+    rs.shuffle(y)
+    rs.shuffle(z)
+    df = pd.DataFrame(np.concatenate([x, y, z], axis=1), columns=['x', 'y', 'z'])
+    ddf = dd.from_pandas(df, npartitions=20)
+
+    for subset, keep in product([None, ['x', 'z']], ['first', 'last']):
+        sol = df.drop_duplicates(subset=subset, keep=keep)
+        res = ddf.drop_duplicates(subset=subset, keep=keep,
+                                  split_every=split_every, split_out=10)
+        assert res.npartitions == 10
+        assert_eq(sol, res)
+
+
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_split_out_value_counts(split_every):
+    df = pd.DataFrame({'x': [1, 2, 3] * 100})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert ddf.x.value_counts(split_out=10, split_every=split_every).npartitions == 10
+    assert_eq(ddf.x.value_counts(split_out=10, split_every=split_every), df.x.value_counts())
+
+
+def test_values():
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    assert_eq(df.values, ddf.values)
+    assert_eq(df.x.values, ddf.x.values)
+    assert_eq(df.y.values, ddf.y.values)
+    assert_eq(df.index.values, ddf.index.values)

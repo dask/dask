@@ -31,6 +31,7 @@ from ..async import get_sync
 from . import methods
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error)
+from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
 
@@ -299,8 +300,26 @@ class _Frame(Base):
         return Index(merge(dsk, self.dask), name,
                      self._meta.index, self.divisions)
 
-    @derived_from(pd.DataFrame)
     def reset_index(self, drop=False):
+        """Reset the index to the default index.
+
+        Note that unlike in ``pandas``, the reset ``dask.dataframe`` index will
+        not be monotonically increasing from 0. Instead, it will restart at 0
+        for each partition (e.g. ``index1 = [0, ..., 10], index2 = [0, ...]``).
+        This is due to the inability to statically know the full length of the
+        index.
+
+        For DataFrame with multi-level index, returns a new DataFrame with
+        labeling information in the columns under the index names, defaulting
+        to 'level_0', 'level_1', etc. if any are None. For a standard index,
+        the index name will be used (if set), otherwise a default 'index' or
+        'level_0' (if 'index' is already taken) will be used.
+
+        Parameters
+        ----------
+        drop : boolean, default False
+            Do not try to insert index into dataframe columns.
+        """
         return self.map_partitions(M.reset_index, drop=drop).clear_divisions()
 
     @property
@@ -349,12 +368,23 @@ class _Frame(Base):
         return new_dd_object(dsk2, name, self._meta, self.divisions)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, **kwargs):
-        split_every = kwargs.pop('split_every', None)
-        assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
+    def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
+        # Let pandas error on bad inputs
+        self._meta_nonempty.drop_duplicates(**kwargs)
+        if 'subset' in kwargs and kwargs['subset'] is not None:
+            split_out_setup = split_out_on_cols
+            split_out_setup_kwargs = {'cols': kwargs['subset']}
+        else:
+            split_out_setup = split_out_setup_kwargs = None
+
+        if kwargs.get('keep', True) is False:
+            raise NotImplementedError("drop_duplicates with keep=False")
+
         chunk = M.drop_duplicates
         return aca(self, chunk=chunk, aggregate=chunk, meta=self._meta,
-                   token='drop-duplicates', split_every=split_every, **kwargs)
+                   token='drop-duplicates', split_every=split_every,
+                   split_out=split_out, split_out_setup=split_out_setup,
+                   split_out_setup_kwargs=split_out_setup_kwargs, **kwargs)
 
     def __len__(self):
         return self.reduction(len, np.sum, token='len', meta=int,
@@ -807,9 +837,47 @@ class _Frame(Base):
             raise ValueError(
                 "Provide either divisions= or npartitions= to repartition")
 
-    @derived_from(pd.Series)
-    def fillna(self, value):
-        return self.map_partitions(M.fillna, value=value)
+    @derived_from(pd.DataFrame)
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        axis = self._validate_axis(axis)
+        if method is None and limit is not None:
+            raise NotImplementedError("fillna with set limit and method=None")
+        meta = self._meta_nonempty.fillna(value=value, method=method,
+                                          limit=limit, axis=axis)
+
+        if axis == 1 or method is None:
+            return self.map_partitions(M.fillna, value=value, method=method,
+                                       limit=limit, axis=axis, meta=meta)
+
+        if method in ('pad', 'ffill'):
+            method = 'ffill'
+            skip_check = 0
+            before, after = 1 if limit is None else limit, 0
+        else:
+            method = 'bfill'
+            skip_check = self.npartitions - 1
+            before, after = 0, 1 if limit is None else limit
+
+        if limit is None:
+            name = 'fillna-chunk-' + tokenize(self, method)
+            dsk = {(name, i): (methods.fillna_check, (self._name, i),
+                               method, i != skip_check)
+                   for i in range(self.npartitions)}
+            parts = new_dd_object(merge(dsk, self.dask), name, meta,
+                                  self.divisions)
+        else:
+            parts = self
+
+        return parts.map_overlap(M.fillna, before, after, method=method,
+                                 limit=limit, meta=meta)
+
+    @derived_from(pd.DataFrame)
+    def ffill(self, axis=None, limit=None):
+        return self.fillna(method='ffill', limit=limit, axis=axis)
+
+    @derived_from(pd.DataFrame)
+    def bfill(self, axis=None, limit=None):
+        return self.fillna(method='bfill', limit=limit, axis=axis)
 
     def sample(self, frac, replace=False, random_state=None):
         """ Random sample of items
@@ -1630,6 +1698,27 @@ class _Frame(Base):
                    aggregate=hyperloglog.estimate_count,
                    split_every=split_every, b=16, meta=float)
 
+    @property
+    def values(self):
+        """ Return a dask.array of the values of this dataframe
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
+        """
+        from ..array.core import Array
+        name = 'values-' + tokenize(self)
+        chunks = ((np.nan,) * self.npartitions,)
+        x = self._meta.values
+        if isinstance(self, DataFrame):
+            chunks = chunks + ((x.shape[1],),)
+            suffix = (0,)
+        else:
+            suffix = ()
+        dsk = {(name, i) + suffix: (getattr, key, 'values')
+               for (i, key) in enumerate(self._keys())}
+        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -1694,10 +1783,6 @@ class Series(_Frame):
     def dt(self):
         from .accessor import DatetimeAccessor
         return DatetimeAccessor(self)
-
-    @derived_from(pd.Series)
-    def reset_index(self, drop=False):
-        return super(Series, self).reset_index(drop=drop)
 
     @cache_readonly
     def cat(self):
@@ -1782,7 +1867,7 @@ class Series(_Frame):
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
-    def unique(self, split_every=None):
+    def unique(self, split_every=None, split_out=1):
         """
         Return Series of unique values in the object. Includes NA values.
 
@@ -1792,19 +1877,20 @@ class Series(_Frame):
         """
         return aca(self, chunk=methods.unique, aggregate=methods.unique,
                    meta=self._meta, token='unique', split_every=split_every,
-                   series_name=self.name)
+                   series_name=self.name, split_out=split_out)
 
     @derived_from(pd.Series)
     def nunique(self, split_every=None):
         return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
-    def value_counts(self, split_every=None):
+    def value_counts(self, split_every=None, split_out=1):
         return aca(self, chunk=M.value_counts,
                    aggregate=methods.value_counts_aggregate,
                    combine=methods.value_counts_combine,
                    meta=self._meta.value_counts(), token='value-counts',
-                   split_every=split_every)
+                   split_every=split_every, split_out=split_out,
+                   split_out_setup=split_out_on_index)
 
     @derived_from(pd.Series)
     def nlargest(self, n=5, split_every=None):
@@ -2739,6 +2825,21 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
+    def to_records(self, index=False):
+        """ Convert to a dask array with struct dtype
+
+        Warning: This creates a dask.array without precise shape information.
+        Operations that depend on shape information, like slicing or reshaping,
+        will not work.
+
+        Examples
+        --------
+        >>> df.to_records()  # doctest: +SKIP
+        dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+        """
+        from .io import to_records
+        return to_records(self)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
@@ -2826,11 +2927,35 @@ def _maybe_from_pandas(dfs):
     return dfs
 
 
+def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
+    if split_out_setup:
+        h = split_out_setup(df, **(split_out_setup_kwargs or {}))
+    else:
+        h = df
+    h = hash_pandas_object(h, index=False)
+    if isinstance(h, pd.Series):
+        h = h._values
+    h %= nparts
+    return {i: df.iloc[h == i] for i in range(nparts)}
+
+
+def split_out_on_index(df):
+    h = df.index
+    if isinstance(h, pd.MultiIndex):
+        h = pd.DataFrame([], index=h).reset_index()
+    return h
+
+
+def split_out_on_cols(df, cols=None):
+    return df[cols]
+
+
 @insert_meta_param_description
 def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
-                       meta=no_default, token=None, split_every=None,
-                       chunk_kwargs=None, aggregate_kwargs=None,
-                       combine_kwargs=None, **kwargs):
+                       meta=no_default, token=None, chunk_kwargs=None,
+                       aggregate_kwargs=None, combine_kwargs=None,
+                       split_every=None, split_out=None, split_out_setup=None,
+                       split_out_setup_kwargs=None, **kwargs):
     """Apply a function to blocks, then concat, then apply again
 
     Parameters
@@ -2848,17 +2973,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     $META
     token : str, optional
         The name to use for the output keys.
-    split_every : int, optional
-        Group partitions into groups of this size while performing a
-        tree-reduction. If set to False, no tree-reduction will be used,
-        and all intermediates will be concatenated and passed to ``aggregate``.
-        Default is 8.
     chunk_kwargs : dict, optional
         Keywords for the chunk function only.
     aggregate_kwargs : dict, optional
         Keywords for the aggregate function only.
     combine_kwargs : dict, optional
-        Keywords for the combine function only
+        Keywords for the combine function only.
+    split_every : int, optional
+        Group partitions into groups of this size while performing a
+        tree-reduction. If set to False, no tree-reduction will be used,
+        and all intermediates will be concatenated and passed to ``aggregate``.
+        Default is 8.
+    split_out : int, optional
+        Number of output partitions. Split occurs after first chunk reduction.
+    split_out_setup : callable, optional
+        If provided, this function is called on each chunk before performing
+        the hash-split. It should return a pandas object, where each row
+        (excluding the index) is hashed. If not provided, the chunk is hashed
+        as is.
+    split_out_setup_kwargs : dict, optional
+        Keywords for the `split_out_setup` function only.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -2908,41 +3042,56 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
                          chunk_kwargs, aggregate_kwargs, combine_kwargs,
-                         split_every)
+                         split_every, split_out, split_out_setup,
+                         split_out_setup_kwargs)
 
     # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {(a, i): (chunk, key) for i, key in enumerate(args[0]._keys())}
+        dsk = {(a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0]._keys())}
     else:
-        dsk = {(a, i): (apply, chunk, [(x._name, i) if isinstance(x, _Frame)
-                                       else x for x in args], chunk_kwargs)
+        dsk = {(a, 0, i, 0): (apply, chunk,
+                              [(x._name, i) if isinstance(x, _Frame)
+                               else x for x in args], chunk_kwargs)
                for i in range(args[0].npartitions)}
 
+    # Split
+    if split_out and split_out > 1:
+        split_prefix = 'split-%s' % token_key
+        shard_prefix = 'shard-%s' % token_key
+        for i in range(args[0].npartitions):
+            dsk[(split_prefix, i)] = (hash_shard, (a, 0, i, 0), split_out,
+                                      split_out_setup, split_out_setup_kwargs)
+            for j in range(split_out):
+                dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
+        a = shard_prefix
+    else:
+        split_out = 1
+
     # Combine
-    prefix = '{0}-combine-{1}-'.format(token or funcname(combine), token_key)
+    b = '{0}-combine-{1}'.format(token or funcname(combine), token_key)
     k = npartitions
-    b = a
     depth = 0
     while k > split_every:
-        b = prefix + str(depth)
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            conc = (_concat, [(a, i) for i in inds])
-            if combine_kwargs:
-                dsk[(b, part_i)] = (apply, combine, [conc], combine_kwargs)
-            else:
-                dsk[(b, part_i)] = (combine, conc)
+            for j in range(split_out):
+                conc = (_concat, [(a, depth, i, j) for i in inds])
+                if combine_kwargs:
+                    dsk[(b, depth + 1, part_i, j)] = (apply, combine, [conc], combine_kwargs)
+                else:
+                    dsk[(b, depth + 1, part_i, j)] = (combine, conc)
         k = part_i + 1
         a = b
         depth += 1
 
     # Aggregate
-    b = '{0}-agg-{1}'.format(token or funcname(aggregate), token_key)
-    conc = (_concat, [(a, i) for i in range(k)])
-    if aggregate_kwargs:
-        dsk[(b, 0)] = (apply, aggregate, [conc], aggregate_kwargs)
-    else:
-        dsk[(b, 0)] = (aggregate, conc)
+    for j in range(split_out):
+        b = '{0}-agg-{1}'.format(token or funcname(aggregate), token_key)
+        conc = (_concat, [(a, depth, i, j) for i in range(k)])
+        if aggregate_kwargs:
+            dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
+        else:
+            dsk[(b, j)] = (aggregate, conc)
 
     if meta is no_default:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
@@ -2953,7 +3102,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     for arg in args:
         if isinstance(arg, _Frame):
             dsk.update(arg.dask)
-    return new_dd_object(dsk, b, meta, [None, None])
+
+    divisions = [None] * (split_out + 1)
+
+    return new_dd_object(dsk, b, meta, divisions)
 
 
 aca = apply_concat_apply

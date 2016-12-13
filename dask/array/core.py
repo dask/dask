@@ -868,6 +868,9 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
         raise TypeError("Must supply shape= keyword argument")
+    if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
+        raise ValueError("Array chunk sizes are unknown. shape: %s, chunks: %s"
+                         % (shape, chunks))
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
     if not all(map(is_integer, shape)):
@@ -1594,10 +1597,10 @@ class Array(Base):
     def squeeze(self):
         return squeeze(self)
 
-    def rechunk(self, chunks):
+    def rechunk(self, chunks, threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
-        from .rechunk import rechunk
-        return rechunk(self, chunks)
+        from . import rechunk   # avoid circular import
+        return rechunk(self, chunks, threshold, block_size_limit)
 
     @property
     def real(self):
@@ -1876,6 +1879,9 @@ def common_blockdim(blockdims):
     if len(non_trivial_dims) == 0:
         return max(blockdims, key=first)
 
+    if np.isnan(sum(map(sum, blockdims))):
+        raise ValueError("Arrays chunk sizes are unknown: %s", blockdims)
+
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
 
@@ -1956,7 +1962,9 @@ def unify_chunks(*args, **kwargs):
     if warn and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
-    arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
+    arrays = [a.rechunk(tuple(chunkss[j]
+                              if a.shape[n] > 1 else 1
+                              if not np.isnan(sum(chunkss[j])) else None
                               for n, j in enumerate(i)))
               for a, i in arginds]
     return chunkss, arrays
@@ -2491,7 +2499,8 @@ def is_scalar_for_elemwise(arg):
 
 
 def broadcast_shapes(*shapes):
-    """Determines output shape from broadcasting arrays.
+    """
+    Determines output shape from broadcasting arrays.
 
     Parameters
     ----------
@@ -2512,7 +2521,7 @@ def broadcast_shapes(*shapes):
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=1):
         dim = max(sizes)
-        if any(i != 1 and i != dim for i in sizes):
+        if any(i != 1 and i != dim and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
         out.append(dim)
@@ -2761,6 +2770,9 @@ def reshape(array, shape):
             raise ValueError('can only specify one unknown dimension')
         missing_size = sanitize_index(array.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
+
+    if np.isnan(sum(array.shape)):
+        raise ValueError("Array chunk size or shape is unknown. shape: %s", array.shape)
 
     if reduce(mul, shape, 1) != array.size:
         raise ValueError('total size of new array must be unchanged')

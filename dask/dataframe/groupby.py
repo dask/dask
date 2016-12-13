@@ -8,7 +8,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .core import DataFrame, Series, aca, map_partitions, no_default
+from .core import (DataFrame, Series, aca, map_partitions, no_default,
+                   split_out_on_index)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
@@ -120,7 +121,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels))
+    return aggfunc(df.groupby(level=levels, sort=False))
 
 
 def _apply_chunk(df, *index, **kwargs):
@@ -145,11 +146,11 @@ def _var_chunk(df, *index):
 
 
 def _var_combine(g, levels):
-    return g.groupby(level=levels).sum()
+    return g.groupby(level=levels, sort=False).sum()
 
 
 def _var_agg(g, levels, ddof):
-    g = g.groupby(level=levels).sum()
+    g = g.groupby(level=levels, sort=False).sum()
     nc = len(g.columns)
     x = g[g.columns[:nc // 3]]
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
@@ -188,7 +189,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
 
 def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels).apply(pd.DataFrame.drop_duplicates)
+    result = df.groupby(level=levels, sort=False).apply(pd.DataFrame.drop_duplicates)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays([
@@ -201,7 +202,7 @@ def _nunique_df_combine(df, levels):
 
 
 def _nunique_df_aggregate(df, levels, name):
-    return df.groupby(level=levels)[name].nunique()
+    return df.groupby(level=levels, sort=False)[name].nunique()
 
 
 def _nunique_series_chunk(df, *index, **_ignored_):
@@ -595,7 +596,7 @@ class _GroupBy(object):
         grouped = sample.groupby(index_meta)
         return _maybe_slice(grouped, self._slice)
 
-    def _aca_agg(self, token, func, aggfunc=None, split_every=None):
+    def _aca_agg(self, token, func, aggfunc=None, split_every=None, split_out=1):
         if aggfunc is None:
             aggfunc = func
 
@@ -610,36 +611,42 @@ class _GroupBy(object):
                    chunk_kwargs=dict(func=func, columns=columns),
                    aggregate=_groupby_aggregate,
                    meta=meta, token=token, split_every=split_every,
-                   aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels))
+                   aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
+                   split_out=split_out, split_out_setup=split_out_on_index)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None):
-        return self._aca_agg(token='sum', func=M.sum, split_every=split_every)
+    def sum(self, split_every=None, split_out=1):
+        return self._aca_agg(token='sum', func=M.sum, split_every=split_every,
+                             split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self, split_every=None):
-        return self._aca_agg(token='min', func=M.min, split_every=split_every)
+    def min(self, split_every=None, split_out=1):
+        return self._aca_agg(token='min', func=M.min, split_every=split_every,
+                             split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def max(self, split_every=None):
-        return self._aca_agg(token='max', func=M.max, split_every=split_every)
+    def max(self, split_every=None, split_out=1):
+        return self._aca_agg(token='max', func=M.max, split_every=split_every,
+                             split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def count(self, split_every=None):
+    def count(self, split_every=None, split_out=1):
         return self._aca_agg(token='count', func=M.count,
-                             aggfunc=M.sum, split_every=split_every)
+                             aggfunc=M.sum, split_every=split_every,
+                             split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self, split_every=None):
-        return self.sum(split_every=split_every) / self.count(split_every=split_every)
+    def mean(self, split_every=None, split_out=1):
+        return (self.sum(split_every=split_every, split_out=split_out) /
+                self.count(split_every=split_every, split_out=split_out))
 
     @derived_from(pd.core.groupby.GroupBy)
-    def size(self, split_every=None):
+    def size(self, split_every=None, split_out=1):
         return self._aca_agg(token='size', func=M.size, aggfunc=M.sum,
-                             split_every=split_every)
+                             split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def var(self, ddof=1, split_every=None):
+    def var(self, ddof=1, split_every=None, split_out=1):
         levels = _determine_levels(self.index)
         result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
                      chunk=_var_chunk,
@@ -647,7 +654,8 @@ class _GroupBy(object):
                      token=self._token_prefix + 'var',
                      aggregate_kwargs={'ddof': ddof, 'levels': levels},
                      combine_kwargs={'levels': levels},
-                     split_every=split_every)
+                     split_every=split_every, split_out=split_out,
+                     split_out_setup=split_out_on_index)
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -657,8 +665,8 @@ class _GroupBy(object):
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def std(self, ddof=1, split_every=None):
-        v = self.var(ddof, split_every=split_every)
+    def std(self, ddof=1, split_every=None, split_out=1):
+        v = self.var(ddof, split_every=split_every, split_out=split_out)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
@@ -674,7 +682,7 @@ class _GroupBy(object):
         return map_partitions(_groupby_get_group, self.obj, self.index, key,
                               columns, meta=meta, token=token)
 
-    def aggregate(self, arg, split_every):
+    def aggregate(self, arg, split_every, split_out=1):
         if isinstance(self.obj, DataFrame):
             if isinstance(self.index, tuple) or np.isscalar(self.index):
                 group_columns = {self.index}
@@ -732,7 +740,8 @@ class _GroupBy(object):
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   combine=_groupby_apply_funcs,
                   combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  meta=meta, token='aggregate', split_every=split_every)
+                  meta=meta, token='aggregate', split_every=split_every,
+                  split_out=split_out, split_out_setup=split_out_on_index)
 
         return map_partitions(_agg_finalize, obj, meta=meta,
                               token='aggregate-finalize', funcs=finalizers)
@@ -862,15 +871,15 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def aggregate(self, arg, split_every=None):
+    def aggregate(self, arg, split_every=None, split_out=1):
         if arg == 'size':
             return self.size()
 
-        return super(DataFrameGroupBy, self).aggregate(arg, split_every=split_every)
+        return super(DataFrameGroupBy, self).aggregate(arg, split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def agg(self, arg, split_every=None):
-        return self.aggregate(arg, split_every=split_every)
+    def agg(self, arg, split_every=None, split_out=1):
+        return self.aggregate(arg, split_every=split_every, split_out=split_out)
 
 
 class SeriesGroupBy(_GroupBy):
@@ -897,7 +906,7 @@ class SeriesGroupBy(_GroupBy):
         super(SeriesGroupBy, self).__init__(df, index=index,
                                             slice=slice, **kwargs)
 
-    def nunique(self, split_every=None):
+    def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         meta = pd.Series([], dtype='int64',
                          index=pd.Index([], dtype=self._meta.obj.dtype),
@@ -919,19 +928,21 @@ class SeriesGroupBy(_GroupBy):
                    chunk_kwargs={'levels': levels, 'name': name},
                    aggregate_kwargs={'levels': levels, 'name': name},
                    combine_kwargs={'levels': levels},
-                   split_every=split_every)
+                   split_every=split_every, split_out=split_out,
+                   split_out_setup=split_out_on_index)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def aggregate(self, arg, split_every=None):
+    def aggregate(self, arg, split_every=None, split_out=1):
         # short-circuit 'simple' aggregations
         if (
             not isinstance(arg, (list, dict)) and
             arg in {'sum', 'mean', 'var', 'size', 'std', 'count'}
         ):
-            return getattr(self, arg)(split_every=split_every)
+            return getattr(self, arg)(split_every=split_every,
+                                      split_out=split_out)
 
-        return super(SeriesGroupBy, self).aggregate(arg, split_every=split_every)
+        return super(SeriesGroupBy, self).aggregate(arg, split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def agg(self, arg, split_every=None):
-        return self.aggregate(arg, split_every=split_every)
+    def agg(self, arg, split_every=None, split_out=1):
+        return self.aggregate(arg, split_every=split_every, split_out=split_out)

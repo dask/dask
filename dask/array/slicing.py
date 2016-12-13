@@ -254,6 +254,10 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     """
     shape = tuple(map(sum, blockdims))
 
+    for dim, ind in zip(shape, index):
+        if np.isnan(dim) and ind != slice(None, None, None):
+            raise ValueError("Arrays chunk sizes are unknown: %s", shape)
+
     assert all(isinstance(ind, (slice, int, long)) for ind in index)
     assert len(index) == len(blockdims)
 
@@ -639,6 +643,8 @@ def new_blockdim(dim_shape, lengths, index):
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(90, 10, -2))
     [16, 5, 10, 5, 4]
     """
+    if index == slice(None, None, None):
+        return lengths
     if isinstance(index, list):
         return [len(index)]
     assert not isinstance(index, (int, long))
