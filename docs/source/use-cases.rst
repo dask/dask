@@ -401,12 +401,18 @@ streamed beween different clients using `channels`_ .
 Because dask.distributed is elastic, they can scale up or scale down their
 cluster resources in response to demand.
 
-End user application development
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-Dask and Distributed offer a 100% Python alternative to message queue based tools such as `Celery`_. 
-The developer who is looking to support power users for custom plugins but also basic users who need
-to run long running, pre-baked tasks can use distributed `channels`_ . This allows the distributed Client to 
-live only for the duration of a web request and the task status to be retrieved later or sent over a websocket.
+One-off tasks from a web server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Message queue based tools such as `Celery`_ allow a kind of message persistence
+and fault tolerance not yet possible with Dask and Distributed. There may
+however be situations where the developer who is looking to support power users for
+custom plugins but also basic users who need to run long running, pre-baked tasks.
+
+In such a situation the `channels`_ feature in distributed, combined with a local_client
+would allow one-off tasks to be run in a "fire and forget" during a web request.
+The power users would then be able to take advantage of the other features and use cases
+of Dask and Distributed listed above.
 
 .. _`combine dask.distributed with normal Python Queues`: https://distributed.readthedocs.io/en/latest/queues.html
 .. _`channels`: https://distributed.readthedocs.io/en/latest/channels.html
