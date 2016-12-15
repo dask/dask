@@ -6,7 +6,7 @@ from ..optimize import cull, fuse_getitem, fuse_selections
 from .. import core
 
 try:
-    import fastparquet
+    import fastparquet  # noqa: F401
 except ImportError:
     _read_parquet_row_group = False
 else:
