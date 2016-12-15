@@ -6,9 +6,11 @@ from ..optimize import cull, fuse_getitem, fuse_selections
 from .. import core
 
 try:
-    from .io.parquet import _read_parquet_row_group
+    import fastparquet
 except ImportError:
     _read_parquet_row_group = False
+else:
+    from .io.parquet import _read_parquet_row_group
 
 
 def fuse_castra_index(dsk):
