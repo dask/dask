@@ -410,6 +410,10 @@ class WorkerBase(Server):
 
         msg = {k: to_serialize(self.data[k]) for k in keys if k in self.data}
         nbytes = {k: self.nbytes.get(k) for k in keys if k in self.data}
+        stop = time()
+        if self.digests is not None:
+            self.digests['get-data-load-duration'].add(stop - start)
+        start = time()
         try:
             compressed = yield write(stream, msg)
             yield close(stream)
@@ -418,6 +422,8 @@ class WorkerBase(Server):
             stream.close()
             raise
         stop = time()
+        if self.digests is not None:
+            self.digests['get-data-send-duration'].add(stop - start)
 
         total_bytes = sum(filter(None, nbytes.values()))
 
@@ -835,6 +841,8 @@ class Worker(WorkerBase):
                         yield self._close(report=False)
                     break
 
+                start = time()
+
                 for msg in msgs:
                     op = msg.pop('op', None)
                     if 'key' in msg:
@@ -854,6 +862,10 @@ class Worker(WorkerBase):
 
                 self.ensure_communicating()
                 self.ensure_computing()
+
+                end = time()
+                if self.digests is not None:
+                    self.digests['handle-messages-duration'].add(end - start)
 
             yield self.batched_stream.close()
             logger.info('Close compute stream')
@@ -1129,10 +1141,14 @@ class Worker(WorkerBase):
                 worker = random.choice(list(self.who_has[dep]))
                 ip, port = worker.split(':')
                 try:
+                    start = time()
                     future = connect(ip, int(port))
                     self.connections[future] = True
                     stream = yield gen.with_timeout(timedelta(seconds=3),
                                                     future)
+                    end = time()
+                    if self.digests is not None:
+                        self.digests['gather-connect-duration'].add(end - start)
                 except (gen.TimeoutError, EnvironmentError):
                     logger.info("Failed to connect to %s", worker)
                     with ignoring(KeyError):  # other coroutine may have removed
@@ -1169,6 +1185,7 @@ class Worker(WorkerBase):
                 self.in_flight[d] = stream
             self.log.append(('request-dep', dep, worker, deps))
             self.connections[stream] = deps
+
             try:
                 start = time()
                 logger.debug("Request %d keys and %d bytes", len(deps),
@@ -1194,6 +1211,10 @@ class Worker(WorkerBase):
                     'bandwidth': total_bytes / duration,
                     'who': worker
                 })
+                if self.digests is not None:
+                    self.digests['transfer-bandwidth'].add(total_bytes / duration)
+                    self.digests['transfer-duration'].add(duration)
+                self.counters['transfer-count'].add(len(deps2))
                 self.incoming_count += 1
             except EnvironmentError as e:
                 logger.error("Worker stream died during communication: %s",
@@ -1416,6 +1437,8 @@ class Worker(WorkerBase):
             if stop - start > 0.005:
                 self.response[key]['disk_load_start'] = start
                 self.response[key]['disk_load_stop'] = stop
+                if self.digests is not None:
+                    self.digests['disk-load-duration'].add(stop - start)
 
             logger.debug("Execute key: %s", key)  # TODO: comment out?
             result = yield self.executor_submit(key, apply_function, function,
@@ -1429,6 +1452,9 @@ class Worker(WorkerBase):
             if result['op'] == 'task-finished':
                 self.put_key_in_memory(key, value)
                 self.transition(key, 'memory')
+                if self.digests is not None:
+                    self.digests['task-duration'].add(result['compute_stop'] -
+                                                      result['compute_start'])
             else:
                 logger.warn(" Compute Failed\n"
                     "Function: %s\n"

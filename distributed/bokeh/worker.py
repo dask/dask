@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import logging
+import math
 
 from bokeh.layouts import row, column, widgetbox
 from bokeh.models import (
@@ -13,7 +14,8 @@ from bokeh.models import (
 )
 from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
 from bokeh.plotting import figure
-from toolz import frequencies
+from bokeh.palettes import viridis, RdBu
+from toolz import frequencies, merge, partition_all
 
 from .components import DashboardComponent
 from .core import BokehServer, format_bytes, format_time
@@ -422,6 +424,118 @@ class SystemMonitor(DashboardComponent):
             self.last = monitor.count
 
 
+class Counters(DashboardComponent):
+    def __init__(self, server, sizing_mode='stretch_both', **kwargs):
+        self.server = server
+        self.counter_figures = {}
+        self.counter_sources = {}
+        self.digest_figures = {}
+        self.digest_sources = {}
+        self.sizing_mode = sizing_mode
+
+        if self.server.digests:
+            for name in self.server.digests:
+                self.add_digest_figure(name)
+        for name in self.server.counters:
+            self.add_counter_figure(name)
+
+        figures = merge(self.digest_figures, self.counter_figures)
+        figures = [figures[k] for k in sorted(figures)]
+
+        if len(figures) <= 5:
+            self.root = column(figures, sizing_mode=sizing_mode)
+        else:
+            self.root = column(*[row(*pair, sizing_mode=sizing_mode)
+                                 for pair in partition_all(2, figures)],
+                               sizing_mode=sizing_mode)
+
+    def add_digest_figure(self, name):
+        with log_errors():
+            n = len(self.server.digests[name].intervals)
+            sources = {i: ColumnDataSource({'x': [], 'y': []})
+                        for i in range(n)}
+
+            kwargs = {}
+            if name.endswith('duration'):
+                kwargs['x_axis_type'] = 'datetime'
+
+            fig = figure(title=name, tools='', height=150,
+                    sizing_mode=self.sizing_mode, **kwargs)
+            fig.yaxis.visible = False
+            fig.ygrid.visible = False
+            if name.endswith('bandwidth') or name.endswith('bytes'):
+                fig.xaxis[0].formatter = NumeralTickFormatter(format='0.0b')
+
+            for i in range(n):
+                alpha = 0.3 + 0.3 * (n - i) / n
+                fig.line(source=sources[i], x='x', y='y',
+                         alpha=alpha, color=RdBu[max(n, 3)][-i])
+
+            fig.xaxis.major_label_orientation = math.pi / 12
+            fig.toolbar.logo = None
+            self.digest_sources[name] = sources
+            self.digest_figures[name] = fig
+            return fig
+
+    def add_counter_figure(self, name):
+        with log_errors():
+            n = len(self.server.counters[name].intervals)
+            sources = {i: ColumnDataSource({'x': [], 'y': [], 'y-center': []})
+                        for i in range(n)}
+
+            fig = figure(title=name, tools='', height=150,
+                    sizing_mode=self.sizing_mode,
+                    x_range=sorted(map(str, self.server.counters[name].components[0])))
+            fig.ygrid.visible = False
+
+            for i in range(n):
+                width = 0.5 + 0.4 * i / n
+                fig.rect(source=sources[i], x='x', y='y-center', width=width,
+                        height='y', alpha=0.3, color=RdBu[max(n, 3)][-i])
+                hover = HoverTool(
+                    point_policy="follow_mouse",
+                    tooltips="""@x : @counts"""
+                )
+                fig.add_tools(hover)
+                fig.xaxis.major_label_orientation = math.pi / 12
+
+            fig.toolbar.logo = None
+
+            self.counter_sources[name] = sources
+            self.counter_figures[name] = fig
+            return fig
+
+    def update(self):
+        with log_errors():
+            for name, figure in self.digest_figures.items():
+                digest = self.server.digests[name]
+                d = {}
+                for i, d in enumerate(digest.components):
+                    if d.size():
+                        ys, xs = d.histogram(100)
+                        if name.endswith('duration'):
+                            xs *= 1000
+                        self.digest_sources[name][i].data.update({'x': xs, 'y': ys})
+                figure.title.text = '%s: %d' % (name, digest.size())
+
+            for name, figure in self.counter_figures.items():
+                counter = self.server.counters[name]
+                d = {}
+                for i, d in enumerate(counter.components):
+                    if d:
+                        xs = sorted(d)
+                        factor = counter.intervals[0] / counter.intervals[i]
+                        counts = [d[x] for x in xs]
+                        ys = [factor * c for c in counts]
+                        y_centers = [y / 2 for y in ys]
+                        xs = list(map(str, xs))
+                        self.counter_sources[name][i].data.update(
+                                {'x': xs, 'y': ys, 'y-center': y_centers,
+                                 'counts': counts})
+                    figure.title.text = '%s: %d' % (name, counter.size())
+                    figure.x_range.factors = list(map(str, xs))
+
+
 from bokeh.server.server import Server
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.application import Application
@@ -470,13 +584,25 @@ def systemmonitor_doc(worker, doc):
         doc.add_root(sysmon.root)
 
 
+def counters_doc(server, doc):
+    with log_errors():
+        counter = Counters(server, sizing_mode='stretch_both')
+        doc.add_periodic_callback(counter.update, 500)
+
+        doc.add_root(counter.root)
+
+
+
 class BokehWorker(BokehServer):
     def __init__(self, worker, io_loop=None):
         self.worker = worker
         main = Application(FunctionHandler(partial(main_doc, worker)))
         crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker)))
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker)))
+        counters = Application(FunctionHandler(partial(counters_doc, worker)))
+
         self.apps = {'/main': main,
+                     '/counters': counters,
                      '/crossfilter': crossfilter,
                      '/system': systemmonitor}
 

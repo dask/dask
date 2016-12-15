@@ -10,7 +10,9 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 
 from distributed.client import _wait
+from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
+from distributed.bokeh.worker import Counters
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
         SystemMonitor, Occupancy)
 
@@ -26,7 +28,7 @@ def test_simple(c, s, a, b):
     yield gen.sleep(0.1)
 
     http_client = AsyncHTTPClient()
-    for suffix in ['system']:
+    for suffix in ['system', 'counters', 'workers']:
         response = yield http_client.fetch('http://localhost:%d/%s'
                                            % (s.services['bokeh'].port, suffix))
         assert 'bokeh' in response.body.decode().lower()
@@ -39,3 +41,20 @@ def test_basic(c, s, a, b):
 
         ss.update()
         assert len(first(ss.source.data.values()))
+
+
+@gen_cluster(client=True)
+def test_counters(c, s, a, b):
+    pytest.importorskip('crick')
+    while 'tick-duration' not in s.digests:
+        yield gen.sleep(0.01)
+    ss = Counters(s)
+
+    ss.update()
+    yield gen.sleep(0.1)
+    ss.update()
+
+    start = time()
+    while not len(ss.digest_sources['tick-duration'][0].data['x']):
+        yield gen.sleep(1)
+        assert time() < start + 5

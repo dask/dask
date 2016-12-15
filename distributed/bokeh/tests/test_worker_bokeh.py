@@ -10,10 +10,11 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 
 from distributed.client import _wait
+from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
 from distributed.bokeh.worker import (BokehWorker, StateTable, CrossFilter,
         CommunicatingStream, ExecutingTimeSeries, CommunicatingTimeSeries,
-        SystemMonitor)
+        SystemMonitor, Counters)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -59,6 +60,32 @@ def test_basic(c, s, a, b):
         assert (len(first(aa.source.data.values())) and
                 len(first(bb.source.data.values())))
 
+
+@gen_cluster(client=True)
+def test_counters(c, s, a, b):
+    pytest.importorskip('crick')
+    while 'tick-duration' not in a.digests:
+        yield gen.sleep(0.01)
+    aa = Counters(a)
+
+    aa.update()
+    yield gen.sleep(0.1)
+    aa.update()
+
+    start = time()
+    while not len(aa.digest_sources['tick-duration'][0].data['x']):
+        yield gen.sleep(1)
+        assert time() < start + 5
+
+
+    a.digests['foo'].add(1)
+    a.digests['foo'].add(2)
+    aa.add_digest_figure('foo')
+
+    a.counters['bar'].add(1)
+    a.counters['bar'].add(2)
+    a.counters['bar'].add(2)
+    aa.add_counter_figure('bar')
 
 
 @gen_cluster(client=True)

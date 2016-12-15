@@ -12,6 +12,7 @@ class BokehServer(object):
         for i in range(5):
             try:
                 self.server = Server(self.apps, io_loop=self.loop, port=port,
+                                     check_unused_sessions_milliseconds=500,
                                      host=['*'])
                 self.server.start(start_loop=False)
                 break

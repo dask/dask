@@ -60,6 +60,7 @@ install:
   - pip install -q git+https://github.com/dask/s3fs.git --upgrade
   - pip install -q git+https://github.com/dask/zict.git --upgrade
   - pip install sortedcollections
+  - if [[ $PYTHON == '3.5' ]]; then pip install git+https://github.com/jcrist/crick.git; fi
 
   # Install distributed
   - python setup.py install

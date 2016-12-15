@@ -10,7 +10,7 @@ import pytest
 from distributed.core import (read, write, pingpong, Server, rpc, connect,
         coerce_to_rpc, send_recv, coerce_to_address, ConnectionPool)
 from distributed.metrics import time
-from distributed.utils_test import slow, loop, gen_test
+from distributed.utils_test import slow, loop, gen_test, gen_cluster
 
 
 def test_server(loop):
@@ -267,3 +267,12 @@ def test_connection_pool():
     while any(rpc.available.values()):
         yield gen.sleep(0.01)
         assert time() < start + 2
+
+
+@gen_cluster()
+def test_ticks(s, a, b):
+    pytest.importorskip('crick')
+    yield gen.sleep(0.1)
+    c = s.digests['tick-duration']
+    assert c.size()
+    assert 0.01 < c.components[0].quantile(0.5) < 0.5

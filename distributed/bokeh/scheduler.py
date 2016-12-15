@@ -19,7 +19,7 @@ from toolz import frequencies
 
 from .components import DashboardComponent
 from .core import BokehServer
-from .worker import SystemMonitor, format_time
+from .worker import SystemMonitor, format_time, counters_doc
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
@@ -137,9 +137,11 @@ class BokehScheduler(BokehServer):
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc,
                                                             scheduler)))
         workers = Application(FunctionHandler(partial(workers_doc, scheduler)))
+        counters = Application(FunctionHandler(partial(counters_doc, scheduler)))
 
         self.apps = {'/system': systemmonitor,
-                     '/workers': workers}
+                     '/workers': workers,
+                     '/counters': counters}
 
         self.loop = io_loop or scheduler.loop
         self.server = None

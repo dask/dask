@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 from datetime import timedelta
+from functools import partial
 import logging
 import six
 import socket
@@ -100,16 +101,37 @@ class Server(TCPServer):
                                   deserialize=deserialize)
         self.deserialize = deserialize
         self.monitor = SystemMonitor()
+        self.counters = None
+        self.digests = None
         if hasattr(self, 'loop'):
+            with ignoring(ImportError):
+                from .counter import Digest
+                self.digests = defaultdict(partial(Digest, loop=self.loop))
+
+            from .counter import Counter
+            self.counters = defaultdict(partial(Counter, loop=self.loop))
+
             pc = PeriodicCallback(self.monitor.update, 500, io_loop=self.loop)
             self.loop.add_callback(pc.start)
+            if self.digests is not None:
+                self._last_tick = time()
+                self._tick_pc = PeriodicCallback(self._measure_tick, 20, io_loop=self.loop)
+                self.loop.add_callback(self._tick_pc.start)
+
+
         self.__stopped = False
+
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     def stop(self):
         if not self.__stopped:
             self.__stopped = True
             super(Server, self).stop()
+
+    def _measure_tick(self):
+        now = time()
+        self.digests['tick-duration'].add(now - self._last_tick)
+        self._last_tick = now
 
     @property
     def port(self):
@@ -175,6 +197,8 @@ class Server(TCPServer):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
                 op = msg.pop('op')
+                if self.counters is not None:
+                    self.counters['op'].add(op)
                 self._listen_streams[stream] = op
                 close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
