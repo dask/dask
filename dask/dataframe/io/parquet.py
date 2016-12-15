@@ -11,6 +11,7 @@ try:
     import fastparquet
     from fastparquet import parquet_thrift
     from fastparquet.core import read_row_group_file
+    from fastparquet.api import _pre_allocate
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
@@ -118,9 +119,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
-    dsk = {(name, i): (read_parquet_row_group, myopen, pf.row_group_filename(rg),
+    dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.helper, pf.cats)
+                       categories, pf.helper, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -131,15 +132,16 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     return out_type(dsk, name, meta, divisions)
 
 
-def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
+def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
+                            helper, cs, dt, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
-    df = read_row_group_file(fn, rg, columns, *args, open=open)
-    if index:
-        df = df.set_index(index)
+    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    read_row_group_file(fn, rg, columns, categories, helper, cs,
+                        open=open, assign=views)
 
     if series:
         return df[df.columns[0]]
