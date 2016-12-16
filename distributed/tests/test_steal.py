@@ -1,6 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+from operator import mul
+import random
 import sys
+from time import sleep
 
 import pytest
 from toolz import sliding_window
@@ -12,7 +15,8 @@ from distributed import Worker
 from distributed.client import Client, _wait, wait
 from distributed.metrics import time
 from distributed.utils_test import (cluster, slowinc, slowadd, randominc,
-        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep)
+        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep,
+        slowidentity)
 
 import pytest
 
@@ -22,12 +26,13 @@ import pytest
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)],
         timeout=20)
 def test_work_stealing(c, s, a, b):
-    [x] = yield c._scatter([1])
+    [x] = yield c._scatter([1], workers=a.address)
     futures = c.map(slowadd, range(50), [x] * 50)
     yield gen.sleep(0.1)
     yield _wait(futures)
     assert len(a.data) > 10
     assert len(b.data) > 10
+    assert len(a.data) > len(b.data)
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
@@ -149,8 +154,6 @@ def test_new_worker_steals(c, s, a):
     b = Worker(s.ip, s.port, loop=s.loop, ncores=1)
     yield b._start()
 
-    yield gen.sleep(1)
-
     result = yield total._result()
     assert result == sum(map(inc, range(100)))
 
@@ -188,7 +191,9 @@ def test_dont_steal_worker_restrictions(c, s, a, b):
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
-    result = yield s.work_steal(b.address, a.address, budget=0.5)
+
+    result = s.extensions['stealing'].balance()
+
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
@@ -203,7 +208,9 @@ def test_dont_steal_host_restrictions(c, s, a, b):
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
-    result = yield s.work_steal(b.address, a.address, budget=0.5)
+
+    result = s.extensions['stealing'].balance()
+
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
@@ -219,13 +226,17 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
-    result = yield s.work_steal(b.address, a.address, budget=0.5)
+
+    result = s.extensions['stealing'].balance()
+
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 2}})])
+@pytest.mark.xfail(reason='no stealing of resources')
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 2}})],
+             timeout=3)
 def test_steal_resource_restrictions(c, s, a):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
     yield future._result()
@@ -238,8 +249,6 @@ def test_steal_resource_restrictions(c, s, a):
     b = Worker(s.ip, s.port, loop=s.loop, ncores=1, resources={'A': 4})
     yield b._start()
 
-    s.balance_by_stealing()
-
     start = time()
     while not b.task_state or len(a.task_state) == 101:
         yield gen.sleep(0.01)
@@ -249,3 +258,78 @@ def test_steal_resource_restrictions(c, s, a):
     assert len(a.task_state) < 101
 
     yield b._close()
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 5, timeout=20)
+def test_balance_without_dependencies(c, s, *workers):
+    s.extensions['stealing']._pc.callback_time = 20
+    def slow(x):
+        y = random.random() * 0.1
+        sleep(y)
+        return y
+    futures = c.map(slow, range(100))
+    yield _wait(futures)
+
+    durations = [sum(w.data.values()) for w in workers]
+    assert max(durations) / min(durations) < 2
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 4)] * 2)
+def test_dont_steal_executing_tasks(c, s, a, b):
+    futures = c.map(slowinc, range(4), delay=0.1, workers=a.address,
+                    allow_other_workers=True)
+
+    yield _wait(futures)
+    assert len(a.data) == 4
+    assert len(b.data) == 0
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
+    s.extensions['stealing']._pc.callback_time = 20
+    x = c.submit(mul, b'0', 100000000, workers=a.address)  # 100 MB
+    yield _wait(x)
+    s.task_duration['slowidentity'] = 0.2
+
+    futures = [c.submit(slowidentity, x, pure=False, delay=0.2) for i in range(2)]
+
+    yield _wait(futures)
+
+    assert len(a.data) == 3
+    assert not any(w.task_state for w in rest)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_steal_when_more_tasks(c, s, a, *rest):
+    s.extensions['stealing']._pc.callback_time = 20
+    x = c.submit(mul, b'0', 100000000, workers=a.address)  # 100 MB
+    yield _wait(x)
+    s.task_duration['slowidentity'] = 0.2
+
+    futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
+                for i in range(20)]
+    yield gen.sleep(0.1)
+
+    assert any(w.task_state for w in rest)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_steal_more_attractive_tasks(c, s, a, *rest):
+    def slow2(x):
+        sleep(1)
+        return x
+    s.extensions['stealing']._pc.callback_time = 20
+    x = c.submit(mul, b'0', 100000000, workers=a.address)  # 100 MB
+    yield _wait(x)
+    s.task_duration['slowidentity'] = 0.2
+    s.task_duration['slow2'] = 1
+
+    future = c.submit(slow2, x)
+    futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
+                for i in range(10)]
+
+    while not any(w.task_state for w in rest):
+        yield gen.sleep(0.01)
+
+    # good future moves first
+    assert any(future.key in w.task_state for w in rest)

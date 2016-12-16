@@ -890,20 +890,22 @@ def test_if_intermediates_clear_on_error(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_pragmatic_move_small_data_to_large_data(c, s, a, b):
-    lists = c.map(lambda n: list(range(n)), [10] * 10, pure=False)
-    sums = c.map(sum, lists)
+    np = pytest.importorskip('numpy')
+    lists = c.map(np.ones, [10000] * 10, pure=False)
+    sums = c.map(np.sum, lists)
     total = c.submit(sum, sums)
 
     def f(x, y):
         return None
+    s.task_duration['f'] = 0.001
     results = c.map(f, lists, [total] * 10)
 
     yield _wait([total])
 
     yield _wait(results)
 
-    assert sum(s.who_has[l.key] == s.who_has[r.key]
-               for l, r in zip(lists, results)) >= 8
+    assert sum(s.who_has[r.key].issubset(s.who_has[l.key])
+               for l, r in zip(lists, results)) >= 9
 
 
 @gen_cluster(client=True)
@@ -2148,6 +2150,7 @@ def test_fatally_serialized_input(c, s):
         yield gen.sleep(0.01)
 
 
+@pytest.mark.xfail(reason='Use fast random selection now')
 @gen_cluster(client=True)
 def test_balance_tasks_by_stacks(c, s, a, b):
     x = c.submit(inc, 1)
@@ -2684,7 +2687,10 @@ def test_even_load_after_fast_functions(c, s, a, b):
 
     futures = c.map(inc, range(2, 11))
     yield _wait(futures)
-    assert abs(len(a.data) - len(b.data)) <= 2
+    assert any(f.key in a.data for f in futures)
+    assert any(f.key in b.data for f in futures)
+
+    # assert abs(len(a.data) - len(b.data)) <= 3
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
@@ -3457,9 +3463,9 @@ def test_retire_many_workers(c, s, *workers):
 
 
 @gen_cluster(client=True,
-             scheduler_kwargs={'steal': False},
              ncores=[('127.0.0.1', 3)] * 2)
 def test_weight_occupancy_against_data_movement(c, s, a, b):
+    s.extensions['stealing']._pc.callback_time = 1000000
     s.task_duration['f'] = 0.01
     def f(x, y=0, z=0):
         sleep(0.01)
@@ -3477,10 +3483,10 @@ def test_weight_occupancy_against_data_movement(c, s, a, b):
 
 
 @gen_cluster(client=True,
-             scheduler_kwargs={'steal': False},
              ncores=[('127.0.0.1', 1), ('127.0.0.1', 10)])
 def test_distribute_tasks_by_ncores(c, s, a, b):
     s.task_duration['f'] = 0.01
+    s.extensions['stealing']._pc.callback_time = 1000000
     def f(x, y=0):
         sleep(0.01)
         return x
@@ -3605,8 +3611,17 @@ def test_auto_normalize_collection_sync(loop):
                 assert end - start < 1
 
 
+def assert_no_data_loss(scheduler):
+    for key, start, finish, recommendations, _ in scheduler.transition_log:
+        if start == 'memory' and finish == 'released':
+            for k, v in recommendations.items():
+                assert not (k == key and v == 'waiting')
+
+
 @gen_cluster(client=True, timeout=None)
 def test_interleave_computations(c, s, a, b):
+    import distributed
+    distributed.g = s
     xs = [delayed(slowinc)(i, delay=0.02) for i in range(30)]
     ys = [delayed(slowdec)(x, delay=0.02) for x in xs]
     zs = [delayed(slowadd)(x, y, delay=0.02) for x, y in zip(xs, ys)]
@@ -3628,6 +3643,8 @@ def test_interleave_computations(c, s, a, b):
         assert x_done >= y_done >= z_done
         assert x_done < y_done + 10
         assert y_done < z_done + 10
+
+    assert_no_data_loss(s)
 
 
 @gen_cluster(client=True, timeout=None)

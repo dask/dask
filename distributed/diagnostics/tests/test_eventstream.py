@@ -28,10 +28,11 @@ def test_eventstream(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_eventstream_remote(c, s, a, b):
+    base_plugins = len(s.plugins)
     stream = yield eventstream(s.address, interval=0.010)
 
     start = time()
-    while not s.plugins:
+    while len(s.plugins) == base_plugins:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
@@ -47,6 +48,6 @@ def test_eventstream_remote(c, s, a, b):
 
     stream.close()
     start = time()
-    while s.plugins:
+    while len(s.plugins) > base_plugins:
         yield gen.sleep(0.01)
         assert time() < start + 5

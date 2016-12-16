@@ -62,7 +62,7 @@ class LocalCluster(object):
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
             loop=None, start=True, scheduler_port=8786,
             silence_logs=logging.CRITICAL, diagnostics_port=8787,
-            services={}, **kwargs):
+            services={}, worker_services={}, **kwargs):
         self.status = None
         self.nanny = nanny
         if silence_logs:
@@ -102,7 +102,8 @@ class LocalCluster(object):
         else:
             _start_worker = partial(self.loop.add_callback, self._start_worker)
         for i in range(n_workers):
-            _start_worker(ncores=threads_per_worker, nanny=nanny, **kwargs)
+            _start_worker(ncores=threads_per_worker, nanny=nanny,
+                    services=worker_services, **kwargs)
         self.status = 'running'
 
         self.diagnostics = None

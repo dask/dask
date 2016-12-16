@@ -12,7 +12,7 @@ import random
 import socket
 from timeit import default_timer
 
-from sortedcollections import ValueSortedDict
+from sortedcontainers import SortedSet
 try:
     from cytoolz import frequencies, topk
 except ImportError:
@@ -34,6 +34,7 @@ from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
 from .metrics import time
 from .publish import PublishExtension
 from .channels import ChannelScheduler
+from .stealing import WorkStealing
 from .utils import (All, ignoring, get_ip, ignore_exceptions,
         ensure_ip, get_fileno_limit, log_errors, key_split, mean,
         divide_n_among_bins, validate_key)
@@ -156,8 +157,6 @@ class Scheduler(Server):
         Which clients want each key.  The active targets of computation.
     * **nbytes:** ``{key: int}``:
         Number of bytes for a key as reported by workers holding that key.
-    * **stealable:** ``[[key]]``
-        A list of stacks of stealable keys, ordered by stealability
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
     * **idle:** ``{worker}``:
@@ -189,8 +188,8 @@ class Scheduler(Server):
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
             synchronize_worker_interval=60000,
             ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
-            validate=False, steal=True, extensions=[ChannelScheduler,
-                PublishExtension],
+            extensions=[ChannelScheduler, PublishExtension, WorkStealing],
+            validate=False,
             **kwargs):
 
         # Attributes
@@ -200,7 +199,7 @@ class Scheduler(Server):
         self.status = None
         self.delete_interval = delete_interval
         self.synchronize_worker_interval = synchronize_worker_interval
-        self.steal = steal
+        self.digests = None
 
         # Communication state
         self.loop = loop or IOLoop.current()
@@ -223,6 +222,7 @@ class Scheduler(Server):
         self.processing = dict()
         self.rprocessing = defaultdict(set)
         self.task_duration = {prefix: 0.00001 for prefix in fast_tasks}
+        self.unknown_durations = defaultdict(set)
         self.host_restrictions = dict()
         self.worker_restrictions = dict()
         self.resource_restrictions = dict()
@@ -241,20 +241,22 @@ class Scheduler(Server):
         self.tracebacks = dict()
         self.exceptions_blame = dict()
         self.datasets = dict()
-        self.stealable = [set() for i in range(12)]
-        self.key_stealable = dict()
-        self.stealable_unknown_durations = defaultdict(set)
+
+        self.idle = SortedSet()
+        self.saturated = set()
 
         # Worker state
         self.ncores = dict()
+        self.workers = SortedSet()
         self.total_ncores = 0
+        self.total_occupancy = 0
         self.worker_info = dict()
         self.host_info = defaultdict(dict)
         self.worker_resources = dict()
         self.used_resources = dict()
         self.resources = defaultdict(dict)
         self.aliases = dict()
-        self.occupancy = ValueSortedDict()
+        self.occupancy = dict()
 
         self.extensions = {}
         self.plugins = []
@@ -341,7 +343,7 @@ class Scheduler(Server):
 
     def __str__(self):
         return '<Scheduler: "%s:%d" processes: %d cores: %d>' % (
-                self.ip, self.port, len(self.ncores), sum(self.ncores.values()))
+                self.ip, self.port, len(self.workers), self.total_ncores)
 
     __repr__ = __str__
 
@@ -357,7 +359,7 @@ class Scheduler(Server):
         """ Basic information about ourselves and our cluster """
         d = {'type': type(self).__name__,
              'id': str(self.id),
-             'workers': list(self.ncores),
+             'workers': list(self.workers),
              'services': {key: v.port for (key, v) in self.services.items()},
              'workers': dict(self.worker_info)}
         return d
@@ -372,19 +374,13 @@ class Scheduler(Server):
                 self.waiting, self.waiting_data, self.released, self.priority,
                 self.nbytes, self.host_restrictions, self.worker_restrictions,
                 self.loose_restrictions, self.ready, self.who_wants,
-                self.wants_what]
+                self.wants_what, self.unknown_durations]
         for collection in collections:
             collection.clear()
 
         with ignoring(AttributeError):
             for c in self._worker_coroutines:
                 c.cancel()
-
-        self._steal_periodic_callback = \
-                PeriodicCallback(callback=self.balance_by_stealing,
-                                 callback_time=100,
-                                 io_loop=self.loop)
-        self._steal_periodic_callback.start()
 
         for cor in self.coroutines:
             if cor.done():
@@ -424,9 +420,11 @@ class Scheduler(Server):
         """
         if self.status == 'closed':
             return
-        self._steal_periodic_callback.stop()
         for service in self.services.values():
             service.stop()
+        for ext in self.extensions:
+            with ignoring(AttributeError):
+                ext.teardown()
         yield self.cleanup()
         if not fast:
             yield self.finished()
@@ -481,7 +479,7 @@ class Scheduler(Server):
                 self.add_resources(address, resources)
                 self.worker_info[address]['resources'] = resources
 
-            if address in self.ncores:
+            if address in self.workers:
                 return 'OK'
 
             name = name or address
@@ -496,6 +494,7 @@ class Scheduler(Server):
                 self.host_info[host]['cores'] += ncores
 
             self.ncores[address] = ncores
+            self.workers.add(address)
             self.total_ncores += ncores
             self.aliases[name] = address
             self.worker_info[address]['name'] = name
@@ -505,6 +504,7 @@ class Scheduler(Server):
                 self.worker_bytes[address] = 0
                 self.processing[address] = dict()
                 self.occupancy[address] = 0
+                self.check_idle_saturated(address)
 
             if nbytes:
                 self.nbytes.update(nbytes)
@@ -594,6 +594,8 @@ class Scheduler(Server):
                 self.priority[key] = (self.generation, new_priority[key]) # prefer old
 
         if restrictions:
+            restrictions = {k: v for k, v in restrictions.items()
+                                 if v is not None}
             restrictions = {k: set(map(self.coerce_address, v))
                             for k, v in restrictions.items()}
             worker_restrictions = {k: {w for w in s if ':' in w}
@@ -683,6 +685,8 @@ class Scheduler(Server):
         """ Mark that certain keys have gone missing.  Recover. """
         with log_errors():
             logger.debug("Stimulus missing data %s, %s", key, worker)
+            if key and self.task_state.get(key) in (None, 'memory'):
+                return {}
 
             recommendations = OrderedDict()
             for k in set(keys):
@@ -729,10 +733,13 @@ class Scheduler(Server):
 
             del self.worker_streams[address]
             del self.ncores[address]
+            self.workers.remove(address)
             del self.aliases[self.worker_info[address]['name']]
             del self.worker_info[address]
             if address in self.idle:
                 self.idle.remove(address)
+            if address in self.saturated:
+                self.saturated.remove(address)
 
             recommendations = OrderedDict()
 
@@ -749,7 +756,7 @@ class Scheduler(Server):
                 elif not self.rprocessing[k]:
                     recommendations[k] = 'released'
 
-            del self.occupancy[address]
+            self.total_occupancy -= self.occupancy.pop(address)
             del self.worker_bytes[address]
             self.remove_resources(address)
 
@@ -907,6 +914,7 @@ class Scheduler(Server):
                 self.wants_what, tasks=self.tasks, erred=self.exceptions_blame,
                 allow_overlap=allow_overlap)
         if not (set(self.ncores) ==
+                set(self.workers) ==
                 set(self.has_what) ==
                 set(self.processing) ==
                 set(self.worker_info) ==
@@ -1135,10 +1143,11 @@ class Scheduler(Server):
                         if 'status' in msg and 'error' in msg['status']:
                             logger.exception(clean_exception(**msg)[1])
 
-                        self.correct_time_delay(worker, msg)
                         op = msg.pop('op')
-                        handler = self.worker_handlers[op]
-                        handler(worker=worker, **msg)
+                        if op:
+                            self.correct_time_delay(worker, msg)
+                            handler = self.worker_handlers[op]
+                            handler(worker=worker, **msg)
 
                 end = time()
                 if self.digests is not None:
@@ -1200,7 +1209,7 @@ class Scheduler(Server):
         Scheduler.broadcast:
         """
         start = time()
-        while not self.ncores:
+        while not self.workers:
             yield gen.sleep(0.2)
             if time() > start + timeout:
                 raise gen.TimeoutError("No workers found")
@@ -1244,7 +1253,7 @@ class Scheduler(Server):
     @gen.coroutine
     def restart(self, environment=None):
         """ Restart all workers.  Reset local state. """
-        n = len(self.ncores)
+        n = len(self.workers)
         with log_errors():
             logger.debug("Send shutdown signal to workers")
 
@@ -1285,7 +1294,7 @@ class Scheduler(Server):
         """ Broadcast message to workers, return all results """
         if workers is None:
             if hosts is None:
-                workers = list(self.ncores)
+                workers = list(self.workers)
             else:
                 workers = []
         if hosts is not None:
@@ -1323,7 +1332,7 @@ class Scheduler(Server):
         """
         with log_errors():
             keys = set(keys or self.who_has)
-            workers = set(workers or self.ncores)
+            workers = set(workers or self.workers)
 
             if not keys.issubset(self.who_has):
                 raise Return({'status': 'missing-data',
@@ -1742,7 +1751,7 @@ class Scheduler(Server):
                                           and dep not in self.exceptions_blame}
 
             if not self.waiting[key]:
-                if self.ncores:
+                if self.workers:
                     self.task_state[key] = 'waiting'
                     recommendations[key] = 'processing'
                 else:
@@ -1794,7 +1803,7 @@ class Scheduler(Server):
             self.task_state[key] = 'waiting'
 
             if not self.waiting[key]:
-                if self.ncores:
+                if self.workers:
                     recommendations[key] = 'processing'
                 else:
                     self.task_state[key] = 'no-worker'
@@ -1832,17 +1841,33 @@ class Scheduler(Server):
                 worker = decide_worker(self.dependencies, self.occupancy,
                         self.who_has, valid_workers, self.loose_restrictions,
                         partial(self.worker_objective, key), key)
+            elif self.idle:
+                if len(self.idle) < 20:  # smart but linear in small case
+                    worker = min(self.idle, key=self.occupancy.get)
+                else:  # dumb but fast in large case
+                    worker = random.choice(self.idle)
             else:
-                worker = first(self.occupancy)
+                if len(self.workers) < 20:  # smart but linear in small case
+                    worker = min(self.workers, key=self.occupancy.get)
+                else:  # dumb but fast in large case
+                    worker = random.choice(self.workers)
 
             assert worker
 
-            duration = self.task_duration.get(key_split(key), 0.5)
+            ks = key_split(key)
+
+            duration = self.task_duration.get(ks)
+            if duration is None:
+                self.unknown_durations[ks].add(key)
+                duration = 0.5
+
             self.processing[worker][key] = duration
             self.rprocessing[key].add(worker)
             self.occupancy[worker] += duration
+            self.total_occupancy += duration
             self.task_state[key] = 'processing'
             self.consume_resources(key, worker)
+            self.check_idle_saturated(worker)
 
             # logger.debug("Send job to worker: %s, %s", worker, key)
 
@@ -1900,6 +1925,14 @@ class Scheduler(Server):
 
                 self.task_duration[ks] = avg_duration
 
+                if ks in self.unknown_durations:
+                    for k in self.unknown_durations.pop(ks):
+                        for w in self.rprocessing.get(k, ()):
+                            old = self.processing[w][k]
+                            self.processing[w][k] = avg_duration
+                            self.occupancy[w] += avg_duration - old
+                            self.total_occupancy += avg_duration - old
+
                 info['last-task'] = compute_stop
 
             ############################
@@ -1921,12 +1954,18 @@ class Scheduler(Server):
                 self.nbytes[key] = nbytes
 
             workers = self.rprocessing.pop(key)
-            for worker in workers:
-                duration = self.processing[worker].pop(key)
-                if not self.processing[worker]:
-                    self.occupancy[worker] = 0
+            for w in workers:
+                duration = self.processing[w].pop(key)
+                if not self.processing[w]:
+                    self.total_occupancy -= self.occupancy[w]
+                    self.occupancy[w] = 0
                 else:
-                    self.occupancy[worker] -= duration
+                    self.total_occupancy -= duration
+                    self.occupancy[w] -= duration
+                self.check_idle_saturated(w)
+                if w != worker:
+                    msg = {'op': 'release-task', 'key': key}
+                    # self.worker_streams[w].send(msg)
 
             recommendations = OrderedDict()
 
@@ -2120,6 +2159,8 @@ class Scheduler(Server):
             for w in self.rprocessing.pop(key):
                 duration = self.processing[w].pop(key)
                 self.occupancy[w] -= duration
+                self.total_occupancy -= duration
+                self.check_idle_saturated(w)
                 self.release_resources(key, w)
 
             self.released.add(key)
@@ -2188,6 +2229,8 @@ class Scheduler(Server):
             for w in self.rprocessing.pop(key):
                 duration = self.processing[w].pop(key)
                 self.occupancy[w] -= duration
+                self.total_occupancy -= duration
+                self.check_idle_saturated(w)
                 self.release_resources(key, w)
 
             del self.waiting_data[key]  # do anything with this?
@@ -2472,125 +2515,24 @@ class Scheduler(Server):
     # Assigning Tasks to Workers #
     ##############################
 
-    @gen.coroutine
-    def work_steal(self, idle=None, saturated=None, budget=None):
-        try:
-            budget = budget or self.occupancy[saturated] / 10 # TODO scale by ratio of idle/saturated
-            ip, port = idle.split(':')
+    def check_idle_saturated(self, worker):
+        occ = self.occupancy[worker]
+        nc = self.ncores[worker]
+        p = len(self.processing[worker])
 
-            try:
-                stream = yield connect(ip, int(port))
-                logger.debug("Steal %s percent of work: %s <- %s", int(100 * budget), idle, saturated)
-                response = yield send_recv(stream, op='steal', worker=saturated, budget=budget)
-                assert response
-                yield write(stream, 'OK')
+        avg = self.total_occupancy / self.total_ncores
 
-                if saturated in self.worker_info and idle in self.worker_info:
-                    for key in response['keys']:
-                        if self.task_state.get(key) == 'processing':
-                            if key in self.processing[saturated]:
-                                duration = self.processing[saturated].pop(key)
-                                self.rprocessing[key].remove(saturated)
-                                self.occupancy[saturated] -= duration
-                                self.release_resources(key, saturated)
+        if p < nc or occ / nc < avg / 2:
+            self.idle.add(worker)
+            if worker in self.saturated:
+                self.saturated.remove(worker)
+        else:
+            if worker in self.idle:
+                self.idle.remove(worker)
 
-                            if key not in self.processing[idle]:
-                                duration = self.task_duration.get(key, 0.5)
-                                self.processing[idle][key] = duration
-                                self.rprocessing[key].add(idle)
-                                self.occupancy[idle] += duration
-                                self.consume_resources(key, idle)
-
-                    logger.debug("Stolen %d keys:  %s <- %s",
-                                 len(response['keys']), idle, saturated)
-            except EnvironmentError:
-                logger.info("Stream closed while monitoring stealing")
-                return
-            else:
-                write(stream, {'op': 'close'})
-                close(stream)
-
-            if self.counters:
-                self.counters['stolen-keys'].add(len(response['keys']))
-
-            if response['keys']:
-                raise gen.Return(response['keys'])
-            else:
-                return  # tornado burns cpu when returning empty lists
-
-        except gen.Return:
-            raise
-        except Exception as e:
-            logger.exception(e)
-            if LOG_PDB:
-                import pdb; pdb.set_trace()
-            raise
-
-    def balance_by_stealing(self):
-        with log_errors():
-            total_occupancy = sum(self.occupancy.values())
-
-            if not self.total_ncores or not total_occupancy:
-                return
-            avg = total_occupancy / self.total_ncores
-
-            idle = list()
-            saturated = list()
-
-            for worker, duration in self.occupancy.iteritems():
-                time_until_completion = duration / self.ncores[worker]
-                if (time_until_completion < 0.3 or
-                    time_until_completion / avg < 0.25):
-                    idle.append(worker)
-                else:
-                    break
-
-            for worker in self.occupancy.irange(reverse=True):
-                duration = self.occupancy[worker]
-                time_until_completion = duration / self.ncores[worker]
-
-                if time_until_completion > 0.3 and time_until_completion / avg > 1.9:
-                    saturated.append(worker)
-                else:
-                    break
-
-            if not saturated or not idle:
-                return
-
-            original_idle = list(idle)
-
-            saturated.sort(reverse=True, key=lambda w: self.occupancy[w]
-                                                     / self.ncores[w])
-
-            # near 1/10 for many more idle than saturated
-            # near 1/3 for roughly the same number
-            fraction = 1/10 + min(1, len(saturated) / len(idle)) / 4
-
-            flag = False
-
-            for s in saturated:
-                occ = self.occupancy[s]
-                sc = self.ncores[s]
-                while idle and occ / sc >= avg * 1.9:
-                    i = idle.pop()
-                    ic = self.ncores[i]
-                    frac = fraction
-                    if sc > ic:
-                        frac *= ic / sc
-                    budget = frac * occ
-                    if budget < 0.1:
-                        idle.append(i)
-                        break
-                    else:
-                        occ -= budget
-                        self.loop.add_callback(self.work_steal, i, s,
-                                               budget=frac)
-                        flag = True
-                    logger.debug("cycle balance work steal")
-
-            if flag:
-                logger.debug("Stealing %d saturated %d idle",
-                            len(saturated), len(original_idle))
+            pending = occ * (p - nc) / nc
+            if p > nc and pending > 0.2 and pending > 1.9 * avg:
+                self.saturated.add(worker)
 
     def valid_workers(self, key):
         """ Return set of currently valid worker addresses for key
@@ -2695,14 +2637,14 @@ class Scheduler(Server):
         Returns a list of all worker addresses that match
         """
         if workers is None:
-            return list(self.ncores)
+            return list(self.workers)
 
         out = set()
         for w in workers:
             if ':' in w:
                 out.add(w)
             else:
-                out.update({ww for ww in self.ncores if w in ww}) # TODO: quadratic
+                out.update({ww for ww in self.workers if w in ww}) # TODO: quadratic
         return list(out)
 
     def start_ipython(self, stream=None):

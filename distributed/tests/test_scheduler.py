@@ -22,7 +22,7 @@ import pytest
 from distributed import Nanny, Worker
 from distributed.core import connect, read, write, close, rpc
 from distributed.scheduler import validate_state, Scheduler
-from distributed.client import _wait
+from distributed.client import _wait, _first_completed
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
@@ -808,3 +808,23 @@ def test_file_descriptors(c, s):
     assert num_fds_6 < num_fds_5 + 20
 
     yield [n._close() for n in nannies]
+
+
+@gen_cluster(client=True)
+def test_learn_occupancy(c, s, a, b):
+    futures = c.map(slowinc, range(1000), delay=0.01)
+    while not any(s.who_has):
+        yield gen.sleep(0.01)
+
+    assert 1 < s.total_occupancy < 40
+    for w in [a, b]:
+        assert 1 < s.occupancy[w.address] < 20
+
+
+@gen_cluster(client=True)
+def test_learn_occupancy_2(c, s, a, b):
+    future = c.map(slowinc, range(1000), delay=0.1)
+    while not any(s.who_has):
+        yield gen.sleep(0.01)
+
+    assert 50 < s.total_occupancy < 200

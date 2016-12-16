@@ -186,7 +186,7 @@ def test_stress_communication(c, s, *workers):
     assert isinstance(result, float)
 
 
-@slow
+@pytest.mark.skip
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10, timeout=60)
 def test_stress_steal(c, s, *workers):
     s.validate = False

@@ -85,7 +85,6 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         except Exception as e:
             logger.warn("Could not start Bokeh web UI", exc_info=True)
 
-
     logger.info('-' * 47)
     try:
         loop.start()

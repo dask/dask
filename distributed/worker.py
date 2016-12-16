@@ -205,8 +205,6 @@ class WorkerBase(Server):
           'upload_file': self.upload_file,
           'start_ipython': self.start_ipython,
           'keys': self.keys,
-          'steal': self.steal,
-          'request_work': self.request_work,
         }
 
         super(WorkerBase, self).__init__(handlers, io_loop=self.loop, **kwargs)
@@ -784,7 +782,6 @@ class Worker(WorkerBase):
         self.executing = set()
         self.executed_count = 0
         self.long_running = set()
-        self.steal_offered = set()
 
         self.batched_stream = None
         self.target_message_size = 200e6  # 200 MB
@@ -811,10 +808,11 @@ class Worker(WorkerBase):
         WorkerBase.__init__(self, *args, **kwargs)
 
     def __str__(self):
-        return "<%s: %s, %s, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
+        return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
                 self.__class__.__name__, self.address, self.status,
-                len(self.executing), self.ncores, len(self.ready),
-                len(self.in_flight), len(self.waiting_for_data))
+                len(self.data), len(self.executing), self.ncores,
+                len(self.ready), len(self.in_flight),
+                len(self.waiting_for_data))
 
     __repr__ = __str__
 
@@ -855,6 +853,8 @@ class Worker(WorkerBase):
                         priority = [self.priority_counter] + priority
                         priority = tuple(-x for x in priority)
                         self.add_task(priority=priority, **msg)
+                    elif op == 'release-task':
+                        self.release_task(**msg)
                     elif op == 'delete-data':
                         self.delete_data(**msg)
                     else:
@@ -948,6 +948,10 @@ class Worker(WorkerBase):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
+
+    def release_task(self, key=None):
+        if self.task_state.get(key) in PENDING:
+            self.rescind_key(key)
 
     ###############
     # Transitions #
@@ -1122,6 +1126,7 @@ class Worker(WorkerBase):
 
     @gen.coroutine
     def gather_dep(self, dep, slot, cause=None):
+        failures = 5
         del self.connections[slot]
         try:
             if self.validate:
@@ -1129,15 +1134,19 @@ class Worker(WorkerBase):
 
             while True:
                 if not self.who_has.get(dep):
-                    # TODO: ask scheduler nicely for new who_has before canceling
                     if dep not in self.dependents:
                         return
-                    for key in list(self.dependents[dep]):
-                        if dep in self.executing:
-                            continue
-                        if dep in self.waiting_for_data.get(key, ()):
-                            self.cancel_key(key)
-                    return
+                    failures += 1
+                    result = yield self.query_who_has(dep)
+                    if not result or failures > 5:
+                        for key in list(self.dependents[dep]):
+                            if dep in self.executing:
+                                continue
+                            if dep in self.waiting_for_data.get(key, ()):
+                                self.cancel_key(key)
+                        return
+                    else:
+                        assert self.who_has.get(dep)
                 worker = random.choice(list(self.who_has[dep]))
                 ip, port = worker.split(':')
                 try:
@@ -1481,150 +1490,6 @@ class Worker(WorkerBase):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
-
-    #################
-    # Work Stealing #
-    #################
-
-    @gen.coroutine
-    def steal(self, stream, worker=None, budget=None):
-        """
-        Steal work from a peer worker
-
-        Parameters
-        ----------
-        worker: string
-            Address of peer
-        budget: float
-            Fraction of total time to steal
-        """
-        with log_errors():
-            ip, port = worker.split(':')
-            target = yield connect(ip, int(port))
-            response = yield send_recv(target, op='request_work',
-                                       worker=self.address,
-                                       budget=budget,
-                                       ncores=self.ncores,
-                                       memory=self.memory_limit,
-                                       total_resources=self.total_resources,
-                                       available_resources=self.available_resources)
-
-            self.priority_counter += 1
-            stolen = list()
-            for key, msg in response['msgs'].items():
-                if key not in self.task_state:
-                    self.log.append((key, 'steal-accept', worker))
-                    msg.update(msg.pop('task'))
-                    priority = msg.pop('priority')
-                    priority = [self.priority_counter] + priority
-                    priority = tuple(-x for x in priority)
-                    self.add_task(key, priority=priority, **msg)
-                    stolen.append(key)
-                else:
-                    self.log.append((key, 'steal-reject', worker))
-
-            self.ensure_communicating()
-            self.ensure_computing()
-
-            yield write(stream, {'keys': stolen})
-            response = yield read(stream)
-
-            assert response == 'OK'  # Ack from scheduler, tell victim all's well
-
-            yield write(target, stolen)
-            yield close(target)
-
-            raise gen.Return('dont-reply')
-
-    @gen.coroutine
-    def request_work(self, stream, worker=None, budget=None, ncores=None,
-                     bandwidth=100e6, total_resources=None, **kwargs):
-        """ Determine tasks to send to peer worker
-
-        Parameters
-        ----------
-        budget: number
-            Fraction of total time to steal
-        ncores: int
-            Number of cores on remove machine
-        bandwidth: number
-            Expected bandwidth between machines in bytes per second
-        """
-        with log_errors():
-            heap = []
-            total_duration = 0
-            for k in concat([self.waiting_for_data,
-                             pluck(1, self.ready),
-                             self.constrained]):
-                if k in self.steal_offered:
-                    continue
-                if self.task_state.get(k) in PENDING:
-                    if not is_valid_worker(
-                            worker_restrictions=self.worker_restrictions.get(k),
-                            host_restrictions=self.host_restrictions.get(k),
-                            resource_restrictions=self.resource_restrictions.get(k),
-                            worker=worker, resources=total_resources):
-                        continue
-
-                    compute = self.durations.get(k, 0.5) / ncores
-                    total_duration += compute
-                    communicate = 0.010 + sum(self.nbytes[dep] for dep in self.dependencies[k]) / bandwidth
-                    score = compute / communicate
-                    if score > 0.05:
-                        heapq.heappush(heap, (score, k, compute, communicate))
-
-            assert budget < 1.0  # fraction
-            budget = budget * total_duration
-            good = set()
-            cost = 0
-            while heap:
-                score, k, compute, communicate = heapq.heappop(heap)
-                cost += compute + communicate
-                if cost < budget:
-                    good.add(k)
-
-            msgs = {}
-            for k in good:
-                d = {}
-                d['task'] = to_serialize(self.raw_tasks[k])
-                who_has = {dep: list(self.who_has.get(dep, []))
-                           for dep in self.dependencies[k]}
-                for dep, deps in who_has.items():
-                    if dep in self.data:
-                        deps.append(self.address)
-                d['who_has'] = who_has
-                d['priority'] = self.priorities[k][1:]
-                d['duration'] = self.durations[k]
-                d['nbytes'] = {dep: self.nbytes.get(dep) for dep in
-                               self.dependencies[k]}
-                if k in self.host_restrictions:
-                    d['host_restrictions'] = self.host_restrictions[k]
-                if k in self.worker_restrictions:
-                    d['worker_restrictions'] = self.worker_restrictions[k]
-                if k in self.resource_restrictions:
-                    d['resource_restrictions'] = self.resource_restrictions[k]
-                msgs[k] = d
-
-            self.steal_offered.update(good)
-            for key in good:
-                self.log.append((key, 'steal-offer', worker))
-            logger.info("Sending %3d tasks: %s -> %s", len(good), self.address,
-                        worker)
-            yield write(stream, {'msgs': msgs, 'keys': list(good)})  # wait on ack
-            response = yield read(stream)
-            stolen = set(response)
-
-            # We're clear to remove these keys.  Scheduler is aware
-            for key in good:
-                self.steal_offered.remove(key)
-                if key in stolen:
-                    self.log.append((key, 'steal-donate', worker))
-                    self.rescind_key(key)
-                else:
-                    self.log.append((key, 'steal-un-offered', worker))
-
-            yield close(stream)
-            raise gen.Return('dont-reply')
 
     ##################
     # Administrative #
