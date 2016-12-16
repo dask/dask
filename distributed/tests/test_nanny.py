@@ -98,6 +98,10 @@ def test_nanny_process_failure(c, s):
     s.stop()
 
 
+def test_nanny_no_port():
+    _ = str(Nanny('127.0.0.1', 8786))
+
+
 @gen_cluster(ncores=[])
 def test_monitor_resources(s):
     pytest.importorskip('psutil')

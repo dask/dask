@@ -309,7 +309,10 @@ class Nanny(Server):
 
     @property
     def worker_address(self):
-        return '%s:%d' % (self.ip, self.worker_port)
+        if self.worker_port:
+            return '%s:%d' % (self.ip, self.worker_port)
+        else:
+            return '%s:port-unassigned' % self.ip
 
     def resource_collect(self):
         try:
