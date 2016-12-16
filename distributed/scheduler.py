@@ -1205,9 +1205,12 @@ class Scheduler(Server):
             if time() > start + timeout:
                 raise gen.TimeoutError("No workers found")
 
-        if workers is not None:
+        if workers is None:
+            ncores = self.ncores
+        else:
             workers = [self.coerce_address(w) for w in workers]
-        ncores = workers if workers is not None else self.ncores
+            ncores = {w: self.ncores[w] for w in workers}
+
         keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                                          report=False,
                                                          serialize=False)

@@ -3647,3 +3647,9 @@ def test_interleave_computations_map(c, s, a, b):
         assert x_done >= y_done >= z_done
         assert x_done < y_done + 10
         assert y_done < z_done + 10
+
+
+@gen_cluster(client=True)
+def test_scatter_dict_workers(c, s, a, b):
+    yield c._scatter({'a': 10}, workers=[a.address, b.address])
+    assert 'a' in a.data or 'a' in b.data
