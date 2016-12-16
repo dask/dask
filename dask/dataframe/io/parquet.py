@@ -1,5 +1,3 @@
-import struct
-
 import pandas as pd
 from toolz import first, partial
 
@@ -13,6 +11,7 @@ try:
     import fastparquet
     from fastparquet import parquet_thrift
     from fastparquet.core import read_row_group_file
+    from fastparquet.api import _pre_allocate
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
@@ -106,7 +105,6 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    # TODO: if categories vary from one rg to next, need to cope
     dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
@@ -121,9 +119,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
-    dsk = {(name, i): (read_parquet_row_group, myopen, pf.row_group_filename(rg),
+    dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.helper, pf.cats)
+                       categories, pf.helper, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -134,15 +132,16 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     return out_type(dsk, name, meta, divisions)
 
 
-def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
+def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
+                            helper, cs, dt, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
-    df = read_row_group_file(fn, rg, columns, *args, open=open)
-    if index:
-        df = df.set_index(index)
+    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    read_row_group_file(fn, rg, columns, categories, helper, cs,
+                        open=open, assign=views)
 
     if series:
         return df[df.columns[0]]
@@ -150,8 +149,8 @@ def read_parquet_row_group(open, fn, index, columns, rg, series, *args):
         return df
 
 
-def to_parquet(path, df, encoding=default_encoding, compression=None,
-               write_index=None):
+def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
+               fixed_text=None, object_encoding=None):
     """
     Write Dask.dataframe to parquet
 
@@ -165,13 +164,25 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     df : Dask.dataframe
-    encoding : parquet_thrift.Encoding
     compression : string or dict
         Either a string like "SNAPPY" or a dictionary mapping column names to
         compressors like ``{"name": "GZIP", "values": "SNAPPY"}``
     write_index : boolean
         Whether or not to write the index.  Defaults to True *if* divisions are
         known.
+    has_nulls : bool, list or None
+        Specifies whether to write NULLs information for columns. If bools,
+        apply to all columns, if list, use for only the named columns, if None,
+        use only for columns which don't have a sentinel NULL marker (currently
+        object columns only).
+    fixed_text : dict {col: int}
+        For column types that are written as bytes (bytes, utf8 strings, or
+        json and bson-encoded objects), if a column is included here, the
+        data will be written in fixed-length format, which should be faster
+        but can potentially result in truncation.
+    object_encoding : dict {col: bytes|utf8|json|bson} or str
+        For object columns, specify how to encode to bytes. If a str, same
+        encoding is applied to all object columns.
 
     Examples
     --------
@@ -193,7 +204,14 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
     if write_index is True or write_index is None and df.known_divisions:
         df = df.reset_index()
 
-    fmd = fastparquet.writer.make_metadata(df._meta_nonempty)
+    object_encoding = object_encoding or 'bytes'
+    if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
+                                      'infer' in object_encoding.values()):
+        raise ValueError('"infer" not allowed as object encoding, '
+                         'because this required data in memory.')
+    fmd = fastparquet.writer.make_metadata(df._meta, has_nulls=has_nulls,
+                                           fixed_text=fixed_text,
+                                           object_encoding=object_encoding)
 
     partitions = df.to_delayed()
     filenames = ['part.%i.parquet' % i for i in range(len(partitions))]
@@ -211,15 +229,11 @@ def to_parquet(path, df, encoding=default_encoding, compression=None,
             chunk.file_path = fn
         fmd.row_groups.append(rg)
 
-    with myopen(metadata_fn, mode='wb') as f:
-        f.write(b'PAR1')
-        foot_size = fastparquet.writer.write_thrift(f, fmd)
-        f.write(struct.pack(b"<i", foot_size))
-        f.write(b'PAR1')
-        f.close()
+    fastparquet.writer.write_common_metadata(metadata_fn, fmd, open_with=myopen,
+                                             no_row_groups=False)
 
-    with myopen(sep.join([path, '_common_metadata']), mode='wb') as f:
-        fastparquet.writer.write_common_metadata(f, fmd)
+    fn = sep.join([path, '_common_metadata'])
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
 
 
 if fastparquet:

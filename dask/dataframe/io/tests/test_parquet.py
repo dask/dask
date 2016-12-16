@@ -20,7 +20,7 @@ def test_local():
                              'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
 
-        to_parquet(tmp, df, write_index=False)
+        to_parquet(tmp, df, write_index=False, object_encoding='utf8')
 
         files = os.listdir(tmp)
         assert '_metadata' in files
@@ -126,7 +126,7 @@ def test_categorical():
         df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100},
                           dtype='category')
         ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf)
+        to_parquet(tmp, ddf, object_encoding='utf8')
 
         ddf2 = read_parquet(tmp, categories=['x'])
 
