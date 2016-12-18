@@ -215,9 +215,9 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         header = b''
     else:
         header = sample.split(b_lineterminator)[0] + b_lineterminator
-    
+
     head = reader(BytesIO(sample), **kwargs)
-    
+
     ddf = text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce)
      
