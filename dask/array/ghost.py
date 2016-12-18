@@ -139,7 +139,7 @@ def ghost_internal(x, axes):
             chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
-                 name, chunks, dtype=x._dtype)
+                 name, chunks, dtype=x.dtype)
 
 
 def trim_internal(x, axes):
@@ -237,7 +237,7 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     c = wrap.full(tuple(map(sum, chunks)), value,
-                  chunks=tuple(chunks), dtype=x._dtype)
+                  chunks=tuple(chunks), dtype=x.dtype)
 
     return concatenate([c, x, c], axis=axis)
 

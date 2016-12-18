@@ -85,15 +85,15 @@ tasks:
 
 .. code-block:: python
 
-   from dask.distributed import Executor
-   e = Executor('scheduler:port')
+   from dask.distributed import Client
+   client = Client('scheduler:port')
 
    futures = []
    for fn in filenames:
-       future = e.submit(load, fn)
+       future = client.submit(load, fn)
        futures.append(future)
 
-   summary = e.submit(summarize, futures)
+   summary = client.submit(summarize, futures)
    summary.result()
 
 

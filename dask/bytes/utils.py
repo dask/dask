@@ -21,13 +21,15 @@ if sys.version_info[0] < 3:
 
         def writable(self):
             try:
-                return self.file.readable()
+                return self.file.writable()
             except AttributeError:
                 return 'w' in self.file.mode
 
-        @property
-        def read1(self):  # https://bugs.python.org/issue12591
-            return self.file.read
+        def read1(self, *args, **kwargs):  # https://bugs.python.org/issue12591
+            return self.file.read(*args, **kwargs)
+
+        def __iter__(self):
+            return self.file.__iter__()
 
         def __getattr__(self, key):
             return getattr(self.file, key)
@@ -112,8 +114,11 @@ def read_block(f, offset, length, delimiter=None):
         start = f.tell()
         length -= start - offset
 
-        f.seek(start + length)
-        seek_delimiter(f, delimiter, 2**16)
+        try:
+            f.seek(start + length)
+            seek_delimiter(f, delimiter, 2**16)
+        except ValueError:
+            f.seek(0, 2)
         end = f.tell()
 
         offset = start

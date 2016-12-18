@@ -1,5 +1,6 @@
 import os
 import pickle
+import functools
 
 import numpy as np
 import pytest
@@ -8,7 +9,8 @@ from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
-                        methodcaller, M)
+                        methodcaller, M, skip_doctest, SerializableLock,
+                        funcname)
 
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -107,6 +109,7 @@ def test_gh606():
         assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
 
 
+@pytest.mark.slow
 def test_random_state_data():
     seed = 37
     state = np.random.RandomState(seed)
@@ -198,3 +201,105 @@ def test_method_caller():
     assert M.count is f
     assert pickle.loads(pickle.dumps(f)) is f
     assert 'count' in dir(M)
+
+    assert 'count' in str(methodcaller('count'))
+    assert 'count' in repr(methodcaller('count'))
+
+
+def test_skip_doctest():
+    example = """>>> xxx
+>>>
+>>> # comment
+>>> xxx"""
+
+    res = skip_doctest(example)
+    assert res == """>>> xxx    # doctest: +SKIP
+>>>
+>>> # comment
+>>> xxx    # doctest: +SKIP"""
+
+    assert skip_doctest(None) == ''
+
+
+def test_SerializableLock():
+    a = SerializableLock()
+    b = SerializableLock()
+    with a:
+        pass
+
+    with a:
+        with b:
+            pass
+
+    with a:
+        assert not a.acquire(False)
+
+    a2 = pickle.loads(pickle.dumps(a))
+    a3 = pickle.loads(pickle.dumps(a))
+    a4 = pickle.loads(pickle.dumps(a2))
+
+    for x in [a, a2, a3, a4]:
+        for y in [a, a2, a3, a4]:
+            with x:
+                assert not y.acquire(False)
+
+    b2 = pickle.loads(pickle.dumps(b))
+    b3 = pickle.loads(pickle.dumps(b2))
+
+    for x in [a, a2, a3, a4]:
+        for y in [b, b2, b3]:
+            with x:
+                with y:
+                    pass
+            with y:
+                with x:
+                    pass
+
+
+def test_SerializableLock_name_collision():
+    a = SerializableLock('a')
+    b = SerializableLock('b')
+    c = SerializableLock('a')
+    d = SerializableLock()
+
+    assert a.lock is not b.lock
+    assert a.lock is c.lock
+    assert d.lock not in (a.lock, b.lock, c.lock)
+
+
+def test_funcname():
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(functools.partial(foo, a=1)) == 'foo'
+    assert funcname(M.sum) == 'sum'
+    assert funcname(lambda: 1) == 'lambda'
+
+    class Foo(object):
+        pass
+
+    assert funcname(Foo) == 'Foo'
+    assert 'Foo' in funcname(Foo())
+
+
+def test_funcname_toolz():
+    toolz = pytest.importorskip('toolz')
+
+    @toolz.curry
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(foo(1)) == 'foo'
+
+
+def test_funcname_multipledispatch():
+    md = pytest.importorskip('multipledispatch')
+
+    @md.dispatch(int, int, int)
+    def foo(a, b, c):
+        pass
+
+    assert funcname(foo) == 'foo'
+    assert funcname(functools.partial(foo, a=1)) == 'foo'

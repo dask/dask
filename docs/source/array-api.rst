@@ -115,8 +115,10 @@ Top level user functions:
    ravel
    real
    rechunk
+   repeat
    reshape
    rint
+   round
    sign
    signbit
    sin

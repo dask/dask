@@ -15,6 +15,9 @@ from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+from threading import Lock
+import uuid
+from weakref import WeakValueDictionary
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
                             urlsplit, unicode)
@@ -509,25 +512,54 @@ class Dispatch(object):
     """Simple single dispatch."""
     def __init__(self):
         self._lookup = {}
+        self._lazy = {}
 
-    def register(self, type, func):
+    def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
-        if isinstance(type, tuple):
-            for t in type:
-                self.register(t, func)
-        else:
-            self._lookup[type] = func
+        def wrapper(func):
+            if isinstance(type, tuple):
+                for t in type:
+                    self.register(t, func)
+            else:
+                self._lookup[type] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
+
+    def register_lazy(self, toplevel, func=None):
+        """
+        Register a registration function which will be called if the
+        *toplevel* module (e.g. 'pandas') is ever loaded.
+        """
+        def wrapper(func):
+            self._lazy[toplevel] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
 
     def __call__(self, arg):
-        # We dispatch first on type(arg), and fall back to iterating through
-        # the mro. This is significantly faster in the common case where
-        # type(arg) is in the lookup, with only a small penalty on fall back.
+        # Fast path with direct lookup on type
         lk = self._lookup
         typ = type(arg)
-        if typ in lk:
-            return lk[typ](arg)
+        try:
+            impl = lk[typ]
+        except KeyError:
+            pass
+        else:
+            return impl(arg)
+        # Is a lazy registration function present?
+        toplevel, _, _ = typ.__module__.partition('.')
+        try:
+            register = self._lazy.pop(toplevel)
+        except KeyError:
+            pass
+        else:
+            register()
+            return self(arg)  # recurse
+        # Walk the MRO and cache the lookup result
         for cls in inspect.getmro(typ)[1:]:
             if cls in lk:
+                lk[typ] = lk[cls]
                 return lk[cls](arg)
         raise TypeError("No dispatch for {0} type".format(typ))
 
@@ -544,10 +576,20 @@ def ensure_not_exists(filename):
 
 
 def _skip_doctest(line):
-    if '>>>' in line:
+    # NumPy docstring contains cursor and comment only example
+    stripped = line.strip()
+    if stripped == '>>>' or stripped.startswith('>>> #'):
+        return stripped
+    elif '>>>' in stripped:
         return line + '    # doctest: +SKIP'
     else:
         return line
+
+
+def skip_doctest(doc):
+    if doc is None:
+        return ''
+    return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
 
 
 def derived_from(original_klass, version=None, ua_args=[]):
@@ -589,7 +631,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
                         "        Dask doesn't supports following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
-            doc = '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+            doc = skip_doctest(doc)
             method.__doc__ = doc
             return method
 
@@ -607,17 +649,33 @@ def derived_from(original_klass, version=None, ua_args=[]):
     return wrapper
 
 
-def funcname(func, full=False):
+def funcname(func):
     """Get the name of a function."""
-    while hasattr(func, 'func'):
-        func = func.func
+    # functools.partial
+    if isinstance(func, functools.partial):
+        return funcname(func.func)
+    # methodcaller
+    if isinstance(func, methodcaller):
+        return func.method
+
+    module_name = getattr(func, '__module__', None) or ''
+    type_name = getattr(type(func), '__name__', None) or ''
+
+    # toolz.curry
+    if 'toolz' in module_name and 'curry' == type_name:
+        return func.func_name
+    # multipledispatch objects
+    if 'multipledispatch' in module_name and 'Dispatcher' == type_name:
+        return func.name
+
+    # All other callables
     try:
-        if full:
-            return func.__qualname__.strip('<>')
-        else:
-            return func.__name__.strip('<>')
+        name = func.__name__
+        if name == '<lambda>':
+            return 'lambda'
+        return name
     except:
-        return str(func).strip('<>')
+        return str(func)
 
 
 def ensure_bytes(s):
@@ -634,6 +692,24 @@ def ensure_bytes(s):
         return s
     if hasattr(s, 'encode'):
         return s.encode()
+    msg = "Object %s is neither a bytes object nor has an encode method"
+    raise TypeError(msg % s)
+
+
+def ensure_unicode(s):
+    """ Turn string or bytes to bytes
+
+    >>> ensure_unicode(u'123')
+    u'123'
+    >>> ensure_unicode('123')
+    u'123'
+    >>> ensure_unicode(b'123')
+    u'123'
+    """
+    if isinstance(s, unicode):
+        return s
+    if hasattr(s, 'decode'):
+        return s.decode()
     msg = "Object %s is neither a bytes object nor has an encode method"
     raise TypeError(msg % s)
 
@@ -871,6 +947,11 @@ class methodcaller(object):
     def __reduce__(self):
         return (methodcaller, (self.method,))
 
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.method)
+
+    __repr__ = __str__
+
 
 class MethodCache(object):
     """Attribute access on this object returns a methodcaller for that
@@ -887,3 +968,67 @@ class MethodCache(object):
 
 
 M = MethodCache()
+
+
+class SerializableLock(object):
+    _locks = WeakValueDictionary()
+    """ A Serializable per-process Lock
+
+    This wraps a normal ``threading.Lock`` object and satisfies the same
+    interface.  However, this lock can also be serialized and sent to different
+    processes.  It will not block concurrent operations between processes (for
+    this you should look at ``multiprocessing.Lock`` or ``locket.lock_file``
+    but will consistently deserialize into the same lock.
+
+    So if we make a lock in one process::
+
+        lock = SerializableLock()
+
+    And then send it over to another process multiple times::
+
+        bytes = pickle.dumps(lock)
+        a = pickle.loads(bytes)
+        b = pickle.loads(bytes)
+
+    Then the deserialized objects will operate as though they were the same
+    lock, and collide as appropriate.
+
+    This is useful for consistently protecting resources on a per-process
+    level.
+
+    The creation of locks is itself not threadsafe.
+    """
+    def __init__(self, token=None):
+        self.token = token or str(uuid.uuid4())
+        if self.token in SerializableLock._locks:
+            self.lock = SerializableLock._locks[self.token]
+        else:
+            self.lock = Lock()
+            SerializableLock._locks[self.token] = self.lock
+
+    def acquire(self, *args):
+        return self.lock.acquire(*args)
+
+    def release(self, *args):
+        return self.lock.release(*args)
+
+    def __enter__(self):
+        self.lock.__enter__()
+
+    def __exit__(self, *args):
+        self.lock.__exit__(*args)
+
+    @property
+    def locked(self):
+        return self.locked
+
+    def __getstate__(self):
+        return self.token
+
+    def __setstate__(self, token):
+        self.__init__(token)
+
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.token)
+
+    __repr__ = __str__

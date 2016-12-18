@@ -57,6 +57,7 @@ def repl_list(sd):
     else:
         return (list, x)
 
+
 rule6 = RewriteRule((list, 'x'), repl_list, ('x',))
 
 

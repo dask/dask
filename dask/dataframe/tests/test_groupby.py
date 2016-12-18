@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -6,7 +8,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph
+from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
 
 
 def groupby_internal_repr():
@@ -109,6 +111,28 @@ def test_full_groupby():
               ddf.groupby('a').apply(func))
 
 
+@pytest.mark.parametrize('grouper', [
+    lambda df: ['a'],
+    lambda df: ['a', 'b'],
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    pytest.mark.xfail(reason="not yet supported")(lambda df: [df['a'] > 2, df['b'] > 1])
+])
+def test_full_groupby_multilevel(grouper):
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'd': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    def func(df):
+        df['b'] = df.b - df.b.mean()
+        return df
+
+    assert_eq(df.groupby(grouper(df)).apply(func),
+              ddf.groupby(grouper(ddf)).apply(func))
+
+
 def test_groupby_dir():
     df = pd.DataFrame({'a': range(10), 'b c d e': range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -117,7 +141,8 @@ def test_groupby_dir():
     assert 'b c d e' not in dir(g)
 
 
-def test_groupby_on_index():
+@pytest.mark.parametrize('get', [dask.async.get_sync, dask.threaded.get])
+def test_groupby_on_index(get):
     full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                          'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
@@ -128,16 +153,17 @@ def test_groupby_on_index():
     assert_eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
 
     def func(df):
-        df.loc[:, 'b'] = df.b - df.b.mean()
-        return df
+        return df.assign(b=df.b - df.b.mean())
 
-    assert_eq(d.groupby('a').apply(func).set_index('a'),
-              e.groupby(e.index).apply(func))
-    assert_eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
-    assert_eq(d.groupby('a').apply(func).set_index('a'),
-              full.groupby('a').apply(func).set_index('a'))
-    assert_eq(efull.groupby(efull.index).apply(func),
-              e.groupby(e.index).apply(func))
+    with dask.set_options(get=get):
+        assert_eq(d.groupby('a').apply(func),
+                  full.groupby('a').apply(func))
+
+        assert_eq(d.groupby('a').apply(func).set_index('a'),
+                  full.groupby('a').apply(func).set_index('a'))
+
+        assert_eq(efull.groupby(efull.index).apply(func),
+                  e.groupby(e.index).apply(func))
 
 
 def test_groupby_multilevel_getitem():
@@ -150,6 +176,7 @@ def test_groupby_multilevel_getitem():
     cases = [(ddf.groupby('a')['b'], df.groupby('a')['b']),
              (ddf.groupby(['a', 'b']), df.groupby(['a', 'b'])),
              (ddf.groupby(['a', 'b'])['c'], df.groupby(['a', 'b'])['c']),
+             (ddf.groupby(ddf['a'])[['b', 'c']], df.groupby(df['a'])[['b', 'c']]),
              (ddf.groupby('a')[['b', 'c']], df.groupby('a')[['b', 'c']]),
              (ddf.groupby('a')[['b']], df.groupby('a')[['b']]),
              (ddf.groupby(['a', 'b', 'c']), df.groupby(['a', 'b', 'c']))]
@@ -177,6 +204,10 @@ def test_groupby_multilevel_agg():
 
     sol = df.groupby(['a', 'c']).mean()
     res = ddf.groupby(['a', 'c']).mean()
+    assert_eq(res, sol)
+
+    sol = df.groupby([df['a'], df['c']]).mean()
+    res = ddf.groupby([ddf['a'], ddf['c']]).mean()
     assert_eq(res, sol)
 
 
@@ -256,17 +287,6 @@ def test_series_groupby_errors():
 
     ss = dd.from_pandas(s, npartitions=2)
 
-    msg = "Grouper for '1' not 1-dimensional"
-    with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([1, 2])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([1, 2])   # dask should raise the same error
-    msg = "Grouper for '2' not 1-dimensional"
-    with tm.assertRaisesRegexp(ValueError, msg):
-        s.groupby([2])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
-        ss.groupby([2])   # dask should raise the same error
-
     msg = "No group keys passed!"
     with tm.assertRaisesRegexp(ValueError, msg):
         s.groupby([])    # pandas
@@ -286,8 +306,13 @@ def test_groupby_index_array():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
 
+    # first select column, then group
     assert_eq(df.A.groupby(df.index.month).nunique(),
               ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
+
+    # first group, then select column
+    assert_eq(df.groupby(df.index.month).A.nunique(),
+              ddf.groupby(ddf.index.month).A.nunique(), check_names=False)
 
 
 def test_groupby_set_index():
@@ -430,7 +455,8 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf.groupby('b').size(), 'dataframe-groupby-size')
 
 
-def test_groupby_reduction_split_every():
+@pytest.mark.parametrize('keyword', ['split_every', 'split_out'])
+def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100})
     ddf = dd.from_pandas(pdf, npartitions=15)
@@ -440,12 +466,12 @@ def test_groupby_reduction_split_every():
 
     # DataFrame
     for m in ['sum', 'min', 'max', 'count', 'mean', 'size', 'var', 'std']:
-        res = call(ddf.groupby('b'), m, split_every=2)
+        res = call(ddf.groupby('b'), m, **{keyword: 2})
         sol = call(pdf.groupby('b'), m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b'), m)._name != res._name
 
-    res = call(ddf.groupby('b'), 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b'), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b'), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b'), 'var', ddof=2)._name != res._name
@@ -453,12 +479,12 @@ def test_groupby_reduction_split_every():
     # Series, post select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.groupby('b').a, m, split_every=2)
+        res = call(ddf.groupby('b').a, m, **{keyword: 2})
         sol = call(pdf.groupby('b').a, m)
         assert_eq(res, sol)
         assert call(ddf.groupby('b').a, m)._name != res._name
 
-    res = call(ddf.groupby('b').a, 'var', split_every=2, ddof=2)
+    res = call(ddf.groupby('b').a, 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.groupby('b').a, 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby('b').a, 'var', ddof=2)._name != res._name
@@ -466,14 +492,14 @@ def test_groupby_reduction_split_every():
     # Series, pre select
     for m in ['sum', 'min', 'max', 'count', 'mean', 'nunique', 'size',
               'var', 'std']:
-        res = call(ddf.a.groupby(ddf.b), m, split_every=2)
+        res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
         assert call(ddf.a.groupby(ddf.b), m)._name != res._name
 
-    res = call(ddf.a.groupby(ddf.b), 'var', split_every=2, ddof=2)
+    res = call(ddf.a.groupby(ddf.b), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
     assert_eq(res, sol)
     assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
@@ -516,13 +542,44 @@ def test_apply_shuffle():
               pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
 
 
+@pytest.mark.parametrize('grouper', [
+    lambda df: 'AA',
+    lambda df: ['AA', 'AB'],
+    lambda df: df['AA'],
+    lambda df: [df['AA'], df['AB']],
+    lambda df: df['AA'] + 1,
+    pytest.mark.xfail("NotImplemented")(lambda df: [df['AA'] + 1, df['AB'] + 1]),
+])
+def test_apply_shuffle_multilevel(grouper):
+    pdf = pd.DataFrame({'AB': [1, 2, 3, 4] * 5,
+                        'AA': [1, 2, 3, 4] * 5,
+                        'B': np.random.randn(20),
+                        'C': np.random.randn(20),
+                        'D': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 3)
+
+    # DataFrameGroupBy
+    assert_eq(ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()))
+
+    # SeriesGroupBy
+    assert_eq(ddf.groupby(grouper(ddf))['B'].apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf))['B'].apply(lambda x: x.sum()))
+
+    # DataFrameGroupBy with column slice
+    assert_eq(ddf.groupby(grouper(ddf))[['B', 'C']].apply(lambda x: x.sum()),
+              pdf.groupby(grouper(pdf))[['B', 'C']].apply(lambda x: x.sum()))
+
+
 def test_numeric_column_names():
     # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1],
-                       1: [1, 2, 3, 4]})
+                       1: [1, 2, 3, 4],
+                       2: [0, 1, 0, 1],})
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
     assert_eq(ddf.groupby(0).apply(lambda x: x),
               df.groupby(0).apply(lambda x: x))
 
@@ -554,3 +611,355 @@ def test_groupby_multiprocessing():
     with dask.set_options(get=get):
         assert_eq(ddf.groupby('B').apply(lambda x: x),
                   df.groupby('B').apply(lambda x: x))
+
+
+def test_groupby_normalize_index():
+    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    d = dd.from_pandas(full, npartitions=3)
+
+    assert d.groupby('a').index == 'a'
+    assert d.groupby(d['a']).index == 'a'
+    assert d.groupby(d['a'] > 2).index._name == (d['a'] > 2)._name
+    assert d.groupby(['a', 'b']).index == ['a', 'b']
+
+    assert d.groupby([d['a'], d['b']]).index == ['a', 'b']
+    assert d.groupby([d['a'], 'b']).index == ['a', 'b']
+
+
+@pytest.mark.parametrize('spec', [
+    {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
+    {'b': 'mean', 'c': ['min', 'max']},
+    {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+    'var',
+])
+@pytest.mark.parametrize('split_every', [False, None])
+@pytest.mark.parametrize('grouper', [
+    lambda df: 'a',
+    lambda df: ['a', 'd'],
+    lambda df: [df['a'], df['d']],
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+])
+def test_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
+              ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+
+
+@pytest.mark.parametrize('spec', [
+    {'b': 'sum', 'c': 'min', 'd': 'max'},
+    ['sum'],
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+    'sum', 'size',
+])
+@pytest.mark.parametrize('split_every', [False, None])
+@pytest.mark.parametrize('grouper', [
+    lambda df: [df['a'], df['d']],
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+])
+def test_series_aggregate__examples(spec, split_every, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+    ps = pdf['c']
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    ds = ddf['c']
+
+    assert_eq(ps.groupby(grouper(pdf)).agg(spec),
+              ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+
+
+@pytest.mark.parametrize('spec', [
+    'sum', 'min', 'max', 'count', 'size', 'std', 'var', 'mean',
+])
+def test_aggregate__single_element_groups(spec):
+    pdf = pd.DataFrame({'a': [1, 1, 3, 3],
+                        'b': [4, 4, 16, 16],
+                        'c': [1, 1, 4, 4],
+                        'd': [1, 1, 3, 3]},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    expected = pdf.groupby(['a', 'd']).agg(spec)
+
+    # NOTE: for std the result is not recast ot the original dtype
+    if spec in {'mean', 'var'}:
+        expected = expected.astype(float)
+
+    assert_eq(expected,
+              ddf.groupby(['a', 'd']).agg(spec))
+
+
+def test_aggregate_build_agg_args__reuse_of_intermediates():
+    """Aggregate reuses intermediates. For example, with sum, count, and mean
+    the sums and counts are only calculated once accross the graph and reused to
+    compute the mean.
+    """
+    from dask.dataframe.groupby import _build_agg_args
+
+    no_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+    ]
+
+    with_mean_spec = [
+        ('foo', 'sum', 'input'),
+        ('bar', 'count', 'input'),
+        ('baz', 'mean', 'input'),
+    ]
+
+    no_mean_chunks, no_mean_aggs, no_mean_finalizers = _build_agg_args(no_mean_spec)
+    with_mean_chunks, with_mean_aggs, with_mean_finalizers = _build_agg_args(with_mean_spec)
+
+    assert len(no_mean_chunks) == len(with_mean_chunks)
+    assert len(no_mean_aggs) == len(with_mean_aggs)
+
+    assert len(no_mean_finalizers) == len(no_mean_spec)
+    assert len(with_mean_finalizers) == len(with_mean_spec)
+
+
+def test_aggregate__dask():
+    dask_holder = collections.namedtuple('dask_holder', ['dask'])
+    get_agg_dask = lambda obj: dask_holder({
+        k: v for (k, v) in obj.dask.items() if k[0].startswith('aggregate')
+    })
+
+    specs = [
+        {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
+        {'b': 'mean', 'c': ['min', 'max']},
+        ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var'],
+        'sum', 'mean', 'min', 'max', 'count', 'std', 'var',
+
+        # NOTE: the 'size' spec is special since it bypasses aggregate
+        #'size'
+    ]
+
+    pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+                        'd': [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100},
+                       columns=['c', 'b', 'a', 'd'])
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    for spec in specs:
+        result1 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+        result2 = ddf.groupby(['a', 'b']).agg(spec, split_every=2)
+
+        agg_dask1 = get_agg_dask(result1)
+        agg_dask2 = get_agg_dask(result2)
+
+        core_agg_dask1 = {k: v for (k, v) in agg_dask1.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        core_agg_dask2 = {k: v for (k, v) in agg_dask2.dask.items()
+                          if not k[0].startswith('aggregate-finalize')}
+
+        # check that the number of paritions used is fixed by split_every
+        assert_max_deps(agg_dask1, 2)
+        assert_max_deps(agg_dask2, 2)
+
+        # check for deterministic key names
+        # not finalize passes the meta object, which cannot tested with ==
+        assert core_agg_dask1 == core_agg_dask2
+
+        # the length of the dask does not depend on the passed spec
+        for other_spec in specs:
+            other = ddf.groupby(['a', 'b']).agg(other_spec, split_every=2)
+            assert len(other.dask) == len(result1.dask)
+            assert len(other.dask) == len(result2.dask)
+
+
+@pytest.mark.parametrize('agg_func', [
+    'sum', 'var', 'mean', 'count', 'size', 'std', 'nunique', 'min', 'max'
+])
+@pytest.mark.parametrize('grouper', [
+    lambda df: ['a'],
+    lambda df: ['a', 'b'],
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2, df['b'] > 1]
+])
+def test_dataframe_aggregations_multilevel(grouper, agg_func):
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'd': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a', 'd'])
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
+              call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
+
+    # not supported by pandas
+    if agg_func != 'nunique':
+        assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
+                  call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
+
+        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+
+
+@pytest.mark.parametrize('agg_func', [
+    'sum', 'var', 'mean', 'count', 'size', 'std', 'min', 'max', 'nunique',
+])
+@pytest.mark.parametrize('grouper', [
+    lambda df: df['a'],
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2, df['b'] > 1]
+])
+def test_series_aggregations_multilevel(grouper, agg_func):
+    """
+    similar to ``test_dataframe_aggregations_multilevel``, but series do not
+    support all groupby args.
+    """
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a'])
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    assert_eq(call(pdf['c'].groupby(grouper(pdf)), agg_func),
+              call(ddf['c'].groupby(grouper(ddf)), agg_func, split_every=2),
+              # for pandas ~ 0.18, the name is not not properly propagated for
+              # the mean aggregation
+              check_names=(agg_func not in {'mean', 'nunique'}))
+
+
+@pytest.mark.parametrize('grouper', [
+    lambda df: df['a'],
+    lambda df: df['a'] > 2,
+    lambda df: [df['a'], df['b']],
+    lambda df: [df['a'] > 2],
+    pytest.mark.xfail(reason="index dtype does not coincide: boolean != empty")(lambda df: [df['a'] > 2, df['b'] > 1])
+])
+@pytest.mark.parametrize('group_and_slice', [
+    lambda df, grouper: df.groupby(grouper(df)),
+    lambda df, grouper: df['c'].groupby(grouper(df)),
+    lambda df, grouper: df.groupby(grouper(df))['c'],
+])
+def test_groupby_meta_content(group_and_slice, grouper):
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a'])
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+
+    expected = group_and_slice(pdf, grouper).first().head(0)
+    meta = group_and_slice(ddf, grouper)._meta.first()
+    meta_nonempty = group_and_slice(ddf, grouper)._meta_nonempty.first().head(0)
+
+    assert_eq(expected, meta)
+    assert_eq(expected, meta_nonempty)
+
+
+def test_groupy_non_aligned_index():
+    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                        'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                       columns=['c', 'b', 'a'])
+
+    ddf3 = dd.from_pandas(pdf, npartitions=3)
+    ddf7 = dd.from_pandas(pdf, npartitions=7)
+
+    # working examples
+    ddf3.groupby(['a', 'b'])
+    ddf3.groupby([ddf3['a'], ddf3['b']])
+
+    # misaligned divisions
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby(ddf7['a'])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], ddf7['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], ddf3['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf3['a'], ddf7['b']])
+
+    with pytest.raises(NotImplementedError):
+        ddf3.groupby([ddf7['a'], 'b'])
+
+
+def test_groupy_series_wrong_grouper():
+    df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+                       'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+                       'c': [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10},
+                      columns=['c', 'b', 'a'])
+
+    df = dd.from_pandas(df, npartitions=3)
+    s = df['a']
+
+    # working index values
+    s.groupby(s)
+    s.groupby([s, s])
+
+    # non working index values
+    with pytest.raises(KeyError):
+        s.groupby('foo')
+
+    with pytest.raises(KeyError):
+        s.groupby([s, 'foo'])
+
+    with pytest.raises(ValueError):
+        s.groupby(df)
+
+    with pytest.raises(ValueError):
+        s.groupby([s, df])
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 20])
+@pytest.mark.parametrize('split_every', [2, 5])
+@pytest.mark.parametrize('split_out', [None, 1, 5, 20])
+def test_hash_groupby_aggregate(npartitions, split_every, split_out):
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100)})
+    ddf = dd.from_pandas(df, npartitions)
+
+    result = ddf.groupby('x').y.var(split_every=split_every,
+                                    split_out=split_out)
+
+    dsk = result._optimize(result.dask, result._keys())
+    from dask.core import get_deps
+    dependencies, dependents = get_deps(dsk)
+
+    assert result.npartitions == (split_out or 1)
+    assert len([k for k, v in dependencies.items() if not v]) == npartitions
+
+    assert_eq(result, df.groupby('x').y.var())
+
+
+def test_split_out_multi_column_groupby():
+    df = pd.DataFrame({'x': np.arange(100) % 10,
+                       'y': np.ones(100),
+                       'z': [1, 2, 3, 4, 5] * 20})
+
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    result = ddf.groupby(['x', 'y']).z.mean(split_out=4)
+    expected = df.groupby(['x', 'y']).z.mean()
+
+    assert_eq(result, expected, check_dtype=False)

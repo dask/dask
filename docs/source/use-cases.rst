@@ -125,8 +125,8 @@ the analyst is already very comfortable.
 
 .. code-block:: python
 
-   from dask.distributed import Executor
-   e = Executor('cluster-address:8786')
+   from dask.distributed import Client
+   client = Client('cluster-address:8786')
 
    import dask.dataframe as dd
    df = dd.read_csv('hdfs://data/2016-*.*.csv', parse_dates=['timestamp'])
@@ -227,9 +227,9 @@ parallelize and load balance the work.
 .. code-block:: python
 
 
-   from dask.distributed import Executor
-   e = Executor("cluster-address:8786")
-   results = compute(*values, get=e.get)
+   from dask.distributed import Client
+   client = Client("cluster-address:8786")
+   results = compute(*values, get=client.get)
 
 
 Complex dependencies

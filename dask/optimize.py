@@ -34,18 +34,26 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out = dict()
+    out_keys = []
     seen = set()
     dependencies = dict()
-    stack = list(set(flatten(keys)))
-    while stack:
-        key = stack.pop()
-        out[key] = dsk[key]
-        deps = get_dependencies(dsk, key, as_list=True)  # fuse needs lists
-        dependencies[key] = deps
-        unseen = [d for d in deps if d not in seen]
-        stack.extend(unseen)
-        seen.update(unseen)
+
+    work = list(set(flatten(keys)))
+    while work:
+        new_work = []
+        out_keys += work
+        deps = [(k, get_dependencies(dsk, k, as_list=True))  # fuse needs lists
+                for k in work]
+        dependencies.update(deps)
+        for _, deplist in deps:
+            for d in deplist:
+                if d not in seen:
+                    seen.add(d)
+                    new_work.append(d)
+        work = new_work
+
+    out = {k: dsk[k] for k in out_keys}
+
     return out, dependencies
 
 
@@ -86,8 +94,8 @@ def fuse(dsk, keys=None, dependencies=None):
         keys = set(flatten(keys))
 
     if dependencies is None:
-        dependencies = dict((key, get_dependencies(dsk, key, as_list=True))
-                            for key in dsk)
+        dependencies = {k: get_dependencies(dsk, k, as_list=True)
+                        for k in dsk}
 
     # locate all members of linear chains
     child2parent = {}
@@ -182,7 +190,8 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     keys = _flat_set(keys)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k)
+                        for k in dsk}
 
     if inline_constants:
         keys.update(k for k, v in dsk.items() if
@@ -245,12 +254,14 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     fast_functions = set(fast_functions)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k)
+                        for k in dsk}
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
             if istask(v) and functions_of(v).issubset(fast_functions) and
-            dependents[k] and k not in output]
+            dependents[k] and k not in output
+            ]
 
     if keys:
         dsk = inline(dsk, keys, inline_constants=inline_constants,
@@ -258,6 +269,12 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
         for k in keys:
             del dsk[k]
     return dsk
+
+
+def unwrap_partial(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    return func
 
 
 def functions_of(task):
@@ -269,20 +286,23 @@ def functions_of(task):
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
     """
-    if istask(task):
-        args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
-        return set([unwrap_partial(task[0])]) | args
-    if isinstance(task, (list, tuple)):
-        if not task:
-            return set()
-        return set.union(*map(functions_of, task))
-    return set()
+    funcs = set()
 
+    work = [task]
+    sequence_types = {list, tuple}
 
-def unwrap_partial(func):
-    while hasattr(func, 'func'):
-        func = func.func
-    return func
+    while work:
+        new_work = []
+        for task in work:
+            if type(task) in sequence_types:
+                if istask(task):
+                    funcs.add(unwrap_partial(task[0]))
+                    new_work += task[1:]
+                else:
+                    new_work += task
+        work = new_work
+
+    return funcs
 
 
 def dealias(dsk, keys=None, dependencies=None):
@@ -321,7 +341,8 @@ def dealias(dsk, keys=None, dependencies=None):
         keys = set(keys)
 
     if not dependencies:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k)
+                        for k in dsk}
 
     aliases = set(k for k, task in dsk.items() if
                   ishashable(task) and task in dsk)
@@ -523,6 +544,7 @@ def merge_sync(dsk1, dsk2):
         new_dsk[new_key] = task
     return new_dsk, sd
 
+
 # store the name iterator in the function
 merge_sync.names = ('merge_%d' % i for i in count(1))
 
@@ -545,6 +567,8 @@ def fuse_selections(dsk, head1, head2, merge):
         Takes ``task1`` and ``task2`` and returns a merged task to
         replace ``task1``.
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
@@ -579,6 +603,8 @@ def fuse_getitem(dsk, func, place):
     place: int
         Location in task to insert the getitem key
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),

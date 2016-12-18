@@ -6,10 +6,11 @@ import uuid
 
 import numpy as np
 import pandas as pd
-from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
+from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat
+from .hashing import hash_pandas_object
 
 from ..base import tokenize
 from ..context import _globals
@@ -135,8 +136,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
                               max_branch=max_branch, shuffle=shuffle,
                               compute=compute)
-
-    df4 = df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
     return df4
 
 
@@ -148,7 +148,9 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)
-    return df3.drop('_partitions', axis=1, dtype=df.columns.dtype)
+    df4 = df3.drop('_partitions', axis=1)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
+    return df4
 
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
@@ -280,8 +282,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
-        parts = partitioning_index(pd.Series(range(npartitions)),
-                                   df.npartitions)
+        parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
                for i, k in enumerate(df2._keys())}
@@ -304,7 +305,8 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
 
 
 def partitioning_index(df, npartitions):
-    """Computes a deterministic index mapping each record to a partition.
+    """
+    Computes a deterministic index mapping each record to a partition.
 
     Identical rows are mapped to the same partition.
 
@@ -319,35 +321,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    if isinstance(df, (pd.Series, pd.Index)):
-        h = hash_series(df).astype('int64')
-    elif isinstance(df, pd.DataFrame):
-        cols = df.iteritems()
-        h = hash_series(next(cols)[1]).astype('int64')
-        for _, col in cols:
-            h = np.multiply(h, 3, h)
-            h = np.add(h, hash_series(col), h)
-    else:
-        raise TypeError("Unexpected type %s" % type(df))
-    return h % int(npartitions)
-
-
-def hash_series(s):
-    """Given a series, return a numpy array of deterministic integers."""
-    vals = s.values
-    dt = vals.dtype
-    if is_categorical_dtype(dt):
-        return vals.codes
-    elif np.issubdtype(dt, np.integer):
-        return vals
-    elif np.issubdtype(dt, np.floating):
-        return np.nan_to_num(vals).view('i' + str(dt.itemsize))
-    elif dt == np.bool:
-        return vals.view('int8')
-    elif np.issubdtype(dt, np.datetime64) or np.issubdtype(dt, np.timedelta64):
-        return vals.view('int64')
-    else:
-        return s.apply(hash).values
+    return hash_pandas_object(df, index=False) % int(npartitions)
 
 
 def barrier(args):
@@ -381,7 +355,10 @@ def shuffle_group_get(g_head, i):
 
 
 def shuffle_group(df, col, stage, k, npartitions):
-    ind = partitioning_index(df[col], npartitions)
+    if col == '_partitions':
+        ind = df[col].values % npartitions
+    else:
+        ind = partitioning_index(df[col], npartitions)
     c = ind // k ** stage % k
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}

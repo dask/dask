@@ -114,7 +114,9 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     df : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a dask DataFrame/Series
     npartitions : int, optional
-        The number of partitions of the index to create.
+        The number of partitions of the index to create. Note that depending on
+        the size and index of the dataframe, the output may have fewer
+        partitions than requested.
     chunksize : int, optional
         The size of the partitions of the index.
     sort: bool
@@ -465,6 +467,18 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
+def to_records(df):
+    from ...array.core import Array
+    if not isinstance(df, (DataFrame, Series)):
+        raise TypeError("df must be either DataFrame or Series")
+    name = 'to-records-' + tokenize(df)
+    dsk = {(name, i): (M.to_records, key)
+           for (i, key) in enumerate(df._keys())}
+    x = df._meta.to_records()
+    chunks = ((np.nan,) * df.npartitions,)
+    return Array(merge(df.dask, dsk), name, chunks, x.dtype)
+
+
 @insert_meta_param_description
 def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
                  metadata=None):
@@ -507,15 +521,14 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     else:
         Frame = DataFrame
 
+    df = Frame(dsk3, name, meta, [None] * (len(dfs) + 1))
+
     if divisions == 'sorted':
         from ..core import compute_divisions
-        divisions = [None] * (len(dfs) + 1)
-        df = Frame(dsk3, name, meta, divisions)
-        return compute_divisions(df)
-    elif divisions is None:
-        divisions = [None] * (len(dfs) + 1)
+        divisions = compute_divisions(df)
+        df.divisions = divisions
 
-    return Frame(dsk3, name, meta, divisions)
+    return df
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):

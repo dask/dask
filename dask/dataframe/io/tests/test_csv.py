@@ -486,7 +486,7 @@ def test_read_csv_raises_on_no_files():
     try:
         dd.read_csv(fn)
         assert False
-    except IOError as e:
+    except (OSError, IOError) as e:
         assert fn in str(e)
 
 
@@ -667,6 +667,17 @@ def test_read_csv_singleton_dtype():
                   dd.read_csv(fn, dtype=float))
 
 
+def test_robust_column_mismatch():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b'name', b'Name')
+    with filetexts(files, mode='b'):
+        ddf = dd.read_csv('2014-01-*.csv')
+        df = pd.read_csv('2014-01-01.csv')
+        assert (df.columns == ddf.columns).all()
+        assert_eq(ddf, ddf)
+
+
 ############
 #  to_csv  #
 ############
@@ -769,3 +780,22 @@ def test_to_csv_series():
         result = dd.read_csv(os.path.join(dir, '*'), header=None,
                              names=['x']).compute()
     assert (result.x == df0).all()
+
+
+def test_to_csv_with_get():
+    from dask.multiprocessing import get as mp_get
+    flag = [False]
+
+    def my_get(*args, **kwargs):
+        flag[0] = True
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpdir() as dn:
+        ddf.to_csv(dn, index=False, get=my_get)
+        assert flag[0]
+        result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
+        assert_eq(result, df)

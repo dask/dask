@@ -3,13 +3,16 @@ from __future__ import absolute_import, division, print_function
 from itertools import product
 from math import ceil
 from numbers import Number
-from operator import getitem, add
+from operator import getitem, add, itemgetter
 
 import numpy as np
-from toolz import merge, first, accumulate, pluck
+from toolz import merge, accumulate, pluck, memoize
 
 from ..base import tokenize
 from ..compatibility import long
+
+
+colon = slice(None, None, None)
 
 
 def sanitize_index(ind):
@@ -148,23 +151,35 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     # Strip Nones from index
     index2 = tuple([ind for ind in index if ind is not None])
     where_none = [i for i, ind in enumerate(index) if ind is None]
+    where_none_orig = list(where_none)
+    for i, x in enumerate(where_none):
+        n = sum(isinstance(ind, int) for ind in index[:x])
+        if n:
+            where_none[i] -= n
 
     # Pass down and do work
     dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
 
-    # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
-    dsk2 = dict(((out_name,) + insert_many(k[1:], where_none, 0),
-                 (v[:2] + (insert_many(v[2], where_none, None),)))
+    if where_none:
+        expand = expander(where_none)
+        expand_orig = expander(where_none_orig)
+
+        # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
+        dsk2 = {(out_name,) + expand(k[1:], 0):
+                (v[:2] + (expand_orig(v[2], None),))
                 for k, v in dsk.items()
-                if k[0] == out_name)
+                if k[0] == out_name}
 
-    # Add back intermediate parts of the dask that weren't the output
-    dsk3 = merge(dsk2, dict((k, v) for k, v in dsk.items() if k[0] != out_name))
+        # Add back intermediate parts of the dask that weren't the output
+        dsk3 = merge(dsk2, {k: v for k, v in dsk.items() if k[0] != out_name})
 
-    # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
-    blockdims3 = insert_many(blockdims2, where_none, (1,))
+        # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
+        blockdims3 = expand(blockdims2, (1,))
 
-    return dsk3, blockdims3
+        return dsk3, blockdims3
+
+    else:
+        return dsk, blockdims2
 
 
 def slice_wrap_lists(out_name, in_name, blockdims, index):
@@ -194,14 +209,14 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
+    # No lists, hooray! just use slice_slices_and_integers
+    if not where_list:
+        return slice_slices_and_integers(out_name, in_name, blockdims, index2)
+
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
                                if isinstance(i, list) else i
                                for i in index2)
-
-    # No lists, hooray! just use slice_slices_and_integers
-    if index2 == index_without_list:
-        return slice_slices_and_integers(out_name, in_name, blockdims, index2)
 
     # lists and full slices.  Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
@@ -239,6 +254,10 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     """
     shape = tuple(map(sum, blockdims))
 
+    for dim, ind in zip(shape, index):
+        if np.isnan(dim) and ind != slice(None, None, None):
+            raise ValueError("Arrays chunk sizes are unknown: %s", shape)
+
     assert all(isinstance(ind, (slice, int, long)) for ind in index)
     assert len(index) == len(blockdims)
 
@@ -257,9 +276,9 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
-    dsk_out = dict((out_name, (getitem, in_name, slices))
-                   for out_name, in_name, slices
-                   in zip(out_names, in_names, all_slices))
+    dsk_out = {out_name: (getitem, in_name, slices)
+               for out_name, in_name, slices
+               in zip(out_names, in_names, all_slices)}
 
     new_blockdims = [new_blockdim(d, db, i)
                      for d, i, db in zip(shape, index, blockdims)
@@ -293,6 +312,11 @@ def _slice_1d(dim_shape, lengths, index):
 
     Examples
     --------
+
+    Trivial slicing
+
+    >>> _slice_1d(100, [60, 40], slice(None, None, None))
+    {0: slice(None, None, None), 1: slice(None, None, None)}
 
     100 length array cut into length 20 pieces, slice 0:35
 
@@ -338,6 +362,9 @@ def _slice_1d(dim_shape, lengths, index):
         return {i: ind}
 
     assert isinstance(index, slice)
+
+    if index == colon:
+        return {k: colon for k in range(len(lengths))}
 
     step = index.step or 1
     if step > 0:
@@ -426,9 +453,6 @@ def issorted(seq):
             return False
         x = elem
     return True
-
-
-colon = slice(None, None, None)
 
 
 def take_sorted(outname, inname, blockdims, index, axis=0):
@@ -571,6 +595,42 @@ def insert_many(seq, where, val):
     return tuple(result)
 
 
+@memoize
+def _expander(where):
+    if not where:
+        def expand(seq, val):
+            return seq
+        return expand
+    else:
+        decl = """def expand(seq, val):
+            return ({left}) + tuple({right})
+        """
+        left = []
+        j = 0
+        for i in range(max(where) + 1):
+            if i in where:
+                left.append("val, ")
+            else:
+                left.append("seq[%d], " % j)
+                j += 1
+        right = "seq[%d:]" % j
+        left = "".join(left)
+        decl = decl.format(**locals())
+        ns = {}
+        exec(compile(decl, "<dynamic>", "exec"), ns, ns)
+        return ns['expand']
+
+
+def expander(where):
+    """ An optimized version of insert_many() when *where*
+    is known upfront and used many times.
+
+    >>> expander([0, 2])(['a', 'b', 'c'], 'z')
+    ('z', 'a', 'z', 'b', 'c')
+    """
+    return _expander(tuple(where))
+
+
 def new_blockdim(dim_shape, lengths, index):
     """
 
@@ -583,10 +643,13 @@ def new_blockdim(dim_shape, lengths, index):
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(90, 10, -2))
     [16, 5, 10, 5, 4]
     """
+    if index == slice(None, None, None):
+        return lengths
     if isinstance(index, list):
         return [len(index)]
     assert not isinstance(index, (int, long))
-    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
+    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(),
+                   key=itemgetter(0))
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
               for i, slc in pairs]
     if isinstance(index, slice) and index.step and index.step < 0:
@@ -599,14 +662,18 @@ def replace_ellipsis(n, index):
 
     >>> replace_ellipsis(4, (3, Ellipsis, 2))
     (3, slice(None, None, None), slice(None, None, None), 2)
+
+    >>> replace_ellipsis(2, (Ellipsis, None))
+    (slice(None, None, None), slice(None, None, None), None)
     """
     # Careful about using in or index because index may contain arrays
     isellipsis = [i for i, ind in enumerate(index) if ind is Ellipsis]
+    extra_dimensions = n - (len(index) - sum(i is None for i in index) - 1)
     if not isellipsis:
         return index
     else:
         loc = isellipsis[0]
-    return (index[:loc] + (slice(None, None, None),) * (n - len(index) + 1) +
+    return (index[:loc] + (slice(None, None, None),) * extra_dimensions +
             index[loc + 1:])
 
 
@@ -651,6 +718,6 @@ def check_index(ind, dimension):
         raise IndexError("Index is not smaller than dimension %d >= %d" %
                          (ind, dimension))
 
-    elif ind <= -dimension:
+    elif ind < -dimension:
         msg = "Negative index is not greater than negative dimension %d <= -%d"
         raise IndexError(msg % (ind, dimension))

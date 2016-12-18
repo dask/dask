@@ -5,6 +5,13 @@ from .io import dataframe_from_ctable
 from ..optimize import cull, fuse_getitem, fuse_selections
 from .. import core
 
+try:
+    import fastparquet  # noqa: F401
+except ImportError:
+    _read_parquet_row_group = False
+else:
+    from .io.parquet import _read_parquet_row_group
+
 
 def fuse_castra_index(dsk):
     from castra import Castra
@@ -26,5 +33,9 @@ def optimize(dsk, keys, **kwargs):
     except ImportError:
         dsk4 = dsk2
     dsk5 = fuse_getitem(dsk4, dataframe_from_ctable, 3)
-    dsk6, _ = cull(dsk5, keys)
-    return dsk6
+    if _read_parquet_row_group:
+        dsk6 = fuse_getitem(dsk5, _read_parquet_row_group, 4)
+    else:
+        dsk6 = dsk5
+    dsk7, _ = cull(dsk6, keys)
+    return dsk7
