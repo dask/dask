@@ -115,8 +115,6 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text)
     dfs = []
-    #print("block lists: %s" % str(block_lists))
-    #print(header)
     for blocks in block_lists:
         if not blocks:
             continue
@@ -217,9 +215,9 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         header = b''
     else:
         header = sample.split(b_lineterminator)[0] + b_lineterminator
-    
+
     head = reader(BytesIO(sample), **kwargs)
-    
+
     ddf = text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce)
      
