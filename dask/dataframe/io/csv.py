@@ -166,7 +166,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "index column is already sorted, you can "
                          "use dd.{0}(..., sorted_index = 'my-index') "
                          "instead.".format(reader_name))
-    if 'sorted_index_col' is not None:
+    if sorted_index_col is not None:
         warn("Setting an index by providing an index column is experimental. "
              "It is upon your responsibility to asure, that the specified "
              "index column is sorted. "
