@@ -229,27 +229,6 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         assert(blocksize == None)
         ddf.divisions = divisions
     
-    #if a sorted index column is specified, but divisions are unknown,
-    #try to calculate them efficiently    
-    if divisions is None and sorted_index_col is not None:
-        #get sample from each block that contains header and first line
-        samples, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                blocksize=blocksize,
-                                sample=sample,
-                                compression=compression, samples_per_block = True,
-                                **(storage_options or {}))
-        #index of first line is division of each block 
-        divisions = []
-        for s in samples:
-            pdf = reader(BytesIO(s), **kwargs)
-            print(pdf)    
-            divisions.append(pdf.index.values[0])
-        
-        #last division is last index of last block
-        #current implementation is inefficient!!!
-        last_division = ddf.to_delayed()[-1].compute().index.values[-1]
-        divisions.append(last_division)
-        ddf.divisions = divisions
     return ddf  
 
 READ_DOC_TEMPLATE = """
