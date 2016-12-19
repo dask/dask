@@ -166,7 +166,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "index column is already sorted, you can "
                          "use dd.{0}(..., sorted_index = 'my-index') "
                          "instead.".format(reader_name))
-    if 'sorted_index_col' is not None:
+    if sorted_index_col is not None:
         warn("Setting an index by providing an index column is experimental. "
              "It is upon your responsibility to asure, that the specified "
              "index column is sorted. "
@@ -228,7 +228,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         ddf.divisions = divisions
     
     #if a sorted index column is specified, but divisions are unknown,
-    #try to calculate them efficiently    
+    #try to calculate them efficiently by sampling one data row per block   
     if divisions is None and sorted_index_col is not None:
         #get sample from each block that contains header and first line
         samples, values = read_bytes(urlpath, delimiter=b_lineterminator,

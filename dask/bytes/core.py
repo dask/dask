@@ -208,14 +208,20 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                 sample = read_block(f, 0, nbytes, delimiter)
         return sample, out
     
-    
+    # Return sample of each block containing two rows
+    # i.e. either header and one data row or two data rows.
+    # Returning data is important to enable reading in divisions  
     elif samples_per_block is True:
         nbytes = 10000
         samples = []
         for path, offset, length, machine in zip(paths, offsets, lengths, machines):
-            with myopen(path, 'rb') as f:            
-                samples_dummy = [read_block(f, 0, nbytes, delimiter, number_of_delimiters=2)
-                     for (o, key, l) in zip(offset, keys, length)]
+            with myopen(path, 'rb') as f:
+                header = read_block(f, offset[0], nbytes, delimiter, number_of_delimiters=1)
+                #beginning of file: read two lines (head + first data row)            
+                samples.append(read_block(f, offset[0], nbytes, delimiter, number_of_delimiters=2))
+                #block within file: append one data row to known header
+                samples_dummy = [header + read_block(f, o, nbytes, delimiter, number_of_delimiters=1)
+                     for o in offset[1:]]
                 samples.extend(samples_dummy)
         return samples, out
                        
