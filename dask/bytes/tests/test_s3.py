@@ -326,7 +326,7 @@ def test_parquet_wstoragepars(s3):
     df = dd.from_pandas(data, chunksize=500)
     to_parquet(url, df, write_index=False)
 
-    df2 = read_parquet(url, storage_options={'default_fill_cache': False})
+    read_parquet(url, storage_options={'default_fill_cache': False})
     assert s3.current().default_fill_cache is False
-    df2 = read_parquet(url, storage_options={'default_fill_cache': True})
+    read_parquet(url, storage_options={'default_fill_cache': True})
     assert s3.current().default_fill_cache is True
