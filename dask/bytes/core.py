@@ -98,7 +98,7 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+               sample=True, compression=None, samples_per_block = False, **kwargs):
     """ Convert path to a list of delayed values
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -197,15 +197,28 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                                            'loose_restrictions': list(restrictions),
                                            'client': client.id})
 
-    if sample is not True:
-        nbytes = sample
-    else:
+    if samples_per_block is False:
+        if sample is not True:
+            nbytes = sample
+        else:
+            nbytes = 10000
+        if sample:
+            # myopen = OpenFileCreator(urlpath, compression)
+            with myopen(paths[0], 'rb') as f:
+                sample = read_block(f, 0, nbytes, delimiter)
+        return sample, out
+    
+    
+    elif samples_per_block is True:
         nbytes = 10000
-    if sample:
-        # myopen = OpenFileCreator(urlpath, compression)
-        with myopen(paths[0], 'rb') as f:
-            sample = read_block(f, 0, nbytes, delimiter)
-    return sample, out
+        samples = []
+        for path, offset, length, machine in zip(paths, offsets, lengths, machines):
+            with myopen(path, 'rb') as f:            
+                samples_dummy = [read_block(f, 0, nbytes, delimiter, number_of_delimiters=2)
+                     for (o, key, l) in zip(offset, keys, length)]
+                samples.extend(samples_dummy)
+        return samples, out
+                       
 
 
 def read_block_from_file(lazy_file, off, bs, delimiter):
