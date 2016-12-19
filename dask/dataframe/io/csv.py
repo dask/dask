@@ -168,9 +168,9 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "instead.".format(reader_name))
     if sorted_index_col is not None:
         warn("Setting an index by providing an index column is experimental. "
-             "It is upon your responsibility to asure, that the specified "
+             "It is your responsibility to make sure, that the specified "
              "index column is sorted. "
-             "The recomendet way of use is dd.{0}(...).set_index('my-index')")
+             "The recomendet way of use is dd.{0}(...).set_index_col('my-index')")
         kwargs['index_col'] = sorted_index_col
     if divisions is not None and blocksize is not None:
         raise ValueError("If you want to provide divisions, please set the "
