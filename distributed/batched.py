@@ -50,6 +50,7 @@ class BatchedSend(object):
         self.stream = None
         self.message_count = 0
         self.batch_count = 0
+        self.byte_count = 0
         self.next_deadline = None
 
     def start(self, stream):
@@ -79,7 +80,8 @@ class BatchedSend(object):
             self.batch_count += 1
             self.next_deadline = self.loop.time() + self.interval
             try:
-                yield write(self.stream, payload)
+                nbytes = yield write(self.stream, payload)
+                self.byte_count += nbytes
             except StreamClosedError:
                 logger.info("Batched Stream Closed")
                 break

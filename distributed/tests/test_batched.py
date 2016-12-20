@@ -77,6 +77,8 @@ def test_BatchedSend():
         result = yield read(stream); assert result == ['hello', 'hello', 'world']
         result = yield read(stream); assert result == ['HELLO', 'HELLO']
 
+        assert b.byte_count > 1
+
 
 @gen_test()
 def test_send_before_start():

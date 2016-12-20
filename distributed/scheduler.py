@@ -220,7 +220,7 @@ class Scheduler(Server):
         self.nbytes = dict()
         self.worker_bytes = dict()
         self.processing = dict()
-        self.rprocessing = defaultdict(set)
+        self.rprocessing = dict()
         self.task_duration = {prefix: 0.00001 for prefix in fast_tasks}
         self.unknown_durations = defaultdict(set)
         self.host_restrictions = dict()
@@ -241,6 +241,7 @@ class Scheduler(Server):
         self.tracebacks = dict()
         self.exceptions_blame = dict()
         self.datasets = dict()
+        self.n_tasks = 0
 
         self.idle = SortedSet()
         self.saturated = set()
@@ -526,7 +527,11 @@ class Scheduler(Server):
             if recommendations:
                 self.transitions(recommendations)
 
-            # self.(address)
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.add_worker(scheduler=self, worker=address)
+                except Exception as e:
+                    logger.exception(e)
 
             logger.info("Register %s", str(address))
             return 'OK'
@@ -769,6 +774,12 @@ class Scheduler(Server):
                         recommendations[key] = 'forgotten'
 
             self.transitions(recommendations)
+
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.remove_worker(scheduler=self, worker=address)
+                except Exception as e:
+                    logger.exception(e)
 
             if not self.processing:
                 logger.info("Lost all workers")
@@ -1845,12 +1856,12 @@ class Scheduler(Server):
                 if len(self.idle) < 20:  # smart but linear in small case
                     worker = min(self.idle, key=self.occupancy.get)
                 else:  # dumb but fast in large case
-                    worker = random.choice(self.idle)
+                    worker = self.idle[self.n_tasks % len(self.idle)]
             else:
                 if len(self.workers) < 20:  # smart but linear in small case
                     worker = min(self.workers, key=self.occupancy.get)
                 else:  # dumb but fast in large case
-                    worker = random.choice(self.workers)
+                    worker = self.workers[self.n_tasks % len(self.workers)]
 
             assert worker
 
@@ -1862,12 +1873,13 @@ class Scheduler(Server):
                 duration = 0.5
 
             self.processing[worker][key] = duration
-            self.rprocessing[key].add(worker)
+            self.rprocessing[key] = {worker}
             self.occupancy[worker] += duration
             self.total_occupancy += duration
             self.task_state[key] = 'processing'
             self.consume_resources(key, worker)
             self.check_idle_saturated(worker)
+            self.n_tasks += 1
 
             # logger.debug("Send job to worker: %s, %s", worker, key)
 
@@ -2531,7 +2543,7 @@ class Scheduler(Server):
                 self.idle.remove(worker)
 
             pending = occ * (p - nc) / nc
-            if p > nc and pending > 0.2 and pending > 1.9 * avg:
+            if p > nc and pending > 0.4 and pending > 1.9 * avg:
                 self.saturated.add(worker)
 
     def valid_workers(self, key):

@@ -1276,15 +1276,10 @@ class Worker(WorkerBase):
 
     @gen.coroutine
     def query_who_has(self, *deps):
-        try:
+        with log_errors():
             response = yield self.scheduler.who_has(keys=deps)
             self.update_who_has(response)
             raise gen.Return(response)
-        except Exception as e:
-            logger.exception(e)
-            if LOG_PDB:
-                import pdb; pdb.set_trace()
-            raise
 
     def update_who_has(self, who_has):
         try:

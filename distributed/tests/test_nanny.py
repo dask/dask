@@ -151,4 +151,4 @@ def test_close_on_disconnect(s, w):
     start = time()
     while w.status != 'closed':
         yield gen.sleep(0.01)
-        assert time() < start + 5
+        assert time() < start + 9

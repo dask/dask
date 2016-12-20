@@ -828,3 +828,18 @@ def test_learn_occupancy_2(c, s, a, b):
         yield gen.sleep(0.01)
 
     assert 50 < s.total_occupancy < 200
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 30)
+def test_balance_many_workers(c, s, *workers):
+    futures = c.map(slowinc, range(20), delay=0.2)
+    yield _wait(futures)
+    assert set(map(len, s.has_what.values())) == {0, 1}
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 30)
+def test_balance_many_workers_2(c, s, *workers):
+    s.extensions['stealing']._pc.callback_time = 100000000
+    futures = c.map(slowinc, range(90), delay=0.2)
+    yield _wait(futures)
+    assert set(map(len, s.has_what.values())) == {3}

@@ -1,12 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
+import itertools
+from functools import partial
 from operator import mul
 import random
 import sys
 from time import sleep
 
 import pytest
-from toolz import sliding_window
+from toolz import sliding_window, concat
 from tornado import gen
 
 import dask
@@ -14,6 +16,7 @@ from dask import delayed
 from distributed import Worker
 from distributed.client import Client, _wait, wait
 from distributed.metrics import time
+from distributed.scheduler import BANDWIDTH, key_split
 from distributed.utils_test import (cluster, slowinc, slowadd, randominc,
         loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep,
         slowidentity)
@@ -333,3 +336,105 @@ def test_steal_more_attractive_tasks(c, s, a, *rest):
 
     # good future moves first
     assert any(future.key in w.task_state for w in rest)
+
+
+def func(x):
+    sleep(1)
+    pass
+
+
+def assert_balanced(inp, out, c, s, *workers):
+    steal = s.extensions['stealing']
+    steal._pc.callback_time = 1000000000
+    counter = itertools.count()
+    B = BANDWIDTH
+    tasks = list(concat(inp))
+    data = yield c._scatter(range(len(tasks)))
+
+    for t, f in zip(tasks, data):
+        s.nbytes[f.key] = BANDWIDTH * t
+        s.task_duration[str(int(t))] = 1
+
+    futures = []
+    data_seq = iter(data)
+    for w, ts in zip(workers, inp):
+        for t in ts:
+            dat = next(data_seq) if t else 123
+            f = c.submit(func, dat, key='%d-%d' % (int(t), next(counter)),
+                         workers=w.address, allow_other_workers=True)
+            futures.append(f)
+
+    while not any(s.processing.values()):
+        yield gen.sleep(0.001)
+
+    s.extensions['stealing'].balance()
+
+    result = [sorted([int(key_split(k)) for k in s.processing[w.address]],
+                     reverse=True)
+              for w in workers]
+
+    result = set(map(tuple, result))
+    out = set(map(tuple, out))
+
+    if result != out:
+        import pdb; pdb.set_trace()
+
+    assert result == out
+
+
+@pytest.mark.parametrize('inp,out', [
+    ([[1], []],  # don't move unnecessarily
+    [[1], []]),
+
+   ([[0, 0], []],  # balance
+    [[0], [0]]),
+
+   ([[0.1, 0.1], []],  # balance even if results in even
+    [[0], [0]]),
+
+   ([[0, 0, 0], []],  # don't over balance
+    [[0, 0], [0]]),
+
+   ([[0, 0], [0, 0, 0], []],  # move from larger
+    [[0, 0], [0, 0], [0]]),
+
+   ([[0, 0, 0], [0], []],  # move to smaller
+    [[0, 0], [0], [0]]),
+
+   ([[0, 1], []],  # choose easier first
+    [[1], [0]]),
+
+   ([[0, 0, 0, 0], [], []],  # spread evenly
+    [[0, 0], [0], [0]]),
+
+   ([[1, 0, 2, 0], [], []],  # move easier
+    [[2, 1], [0], [0]]),
+
+   ([[1, 1, 1], []],  # be willing to move costly items
+    [[1, 1], [1]]),
+
+   ([[1, 1, 1, 1], []],  # but don't move too many
+    [[1, 1, 1], [1]]),
+
+   ([[4, 2, 2, 2, 2, 1, 1],
+     [4, 2, 1, 1],
+     [],
+     [],
+     []],
+    [[4, 2, 2, 2],
+     [4, 2, 1],
+     [2, 1],
+     [1],
+     [1]]),
+
+   ([[1, 1, 1, 1, 1, 1, 1],
+     [1, 1], [1, 1], [1, 1],
+     []],
+    [[1, 1, 1, 1],
+     [1, 1], [1, 1], [1, 1],
+     [1, 1, 1]])
+    ])
+def test_balance(inp, out):
+    test = lambda *args, **kwargs: assert_balanced(inp, out, *args, **kwargs)
+    test = gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * len(inp))(test)
+    test()
