@@ -330,3 +330,8 @@ def test_parquet_wstoragepars(s3):
     assert s3.current().default_fill_cache is False
     read_parquet(url, storage_options={'default_fill_cache': True})
     assert s3.current().default_fill_cache is True
+
+    read_parquet(url, storage_options={'default_block_size': 2**20})
+    assert s3.current().default_block_size == 2**20
+    with s3.current().open(url+'/_metadata') as f:
+        assert f.blocksize == 2**20
