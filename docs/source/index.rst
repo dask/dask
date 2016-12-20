@@ -108,11 +108,11 @@ Contents
    ipython
    publish
    queues
+   channels
    resources
    task-launch
    adaptive
    submitting-applications
-
 
 .. toctree::
    :maxdepth: 1
