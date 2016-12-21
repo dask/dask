@@ -507,7 +507,7 @@ class Scheduler(Server):
                 self.occupancy[address] = 0
                 self.check_idle_saturated(address)
 
-            if nbytes:
+            if nbytes is not None:
                 self.nbytes.update(nbytes)
 
             # for key in keys:  # TODO
@@ -1950,7 +1950,7 @@ class Scheduler(Server):
             ############################
             # Update State Information #
             ############################
-            if nbytes:
+            if nbytes is not None:
                 self.nbytes[key] = nbytes
 
             self.who_has[key] = set()
@@ -1961,9 +1961,6 @@ class Scheduler(Server):
                 self.has_what[worker].add(key)
                 self.worker_bytes[worker] += self.nbytes.get(key,
                                                              DEFAULT_DATA_SIZE)
-
-            if nbytes:
-                self.nbytes[key] = nbytes
 
             workers = self.rprocessing.pop(key)
             for w in workers:

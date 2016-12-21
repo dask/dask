@@ -920,7 +920,7 @@ class Worker(WorkerBase):
                 self.resource_restrictions[key] = resource_restrictions
             self.task_state[key] = 'waiting'
 
-            if nbytes:
+            if nbytes is not None:
                 self.nbytes.update(nbytes)
 
             if who_has:
