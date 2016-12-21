@@ -110,8 +110,8 @@ class Scheduler(Server):
     * **processing:** ``{worker: {key: cost}}``:
         Set of keys currently in execution on each worker and their expected
         duration
-    * **rprocessing:** ``{key: {worker}}``:
-        Set of workers currently executing a particular task
+    * **rprocessing:** ``{key: worker}``:
+        The worker currently executing a particular task
     * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
@@ -524,14 +524,15 @@ class Scheduler(Server):
                 valid = self.valid_workers(key)
                 if valid is True or address in valid:
                     recommendations[key] = 'waiting'
-            if recommendations:
-                self.transitions(recommendations)
 
             for plugin in self.plugins[:]:
                 try:
                     plugin.add_worker(scheduler=self, worker=address)
                 except Exception as e:
                     logger.exception(e)
+
+            if recommendations:
+                self.transitions(recommendations)
 
             logger.info("Register %s", str(address))
             return 'OK'
@@ -750,7 +751,7 @@ class Scheduler(Server):
 
             in_flight = set(self.processing.pop(address))
             for k in list(in_flight):
-                self.rprocessing[k].remove(address)
+                # del self.rprocessing[k]
                 if not safe:
                     self.suspicious_tasks[k] += 1
                 if not safe and self.suspicious_tasks[k] > self.allowed_failures:
@@ -758,7 +759,7 @@ class Scheduler(Server):
                     r = self.transition(k, 'erred', exception=e, cause=k)
                     recommendations.update(r)
                     in_flight.remove(k)
-                elif not self.rprocessing[k]:
+                else:
                     recommendations[k] = 'released'
 
             self.total_occupancy -= self.occupancy.pop(address)
@@ -869,8 +870,8 @@ class Scheduler(Server):
         assert key not in self.waiting
         assert key in self.waiting_data
         assert key in self.rprocessing
-        for w in self.rprocessing[key]:
-            assert key in self.processing[w]
+        w = self.rprocessing[key]
+        assert key in self.processing[w]
         assert key not in self.who_has
         for dep in self.dependencies[key]:
             assert dep in self.who_has
@@ -1873,7 +1874,7 @@ class Scheduler(Server):
                 duration = 0.5
 
             self.processing[worker][key] = duration
-            self.rprocessing[key] = {worker}
+            self.rprocessing[key] = worker
             self.occupancy[worker] += duration
             self.total_occupancy += duration
             self.task_state[key] = 'processing'
@@ -1904,7 +1905,8 @@ class Scheduler(Server):
         try:
             if self.validate:
                 assert key in self.rprocessing
-                assert all(key in self.processing[w] for w in self.rprocessing[key])
+                w = self.rprocessing[key]
+                assert key in self.processing[w]
                 assert key not in self.waiting
                 assert key not in self.who_has
                 assert key not in self.exceptions_blame
@@ -1939,7 +1941,8 @@ class Scheduler(Server):
 
                 if ks in self.unknown_durations:
                     for k in self.unknown_durations.pop(ks):
-                        for w in self.rprocessing.get(k, ()):
+                        if key in self.rprocessing:
+                            w = self.rprocessing[k]
                             old = self.processing[w][k]
                             self.processing[w][k] = avg_duration
                             self.occupancy[w] += avg_duration - old
@@ -1962,19 +1965,18 @@ class Scheduler(Server):
                 self.worker_bytes[worker] += self.nbytes.get(key,
                                                              DEFAULT_DATA_SIZE)
 
-            workers = self.rprocessing.pop(key)
-            for w in workers:
-                duration = self.processing[w].pop(key)
-                if not self.processing[w]:
-                    self.total_occupancy -= self.occupancy[w]
-                    self.occupancy[w] = 0
-                else:
-                    self.total_occupancy -= duration
-                    self.occupancy[w] -= duration
-                self.check_idle_saturated(w)
-                if w != worker:
-                    msg = {'op': 'release-task', 'key': key}
-                    # self.worker_streams[w].send(msg)
+            w = self.rprocessing.pop(key)
+            duration = self.processing[w].pop(key)
+            if not self.processing[w]:
+                self.total_occupancy -= self.occupancy[w]
+                self.occupancy[w] = 0
+            else:
+                self.total_occupancy -= duration
+                self.occupancy[w] -= duration
+            self.check_idle_saturated(w)
+            if w != worker:
+                msg = {'op': 'release-task', 'key': key}
+                # self.worker_streams[w].send(msg)
 
             recommendations = OrderedDict()
 
@@ -2165,7 +2167,8 @@ class Scheduler(Server):
                 assert key not in self.who_has
                 assert self.task_state[key] == 'processing'
 
-            for w in self.rprocessing.pop(key):
+            w = self.rprocessing.pop(key)
+            if w in self.workers:
                 duration = self.processing[w].pop(key)
                 self.occupancy[w] -= duration
                 self.total_occupancy -= duration
@@ -2235,7 +2238,8 @@ class Scheduler(Server):
                         not self.waiting_data.get(dep)):
                         recommendations[dep] = 'released'
 
-            for w in self.rprocessing.pop(key):
+            w = self.rprocessing.pop(key)
+            if w in self.processing:
                 duration = self.processing[w].pop(key)
                 self.occupancy[w] -= duration
                 self.total_occupancy -= duration

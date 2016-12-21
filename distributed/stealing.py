@@ -7,7 +7,7 @@ import os
 import random
 from time import time
 
-from toolz import first, topk
+from toolz import topk
 from tornado.iostream import StreamClosedError
 from tornado.ioloop import PeriodicCallback
 
@@ -75,7 +75,7 @@ class WorkStealing(SchedulerPlugin):
                             self.put_key_in_stealable(k, split=ks)
 
     def put_key_in_stealable(self, key, split=None):
-        worker = first(self.scheduler.rprocessing[key])
+        worker = self.scheduler.rprocessing[key]
         cost_multiplier, level = self.steal_time_ratio(key, split=split)
         if cost_multiplier is not None:
             self.stealable_all[level].add(key)
@@ -140,7 +140,7 @@ class WorkStealing(SchedulerPlugin):
     def move_task(self, key, victim, thief):
         try:
             if self.scheduler.validate:
-                if victim not in self.scheduler.rprocessing[key]:
+                if victim != self.scheduler.rprocessing[key]:
                     import pdb; pdb.set_trace()
 
             self.remove_key_from_stealable(key)
@@ -149,13 +149,12 @@ class WorkStealing(SchedulerPlugin):
                     thief, self.scheduler.occupancy[thief])
 
             duration = self.scheduler.processing[victim].pop(key)
-            self.scheduler.rprocessing[key].remove(victim)
             self.scheduler.occupancy[victim] -= duration
             self.scheduler.total_occupancy -= duration
 
             duration = self.scheduler.task_duration.get(key_split(key), 0.5)
             self.scheduler.processing[thief][key] = duration
-            self.scheduler.rprocessing[key].add(thief)
+            self.scheduler.rprocessing[key] = thief
             self.scheduler.occupancy[thief] += duration
             self.scheduler.total_occupancy += duration
 
@@ -228,7 +227,7 @@ class WorkStealing(SchedulerPlugin):
                     if stealable:
                         seen = True
                     for key in list(stealable):
-                        sat = first(s.rprocessing[key])
+                        sat = s.rprocessing[key]
                         if occupancy[sat] < 0.2:
                             continue
                         i += 1

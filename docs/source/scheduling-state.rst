@@ -114,14 +114,11 @@ Each of the following is a dictionary keyed by task name (described below):
     Keys that are currently allocated to a worker.  This is keyed by worker
     address and contains the expected cost in seconds of running that task.
 
-* **rprocessing:** ``{key: {worker}}``:
+* **rprocessing:** ``{key: worker}``:
 
     The reverse of the ``processing`` dictionary.  This is all keys that are
-    currently running with a set of all workers that are currently running
-    them.  This is redundant with ``processing`` and just here for faster
-    indexed querying.  It is rare for these sets to be larger than size one but
-    does happen in rare cases when a task might be submitted redundantly to
-    multiple workers.
+    currently running with the workers that is currently running them.  This is
+    redundant with ``processing`` and just here for faster indexed querying.
 
 * **who_has:** ``{key: {worker}}``:
 
