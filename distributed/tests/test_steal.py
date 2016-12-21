@@ -13,7 +13,7 @@ from tornado import gen
 
 import dask
 from dask import delayed
-from distributed import Worker
+from distributed import Worker, Nanny
 from distributed.client import Client, _wait, wait
 from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
@@ -373,13 +373,13 @@ def assert_balanced(inp, out, c, s, *workers):
                      reverse=True)
               for w in workers]
 
-    result = set(map(tuple, result))
-    out = set(map(tuple, out))
+    result2 = sorted(result, reverse=True)
+    out2 = sorted(out, reverse=True)
 
-    if result != out:
+    if result2 != out2:
         import pdb; pdb.set_trace()
 
-    assert result == out
+    assert result2 == out2
 
 
 @pytest.mark.parametrize('inp,out', [
@@ -416,14 +416,17 @@ def assert_balanced(inp, out, c, s, *workers):
    ([[1, 1, 1, 1], []],  # but don't move too many
     [[1, 1, 1], [1]]),
 
+   ([[0, 0], [0, 0], [0, 0], []],  # no one clearly saturated
+    [[0, 0], [0, 0], [0], [0]]),
+
    ([[4, 2, 2, 2, 2, 1, 1],
-     [4, 2, 1, 1],
+     [4, 2, 1, 1, 1],
      [],
      [],
      []],
-    [[4, 2, 2, 2],
+    [[4, 2, 2, 2, 2],
      [4, 2, 1],
-     [2, 1],
+     [1, 1],
      [1],
      [1]]),
 
@@ -438,3 +441,20 @@ def test_balance(inp, out):
     test = lambda *args, **kwargs: assert_balanced(inp, out, *args, **kwargs)
     test = gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * len(inp))(test)
     test()
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, Worker=Nanny)
+def test_restart(c, s, a, b):
+    futures = c.map(slowinc, range(100), delay=0.1, workers=a.address,
+                    allow_other_workers=True)
+    while not s.processing[b.worker_address]:
+        yield gen.sleep(0.01)
+
+    steal = s.extensions['stealing']
+    assert any(st for st in steal.stealable_all)
+    assert any(x for L in steal.stealable.values() for x in L)
+
+    yield c._restart()
+
+    assert not any(x for x in steal.stealable_all)
+    assert not any(x for L in steal.stealable.values() for x in L)

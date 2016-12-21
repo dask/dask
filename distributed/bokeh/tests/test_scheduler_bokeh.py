@@ -11,10 +11,10 @@ from tornado.httpclient import AsyncHTTPClient
 
 from distributed.client import _wait
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, dec
+from distributed.utils_test import gen_cluster, inc, dec, slowinc
 from distributed.bokeh.worker import Counters
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
-        SystemMonitor, Occupancy)
+        SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -36,7 +36,7 @@ def test_simple(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
-    for component in [SystemMonitor, StateTable, Occupancy]:
+    for component in [SystemMonitor, StateTable, Occupancy, StealingTimeSeries]:
         ss = component(s)
 
         ss.update()
@@ -58,3 +58,18 @@ def test_counters(c, s, a, b):
     while not len(ss.digest_sources['tick-duration'][0].data['x']):
         yield gen.sleep(1)
         assert time() < start + 5
+
+
+@gen_cluster(client=True)
+def test_stealing_events(c, s, a, b):
+    se = StealingEvents(s)
+
+    futures = c.map(slowinc, range(100), delay=0.1, workers=a.address,
+                    allow_other_workers=True)
+
+    while not b.task_state:  # will steal soon
+        yield gen.sleep(0.01)
+
+    se.update()
+
+    assert len(first(se.source.data.values()))

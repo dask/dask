@@ -9,3 +9,8 @@ def parse_args(args):
             options[k] = int(v)
 
     return options
+
+
+def transpose(lod):
+    keys = list(lod[0].keys())
+    return {k: [d[k] for d in lod] for k in keys}

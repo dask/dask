@@ -19,6 +19,7 @@ from toolz import frequencies, merge, partition_all
 
 from .components import DashboardComponent
 from .core import BokehServer, format_bytes, format_time
+from .utils import transpose
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
@@ -139,7 +140,7 @@ class CommunicatingStream(DashboardComponent):
                         min(msgs['start']) > source.data['stop'][-1] + 10000):
                         source.data.update(msgs)
                     else:
-                        source.stream(msgs, rollover=1000)
+                        source.stream(msgs, rollover=10000)
 
 
 class CommunicatingTimeSeries(DashboardComponent):
@@ -168,7 +169,8 @@ class CommunicatingTimeSeries(DashboardComponent):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
                                 'out': [len(self.worker._listen_streams)],
-                                'in': [len(self.worker.connections)]}, 1000)
+                                'in': [len(self.worker.connections)]},
+                                10000)
 
 
 class ExecutingTimeSeries(DashboardComponent):
@@ -606,11 +608,6 @@ class BokehWorker(BokehServer):
 
         self.loop = io_loop or worker.loop
         self.server = None
-
-
-def transpose(lod):
-    keys = list(lod[0].keys())
-    return {k: [d[k] for d in lod] for k in keys}
 
 
 def format_bytes(n):

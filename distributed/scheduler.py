@@ -2539,9 +2539,11 @@ class Scheduler(Server):
             if worker in self.idle:
                 self.idle.remove(worker)
 
-            pending = occ * (p - nc) / nc
+            pending = occ * (p - nc) / p / nc
             if p > nc and pending > 0.4 and pending > 1.9 * avg:
                 self.saturated.add(worker)
+            elif worker in self.saturated:
+                self.saturated.remove(worker)
 
     def valid_workers(self, key):
         """ Return set of currently valid worker addresses for key

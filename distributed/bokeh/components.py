@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from bisect import bisect
-from toolz import valmap
+from operator import add
 
 from bokeh.layouts import row, column
 from bokeh.models import (
@@ -14,6 +14,7 @@ from bokeh.models import (
 from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
+from toolz import valmap
 
 from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
 from distributed.utils import log_errors
@@ -52,6 +53,7 @@ class TaskStream(DashboardComponent):
         """
         self.n_rectangles = n_rectangles
         self.clear_interval = clear_interval
+        self.last = 0
 
         self.source = ColumnDataSource(data=dict(
             start=[], duration=[], key=[], name=[], color=[],
@@ -120,10 +122,12 @@ class TaskStream(DashboardComponent):
 
             # If there has been a significant delay then clear old rectangles
             if rectangles['start']:
-                last_end = old['start'][ind - 1] + old['duration'][ind - 1]
-                if min(rectangles['start']) > last_end + self.clear_interval:
-                    self.source.data.update(rectangles)
-                    return
+                m = min(map(add, rectangles['start'], rectangles['duration']))
+                if m > self.last:
+                    self.last, last = m, self.last
+                    if m > last + self.clear_interval:
+                        self.source.data.update(rectangles)
+                        return
 
             self.source.stream(rectangles, self.n_rectangles)
 

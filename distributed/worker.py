@@ -1156,10 +1156,9 @@ class Worker(WorkerBase):
                 ip, port = worker.split(':')
                 try:
                     start = time()
-                    future = connect(ip, int(port))
+                    future = connect(ip, int(port), timeout=10)
                     self.connections[future] = True
-                    stream = yield gen.with_timeout(timedelta(seconds=3),
-                                                    future)
+                    stream = yield future
                     end = time()
                     if self.digests is not None:
                         self.digests['gather-connect-duration'].add(end - start)
