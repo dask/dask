@@ -199,6 +199,7 @@ def is_kernel():
 
 hex_pattern = re.compile('[a-f]+')
 
+
 def key_split(s):
     """
     >>> key_split('x')
@@ -248,6 +249,14 @@ def key_split(s):
             return result
     except:
         return 'Other'
+
+
+try:
+    from functools import lru_cache
+except ImportError:
+    pass
+else:
+    key_split = lru_cache(100000)(key_split)
 
 
 @contextmanager
