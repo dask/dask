@@ -37,8 +37,8 @@ from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All, mp_context
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
-        randominc, loop, inc, dec, div, throws, gen_cluster, gen_test, double,
-        deep, popen)
+        randominc, loop, inc, dec, div, throws, geninc, asyncinc,
+        gen_cluster, gen_test, double, deep, popen)
 
 
 @gen_cluster(client=True, timeout=None)
@@ -2186,6 +2186,44 @@ def test_run_sync(loop):
 
             result = c.run(func, 1, y=2, workers=['127.0.0.1:%d' % a['port']])
             assert result == {'127.0.0.1:%d' % a['port']: 3}
+
+
+@gen_cluster(client=True)
+def test_run_coroutine(c, s, a, b):
+    results = yield c._run_coroutine(geninc, 1, delay=0.05)
+    assert results == {a.address: 2, b.address: 2}
+
+    results = yield c._run_coroutine(geninc, 1, delay=0.05, workers=[a.address])
+    assert results == {a.address: 2}
+
+    results = yield c._run_coroutine(geninc, 1, workers=[])
+    assert results == {}
+
+    with pytest.raises(RuntimeError) as exc_info:
+        yield c._run_coroutine(throws, 1)
+    exc_info.match("hello")
+
+    if sys.version_info >= (3, 5):
+        results = yield c._run_coroutine(asyncinc, 2, delay=0.01)
+        assert results == {a.address: 3, b.address: 3}
+
+
+def test_run_coroutine_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            result = c.run_coroutine(geninc, 2, delay=0.01)
+            assert result == {'127.0.0.1:%d' % a['port']: 3,
+                              '127.0.0.1:%d' % b['port']: 3}
+
+            result = c.run_coroutine(geninc, 2,
+                                     workers=['127.0.0.1:%d' % a['port']])
+            assert result == {'127.0.0.1:%d' % a['port']: 3}
+
+            t1 = time()
+            result = c.run_coroutine(geninc, 2, delay=10, wait=False)
+            t2 = time()
+            assert result is None
+            assert t2 - t1 <= 1.0
 
 
 def test_run_exception(loop):

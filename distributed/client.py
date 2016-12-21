@@ -1250,7 +1250,7 @@ class Client(object):
             if resp['status'] == 'OK':
                 results[key] = resp['result']
             elif resp['status'] == 'error':
-                raise loads(resp['exception'])
+                six.reraise(*clean_exception(**resp))
         raise Return(results)
 
     def run(self, function, *args, **kwargs):
@@ -1287,6 +1287,50 @@ class Client(object):
          '192.168.0.101:9000': 4321}
         """
         return sync(self.loop, self._run, function, *args, **kwargs)
+
+    @gen.coroutine
+    def _run_coroutine(self, function, *args, **kwargs):
+        workers = kwargs.pop('workers', None)
+        wait = kwargs.pop('wait', True)
+        responses = yield self.scheduler.broadcast(msg=dict(op='run_coroutine',
+                                                function=dumps(function),
+                                                args=dumps(args),
+                                                kwargs=dumps(kwargs),
+                                                wait=wait),
+                                                workers=workers)
+        if not wait:
+            raise Return(None)
+        else:
+            results = {}
+            for key, resp in responses.items():
+                if resp['status'] == 'OK':
+                    results[key] = resp['result']
+                elif resp['status'] == 'error':
+                    six.reraise(*clean_exception(**resp))
+            raise Return(results)
+
+    def run_coroutine(self, function, *args, **kwargs):
+        """
+        Spawn a coroutine on all workers.
+
+        This spaws a coroutine on all currently known workers and then waits
+        for the coroutine on each worker.  The coroutines' results are returned
+        as a dictionary keyed by worker address.
+
+        Parameters
+        ----------
+        function: a coroutine function
+            (typically a function wrapped in gen.coroutine or
+             a Python 3.5+ async function)
+        *args: arguments for remote function
+        **kwargs: keyword arguments for remote function
+        wait: boolean (default True)
+            Whether to wait for coroutines to end.
+        workers: list
+            Workers on which to run the function. Defaults to all known workers.
+
+        """
+        return sync(self.loop, self._run_coroutine, function, *args, **kwargs)
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
             loose_restrictions=None, allow_other_workers=True, priority=None,

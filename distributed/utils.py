@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import Iterable
 from contextlib import contextmanager
+import inspect
 import logging
 import multiprocessing
 import os
@@ -46,6 +47,24 @@ def funcname(func):
         return func.__name__
     except:
         return str(func)
+
+
+def has_arg(func, argname):
+    """
+    Whether the function takes an argument with the given name.
+    """
+    while True:
+        try:
+            if 'dask_worker' in inspect.getargspec(func).args:
+                return True
+        except TypeError:
+            break
+        try:
+            # For Tornado coroutines and other decorated functions
+            func = func.__wrapped__
+        except AttributeError:
+            break
+    return False
 
 
 def get_fileno_limit():
