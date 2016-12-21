@@ -11,15 +11,39 @@ identify performance issues, and debug failures.
 Dask.distributed includes a web interface to help deliver this information over
 a normal web page in real time.  This web interface is launched by default
 wherever the scheduler is launched if the scheduler machine has Bokeh_
-installed (``conda install bokeh -c bokeh``).  The web interface is normally
-available at  ``http://scheduler-address:8787/status/`` and can be viewed any
-normal web browser.
+installed (``conda install bokeh -c bokeh``).
+
+List of Servers
+---------------
+
+There are a few sets of diagnostic pages served at different ports:
+
+*   Main Scheduler pages at ``http://scheduler-address:8787``.  These pages,
+    particularly the ``/status`` page are the main page that most people
+    associate with Dask.  These pages are served from a separate standalone
+    Bokeh server application running in a separate process.
+*   Debug Scheduler pages at ``http://scheduler-address:8788``.  These pages
+    have more detailed diagnostic information about the scheduler.  They are
+    more often used by developers than by users, but may still be of interest
+    to the performance-conscious.  These pages run from inside the scheduler
+    process, and so compete for resources with the main scheduler.
+*   Debug Worker pages for each worker at ``http://worker-address:8789``.
+    These pages have detailed diagnostic information about the worker.  Like the
+    diagnostic scheduler pages they are of more utility to developers or to
+    people looking to understand the performance of their underlying cluster.  If
+    port 8789 is unavailable (for example it is in use by another worker) then a
+    random port is chosen.  A list of all ports can be obtained from looking at
+    the service ports for each worker in the result of calling
+    ``client.scheduler_info()``
+
+The rest of this document will be about the main pages at
+``http://scheduler-address:8787``.
 
 The available pages are ``http://scheduler-address:8787/<page>/`` where ``<page>`` is one of
 
-- ``status``
-- ``tasks``
-- ``workers``
+- ``status``: a stream of recently run tasks, progress bars, resource use
+- ``tasks``: a larger stream of the last 100k tasks
+- ``workers``: basic information about workers and their current load
 
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
 
