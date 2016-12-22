@@ -6,3 +6,7 @@ from .io import (from_array, from_bcolz, from_array, from_bcolz,
 from .csv import read_csv, to_csv, read_table
 from .hdf import read_hdf, to_hdf
 from . import demo
+try:
+    from .parquet import read_parquet, to_parquet
+except ImportError:
+    pass
