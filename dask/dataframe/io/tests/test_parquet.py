@@ -155,15 +155,27 @@ def test_ordering():
 
 @pytest.mark.parametrize('df', [
     pd.DataFrame({'x': [3, 2, 1]}),
-    pd.DataFrame({'x': ['a', 'b', 'c']}),
+    pd.DataFrame({'x': ['c', 'a', 'b']}),
+    pd.DataFrame({'x': ['cc', 'a', 'bbb']}),
     pd.DataFrame({'x': [b'a', b'b', b'c']}),
     pd.DataFrame({'x': pd.Categorical(['a', 'b', 'c'])}),
-    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'),
+    pd.DataFrame({'x': list(map(pd.Timestamp, [3, 2, 1]))}),
     pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'),
     pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'),
     pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'),
     pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('float32'),
     pd.DataFrame({'x': [3, 1, 2]}, index=[3, 2, 1]),
+    pd.DataFrame({'x': [3, 1, 5]}, index=pd.Index([1, 2, 3], name='foo')),
+    pd.DataFrame({'x': [1, 2, 3],
+                  'y': [3, 2, 1]}),
+    pd.DataFrame({'x': [1, 2, 3],
+                  'y': [3, 2, 1]}, columns=['y', 'x']),
+    pd.DataFrame({'0': [3, 2, 1]}),
+    pd.DataFrame({'x': [3, 2, None]}),
+    pd.DataFrame({'-': [3., 2., None]}),
+    pd.DataFrame({'.': [3., 2., None]}),
+    pd.DataFrame({' ': [3., 2., None]}),
     ])
 def test_roundtrip(df):
     with tmpdir() as tmp:
@@ -173,5 +185,5 @@ def test_roundtrip(df):
         ddf = dd.from_pandas(df, npartitions=2)
 
         to_parquet(tmp, ddf)
-        ddf2 = read_parquet(tmp)
+        ddf2 = read_parquet(tmp, index=df.index.name)
         assert_eq(ddf, ddf2)
