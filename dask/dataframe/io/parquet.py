@@ -2,7 +2,6 @@ import pandas as pd
 from toolz import first, partial
 
 from ..core import DataFrame, Series
-from ..utils import make_meta
 from ...base import compute, tokenize, normalize_token
 from ...delayed import delayed
 from ...bytes.core import OpenFileCreator
@@ -112,7 +111,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
-    meta = make_meta(dtypes)
+    meta = pd.DataFrame({c: pd.Series([], dtype=d)
+                        for (c, d) in dtypes.items()},
+                        columns=[c for c in pf.columns if c in dtypes])
+
     for cat in categories:
         meta[cat] = pd.Series(pd.Categorical([], categories=cats[cat]))
 
