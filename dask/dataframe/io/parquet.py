@@ -84,15 +84,17 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     if index is False:
         index_col = None
+    elif len(minmax) == 1:
+        index_col = first(minmax)
     elif len(minmax) > 1:
         if index:
             index_col = index
+        elif 'index' in minmax:
+            index_col = 'index'
         else:
             raise ValueError("Multiple possible indexes exist: %s.  "
                              "Please select one with index='index-name'"
                              % sorted(minmax))
-    elif len(minmax) == 1:
-        index_col = first(minmax)
     else:
         index_col = None
 

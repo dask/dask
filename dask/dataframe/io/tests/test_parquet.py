@@ -151,4 +151,27 @@ def test_ordering():
         assert pf.columns == ['myindex', 'c', 'a', 'b']
 
         ddf2 = read_parquet(tmp, index='myindex')
+
+
+@pytest.mark.parametrize('df', [
+    pd.DataFrame({'x': [3, 2, 1]}),
+    pd.DataFrame({'x': ['a', 'b', 'c']}),
+    pd.DataFrame({'x': [b'a', b'b', b'c']}),
+    pd.DataFrame({'x': pd.Categorical(['a', 'b', 'c'])}),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'),
+    pd.DataFrame({'x': [3, 1, 2]}, index=[3, 2, 1]),
+    ])
+def test_roundtrip(df):
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        if df.index.name is None:
+            df.index.name = 'index'
+        ddf = dd.from_pandas(df, npartitions=2)
+
+        to_parquet(tmp, ddf)
+        ddf2 = read_parquet(tmp)
         assert_eq(ddf, ddf2)
