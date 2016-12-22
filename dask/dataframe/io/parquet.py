@@ -18,7 +18,8 @@ except:
     default_encoding = None
 
 
-def read_parquet(path, columns=None, filters=None, categories=None, index=None):
+def read_parquet(path, columns=None, filters=None, categories=None, index=None,
+                 storage_options=None):
     """
     Read Dask DataFrame from ParquetFile
 
@@ -40,6 +41,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
+    storage_options : dict
+        Key/value pairs to be passed on to the file-system backend, if any.
 
     Examples
     --------
@@ -53,7 +56,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         raise ImportError("fastparquet not installed")
     if filters is None:
         filters = []
-    myopen = OpenFileCreator(path, compression=None, text=False)
+    myopen = OpenFileCreator(path, compression=None, text=False,
+                             **(storage_options or {}))
 
     if isinstance(columns, list):
         columns = tuple(columns)
@@ -150,7 +154,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
-               fixed_text=None, object_encoding=None):
+               fixed_text=None, object_encoding=None, storage_options=None):
     """
     Write Dask.dataframe to parquet
 
@@ -183,6 +187,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     object_encoding : dict {col: bytes|utf8|json|bson} or str
         For object columns, specify how to encode to bytes. If a str, same
         encoding is applied to all object columns.
+    storage_options : dict
+        Key/value pairs to be passed on to the file-system backend, if any.
 
     Examples
     --------
@@ -196,7 +202,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
 
-    myopen = OpenFileCreator(path, compression=None, text=False)
+    myopen = OpenFileCreator(path, compression=None, text=False,
+                             **(storage_options or {}))
     myopen.fs.mkdirs(path)
     sep = myopen.fs.sep
     metadata_fn = sep.join([path, '_metadata'])
