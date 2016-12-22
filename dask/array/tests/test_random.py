@@ -136,7 +136,7 @@ def test_random_all():
     da.random.chisquare(1, size=5, chunks=3).compute()
     da.random.exponential(1, size=5, chunks=3).compute()
     da.random.f(1, 2, size=5, chunks=3).compute()
-    da.random.gamma(5, 1, chunks=3).compute()
+    da.random.gamma(5, 1, size=5, chunks=3).compute()
     da.random.geometric(1, size=5, chunks=3).compute()
     da.random.gumbel(1, size=5, chunks=3).compute()
     da.random.hypergeometric(1, 2, 3, size=5, chunks=3).compute()
