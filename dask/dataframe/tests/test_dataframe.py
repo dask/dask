@@ -2854,7 +2854,7 @@ def test_copy():
 
     df['y'] = df.x * 2
 
-    
+
 def test_del():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},

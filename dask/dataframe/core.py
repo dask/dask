@@ -309,10 +309,6 @@ class _Frame(Base):
         return Index(merge(dsk, self.dask), name,
                      self._meta.index, self.divisions)
 
-    def copy(self):
-        """ Return a copy of the dataframe """
-        return new_dd_object(self.dask, self._name, self._meta, self.divisions)
-
     def reset_index(self, drop=False):
         """Reset the index to the default index.
 
