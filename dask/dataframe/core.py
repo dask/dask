@@ -265,6 +265,15 @@ class _Frame(Base):
     def __setstate__(self, state):
         self.dask, self._name, self._meta, self.divisions = state
 
+    def copy(self):
+        """ Make a copy of the dataframe
+
+        This is strictly a shallow copy of the underlying computational graph.
+        It does not affect the underlying data
+        """
+        return new_dd_object(self.dask, self._name,
+                             self._meta, self.divisions)
+
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
@@ -2271,6 +2280,12 @@ class DataFrame(_Frame):
         self.dask = df.dask
         self._name = df._name
         self._meta = df._meta
+
+    def __delitem__(self, key):
+        result = self.drop([key], axis=1)
+        self.dask = result.dask
+        self._name = result._name
+        self._meta = result._meta
 
     def __setattr__(self, key, value):
         try:
