@@ -2552,8 +2552,7 @@ def test_timeseries_sorted():
 def test_column_assignment():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
-    from copy import copy
-    orig = copy(ddf)
+    orig = ddf.copy()
     ddf['z'] = ddf.x + ddf.y
     df['z'] = df.x + df.y
 
@@ -2841,3 +2840,17 @@ def test_values():
     assert_eq(df.x.values, ddf.x.values)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
+
+
+def test_del():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+    b = a.copy()
+
+    del a['x']
+    assert_eq(b, df)
+
+    del df['x']
+    assert_eq(a, df)
