@@ -151,6 +151,7 @@ def test_ordering():
         assert pf.columns == ['myindex', 'c', 'a', 'b']
 
         ddf2 = read_parquet(tmp, index='myindex')
+        assert_eq(ddf, ddf2)
 
 
 @pytest.mark.parametrize('df,kwargs', [
@@ -163,7 +164,7 @@ def test_ordering():
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}),
     pytest.mark.xfail((pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}),
-                       reason="Parquet doesn't support nanosecond precision"),
+                      reason="Parquet doesn't support nanosecond precision"),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'), {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'), {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'), {}),
@@ -179,7 +180,7 @@ def test_ordering():
     (pd.DataFrame({'-': [3., 2., None]}), {}),
     (pd.DataFrame({'.': [3., 2., None]}), {}),
     (pd.DataFrame({' ': [3., 2., None]}), {}),
-    ])
+])
 def test_roundtrip(df, kwargs):
     with tmpdir() as tmp:
         tmp = str(tmp)
