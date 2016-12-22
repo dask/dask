@@ -14,3 +14,7 @@ from .rolling import (rolling_count, rolling_sum, rolling_mean, rolling_median,
                       rolling_window)
 from ..base import compute
 from .reshape import get_dummies, pivot_table, melt
+try:
+    from .io import read_parquet, to_parquet
+except ImportError:
+    pass
