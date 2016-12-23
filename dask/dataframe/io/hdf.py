@@ -390,3 +390,6 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
                                     sorted_index=sorted_index,
                                     lock=lock, mode=mode)
                    for path in paths])
+
+from ..core import _Frame
+_Frame.to_hdf.__doc__ = to_hdf.__doc__
