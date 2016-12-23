@@ -3640,4 +3640,5 @@ def to_delayed(df):
     from ..delayed import Delayed
     return [Delayed(k, [df.dask]) for k in df._keys()]
 
+
 _Frame.to_delayed.__doc__ = to_delayed.__doc__

@@ -620,7 +620,5 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
-from ..core import _Frame, DataFrame
-
 DataFrame.to_records.__doc__ = to_records.__doc__
 DataFrame.to_bag.__doc__ = to_bag.__doc__
