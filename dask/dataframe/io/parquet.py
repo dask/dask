@@ -25,6 +25,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
 
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
+
     Parameters
     ----------
     path : string
@@ -192,6 +194,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
 
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
+
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
@@ -249,3 +253,6 @@ if fastparquet:
     @partial(normalize_token.register, fastparquet.ParquetFile)
     def normalize_ParquetFile(pf):
         return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+
+
+DataFrame.to_parquet.__doc__ = to_parquet.__doc__

@@ -926,6 +926,10 @@ class _Frame(Base):
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
+    def to_parquet(self, path, *args, **kwargs):
+        from .io import to_parquet
+        return to_parquet(path, self, *args, **kwargs)
+
     def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
