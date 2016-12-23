@@ -22,7 +22,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method
+from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (repr_long_list, random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M)
@@ -923,18 +923,22 @@ class _Frame(Base):
                              self._meta, self.divisions)
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
+        """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
     def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
         from .io import to_parquet
         return to_parquet(path, self, *args, **kwargs)
 
     def to_csv(self, filename, **kwargs):
+        """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):
+        """ See dd.to_delayed docstring for more information """
         return to_delayed(self)
 
     @classmethod
@@ -3641,4 +3645,5 @@ def to_delayed(df):
     return [Delayed(k, [df.dask]) for k in df._keys()]
 
 
-_Frame.to_delayed.__doc__ = to_delayed.__doc__
+if PY3:
+    _Frame.to_delayed.__doc__ = to_delayed.__doc__

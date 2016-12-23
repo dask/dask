@@ -14,6 +14,7 @@ from toolz import merge
 
 from ...async import get_sync
 from ...base import tokenize
+from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
 import dask.multiprocessing
@@ -87,7 +88,7 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
 
     Save data to multiple datapaths within the same file:
 
-    >>> df.to_hdf('output.hdf', '/data-*')
+    >>> df.to_hdf('output.hdf', '/data-*')          # doctest: +SKIP
 
     Save data to multiple files:
 
@@ -391,5 +392,6 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
                    for path in paths])
 
 
-from ..core import _Frame
-_Frame.to_hdf.__doc__ = to_hdf.__doc__
+if PY3:
+    from ..core import _Frame
+    _Frame.to_hdf.__doc__ = to_hdf.__doc__

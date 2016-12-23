@@ -12,7 +12,7 @@ import numpy as np
 from toolz import merge
 
 from ...base import tokenize
-from ...compatibility import unicode
+from ...compatibility import unicode, PY3
 from ... import array as da
 from ...async import get_sync
 from ...delayed import Delayed, delayed
@@ -620,5 +620,6 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
-DataFrame.to_records.__doc__ = to_records.__doc__
-DataFrame.to_bag.__doc__ = to_bag.__doc__
+if PY3:
+    DataFrame.to_records.__doc__ = to_records.__doc__
+    DataFrame.to_bag.__doc__ = to_bag.__doc__

@@ -3,6 +3,7 @@ from toolz import first, partial
 
 from ..core import DataFrame, Series
 from ...base import compute, tokenize, normalize_token
+from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import OpenFileCreator
 
@@ -255,4 +256,5 @@ if fastparquet:
         return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
 
 
-DataFrame.to_parquet.__doc__ = to_parquet.__doc__
+if PY3:
+    DataFrame.to_parquet.__doc__ = to_parquet.__doc__

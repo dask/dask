@@ -12,7 +12,7 @@ except ImportError:
 import numpy as np
 import pandas as pd
 
-from ...compatibility import PY2
+from ...compatibility import PY2, PY3
 from ...delayed import delayed
 from .io import from_delayed
 
@@ -415,5 +415,6 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
         return values
 
 
-from ..core import _Frame
-_Frame.to_csv.__doc__ = to_csv.__doc__
+if PY3:
+    from ..core import _Frame
+    _Frame.to_csv.__doc__ = to_csv.__doc__
