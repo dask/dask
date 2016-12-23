@@ -3,8 +3,7 @@ Parquet
 
 *This page is temporary and may disappear at any moment*
 
-Dask.dataframe contains experimental functions to read and write Parquet data
-using the fastparquet_ project.
+Dask.dataframe reads and writes Parquet data using the fastparquet_ project.
 
 .. _fastparquet: http://fastparquet.readthedocs.io/en/latest/
 

@@ -1041,12 +1041,12 @@ class _Frame(Base):
         >>> df.to_hdf('output_*.hdf', '/data',
         ...   get=dask.multiprocessing.get, lock=False) # doctest: +SKIP
         """
-
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
     def to_csv(self, filename, **kwargs):
-        """Write DataFrame to a series of comma-separated values (csv) files
+        """
+        Write DataFrame to a series of comma-separated values (csv) files
 
         One filename per partition will be created. You can specify the
         filenames in a variety of ways.
@@ -1157,12 +1157,7 @@ class _Frame(Base):
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):
-        """ Convert dataframe into dask Delayed objects
-
-        Returns a list of delayed values, one value per partition.
-        """
-        from ..delayed import Delayed
-        return [Delayed(k, [self.dask]) for k in self._keys()]
+        return to_delayed(self)
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1976,14 +1971,6 @@ class Series(_Frame):
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
-        """Convert to a dask Bag.
-
-        Parameters
-        ----------
-        index : bool, optional
-            If True, the elements are tuples of ``(index, value)``, otherwise
-            they're just the ``value``.  Default is False.
-        """
         from .io import to_bag
         return to_bag(self, index)
 
@@ -2845,17 +2832,6 @@ class DataFrame(_Frame):
                            aggfunc=aggfunc)
 
     def to_records(self, index=False):
-        """ Convert to a dask array with struct dtype
-
-        Warning: This creates a dask.array without precise shape information.
-        Operations that depend on shape information, like slicing or reshaping,
-        will not work.
-
-        Examples
-        --------
-        >>> df.to_records()  # doctest: +SKIP
-        dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
-        """
         from .io import to_records
         return to_records(self)
 
@@ -3872,3 +3848,18 @@ def maybe_shift_divisions(df, periods, freq):
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)
     return df
+
+
+def to_delayed(df):
+    """ Create Dask Delayed objects from a Dask Dataframe
+
+    Returns a list of delayed values, one value per partition.
+
+    Examples
+    --------
+    >>> partitions = df.to_delayed()  # doctest: +SKIP
+    """
+    from ..delayed import Delayed
+    return [Delayed(k, [df.dask]) for k in df._keys()]
+
+_Frame.to_delayed.__doc__ = to_delayed.__doc__

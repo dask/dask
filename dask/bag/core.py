@@ -1051,7 +1051,7 @@ class Bag(Base):
             raise NotImplementedError(msg)
 
     def to_dataframe(self, columns=None):
-        """ Convert Bag to dask.dataframe
+        """ Create Dask Dataframe from a Dask Bag
 
         Bag should contain tuples, dict records, or scalars.
 

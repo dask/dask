@@ -20,7 +20,7 @@ except:
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                  storage_options=None):
     """
-    Read Dask DataFrame from ParquetFile
+    Read ParquetFile into a Dask DataFrame
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
@@ -158,7 +158,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                fixed_text=None, object_encoding=None, storage_options=None):
     """
-    Write Dask.dataframe to parquet
+    Store Dask.dataframe to Parquet files
 
     Notes
     -----
