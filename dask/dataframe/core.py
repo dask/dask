@@ -22,7 +22,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method
+from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (repr_long_list, random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M)
@@ -923,246 +923,23 @@ class _Frame(Base):
                              self._meta, self.divisions)
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
-        """ Export frame to hdf file(s)
-
-        Export dataframe to one or multiple hdf5 files or nodes.
-
-        Exported hdf format is pandas' hdf table format only.
-        Data saved by this function should be read by pandas dataframe
-        compatible reader.
-
-        By providing a single asterisk in either the path_or_buf or key
-        parameters you direct dask to save each partition to a different file
-        or node (respectively). The asterisk will be replaced with a zero
-        padded partition number, as this is the default implementation of
-        name_function.
-
-        When writing to a single hdf node in a single hdf file, all hdf save
-        tasks are required to execute in a specific order, often becoming the
-        bottleneck of the entire execution graph. Saving to multiple nodes or
-        files removes that restriction (order is still preserved by enforcing
-        order on output, using name_function) and enables executing save tasks
-        in parallel.
-
-        Parameters
-        ----------
-        path_or_buf: HDFStore object or string
-        Destination file(s). If string, can contain a single asterisk to
-        save each partition to a different file. Only one asterisk is
-        allowed in both path_or_buf and key parameters.
-        key: string
-        A node / group path in file, can contain a single asterisk to save
-        each partition to a different hdf node in a single file. Only one
-        asterisk is allowed in both path_or_buf and key parameters.
-        format: optional, default 'table'
-            Default hdf storage format, currently only pandas' 'table' format
-            is supported.
-        mode: optional, {'a', 'w', 'r+'}, default 'a'
-
-          ``'a'``
-              Append: Add data to existing file(s) or create new.
-          ``'w'``
-              Write: overwrite any existing files with new ones.
-          ``'r+'``
-              Append to existing files, files must already exist.
-        append: optional, default False
-        If False, overwrites existing node with the same name otherwise
-        appends to it.
-        complevel: optional, 0-9, default 0
-            compression level, higher means better compression ratio and
-            possibly more CPU time. Depends on complib.
-        complib: {'zlib', 'bzip2', 'lzo', 'blosc', None}, default None
-        If complevel > 0 compress using this compression library when
-        possible
-        fletcher32: bool, default False
-        If True and compression is used, additionally apply the fletcher32
-        checksum.
-        get: callable, optional
-        A scheduler `get` function to use. If not provided, the default is
-        to check the global settings first, and then fall back to defaults
-        for the collections.
-        dask_kwargs: dict, optional
-        A dictionary of keyword arguments passed to the `get` function
-        used.
-        name_function: callable, optional, default None
-        A callable called for each partition that accepts a single int
-        representing the partition number. name_function must return a
-        string representation of a partition's index in a way that will
-        preserve the partition's location after a string sort.
-
-        If None, a default name_function is used. The default name_function
-        will return a zero padded string of received int. See
-        dask.utils.build_name_function for more info.
-        compute: bool, default True
-            If True, execute computation of resulting dask graph.
-            If False, return a Delayed object.
-        lock: bool, None or lock object, default None
-        In to_hdf locks are needed for two reasons. First, to protect
-        against writing to the same file from multiple processes or threads
-        simultaneously.  Second, default libhdf5 is not thread safe, so we
-        must additionally lock on it's usage. By default if lock is None
-        lock will be determined optimally based on path_or_buf, key and the
-        scheduler used. Manually setting this parameter is usually not
-        required to improve performance.
-
-        Alternatively, you can specify specific values:
-        If False, no locking will occur. If True, default lock object will
-        be created (multiprocessing.Manager.Lock on multiprocessing
-        scheduler, Threading.Lock otherwise), This can be used to force
-        using a lock in scenarios the default behavior will be to avoid
-        locking. Else, value is assumed to implement the lock interface,
-        and will be the lock object used.
-
-        See Also
-        --------
-            dask.DataFrame.read_hdf: reading hdf files
-            dask.Series.read_hdf: reading hdf files
-
-        Examples
-        --------
-        Saving data to a single file:
-
-        >>> df.to_hdf('output.hdf', '/data')            # doctest: +SKIP
-
-        Saving data to multiple nodes:
-
-        >>> with pd.HDFStore('output.hdf') as fh:
-        ...     df.to_hdf(fh, '/data*')
-        ...     fh.keys()                               # doctest: +SKIP
-        ['/data0', '/data1']
-
-        Or multiple files:
-
-        >>> df.to_hdf('output_*.hdf', '/data')          # doctest: +SKIP
-
-        Saving multiple files with the multiprocessing scheduler and manually
-        disabling locks:
-
-        >>> df.to_hdf('output_*.hdf', '/data',
-        ...   get=dask.multiprocessing.get, lock=False) # doctest: +SKIP
-        """
-
+        """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
 
+    def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
+        from .io import to_parquet
+        return to_parquet(path, self, *args, **kwargs)
+
     def to_csv(self, filename, **kwargs):
-        """Write DataFrame to a series of comma-separated values (csv) files
-
-        One filename per partition will be created. You can specify the
-        filenames in a variety of ways.
-
-        Use a globstring::
-
-        >>> df.to_csv('/path/to/data/export-*.csv')  # doctest: +SKIP
-
-        The * will be replaced by the increasing sequence 0, 1, 2, ...
-
-        ::
-
-            /path/to/data/export-0.csv
-            /path/to/data/export-1.csv
-
-        Use a globstring and a ``name_function=`` keyword argument.  The
-        name_function function should expect an integer and produce a string.
-        Strings produced by name_function must preserve the order of their
-        respective partition indices.
-
-        >>> from datetime import date, timedelta
-        >>> def name(i):
-        ...     return str(date(2015, 1, 1) + i * timedelta(days=1))
-
-        >>> name(0)
-        '2015-01-01'
-        >>> name(15)
-        '2015-01-16'
-
-        >>> df.to_csv('/path/to/data/export-*.csv', name_function=name)  # doctest: +SKIP
-
-        ::
-
-            /path/to/data/export-2015-01-01.csv
-            /path/to/data/export-2015-01-02.csv
-            ...
-
-        You can also provide an explicit list of paths::
-
-        >>> paths = ['/path/to/data/alice.csv', '/path/to/data/bob.csv', ...]  # doctest: +SKIP
-        >>> df.to_csv(paths) # doctest: +SKIP
-
-        Parameters
-        ----------
-        filename : string
-            Path glob indicating the naming scheme for the output files
-        name_function : callable, default None
-            Function accepting an integer (partition index) and producing a
-            string to replace the asterisk in the given filename globstring.
-            Should preserve the lexicographic order of partitions
-        compression : string or None
-            String like 'gzip' or 'xz'.  Must support efficient random access.
-            Filenames with extensions corresponding to known compression
-            algorithms (gz, bz2) will be compressed accordingly automatically
-        sep : character, default ','
-            Field delimiter for the output file
-        na_rep : string, default ''
-            Missing data representation
-        float_format : string, default None
-            Format string for floating point numbers
-        columns : sequence, optional
-            Columns to write
-        header : boolean or list of string, default True
-            Write out column names. If a list of string is given it is assumed
-            to be aliases for the column names
-        index : boolean, default True
-            Write row names (index)
-        index_label : string or sequence, or False, default None
-            Column label for index column(s) if desired. If None is given, and
-            `header` and `index` are True, then the index names are used. A
-            sequence should be given if the DataFrame uses MultiIndex.  If
-            False do not print fields for index names. Use index_label=False
-            for easier importing in R
-        nanRep : None
-            deprecated, use na_rep
-        mode : str
-            Python write mode, default 'w'
-        encoding : string, optional
-            A string representing the encoding to use in the output file,
-            defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
-        compression : string, optional
-            a string representing the compression to use in the output file,
-            allowed values are 'gzip', 'bz2', 'xz',
-            only used when the first argument is a filename
-        line_terminator : string, default '\\n'
-            The newline character or character sequence to use in the output
-            file
-        quoting : optional constant from csv module
-            defaults to csv.QUOTE_MINIMAL
-        quotechar : string (length 1), default '\"'
-            character used to quote fields
-        doublequote : boolean, default True
-            Control quoting of `quotechar` inside a field
-        escapechar : string (length 1), default None
-            character used to escape `sep` and `quotechar` when appropriate
-        chunksize : int or None
-            rows to write at a time
-        tupleize_cols : boolean, default False
-            write multi_index columns as a list of tuples (if True)
-            or new (expanded format) if False)
-        date_format : string, default None
-            Format string for datetime objects
-        decimal: string, default '.'
-            Character recognized as decimal separator. E.g. use ',' for
-            European data
-        """
+        """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
     def to_delayed(self):
-        """ Convert dataframe into dask Delayed objects
-
-        Returns a list of delayed values, one value per partition.
-        """
-        from ..delayed import Delayed
-        return [Delayed(k, [self.dask]) for k in self._keys()]
+        """ See dd.to_delayed docstring for more information """
+        return to_delayed(self)
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1976,14 +1753,6 @@ class Series(_Frame):
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
-        """Convert to a dask Bag.
-
-        Parameters
-        ----------
-        index : bool, optional
-            If True, the elements are tuples of ``(index, value)``, otherwise
-            they're just the ``value``.  Default is False.
-        """
         from .io import to_bag
         return to_bag(self, index)
 
@@ -2845,17 +2614,6 @@ class DataFrame(_Frame):
                            aggfunc=aggfunc)
 
     def to_records(self, index=False):
-        """ Convert to a dask array with struct dtype
-
-        Warning: This creates a dask.array without precise shape information.
-        Operations that depend on shape information, like slicing or reshaping,
-        will not work.
-
-        Examples
-        --------
-        >>> df.to_records()  # doctest: +SKIP
-        dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
-        """
         from .io import to_records
         return to_records(self)
 
@@ -3872,3 +3630,20 @@ def maybe_shift_divisions(df, periods, freq):
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)
     return df
+
+
+def to_delayed(df):
+    """ Create Dask Delayed objects from a Dask Dataframe
+
+    Returns a list of delayed values, one value per partition.
+
+    Examples
+    --------
+    >>> partitions = df.to_delayed()  # doctest: +SKIP
+    """
+    from ..delayed import Delayed
+    return [Delayed(k, [df.dask]) for k in df._keys()]
+
+
+if PY3:
+    _Frame.to_delayed.__doc__ = to_delayed.__doc__

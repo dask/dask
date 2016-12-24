@@ -3,6 +3,7 @@ from toolz import first, partial
 
 from ..core import DataFrame, Series
 from ...base import compute, tokenize, normalize_token
+from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import OpenFileCreator
 
@@ -20,10 +21,12 @@ except:
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                  storage_options=None):
     """
-    Read Dask DataFrame from ParquetFile
+    Read ParquetFile into a Dask DataFrame
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
+
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
     Parameters
     ----------
@@ -158,7 +161,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                fixed_text=None, object_encoding=None, storage_options=None):
     """
-    Write Dask.dataframe to parquet
+    Store Dask.dataframe to Parquet files
 
     Notes
     -----
@@ -191,6 +194,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
         encoding is applied to all object columns.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
+
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
     Examples
     --------
@@ -249,3 +254,7 @@ if fastparquet:
     @partial(normalize_token.register, fastparquet.ParquetFile)
     def normalize_ParquetFile(pf):
         return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+
+
+if PY3:
+    DataFrame.to_parquet.__doc__ = to_parquet.__doc__

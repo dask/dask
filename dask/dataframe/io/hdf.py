@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from fnmatch import fnmatch
-from functools import wraps
 from glob import glob
 import os
 from threading import Lock
@@ -15,6 +14,7 @@ from toolz import merge
 
 from ...async import get_sync
 from ...base import tokenize
+from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
 import dask.multiprocessing
@@ -40,10 +40,85 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     return None
 
 
-@wraps(pd.DataFrame.to_hdf)
-def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
+def to_hdf(df, path, key, mode='a', append=False, get=None,
            name_function=None, compute=True, lock=None, dask_kwargs={},
            **kwargs):
+    """ Store Dask Dataframe to Hierarchical Data Format (HDF) files
+
+    This is a parallel version of the Pandas function of the same name.  Please
+    see the Pandas docstring for more detailed information about shared keyword
+    arguments.
+
+    This function differs from the Pandas version by saving the many partitions
+    of a Dask DataFrame in parallel, either to many files, or to many datasets
+    within the same file.  You may specify this parallelism with an asterix
+    ``*`` within the filename or datapath, and an optional ``name_function``.
+    The asterix will be replaced with an increasing sequence of integers
+    starting from ``0`` or with the result of calling ``name_function`` on each
+    of those integers.
+
+    This function only supports the Pandas ``'table'`` format, not the more
+    specialized ``'fixed'`` format.
+
+    Parameters
+    ----------
+    path: string
+        Path to a target filename.  May contain a ``*`` to denote many filenames
+    key: string
+        Datapath within the files.  May contain a ``*`` to denote many locations
+    name_function: function
+        A function to convert the ``*`` in the above options to a string.
+        Should take in a number from 0 to the number of partitions and return a
+        string. (see examples below)
+    compute: bool
+        Whether or not to execute immediately.  If False then this returns a
+        ``dask.Delayed`` value.
+    lock: Lock, optional
+        Lock to use to prevent concurrency issues.  By default a
+        ``threading.Lock`` or ``multiprocessing.Lock`` will be used depending
+        on your scheduler
+    **other:
+        See pandas.to_hdf for more information
+
+    Examples
+    --------
+    Save Data to a single file
+
+    >>> df.to_hdf('output.hdf', '/data')            # doctest: +SKIP
+
+    Save data to multiple datapaths within the same file:
+
+    >>> df.to_hdf('output.hdf', '/data-*')          # doctest: +SKIP
+
+    Save data to multiple files:
+
+    >>> df.to_hdf('output-*.hdf', '/data')          # doctest: +SKIP
+
+    Save data to multiple files, using the multiprocessing scheduler:
+
+    >>> df.to_hdf('output-*.hdf', '/data', get=dask.multiprocessing.get) # doctest: +SKIP
+
+    Specify custom naming scheme.  This writes files as
+    '2000-01-01.hdf', '2000-01-02.hdf', '2000-01-03.hdf', etc..
+
+    >>> from datetime import date, timedelta
+    >>> base = date(year=2000, month=1, day=1)
+    >>> def name_function(i):
+    ...     ''' Convert integer 0 to n to a string '''
+    ...     return base + timedelta(days=i)
+
+    >>> df.to_hdf('*.hdf', '/data', name_function=name_function) # doctest: +SKIP
+
+    Returns
+    -------
+    None: if compute == True
+    delayed value: if compute == False
+
+    See Also
+    --------
+    read_hdf:
+    to_parquet:
+    """
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -51,20 +126,20 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     single_file = True
     single_node = True
 
-    # if path_or_buf is string, format using i_name
-    if isinstance(path_or_buf, str):
-        if path_or_buf.count('*') + key.count('*') > 1:
+    # if path is string, format using i_name
+    if isinstance(path, str):
+        if path.count('*') + key.count('*') > 1:
             raise ValueError("A maximum of one asterisk is accepted in file path and dataset key")
 
-        fmt_obj = lambda path_or_buf, i_name: path_or_buf.replace('*', i_name)
+        fmt_obj = lambda path, i_name: path.replace('*', i_name)
 
-        if '*' in path_or_buf:
+        if '*' in path:
             single_file = False
     else:
         if key.count('*') > 1:
             raise ValueError("A maximum of one asterisk is accepted in dataset key")
 
-        fmt_obj = lambda path_or_buf, _: path_or_buf
+        fmt_obj = lambda path, _: path
 
     if '*' in key:
         single_node = False
@@ -115,7 +190,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
 
     i_name = name_function(0)
     dsk[(name, 0)] = (_pd_to_hdf, pd_to_hdf, lock,
-                      [(df._name, 0), fmt_obj(path_or_buf, i_name),
+                      [(df._name, 0), fmt_obj(path, i_name),
                        key.replace('*', i_name)], kwargs)
 
     kwargs2 = kwargs.copy()
@@ -127,7 +202,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, get=None,
     for i in range(1, df.npartitions):
         i_name = name_function(i)
         task = (_pd_to_hdf, pd_to_hdf, lock,
-                [(df._name, i), fmt_obj(path_or_buf, i_name),
+                [(df._name, i), fmt_obj(path, i_name),
                     key.replace('*', i_name)], kwargs2)
         if single_file:
             link_dep = i - 1 if single_node else 0
@@ -258,13 +333,14 @@ def _pd_read_hdf(path, key, lock, kwargs):
     return result
 
 
-@wraps(pd.read_hdf)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
              chunksize=1000000, sorted_index=False, lock=True, mode='a'):
     """
-    Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
-    can read multiple files, and read multiple keys from the same file by using
-    pattern matching.
+    Read HDF files into a Dask DataFrame
+
+    Read hdf files into a dask dataframe. This function is like
+    ``pandas.read_hdf``, except it can read from a single large file, or from
+    multiple files, or from multiple keys from the same file.
 
     Parameters
     ----------
@@ -314,3 +390,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
                                     sorted_index=sorted_index,
                                     lock=lock, mode=mode)
                    for path in paths])
+
+
+if PY3:
+    from ..core import _Frame
+    _Frame.to_hdf.__doc__ = to_hdf.__doc__
