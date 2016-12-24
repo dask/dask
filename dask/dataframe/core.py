@@ -2389,6 +2389,15 @@ class DataFrame(_Frame):
         >>> df2 = df.set_index('x')  # doctest: +SKIP
         >>> df2 = df.set_index(d.x)  # doctest: +SKIP
         >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+
+        A common case is when we have a datetime column that we know to be
+        sorted and is cleanly divided by day.  We can set this index for free
+        by specifying both that the column is pre-sorted and the particular
+        divisions along which is is separated
+
+        >>> import pandas as pd
+        >>> divisions = pd.date_range('2000', '2010', freq='1D')
+        >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
         if sorted:
             return set_sorted_index(self, other, drop=drop, **kwargs)
