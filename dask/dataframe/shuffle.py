@@ -17,15 +17,9 @@ from ..context import _globals
 from ..utils import digit, insert, M
 
 
-def set_index(df, index, npartitions=None, shuffle=None, compute=True,
-              drop=True, upsample=1.0, **kwargs):
-    """ Set DataFrame index to new column
-
-    Sorts index and realigns Dataframe to new sorted order.
-
-    This shuffles and repartitions your data. If done in parallel the
-    resulting order is non-deterministic.
-    """
+def set_index(df, index, npartitions=None, shuffle=None, compute=False,
+              drop=True, upsample=1.0, divisions=None, **kwargs):
+    """ See _Frame.set_index for docstring """
     if (isinstance(index, Series) and index._name == df.index._name):
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -40,12 +34,13 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=True,
     else:
         index2 = index
 
-    divisions = (index2
-                 ._repartition_quantiles(npartitions, upsample=upsample)
-                 .compute()).tolist()
+    if divisions is None:
+        divisions = (index2
+                     ._repartition_quantiles(npartitions, upsample=upsample)
+                     .compute()).tolist()
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
-                         **kwargs)
+                         compute=compute, **kwargs)
 
 
 def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,

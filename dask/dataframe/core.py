@@ -2340,27 +2340,55 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def set_index(self, other, drop=True, sorted=False, **kwargs):
-        """ Set the DataFrame index (row labels) using an existing column
+        """
+        Set the DataFrame index (row labels) using an existing column
 
-        This operation in dask.dataframe is expensive.  If the input column is
-        sorted then we accomplish the set_index in a single full read of that
-        column.  However, if the input column is not sorted then this operation
-        triggers a full shuffle, which can take a while and only works on a
-        single machine (not distributed).
+        This realigns the dataset to be sorted by a new column.  This can have a
+        significant impact on performance, because joins, groupbys, lookups, etc.
+        are all much faster on that column.  However, this performance increase
+        comes with a cost, sorting a parallel dataset requires expensive shuffles.
+        Often we ``set_index`` once directly after data ingest and filtering and
+        then perform many cheap computations off of the sorted dataset.
+
+        This function operates exactly like ``pandas.set_index`` except with
+        different performance costs (it is much more expensive).  Under normal
+        operation this function does an initial pass over the index column to
+        compute approximate qunatiles to serve as future divisions.  It then passes
+        over the data a second time, splitting up each input partition into several
+        pieces and sharing those pieces to all of the output partitions now in
+        sorted order.
+
+        In some cases we can alleviate those costs, for example if your dataset is
+        sorted already then we can avoid making many small pieces or if you know
+        good values to split the new index column then we can avoid the initial
+        pass over the data.  For example if your new index is a datetime index and
+        your data is already sorted by day then this entire operation can be done
+        for free.  You can control these options with the following parameters.
 
         Parameters
         ----------
-        other: Series or label
-        drop: boolean, default True
-            Delete columns to be used as the new index
-        sorted: boolean, default False
-            Set to True if the new index column is already sorted
+        df: Dask DataFrame
+        index: string or Dask Series
+        npartitions: int
+            The ideal number of output partitions
+        shuffle: string, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` for
+            distributed operation.  Will be inferred by your current scheduler.
+        sorted: bool, optional
+            If the index column is already sorted in increasing order.
+            Defaults to False
+        divisions: list, optional
+            Known values on which to separate index values of the partitions.
+            See http://dask.pydata.org/en/latest/dataframe-design.html#partitions
+            Defaults to computing this with a single pass over the data
+        compute: bool
+            Whether or not to trigger an immediate computation. Defaults to True.
 
         Examples
         --------
-        >>> df.set_index('x')  # doctest: +SKIP
-        >>> df.set_index(d.x)  # doctest: +SKIP
-        >>> df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        >>> df2 = df.set_index('x')  # doctest: +SKIP
+        >>> df2 = df.set_index(d.x)  # doctest: +SKIP
+        >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
         """
         if sorted:
             return set_sorted_index(self, other, drop=drop, **kwargs)
@@ -2377,8 +2405,7 @@ class DataFrame(_Frame):
         --------
         set_index
         """
-        from .shuffle import set_partition
-        return set_partition(self, column, divisions, **kwargs)
+        raise Exception("Deprecated, use set_index(..., divisions=...) instead")
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):

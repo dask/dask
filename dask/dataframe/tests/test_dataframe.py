@@ -660,23 +660,23 @@ def test_drop_duplicates_subset():
 
 
 def test_set_partition():
-    d2 = d.set_partition('b', [0, 2, 9])
+    d2 = d.set_index('b', divisions=[0, 2, 9])
     assert d2.divisions == (0, 2, 9)
     expected = full.set_index('b')
     assert_eq(d2, expected)
 
 
 def test_set_partition_compute():
-    d2 = d.set_partition('b', [0, 2, 9])
-    d3 = d.set_partition('b', [0, 2, 9], compute=True)
+    d2 = d.set_index('b', divisions=[0, 2, 9], compute=False)
+    d3 = d.set_index('b', divisions=[0, 2, 9], compute=True)
 
     assert_eq(d2, d3)
     assert_eq(d2, full.set_index('b'))
     assert_eq(d3, full.set_index('b'))
     assert len(d2.dask) > len(d3.dask)
 
-    d4 = d.set_partition(d.b, [0, 2, 9])
-    d5 = d.set_partition(d.b, [0, 2, 9], compute=True)
+    d4 = d.set_index(d.b, divisions=[0, 2, 9], compute=False)
+    d5 = d.set_index(d.b, divisions=[0, 2, 9], compute=True)
     exp = full.copy()
     exp.index = exp.b
     assert_eq(d4, d5)
@@ -1398,7 +1398,7 @@ def test_set_partition_2():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
     ddf = dd.from_pandas(df, 2)
 
-    result = ddf.set_partition('y', ['a', 'c', 'd'])
+    result = ddf.set_index('y', divisions=['a', 'c', 'd'])
     assert result.divisions == ('a', 'c', 'd')
 
     assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
