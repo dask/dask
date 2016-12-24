@@ -74,7 +74,7 @@ class _LocIndexer(object):
         Convert index-indexer for partial time string slicing
         if obj.index is DatetimeIndex / PeriodIndex
         """
-        iindexer = _maybe_partial_time_string(self.obj._meta.index,
+        iindexer = _maybe_partial_time_string(self.obj._meta_nonempty.index,
                                               iindexer, kind='loc')
         return iindexer
 
@@ -219,6 +219,6 @@ def _maybe_partial_time_string(index, indexer, kind):
     elif isinstance(indexer, pd.compat.string_types):
         start = index._maybe_cast_slice_bound(indexer, 'left', 'loc')
         stop = index._maybe_cast_slice_bound(indexer, 'right', 'loc')
-        return slice(start, stop)
+        return slice(min(start, stop), max(start, stop))
 
     return indexer
