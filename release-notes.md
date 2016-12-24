@@ -1,8 +1,28 @@
-1.14.x -
+1.15.x -
 ----------------------------
+
+*  Major Worker refactor #704
+*  Major Scheduler refactor #717 #722 #724 #742 743
 
 *  Add ``check`` (default is ``False``) option to ``Client.get_versions``
    to raise if the versions don't match on client, scheduler & workers #664
+*  ``Future.add_done_callback`` executes in separate thread #656
+*  Clean up numpy serialization #670
+*  Support serialization of Tornado v4.5 coroutines #673
+*  Use CPickle instead of Pickle in Python 2 #684
+*  Use Forkserver rather than Fork on Unix in Python 3 #687
+*  Support abstract resources for per-task constraints #694 #720 #737
+*  Add TCP timeouts #697
+*  Add embedded Bokeh server to workers #709 #713 #738
+*  Add embedded Bokeh server to scheduler #724 #736 #738
+*  Add more precise timers for Windows #713
+*  Add Versioneer #715
+*  Support inter-client channels  #729 #749
+*  Scheduler Performance improvements #740 #760
+*  Improve load balancing and work stealing #747 #754 #757
+*  Run Tornado coroutines on workers
+*  Avoid slow sizeof call on Pandas dataframes #758
+
 
 1.14.3 - November 13th, 2016
 ----------------------------
