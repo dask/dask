@@ -144,7 +144,7 @@ class WorkStealing(SchedulerPlugin):
                     import pdb; pdb.set_trace()
 
             self.remove_key_from_stealable(key)
-            logger.info("Moved %s, %s: %2f -> %s: %2f", key,
+            logger.debug("Moved %s, %s: %2f -> %s: %2f", key,
                     victim, self.scheduler.occupancy[victim],
                     thief, self.scheduler.occupancy[thief])
 
