@@ -12,7 +12,7 @@ import numpy as np
 from toolz import merge
 
 from ...base import tokenize
-from ...compatibility import unicode
+from ...compatibility import unicode, PY3
 from ... import array as da
 from ...async import get_sync
 from ...delayed import Delayed, delayed
@@ -66,7 +66,7 @@ def _meta_from_array(x, columns=None):
 
 
 def from_array(x, chunksize=50000, columns=None):
-    """ Read dask Dataframe from any slicable array
+    """ Read any slicable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
@@ -103,16 +103,21 @@ def from_array(x, chunksize=50000, columns=None):
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
-    """Construct a dask object from a pandas object.
+    """
+    Construct a Dask DataFrame from a Pandas DataFrame
 
-    If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
-    ``pandas.DataFrame`` a ``dask.DataFrame`` will be returned. All other
-    pandas objects will raise a ``TypeError``.
+    This splits an in-memory Pandas dataframe into several parts and constructs
+    a dask.dataframe from those parts on which Dask.dataframe can operate in
+    parallel.
+
+    Note that, despite parallelism, Dask.dataframe may not always be faster
+    than Pandas.  We recommend that you stay with Pandas for as long as
+    possible before switching to Dask.dataframe.
 
     Parameters
     ----------
     df : pandas.DataFrame or pandas.Series
-        The DataFrame/Series with which to construct a dask DataFrame/Series
+        The DataFrame/Series with which to construct a Dask DataFrame/Series
     npartitions : int, optional
         The number of partitions of the index to create. Note that depending on
         the size and index of the dataframe, the output may have fewer
@@ -156,7 +161,6 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     See Also
     --------
     from_array : Construct a dask.DataFrame from an array that has record dtype
-    from_bcolz : Construct a dask.DataFrame from a bcolz ctable
     read_csv : Construct a dask.DataFrame from a CSV file
     """
     if isinstance(getattr(data, 'index', None), pd.MultiIndex):
@@ -197,15 +201,16 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
                **kwargs):
-    """ Read dask Dataframe from bcolz.ctable
+    """ Read BColz CTable into a Dask Dataframe
+
+    BColz is a fast on-disk compressed column store with careful attention
+    given to compression.  https://bcolz.readthedocs.io/en/latest/
 
     Parameters
     ----------
     x : bcolz.ctable
-        Input data
     chunksize : int, optional
-        The size of blocks to pull out from ctable.  Ideally as large as can
-        comfortably fit in memory
+        The size of blocks to pull out from ctable.
     categorize : bool, defaults to True
         Automatically categorize all string dtypes
     index : string, optional
@@ -339,7 +344,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
 
 
 def from_dask_array(x, columns=None):
-    """ Convert dask Array to dask DataFrame
+    """ Create Dask Array from a Dask DataFrame
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
 
@@ -351,7 +356,6 @@ def from_dask_array(x, columns=None):
 
     Examples
     --------
-
     >>> import dask.array as da
     >>> import dask.dataframe as dd
     >>> x = da.ones((4, 2), chunks=(2, 2))
@@ -362,8 +366,13 @@ def from_dask_array(x, columns=None):
     1  1.0  1.0
     2  1.0  1.0
     3  1.0  1.0
-    """
 
+    See Also
+    --------
+    dask.bag.to_dataframe: from dask.bag
+    dask.dataframe._Frame.values: Reverse conversion
+    dask.dataframe._Frame.to_records: Reverse conversion
+    """
     meta = _meta_from_array(x, columns)
 
     name = 'from-dask-array' + tokenize(x, columns)
@@ -393,7 +402,11 @@ def from_dask_array(x, columns=None):
 
 
 def from_castra(x, columns=None):
-    """Load a dask DataFrame from a Castra.
+    """
+    Load a dask DataFrame from a Castra.
+
+    The Castra project has been deprecated.  We recommend using Parquet
+    instead.
 
     Parameters
     ----------
@@ -420,7 +433,7 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
               compute=True, get=get_sync):
     """ Write DataFrame to Castra on-disk store
 
-    See https://github.com/blosc/castra for details
+    The Castra project has been deprecated.  We recommend using Parquet instead.
 
     See Also
     --------
@@ -457,6 +470,18 @@ def _df_to_bag(df, index=False):
 
 
 def to_bag(df, index=False):
+    """Create Dask Bag from a Dask DataFrame
+
+    Parameters
+    ----------
+    index : bool, optional
+        If True, the elements are tuples of ``(index, value)``, otherwise
+        they're just the ``value``.  Default is False.
+
+    Examples
+    --------
+    >>> bag = df.to_bag()  # doctest: +SKIP
+    """
     from ...bag.core import Bag
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
@@ -468,6 +493,22 @@ def to_bag(df, index=False):
 
 
 def to_records(df):
+    """ Create Dask Array from a Dask Dataframe
+
+    Warning: This creates a dask.array without precise shape information.
+    Operations that depend on shape information, like slicing or reshaping,
+    will not work.
+
+    Examples
+    --------
+    >>> df.to_records()  # doctest: +SKIP
+    dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+
+    See Also
+    --------
+    dask.dataframe._Frame.values
+    dask.dataframe.from_dask_array
+    """
     from ...array.core import Array
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
@@ -482,7 +523,7 @@ def to_records(df):
 @insert_meta_param_description
 def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
                  metadata=None):
-    """ Create DataFrame from many dask.delayed objects
+    """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
     ----------
@@ -577,3 +618,8 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         values.append(seq[-1])
 
     return values, positions
+
+
+if PY3:
+    DataFrame.to_records.__doc__ = to_records.__doc__
+    DataFrame.to_bag.__doc__ = to_bag.__doc__

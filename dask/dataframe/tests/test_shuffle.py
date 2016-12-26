@@ -3,6 +3,7 @@ import pytest
 import pickle
 import numpy as np
 
+import dask
 import dask.dataframe as dd
 from dask.threaded import get as threaded_get
 from dask.multiprocessing import get as mp_get
@@ -254,3 +255,18 @@ def test_maybe_buffered_partd():
     assert not f2.buffer
     p2 = f2()
     assert isinstance(p2.partd, partd.File)
+
+
+def test_set_index_with_explicit_divisions():
+    df = pd.DataFrame({'x': [4, 1, 2, 5]}, index=[10, 20, 30, 40])
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def throw(*args, **kwargs):
+        raise Exception()
+
+    with dask.set_options(get=throw):
+        ddf2 = ddf.set_index('x', divisions=[1, 3, 5])
+
+    df2 = df.set_index('x')
+    assert_eq(ddf2, df2)

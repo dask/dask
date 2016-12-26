@@ -14,7 +14,7 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
     sep = '/'
 
     def __init__(self, key=None, username=None, secret=None, password=None,
-                 blocksize=5 * 2 ** 20, path=None, host=None, s3=None, **kwargs):
+                 path=None, host=None, s3=None, **kwargs):
         if username is not None:
             if key is not None:
                 raise KeyError("S3 storage options got secrets argument "
@@ -33,15 +33,13 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
             secret = password
         if secret is not None:
             kwargs['secret'] = secret
-        self.blocksize = blocksize
         # S3FileSystem.__init__(self, kwargs)  # not sure what do do here
         S3FileSystem.__init__(self, **kwargs)
 
     def open(self, path, mode='rb', **kwargs):
         bucket = kwargs.pop('host', '')
         s3_path = bucket + path
-        return S3FileSystem.open(self, s3_path, mode=mode,
-                                 block_size=self.blocksize)
+        return S3FileSystem.open(self, s3_path, mode=mode)
 
     def glob(self, path, **kwargs):
         bucket = kwargs.pop('host', '')

@@ -1051,7 +1051,7 @@ class Bag(Base):
             raise NotImplementedError(msg)
 
     def to_dataframe(self, columns=None):
-        """ Convert Bag to dask.dataframe
+        """ Create Dask Dataframe from a Dask Bag
 
         Bag should contain tuples, dict records, or scalars.
 
@@ -1590,9 +1590,9 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     import partd
     p = ('partd-' + token,)
     try:
-        dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+        dsk1 = {p: (partd.Python, (partd.Snappy, (partd.File,)))}
     except AttributeError:
-        dsk1 = {p: (partd.Python, partd.File())}
+        dsk1 = {p: (partd.Python, (partd.File,))}
 
     # Partition data on disk
     name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)

@@ -2,8 +2,8 @@ import pandas as pd
 from toolz import first, partial
 
 from ..core import DataFrame, Series
-from ..utils import make_meta
 from ...base import compute, tokenize, normalize_token
+from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import OpenFileCreator
 
@@ -18,12 +18,15 @@ except:
     default_encoding = None
 
 
-def read_parquet(path, columns=None, filters=None, categories=None, index=None):
+def read_parquet(path, columns=None, filters=None, categories=None, index=None,
+                 storage_options=None):
     """
-    Read Dask DataFrame from ParquetFile
+    Read ParquetFile into a Dask DataFrame
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
+
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
     Parameters
     ----------
@@ -40,6 +43,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
+    storage_options : dict
+        Key/value pairs to be passed on to the file-system backend, if any.
 
     Examples
     --------
@@ -53,7 +58,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
         raise ImportError("fastparquet not installed")
     if filters is None:
         filters = []
-    myopen = OpenFileCreator(path, compression=None, text=False)
+    myopen = OpenFileCreator(path, compression=None, text=False,
+                             **(storage_options or {}))
 
     if isinstance(columns, list):
         columns = tuple(columns)
@@ -81,15 +87,17 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
 
     if index is False:
         index_col = None
+    elif len(minmax) == 1:
+        index_col = first(minmax)
     elif len(minmax) > 1:
         if index:
             index_col = index
+        elif 'index' in minmax:
+            index_col = 'index'
         else:
             raise ValueError("Multiple possible indexes exist: %s.  "
                              "Please select one with index='index-name'"
                              % sorted(minmax))
-    elif len(minmax) == 1:
-        index_col = first(minmax)
     else:
         index_col = None
 
@@ -108,7 +116,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None):
     dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
-    meta = make_meta(dtypes)
+    meta = pd.DataFrame({c: pd.Series([], dtype=d)
+                        for (c, d) in dtypes.items()},
+                        columns=[c for c in pf.columns if c in dtypes])
+
     for cat in categories:
         meta[cat] = pd.Series(pd.Categorical([], categories=cats[cat]))
 
@@ -150,9 +161,9 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
-               fixed_text=None, object_encoding=None):
+               fixed_text=None, object_encoding=None, storage_options=None):
     """
-    Write Dask.dataframe to parquet
+    Store Dask.dataframe to Parquet files
 
     Notes
     -----
@@ -183,6 +194,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     object_encoding : dict {col: bytes|utf8|json|bson} or str
         For object columns, specify how to encode to bytes. If a str, same
         encoding is applied to all object columns.
+    storage_options : dict
+        Key/value pairs to be passed on to the file-system backend, if any.
+
+    This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
     Examples
     --------
@@ -196,7 +211,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
 
-    myopen = OpenFileCreator(path, compression=None, text=False)
+    myopen = OpenFileCreator(path, compression=None, text=False,
+                             **(storage_options or {}))
     myopen.fs.mkdirs(path)
     sep = myopen.fs.sep
     metadata_fn = sep.join([path, '_metadata'])
@@ -240,3 +256,7 @@ if fastparquet:
     @partial(normalize_token.register, fastparquet.ParquetFile)
     def normalize_ParquetFile(pf):
         return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+
+
+if PY3:
+    DataFrame.to_parquet.__doc__ = to_parquet.__doc__

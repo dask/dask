@@ -19,8 +19,8 @@ def test_local():
                              'f': np.arange(1000, dtype=np.float64),
                              'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
-
-        to_parquet(tmp, df, write_index=False)
+        
+        df.to_parquet(tmp, write_index=False, object_encoding='utf8')
 
         files = os.listdir(tmp)
         assert '_metadata' in files
@@ -134,3 +134,61 @@ def test_categorical():
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
+
+
+def test_ordering():
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        df = pd.DataFrame({'a': [1, 2, 3],
+                           'b': [10, 20, 30],
+                           'c': [100, 200, 300]},
+                          index=pd.Index([-1, -2, -3], name='myindex'),
+                          columns=['c', 'a', 'b'])
+        ddf = dd.from_pandas(df, npartitions=2)
+        to_parquet(tmp, ddf)
+
+        pf = fastparquet.ParquetFile(tmp)
+        assert pf.columns == ['myindex', 'c', 'a', 'b']
+
+        ddf2 = read_parquet(tmp, index='myindex')
+        assert_eq(ddf, ddf2)
+
+
+@pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
+    (pd.DataFrame({'x': [3, 2, 1]}), {}, {}),
+    (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),
+    (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {'object_encoding': 'utf8'}, {}),
+    (pd.DataFrame({'x': [b'a', b'b', b'c']}), {'object_encoding': 'bytes'}, {}),
+    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}), {'object_encoding': 'utf8'},
+                                                           {'categories': ['x']}),
+    (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
+    (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
+    (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
+    pytest.mark.xfail((pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {}),
+                      reason="Parquet doesn't support nanosecond precision"),
+    (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'), {}, {}),
+    (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'), {}, {}),
+    (pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'), {}, {}),
+    (pd.DataFrame({'x': [3, 2, 1]}).astype('float32'), {}, {}),
+    (pd.DataFrame({'x': [3, 1, 2]}, index=[3, 2, 1]), {}, {}),
+    (pd.DataFrame({'x': [3, 1, 5]}, index=pd.Index([1, 2, 3], name='foo')), {}, {}),
+    (pd.DataFrame({'x': [1, 2, 3],
+                  'y': [3, 2, 1]}), {}, {}),
+    (pd.DataFrame({'x': [1, 2, 3],
+                  'y': [3, 2, 1]}, columns=['y', 'x']), {}, {}),
+    (pd.DataFrame({'0': [3, 2, 1]}), {}, {}),
+    (pd.DataFrame({'x': [3, 2, None]}), {}, {}),
+    (pd.DataFrame({'-': [3., 2., None]}), {}, {}),
+    (pd.DataFrame({'.': [3., 2., None]}), {}, {}),
+    (pd.DataFrame({' ': [3., 2., None]}), {}, {}),
+])
+def test_roundtrip(df, write_kwargs, read_kwargs):
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        if df.index.name is None:
+            df.index.name = 'index'
+        ddf = dd.from_pandas(df, npartitions=2)
+
+        to_parquet(tmp, ddf, **write_kwargs)
+        ddf2 = read_parquet(tmp, index=df.index.name, **read_kwargs)
+        assert_eq(ddf, ddf2)

@@ -1,6 +1,49 @@
 Changelog
 =========
 
+0.13.0 / ?
+
+Array
++++++
+
+- Mandatory dtypes on dask.array.  All operations maintain dtype information
+  and UDF functions like map_blocks now require a dtype= keyword if it can not
+  be inferred.  (:pr:`1755`)
+- Support arrays without known shapes, such as arises when slicing arrays with
+  arrays or converting dataframes to arrays (:pr:`1838`)
+- Support mutation by setting one array with another (:pr:`1840`)
+- Tree reductions for covariance and correlations.  (:pr:`1758`)
+- Add SerializableLock for better use with distributed scheduling (:pr:`1766`)
+- Improved atop support (:pr:`1800`)
+- Rechunk optimization (:pr:`1737`), (:pr:`1827`)
+
+Bag
++++
+
+- Avoid wrong results when recomputing the same groupby twice (:pr:`1867`)
+
+DataFrame
++++++++++
+
+- Add ``map_overlap`` for custom rolling operations (:pr:`1769`)
+- Add ``shift`` (:pr:`1773`)
+- Add Parquet support (:pr:`1782`) (:pr:`1792`) (:pr:`1810`), (:pr:`1843`),
+  (:pr:`1859`), (:pr:`1863`)
+- Add missing methods combine, abs, autocorr, sem, nsmallest, first, last,
+  prod, (:pr:`1787`)
+- Approximate nunique (:pr:`1807`), (:pr:`1824`)
+- Reductions with multiple output partitions (for operations like
+  drop_duplicates) (:pr:`1808`), (:pr:`1823`) (:pr:`1828`)
+- Add delitem and copy to DataFrames, increasing mutation support (:pr:`1858`)
+
+
+Core
+++++
+
+- Refactor core byte ingest (:pr:`1768`), (:pr:`1774`)
+- Improve import time (:pr:`1833`)
+
+
 0.12.0 / 2016-11-03
 -------------------
 
