@@ -1100,3 +1100,9 @@ def test_reductions_are_lazy():
     res = b.reduction(func, sum)
 
     assert res.compute(get=dask.get) == sum(range(10))
+
+
+def test_repeated_groupby():
+    b = db.range(10, npartitions=4)
+    c = b.groupby(lambda x: x % 3)
+    assert valmap(len, dict(c)) == valmap(len, dict(c))
