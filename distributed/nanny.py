@@ -37,7 +37,7 @@ class Nanny(Server):
                  ncores=None, loop=None, local_dir=None, services=None,
                  name=None, memory_limit=TOTAL_MEMORY, reconnect=True,
                  validate=False, environment=nanny_environment, quiet=False,
-                 resources=None, **kwargs):
+                 resources=None, silence_logs=None, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self._given_worker_port = worker_port
@@ -73,6 +73,10 @@ class Nanny(Server):
                     'terminate': self._close,
                     'monitor_resources': self.monitor_resources,
                     'run': self.run}
+
+        if silence_logs:
+            logger.setLevel(silence_logs)
+        self.silence_logs = silence_logs
 
         super(Nanny, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
@@ -208,9 +212,14 @@ class Nanny(Server):
                     args=(q, self.ip, self.scheduler.ip,
                           self.scheduler.port, self.ncores,
                           self.port, self._given_worker_port,
-                          self.local_dir, self.services, self.name,
-                          self.memory_limit, self.reconnect, self.resources,
-                          self.validate))
+                          self.local_dir),
+                    kwargs={'services': self.services,
+                            'name': self.name,
+                            'memory_limit': self.memory_limit,
+                            'reconnect': self.reconnect,
+                            'resources': self.resources,
+                            'validate': self.validate,
+                            'silence_logs': self.silence_logs})
                 self.process.daemon = True
                 self.process.start()
                 while True:
@@ -374,8 +383,7 @@ def run_worker_subprocess(environment, ip, scheduler_ip, scheduler_port, ncores,
 
 
 def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
-        worker_port, local_dir, services, name, memory_limit, reconnect,
-        resources, validate):
+                    worker_port, local_dir, **kwargs):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker  # pragma: no cover
     from tornado.ioloop import IOLoop  # pragma: no cover
@@ -384,9 +392,7 @@ def run_worker_fork(q, ip, scheduler_ip, scheduler_port, ncores, nanny_port,
     loop.make_current()  # pragma: no cover
     worker = Worker(scheduler_ip, scheduler_port, ncores=ncores, ip=ip,
                     service_ports={'nanny': nanny_port}, local_dir=local_dir,
-                    services=services, name=name, memory_limit=memory_limit,
-                    reconnect=reconnect, validate=validate,
-                    resources=resources, loop=loop)  # pragma: no cover
+                    loop=loop, **kwargs)  # pragma: no cover
 
     @gen.coroutine  # pragma: no cover
     def run():

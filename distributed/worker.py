@@ -133,13 +133,16 @@ class WorkerBase(Server):
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
-                 memory_limit='auto', executor=None, resources=None, **kwargs):
+                 memory_limit='auto', executor=None, resources=None,
+                 silence_logs=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
+        if silence_logs:
+            logger.setLevel(silence_logs)
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
 

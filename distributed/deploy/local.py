@@ -65,6 +65,7 @@ class LocalCluster(object):
             services={}, worker_services={}, **kwargs):
         self.status = None
         self.nanny = nanny
+        self.silence_logs = silence_logs
         if silence_logs:
             for l in ['distributed.scheduler',
                       'distributed.worker',
@@ -128,7 +129,8 @@ class LocalCluster(object):
             kwargs['quiet'] = True
         else:
             W = Worker
-        w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop, **kwargs)
+        w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop,
+              silence_logs=self.silence_logs, **kwargs)
         yield w._start(port)
 
         self.workers.append(w)

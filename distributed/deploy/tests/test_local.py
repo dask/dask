@@ -190,6 +190,7 @@ def test_blocks_until_full(loop):
     with Client(loop=loop) as c:
         assert len(c.ncores()) > 0
 
+
 @gen_test()
 def test_scale_up_and_down():
     loop = IOLoop.current()
@@ -212,3 +213,12 @@ def test_scale_up_and_down():
 
     yield c._shutdown()
     yield cluster._close()
+
+
+def test_silent_startup(capsys, loop):
+    with LocalCluster(diagnostics_port=None, loop=loop, scheduler_port=0):
+        sleep(0.5)
+
+    out, err = capsys.readouterr()
+    assert not out
+    assert not err
