@@ -1161,6 +1161,17 @@ class Array(Base):
     def __complex__(self):
         return complex(self.compute())
 
+    def __setitem__(self, key, value):
+        if isinstance(key, Array):
+            y = where(key, value, self)
+            self.dtype = y.dtype
+            self.dask = y.dask
+            self.name = y.name
+            return self
+        else:
+            raise NotImplementedError("Item assignment with %s not supported"
+                                      % type(key))
+
     def __getitem__(self, index):
         out = 'getitem-' + tokenize(self, index)
 
@@ -1182,6 +1193,9 @@ class Array(Base):
                 return self.map_blocks(getitem, index, dtype=dt, name=out)
 
         # Slicing
+        if isinstance(index, Array):
+            return slice_with_dask_array(self, index)
+
         if not isinstance(index, tuple):
             index = (index,)
 
@@ -1672,7 +1686,7 @@ class Array(Base):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return self
+        return Array(self.dask, self.name, self.chunks, self.dtype)
 
     def to_delayed(self):
         """ Convert Array into dask Delayed objects
@@ -3749,3 +3763,15 @@ def repeat(a, repeats, axis=None):
         out.append(result)
 
     return concatenate(out, axis=axis)
+
+
+def slice_with_dask_array(x, index):
+    y = elemwise(getitem, x, index, dtype=x.dtype)
+
+    name = 'getitem-' + tokenize(x, index)
+
+    dsk = {(name, i): k
+           for i, k in enumerate(core.flatten(y._keys()))}
+    chunks = ((np.nan,) * y.npartitions,)
+
+    return Array(merge(y.dask, dsk), name, chunks, x.dtype)

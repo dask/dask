@@ -2261,9 +2261,16 @@ def test_A_property():
     assert x.A is x
 
 
-def test_copy():
-    x = da.ones(5, chunks=(2,))
-    assert x.copy() is x
+def test_copy_mutate():
+    x = da.arange(5, chunks=(2,))
+    y = x.copy()
+    x[x % 2 == 0] = -1
+
+    xx = np.arange(5)
+    xx[xx % 2 == 0] = -1
+    assert_eq(x, xx)
+
+    assert_eq(y, np.arange(5))
 
 
 def test_npartitions():
@@ -2589,3 +2596,67 @@ def test_no_chunks_slicing_2d():
         with pytest.raises(ValueError) as e:
             op()
         assert 'chunk' in str(e) and 'unknown' in str(e)
+
+
+def test_index_array_with_array_1d():
+    x = np.arange(10)
+    dx = da.from_array(x, chunks=(5,))
+    dx._chunks = ((np.nan, np.nan),)
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+    dy = da.ones(11, chunks=(3,))
+
+    with pytest.raises(ValueError):
+        dx[dy > 5]
+
+
+def test_index_array_with_array_2d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+    dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
+
+    assert (sorted(x[x % 2 == 0].tolist()) ==
+            sorted(dx[dx % 2 == 0].compute().tolist()))
+    assert (sorted(x[x > 6].tolist()) ==
+            sorted(dx[dx > 6].compute().tolist()))
+
+
+def test_setitem_1d():
+    x = np.arange(10)
+    dx = da.from_array(x.copy(), chunks=(5,))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+
+def test_setitem_2d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+
+def test_setitem_mixed_d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+
+    x[x[0, None] > 2] = -1
+    dx[dx[0, None] > 2] = -1
+    assert_eq(x, dx)
+
+    x[x[None, 0] > 2] = -1
+    dx[dx[None, 0] > 2] = -1
+    assert_eq(x, dx)

@@ -2842,6 +2842,19 @@ def test_values():
     assert_eq(df.index.values, ddf.index.values)
 
 
+def test_copy():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    a = dd.from_pandas(df, npartitions=2)
+    b = a.copy()
+
+    a['y'] = a.x * 2
+
+    assert_eq(b, df)
+
+    df['y'] = df.x * 2
+
+
 def test_del():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},

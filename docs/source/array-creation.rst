@@ -71,6 +71,22 @@ as described above.
 See :doc:`documentation on using dask.delayed with collections<delayed-collections>`.
 
 
+From Dask.dataframe
+-------------------
+
+You can create dask arrays from dask dataframes using the ``.values`` attribute
+or the ``.to_records()`` method.
+
+.. code-block:: python
+
+   >>> x = df.values
+   >>> x = df.to_records()
+
+However these arrays do not have known chunk sizes (dask.dataframe does not
+track the number of rows in each partition) and so some operations like slicing
+will not operate correctly.
+
+
 Chunks
 ------
 
@@ -98,6 +114,23 @@ For performance, a good choice of ``chunks`` follows the following rules:
     efficient if your chunks are aligned so that you have to touch fewer
     chunks.  If you want to add two arrays then its convenient if those arrays
     have matching chunks patterns.
+
+
+Unknown Chunks
+~~~~~~~~~~~~~~
+
+Some arrays have unknown chunk sizes.  These are designated using ``np.nan``
+rather than an integer.  These arrays support many but not all operations.  In
+particular, opeations like slicing are not possible and will result in an
+error.
+
+.. code-block:: python
+
+   >>> x.shape
+   (np.nan, np.nan)
+
+   >>> x[0]
+   ValueError: Array chunk sizes unknown
 
 
 Chunks Examples

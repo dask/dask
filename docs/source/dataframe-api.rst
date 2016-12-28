@@ -76,9 +76,11 @@ Top level user functions:
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
-    DataFrame.to_hdf
     DataFrame.to_delayed
+    DataFrame.to_hdf
+    DataFrame.to_records
     DataFrame.truediv
+    DataFrame.values
     DataFrame.var
     DataFrame.visualize
     DataFrame.where
