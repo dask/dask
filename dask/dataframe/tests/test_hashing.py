@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from dask.dataframe.hashing import hash_pandas_object
+from dask.dataframe.utils import assert_eq
 
 
 @pytest.mark.parametrize('obj', [
@@ -23,4 +24,7 @@ from dask.dataframe.hashing import hash_pandas_object
 def test_hash_pandas_object(obj):
     a = hash_pandas_object(obj)
     b = hash_pandas_object(obj)
-    np.testing.assert_equal(a, b)
+    if isinstance(a, np.ndarray):
+        np.testing.assert_equal(a, b)
+    else:
+        assert_eq(a, b)
