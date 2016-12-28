@@ -19,7 +19,7 @@ def test_local():
                              'f': np.arange(1000, dtype=np.float64),
                              'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
-        
+
         df.to_parquet(tmp, write_index=False, object_encoding='utf8')
 
         files = os.listdir(tmp)
