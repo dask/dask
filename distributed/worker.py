@@ -971,6 +971,8 @@ class Worker(WorkerBase):
         state = func(key, **kwargs)
         self.log.append((key, start, state or finish))
         self.task_state[key] = state or finish
+        # if self.validate:
+        #     self.validate_key(key)
 
     def transition_waiting_ready(self, key):
         try:
@@ -1497,6 +1499,46 @@ class Worker(WorkerBase):
     # Administrative #
     ##################
 
+    def validate_key_memory(self, key):
+        assert key in self.data
+        assert key in self.nbytes
+        assert key not in self.waiting_for_data
+        assert key not in self.executing
+        assert key not in self.ready
+
+    def validate_key_executing(self, key):
+        assert key in self.executing
+        assert key not in self.data
+        assert key not in self.waiting_for_data
+        assert all(dep in self.data for dep in self.dependencies[key])
+
+    def validate_key_ready(self, key):
+        assert key in pluck(1, self.ready)
+        assert key not in self.data
+        assert key not in self.executing
+        assert key not in self.waiting_for_data
+        assert all(dep in self.data for dep in self.dependencies[key])
+
+    def validate_key_waiting(self, key):
+        assert key not in self.data
+        assert not all(dep in self.data for dep in self.dependencies[key])
+
+    def validate_key(self, key):
+        try:
+            state = self.task_state[key]
+            if state == 'memory':
+                self.validate_key_memory(key)
+            elif state == 'waiting':
+                self.validate_key_waiting(key)
+            elif state == 'ready':
+                self.validate_key_ready(key)
+            elif state == 'executing':
+                self.validate_key_executing(key)
+        except Exception as e:
+            logger.exception(e)
+            import pdb; pdb.set_trace()
+            raise
+
     def validate_state(self):
         try:
             for key, workers in self.who_has.items():
@@ -1547,10 +1589,12 @@ class Worker(WorkerBase):
                 'heap': key in pluck(1, self.ready),
                 'data': key in self.data}
 
-    def story(self, key):
+    def story(self, *keys):
         return [msg for msg in self.log
-                    if key in msg
-                    or any(key in c for c in msg
+                    if any(key in msg for key in keys)
+                    or any(key in c
+                           for key in keys
+                           for c in msg
                            if isinstance(c, (tuple, list, set)))]
 
 

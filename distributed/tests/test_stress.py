@@ -146,7 +146,11 @@ def test_stress_scatter_death(c, s, *workers):
         print(s.processing)
         print(ws)
         print(futures)
-        if config.get('log-on-err'):
+        try:
+            worker = [w for w in ws.values() if w.waiting_for_data][0]
+        except:
+            pass
+        if True:
             import pdb; pdb.set_trace()
         else:
             raise
