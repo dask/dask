@@ -963,3 +963,11 @@ def test_split_out_multi_column_groupby():
     expected = df.groupby(['x', 'y']).z.mean()
 
     assert_eq(result, expected, check_dtype=False)
+
+
+def test_groupby_numeric_column():
+    df = pd.DataFrame({'A' : ['foo', 'foo', 'bar'], 0: [1,2,3]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.groupby(ddf.A)[0].sum(),
+              df.groupby(df.A)[0].sum())

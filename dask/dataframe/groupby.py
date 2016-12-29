@@ -86,7 +86,8 @@ def _maybe_slice(grouped, columns):
     """
     if isinstance(grouped, pd.core.groupby.DataFrameGroupBy):
         if columns is not None:
-            columns = columns if isinstance(columns, str) else list(columns)
+            if isinstance(columns, (tuple, list, set, pd.Index)):
+                columns = list(columns)
             return grouped[columns]
     return grouped
 
@@ -131,7 +132,8 @@ def _apply_chunk(df, *index, **kwargs):
     if isinstance(df, pd.Series) or columns is None:
         return func(df.groupby(index))
     else:
-        columns = columns if isinstance(columns, str) else list(columns)
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
         return func(df.groupby(index)[columns])
 
 
