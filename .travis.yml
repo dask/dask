@@ -33,10 +33,7 @@ install:
   - if [[ $PYTHON == '3.3' ]]; then pip install cloudpickle pandas==$PANDAS; fi
   - if [[ $PYTHON == '2.7' ]]; then pip install backports.lzma mock; fi
   - if [[ $PYTHON == '3.5' ]]; then pip install git+https://github.com/dask/fastparquet; fi
-  - pip install git+https://github.com/mrocklin/partd --upgrade
-  - pip install git+https://github.com/mrocklin/cachey --upgrade
-  - pip install blosc --upgrade
-  - pip install graphviz moto flake8
+  - pip install partd cachey blosc graphviz moto flake8 --upgrade
   - if [[ $PYTHON < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
   # For parallel testing (`-n` argument in XTRATESTARGS)
   - pip install pytest-xdist
