@@ -391,18 +391,25 @@ class WorkerBase(Server):
     def delete_data(self, stream=None, keys=None, report=True):
         if keys:
             for key in list(keys):
-                if not (key in self.dependents and
-                        any(self.task_state[dep] in IN_PLAY
-                            for dep in self.dependents.get(key, ()))):
-                    if key in self.data:
-                        del self.data[key]
-                    self.log.append((key, 'delete'))
-                    if key in self.tasks and self.task_state[key] in ('memory', 'error'):
-                        # TODO: cleanly cancel in-flight tasks
-                        self.forget_key(key)
-                else:
+                deps = self.dependents.get(key, ())
+                if deps and any(self.task_state[dep] in IN_PLAY
+                                for dep in deps):
                     logger.info("Tried to delete necessary key: %s", key)
+                    self.log.append((key, 'tried-to-delete-unneccesary-key'))
                     keys.remove(key)
+                    continue
+                else:
+                    state = self.task_state.get(key)
+                    if state == 'memory':
+                        del self.data[key]
+                        self.forget_key(key)
+                        self.log.append((key, 'delete-memory'))
+                    elif state == 'error':
+                        self.forget_key(key)
+                        self.log.append((key, 'delete-error'))
+                    elif key in self.data:
+                        del self.data[key]
+                        self.log.append((key, 'delete-data'))
             logger.debug("Deleted %d keys", len(keys))
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
@@ -799,7 +806,9 @@ class Worker(WorkerBase):
 
         self._transitions = {
                 ('waiting', 'ready'): self.transition_waiting_ready,
+                ('waiting', 'memory'): self.transition_waiting_memory,
                 ('ready', 'executing'): self.transition_ready_executing,
+                ('ready', 'memory'): self.transition_ready_memory,
                 ('constrained', 'executing'): self.transition_constrained_executing,
                 ('executing', 'memory'): self.transition_executing_done,
                 ('executing', 'error'): self.transition_executing_done,
@@ -886,17 +895,30 @@ class Worker(WorkerBase):
             host_restrictions=None, worker_restrictions=None,
             resource_restrictions=None, **kwargs2):
         try:
-            if key in self.task_state:
+            if key in self.tasks:
                 state = self.task_state[key]
                 if state in ('memory', 'error'):
                     if state == 'memory':
                         assert key in self.data
-                    logger.info("Asked to compute prexisting result: %s: %s" ,
-                                key, state)
+                    logger.debug("Asked to compute prexisting result: %s: %s" ,
+                                 key, state)
                     self.batched_stream.send(self.response[key])
                     return
                 if state in IN_PLAY:
                     return
+
+            if key in self.data:
+                self.response[key] = {'op': 'task-finished',
+                                      'status': 'OK',
+                                      'key': key,
+                                      'nbytes': self.nbytes[key],
+                                      'type': dumps_function(type(self.data[key]))}
+                self.batched_stream.send(self.response[key])
+                self.task_state[key] = 'memory'
+                self.tasks[key] = None
+                self.raw_tasks[key] = None
+                self.log.append((key, 'new-task-already-in-memory'))
+                return
 
             self.log.append((key, 'new'))
             try:
@@ -967,12 +989,14 @@ class Worker(WorkerBase):
 
     def transition(self, key, finish, **kwargs):
         start = self.task_state[key]
+        if start == finish:
+            return
         func = self._transitions[start, finish]
         state = func(key, **kwargs)
         self.log.append((key, start, state or finish))
         self.task_state[key] = state or finish
-        # if self.validate:
-        #     self.validate_key(key)
+        if self.validate:
+            self.validate_key(key)
 
     def transition_waiting_ready(self, key):
         try:
@@ -996,6 +1020,27 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
+    def transition_waiting_memory(self, key):
+        try:
+            if self.validate:
+                assert self.task_state[key] == 'waiting'
+                assert key in self.waiting_for_data
+                assert key not in self.executing
+                assert key not in self.ready
+
+            del self.waiting_for_data[key]
+            self.response[key] = {'op': 'task-finished',
+                                  'status': 'OK',
+                                  'key': key,
+                                  'nbytes': self.nbytes[key],
+                                  'type': dumps_function(type(self.data[key]))}
+            self.batched_stream.send(self.response[key])
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
+
     def transition_ready_executing(self, key):
         try:
             if self.validate:
@@ -1012,6 +1057,14 @@ class Worker(WorkerBase):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
+
+    def transition_ready_memory(self, key):
+        self.response[key] = {'op': 'task-finished',
+                              'status': 'OK',
+                              'key': key,
+                              'nbytes': self.nbytes[key],
+                              'type': dumps_function(type(self.data[key]))}
+        self.batched_stream.send(self.response[key])
 
     def transition_constrained_executing(self, key):
         self.transition_ready_executing(key)
@@ -1133,6 +1186,9 @@ class Worker(WorkerBase):
                     self.waiting_for_data[dep].remove(key)
                 if not self.waiting_for_data[dep]:
                     self.transition(dep, 'ready')
+
+        if key in self.task_state:
+            self.transition(key, 'memory')
 
     @gen.coroutine
     def gather_dep(self, dep, slot, cause=None):

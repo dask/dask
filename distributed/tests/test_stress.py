@@ -140,7 +140,7 @@ def test_stress_scatter_death(c, s, *workers):
         alive.remove(w)
 
     try:
-        yield gen.with_timeout(timedelta(seconds=20), c._gather(futures))
+        yield gen.with_timeout(timedelta(seconds=25), c._gather(futures))
     except gen.TimeoutError:
         ws = {w.address: w for w in workers if w.status != 'closed'}
         print(s.processing)
@@ -150,7 +150,7 @@ def test_stress_scatter_death(c, s, *workers):
             worker = [w for w in ws.values() if w.waiting_for_data][0]
         except:
             pass
-        if True:
+        if config.get('log-on-err'):
             import pdb; pdb.set_trace()
         else:
             raise
