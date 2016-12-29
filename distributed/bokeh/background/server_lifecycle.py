@@ -116,15 +116,11 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
                 if 'compute_start' in msg:
                     deque.append(msg)
                     times.append(msg['compute_start'])
-                    index.append(i)
-                    i += 1
-                    if msg.get('transfer_start') is not None:
+                    count = task_stream_append(rectangles, msg, workers)
+                    for _ in range(count):
                         index.append(i)
                         i += 1
-                    if msg.get('disk_load_start') is not None:
-                        index.append(i)
-                        i += 1
-                    task_stream_append(rectangles, msg, workers)
+
     except StreamClosedError:
         pass  # don't log StreamClosedErrors
     except Exception as e:

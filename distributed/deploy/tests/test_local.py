@@ -221,4 +221,5 @@ def test_silent_startup(capsys, loop):
 
     out, err = capsys.readouterr()
     assert not out
-    assert not err
+    for line in err.split('\n'):
+        assert 'worker' not in line

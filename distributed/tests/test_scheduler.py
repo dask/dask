@@ -843,3 +843,15 @@ def test_balance_many_workers_2(c, s, *workers):
     futures = c.map(slowinc, range(90), delay=0.2)
     yield _wait(futures)
     assert set(map(len, s.has_what.values())) == {3}
+
+
+@gen_cluster(client=True)
+def test_learn_occupancy_multiple_workers(c, s, a, b):
+    x = c.submit(slowinc, 1, delay=0.2, workers=a.address)
+    yield gen.sleep(0.05)
+    futures = c.map(slowinc, range(100), delay=0.2)
+
+    yield _wait(x)
+
+    assert not any(v == 0.5 for vv in s.processing.values() for v in vv)
+    s.validate_state()

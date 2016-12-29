@@ -944,6 +944,9 @@ class Scheduler(Server):
             for key in keys:
                 assert worker in self.who_has[key]
 
+        for worker, occ in self.occupancy.items():
+            assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
+
     ###################
     # Manage Messages #
     ###################
@@ -1941,7 +1944,7 @@ class Scheduler(Server):
 
                 if ks in self.unknown_durations:
                     for k in self.unknown_durations.pop(ks):
-                        if key in self.rprocessing:
+                        if k in self.rprocessing:
                             w = self.rprocessing[k]
                             old = self.processing[w][k]
                             self.processing[w][k] = avg_duration
