@@ -43,9 +43,5 @@ setup(name='distributed',
         dask-remote=distributed.cli.dask_remote:go
         dask-scheduler=distributed.cli.dask_scheduler:go
         dask-worker=distributed.cli.dask_worker:go
-        dcenter=distributed.cli.dcenter:go
-        dcluster=distributed.cli.dcluster:go
-        dscheduler=distributed.cli.dscheduler:go
-        dworker=distributed.cli.dworker:go
       ''',
       zip_safe=False)

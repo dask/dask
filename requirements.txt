@@ -8,6 +8,6 @@ six
 tblib
 psutil
 locket
-zict >= 0.1.0
+zict >= 0.1.1
 sortedcollections
 futures; python_version < '3.0'
