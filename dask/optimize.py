@@ -673,6 +673,8 @@ def dedupe_constants(dsk, predicate):
             constants[const_id] = const
             key_lk[const_id].add(k)
     key_lk = {c_id: k for c_id, k in key_lk.items() if len(k) > 1}
+    if not key_lk:
+        return dsk
     keys = set()
     keys.update(*key_lk.values())
     dsk2 = {}
