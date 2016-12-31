@@ -4,7 +4,6 @@ from collections import defaultdict, deque
 import logging
 from math import log
 import os
-import random
 from time import time
 
 from toolz import topk
@@ -122,7 +121,8 @@ class WorkStealing(SchedulerPlugin):
         if split in fast_tasks:
             return None, None
         try:
-            compute_time = self.scheduler.task_duration[split]
+            worker = self.scheduler.rprocessing[key]
+            compute_time = self.scheduler.processing[worker][key]
         except KeyError:
             self.stealable_unknown_durations[split].add(key)
             return None, None
@@ -153,6 +153,9 @@ class WorkStealing(SchedulerPlugin):
             self.scheduler.total_occupancy -= duration
 
             duration = self.scheduler.task_duration.get(key_split(key), 0.5)
+            duration += sum(self.scheduler.nbytes[key] for key in
+                            self.scheduler.dependencies[key] -
+                            self.scheduler.has_what[thief]) / BANDWIDTH
             self.scheduler.processing[thief][key] = duration
             self.scheduler.rprocessing[key] = thief
             self.scheduler.occupancy[thief] += duration
@@ -209,8 +212,10 @@ class WorkStealing(SchedulerPlugin):
 
                     for key in list(stealable):
                         i += 1
+                        if not idle:
+                            break
                         idl = idle[i % len(idle)]
-                        duration = s.task_duration.get(key_split(key), 0.5)
+                        duration = s.processing[sat][key]
 
                         if (occupancy[idl] + cost_multiplier * duration
                           <= occupancy[sat] - duration / 2):
@@ -227,12 +232,14 @@ class WorkStealing(SchedulerPlugin):
                     if stealable:
                         seen = True
                     for key in list(stealable):
+                        if not idle:
+                            break
                         sat = s.rprocessing[key]
                         if occupancy[sat] < 0.2:
                             continue
                         i += 1
                         idl = idle[i % len(idle)]
-                        duration = s.task_duration.get(key_split(key), 0.5)
+                        duration = s.processing[sat][key]
 
                         if (occupancy[idl] + cost_multiplier * duration
                             <= occupancy[sat] - duration / 2):

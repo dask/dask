@@ -4,7 +4,7 @@ import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
 from datetime import timedelta
-from operator import add
+from operator import add, mul
 import sys
 from time import sleep
 
@@ -21,13 +21,13 @@ import pytest
 
 from distributed import Nanny, Worker
 from distributed.core import connect, read, write, close, rpc
-from distributed.scheduler import validate_state, Scheduler
+from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
 from distributed.client import _wait, _first_completed
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
-        loop, readone, slowinc)
+        loop, readone, slowinc, slowadd)
 from distributed.utils import All
 from distributed.utils_test import slow
 from dask.compatibility import apply
@@ -855,3 +855,16 @@ def test_learn_occupancy_multiple_workers(c, s, a, b):
 
     assert not any(v == 0.5 for vv in s.processing.values() for v in vv)
     s.validate_state()
+
+
+@gen_cluster(client=True)
+def test_include_communication_in_occupancy(c, s, a, b):
+    s.task_duration['slowadd'] = 0.001
+    x = c.submit(mul, b'0', int(BANDWIDTH), workers=a.address)
+    y = c.submit(mul, b'1', int(BANDWIDTH * 1.5), workers=b.address)
+
+    z = c.submit(slowadd, x, y, delay=1)
+    while z.key not in s.rprocessing:
+        yield gen.sleep(0.01)
+
+    assert s.processing[b.address][z.key] > 1

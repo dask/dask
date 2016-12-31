@@ -14,6 +14,7 @@ from tornado import gen
 import dask
 from dask import delayed
 from distributed import Worker, Nanny
+from distributed.config import config
 from distributed.client import Client, _wait, wait
 from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
@@ -343,28 +344,30 @@ def func(x):
     pass
 
 
-def assert_balanced(inp, out, c, s, *workers):
+def assert_balanced(inp, expected, c, s, *workers):
     steal = s.extensions['stealing']
-    steal._pc.callback_time = 1000000000
+    steal._pc.stop()
+
     counter = itertools.count()
     B = BANDWIDTH
     tasks = list(concat(inp))
-    data = yield c._scatter(range(len(tasks)))
-
-    for t, f in zip(tasks, data):
-        s.nbytes[f.key] = BANDWIDTH * t
-        s.task_duration[str(int(t))] = 1
+    data_seq = itertools.count()
 
     futures = []
-    data_seq = iter(data)
     for w, ts in zip(workers, inp):
         for t in ts:
-            dat = next(data_seq) if t else 123
+            if t:
+                [dat] = yield c._scatter([next(data_seq)], workers=w.address)
+                s.nbytes[dat.key] = BANDWIDTH * t
+            else:
+                dat = 123
+            s.task_duration[str(int(t))] = 1
             f = c.submit(func, dat, key='%d-%d' % (int(t), next(counter)),
-                         workers=w.address, allow_other_workers=True)
+                         workers=w.address, allow_other_workers=True,
+                         pure=False)
             futures.append(f)
 
-    while not any(s.processing.values()):
+    while len(s.rprocessing) < len(futures):
         yield gen.sleep(0.001)
 
     s.extensions['stealing'].balance()
@@ -374,15 +377,16 @@ def assert_balanced(inp, out, c, s, *workers):
               for w in workers]
 
     result2 = sorted(result, reverse=True)
-    out2 = sorted(out, reverse=True)
+    expected2 = sorted(expected, reverse=True)
 
-    if result2 != out2:
-        import pdb; pdb.set_trace()
+    if config.get('pdb-on-err'):
+        if result2 != expected2:
+            import pdb; pdb.set_trace()
 
-    assert result2 == out2
+    assert result2 == expected2
 
 
-@pytest.mark.parametrize('inp,out', [
+@pytest.mark.parametrize('inp,expected', [
     ([[1], []],  # don't move unnecessarily
     [[1], []]),
 
@@ -420,25 +424,25 @@ def assert_balanced(inp, out, c, s, *workers):
     [[0, 0], [0, 0], [0], [0]]),
 
    ([[4, 2, 2, 2, 2, 1, 1],
-     [4, 2, 1, 1, 1],
+     [4, 2, 1, 1],
      [],
      [],
      []],
     [[4, 2, 2, 2, 2],
      [4, 2, 1],
-     [1, 1],
+     [1],
      [1],
      [1]]),
 
    ([[1, 1, 1, 1, 1, 1, 1],
      [1, 1], [1, 1], [1, 1],
      []],
-    [[1, 1, 1, 1],
+    [[1, 1, 1, 1, 1],
      [1, 1], [1, 1], [1, 1],
-     [1, 1, 1]])
+     [1, 1]])
     ])
-def test_balance(inp, out):
-    test = lambda *args, **kwargs: assert_balanced(inp, out, *args, **kwargs)
+def test_balance(inp, expected):
+    test = lambda *args, **kwargs: assert_balanced(inp, expected, *args, **kwargs)
     test = gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * len(inp))(test)
     test()
 
@@ -458,3 +462,21 @@ def test_restart(c, s, a, b):
 
     assert not any(x for x in steal.stealable_all)
     assert not any(x for L in steal.stealable.values() for x in L)
+
+
+@gen_cluster(client=True)
+def test_steal_communication_heavy_tasks(c, s, a, b):
+    s.task_duration['slowadd'] = 0.001
+    x = c.submit(mul, b'0', int(BANDWIDTH), workers=a.address)
+    y = c.submit(mul, b'1', int(BANDWIDTH), workers=b.address)
+
+    futures = [c.submit(slowadd, x, y, delay=1, pure=False, workers=a.address,
+                        allow_other_workers=True)
+                for i in range(10)]
+
+    while not any(f.key in s.rprocessing for f in futures):
+        yield gen.sleep(0.01)
+
+    s.extensions['stealing'].balance()
+
+    assert s.processing[b.address]

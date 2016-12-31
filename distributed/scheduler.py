@@ -1876,10 +1876,14 @@ class Scheduler(Server):
                 self.unknown_durations[ks].add(key)
                 duration = 0.5
 
-            self.processing[worker][key] = duration
+            comm = (sum(self.nbytes[dep]
+                       for dep in self.dependencies[key] - self.has_what[worker])
+                    / BANDWIDTH)
+
+            self.processing[worker][key] = duration + comm
             self.rprocessing[key] = worker
-            self.occupancy[worker] += duration
-            self.total_occupancy += duration
+            self.occupancy[worker] += duration + comm
+            self.total_occupancy += duration + comm
             self.task_state[key] = 'processing'
             self.consume_resources(key, worker)
             self.check_idle_saturated(worker)
@@ -1947,9 +1951,12 @@ class Scheduler(Server):
                         if k in self.rprocessing:
                             w = self.rprocessing[k]
                             old = self.processing[w][k]
-                            self.processing[w][k] = avg_duration
-                            self.occupancy[w] += avg_duration - old
-                            self.total_occupancy += avg_duration - old
+                            comm = (sum(self.nbytes[d] for d in
+                                         self.dependencies[k] - self.has_what[w])
+                                    / BANDWIDTH)
+                            self.processing[w][k] = avg_duration + comm
+                            self.occupancy[w] += avg_duration + comm - old
+                            self.total_occupancy += avg_duration + comm - old
 
                 info['last-task'] = compute_stop
 
