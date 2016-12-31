@@ -7,7 +7,7 @@ click >= 6.6
 six
 tblib
 psutil
-locket
 zict >= 0.1.1
 sortedcollections
 futures; python_version < '3.0'
+singledispatch; python_version < '3.4'

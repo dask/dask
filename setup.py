@@ -6,11 +6,6 @@ import sys
 import versioneer
 
 requires = open('requirements.txt').read().strip().split('\n')
-if sys.version_info[0] < 3:
-    requires.append('futures')
-    requires.append('locket')
-if sys.version_info < (3, 4):
-    requires.append('singledispatch')
 
 setup(name='distributed',
       version=versioneer.get_version(),
