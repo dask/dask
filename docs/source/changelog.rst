@@ -53,12 +53,12 @@ DataFrame
   scalars (:pr:`1515`)
 - Fix type size inference for series (:pr:`1513`)
 - ``dataframe.DataFrame.categorize`` no longer includes missing values
-  in the ``categories``. This is for compatibility with a `pandas change<https://github.com/pydata/pandas/pull/10929>` (:pr:`1565`)
+  in the ``categories``. This is for compatibility with a `pandas change <https://github.com/pydata/pandas/pull/10929>`_ (:pr:`1565`)
 - Fix head parser error in ``dataframe.read_csv`` when some lines have quotes
   (:pr:`1495`)
 - Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
   row-wise reduction to dataframes and series (:pr:`1483`)
-- Add ``dataframe.select_dtypes``, which mirrors the `pandas method<http://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
+- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <http://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
 - ``dataframe.read_hdf`` now supports reading ``Series`` (:pr:`1564`)
 - Support Pandas 0.19.0 (:pr:`1540`)
 - Implement ``select_dtypes`` (:pr:`1556`)
@@ -92,7 +92,7 @@ Array
 - Optimized slicing performance (:pr:`1539`) (:pr:`1731`)
 - Extend ``atop`` with a ``concatenate=`` (:pr:`1609`) ``new_axes=``
   (:pr:`1612`) and ``adjust_chunks=`` (:pr:`1716`) keywords
-- Add clip (:pr:`1610`) swapaxes (:pr:`1611`) round (:pr:`1708`) repeat (:pr:``)
+- Add clip (:pr:`1610`) swapaxes (:pr:`1611`) round (:pr:`1708`) repeat
 - Automatically align chunks in ``atop``-backed operations (:pr:`1644`)
 - Cull dask.arrays on slicing (:pr:`1709`)
 
@@ -103,7 +103,7 @@ Bag
 - Avoid non-lazy memory use in reductions (:pr:`1747`)
 
 Administration
-+++++++++++++
+++++++++++++++
 
 - Added changelog (:pr:`1526`)
 - Create new threadpool when operating from thread (:pr:`1487`)
@@ -288,8 +288,7 @@ Array
 +++++
 
 - Bugfix for range slicing that could periodically lead to incorrect results.
-- Improved support and resiliency of ``arg`` reductions (``argmin``,
-``argmax``, etc.)
+- Improved support and resiliency of ``arg`` reductions (``argmin``, ``argmax``, etc.)
 
 Bag
 ++++

@@ -172,6 +172,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_parquet
 .. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
