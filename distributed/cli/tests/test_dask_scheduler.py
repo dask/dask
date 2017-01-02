@@ -134,11 +134,16 @@ def test_multiple_workers(loop):
 
 def test_pid_file(loop):
     def check_pidfile(proc, pidfile):
+        start = time()
         while not os.path.exists(pidfile):
             sleep(0.01)
+            assert time() < start + 5
+
         text = False
+        start = time()
         while not text:
             sleep(0.01)
+            assert time() < start + 5
             with open(pidfile) as f:
                 text = f.read()
         pid = int(text)

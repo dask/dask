@@ -48,7 +48,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
@@ -59,11 +59,11 @@ install:
   - pip install -q git+https://github.com/joblib/joblib.git --upgrade
   - pip install -q git+https://github.com/dask/s3fs.git --upgrade
   - pip install -q git+https://github.com/dask/zict.git --upgrade
-  - pip install sortedcollections
+  - pip install -q sortedcollections msgpack-python
   - if [[ $PYTHON == '3.5' ]]; then pip install git+https://github.com/jcrist/crick.git; fi
 
   # Install distributed
-  - python setup.py install
+  - pip install --no-deps -e .
 
 script:
     - export PYTEST_OPTIONS="--verbose -r s --timeout-method=thread --timeout=300 --runslow --durations=20"
