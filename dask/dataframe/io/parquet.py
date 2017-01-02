@@ -220,7 +220,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if write_index is True or write_index is None and df.known_divisions:
         df = df.reset_index()
 
-    object_encoding = object_encoding or 'bytes'
+    object_encoding = object_encoding or 'utf8'
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
                                       'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '

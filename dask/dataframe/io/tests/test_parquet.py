@@ -126,7 +126,7 @@ def test_categorical():
         df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100},
                           dtype='category')
         ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf, object_encoding='utf8')
+        to_parquet(tmp, ddf)
 
         ddf2 = read_parquet(tmp, categories=['x'])
 
