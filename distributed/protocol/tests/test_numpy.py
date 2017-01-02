@@ -118,3 +118,22 @@ def test_compress_memoryview():
     compression, compressed = maybe_compress(mv)
     if compression:
         assert len(compressed) < len(mv)
+
+
+def test_dont_compress_uncompressable_data():
+    blosc = pytest.importorskip('blosc')
+    x = np.random.randint(0, 255, size=100000).astype('uint8')
+    header, [data] = serialize(x)
+    assert 'compression' not in header
+    assert data == x.data
+
+    x = np.ones(1000000)
+    header, [data] = serialize(x)
+    assert header['compression'] == ['blosc']
+    assert data != x.data
+
+
+    x = np.ones(100)
+    header, [data] = serialize(x)
+    assert 'compression' not in header
+    assert data.obj.ctypes.data == x.ctypes.data
