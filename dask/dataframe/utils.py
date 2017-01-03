@@ -167,6 +167,32 @@ def raise_on_meta_error(funcname=None):
         raise ValueError(msg)
 
 
+UNKNOWN_CATEGORIES = '__UNKNOWN_CATEGORIES__'
+
+
+def has_known_categories(s):
+    """Returns whether the categories in `x` are known.
+
+    Parameters
+    ----------
+    x : Series or CategoricalIndex
+    """
+    if isinstance(s, pd.Series):
+        return (len(s.cat.categories) != 1 or
+                s.cat.categories[0] != UNKNOWN_CATEGORIES)
+    elif isinstance(s, pd.CategoricalIndex):
+        return (len(s.categories) != 1 or
+                s.categories[0] != UNKNOWN_CATEGORIES)
+    raise TypeError("Expected Series or CategoricalIndex")
+
+
+def _empty_series(name, dtype, index=None):
+    if isinstance(dtype, str) and dtype == 'category':
+        return pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]),
+                         name=name, index=index).iloc[:0]
+    return pd.Series([], dtype=dtype, name=name, index=index)
+
+
 def make_meta(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -200,17 +226,17 @@ def make_meta(x, index=None):
     elif isinstance(x, pd.Index):
         return x[0:0]
     index = index if index is None else index[0:0]
+
     if isinstance(x, dict):
-        return pd.DataFrame({c: pd.Series([], dtype=d)
-                             for (c, d) in x.items()},
-                            index=index)
-    elif isinstance(x, tuple) and len(x) == 2:
-        return pd.Series([], dtype=x[1], name=x[0], index=index)
+        return pd.DataFrame({c: _empty_series(c, d, index=index)
+                             for (c, d) in x.items()}, index=index)
+    if isinstance(x, tuple) and len(x) == 2:
+        return _empty_series(x[0], x[1], index=index)
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError("Expected iterable of tuples of (name, dtype), "
                              "got {0}".format(x))
-        return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
+        return pd.DataFrame({c: _empty_series(c, d, index=index) for (c, d) in x},
                             columns=[c for c, d in x], index=index)
     elif not hasattr(x, 'dtype') and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
@@ -223,7 +249,7 @@ def make_meta(x, index=None):
             # Continue on to next check
             pass
 
-    if is_pd_scalar(x):
+    if is_scalar(x):
         return _nonempty_scalar(x)
 
     raise TypeError("Don't know how to create metadata from {0}".format(x))
@@ -251,12 +277,12 @@ def _nonempty_index(idx):
         return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        if len(idx.categories):
+        if len(idx.categories) and has_known_categories(idx):
             data = [idx.categories[0]] * 2
             cats = idx.categories
         else:
             data = _nonempty_index(idx.categories)
-            cats = data.unique()
+            cats = None
         return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
@@ -302,12 +328,6 @@ def _nonempty_scalar(x):
                         "'{0}'".format(type(x).__name__))
 
 
-def is_pd_scalar(x):
-    """Whether the object is a scalar type"""
-    return (np.isscalar(x) or isinstance(x, (pd.Timestamp, pd.Timedelta,
-                                             pd.Period)))
-
-
 def _nonempty_series(s, idx):
 
     dtype = s.dtype
@@ -315,12 +335,12 @@ def _nonempty_series(s, idx):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
-        if len(s.cat.categories):
+        if len(s.cat.categories) and has_known_categories(s):
             data = [s.cat.categories[0]] * 2
             cats = s.cat.categories
         else:
             data = _nonempty_index(s.cat.categories)
-            cats = data.unique()
+            cats = None
         data = pd.Categorical(data, categories=cats,
                               ordered=s.cat.ordered)
     else:
@@ -349,7 +369,7 @@ def meta_nonempty(x):
                            columns=np.arange(len(x.columns)))
         res.columns = x.columns
         return res
-    elif is_pd_scalar(x):
+    elif is_scalar(x):
         return _nonempty_scalar(x)
     else:
         raise TypeError("Expected Index, Series, DataFrame, or scalar, "
