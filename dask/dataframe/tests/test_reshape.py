@@ -6,7 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import assert_eq, PANDAS_ge_0190
+from dask.dataframe.utils import assert_eq, PANDAS_ge_0190, make_meta
 
 
 @pytest.mark.parametrize('data', [
@@ -91,6 +91,20 @@ def test_get_dummies_errors():
         ds = dd.from_pandas(s, 2)
         dd.get_dummies(ds)
 
+    # unknown categories
+    df = pd.DataFrame({'x': list('abcbc'), 'y': list('bcbcb')})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf._meta = make_meta({'x': 'category', 'y': 'category'})
+
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf)
+
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf, columns=['x', 'y'])
+
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf.x)
+
 
 @pytest.mark.parametrize('aggfunc', ['mean', 'sum', 'count'])
 def test_pivot_table(aggfunc):
@@ -173,6 +187,12 @@ def test_pivot_table_errors():
 
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values='B', aggfunc='xx')
+
+    # unknown categories
+    ddf._meta = make_meta({'A': object, 'B': float, 'C': 'category'})
+    msg = "'columns' must have known categories"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.pivot_table(ddf, index='A', columns='C', values=['B'])
 
     df = pd.DataFrame({'A': np.random.choice(list('abc'), size=10),
                        'B': np.random.randn(10),

@@ -170,19 +170,20 @@ def raise_on_meta_error(funcname=None):
 UNKNOWN_CATEGORIES = '__UNKNOWN_CATEGORIES__'
 
 
-def has_known_categories(s):
+def has_known_categories(x):
     """Returns whether the categories in `x` are known.
 
     Parameters
     ----------
     x : Series or CategoricalIndex
     """
-    if isinstance(s, pd.Series):
-        return (len(s.cat.categories) != 1 or
-                s.cat.categories[0] != UNKNOWN_CATEGORIES)
-    elif isinstance(s, pd.CategoricalIndex):
-        return (len(s.categories) != 1 or
-                s.categories[0] != UNKNOWN_CATEGORIES)
+    x = getattr(x, '_meta', x)
+    if isinstance(x, pd.Series):
+        return (len(x.cat.categories) != 1 or
+                x.cat.categories[0] != UNKNOWN_CATEGORIES)
+    elif isinstance(x, pd.CategoricalIndex):
+        return (len(x.categories) != 1 or
+                x.categories[0] != UNKNOWN_CATEGORIES)
     raise TypeError("Expected Series or CategoricalIndex")
 
 

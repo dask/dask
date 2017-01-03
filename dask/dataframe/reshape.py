@@ -5,7 +5,7 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar
+from .utils import is_categorical_dtype, is_scalar, has_known_categories
 
 
 ###############################################################
@@ -54,8 +54,15 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                    "supported. Please use `df.categorize()` beforehand to "
                    "convert to categorical dtype.")
 
-    if isinstance(data, Series) and not is_categorical_dtype(data):
-        raise NotImplementedError(not_cat_msg)
+    unknown_cat_msg = ("`get_dummies` with unknown categories is not "
+                       "supported. Please use `df.cat.set_categories` or "
+                       "`df.categorize` beforehand to ensure known categories")
+
+    if isinstance(data, Series):
+        if not is_categorical_dtype(data):
+            raise NotImplementedError(not_cat_msg)
+        if not has_known_categories(data):
+            raise NotImplementedError(unknown_cat_msg)
     elif isinstance(data, DataFrame):
         if columns is None:
             if (data.dtypes == 'object').any():
@@ -64,6 +71,9 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
         else:
             if not all(is_categorical_dtype(data[c]) for c in columns):
                 raise NotImplementedError(not_cat_msg)
+
+        if not all(has_known_categories(data[c]) for c in columns):
+            raise NotImplementedError(unknown_cat_msg)
 
     if sparse:
         raise NotImplementedError('sparse=True is not supported')
@@ -108,6 +118,8 @@ def pivot_table(df, index=None, columns=None,
         raise ValueError("'columns' must be the name of an existing column")
     if not is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
+    if not has_known_categories(df[columns]):
+        raise ValueError("'columns' must have known categories")
     if not is_scalar(values) or values is None:
         raise ValueError("'values' must be the name of an existing column")
     if not is_scalar(aggfunc) or aggfunc not in ('mean', 'sum', 'count'):
