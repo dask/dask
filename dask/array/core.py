@@ -2433,7 +2433,7 @@ def dot(a, b):
 
 def insert_to_ooc(out, arr, lock=True, region=None):
     if lock is True:
-        lock = Lock()
+        lock = SerializableLock()
 
     def store(x, index, lock, region):
         if lock:
