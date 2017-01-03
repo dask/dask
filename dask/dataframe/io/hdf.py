@@ -4,12 +4,11 @@ from fnmatch import fnmatch
 from glob import glob
 import os
 from threading import Lock
-import multiprocessing
+import multiprocessing as mp
 import uuid
 from warnings import warn
 
 import pandas as pd
-import dask
 from toolz import merge
 
 from ...async import get_sync
@@ -17,13 +16,18 @@ from ...base import tokenize
 from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
-import dask.multiprocessing
+from ...import multiprocessing
 
 from ..core import DataFrame, new_dd_object
 
-from ...utils import build_name_function
+from ...utils import build_name_function, SerializableLock
 
 from .io import _link
+
+try:
+    import distributed
+except ImportError:
+    distributed = None
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -171,16 +175,22 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and _actual_get is not dask.multiprocessing.get:
+        elif not single_file and _actual_get is not multiprocessing.get:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
         else:
             lock = False
 
+    def unwrap_method(f):
+        return getattr(f, '__func__', f)
+
     if lock is True:
-        if _actual_get == dask.multiprocessing.get:
-            lock = multiprocessing.Manager().Lock()
+        if _actual_get == multiprocessing.get:
+            lock = mp.Manager().Lock()
+        elif distributed and (unwrap_method(_actual_get) is
+                              unwrap_method(distributed.Client.get)):
+            lock = SerializableLock()
         else:
             lock = Lock()
 
