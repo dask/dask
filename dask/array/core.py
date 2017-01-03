@@ -13,7 +13,6 @@ import os
 import sys
 import traceback
 import pickle
-from threading import Lock
 import uuid
 import warnings
 
