@@ -9,6 +9,7 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
+from dask.dataframe.core import _concat
 from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype
 
 
@@ -16,6 +17,59 @@ from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype
 def cat_series(request):
     ordered = request.param
     return pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
+
+
+def test_concat_unions_categoricals():
+    a = pd.DataFrame({'w': list('xxxxx'),
+                      'x': np.arange(5),
+                      'y': list('abcbc'),
+                      'z': np.arange(5, dtype='f8')})
+
+    b = pd.DataFrame({'w': list('yyyyy'),
+                      'x': np.arange(5, 10),
+                      'y': list('abbba'),
+                      'z': np.arange(5, 10, dtype='f8')})
+
+    c = pd.DataFrame({'w': list('zzzzz'),
+                      'x': np.arange(10, 15),
+                      'y': list('bcbcc'),
+                      'z': np.arange(10, 15, dtype='f8')})
+
+    frames = [a, b, c]
+    frames2 = []
+    for df in frames:
+        df.w = df.w.astype('category')
+        df.y = df.y.astype('category')
+        frames2.append(df.assign(w=df.w.cat.set_categories(list('xyz')),
+                                 y=df.y.cat.set_categories(list('abc'))))
+    frames3 = [i.set_index(i.y) for i in frames]
+    frames4 = [i.set_index(i.y) for i in frames2]
+
+    # Categorical DataFrame, regular index
+    tm.assert_frame_equal(_concat(frames), pd.concat(frames2))
+
+    # Categorical Series, regular index
+    tm.assert_series_equal(_concat([i.y for i in frames]),
+                           pd.concat([i.y for i in frames2]))
+
+    # Categorical Index
+    tm.assert_index_equal(_concat([i.index for i in frames3]),
+                          pd.concat([i for i in frames4]).index)
+
+    # Categorical DataFrame, Categorical Index
+    tm.assert_frame_equal(_concat(frames3), pd.concat(frames4))
+
+    # Non-categorical DataFrame, Categorical Index
+    tm.assert_frame_equal(_concat([i[['x', 'z']] for i in frames3]),
+                          pd.concat([i[['x', 'z']] for i in frames4]))
+
+    # Categorical Series, Categorical Index
+    tm.assert_series_equal(_concat([i.z for i in frames3]),
+                           pd.concat([i.z for i in frames4]))
+
+    # Non-categorical Series, Categorical Index
+    tm.assert_series_equal(_concat([i.x for i in frames3]),
+                           pd.concat([i.x for i in frames4]))
 
 
 def test_is_categorical_dtype():
