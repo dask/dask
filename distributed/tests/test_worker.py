@@ -566,3 +566,24 @@ def test_clean_nbytes(c, s, a, b):
 
     yield gen.sleep(1)
     assert len(a.nbytes) + len(b.nbytes) == 1
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 20)
+def test_gather_many_small(c, s, a, *workers):
+    a.total_connections = 2
+    futures = yield c._scatter(list(range(100)))
+
+    assert all(w.data for w in workers)
+
+    def f(*args):
+        return 10
+
+    future = c.submit(f, *futures, workers=a.address)
+    yield _wait(future)
+
+    types = list(pluck(0, a.log))
+    req = [i for i, t in enumerate(types) if t == 'request-dep']
+    recv = [i for i, t in enumerate(types) if t == 'receive-dep']
+    assert min(recv) > max(req)
+
+    assert a.comm_nbytes == 0

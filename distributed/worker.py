@@ -58,6 +58,7 @@ except ImportError:
 
 IN_PLAY = ('waiting', 'ready', 'executing', 'long-running')
 PENDING = ('waiting', 'ready', 'constrained')
+READY = ('ready', 'constrained')
 
 
 class WorkerBase(Server):
@@ -780,7 +781,11 @@ class Worker(WorkerBase):
 
         self.in_flight = dict()
         self.total_connections = 50
+        self.total_comm_nbytes = 10e6
+        self.comm_nbytes = 0
         self.connections = {}
+        self.suspicious_deps = defaultdict(lambda: 0)
+        self._missing_dep_flight = set()
 
         self.nbytes = dict()
         self.types = dict()
@@ -902,18 +907,13 @@ class Worker(WorkerBase):
                         assert key in self.data
                     logger.debug("Asked to compute prexisting result: %s: %s" ,
                                  key, state)
-                    self.batched_stream.send(self.response[key])
+                    self.send_task_state_to_scheduler(key)
                     return
                 if state in IN_PLAY:
                     return
 
             if key in self.data:
-                self.response[key] = {'op': 'task-finished',
-                                      'status': 'OK',
-                                      'key': key,
-                                      'nbytes': self.nbytes[key],
-                                      'type': dumps_function(type(self.data[key]))}
-                self.batched_stream.send(self.response[key])
+                self.send_task_state_to_scheduler(key)
                 self.task_state[key] = 'memory'
                 self.tasks[key] = None
                 self.raw_tasks[key] = None
@@ -962,6 +962,7 @@ class Worker(WorkerBase):
 
             if who_has:
                 for dep, workers in who_has.items():
+                    assert workers
                     if dep not in self.who_has:
                         self.who_has[dep] = set(workers)
                     self.who_has[dep].update(workers)
@@ -1029,12 +1030,7 @@ class Worker(WorkerBase):
                 assert key not in self.ready
 
             del self.waiting_for_data[key]
-            self.response[key] = {'op': 'task-finished',
-                                  'status': 'OK',
-                                  'key': key,
-                                  'nbytes': self.nbytes[key],
-                                  'type': dumps_function(type(self.data[key]))}
-            self.batched_stream.send(self.response[key])
+            self.send_task_state_to_scheduler(key)
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -1046,7 +1042,7 @@ class Worker(WorkerBase):
             if self.validate:
                 assert key not in self.waiting_for_data
                 # assert key not in self.data
-                assert self.task_state[key] in ('ready', 'constrained')
+                assert self.task_state[key] in READY
                 assert key not in self.ready
                 assert all(dep in self.data for dep in self.dependencies[key])
 
@@ -1059,12 +1055,7 @@ class Worker(WorkerBase):
             raise
 
     def transition_ready_memory(self, key):
-        self.response[key] = {'op': 'task-finished',
-                              'status': 'OK',
-                              'key': key,
-                              'nbytes': self.nbytes[key],
-                              'type': dumps_function(type(self.data[key]))}
-        self.batched_stream.send(self.response[key])
+        self.send_task_state_to_scheduler(key)
 
     def transition_constrained_executing(self, key):
         self.transition_ready_executing(key)
@@ -1091,7 +1082,7 @@ class Worker(WorkerBase):
             elif self.task_state[key] == 'long-running':
                 self.long_running.remove(key)
             if self.batched_stream:
-                self.batched_stream.send(self.response[key])
+                self.send_task_state_to_scheduler(key)
             else:
                 raise StreamClosedError()
 
@@ -1148,18 +1139,33 @@ class Worker(WorkerBase):
                           and d not in self.executing
                           and d not in self.in_flight]
 
-                for dep in deps:
-                    if not self.who_has.get(dep):
-                        logger.info("Can't find dependencies for key %s", key)
-                        self.cancel_key(key)
-                        continue
+                missing_deps = {dep for dep in deps if not self.who_has.get(dep)}
+                if missing_deps:
+                    logger.info("Can't find dependencies for key %s", key)
+                    self.loop.add_callback(self.handle_missing_dep,
+                                           *missing_deps)
+
+                    deps = [dep for dep in deps if dep not in missing_deps]
 
                 self.log.append(('gather-dependencies', key, deps))
 
-                while deps and len(self.connections) < self.total_connections:
+                while deps and (len(self.connections) < self.total_connections
+                                or self.comm_nbytes < self.total_comm_nbytes):
                     token = object()
-                    self.connections[token] = None
-                    self.loop.add_callback(self.gather_dep, deps.pop(), token, cause=key)
+                    dep = deps.pop()
+                    if dep in self.in_flight:
+                        continue
+                    if dep not in self.who_has:
+                        continue
+                    worker = random.choice(list(self.who_has[dep]))
+                    to_gather, total_nbytes = self.select_keys_for_gather(worker, dep)
+                    self.comm_nbytes += total_nbytes
+                    self.connections[token] = to_gather
+                    for d in to_gather:
+                        assert d not in self.in_flight
+                        self.in_flight[d] = token
+                    self.loop.add_callback(self.gather_dep, worker, dep,
+                            to_gather, token, total_nbytes, cause=key)
 
                 if not deps:
                     self.data_needed.popleft()
@@ -1168,6 +1174,16 @@ class Worker(WorkerBase):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
+
+    def send_task_state_to_scheduler(self, key):
+        d = self.response[key]
+        if 'op' not in d and key in self.data:
+            d.update({'op': 'task-finished',
+                      'status': 'OK',
+                      'key': key,
+                      'nbytes': self.nbytes[key],
+                      'type': dumps_function(type(self.data[key]))})
+        self.batched_stream.send(d)
 
     def put_key_in_memory(self, key, value):
         if key in self.data:
@@ -1190,97 +1206,62 @@ class Worker(WorkerBase):
         if key in self.task_state:
             self.transition(key, 'memory')
 
+    def select_keys_for_gather(self, worker, dep):
+        deps = {dep}
+
+        total_bytes = self.nbytes[dep]
+        L = self.pending_data_per_worker[worker]
+
+        while L:
+            d = L.popleft()
+            if (d in self.data or
+                d in self.in_flight or
+                d in self.executing or
+                d not in self.nbytes):  # no longer tracking
+                continue
+            if total_bytes + self.nbytes[d] > self.target_message_size:
+                break
+            deps.add(d)
+            total_bytes += self.nbytes[d]
+
+        return deps, total_bytes
+
     @gen.coroutine
-    def gather_dep(self, dep, slot, cause=None):
-        failures = 5
-        del self.connections[slot]
-        try:
-            if self.validate:
-                self.validate_state()
-
-            while True:
-                if not self.who_has.get(dep):
-                    if dep not in self.dependents:
-                        return
-                    failures += 1
-                    result = yield self.query_who_has(dep)
-                    if not result or failures > 5:
-                        for key in list(self.dependents[dep]):
-                            if dep in self.executing:
-                                continue
-                            if dep in self.waiting_for_data.get(key, ()):
-                                self.cancel_key(key)
-                        return
-                    else:
-                        assert self.who_has.get(dep)
-                worker = random.choice(list(self.who_has[dep]))
-                ip, port = worker.split(':')
-                try:
-                    start = time()
-                    future = connect(ip, int(port), timeout=10)
-                    self.connections[future] = True
-                    stream = yield future
-                    end = time()
-                    if self.digests is not None:
-                        self.digests['gather-connect-duration'].add(end - start)
-                except (gen.TimeoutError, EnvironmentError):
-                    logger.info("Failed to connect to %s", worker)
-                    with ignoring(KeyError):  # other coroutine may have removed
-                        for d in self.has_what.pop(worker):
-                            self.who_has[d].remove(worker)
-                else:
-                    break
-                finally:
-                    del self.connections[future]
-
-            if dep in self.data or dep in self.in_flight:  # someone beat us
-                stream.close() # close newly opened stream
-                return
-
-            deps = {dep}
-
-            total_bytes = self.nbytes[dep]
-            L = self.pending_data_per_worker[worker]
-
-            while L:
-                d = L.popleft()
-                if (d in self.data or
-                    d in self.in_flight or
-                    d in self.executing or
-                    d not in self.nbytes):  # no longer tracking
-                    continue
-                if total_bytes + self.nbytes[d] > self.target_message_size:
-                    break
-                deps.add(d)
-                total_bytes += self.nbytes[d]
-
-            for d in deps:
-                assert d not in self.in_flight
-                self.in_flight[d] = stream
-            self.log.append(('request-dep', dep, worker, deps))
-            self.connections[stream] = deps
-
+    def gather_dep(self, worker, dep, deps, slot, total_nbytes, cause=None):
+        stream = None
+        with log_errors():
+            ip, port = worker.split(':')
+            response = {}
             try:
+                if self.validate:
+                    self.validate_state()
+
                 start = time()
-                logger.debug("Request %d keys and %d bytes", len(deps),
-                             total_bytes)
+                stream = yield connect(ip, int(port), timeout=3)
+                stop = time()
+                if self.digests is not None:
+                    self.digests['gather-connect-duration'].add(stop - start)
+
+                self.log.append(('request-dep', dep, worker, deps))
+                logger.debug("Request %d keys", len(deps))
+
+                start = time()
                 response = yield send_recv(stream, op='get_data', keys=list(deps),
                                            close=True, who=self.address)
                 stop = time()
-                deps2 = list(response)
 
                 if cause:
                     self.response[cause].update({'transfer_start': start,
                                                  'transfer_stop': stop})
 
-                total_bytes = sum(self.nbytes.get(dep, 0) for dep in deps2)
+                total_bytes = sum(self.nbytes.get(dep, 0) for dep in response)
                 duration = (stop - start) or 0.5
                 self.incoming_transfer_log.append({
                     'start': start,
                     'stop': stop,
                     'middle': (start + stop) / 2.0,
                     'duration': duration,
-                    'keys': {dep: self.nbytes.get(dep, None) for dep in deps2},
+                    'keys': {dep: self.nbytes.get(dep, None) for dep in response},
                     'total': total_bytes,
                     'bandwidth': total_bytes / duration,
                     'who': worker
@@ -1288,56 +1269,104 @@ class Worker(WorkerBase):
                 if self.digests is not None:
                     self.digests['transfer-bandwidth'].add(total_bytes / duration)
                     self.digests['transfer-duration'].add(duration)
-                self.counters['transfer-count'].add(len(deps2))
+                self.counters['transfer-count'].add(len(response))
                 self.incoming_count += 1
+
+                self.log.append(('receive-dep', worker, list(response)))
+
+                for d, v in response.items():
+                    self.put_key_in_memory(d, v)
+
+                if response:
+                    self.batched_stream.send({'op': 'add-keys',
+                                              'keys': list(response)})
             except EnvironmentError as e:
                 logger.error("Worker stream died during communication: %s",
                              worker)
-                response = {}
                 self.log.append(('receive-dep-failed', worker))
+            except Exception as e:
+                logger.exception(e)
+                if self.batched_stream and LOG_PDB:
+                    import pdb; pdb.set_trace()
+                raise
             finally:
-                del self.connections[stream]
-                stream.close()
+                if stream:
+                    stream.close()
+                self.comm_nbytes -= total_nbytes
+                for d in self.connections.pop(slot):
+                    del self.in_flight[d]
 
-            self.log.append(('receive-dep', worker, list(response)))
+                    if d not in response and d in self.dependents:
+                        self.log.append(('missing-dep', d))
+                        try:
+                            self.who_has[d].remove(worker)
+                        except KeyError:
+                            pass
+                        try:
+                            self.has_what[worker].remove(d)
+                        except KeyError:
+                            pass
+                        if d not in self.who_has:
+                            continue
+                        if not self.who_has[d]:
+                            if d not in self._missing_dep_flight:
+                                self._missing_dep_flight.add(d)
+                                self.loop.add_callback(self.handle_missing_dep, d)
+                            continue
+                        for key in self.dependents.get(d, ()):
+                            if key in self.waiting_for_data:
+                                self.data_needed.appendleft(key)
 
-            assert len(self.connections) < self.total_connections
+                if self.validate:
+                    self.validate_state()
 
-            for d in deps:
-                del self.in_flight[d]
+                self.ensure_computing()
+                self.ensure_communicating()
 
-            for d, v in response.items():
-                self.put_key_in_memory(d, v)
+    @gen.coroutine
+    def handle_missing_dep(self, *deps):
+        original_deps = list(deps)
+        self.log.append(('handle-missing', deps))
+        try:
+            deps = {dep for dep in deps if dep in self.dependents}
+            if not deps:
+                return
 
-            if response:
-                self.batched_stream.send({'op': 'add-keys',
-                                          'keys': list(response)})
+            for dep in list(deps):
+                suspicious = self.suspicious_deps[dep]
+                if suspicious > 5:
+                    deps.remove(dep)
+                    for key in list(self.dependents.get(dep, ())):
+                        self.cancel_key(key)
+                    deps.remove(dep)
+            if not deps:
+                return
 
-            for d in deps:
-                if d not in response and d in self.dependents:
-                    self.log.append(('missing-dep', d))
-                    try:
-                        self.who_has[d].remove(worker)
-                    except KeyError:
-                        pass
-                    try:
-                        self.has_what[worker].remove(d)
-                    except KeyError:
-                        pass
-                    for key in self.dependents.get(d, ()):
+            for dep in deps:
+                logger.info("Suspicious: %s %s", dep, self.suspicious_deps[dep])
+
+            response = yield self.scheduler.who_has(keys=list(deps))
+            self.update_who_has(response)
+            for dep in deps:
+                self.suspicious_deps[dep] += 1
+
+                if dep not in response:
+                    self.log.append((dep, 'no workers found',
+                                     self.dependents.get(dep)))
+                    for key in list(self.dependents.get(dep, ())):
+                        self.cancel_key(key)
+                else:
+                    self.log.append((dep, 'new workers found'))
+                    for key in self.dependents.get(dep, ()):
                         if key in self.waiting_for_data:
-                            self.data_needed.appendleft(key)
+                            self.data_needed.append(key)
 
-            if self.validate:
-                self.validate_state()
-
-            self.ensure_computing()
             self.ensure_communicating()
         except Exception as e:
             logger.exception(e)
-            if self.batched_stream and LOG_PDB:
-                import pdb; pdb.set_trace()
-            raise
+        finally:
+            for dep in original_deps:
+                self._missing_dep_flight.remove(dep)
 
     @gen.coroutine
     def query_who_has(self, *deps):
@@ -1417,6 +1446,8 @@ class Worker(WorkerBase):
                 del self.worker_restrictions[key]
             if key in self.resource_restrictions:
                 del self.resource_restrictions[key]
+            if key in self.suspicious_deps:
+                del self.suspicious_deps[key]
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -1478,11 +1509,8 @@ class Worker(WorkerBase):
                     break
             while self.ready and len(self.executing) < self.ncores:
                 _, key = heapq.heappop(self.ready)
-                if key not in self.task_state:
-                    continue
-                if self.task_state[key] in ('memory', 'error', 'executing'):
-                    continue
-                self.transition(key, 'executing')
+                if self.task_state.get(key) in READY:
+                    self.transition(key, 'executing')
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -1492,8 +1520,9 @@ class Worker(WorkerBase):
     @gen.coroutine
     def execute(self, key, report=False):
         try:
+            if key not in self.executing:
+                return
             if self.validate:
-                assert key in self.executing
                 assert key not in self.waiting_for_data
                 assert self.task_state[key] == 'executing'
 
@@ -1626,6 +1655,12 @@ class Worker(WorkerBase):
                 if state == 'long-running':
                     assert key not in self.executing
                     assert key in self.long_running
+
+            for key, deps in self.waiting_for_data.items():
+                if key not in self.data_needed:
+                    for dep in deps:
+                        assert (dep in self.in_flight or
+                                dep in self._missing_dep_flight)
 
             for key in self.tasks:
                 if self.task_state[key] == 'memory':

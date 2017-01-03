@@ -148,7 +148,7 @@ def test_dont_steal_fast_tasks(c, s, *workers):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)], timeout=20)
 def test_new_worker_steals(c, s, a):
-    yield _wait(c.submit(slowinc, 1, delay=0.01)._result())
+    yield _wait(c.submit(slowinc, 1, delay=0.01))
 
     futures = c.map(slowinc, range(100), delay=0.05)
     total = c.submit(sum, futures)

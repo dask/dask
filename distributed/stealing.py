@@ -168,6 +168,8 @@ class WorkStealing(SchedulerPlugin):
                 self.scheduler.send_task_to_worker(thief, key)
             except StreamClosedError:
                 self.scheduler.remove_worker(thief)
+        except StreamClosedError:
+            logger.info("Worker stream closed while stealing: %s", victim)
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:

@@ -709,6 +709,9 @@ class Scheduler(Server):
 
             self.transitions(recommendations)
 
+            if self.validate:
+                assert not any(k in self.who_has for k in keys)
+
             return {}
 
     def remove_worker(self, stream=None, address=None, safe=False):
@@ -775,6 +778,9 @@ class Scheduler(Server):
                         recommendations[key] = 'forgotten'
 
             self.transitions(recommendations)
+
+            if self.validate:
+                assert all(self.who_has.values())
 
             for plugin in self.plugins[:]:
                 try:
@@ -944,6 +950,8 @@ class Scheduler(Server):
             for key in keys:
                 assert worker in self.who_has[key]
 
+        assert all(self.who_has.values())
+
         for worker, occ in self.occupancy.items():
             assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
 
@@ -1075,31 +1083,41 @@ class Scheduler(Server):
 
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
-        msg = {'op': 'compute-task',
-               'key': key,
-               'priority': self.priority[key],
-               'duration': self.task_duration.get(key_split(key), 0.5)}
-        if key not in self.loose_restrictions:
-            if key in self.host_restrictions:
-                msg['host_restrictions'] = list(self.host_restrictions[key])
-            if key in self.worker_restrictions:
-                msg['worker_restrictions'] = list(self.worker_restrictions[key])
-        if key in self.resource_restrictions:
-            msg['resource_restrictions'] = self.resource_restrictions[key]
+        try:
+            msg = {'op': 'compute-task',
+                   'key': key,
+                   'priority': self.priority[key],
+                   'duration': self.task_duration.get(key_split(key), 0.5)}
+            if key not in self.loose_restrictions:
+                if key in self.host_restrictions:
+                    msg['host_restrictions'] = list(self.host_restrictions[key])
+                if key in self.worker_restrictions:
+                    msg['worker_restrictions'] = list(self.worker_restrictions[key])
+            if key in self.resource_restrictions:
+                msg['resource_restrictions'] = self.resource_restrictions[key]
 
-        deps = self.dependencies[key]
-        if deps:
-            msg['who_has'] = {dep: tuple(self.who_has.get(dep, ()))
-                              for dep in deps}
-            msg['nbytes'] = {dep: self.nbytes.get(dep) for dep in deps}
+            deps = self.dependencies[key]
+            if deps:
+                msg['who_has'] = {dep: list(self.who_has[dep]) for dep in deps}
+                msg['nbytes'] = {dep: self.nbytes.get(dep) for dep in deps}
 
-        task = self.tasks[key]
-        if type(task) is dict:
-            msg.update(task)
-        else:
-            msg['task'] = task
+            if self.validate and deps:
+                assert all(msg['who_has'].values())
 
-        self.worker_streams[worker].send(msg)
+            task = self.tasks[key]
+            if type(task) is dict:
+                msg.update(task)
+            else:
+                msg['task'] = task
+
+            self.worker_streams[worker].send(msg)
+        except StreamClosedError:
+            logger.info("Tried to send task to removed worker")
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
 
     def handle_uncaught_error(self, **msg):
         logger.exception(clean_exception(**msg)[1])
@@ -1116,6 +1134,8 @@ class Scheduler(Server):
     def handle_missing_data(self, key=None, **msg):
         r = self.stimulus_missing_data(key=key, ensure=False, **msg)
         self.transitions(r)
+        if self.validate:
+            assert all(self.who_has.values())
 
     @gen.coroutine
     def handle_worker(self, worker):
@@ -1843,9 +1863,12 @@ class Scheduler(Server):
                 assert all(dep in self.who_has
                            for dep in self.dependencies[key])
 
-            valid_workers = self.valid_workers(key)
+            if any(not self.who_has[dep] for dep in self.dependencies[key]):
+                return {}
 
             del self.waiting[key]
+
+            valid_workers = self.valid_workers(key)
 
             if not valid_workers and key not in self.loose_restrictions and self.ncores:
                 self.unrunnable.add(key)
@@ -1969,11 +1992,12 @@ class Scheduler(Server):
             self.who_has[key] = set()
             self.release_resources(key, worker)
 
-            if worker:
-                self.who_has[key].add(worker)
-                self.has_what[worker].add(key)
-                self.worker_bytes[worker] += self.nbytes.get(key,
-                                                             DEFAULT_DATA_SIZE)
+            assert worker
+
+            self.who_has[key].add(worker)
+            self.has_what[worker].add(key)
+            self.worker_bytes[worker] += self.nbytes.get(key,
+                                                         DEFAULT_DATA_SIZE)
 
             w = self.rprocessing.pop(key)
             duration = self.processing[w].pop(key)
