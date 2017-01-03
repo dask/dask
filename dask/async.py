@@ -117,8 +117,6 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 
-from toolz import identity
-
 from .compatibility import Queue
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
@@ -368,6 +366,14 @@ We currently select tasks that have recently been made ready.  We hope that
 this first-in-first-out policy reduces memory footprint
 '''
 
+def _identity(x):
+    """ Identity function. Returns x.
+
+    >>> identity(3)
+    3
+    """
+    return x
+
 '''
 `get`
 -----
@@ -375,11 +381,10 @@ this first-in-first-out policy reduces memory footprint
 The main function of the scheduler.  Get is the main entry point.
 '''
 
-
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               get_id=default_get_id, raise_on_exception=False,
               rerun_exceptions_locally=None, callbacks=None,
-              dumps=identity, loads=identity,
+              dumps=_identity, loads=_identity,
               **kwargs):
     """ Asynchronous get function
 
@@ -535,7 +540,6 @@ def get_sync(dsk, keys, **kwargs):
     kwargs.pop('num_workers', None)    # if num_workers present, remove it
     return get_async(apply_sync, 1, dsk, keys,
                      raise_on_exception=True, **kwargs)
-
 
 def sortkey(item):
     """ Sorting key function that is robust to different types
