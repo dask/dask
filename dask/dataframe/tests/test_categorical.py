@@ -194,3 +194,14 @@ class TestCategoricalAccessor:
                              dask.delayed(make_full)()])
         # Used to raise an IndexError
         a.A.cat.categories
+
+    def test_unknown_categories(self):
+        a = pd.Series(pd.Categorical(['a', 'b', 'c', 'b', 'c'], list('abc')))
+        da = dd.from_pandas(a, npartitions=2)
+        da._meta = make_meta((None, 'category'))
+
+        with pytest.raises(NotImplementedError):
+            da.cat.categories
+
+        db = da.cat.set_categories(['a', 'b', 'c'])
+        tm.assert_index_equal(db.cat.categories, a.cat.categories)

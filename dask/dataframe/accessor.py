@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pandas as pd
 
 from .core import Series, map_partitions, partial
+from .utils import has_known_categories
 
 
 class Accessor(object):
@@ -126,7 +127,7 @@ class CategoricalAccessor(Accessor):
     So `df.a.cat.codes` <=> `df.a.map_partitions(lambda x: x.cat.codes)`
     """
     ns = pd.Series.cat
-    _meta_attributes = {'categories', 'ordered'}
+    _meta_attributes = {'ordered'}
 
     def _function_map(self, key, *args, **kwargs):
         out = self.call(self._series._meta, key, *args, **kwargs)
@@ -150,6 +151,16 @@ class CategoricalAccessor(Accessor):
     @staticmethod
     def call(obj, attr, *args, **kwargs):
         return getattr(obj.cat, attr)(*args, **kwargs)
+
+    @property
+    def categories(self):
+        """The categories of this categorical.
+
+        If categories are unknown, an error is raised"""
+        if not has_known_categories(self._series._meta):
+            raise NotImplementedError("`df.cat.categories` with unknown "
+                                      "categories")
+        return self._series._meta.cat.categories
 
     def remove_unused_categories(self):
         """
