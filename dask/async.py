@@ -355,6 +355,15 @@ def default_get_id():
     return None
 
 
+def identity(x):
+    """ Identity function. Returns x.
+
+    >>> identity(3)
+    3
+    """
+    return x
+
+
 '''
 Task Selection
 --------------
@@ -366,14 +375,6 @@ We currently select tasks that have recently been made ready.  We hope that
 this first-in-first-out policy reduces memory footprint
 '''
 
-def _identity(x):
-    """ Identity function. Returns x.
-
-    >>> identity(3)
-    3
-    """
-    return x
-
 '''
 `get`
 -----
@@ -381,10 +382,11 @@ def _identity(x):
 The main function of the scheduler.  Get is the main entry point.
 '''
 
+
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               get_id=default_get_id, raise_on_exception=False,
               rerun_exceptions_locally=None, callbacks=None,
-              dumps=_identity, loads=_identity,
+              dumps=identity, loads=identity,
               **kwargs):
     """ Asynchronous get function
 
@@ -540,6 +542,7 @@ def get_sync(dsk, keys, **kwargs):
     kwargs.pop('num_workers', None)    # if num_workers present, remove it
     return get_async(apply_sync, 1, dsk, keys,
                      raise_on_exception=True, **kwargs)
+
 
 def sortkey(item):
     """ Sorting key function that is robust to different types
