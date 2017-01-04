@@ -50,50 +50,7 @@ def _concat(args):
             return pd.Series(args)
         except:
             return args
-
-    # Filter out empty chunks
-    args2 = [arg for arg in args if len(arg)]
-    if not args2:
-        return args[0]
-
-    # DataFrame/Series
-    if isinstance(args2[0], (pd.DataFrame, pd.Series)):
-        # Handle categorical index separately
-        if isinstance(args2[0].index, pd.CategoricalIndex):
-            args3 = [df.reset_index(drop=True) for df in args]
-            ind = _concat([df.index for df in args])
-        else:
-            args3 = args2
-            ind = None
-        # Concatenate the partitions together, handling categories as needed
-        head = args3[0]
-        if isinstance(head, pd.DataFrame):
-            cat_mask = head.dtypes == 'category'
-            if (cat_mask).any():
-                not_cat = cat_mask[~cat_mask].index
-                out = pd.concat([df[not_cat] for df in args3])
-                for col in head.columns.difference(not_cat):
-                    out[col] = union_categoricals([df[col] for df in args3])
-                out = out.reindex_axis(head.columns, axis=1)
-            else:
-                out = pd.concat(args3)
-        else:
-            if is_categorical_dtype(head.dtype):
-                if ind is None:
-                    ind = _concat([df.index for df in args3])
-                return pd.Series(union_categoricals(args3), index=ind,
-                                 name=head.name)
-            out = pd.concat(args3)
-        # Re-add the index if needed
-        if ind is not None:
-            out.index = ind
-        return out
-
-    # Indices
-    if isinstance(args2[0], pd.CategoricalIndex):
-        return pd.CategoricalIndex(union_categoricals(args2),
-                                   name=args2[0].name)
-    return args2[0].append(args2[1:])
+    return methods.concat(args, uniform=True)
 
 
 def _get_return_type(meta):

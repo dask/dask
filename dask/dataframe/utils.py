@@ -179,11 +179,9 @@ def has_known_categories(x):
     """
     x = getattr(x, '_meta', x)
     if isinstance(x, pd.Series):
-        return (len(x.cat.categories) != 1 or
-                x.cat.categories[0] != UNKNOWN_CATEGORIES)
+        return UNKNOWN_CATEGORIES not in x.cat.categories
     elif isinstance(x, pd.CategoricalIndex):
-        return (len(x.categories) != 1 or
-                x.categories[0] != UNKNOWN_CATEGORIES)
+        return UNKNOWN_CATEGORIES not in x.categories
     raise TypeError("Expected Series or CategoricalIndex")
 
 
