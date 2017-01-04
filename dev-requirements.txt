@@ -1,0 +1,11 @@
+joblib >= 0.10.2
+mock >= 2.0.0
+pandas >= 0.19.2
+numpy >= 1.11.0
+bokeh >= 0.12.3
+requests >= 2.12.4
+pyzmq >= 16.0.2
+ipython >= 5.0.0
+jupyter_client >= 4.4.0
+ipykernel >= 4.5.2
+pytest >= 3.0.5

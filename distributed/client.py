@@ -1204,7 +1204,7 @@ class Client(object):
         --------
         Client.publish_dataset
         """
-        return sync(self.loop, self.scheduler.publist_delete, name=name)
+        return sync(self.loop, self.scheduler.publish_delete, name=name)
 
     def list_datasets(self):
         """

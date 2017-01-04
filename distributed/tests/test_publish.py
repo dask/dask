@@ -6,6 +6,7 @@ from distributed import Client
 from distributed.client import futures_of
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc
+from distributed.utils_test import cluster, loop
 
 @gen_cluster(client=False)
 def test_publish_simple(s, a, b):
@@ -84,6 +85,19 @@ def test_unpublish(c, s, a, b):
     assert "not found" in str(exc_info.value)
     assert "data" in str(exc_info.value)
 
+def test_unpublish_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            data = c.scatter([0, 1, 2])
+            c.publish_dataset(data=data)
+            c.unpublish_dataset(name='data')
+
+            with pytest.raises(KeyError) as exc_info:
+                result = c.get_dataset(name='data')
+
+            assert "not found" in str(exc_info.value)
+            assert "data" in str(exc_info.value)
+
 
 @gen_cluster(client=True)
 def test_publish_multiple_datasets(c, s, a, b):
@@ -93,6 +107,32 @@ def test_publish_multiple_datasets(c, s, a, b):
     yield c._publish_dataset(x=x, y=y)
     datasets = yield c.scheduler.publish_list()
     assert set(datasets) == {'x', 'y'}
+
+
+def test_unpublish_multiple_datasets_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            x = delayed(inc)(1)
+            y = delayed(inc)(2)
+            c.publish_dataset(x=x, y=y)
+            c.unpublish_dataset(name='x')
+
+            with pytest.raises(KeyError) as exc_info:
+                result = c.get_dataset(name='x')
+
+            datasets = c.list_datasets()
+            assert set(datasets) == {'y'}
+
+            assert "not found" in str(exc_info.value)
+            assert "x" in str(exc_info.value)
+
+            c.unpublish_dataset(name='y')
+
+            with pytest.raises(KeyError) as exc_info:
+                result = c.get_dataset(name='y')
+
+            assert "not found" in str(exc_info.value)
+            assert "y" in str(exc_info.value)
 
 
 @gen_cluster(client=False)
