@@ -199,10 +199,18 @@ def test_nout():
     pytest.raises(ValueError, lambda: delayed(add, nout=-1))
     pytest.raises(ValueError, lambda: delayed(add, nout=True))
 
-    func = delayed(add, nout=1)
+    func = delayed(add, nout=None)
     a = func(1)
     assert a._length is None
     pytest.raises(TypeError, lambda: list(a))
+    pytest.raises(TypeError, lambda: len(a))
+
+    func = delayed(lambda x: (x,), nout=1, pure=True)
+    x = func(1)
+    assert len(x) == 1
+    a, = x
+    assert compute(a) == (1, )
+    assert a._length is None
     pytest.raises(TypeError, lambda: len(a))
 
 

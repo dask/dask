@@ -36,6 +36,11 @@ DataFrame
   drop_duplicates) (:pr:`1808`), (:pr:`1823`) (:pr:`1828`)
 - Add delitem and copy to DataFrames, increasing mutation support (:pr:`1858`)
 
+Delayed
++++++++
+
+- ``delayed(nout=1)`` does not default to ``out=None`` any more. I.e. functions
+  with return tuples of length 1 can be handled correctly.
 
 Core
 ++++

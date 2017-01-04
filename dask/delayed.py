@@ -408,7 +408,7 @@ def call_function(func, args, kwargs, pure=False, nout=None):
 
     dasks = flat_unique(dasks)
     dasks.append({name: task})
-    nout = nout if nout and nout > 1 else None
+    nout = nout if nout and nout > 0 else None
     return Delayed(name, dasks, length=nout)
 
 
