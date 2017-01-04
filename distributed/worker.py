@@ -268,6 +268,7 @@ class WorkerBase(Server):
                         host_info=self.host_health(),
                         services=self.service_ports,
                         memory_limit=self.memory_limit,
+                        local_directory=self.local_dir,
                         resources=self.total_resources,
                         **self.process_health())
                 break

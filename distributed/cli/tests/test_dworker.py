@@ -13,7 +13,7 @@ from distributed import Scheduler, Client
 from distributed.core import rpc
 from distributed.nanny import isalive
 from distributed.metrics import time
-from distributed.utils import sync, ignoring
+from distributed.utils import sync, ignoring, tmpfile
 from distributed.utils_test import (loop, popen, slow, terminate_process,
                                     wait_for_port)
 
@@ -81,3 +81,17 @@ def test_resources(loop):
                 info = c.scheduler_info()
                 worker = list(info['workers'].values())[0]
                 assert worker['resources'] == {'A': 1, 'B': 2, 'C': 3}
+
+
+@pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])
+def test_local_directory(loop, nanny):
+    with tmpfile() as fn:
+        with popen(['dask-scheduler', '--no-bokeh']) as sched:
+            with popen(['dask-worker', '127.0.0.1:8786', nanny,
+                        '--no-bokeh', '--local-directory', fn]) as worker:
+                with Client('127.0.0.1:8786', loop=loop) as c:
+                    while not c.scheduler_info()['workers']:
+                        sleep(0.1)
+                    info = c.scheduler_info()
+                    worker = list(info['workers'].values())[0]
+                    assert worker['local_directory'] == fn

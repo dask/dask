@@ -69,13 +69,15 @@ def handle_signal(sig, frame):
               help="Start workers in nanny process for management")
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
+@click.option('--local-directory', default='', type=str,
+              help="Directory to place worker files")
 @click.option('--temp-filename', default=None,
               help="Internal use only")
 @click.option('--resources', type=str, default='',
               help='Resources for task constraints like "GPU=2 MEM=10e9"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         nanny, name, memory_limit, pid_file, temp_filename, reconnect,
-        resources, bokeh, bokeh_port):
+        resources, bokeh, bokeh_port, local_directory):
     if nanny:
         port = nanny_port
     else:
@@ -144,7 +146,8 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         ip = get_ip(scheduler_ip, scheduler_port)
     nannies = [t(scheduler_ip, scheduler_port, ncores=nthreads, ip=ip,
                  services=services, name=name, loop=loop, resources=resources,
-                 memory_limit=memory_limit, reconnect=reconnect, **kwargs)
+                 memory_limit=memory_limit, reconnect=reconnect,
+                 local_dir=local_directory, **kwargs)
                for i in range(nprocs)]
 
     for n in nannies:
