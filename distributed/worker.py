@@ -263,7 +263,8 @@ class WorkerBase(Server):
                 resp = yield self.scheduler.register(
                         ncores=self.ncores, address=(self.ip, self.port),
                         keys=list(self.data),
-                        name=self.name, nbytes=valmap(sizeof, self.data),
+                        name=self.name,
+                        nbytes=self.nbytes,
                         now=time(),
                         host_info=self.host_health(),
                         services=self.service_ports,
@@ -286,7 +287,8 @@ class WorkerBase(Server):
         self.loop.add_callback(self._start, port)
 
     def identity(self, stream):
-        return {'type': type(self).__name__, 'id': self.id,
+        return {'type': type(self).__name__,
+                'id': self.id,
                 'scheduler': (self.scheduler.ip, self.scheduler.port),
                 'ncores': self.ncores,
                 'memory_limit': self.memory_limit}

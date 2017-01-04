@@ -868,3 +868,31 @@ def test_include_communication_in_occupancy(c, s, a, b):
         yield gen.sleep(0.01)
 
     assert s.processing[b.address][z.key] > 1
+
+
+@gen_cluster(client=True)
+def test_worker_arrives_with_processing_data(c, s, a, b):
+    x = delayed(slowinc)(1, delay=0.4)
+    y = delayed(slowinc)(x, delay=0.4)
+    z = delayed(slowinc)(y, delay=0.4)
+
+    yy, zz = c.persist([y, z])
+
+    while not s.processing:
+        yield gen.sleep(0.01)
+
+    w = Worker(s.ip, s.port, ncores=1, ip='127.0.0.1')
+    w.put_key_in_memory(y.key, 3)
+
+    yield w._start()
+
+    start = time()
+
+    while len(s.workers) < 3:
+        yield gen.sleep(0.01)
+
+    assert s.task_state[y.key] == 'memory'
+    assert s.task_state[x.key] == 'released'
+    assert s.task_state[z.key] == 'processing'
+
+    yield w._close()

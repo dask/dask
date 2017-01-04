@@ -315,8 +315,9 @@ class Scheduler(Server):
 
         self._transitions = {
                  ('released', 'waiting'): self.transition_released_waiting,
-                 ('waiting', 'processing'): self.transition_waiting_processing,
                  ('waiting', 'released'): self.transition_waiting_released,
+                 ('waiting', 'processing'): self.transition_waiting_processing,
+                 ('waiting', 'memory'): self.transition_waiting_memory,
                  ('processing', 'released'): self.transition_processing_released,
                  ('processing', 'memory'): self.transition_processing_memory,
                  ('processing', 'erred'): self.transition_processing_erred,
@@ -507,9 +508,6 @@ class Scheduler(Server):
                 self.occupancy[address] = 0
                 self.check_idle_saturated(address)
 
-            if nbytes is not None:
-                self.nbytes.update(nbytes)
-
             # for key in keys:  # TODO
             #     self.mark_key_in_memory(key, [address])
 
@@ -519,17 +517,25 @@ class Scheduler(Server):
             if self.ncores[address] > len(self.processing[address]):
                 self.idle.add(address)
 
-            recommendations = {}
-            for key in list(self.unrunnable):
-                valid = self.valid_workers(key)
-                if valid is True or address in valid:
-                    recommendations[key] = 'waiting'
-
             for plugin in self.plugins[:]:
                 try:
                     plugin.add_worker(scheduler=self, worker=address)
                 except Exception as e:
                     logger.exception(e)
+
+            if nbytes:
+                for key in nbytes:
+                    state = self.task_state.get(key)
+                    if state in ('processing', 'waiting'):
+                        recommendations = self.transition(key, 'memory',
+                                worker=address, nbytes=nbytes[key])
+                        self.transitions(recommendations)
+
+            recommendations = {}
+            for key in list(self.unrunnable):
+                valid = self.valid_workers(key)
+                if valid is True or address in valid:
+                    recommendations[key] = 'waiting'
 
             if recommendations:
                 self.transitions(recommendations)
@@ -1925,6 +1931,71 @@ class Scheduler(Server):
                 assert key not in self.waiting
 
             return {}
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
+
+    def transition_waiting_memory(self, key, nbytes=None, worker=None, **kwargs):
+        try:
+            if self.validate:
+                assert key not in self.rprocessing
+                assert key in self.waiting
+                assert self.task_state[key] == 'waiting'
+
+            del self.waiting[key]
+
+            if nbytes is not None:
+                self.nbytes[key] = nbytes
+
+            if key not in self.who_has:
+                self.who_has[key] = set()
+
+            self.who_has[key].add(worker)
+            self.has_what[worker].add(key)
+            self.worker_bytes[worker] += nbytes or DEFAULT_DATA_SIZE
+
+            self.check_idle_saturated(worker)
+
+            recommendations = OrderedDict()
+
+            deps = self.dependents.get(key, [])
+            if len(deps) > 1:
+               deps = sorted(deps, key=self.priority.get, reverse=True)
+
+            for dep in deps:
+                if dep in self.waiting:
+                    s = self.waiting[dep]
+                    s.remove(key)
+                    if not s:  # new task ready to run
+                        recommendations[dep] = 'processing'
+
+            for dep in self.dependencies.get(key, []):
+                if dep in self.waiting_data:
+                    s = self.waiting_data[dep]
+                    s.remove(key)
+                    if (not s and dep and
+                        dep not in self.who_wants and
+                        not self.waiting_data.get(dep)):
+                        recommendations[dep] = 'released'
+
+            if (not self.waiting_data.get(key) and
+                key not in self.who_wants):
+                recommendations[key] = 'released'
+            else:
+                msg = {'op': 'key-in-memory',
+                       'key': key}
+                self.report(msg)
+
+            self.task_state[key] = 'memory'
+
+            if self.validate:
+                assert key not in self.rprocessing
+                assert key not in self.waiting
+                assert self.who_has[key]
+
+            return recommendations
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
