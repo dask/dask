@@ -393,24 +393,21 @@ class WorkerBase(Server):
         if keys:
             for key in list(keys):
                 deps = self.dependents.get(key, ())
-                if deps and any(self.task_state[dep] in IN_PLAY
-                                for dep in deps):
-                    logger.info("Tried to delete necessary key: %s", key)
-                    self.log.append((key, 'tried-to-delete-unneccesary-key'))
-                    keys.remove(key)
-                    continue
-                else:
-                    state = self.task_state.get(key)
-                    if state == 'memory':
-                        del self.data[key]
-                        self.forget_key(key)
-                        self.log.append((key, 'delete-memory'))
-                    elif state == 'error':
-                        self.forget_key(key)
-                        self.log.append((key, 'delete-error'))
-                    elif key in self.data:
-                        del self.data[key]
-                        self.log.append((key, 'delete-data'))
+                for dep in deps:
+                    if self.task_state[dep] in PENDING:
+                        self.cancel_key(dep)
+
+                state = self.task_state.get(key)
+                if state == 'memory':
+                    del self.data[key]
+                    self.forget_key(key)
+                    self.log.append((key, 'delete-memory'))
+                elif state == 'error':
+                    self.forget_key(key)
+                    self.log.append((key, 'delete-error'))
+                elif key in self.data:
+                    del self.data[key]
+                    self.log.append((key, 'delete-data'))
             logger.debug("Deleted %d keys", len(keys))
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
@@ -1343,7 +1340,8 @@ class Worker(WorkerBase):
                 return
 
             for dep in deps:
-                logger.info("Suspicious: %s %s", dep, self.suspicious_deps[dep])
+                logger.info("Dependent not found: %s %s .  Asking scheduler",
+                            dep, self.suspicious_deps[dep])
 
             response = yield self.scheduler.who_has(keys=list(deps))
             self.update_who_has(response)
@@ -1520,7 +1518,7 @@ class Worker(WorkerBase):
     @gen.coroutine
     def execute(self, key, report=False):
         try:
-            if key not in self.executing:
+            if key not in self.executing or key not in self.task_state:
                 return
             if self.validate:
                 assert key not in self.waiting_for_data
@@ -1542,6 +1540,9 @@ class Worker(WorkerBase):
             result = yield self.executor_submit(key, apply_function, function,
                                                 args2, kwargs2,
                                                 self.execution_state, key)
+
+            if key not in self.task_state:
+                return
 
             result['key'] = key
             value = result.pop('result', None)
