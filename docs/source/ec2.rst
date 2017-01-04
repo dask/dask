@@ -51,12 +51,12 @@ Connect
 Connection instructions follow successful completion of the ``dask-ec2 up``
 command.  The involve the following::
 
-    dask-ec2 ssh        # SSH into head node
+    dask-ec2 ssh 0      # SSH into head node
     ipython             # Start IPython console on head node
 
 .. code-block:: python
 
-   >>> from distributed import Client, s3, progress
+   >>> from distributed import Client
    >>> c = Client('127.0.0.1:8786')
 
 This client now has access to all the cores of your cluster.
