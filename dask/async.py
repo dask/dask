@@ -117,8 +117,6 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 
-from toolz import identity
-
 from .compatibility import Queue
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
@@ -355,6 +353,15 @@ def nested_get(ind, coll):
 def default_get_id():
     """Default get_id"""
     return None
+
+
+def identity(x):
+    """ Identity function. Returns x.
+
+    >>> identity(3)
+    3
+    """
+    return x
 
 
 '''
