@@ -13,7 +13,7 @@ import click
 
 import distributed
 from distributed import Scheduler
-from distributed.utils import get_ip
+from distributed.utils import get_ip, ignoring
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from tornado.ioloop import IOLoop
@@ -67,8 +67,9 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
 
     services = {('http', http_port): HTTPScheduler}
     if _bokeh:
-        from distributed.bokeh.scheduler import BokehScheduler
-        services[('bokeh', 8788)] = BokehScheduler
+        with ignoring(ImportError):
+            from distributed.bokeh.scheduler import BokehScheduler
+            services[('bokeh', 8788)] = BokehScheduler
     scheduler = Scheduler(ip=ip, loop=loop, services=services)
     scheduler.start(port)
 
