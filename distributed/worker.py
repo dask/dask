@@ -13,9 +13,6 @@ from timeit import default_timer
 import shutil
 import sys
 
-from .core import read, write, connect, close, send_recv, error_message
-
-
 from dask.core import istask
 from dask.compatibility import apply
 try:
@@ -644,11 +641,11 @@ def apply_function(function, args, kwargs, execution_state, key):
                'status': 'OK',
                'result': result,
                'nbytes': sizeof(result),
-               'type': dumps_function(type(result)) if result is not None else None}
+               'type': type(result) if result is not None else None}
     finally:
         end = time()
-    msg['compute_start'] = start
-    msg['compute_stop'] = end
+    msg['start'] = start
+    msg['stop'] = end
     msg['thread'] = current_thread().ident
     return msg
 
@@ -786,10 +783,14 @@ class Worker(WorkerBase):
 
         self.nbytes = dict()
         self.types = dict()
+        self.threads = dict()
+        self.exceptions = dict()
+        self.tracebacks = dict()
+
         self.priorities = dict()
         self.priority_counter = 0
         self.durations = dict()
-        self.response = defaultdict(dict)
+        self.startstops = defaultdict(list)
         self.host_restrictions = dict()
         self.worker_restrictions = dict()
         self.resource_restrictions = dict()
@@ -1173,13 +1174,27 @@ class Worker(WorkerBase):
             raise
 
     def send_task_state_to_scheduler(self, key):
-        d = self.response[key]
-        if 'op' not in d and key in self.data:
-            d.update({'op': 'task-finished',
-                      'status': 'OK',
-                      'key': key,
-                      'nbytes': self.nbytes[key],
-                      'type': dumps_function(type(self.data[key]))})
+        if key in self.nbytes:
+            d = {'op': 'task-finished',
+                 'status': 'OK',
+                 'key': key,
+                 'nbytes': self.nbytes[key],
+                 'thread': self.threads.get(key),
+                 'type': dumps_function(type(self.data[key]))}
+        elif key in self.exceptions:
+            d = {'op': 'task-erred',
+                 'status': 'error',
+                 'key': key,
+                 'thread': self.threads.get(key),
+                 'exception': self.exceptions[key],
+                 'traceback': self.tracebacks[key]}
+        else:
+            logger.error("Key not ready to send to worker, %s: %s",
+                         key, self.task_state[key])
+            return
+
+        if key in self.startstops:
+            d['startstops'] = self.startstops[key]
         self.batched_stream.send(d)
 
     def put_key_in_memory(self, key, value):
@@ -1190,6 +1205,9 @@ class Worker(WorkerBase):
 
         if key not in self.nbytes:
             self.nbytes[key] = sizeof(value)
+
+        if key not in self.types:
+            self.types[key] = type(value)
 
         self.types[key] = type(value)
 
@@ -1248,8 +1266,7 @@ class Worker(WorkerBase):
                 stop = time()
 
                 if cause:
-                    self.response[cause].update({'transfer_start': start,
-                                                 'transfer_stop': stop})
+                    self.startstops[cause].append(('transfer', start, stop))
 
                 total_bytes = sum(self.nbytes.get(dep, 0) for dep in response)
                 duration = (stop - start) or 0.5
@@ -1426,17 +1443,23 @@ class Worker(WorkerBase):
                     if not self.has_what[worker]:
                         del self.has_what[worker]
 
-            if key not in self.dependents:
-                if key in self.nbytes:
-                    del self.nbytes[key]
-                if key in self.types:
-                    del self.types[key]
-                if key in self.priorities:
-                    del self.priorities[key]
-                if key in self.durations:
-                    del self.durations[key]
-                if key in self.response:
-                    del self.response[key]
+            if key in self.nbytes:
+                del self.nbytes[key]
+            if key in self.types:
+                del self.types[key]
+            if key in self.threads:
+                del self.threads[key]
+            if key in self.priorities:
+                del self.priorities[key]
+            if key in self.durations:
+                del self.durations[key]
+            if key in self.exceptions:
+                del self.exceptions[key]
+            if key in self.tracebacks:
+                del self.tracebacks[key]
+
+            if key in self.startstops:
+                del self.startstops[key]
 
             if key in self.host_restrictions:
                 del self.host_restrictions[key]
@@ -1531,8 +1554,7 @@ class Worker(WorkerBase):
             kwargs2 = pack_data(kwargs, self.data, key_types=str)
             stop = time()
             if stop - start > 0.005:
-                self.response[key]['disk_load_start'] = start
-                self.response[key]['disk_load_stop'] = stop
+                self.startstops[key].append(('disk', start, stop))
                 if self.digests is not None:
                     self.digests['disk-load-duration'].add(stop - start)
 
@@ -1546,15 +1568,21 @@ class Worker(WorkerBase):
 
             result['key'] = key
             value = result.pop('result', None)
-            self.response[key].update(result)
+            self.startstops[key].append(('compute', result['start'],
+                                                    result['stop']))
+            self.threads[key] = result['thread']
 
             if result['op'] == 'task-finished':
+                self.nbytes[key] = result['nbytes']
+                self.types[key] = result['type']
                 self.put_key_in_memory(key, value)
                 self.transition(key, 'memory')
                 if self.digests is not None:
-                    self.digests['task-duration'].add(result['compute_stop'] -
-                                                      result['compute_start'])
+                    self.digests['task-duration'].add(result['stop'] -
+                                                      result['start'])
             else:
+                self.exceptions[key] = result['exception']
+                self.tracebacks[key] = result['traceback']
                 logger.warn(" Compute Failed\n"
                     "Function: %s\n"
                     "args:     %s\n"
@@ -1565,7 +1593,7 @@ class Worker(WorkerBase):
                 self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
-                         self.response[key])
+                         result)
 
             if self.validate:
                 assert key not in self.executing

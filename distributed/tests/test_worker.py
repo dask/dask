@@ -446,8 +446,8 @@ def test_clean(c, s, a, b):
 
     yield y._result()
 
-    collections = [a.tasks, a.task_state, a.response, a.data, a.nbytes,
-                   a.durations, a.priorities]
+    collections = [a.tasks, a.task_state, a.startstops, a.data, a.nbytes,
+                   a.durations, a.priorities, a.types, a.threads]
     for c in collections:
         assert c
 
@@ -587,3 +587,16 @@ def test_gather_many_small(c, s, a, *workers):
     assert min(recv) > max(req)
 
     assert a.comm_nbytes == 0
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
+def test_multiple_transfers(c, s, w1, w2, w3):
+    x = c.submit(inc, 1, workers=w1.address)
+    y = c.submit(inc, 2, workers=w2.address)
+    z = c.submit(add, x, y, workers=w3.address)
+
+    yield _wait(z)
+
+    r = w3.startstops[z.key]
+    transfers = [t for t in r if t[0] == 'transfer']
+    assert len(transfers) == 2

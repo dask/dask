@@ -680,7 +680,8 @@ class Scheduler(Server):
 
         if self.task_state[key] == 'processing':
             recommendations = self.transition(key, 'erred', cause=key,
-                    exception=exception, traceback=traceback)
+                    exception=exception, traceback=traceback, worker=worker,
+                    **kwargs)
         else:
             recommendations = {}
 
@@ -1212,11 +1213,12 @@ class Scheduler(Server):
         """
         if 'time-delay' in self.worker_info[worker]:
             delay = self.worker_info[worker]['time-delay']
-            for key in ['transfer_start', 'transfer_stop', 'time',
-                        'compute_start', 'compute_stop', 'disk_load_start',
-                        'disk_load_stop']:
-                if key in msg:
-                    msg[key] += delay
+            if 'time' in msg:
+                msg['time'] += delay
+
+            if 'startstops' in msg:
+                msg['startstops'] = [(a, b + delay, c + delay)
+                                     for a, b, c in msg['startstops']]
 
     def add_plugin(self, plugin):
         """
@@ -1930,8 +1932,7 @@ class Scheduler(Server):
             raise
 
     def transition_processing_memory(self, key, nbytes=None, type=None,
-            worker=None, compute_start=None, compute_stop=None,
-            transfer_start=None, transfer_stop=None, **kwargs):
+            worker=None, startstops=None, **kwargs):
         try:
             if self.validate:
                 assert key in self.rprocessing
@@ -1950,6 +1951,12 @@ class Scheduler(Server):
             if worker not in self.processing:
                 return {key: 'released'}
 
+            if startstops:
+                compute_start, compute_stop = [(b, c) for a, b, c in startstops
+                                              if a == 'compute'][0]
+            else:
+                compute_start = compute_stop = None
+
             #############################
             # Update Timing Information #
             #############################
@@ -1957,11 +1964,9 @@ class Scheduler(Server):
                 # Update average task duration for worker
                 info = self.worker_info[worker]
                 ks = key_split(key)
-                gap = (transfer_start or compute_start) - info.get('last-task', 0)
                 old_duration = self.task_duration.get(ks, 0)
                 new_duration = compute_stop - compute_start
-                if (not old_duration or
-                    gap > max(10e-3, info.get('latency', 0), old_duration)):
+                if not old_duration:
                     avg_duration = new_duration
                 else:
                     avg_duration = (0.5 * old_duration
@@ -2239,7 +2244,7 @@ class Scheduler(Server):
             raise
 
     def transition_processing_erred(self, key, cause=None, exception=None,
-            traceback=None):
+            traceback=None, **kwargs):
         try:
             if self.validate:
                 assert cause or key in self.exceptions_blame

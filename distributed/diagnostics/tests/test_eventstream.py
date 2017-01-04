@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from copy import deepcopy
 from time import sleep
 
 import pytest
@@ -9,21 +10,36 @@ from distributed import Client, Scheduler, Worker
 from distributed.core import read
 from distributed.client import _wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
+from distributed.diagnostics.progress_stream import task_stream_append
 from distributed.metrics import time
 from distributed.utils_test import inc, div, dec, gen_cluster
 from distributed.worker import dumps_task
 
 
-@gen_cluster(client=True)
-def test_eventstream(c, s, a, b):
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
+def test_eventstream(c, s, *workers):
     es = EventStream()
     s.add_plugin(es)
     assert es.buffer == []
 
     futures = c.map(div, [1] * 10, range(10))
-    yield _wait(futures)
+    total = c.submit(sum, futures[1:])
+    yield _wait(total)
 
-    assert len(es.buffer) == 10
+    assert len(es.buffer) == 11
+
+    from distributed.bokeh import messages
+    lists = deepcopy(messages['task-events']['rectangles'])
+    workers = dict()
+    for msg in es.buffer:
+        task_stream_append(lists, msg, workers)
+
+    assert len([n for n in lists['name'] if n.startswith('transfer')]) == 2
+    for name, color in zip(lists['name'], lists['color']):
+        if name == 'transfer':
+            assert color == 'red'
+
+    assert any(c == 'black' for c in lists['color'])
 
 
 @gen_cluster(client=True)

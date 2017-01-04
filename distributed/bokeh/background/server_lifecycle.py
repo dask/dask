@@ -113,9 +113,8 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
 
             last_seen[0] = time()
             for msg in msgs:
-                if 'compute_start' in msg:
+                if 'startstops' in msg:
                     deque.append(msg)
-                    times.append(msg['compute_start'])
                     count = task_stream_append(rectangles, msg, workers)
                     for _ in range(count):
                         index.append(i)

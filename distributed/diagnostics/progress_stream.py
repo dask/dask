@@ -165,57 +165,52 @@ def progress_quads(msg, nrows=8, ncols=3):
 
     return d
 
+
+def color_of_message(msg):
+    if msg['status'] == 'OK':
+        split = key_split(msg['key'])
+        return color_of(split)
+    else:
+        return 'black'
+
+
+colors = {'transfer': 'red',
+          'disk': 'orange',
+          'compute': color_of_message}
+
+
+alphas = {'transfer': 0.4,
+          'compute': 1,
+          'disk': 0.4}
+
+
+prefix = {'transfer': 'transfer-',
+          'disk': 'load-',
+          'compute': ''}
+
+
 def task_stream_append(lists, msg, workers, palette=task_stream_palette):
-    start, stop = msg['compute_start'], msg['compute_stop']
-    lists['start'].append((start + stop) / 2 * 1000)
-    lists['duration'].append(1000 * (stop - start))
     key = msg['key']
     name = key_split(key)
-    if msg['status'] == 'OK':
-        color = color_of(name, palette=palette)
-    else:
-        color = 'black'
-    lists['key'].append(key)
-    lists['name'].append(name)
-    lists['color'].append(color)
-    lists['alpha'].append(1)
-    lists['worker'].append(msg['worker'])
+    startstops = msg.get('startstops', [])
 
-    worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
-    lists['worker_thread'].append(worker_thread)
-    if worker_thread not in workers:
-        workers[worker_thread] = len(workers)
-    lists['y'].append(workers[worker_thread])
+    for action, start, stop in startstops:
+        color = colors[action]
+        if type(color) is not str:
+            color = color(msg)
 
-    count = 1
-
-    if (msg.get('transfer_start') is not None and
-        msg['transfer_stop'] > (start - 1)):
-        start, stop = msg['transfer_start'], msg['transfer_stop']
         lists['start'].append((start + stop) / 2 * 1000)
         lists['duration'].append(1000 * (stop - start))
-
         lists['key'].append(key)
-        lists['name'].append('transfer-to-' + name)
+        lists['name'].append(prefix[action] + name)
+        lists['color'].append(color)
+        lists['alpha'].append(alphas[action])
         lists['worker'].append(msg['worker'])
-        lists['color'].append('#FF0020')
-        lists['alpha'].append('0.4')
+
+        worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
         lists['worker_thread'].append(worker_thread)
+        if worker_thread not in workers:
+            workers[worker_thread] = len(workers)
         lists['y'].append(workers[worker_thread])
-        count += 1
 
-    if msg.get('disk_load_start') is not None:
-        start, stop = msg['disk_load_start'], msg['disk_load_stop']
-        lists['start'].append((start + stop) / 2 * 1000)
-        lists['duration'].append(1000 * (stop - start))
-
-        lists['key'].append(key)
-        lists['name'].append('disk-load-' + name)
-        lists['worker'].append(msg['worker'])
-        lists['color'].append('#FF2000')
-        lists['alpha'].append('0.4')
-        lists['worker_thread'].append(worker_thread)
-        lists['y'].append(workers[worker_thread])
-        count += 1
-
-    return count
+    return len(startstops)
