@@ -185,6 +185,28 @@ def has_known_categories(x):
     raise TypeError("Expected Series or CategoricalIndex")
 
 
+def strip_unknown_categories(x):
+    """Replace any unknown categoricals with empty categoricals.
+
+    Useful for preventing ``UNKNOWN_CATEGORIES`` from leaking into results.
+    """
+    if isinstance(x, pd.Series):
+        if is_categorical_dtype(x.dtype) and not has_known_categories(x):
+            x = x.cat.set_categories([])
+    elif isinstance(x, pd.DataFrame):
+        cat_mask = x.dtypes == 'category'
+        if cat_mask.any():
+            cats = cat_mask[cat_mask].index
+            if not all(has_known_categories(x[c] for c in cats)):
+                x = x.copy()
+                for c in cats:
+                    x[c].set_categories([], inplace=True)
+    elif isinstance(x, pd.CategoricalIndex):
+        if not has_known_categories(x):
+            x = x.set_categories([])
+    return x
+
+
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == 'category':
         return pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]),
