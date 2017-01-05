@@ -209,7 +209,7 @@ def test_nout():
     x = func(1)
     assert len(x) == 1
     a, = x
-    assert compute(a) == (1, )
+    assert a.compute() == 1
     assert a._length is None
     pytest.raises(TypeError, lambda: len(a))
 

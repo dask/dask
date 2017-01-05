@@ -129,6 +129,7 @@ def delayed(obj, name=None, pure=False, nout=None):
         object. If provided, the ``Delayed`` output of the call can be iterated
         into ``nout`` objects, allowing for unpacking of results. By default
         iteration over ``Delayed`` objects will error.
+        Note, that ``nout=1`` expects ``obj``, to return a tuple of length 1.
 
     Examples
     --------
