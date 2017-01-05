@@ -1100,11 +1100,6 @@ class Scheduler(Server):
                    'key': key,
                    'priority': self.priority[key],
                    'duration': self.task_duration.get(key_split(key), 0.5)}
-            if key not in self.loose_restrictions:
-                if key in self.host_restrictions:
-                    msg['host_restrictions'] = list(self.host_restrictions[key])
-                if key in self.worker_restrictions:
-                    msg['worker_restrictions'] = list(self.worker_restrictions[key])
             if key in self.resource_restrictions:
                 msg['resource_restrictions'] = self.resource_restrictions[key]
 

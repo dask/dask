@@ -507,43 +507,12 @@ def test_system_monitor(s, a, b):
 
 
 
-@pytest.mark.skipif(not sys.platform.startswith('linux'),
-                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2, {'resources': {'A': 1}}),
-                                  ('127.0.0.2', 1)])
+                                  ('127.0.0.1', 1)])
 def test_restrictions(c, s, a, b):
-    # Worker restrictions
-    x = c.submit(inc, 1, workers=a.address)
-    yield x._result()
-    assert a.host_restrictions == {}
-    assert a.worker_restrictions == {x.key: {a.address}}
-    assert a.resource_restrictions == {}
-
-    yield c._cancel(x)
-
-    while x.key in a.task_state:
-        yield gen.sleep(0.01)
-
-    assert a.worker_restrictions == {}
-
-    # Host restrictions
-    x = c.submit(inc, 1, workers=['127.0.0.1'])
-    yield x._result()
-    assert a.host_restrictions == {x.key: {'127.0.0.1'}}
-    assert a.worker_restrictions == {}
-    assert a.resource_restrictions == {}
-    yield c._cancel(x)
-
-    while x.key in a.task_state:
-        yield gen.sleep(0.01)
-
-    assert a.host_restrictions == {}
-
     # Resource restrictions
     x = c.submit(inc, 1, resources={'A': 1})
     yield x._result()
-    assert a.host_restrictions == {}
-    assert a.worker_restrictions == {}
     assert a.resource_restrictions == {x.key: {'A': 1}}
     yield c._cancel(x)
 

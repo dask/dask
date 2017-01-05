@@ -59,74 +59,6 @@ READY = ('ready', 'constrained')
 
 
 class WorkerBase(Server):
-    """ Worker Node
-
-    Workers perform two functions:
-
-    1.  **Serve data** from a local dictionary
-    2.  **Perform computation** on that data and on data from peers
-
-    Additionally workers keep a scheduler informed of their data and use that
-    scheduler to gather data from other workers when necessary to perform a
-    computation.
-
-    You can start a worker with the ``dask-worker`` command line application::
-
-        $ dask-worker scheduler-ip:port
-
-    **State**
-
-    * **data:** ``{key: object}``:
-        Dictionary mapping keys to actual values
-    * **active:** ``{key}``:
-        Set of keys currently under computation
-    * **ncores:** ``int``:
-        Number of cores used by this worker process
-    * **executor:** ``concurrent.futures.ThreadPoolExecutor``:
-        Executor used to perform computation
-    * **local_dir:** ``path``:
-        Path on local machine to store temporary files
-    * **scheduler:** ``rpc``:
-        Location of scheduler.  See ``.ip/.port`` attributes.
-    * **name:** ``string``:
-        Alias
-    * **services:** ``{str: Server}``:
-        Auxiliary web servers running on this worker
-    * **service_ports:** ``{str: port}``:
-
-    Parameters
-    ----------
-    scheduler_ip: str
-    scheduler_port: int
-    ip: str, optional
-    ncores: int, optional
-    loop: tornado.ioloop.IOLoop
-    local_dir: str, optional
-        Directory where we place local resources
-    name: str, optional
-    heartbeat_interval: int
-        Milliseconds between heartbeats to scheduler
-    memory_limit: int
-        Number of bytes of data to keep in memory before using disk
-    executor: concurrent.futures.Executor
-
-    Examples
-    --------
-
-    Use the command line to start a worker::
-
-        $ dask-scheduler
-        Start scheduler at 127.0.0.1:8786
-
-        $ dask-worker 127.0.0.1:8786
-        Start worker at:               127.0.0.1:1234
-        Registered with scheduler at:  127.0.0.1:8786
-
-    See Also
-    --------
-    distributed.scheduler.Scheduler
-    distributed.nanny.Nanny
-    """
 
     def __init__(self, scheduler_ip, scheduler_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
@@ -770,9 +702,164 @@ def run(worker, stream, function, args=(), kwargs={}, is_coro=False, wait=True):
 
 
 class Worker(WorkerBase):
+    """ Worker node in a Dask distributed cluster
+
+    Workers perform two functions:
+
+    1.  **Serve data** from a local dictionary
+    2.  **Perform computation** on that data and on data from peers
+
+    Workers keep the scheduler informed of their data and use that scheduler to
+    gather data from other workers when necessary to perform a computation.
+
+    You can start a worker with the ``dask-worker`` command line application::
+
+        $ dask-worker scheduler-ip:port
+
+    Use the ``--help`` flag to see more options
+
+        $ dask-worker --help
+
+    The rest of this docstring is about the internal state the the worker uses
+    to manage and track internal computations.
+
+    **State**
+
+    **Informational State**
+
+    These attributes don't change significantly during execution.
+
+    * **ncores:** ``int``:
+        Number of cores used by this worker process
+    * **executor:** ``concurrent.futures.ThreadPoolExecutor``:
+        Executor used to perform computation
+    * **local_dir:** ``path``:
+        Path on local machine to store temporary files
+    * **scheduler:** ``rpc``:
+        Location of scheduler.  See ``.ip/.port`` attributes.
+    * **name:** ``string``:
+        Alias
+    * **services:** ``{str: Server}``:
+        Auxiliary web servers running on this worker
+    * **service_ports:** ``{str: port}``:
+    * **total_connections**": ``int``
+        The maximum number of concurrent connections we want to see
+    * **total_comm_nbytes**: ``int``
+    * **batched_stream**: ``BatchedSend(IOstream)``
+        A batched stream along which we communicate to the scheduler
+    * **log**: ``[(message)]``
+        A structured and queryable log.  See ``Worker.story``
+
+    **Volatile State**
+
+    This attributes track the progress of tasks that this worker is trying to
+    complete.  In the descriptions below a ``key`` is the name of a task that
+    we want to compute and ``dep`` is the name of a piece of dependent data
+    that we want to collect from others.
+
+    * **data:** ``{key: object}``:
+        Dictionary mapping keys to actual values
+    * **task_state**: ``{key: string}``:
+        The state of all tasks that the scheduler has asked us to compute.
+        Valid states include waiting, constrained, exeucuting, memory, erred
+    * **tasks**: ``{key: dict}``
+        The function, args, kwargs of a task.  We run this when appropriate
+    * **dependencies**: ``{key: {deps}}``
+        The data needed by this key to run
+    * **dependents**: ``{dep: {keys}}``
+        The keys that use this dependency
+    * **waiting_for_data**: ``{kep: {deps}}``
+        A dynamic verion of dependencies.  All dependencies that we still don't
+        have for a particular key.
+    * **ready**: [keys]
+        Keys that are ready to run.  Stored in a LIFO stack
+    * **constrained**: [keys]
+        Keys for which we have the data to run, but are waiting on abstract
+        resources like GPUs.  Stored in a FIFO deque
+    * **executing**: {keys}
+        Keys that are currently executing
+    * **executed_count**: int
+        A number of tasks that this worker has run in its lifetime
+    * **long_running**: {keys}
+        A set of keys of tasks that are running and have started their own
+        long-running clients.
+
+    * **who_has**: ``{dep: {worker}}``
+        Workers that we believe have this data
+    * **has_what**: ``{worker: {deps}}``
+        The data that we care about that we think a worker has
+    * **pending_data_per_worker**: ``{worker: [dep]}``
+        The data on each worker that we still want, prioritized as a deque
+    * **data_needed**: deque(keys)
+        The keys whose data we still lack, arranged in a deque
+    * **in_flight_tasks**: ``{task: worker}``
+        All dependencies that are coming to us in current peer-to-peer
+        connections and the workers from which they are coming.
+    * **in_flight_workers**: ``{worker: {task}}``
+        The workers from which we are currently gathering data and the
+        dependencies we expect from those connections
+    * **comm_bytes**: ``int``
+        The total number of bytes in flight
+    * **suspicious_deps**: ``{dep: int}``
+        The number of times a dependency has not been where we expected it
+
+    * **nbytes**: ``{key: int}``
+        The size of a particular piece of data
+    * **types**: ``{key: type}``
+        The type of a particular piece of data
+    * **threads**: ``{key: int}``
+        The ID of the thread on which the task ran
+    * **exceptions**: ``{key: exception}``
+        The exception caused by running a task if it erred
+    * **tracebacks**: ``{key: traceback}``
+        The exception caused by running a task if it erred
+    * **startstops**: ``{key: [(str, float, float)]}``
+        Log of transfer, load, and compute times for a task
+
+    * **priorities**: ``{key: tuple}``
+        The priority of a key given by the scheduler.  Determines run order.
+    * **durations**: ``{key: float}``
+        Expected duration of a task
+    * **resource_restrictions**: ``{key: {str: number}}``
+        Abstract resources required to run a task
+
+    Parameters
+    ----------
+    scheduler_ip: str
+    scheduler_port: int
+    ip: str, optional
+    ncores: int, optional
+    loop: tornado.ioloop.IOLoop
+    local_dir: str, optional
+        Directory where we place local resources
+    name: str, optional
+    heartbeat_interval: int
+        Milliseconds between heartbeats to scheduler
+    memory_limit: int
+        Number of bytes of data to keep in memory before using disk
+    executor: concurrent.futures.Executor
+    resources: dict
+        Resources that thiw worker has like ``{'GPU': 2}``
+
+    Examples
+    --------
+
+    Use the command line to start a worker::
+
+        $ dask-scheduler
+        Start scheduler at 127.0.0.1:8786
+
+        $ dask-worker 127.0.0.1:8786
+        Start worker at:               127.0.0.1:1234
+        Registered with scheduler at:  127.0.0.1:8786
+
+    See Also
+    --------
+    distributed.scheduler.Scheduler
+    distributed.nanny.Nanny
+    """
     def __init__(self, *args, **kwargs):
         self.tasks = dict()
-        self.raw_tasks = dict()
         self.task_state = dict()
         self.dependencies = dict()
         self.dependents = dict()
@@ -801,8 +888,6 @@ class Worker(WorkerBase):
         self.priority_counter = 0
         self.durations = dict()
         self.startstops = defaultdict(list)
-        self.host_restrictions = dict()
-        self.worker_restrictions = dict()
         self.resource_restrictions = dict()
 
         self.ready = list()
@@ -908,7 +993,6 @@ class Worker(WorkerBase):
 
     def add_task(self, key, function=None, args=None, kwargs=None, task=None,
             who_has=None, nbytes=None, priority=None, duration=None,
-            host_restrictions=None, worker_restrictions=None,
             resource_restrictions=None, **kwargs2):
         try:
             if key in self.tasks:
@@ -927,7 +1011,6 @@ class Worker(WorkerBase):
                 self.task_state[key] = 'memory'
                 self.send_task_state_to_scheduler(key)
                 self.tasks[key] = None
-                self.raw_tasks[key] = None
                 self.log.append((key, 'new-task-already-in-memory'))
                 return
 
@@ -936,7 +1019,6 @@ class Worker(WorkerBase):
                 self.tasks[key] = self._deserialize(function, args, kwargs, task)
                 raw = {'function': function, 'args': args, 'kwargs': kwargs,
                         'task': task}
-                self.raw_tasks[key] = {k: v for k, v in raw.items() if v is not None}
             except Exception as e:
                 logger.warn("Could not deserialize task", exc_info=True)
                 emsg = error_message(e)
@@ -948,10 +1030,6 @@ class Worker(WorkerBase):
 
             self.priorities[key] = priority
             self.durations[key] = duration
-            if host_restrictions:
-                self.host_restrictions[key] = set(host_restrictions)
-            if worker_restrictions:
-                self.worker_restrictions[key] = set(worker_restrictions)
             if resource_restrictions:
                 self.resource_restrictions[key] = resource_restrictions
             self.task_state[key] = 'waiting'
@@ -1454,7 +1532,6 @@ class Worker(WorkerBase):
             self.log.append(('forget', key))
             if key in self.tasks:
                 del self.tasks[key]
-                del self.raw_tasks[key]
                 del self.task_state[key]
             if key in self.waiting_for_data:
                 del self.waiting_for_data[key]
@@ -1488,10 +1565,6 @@ class Worker(WorkerBase):
             if key in self.startstops:
                 del self.startstops[key]
 
-            if key in self.host_restrictions:
-                del self.host_restrictions[key]
-            if key in self.worker_restrictions:
-                del self.worker_restrictions[key]
             if key in self.resource_restrictions:
                 del self.resource_restrictions[key]
             if key in self.suspicious_deps:
@@ -1508,7 +1581,6 @@ class Worker(WorkerBase):
                 return
             del self.task_state[key]
             del self.tasks[key]
-            del self.raw_tasks[key]
             if key in self.waiting_for_data:
                 del self.waiting_for_data[key]
 
@@ -1744,45 +1816,3 @@ class Worker(WorkerBase):
                            for key in keys
                            for c in msg
                            if isinstance(c, (tuple, list, set)))]
-
-
-def is_valid_worker(worker_restrictions=None, host_restrictions=None,
-        resource_restrictions=None, resources=None, worker=None):
-    """
-    Can this worker run on this machine given known scheduling restrictions?
-
-    Examples
-    --------
-    >>> is_valid_worker(worker_restrictions={'alice:8000', 'bob:8000'},
-    ...                 worker='alice:8000')
-    True
-
-    >>> is_valid_worker(host_restrictions={'alice', 'bob'},
-    ...                 worker='alice:8000')
-    True
-
-    >>> is_valid_worker(resource_restrictions={'GPU': 1, 'MEM': 8e9},
-    ...                 resources={'GPU': 2, 'MEM':4e9})
-    False
-
-    >>> is_valid_worker(host_restrictions={'alice', 'bob'},
-    ...                 resource_restrictions={'GPU': 1, 'MEM': 8e9},
-    ...                 resources={'GPU': 2, 'MEM': 10e9},
-    ...                 worker='charlie:8000')
-    False
-    """
-    if worker_restrictions is not None:
-        if worker not in worker_restrictions:
-            return False
-
-    if host_restrictions is not None:
-        host = worker.split(':')[0]
-        if host not in host_restrictions:
-            return False
-
-    if resource_restrictions is not None:
-        for resource, quantity in resource_restrictions.items():
-            if resources.get(resource, 0) < quantity:
-                return False
-
-    return True
