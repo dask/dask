@@ -916,6 +916,10 @@ class Scheduler(Server):
         for dep in self.dependencies[key]:
             assert dep in self.who_has
 
+    def validate_erred(self, key):
+        assert key in self.exceptions_blame
+        assert key not in self.who_has
+
     def validate_key(self, key):
         try:
             try:
