@@ -783,11 +783,11 @@ class Worker(WorkerBase):
 
         self.data_needed = deque()  # TODO: replace with heap?
 
-        self.in_flight = dict()
+        self.in_flight_tasks = dict()
+        self.in_flight_workers = dict()
         self.total_connections = 50
         self.total_comm_nbytes = 10e6
         self.comm_nbytes = 0
-        self.connections = {}
         self.suspicious_deps = defaultdict(lambda: 0)
         self._missing_dep_flight = set()
 
@@ -841,7 +841,7 @@ class Worker(WorkerBase):
         return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
                 self.__class__.__name__, self.address, self.status,
                 len(self.data), len(self.executing), self.ncores,
-                len(self.ready), len(self.in_flight),
+                len(self.ready), len(self.in_flight_tasks),
                 len(self.waiting_for_data))
 
     __repr__ = __str__
@@ -1126,11 +1126,14 @@ class Worker(WorkerBase):
     ##########################
 
     def ensure_communicating(self):
+        logger.info("Ensure communicating")
+        changed = True
         try:
-            while self.data_needed and len(self.connections) < self.total_connections:
+            while changed and self.data_needed and len(self.in_flight_workers) < self.total_connections:
+                changed = False
                 logger.debug("Ensure communicating.  Pending: %d.  Connections: %d/%d",
                              len(self.data_needed),
-                             len(self.connections),
+                             len(self.in_flight_workers),
                              self.total_connections)
 
                 key = self.data_needed[0]
@@ -1148,7 +1151,7 @@ class Worker(WorkerBase):
                 deps = [d for d in deps
                           if d not in self.data
                           and d not in self.executing
-                          and d not in self.in_flight]
+                          and d not in self.in_flight_tasks]
 
                 missing_deps = {dep for dep in deps if not self.who_has.get(dep)}
                 if missing_deps:
@@ -1164,25 +1167,32 @@ class Worker(WorkerBase):
 
                 self.log.append(('gather-dependencies', key, deps))
 
-                while deps and (len(self.connections) < self.total_connections
+                in_flight = False
+
+                while deps and (len(self.in_flight_workers) < self.total_connections
                                 or self.comm_nbytes < self.total_comm_nbytes):
-                    token = object()
                     dep = deps.pop()
-                    if dep in self.in_flight:
+                    if dep in self.in_flight_tasks:
                         continue
                     if dep not in self.who_has:
                         continue
-                    worker = random.choice(list(self.who_has[dep]))
+                    workers = [w for w in self.who_has[dep]
+                                  if w not in self.in_flight_workers]
+                    if not workers:
+                        in_flight = True
+                        continue
+                    worker = random.choice(list(workers))
                     to_gather, total_nbytes = self.select_keys_for_gather(worker, dep)
                     self.comm_nbytes += total_nbytes
-                    self.connections[token] = to_gather
+                    self.in_flight_workers[worker] = to_gather
                     for d in to_gather:
-                        assert d not in self.in_flight
-                        self.in_flight[d] = token
+                        assert d not in self.in_flight_tasks
+                        self.in_flight_tasks[d] = worker
                     self.loop.add_callback(self.gather_dep, worker, dep,
-                            to_gather, token, total_nbytes, cause=key)
+                            to_gather, total_nbytes, cause=key)
+                    changed = True
 
-                if not deps:
+                if not deps and not in_flight:
                     self.data_needed.popleft()
         except Exception as e:
             logger.exception(e)
@@ -1247,7 +1257,7 @@ class Worker(WorkerBase):
         while L:
             d = L.popleft()
             if (d in self.data or
-                d in self.in_flight or
+                d in self.in_flight_tasks or
                 d in self.executing or
                 d not in self.nbytes):  # no longer tracking
                 continue
@@ -1259,7 +1269,7 @@ class Worker(WorkerBase):
         return deps, total_bytes
 
     @gen.coroutine
-    def gather_dep(self, worker, dep, deps, slot, total_nbytes, cause=None):
+    def gather_dep(self, worker, dep, deps, total_nbytes, cause=None):
         stream = None
         with log_errors():
             ip, port = worker.split(':')
@@ -1324,8 +1334,8 @@ class Worker(WorkerBase):
                 if stream:
                     stream.close()
                 self.comm_nbytes -= total_nbytes
-                for d in self.connections.pop(slot):
-                    del self.in_flight[d]
+                for d in self.in_flight_workers.pop(worker):
+                    del self.in_flight_tasks[d]
 
                     if d not in response and d in self.dependents:
                         self.log.append(('missing-dep', d))
@@ -1691,7 +1701,7 @@ class Worker(WorkerBase):
                     s = self.waiting_for_data[key]
                     for dep in self.dependencies[key]:
                         assert (dep in s or
-                                dep in self.in_flight or
+                                dep in self.in_flight_tasks or
                                 dep in self.executing or
                                 dep in self.data)
                 if state == 'ready':
@@ -1705,8 +1715,9 @@ class Worker(WorkerBase):
             for key, deps in self.waiting_for_data.items():
                 if key not in self.data_needed:
                     for dep in deps:
-                        assert (dep in self.in_flight or
-                                dep in self._missing_dep_flight)
+                         assert (dep in self.in_flight_tasks or
+                                 dep in self._missing_dep_flight or
+                                 self.who_has[dep].issubset(self.in_flight_workers))
 
             for key in self.tasks:
                 if self.task_state[key] == 'memory':

@@ -600,3 +600,29 @@ def test_multiple_transfers(c, s, w1, w2, w3):
     r = w3.startstops[z.key]
     transfers = [t for t in r if t[0] == 'transfer']
     assert len(transfers) == 2
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
+def test_share_communication(c, s, w1, w2, w3):
+    x = c.submit(mul, b'1', int(w3.target_message_size + 1), workers=w1.address)
+    y = c.submit(mul, b'2', int(w3.target_message_size + 1), workers=w2.address)
+    yield _wait([x, y])
+    yield c._replicate([x, y], workers=[w1.address, w2.address])
+    z = c.submit(add, x, y, workers=w3.address)
+    yield _wait(z)
+    assert len(w3.incoming_transfer_log) == 2
+    assert w1.outgoing_transfer_log
+    assert w2.outgoing_transfer_log
+
+
+@gen_cluster(client=True)
+def test_dont_overlap_communications_to_same_worker(c, s, a, b):
+    x = c.submit(mul, b'1', int(b.target_message_size + 1), workers=a.address)
+    y = c.submit(mul, b'2', int(b.target_message_size + 1), workers=a.address)
+    yield _wait([x, y])
+    z = c.submit(add, x, y, workers=b.address)
+    yield _wait(z)
+    assert len(b.incoming_transfer_log) == 2
+    l1, l2 = b.incoming_transfer_log
+
+    assert l1['stop'] < l2['start']
