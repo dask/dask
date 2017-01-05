@@ -11,7 +11,7 @@ from time import sleep
 import dask
 from dask import delayed
 from dask.core import get_deps
-from toolz import merge, concat, valmap, first
+from toolz import merge, concat, valmap, first, frequencies
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.gen import TimeoutError
@@ -889,6 +889,82 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     start = time()
 
     while len(s.workers) < 3:
+        yield gen.sleep(0.01)
+
+    assert s.task_state[y.key] == 'memory'
+    assert s.task_state[x.key] == 'released'
+    assert s.task_state[z.key] == 'processing'
+
+    yield w._close()
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_worker_breaks_and_returns(c, s, a):
+    future = c.submit(slowinc, 1, delay=0.1)
+    for i in range(10):
+        future = c.submit(slowinc, future, delay=0.1)
+
+    yield _wait(future)
+
+    a.batched_stream.stream.close()
+
+    yield gen.sleep(0.1)
+    start = time()
+    yield _wait(future)
+    end = time()
+
+    assert end - start < 1
+
+    assert frequencies(s.task_state.values()) == {'memory': 1, 'released': 10}
+
+
+@gen_cluster(client=True, ncores=[])
+def test_no_workers_to_memory(c, s):
+    x = delayed(slowinc)(1, delay=0.4)
+    y = delayed(slowinc)(x, delay=0.4)
+    z = delayed(slowinc)(y, delay=0.4)
+
+    yy, zz = c.persist([y, z])
+
+    while not s.task_state:
+        yield gen.sleep(0.01)
+
+    w = Worker(s.ip, s.port, ncores=1, ip='127.0.0.1')
+    w.put_key_in_memory(y.key, 3)
+
+    yield w._start()
+
+    start = time()
+
+    while not s.workers:
+        yield gen.sleep(0.01)
+
+    assert s.task_state[y.key] == 'memory'
+    assert s.task_state[x.key] == 'released'
+    assert s.task_state[z.key] == 'processing'
+
+    yield w._close()
+
+
+@gen_cluster(client=True)
+def test_no_worker_to_memory_restrictions(c, s, a, b):
+    x = delayed(slowinc)(1, delay=0.4)
+    y = delayed(slowinc)(x, delay=0.4)
+    z = delayed(slowinc)(y, delay=0.4)
+
+    yy, zz = c.persist([y, z], workers={(x, y, z): '127.0.0.2'})
+
+    while not s.task_state:
+        yield gen.sleep(0.01)
+
+    w = Worker(s.ip, s.port, ncores=1, ip='127.0.0.2')
+    w.put_key_in_memory(y.key, 3)
+
+    yield w._start()
+
+    start = time()
+
+    while not s.workers:
         yield gen.sleep(0.01)
 
     assert s.task_state[y.key] == 'memory'

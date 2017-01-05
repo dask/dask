@@ -22,7 +22,7 @@ from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
 
 
-def test_submit_after_failed_worker(loop):
+def test_submit_after_failed_worker_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
             L = c.map(inc, range(10))
@@ -30,6 +30,17 @@ def test_submit_after_failed_worker(loop):
             a['proc'].terminate()
             total = c.submit(sum, L)
             assert total.result() == sum(map(inc, range(10)))
+
+
+@gen_cluster(client=True)
+def test_submit_after_failed_worker(c, s, a, b):
+    L = c.map(inc, range(10))
+    yield _wait(L)
+    yield a._close()
+
+    total = c.submit(sum, L)
+    result = yield total._result()
+    assert result == sum(map(inc, range(10)))
 
 
 def test_gather_after_failed_worker(loop):

@@ -733,10 +733,10 @@ class Scheduler(Server):
             address = self.coerce_address(address)
             logger.info("Remove worker %s", address)
             if address not in self.processing:
+                logger.info("Worker already removed")
                 return 'already-removed'
-            with ignoring(AttributeError):
-                stream = self.worker_streams[address].stream
-                close(stream)
+            with ignoring(AttributeError, StreamClosedError):
+                self.worker_streams[address].send({'op': 'close'})
 
             host, port = address.split(':')
 
@@ -798,6 +798,7 @@ class Scheduler(Server):
             if not self.processing:
                 logger.info("Lost all workers")
 
+            logger.info("Removed worker %s", address)
         return 'OK'
 
     def stimulus_cancel(self, stream, keys=None, client=None):

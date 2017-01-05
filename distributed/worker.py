@@ -214,7 +214,6 @@ class WorkerBase(Server):
         self.heartbeat_callback = PeriodicCallback(self.heartbeat,
                                                    self.heartbeat_interval,
                                                    io_loop=self.loop)
-        self.loop.add_callback(self.heartbeat_callback.start)
 
     @property
     def worker_address(self):
@@ -240,24 +239,8 @@ class WorkerBase(Server):
             logger.debug("Heartbeat skipped: channel busy")
 
     @gen.coroutine
-    def _start(self, port=0):
-        self.listen(port)
-        self.name = self.name or self.address
-        for k, v in self.services.items():
-            v.listen(0)
-            self.service_ports[k] = v.port
-
-        logger.info('      Start worker at: %20s:%d', self.ip, self.port)
-        for k, v in self.service_ports.items():
-            logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
-        logger.info('Waiting to connect to: %20s:%d',
-                    self.scheduler.ip, self.scheduler.port)
-        logger.info('-' * 49)
-        logger.info('              Threads: %26d', self.ncores)
-        if self.memory_limit:
-            logger.info('               Memory: %23.2f GB', self.memory_limit / 1e9)
-        logger.info('      Local Directory: %26s', self.local_dir)
-        logger.info('-' * 49)
+    def _register_with_scheduler(self):
+        self.heartbeat_callback.stop()
         while True:
             try:
                 resp = yield self.scheduler.register(
@@ -278,6 +261,30 @@ class WorkerBase(Server):
                 yield gen.sleep(0.5)
         if resp != 'OK':
             raise ValueError(resp)
+        self.heartbeat_callback.start()
+
+    @gen.coroutine
+    def _start(self, port=0):
+        self.listen(port)
+        self.name = self.name or self.address
+        for k, v in self.services.items():
+            v.listen(0)
+            self.service_ports[k] = v.port
+
+        logger.info('      Start worker at: %20s:%d', self.ip, self.port)
+        for k, v in self.service_ports.items():
+            logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
+        logger.info('Waiting to connect to: %20s:%d',
+                    self.scheduler.ip, self.scheduler.port)
+        logger.info('-' * 49)
+        logger.info('              Threads: %26d', self.ncores)
+        if self.memory_limit:
+            logger.info('               Memory: %23.2f GB', self.memory_limit / 1e9)
+        logger.info('      Local Directory: %26s', self.local_dir)
+        logger.info('-' * 49)
+
+        yield self._register_with_scheduler()
+
         logger.info('        Registered to: %20s:%d',
                     self.scheduler.ip, self.scheduler.port)
         logger.info('-' * 49)
@@ -856,7 +863,9 @@ class Worker(WorkerBase):
                 try:
                     msgs = yield read(stream)
                 except EnvironmentError:
-                    if self.reconnect:
+                    if self.reconnect and self.status not in ('closed', 'closing'):
+                        logger.info("Connection to scheduler broken. Reregistering")
+                        self._register_with_scheduler()
                         break
                     else:
                         yield self._close(report=False)
@@ -870,6 +879,7 @@ class Worker(WorkerBase):
                         validate_key(msg['key'])
                     if op == 'close':
                         closed = True
+                        self._close()
                         break
                     elif op == 'compute-task':
                         priority = msg.pop('priority')
@@ -914,8 +924,8 @@ class Worker(WorkerBase):
                     return
 
             if key in self.data:
-                self.send_task_state_to_scheduler(key)
                 self.task_state[key] = 'memory'
+                self.send_task_state_to_scheduler(key)
                 self.tasks[key] = None
                 self.raw_tasks[key] = None
                 self.log.append((key, 'new-task-already-in-memory'))
@@ -1143,8 +1153,12 @@ class Worker(WorkerBase):
                 missing_deps = {dep for dep in deps if not self.who_has.get(dep)}
                 if missing_deps:
                     logger.info("Can't find dependencies for key %s", key)
+                    missing_deps2 = {dep for dep in missing_deps if dep not in
+                                     self._missing_dep_flight}
+                    for dep in missing_deps2:
+                        self._missing_dep_flight.add(dep)
                     self.loop.add_callback(self.handle_missing_dep,
-                                           *missing_deps)
+                                           *missing_deps2)
 
                     deps = [dep for dep in deps if dep not in missing_deps]
 
@@ -1355,7 +1369,6 @@ class Worker(WorkerBase):
                     deps.remove(dep)
                     for key in list(self.dependents.get(dep, ())):
                         self.cancel_key(key)
-                    deps.remove(dep)
             if not deps:
                 return
 
@@ -1379,12 +1392,13 @@ class Worker(WorkerBase):
                         if key in self.waiting_for_data:
                             self.data_needed.append(key)
 
-            self.ensure_communicating()
         except Exception as e:
             logger.exception(e)
         finally:
             for dep in original_deps:
                 self._missing_dep_flight.remove(dep)
+
+            self.ensure_communicating()
 
     @gen.coroutine
     def query_who_has(self, *deps):
