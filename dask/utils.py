@@ -1046,18 +1046,8 @@ def effective_get(get=None, df=None):
 def get_scheduler_lock(get=None, df=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
-    def unwrap_method(f):
-        return getattr(f, '__func__', f)
-
     actual_get = effective_get(get, df)
-    try:
-        import distributed
-    except ImportError:
-        distributed = None
 
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
-    if distributed and (unwrap_method(actual_get) is
-                        unwrap_method(distributed.Client.get)):
-        return SerializableLock()
-    return Lock()
+    return SerializableLock()
