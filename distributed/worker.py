@@ -1204,7 +1204,6 @@ class Worker(WorkerBase):
     ##########################
 
     def ensure_communicating(self):
-        logger.info("Ensure communicating")
         changed = True
         try:
             while changed and self.data_needed and len(self.in_flight_workers) < self.total_connections:
