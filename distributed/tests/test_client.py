@@ -3708,3 +3708,23 @@ def test_interleave_computations_map(c, s, a, b):
 def test_scatter_dict_workers(c, s, a, b):
     yield c._scatter({'a': 10}, workers=[a.address, b.address])
     assert 'a' in a.data or 'a' in b.data
+
+
+@slow
+@gen_test()
+def test_client_timeout():
+    loop = IOLoop.current()
+    c = Client('127.0.0.1:57484', loop=loop, start=False)
+    loop.add_callback(c._start, timeout=10)
+
+    s = Scheduler(loop=loop)
+    yield gen.sleep(4)
+    s.start(57484)
+
+    start = time()
+    while not c.scheduler_stream:
+        yield gen.sleep(0.1)
+        assert time() < start + 2
+
+    yield c._shutdown()
+    yield s.close()

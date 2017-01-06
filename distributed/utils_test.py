@@ -35,6 +35,7 @@ def valid_python_script(tmpdir_factory):
     local_file.write("print('hello world!')")
     return local_file
 
+
 @pytest.fixture(scope='session')
 def client_contract_script(tmpdir_factory):
     local_file = tmpdir_factory.mktemp('data').join('distributed_script.py')
@@ -42,6 +43,7 @@ def client_contract_script(tmpdir_factory):
      'print(e)')
     local_file.write('\n'.join(lines))
     return local_file
+
 
 @pytest.fixture(scope='session')
 def invalid_python_script(tmpdir_factory):
@@ -325,7 +327,8 @@ def check_active_rpc(loop, active_rpc_timeout=0):
 
 
 @contextmanager
-def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0):
+def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0,
+            scheduler_kwargs={}):
     with pristine_loop() as loop:
         with check_active_rpc(loop, active_rpc_timeout):
             if nanny:
@@ -333,8 +336,9 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0):
             else:
                 _run_worker = run_worker
             scheduler_q = mp_context.Queue()
-            scheduler = mp_context.Process(
-                target=run_scheduler, args=(scheduler_q,))
+            scheduler = mp_context.Process(target=run_scheduler,
+                                           args=(scheduler_q,),
+                                           kwargs=scheduler_kwargs)
             scheduler.daemon = True
             scheduler.start()
             sport = scheduler_q.get()

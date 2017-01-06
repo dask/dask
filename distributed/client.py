@@ -435,7 +435,7 @@ class Client(object):
         self.scheduler = coerce_to_rpc(self._start_arg, timeout=timeout)
         self.scheduler_stream = None
 
-        yield self.ensure_connected()
+        yield self.ensure_connected(timeout=timeout)
 
         self.coroutines.append(self._handle_report())
 
@@ -458,12 +458,13 @@ class Client(object):
                     yield gen.sleep(timeout)
 
     @gen.coroutine
-    def ensure_connected(self):
+    def ensure_connected(self, timeout=3):
         if self.scheduler_stream and not self.scheduler_stream.closed():
             return
 
         try:
-            stream = yield connect(self.scheduler.ip, self.scheduler.port)
+            stream = yield connect(self.scheduler.ip, self.scheduler.port,
+                                   timeout=timeout)
         except:
             raise IOError("Could not connect to %s:%d" %
                           (self.scheduler.ip, self.scheduler.port))
