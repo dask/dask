@@ -528,8 +528,8 @@ class Client(object):
                 try:
                     msgs = yield read(self.scheduler_stream.stream)
                 except StreamClosedError:
-                    logger.warn("Client report stream closed to scheduler")
                     if self.status == 'running':
+                        logger.warn("Client report stream closed to scheduler")
                         logger.info("Reconnecting...")
                         self.status = 'connecting'
                         yield self.reconnect()
