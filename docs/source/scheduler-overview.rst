@@ -23,7 +23,7 @@ graph, and a key or list of keys to compute:
 
    >>> dsk = {'a': 1,
    ...        'b': 2,
-   ...        'c': (add, 'a', 'b'),
+   ...        'c': (sum, 'a', 'b'),
    ...        'd': (sum, ['a', 'b', 'c'])}
 
    >>> get(dsk, 'c')
