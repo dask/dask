@@ -1049,3 +1049,125 @@ def test_concat_categorical(known, cat_index, divisions):
                                [frames[0][['x', 'y']]] + frames[1:], join)
         assert not hasattr(res, 'w') or has_known_categories(res.w)
         assert has_known_categories(res.y) == known
+
+
+def test_append():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                       'b': [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+    df3 = pd.DataFrame({'b': [1, 2, 3, 4, 5, 6],
+                        'c': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+
+    ddf = dd.from_pandas(df, 2)
+    ddf2 = dd.from_pandas(df2, 2)
+    ddf3 = dd.from_pandas(df3, 2)
+
+    s = pd.Series([7, 8], name=6, index=['a', 'b'])
+    assert_eq(ddf.append(s), df.append(s))
+
+    assert_eq(ddf.append(ddf2), df.append(df2))
+    assert_eq(ddf.a.append(ddf2.a), df.a.append(df2.a))
+    # different columns
+    assert_eq(ddf.append(ddf3), df.append(df3))
+    assert_eq(ddf.a.append(ddf3.b), df.a.append(df3.b))
+
+    # dask + pandas
+    assert_eq(ddf.append(df2), df.append(df2))
+    assert_eq(ddf.a.append(df2.a), df.a.append(df2.a))
+
+    assert_eq(ddf.append(df3), df.append(df3))
+    assert_eq(ddf.a.append(df3.b), df.a.append(df3.b))
+
+    df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[4, 5, 6, 7, 8, 9])
+    ddf4 = dd.from_pandas(df4, 2)
+    with pytest.raises(ValueError):
+        ddf.append(ddf4)
+
+
+def test_append2():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    ddf2 = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
+    ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
+    assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
+    assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+
+    # Dask + pandas
+    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
+    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
+    assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
+    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
+    assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
+
+
+def test_append_categorical():
+    frames = [pd.DataFrame({'x': np.arange(5, 10),
+                            'y': list('abbba'),
+                            'z': np.arange(5, 10, dtype='f8')}),
+              pd.DataFrame({'x': np.arange(10, 15),
+                            'y': list('bcbcc'),
+                            'z': np.arange(10, 15, dtype='f8')})]
+    frames2 = []
+    for df in frames:
+        df.y = df.y.astype('category')
+        df2 = df.copy()
+        df2.y = df2.y.cat.set_categories(list('abc'))
+        df.index = df.y
+        frames2.append(df2.set_index(df2.y))
+
+    df1, df2 = frames2
+
+    for known in [True, False]:
+        dframes = [dd.from_pandas(p, npartitions=2, sort=False) for p in frames]
+        if not known:
+            dframes[0]._meta = clear_known_categories(dframes[0]._meta,
+                                                      ['y'], index=True)
+        ddf1, ddf2 = dframes
+
+        res = ddf1.append(ddf2)
+        assert_eq(res, df1.append(df2))
+        assert has_known_categories(res.index) == known
+        assert has_known_categories(res.y) == known
+
+        res = ddf1.y.append(ddf2.y)
+        assert_eq(res, df1.y.append(df2.y))
+        assert has_known_categories(res.index) == known
+        assert has_known_categories(res) == known
+
+        res = ddf1.index.append(ddf2.index)
+        assert_eq(res, df1.index.append(df2.index))
+        assert has_known_categories(res) == known

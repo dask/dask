@@ -1341,29 +1341,13 @@ class _Frame(Base):
     def append(self, other):
         # because DataFrame.append will override the method,
         # wrap by pd.Series.append docstring
+        from .multi import concat
 
         if isinstance(other, (list, dict)):
             msg = "append doesn't support list or dict input"
             raise NotImplementedError(msg)
 
-        if not isinstance(other, _Frame):
-            from .io import from_pandas
-            other = from_pandas(other, 1)
-
-        from .multi import _append
-        if self.known_divisions and other.known_divisions:
-            if self.divisions[-1] < other.divisions[0]:
-                divisions = self.divisions[:-1] + other.divisions
-                return _append(self, other, divisions)
-            else:
-                msg = ("Unable to append two dataframes to each other with known "
-                       "divisions if those divisions are not ordered. "
-                       "The divisions/index of the second dataframe must be "
-                       "greater than the divisions/index of the first dataframe.")
-                raise ValueError(msg)
-        else:
-            divisions = [None] * (self.npartitions + other.npartitions + 1)
-            return _append(self, other, divisions)
+        return concat([self, other], join='outer', interleave_partitions=False)
 
     @derived_from(pd.DataFrame)
     def align(self, other, join='outer', axis=None, fill_value=None):
