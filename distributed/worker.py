@@ -99,7 +99,6 @@ class WorkerBase(Server):
         self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(ip=scheduler_ip, port=scheduler_port)
-        self.active = set()
         self.name = name
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
@@ -163,8 +162,7 @@ class WorkerBase(Server):
                                         now=time(),
                                         host_info=self.host_health(),
                                         services=self.service_ports,
-                                        memory_limit=self.memory_limit,
-                                        **self.process_health())
+                                        memory_limit=self.memory_limit)
             finally:
                 self.heartbeat_active = False
         else:
@@ -185,8 +183,7 @@ class WorkerBase(Server):
                         services=self.service_ports,
                         memory_limit=self.memory_limit,
                         local_directory=self.local_dir,
-                        resources=self.total_resources,
-                        **self.process_health())
+                        resources=self.total_resources)
                 break
             except EnvironmentError:
                 logger.debug("Unable to register with scheduler.  Waiting")
@@ -435,11 +432,6 @@ class WorkerBase(Server):
                 logger.exception(e)
                 return {'status': 'error', 'exception': dumps(e)}
         return {'status': 'OK', 'nbytes': len(data)}
-
-    def process_health(self, stream=None):
-        d = {'active': len(self.active),
-             'stored': len(self.data)}
-        return d
 
     def host_health(self, stream=None):
         """ Information about worker """

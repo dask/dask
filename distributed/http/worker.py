@@ -4,7 +4,7 @@ from collections import defaultdict
 import logging
 import os
 
-from toolz import keymap, valmap
+from toolz import keymap, valmap, pluck
 from tornado import web
 
 from .core import RequestHandler, MyApp, Resources
@@ -23,20 +23,20 @@ class Info(RequestHandler):
                 'status': self.server.status}
         self.write(resp)
 
+
 class Processing(RequestHandler):
-    """Basic info about the worker """
     def get(self):
-        try:
-            resp = {'processing': [str(k) for k in self.server.active]}
-        except Exception as e:
-            resp = str(e)
-        self.write(resp)
+            resp = {'processing': list(map(str, self.server.executing)),
+                    'waiting': list(map(str, self.server.waiting_for_data)),
+                    'constrained': list(map(str, self.server.constrained)),
+                    'ready': list(map(str, pluck(1, self.server.ready)))}
+            self.write(resp)
 
 
 class NBytes(RequestHandler):
     """Basic info about the worker """
     def get(self):
-        resp = keymap(str, valmap(sizeof, self.server.data))
+        resp = self.server.nbytes
         self.write(resp)
 
 
@@ -44,8 +44,8 @@ class NBytesSummary(RequestHandler):
     """Basic info about the worker """
     def get(self):
         out = defaultdict(lambda: 0)
-        for k, v in self.server.data.items():
-            out[key_split(k)] += sizeof(v)
+        for k in self.server.data:
+            out[key_split(k)] += self.server.nbytes[k]
         self.write(dict(out))
 
 
