@@ -10,7 +10,7 @@ _globals['callbacks'] = set()
 
 
 class set_options(object):
-    """ Set global state within controled context
+    """ Set global state within controlled context
 
     This lets you specify various global settings in a tightly controlled
     ``with`` block.
