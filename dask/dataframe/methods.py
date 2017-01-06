@@ -238,7 +238,23 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             out = pd.concat([df[df.columns.intersection(not_cat)]
                              for df in dfs3], join=join)
             for col in cat_mask.index.difference(not_cat):
-                out[col] = union_categoricals([df.get(col) for df in dfs3])
+                # Find an example of categoricals in this column
+                for df in dfs3:
+                    sample = df.get(col)
+                    if sample is not None:
+                        break
+                # Extract partitions, subbing in missing if needed
+                parts = []
+                for df in dfs3:
+                    if col in df.columns:
+                        parts.append(df[col])
+                    else:
+                        codes = np.full(len(df), -1, dtype='i8')
+                        data = pd.Categorical.from_codes(codes,
+                                                         sample.cat.categories,
+                                                         sample.cat.ordered)
+                        parts.append(data)
+                out[col] = union_categoricals(parts)
             out = out.reindex_axis(cat_mask.index, axis=1)
         else:
             out = pd.concat(dfs3, join=join)

@@ -10,8 +10,6 @@ import warnings
 
 from toolz import merge, partial, first, unique, partition_all
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
-from pandas.types.concat import union_categoricals
 from pandas.util.decorators import cache_readonly
 import numpy as np
 

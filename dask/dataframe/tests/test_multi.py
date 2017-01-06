@@ -5,10 +5,12 @@ import pandas.util.testing as tm
 
 from dask.async import get_sync
 from dask.dataframe.core import _Frame
+from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
-from dask.dataframe.utils import assert_eq, assert_divisions, make_meta
+from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
+                                  has_known_categories, clear_known_categories)
 
 import pytest
 
@@ -984,3 +986,66 @@ def test_concat5():
 
         assert_eq(dd.concat(case, axis=1, join='inner'),
                   pd.concat(pdcase, axis=1, join='inner'))
+
+
+@pytest.mark.parametrize('known, cat_index, divisions',
+                         [(True, True, False), (True, False, True),
+                          (True, False, False), (False, True, False),
+                          (False, False, True), (False, False, False)])
+def test_concat_categorical(known, cat_index, divisions):
+    frames = [pd.DataFrame({'w': list('xxxxx'),
+                            'x': np.arange(5),
+                            'y': list('abcbc'),
+                            'z': np.arange(5, dtype='f8')}),
+              pd.DataFrame({'w': list('yyyyy'),
+                            'x': np.arange(5, 10),
+                            'y': list('abbba'),
+                            'z': np.arange(5, 10, dtype='f8')}),
+              pd.DataFrame({'w': list('zzzzz'),
+                            'x': np.arange(10, 15),
+                            'y': list('bcbcc'),
+                            'z': np.arange(10, 15, dtype='f8')})]
+    for df in frames:
+        df.w = df.w.astype('category')
+        df.y = df.y.astype('category')
+
+    if cat_index:
+        frames = [df.set_index(df.y) for df in frames]
+
+    dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
+
+    if not known:
+        dframes[0]._meta = clear_known_categories(dframes[0]._meta, ['y'],
+                                                  index=True)
+
+    def check_and_return(ddfs, dfs, join):
+        sol = concat(dfs, join=join)
+        res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
+        assert_eq(res, sol)
+        if known:
+            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+                res._meta == p  # will error if schemas don't align
+        assert not cat_index or has_known_categories(res.index) == known
+        return res
+
+    for join in ['inner', 'outer']:
+        # Frame
+        res = check_and_return(dframes, frames, join)
+        assert has_known_categories(res.w)
+        assert has_known_categories(res.y) == known
+
+        # Series
+        res = check_and_return([i.y for i in dframes],
+                               [i.y for i in frames], join)
+        assert has_known_categories(res) == known
+
+        # Non-cat series with cat index
+        if cat_index:
+            res = check_and_return([i.x for i in dframes],
+                                   [i.x for i in frames], join)
+
+        # Partition missing columns
+        res = check_and_return([dframes[0][['x', 'y']]] + dframes[1:],
+                               [frames[0][['x', 'y']]] + frames[1:], join)
+        assert not hasattr(res, 'w') or has_known_categories(res.w)
+        assert has_known_categories(res.y) == known

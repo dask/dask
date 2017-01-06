@@ -65,7 +65,7 @@ import pandas as pd
 from ..base import tokenize
 from ..compatibility import apply
 from .core import (_Frame, DataFrame, map_partitions, Index,
-                   _maybe_from_pandas, new_dd_object, _emulate)
+                   _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
@@ -424,10 +424,10 @@ def concat_unindexed_dataframes(dfs):
 
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     """ Concatenate indexed dataframes together along the index """
-    meta = _emulate(methods.concat, dfs, axis=axis, join=join)
+    meta = methods.concat([df._meta for df in dfs], axis=axis, join=join)
+    empties = [strip_unknown_categories(df._meta) for df in dfs]
 
     dfs2, divisions, parts = align_partitions(*dfs)
-    empties = [strip_unknown_categories(df._meta) for df in dfs]
 
     name = 'concat-indexed-' + tokenize(join, *dfs)
 
@@ -445,7 +445,8 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def stack_partitions(dfs, divisions, join='outer'):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = _emulate(methods.concat, dfs, axis=0, join=join).iloc[:0]
+    meta = methods.concat([df._meta for df in dfs], join=join)
+    empty = strip_unknown_categories(meta)
 
     name = 'concat-{0}'.format(tokenize(*dfs))
     dsk = {}
@@ -465,7 +466,7 @@ def stack_partitions(dfs, divisions, join='outer'):
             if match:
                 dsk[(name, i)] = key
             else:
-                dsk[(name, i)] = (methods.concat, [key, meta], 0, join)
+                dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
             i += 1
 
     return new_dd_object(dsk, name, meta, divisions)
