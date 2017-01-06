@@ -1,5 +1,5 @@
 import pytest
-pytest.importorskip('distributed')
+distributed = pytest.importorskip('distributed')
 
 from tornado import gen
 
@@ -75,3 +75,19 @@ def test_local_get_with_distributed_active(c, s, a, b):
     y = delayed(inc)(2).persist(get=dask.async.get_sync)
     yield gen.sleep(0.01)
     assert not s.task_state # scheduler hasn't done anything
+
+
+
+def test_to_hdf_distributed(loop):
+    from ..dataframe.io.tests.test_hdf import test_to_hdf
+    with cluster() as (s, [a, b]):
+        with distributed.Client(s['address'], loop=loop) as c:  # noqa: F841
+            test_to_hdf()
+
+
+@pytest.mark.parametrize('npartitions', [1, 4, 10])
+def test_to_hdf_scheduler_distributed(npartitions, loop):
+    from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+    with cluster() as (s, [a, b]):
+        with distributed.Client(s['address'], loop=loop) as c:  # noqa: F841
+            test_to_hdf_schedulers(None, npartitions)
