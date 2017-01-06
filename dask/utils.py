@@ -16,12 +16,15 @@ from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from threading import Lock
+import multiprocessing as mp
+from .import multiprocessing
 import uuid
 from weakref import WeakValueDictionary
 
 from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
                             urlsplit, unicode)
 from .core import get_deps
+from .context import _globals
 
 
 system_encoding = sys.getdefaultencoding()
@@ -1032,3 +1035,19 @@ class SerializableLock(object):
         return "<%s: %s>" % (self.__class__.__name__, self.token)
 
     __repr__ = __str__
+
+
+def effective_get(get=None, collection=None):
+    """Get the effective get method used in a given situation"""
+    collection_get = collection._default_get if collection else None
+    return get or _globals.get('get') or collection_get
+
+
+def get_scheduler_lock(get=None, collection=None):
+    """Get an instance of the appropriate lock for a certain situation based on
+       scheduler used."""
+    actual_get = effective_get(get, collection)
+
+    if actual_get == multiprocessing.get:
+        return mp.Manager().Lock()
+    return SerializableLock()

@@ -3,13 +3,10 @@ from __future__ import absolute_import, division, print_function
 from fnmatch import fnmatch
 from glob import glob
 import os
-from threading import Lock
-import multiprocessing
 import uuid
 from warnings import warn
 
 import pandas as pd
-import dask
 from toolz import merge
 
 from ...async import get_sync
@@ -17,11 +14,11 @@ from ...base import tokenize
 from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
-import dask.multiprocessing
+from ... import multiprocessing
 
 from ..core import DataFrame, new_dd_object
 
-from ...utils import build_name_function
+from ...utils import build_name_function, effective_get, get_scheduler_lock
 
 from .io import _link
 
@@ -75,8 +72,10 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
         ``dask.Delayed`` value.
     lock: Lock, optional
         Lock to use to prevent concurrency issues.  By default a
-        ``threading.Lock`` or ``multiprocessing.Lock`` will be used depending
-        on your scheduler
+        ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
+        will be used depending on your scheduler if a lock is required. See
+        dask.utils.get_scheduler_lock for more information about lock
+        selection.
     **other:
         See pandas.to_hdf for more information
 
@@ -129,7 +128,8 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
     # if path is string, format using i_name
     if isinstance(path, str):
         if path.count('*') + key.count('*') > 1:
-            raise ValueError("A maximum of one asterisk is accepted in file path and dataset key")
+            raise ValueError("A maximum of one asterisk is accepted in file "
+                             "path and dataset key")
 
         fmt_obj = lambda path, i_name: path.replace('*', i_name)
 
@@ -137,7 +137,8 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
             single_file = False
     else:
         if key.count('*') > 1:
-            raise ValueError("A maximum of one asterisk is accepted in dataset key")
+            raise ValueError("A maximum of one asterisk is accepted in "
+                             "dataset key")
 
         fmt_obj = lambda path, _: path
 
@@ -167,22 +168,18 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
         get = get_sync
 
     # handle lock default based on whether we're writing to a single entity
-    _actual_get = get or _globals.get('get') or df._default_get
+    _actual_get = effective_get(get, df)
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and _actual_get is not dask.multiprocessing.get:
+        elif not single_file and _actual_get is not multiprocessing.get:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
         else:
             lock = False
-
-    if lock is True:
-        if _actual_get == dask.multiprocessing.get:
-            lock = multiprocessing.Manager().Lock()
-        else:
-            lock = Lock()
+    if lock:
+        lock = get_scheduler_lock(get, df)
 
     kwargs.update({'format': 'table', 'mode': mode, 'append': append})
 
@@ -373,7 +370,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
     """
     if lock is True:
-        lock = Lock()
+        lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
     paths = sorted(glob(pattern))
