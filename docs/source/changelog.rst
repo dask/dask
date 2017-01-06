@@ -36,6 +36,16 @@ DataFrame
   drop_duplicates) (:pr:`1808`), (:pr:`1823`) (:pr:`1828`)
 - Add delitem and copy to DataFrames, increasing mutation support (:pr:`1858`)
 
+Delayed
++++++++
+
+- Changed behaviour for ``delayed(nout=0)`` and ``delayed(nout=1)``:
+  ``delayed(nout=1)`` does not default to ``out=None`` anymore, and
+  ``delayed(nout=0)`` is also enabled. I.e. functions with return
+  tuples of length 1 or 0 can be handled correctly. This is especially
+  handy, if functions with a variable amount of outputs are wrapped by
+  ``delayed``. E.g. a trivial example:
+  ``delayed(lambda *args: args, nout=len(vals))(*vals)``
 
 Core
 ++++

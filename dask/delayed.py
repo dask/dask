@@ -129,6 +129,8 @@ def delayed(obj, name=None, pure=False, nout=None):
         object. If provided, the ``Delayed`` output of the call can be iterated
         into ``nout`` objects, allowing for unpacking of results. By default
         iteration over ``Delayed`` objects will error.
+        Note, that ``nout=1`` expects ``obj``, to return a tuple of length 1,
+        and consequently for `nout=0``, ``obj`` should return an empty tuple.
 
     Examples
     --------
@@ -408,7 +410,7 @@ def call_function(func, args, kwargs, pure=False, nout=None):
 
     dasks = flat_unique(dasks)
     dasks.append({name: task})
-    nout = nout if nout and nout > 1 else None
+    nout = nout if nout is not None else None
     return Delayed(name, dasks, length=nout)
 
 
