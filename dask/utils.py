@@ -1037,16 +1037,16 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, df=None):
+def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
-    df_get = df._default_get if df else None
-    return get or _globals.get('get') or df_get
+    collection_get = collection._default_get if collection else None
+    return get or _globals.get('get') or collection_get
 
 
-def get_scheduler_lock(get=None, df=None):
+def get_scheduler_lock(get=None, collection=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
-    actual_get = effective_get(get, df)
+    actual_get = effective_get(get, collection)
 
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
