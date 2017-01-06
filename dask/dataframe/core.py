@@ -48,7 +48,12 @@ def _concat(args):
             return pd.Series(args)
         except:
             return args
-    return methods.concat(args, uniform=True)
+    # We filter out empty partitions here because pandas frequently has
+    # inconsistent dtypes in results between empty and non-empty frames.
+    # Ideally this would be handled locally for each operation, but in practice
+    # this seems easier. TODO: don't do this.
+    args2 = [i for i in args if len(i)]
+    return args[0] if not args2 else methods.concat(args2, uniform=True)
 
 
 def _get_return_type(meta):
