@@ -21,9 +21,11 @@ graph, and a key or list of keys to compute:
 
 .. code-block:: python
 
+   >>> from operator import add
+
    >>> dsk = {'a': 1,
    ...        'b': 2,
-   ...        'c': (sum, 'a', 'b'),
+   ...        'c': (add, 'a', 'b'),
    ...        'd': (sum, ['a', 'b', 'c'])}
 
    >>> get(dsk, 'c')
