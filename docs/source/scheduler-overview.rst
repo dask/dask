@@ -21,6 +21,8 @@ graph, and a key or list of keys to compute:
 
 .. code-block:: python
 
+   >>> from operator import add
+
    >>> dsk = {'a': 1,
    ...        'b': 2,
    ...        'c': (add, 'a', 'b'),
