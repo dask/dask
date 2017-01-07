@@ -23,9 +23,12 @@ which is included as a comment at the end of this file:
 from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import thread
-
+import logging
 from threading import local, Thread
+
 from .compatibility import get_thread_identity
+
+logger = logging.getLogger(__name__)
 
 thread_state = local()
 
@@ -44,7 +47,7 @@ def _worker(executor, work_queue):
                 return
         del executor
     except BaseException:
-        _base.LOGGER.critical('Exception in worker', exc_info=True)
+        logger.critical('Exception in worker', exc_info=True)
     finally:
         del thread_state.proceed
         del thread_state.executor

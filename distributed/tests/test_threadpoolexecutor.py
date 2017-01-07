@@ -3,6 +3,7 @@ from time import sleep
 from distributed.metrics import time
 from distributed.threadpoolexecutor import ThreadPoolExecutor, secede
 
+
 def test_tpe():
     e = ThreadPoolExecutor(2)
     list(e.map(sleep, [0.01] * 4))
@@ -25,4 +26,3 @@ def test_tpe():
     while all(t.is_alive() for t in threads):
         sleep(0.01)
         assert time() < start + 1
-
