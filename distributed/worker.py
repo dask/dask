@@ -1209,11 +1209,13 @@ class Worker(WorkerBase):
 
                 if key not in self.tasks:
                     self.data_needed.popleft()
+                    changed = True
                     continue
 
                 if self.task_state.get(key) != 'waiting':
                     self.log.append((key, 'communication pass'))
                     self.data_needed.popleft()
+                    changed = True
                     continue
 
                 deps = self.dependencies[key]
@@ -1520,7 +1522,7 @@ class Worker(WorkerBase):
 
     def forget_key(self, key):
         try:
-            self.log.append(('forget', key))
+            self.log.append((key, 'forget'))
             if key in self.tasks:
                 del self.tasks[key]
                 del self.task_state[key]
