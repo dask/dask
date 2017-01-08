@@ -214,7 +214,9 @@ class Server(TCPServer):
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
-                        result = yield gen.maybe_future(handler(stream, **msg))
+                        result = handler(stream, **msg)
+                        if type(result) is gen.Future:
+                            result = yield result
                     except StreamClosedError as e:
                         logger.warn("Lost connection to %s: %s", str(address), e)
                         break
