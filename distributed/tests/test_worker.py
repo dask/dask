@@ -25,8 +25,8 @@ from distributed.protocol import to_serialize
 from distributed.protocol.pickle import dumps, loads
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
-from distributed.utils import ignoring
-from distributed.utils_test import (loop, inc, mul, gen_cluster,
+from distributed.utils import ignoring, tmpfile
+from distributed.utils_test import (loop, inc, mul, gen_cluster, div,
         slow, slowinc, throws, current_loop, gen_test, readone)
 
 
@@ -595,3 +595,26 @@ def test_dont_overlap_communications_to_same_worker(c, s, a, b):
     l1, l2 = b.incoming_transfer_log
 
     assert l1['stop'] < l2['start']
+
+
+@pytest.mark.avoid_travis
+@gen_cluster(client=True)
+def test_log_exception_on_failed_task(c, s, a, b):
+    with tmpfile() as fn:
+        fh = logging.FileHandler(fn)
+        try:
+            from distributed.worker import logger
+            logger.addHandler(fh)
+
+            future = c.submit(div, 1, 0)
+            yield _wait(future)
+
+            yield gen.sleep(0.1)
+            fh.flush()
+            with open(fn) as f:
+                text = f.read()
+
+            assert "ZeroDivisionError" in text
+            assert "Exception" in text
+        finally:
+            logger.removeHandler(fh)

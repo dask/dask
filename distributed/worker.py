@@ -1676,12 +1676,14 @@ class Worker(WorkerBase):
                 self.exceptions[key] = result['exception']
                 self.tracebacks[key] = result['traceback']
                 logger.warn(" Compute Failed\n"
-                    "Function: %s\n"
-                    "args:     %s\n"
-                    "kwargs:   %s\n",
+                    "Function:  %s\n"
+                    "args:      %s\n"
+                    "kwargs:    %s\n"
+                    "Exception: %s\n",
                     str(funcname(function))[:1000],
                     convert_args_to_str(args2, max_len=1000),
-                    convert_kwargs_to_str(kwargs2, max_len=1000), exc_info=True)
+                    convert_kwargs_to_str(kwargs2, max_len=1000),
+                    repr(loads(result['exception'])))
                 self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
