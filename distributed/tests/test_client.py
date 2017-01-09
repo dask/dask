@@ -403,6 +403,13 @@ def test_as_completed(loop):
             assert list(as_completed([])) == []
 
 
+def test_as_completed_with_non_futures(loop):
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            with pytest.raises(TypeError):
+                list(as_completed([1, 2, 3]))
+
+
 def test_wait_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:

@@ -2363,6 +2363,10 @@ def as_completed(fs):
     fs = list(fs)
     if not fs:
         return
+    non_futures = [f for f in fs if not isinstance(f, Future)]
+    if non_futures:
+        raise TypeError("Using as_completed on non-future objects: %s" %
+                        non_futures)
     if len(set(f.client for f in fs)) == 1:
         loop = first(fs).client.loop
     else:
