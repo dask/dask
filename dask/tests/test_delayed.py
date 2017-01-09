@@ -197,6 +197,14 @@ def test_traverse_false():
     assert res[0] == fail
     assert res[1] is a
 
+    # list containing task-like-things
+    x = [1, (fail, a), a]
+    res = delayed(x, traverse=False).compute()
+    assert isinstance(res, list)
+    assert res[0] == 1
+    assert res[1][0] == fail and res[1][1] is a
+    assert res[2] is a
+
     # traverse=False still hits top level
     b = delayed(1)
     x = delayed(b, traverse=False)

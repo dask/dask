@@ -423,6 +423,25 @@ def isdag(d, keys):
     return not getcycle(d, keys)
 
 
+class literal(object):
+    """A small serializable object to wrap literal values without copying"""
+    __slots__ = ('data',)
+
+    def __init__(self, data):
+        self.data = data
+
+    def __repr__(self):
+        return 'literal<type=%s>' % type(self.data).__name__
+
+    def __reduce__(self):
+        return (literal, (self.data,))
+
+
+def extract_literal(x):
+    """Extract the object wrapped in a literal"""
+    return x.data
+
+
 def quote(x):
     """ Ensure that this value remains this value in a dask graph
 
@@ -430,8 +449,8 @@ def quote(x):
     ensure that our data is not interpreted but remains literal.
 
     >>> quote((add, 1, 2))  # doctest: +SKIP
-    (tuple, [add, 1, 2])
+    (extract_literal, literal<type=tuple>)
     """
-    if istask(x):
-        return (tuple, list(map(quote, x)))
+    if istask(x) or type(x) is list:
+        return (extract_literal, literal(x))
     return x
