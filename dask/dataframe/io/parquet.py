@@ -2,7 +2,7 @@ import pandas as pd
 from toolz import first, partial
 
 from ..core import DataFrame, Series
-from ...base import compute, tokenize, normalize_token
+from ...base import tokenize, normalize_token
 from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import OpenFileCreator
@@ -238,7 +238,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
               compression=compression)
               for outfile, partition in zip(outfiles, partitions)]
 
-    out = compute(*writes)
+    out = delayed(writes).compute()
 
     for fn, rg in zip(filenames, out):
         for chunk in rg.columns:

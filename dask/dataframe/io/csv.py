@@ -409,8 +409,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
                          encoding=None)
 
     if compute:
-        from dask import compute
-        compute(*values, get=get)
+        delayed(values).compute(get=get)
     else:
         return values
 

@@ -171,8 +171,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     out = write_bytes(b.to_delayed(), path, name_function, compression,
                       encoding=encoding)
     if compute:
-        from dask import compute
-        compute(*out)
+        from dask import delayed
+        delayed(out).compute()
     else:
         return out
 
