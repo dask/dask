@@ -562,7 +562,14 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     else:
         Frame = DataFrame
 
-    df = Frame(dsk3, name, meta, [None] * (len(dfs) + 1))
+    if divisions is None or divisions == 'sorted':
+        divs = [None] * (len(dfs) + 1)
+    else:
+        divs = tuple(divisions)
+        if len(divs) != len(dfs) + 1:
+            raise ValueError("divisions should be a tuple of len(dfs) + 1")
+
+    df = Frame(dsk3, name, meta, divs)
 
     if divisions == 'sorted':
         from ..core import compute_divisions

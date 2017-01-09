@@ -2344,43 +2344,6 @@ def test_dataframe_itertuples():
         assert a == b
 
 
-def test_from_delayed():
-    dfs = [delayed(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
-    meta = dfs[0].compute()
-    df = dd.from_delayed(dfs, meta=meta)
-
-    assert (df.compute().columns == df.columns).all()
-    f = lambda x: pd.Series([len(x)])
-    assert list(df.map_partitions(f).compute()) == [1, 2, 3, 4]
-
-    ss = [d.A for d in dfs]
-    s = dd.from_delayed(ss, meta=meta.A)
-
-    assert s.compute().name == s.name
-    assert list(s.map_partitions(f).compute()) == [1, 2, 3, 4]
-
-
-def test_from_delayed_sorted():
-    a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
-    b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
-
-    A = dd.from_delayed([delayed(a), delayed(b)], divisions='sorted')
-    assert A.known_divisions
-
-    assert A.divisions == (1, 100, 200)
-
-
-def test_to_delayed():
-    from dask.delayed import Delayed
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    a, b = ddf.to_delayed()
-    assert isinstance(a, Delayed)
-    assert isinstance(b, Delayed)
-
-    assert_eq(a.compute(), df.iloc[:2])
-
-
 def test_astype():
     df = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
                       index=[10, 20, 30, 40])
