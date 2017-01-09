@@ -847,7 +847,8 @@ class _Frame(Base):
                 "Provide either divisions= or npartitions= to repartition")
 
     @derived_from(pd.DataFrame)
-    def fillna(self, value=None, method=None, limit=None, axis=None):
+    def fillna(self, value=None, method=None, limit=None, axis=None,
+               loose=None):
         axis = self._validate_axis(axis)
         if method is None and limit is not None:
             raise NotImplementedError("fillna with set limit and method=None")
@@ -860,7 +861,8 @@ class _Frame(Base):
 
         if axis == 1 or method is None:
             return self.map_partitions(M.fillna, value, method=method,
-                                       limit=limit, axis=axis, meta=meta)
+                                       limit=limit, axis=axis, meta=meta,
+                                       loose=loose)
 
         if method in ('pad', 'ffill'):
             method = 'ffill'
