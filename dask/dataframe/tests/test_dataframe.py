@@ -2867,3 +2867,24 @@ def test_del():
 
     del df['x']
     assert_eq(a, df)
+
+
+def test_loose():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5],
+                       'unlisted-column': [2.0, np.nan, 0, 4.5]})
+    columns = [('x', object), ('y', 'int')]
+
+    dsk = {('name', 0): (lambda: df[:2],),
+           ('name', 1): (lambda: df[2:],)}
+    a = dd.DataFrame(dsk, 'name', columns, [None] * 3)
+    o = a.fillna(0, loose=True).compute()
+    assert_eq(df.fillna(0), o)
+
+    with pytest.raises(ValueError):
+        o = a.fillna(0).compute()
+
+    b = dd.DataFrame(dsk, 'name', columns + [('nonexist', object)], [None] * 3)
+    with pytest.raises(ValueError) as ex:
+        b.fillna(0, loose=True).compute()
+        assert 'Meta columns are expected to be a subset of dataframe' in ex.msg
