@@ -11,7 +11,7 @@ import threading
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io.io import _meta_from_array
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 
 from dask.utils import tmpfile
 from dask.async import get_sync
@@ -555,3 +555,47 @@ def test_to_records():
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.to_records(), ddf.to_records())
+
+
+def test_from_delayed():
+    df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list('abcd'))
+    parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
+    dfs = [delayed(parts.__getitem__)(i) for i in range(4)]
+    meta = dfs[0].compute()
+
+    my_len = lambda x: pd.Series([len(x)])
+
+    for divisions in [None, [0, 1, 3, 6, 10]]:
+        ddf = dd.from_delayed(dfs, meta=meta, divisions=divisions)
+        assert_eq(ddf, df)
+        assert list(ddf.map_partitions(my_len).compute()) == [1, 2, 3, 4]
+        assert ddf.known_divisions == (divisions is not None)
+
+        s = dd.from_delayed([d.a for d in dfs], meta=meta.a,
+                            divisions=divisions)
+        assert_eq(s, df.a)
+        assert list(s.map_partitions(my_len).compute()) == [1, 2, 3, 4]
+        assert ddf.known_divisions == (divisions is not None)
+
+    with pytest.raises(ValueError):
+        dd.from_delayed(dfs, meta=meta, divisions=[0, 1, 3, 6])
+
+
+def test_from_delayed_sorted():
+    a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
+    b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
+
+    A = dd.from_delayed([delayed(a), delayed(b)], divisions='sorted')
+    assert A.known_divisions
+
+    assert A.divisions == (1, 100, 200)
+
+
+def test_to_delayed():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    a, b = ddf.to_delayed()
+    assert isinstance(a, Delayed)
+    assert isinstance(b, Delayed)
+
+    assert_eq(a.compute(), df.iloc[:2])
