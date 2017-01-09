@@ -2969,6 +2969,8 @@ def map_partitions(func, *args, **kwargs):
     if meta is not no_default:
         meta = make_meta(meta)
 
+    loose = kwargs.pop('loose', False) or False
+
     assert callable(func)
     if 'token' in kwargs:
         name = kwargs.pop('token')
@@ -3000,13 +3002,13 @@ def map_partitions(func, *args, **kwargs):
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
+        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta, loose)
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
     return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
 
 
-def apply_and_enforce(func, args, kwargs, meta):
+def apply_and_enforce(func, args, kwargs, meta, loose=False):
     """Apply a function, and enforce the output to match meta
 
     Ensures the output has the same columns, even if empty."""
@@ -3015,7 +3017,14 @@ def apply_and_enforce(func, args, kwargs, meta):
         if len(df) == 0:
             return meta
         c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
-        return _rename(c, df)
+        if loose:
+          if not set(c).issubset(set(df.columns)):
+            raise ValueError("Meta columns are expected to be a subset of "
+                             "dataframe columns when loose=True. meta "
+                             "columns: {}. dataframe columns: {}."
+                             "".format(c, df.columns))
+        else:
+          return _rename(c, df)
     return df
 
 
