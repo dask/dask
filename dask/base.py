@@ -119,6 +119,24 @@ class Base(object):
         raise NotImplementedError
 
 
+def _extract_graph_and_keys(vals):
+    """Given a list of dask vals, return a single graph and a list of keys such
+    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    dsk = {}
+    keys = []
+    for v in vals:
+        # Optimization to avoid merging dictionaries in Delayed values. Reduces
+        # memory usage for large graphs.
+        if hasattr(v, '_dasks'):
+            for d in v._dasks:
+                dsk.update(d)
+        else:
+            dsk.update(v.dask)
+        keys.append(v._keys())
+
+    return dsk, keys
+
+
 def compute(*args, **kwargs):
     """Compute several dask collections at once.
 
@@ -165,17 +183,16 @@ def compute(*args, **kwargs):
 
     if kwargs.get('optimize_graph', True):
         groups = groupby(attrgetter('_optimize'), variables)
-        groups = {opt: [merge([v.dask for v in val]),
-                        [v._keys() for v in val]]
+        groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:
             groups = {k: [opt(dsk, keys), keys]
                       for k, (dsk, keys) in groups.items()}
         dsk = merge([opt(dsk, keys, **kwargs)
                     for opt, (dsk, keys) in groups.items()])
+        keys = [var._keys() for var in variables]
     else:
-        dsk = merge(var.dask for var in variables)
-    keys = [var._keys() for var in variables]
+        dsk, keys = _extract_graph_and_keys(variables)
     results = get(dsk, keys, **kwargs)
 
     results_iter = iter(results)
