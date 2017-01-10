@@ -2,11 +2,12 @@ from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
 
+from dask import delayed
 from tornado import gen
 
-from distributed import local_client
+from distributed import local_client, Client, as_completed
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, double
+from distributed.utils_test import gen_cluster, inc, double, cluster, loop
 
 
 @gen_cluster(client=True)
@@ -86,3 +87,30 @@ def test_gather_multi_machine(c, s, a, b):
     result = yield future._result()
 
     assert result == (2, 3)
+
+
+@gen_cluster(client=True)
+def test_same_loop(c, s, a, b):
+    def f():
+        with local_client() as lc:
+            return lc.loop is lc.worker.loop
+
+    future = c.submit(f)
+    result = yield future._result()
+    assert result
+
+
+def test_sync(loop):
+    def mysum():
+        result = 0
+        sub_tasks = [delayed(double)(i) for i in range(100)]
+
+        with local_client() as lc:
+            futures = lc.compute(sub_tasks)
+            for f in as_completed(futures):
+                result += f.result()
+        return result
+
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            assert delayed(mysum)().compute(get=c.get) == 9900

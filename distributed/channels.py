@@ -127,6 +127,8 @@ class ChannelClient(object):
             return self.channels[channel]
 
     def receive_key(self, channel=None, key=None):
+        if channel not in self.channels:
+            self._create_channel(channel)
         self.channels[channel]._receive_update(key)
 
     def receive_stop(self, channel=None):

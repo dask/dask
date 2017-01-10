@@ -1,8 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
+from time import sleep
 from tornado import gen
-from toolz import keymap, valmap, merge
+from toolz import keymap, valmap, merge, assoc
 import uuid
 import uuid
 
@@ -10,6 +11,7 @@ from dask.base import tokenize
 from tornado import gen
 
 from .client import AllExit, Client, Future, pack_data, unpack_remotedata
+from dask.compatibility import apply
 from .sizeof import sizeof
 from .threadpoolexecutor import secede
 from .utils import All, log_errors, sync, tokey, ignoring
@@ -44,8 +46,10 @@ def local_client():
     secede()  # have this thread secede from the thread pool
               # so that it doesn't take up a fixed resource while waiting
     worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
-    with WorkerClient(address) as e:
-        yield e
+    with WorkerClient(address, loop=worker.loop) as wc:
+        while wc.status != 'running':
+            sleep(0.01)
+        yield wc
 
 
 def get_worker():
@@ -60,8 +64,10 @@ class WorkerClient(Client):
     look to the local data dictionary rather than sending data over the network
     """
     def __init__(self, *args, **kwargs):
+        loop = kwargs.get('loop')
         self.worker = get_worker()
-        Client.__init__(self, *args, **kwargs)
+        sync(loop, apply, Client.__init__, (self,) + args, assoc(kwargs, 'start', False))
+        loop.add_callback(self._start)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
@@ -101,8 +107,7 @@ class WorkerClient(Client):
 
             nbytes = valmap(sizeof, data2)
 
-            # self.worker.data.update(data2)  # thread safety matters
-            self.worker.loop.add_callback(self.worker.data.update, data2)
+            self.worker.data.update(data2)
 
             yield self.scheduler.update_data(
                     who_has={key: [self.worker.address] for key in data2},
@@ -145,13 +150,8 @@ class WorkerClient(Client):
         with ignoring(AllExit):
             yield All([wait(key) for key in keys if key in self.futures])
 
-        while True:  # not threadsafe, so try until success
-            try:
-                local = {k: self.worker.data[k] for k in keys
-                         if k in self.worker.data}
-                break
-            except KeyError as e:
-                pass
+        local = {k: self.worker.data[k] for k in keys
+                 if k in self.worker.data}
 
         futures3 = {k: Future(k, self) for k in keys if k not in local}
 
