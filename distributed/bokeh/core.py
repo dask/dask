@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import bokeh
 from bokeh.server.server import Server
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.application import Application
@@ -14,7 +15,10 @@ class BokehServer(object):
                 self.server = Server(self.apps, io_loop=self.loop, port=port,
                                      check_unused_sessions_milliseconds=500,
                                      host=['*'])
-                self.server.start(start_loop=False)
+                if bokeh.__version__ <= '0.12.3':
+                    self.server.start(start_loop=False)
+                else:
+                    self.server.start()
                 break
             except (SystemExit, EnvironmentError):
                 port = 0
