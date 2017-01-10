@@ -1,7 +1,9 @@
+from itertools import product
+import warnings
+
 import pytest
 pytest.importorskip('numpy')
 
-from itertools import product
 import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
@@ -361,3 +363,12 @@ def test_plan_rechunk_heterogenous():
     #  * cf -> fc also fits the bill (graph size and block size neutral)
     steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
     _assert_steps(steps, [(cc, ff, cc), (ff, cf, cc)])
+
+
+def test_rechunk_warning():
+    N = 20
+    x = da.random.normal(size=(N, N, 100), chunks=(1, N, 100))
+    with warnings.catch_warnings(record=True) as w:
+        x = x.rechunk((N, 1, 100))
+
+    assert not w

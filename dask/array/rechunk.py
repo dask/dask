@@ -342,10 +342,14 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     # block_size_limit.  This is in effect a knapsack problem, except with
     # multiplicative values and weights.  Just use a greedy algorithm
     # by trying dimensions in decreasing value / weight order.
-    sorted_candidates = sorted(
-        merge_candidates,
-        key=lambda k: np.log(graph_size_effect[k]) / np.log(block_size_effect[k]),
-    )
+    def key(k):
+        gse = graph_size_effect[k]
+        bse = block_size_effect[k]
+        if bse == 1:
+            bse = 1 + 1e-9
+        return np.log(gse) / np.log(bse)
+
+    sorted_candidates = sorted(merge_candidates, key=key)
 
     largest_block_size = reduce(mul, old_largest_width)
 
