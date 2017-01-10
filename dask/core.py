@@ -436,10 +436,8 @@ class literal(object):
     def __reduce__(self):
         return (literal, (self.data,))
 
-
-def extract_literal(x):
-    """Extract the object wrapped in a literal"""
-    return x.data
+    def __call__(self):
+        return self.data
 
 
 def quote(x):
@@ -449,8 +447,8 @@ def quote(x):
     ensure that our data is not interpreted but remains literal.
 
     >>> quote((add, 1, 2))  # doctest: +SKIP
-    (extract_literal, literal<type=tuple>)
+    (literal<type=tuple>,)
     """
     if istask(x) or type(x) is list:
-        return (extract_literal, literal(x))
+        return (literal(x),)
     return x
