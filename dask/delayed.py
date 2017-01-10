@@ -7,6 +7,7 @@ import uuid
 
 from toolz import merge, unique, curry, first
 
+from .core import quote
 from .utils import concrete, funcname, methodcaller
 from . import base
 from .compatibility import apply
@@ -107,7 +108,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=False, nout=None):
+def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -128,9 +129,14 @@ def delayed(obj, name=None, pure=False, nout=None):
         The number of outputs returned from calling the resulting ``Delayed``
         object. If provided, the ``Delayed`` output of the call can be iterated
         into ``nout`` objects, allowing for unpacking of results. By default
-        iteration over ``Delayed`` objects will error.
-        Note, that ``nout=1`` expects ``obj``, to return a tuple of length 1,
-        and consequently for `nout=0``, ``obj`` should return an empty tuple.
+        iteration over ``Delayed`` objects will error. Note, that ``nout=1``
+        expects ``obj``, to return a tuple of length 1, and consequently for
+        `nout=0``, ``obj`` should return an empty tuple.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``delayed``. For large collections this can be
+        expensive. If ``obj`` doesn't contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
 
     Examples
     --------
@@ -248,9 +254,13 @@ def delayed(obj, name=None, pure=False, nout=None):
     if isinstance(obj, Delayed):
         return obj
 
-    task, dasks = to_task_dasks(obj)
+    if isinstance(obj, base.Base) or traverse:
+        task, dasks = to_task_dasks(obj)
+    else:
+        task = quote(obj)
+        dasks = []
 
-    if not dasks:
+    if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
             raise ValueError("nout must be None or a positive integer,"
                              " got %s" % nout)

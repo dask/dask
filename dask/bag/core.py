@@ -635,7 +635,6 @@ class Bag(Base):
         Bag.foldby
         """
         combine = combine or binop
-        initial = quote(initial)
         if initial is not no_default:
             return self.reduction(curry(_reduce, binop, initial=initial),
                                   curry(_reduce, combine),

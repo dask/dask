@@ -1,11 +1,12 @@
 from collections import namedtuple
 
 import pytest
+import pickle
 
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
 from dask.core import (istask, get_dependencies, get_deps, flatten, subs,
-                       preorder_traversal, quote, has_tasks)
+                       preorder_traversal, literal, quote, has_tasks)
 
 
 def contains(a, b):
@@ -226,3 +227,8 @@ def test_quote():
 
     for l in literals:
         assert core.get({'x': quote(l)}, 'x') == l
+
+
+def test_literal_serializable():
+    l = literal((add, 1, 2))
+    assert pickle.loads(pickle.dumps(l)).data == (add, 1, 2)
