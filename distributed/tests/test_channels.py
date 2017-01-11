@@ -71,6 +71,8 @@ def test_local_client(loop):
                 last = c.submit(add, future, last, key='add-' + future.key)
                 y.append(last)
 
+            y.flush()
+
     with cluster() as (s, [a, b]):
         with Client(('127.0.0.1', s['port']), loop=loop) as c:
             x = c.channel('x')

@@ -186,6 +186,7 @@ def test_work_steal_no_kwargs(c, s, a, b):
 
     assert result == sum(map(inc, range(100)))
 
+
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)])
 def test_dont_steal_worker_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)

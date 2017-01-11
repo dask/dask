@@ -195,7 +195,9 @@ class WorkStealing(SchedulerPlugin):
 
             if not s.saturated:
                 saturated = topk(10, s.workers, key=occupancy.get)
-                saturated = [w for w in saturated if occupancy[w] > 0.2]
+                saturated = [w for w in saturated
+                                if occupancy[w] > 0.2
+                               and len(s.processing[w]) > s.ncores[w]]
             elif len(s.saturated) < 20:
                 saturated = sorted(saturated, key=occupancy.get, reverse=True)
 
@@ -236,9 +238,13 @@ class WorkStealing(SchedulerPlugin):
                     for key in list(stealable):
                         if not idle:
                             break
+
                         sat = s.rprocessing[key]
                         if occupancy[sat] < 0.2:
                             continue
+                        if len(s.processing[sat]) <= s.ncores[sat]:
+                            continue
+
                         i += 1
                         idl = idle[i % len(idle)]
                         duration = s.processing[sat][key]

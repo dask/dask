@@ -105,9 +105,7 @@ class WorkerClient(Client):
             else:
                 raise TypeError("Don't know how to scatter %s" % type(data))
 
-            nbytes = valmap(sizeof, data2)
-
-            self.worker.data.update(data2)
+            self.worker.update_data(data=data2, report=False)
 
             yield self.scheduler.update_data(
                     who_has={key: [self.worker.address] for key in data2},

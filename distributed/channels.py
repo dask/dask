@@ -35,7 +35,7 @@ class ChannelScheduler(object):
                     'channel-append': self.append,
                     'channel-stop': self.stop}
 
-        self.scheduler.compute_handlers.update(handlers)
+        self.scheduler.client_handlers.update(handlers)
         self.scheduler.extensions['channels'] = self
 
     def subscribe(self, channel=None, client=None, maxlen=None):
@@ -67,7 +67,7 @@ class ChannelScheduler(object):
             del self.clients[channel]
             del self.stopped[channel]
 
-    def append(self, channel=None, key=None):
+    def append(self, channel=None, key=None, client=None):
         if self.stopped[channel]:
             return
 
@@ -83,7 +83,7 @@ class ChannelScheduler(object):
         client='streaming-%s' % channel
         self.scheduler.client_desires_keys(keys=[key], client=client)
 
-    def stop(self, channel=None):
+    def stop(self, channel=None, client=None):
         self.stopped[channel] = True
         logger.info("Stop channel %s", channel)
         for client in list(self.clients[channel]):

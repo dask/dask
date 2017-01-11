@@ -267,15 +267,15 @@ class Scheduler(Server):
 
         self.worker_handlers = {'task-finished': self.handle_task_finished,
                                 'task-erred': self.handle_task_erred,
-                                'missing-data': self.handle_missing_data,
+                                'release': self.handle_missing_data,
                                 'add-keys': self.add_keys}
 
-        self.compute_handlers = {'update-graph': self.update_graph,
-                                 'client-desires-keys': self.client_desires_keys,
-                                 'update-data': self.update_data,
-                                 'missing-data': self.stimulus_missing_data,
-                                 'client-releases-keys': self.client_releases_keys,
-                                 'restart': self.restart}
+        self.client_handlers = {'update-graph': self.update_graph,
+                                'client-desires-keys': self.client_desires_keys,
+                                'update-data': self.update_data,
+                                'report-key': self.report_on_key,
+                                'client-releases-keys': self.client_releases_keys,
+                                'restart': self.restart}
 
         self.handlers = {'register-client': self.add_client,
                          'scatter': self.scatter,
@@ -693,7 +693,7 @@ class Scheduler(Server):
 
         return recommendations
 
-    def stimulus_missing_data(self, keys=None, key=None, worker=None,
+    def stimulus_missing_data(self, cause=None, key=None, worker=None,
             ensure=True, **kwargs):
         """ Mark that certain keys have gone missing.  Recover. """
         with log_errors():
@@ -702,14 +702,14 @@ class Scheduler(Server):
                 return {}
 
             recommendations = OrderedDict()
-            for k in set(keys):
-                if self.task_state.get(k) == 'memory':
-                    for w in set(self.who_has[k]):
-                        self.has_what[w].remove(k)
-                        self.who_has[k].remove(w)
-                        self.worker_bytes[w] -= self.nbytes.get(k,
-                                                        DEFAULT_DATA_SIZE)
-                    recommendations[k] = 'released'
+
+            if self.task_state.get(cause) == 'memory':  # couldn't find this
+                for w in set(self.who_has[cause]):  # TODO: this behavior is extreme
+                    self.has_what[w].remove(cause)
+                    self.who_has[cause].remove(w)
+                    self.worker_bytes[w] -= self.nbytes.get(cause,
+                                                    DEFAULT_DATA_SIZE)
+                recommendations[cause] = 'released'
 
             if key:
                 recommendations[key] = 'released'
@@ -717,7 +717,7 @@ class Scheduler(Server):
             self.transitions(recommendations)
 
             if self.validate:
-                assert not any(k in self.who_has for k in keys)
+                assert cause not in self.who_has
 
             return {}
 
@@ -1073,9 +1073,12 @@ class Scheduler(Server):
                         breakout = True
                         self.close()
                         break
-                    elif op in self.compute_handlers:
+                    elif op in self.client_handlers:
                         try:
-                            result = self.compute_handlers[op](**msg)
+                            handler = self.client_handlers[op]
+                            if 'client' not in msg:
+                                msg['client'] = client
+                            result = handler(**msg)
                             if isinstance(result, gen.Future):
                                 yield result
                         except Exception as e:
@@ -1138,7 +1141,9 @@ class Scheduler(Server):
         r = self.stimulus_task_erred(key=key, **msg)
         self.transitions(r)
 
-    def handle_missing_data(self, key=None, **msg):
+    def handle_missing_data(self, key=None, worker=None, client=None, **msg):
+        if self.rprocessing.get(key) != worker:
+            return
         r = self.stimulus_missing_data(key=key, ensure=False, **msg)
         self.transitions(r)
         if self.validate:
@@ -1294,7 +1299,7 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def restart(self, environment=None):
+    def restart(self, environment=None, client=None):
         """ Restart all workers.  Reset local state. """
         n = len(self.workers)
         with log_errors():
@@ -2021,6 +2026,8 @@ class Scheduler(Server):
 
             if worker not in self.processing:
                 return {key: 'released'}
+            if worker != self.rprocessing[key]:
+                return {}
 
             if startstops:
                 compute_start, compute_stop = [(b, c) for a, b, c in startstops

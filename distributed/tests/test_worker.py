@@ -618,3 +618,36 @@ def test_log_exception_on_failed_task(c, s, a, b):
             assert "Exception" in text
         finally:
             logger.removeHandler(fh)
+
+
+@gen_cluster(client=True)
+def test_clean_up_dependencies(c, s, a, b):
+    x = delayed(inc)(1)
+    y = delayed(inc)(2)
+    xx = delayed(inc)(x)
+    yy = delayed(inc)(y)
+    z = delayed(add)(xx, yy)
+
+    zz = c.persist(z)
+    yield _wait(zz)
+
+    start = time()
+    while len(a.data) + len(b.data) > 1:
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+    assert set(a.data) | set(b.data) == {zz.key}
+
+
+@gen_cluster(client=True)
+def test_hold_onto_dependents(c, s, a, b):
+    x = c.submit(inc, 1, workers=a.address)
+    y = c.submit(inc, x, workers=b.address)
+    yield _wait(y)
+
+    assert x.key in b.data
+
+    yield c._cancel(y)
+    yield gen.sleep(0.1)
+
+    assert x.key in b.data

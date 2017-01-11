@@ -176,7 +176,7 @@ def test_stress_communication(c, s, *workers):
         if soft < lim:
             resource.setrlimit(resource.RLIMIT_NOFILE, (lim, max(hard, lim)))
     except Exception as e:
-        pytest.skip("file descriptor limit too low and couldn't be increased :"
+        pytest.skip("file descriptor limit too low and can't be increased :"
                     + str(e))
 
     n = 40
@@ -215,3 +215,25 @@ def test_stress_steal(c, s, *workers):
                 s.work_steal(a.address, b.address, 0.5)
         if not s.processing:
             break
+
+
+@slow
+@gen_cluster(ncores=[('127.0.0.1', 1)] * 10, client=True, timeout=120)
+def test_close_connections(c, s, *workers):
+    da = pytest.importorskip('dask.array')
+    x = da.random.random(size=(1000, 1000), chunks=(1000, 1))
+    for i in range(3):
+        x = x.rechunk((1, 1000))
+        x = x.rechunk((1000, 1))
+
+    future = c.compute(x.sum())
+    while any(s.processing.values()):
+        yield gen.sleep(0.5)
+        worker = random.choice(list(workers))
+        for stream in worker._listen_streams:
+            stream.close()
+        # print(frequencies(s.task_state.values()))
+        # for w in workers:
+        #     print(w)
+
+    yield _wait(future)

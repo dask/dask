@@ -153,14 +153,21 @@ pipeline:
 .. image:: images/worker-task-state.svg
     :alt: Dask worker task states
 
+The worker also tracks data dependencies that are required to run the tasks
+above.  These follow through a simpler pipeline:
+
+
+.. image:: images/worker-dep-state.svg
+    :alt: Dask worker dependency states
+
 As tasks arrive they are prioritized and put into a heap.  They are then taken
 from this heap in turn to have any remote dependencies collected.  For each
 dependency we select a worker at random that has that data and collect the
 dependency from that worker.  To improve bandwidth we opportunistically gather
-other dependencies of other tasks are known to be on that worker, up to a
-maximum of 100MB of data (too little data and bandwidth suffers, too much data
+other dependencies of other tasks that are known to be on that worker, up to a
+maximum of 200MB of data (too little data and bandwidth suffers, too much data
 and responsiveness suffers).  We use a fixed number of connections (around
-10-20) so as to avoid overly-fragmenting our network bandwidth.  After all
+10-50) so as to avoid overly-fragmenting our network bandwidth.  After all
 dependencies for a task are in memory we transition the task to the ready state
 and put the task again into a heap of tasks that are ready to run.
 

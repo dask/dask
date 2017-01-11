@@ -553,8 +553,11 @@ class Client(object):
                         breakout = True
                         break
 
-                    handler = self._handlers[op]
-                    handler(**msg)
+                    try:
+                        handler = self._handlers[op]
+                        handler(**msg)
+                    except Exception as e:
+                        logger.exception(e)
                 if breakout:
                     break
 
@@ -906,8 +909,9 @@ class Client(object):
 
             if response['status'] == 'error':
                 logger.warn("Couldn't gather keys %s", response['keys'])
-                self._send_to_scheduler({'op': 'missing-data',
-                                         'keys': response['keys']})
+                for key in response['keys']:
+                    self._send_to_scheduler({'op': 'report-key',
+                                             'key': key})
                 for key in response['keys']:
                     self.futures[key].event.clear()
             else:
@@ -1374,7 +1378,6 @@ class Client(object):
                                  'keys': list(flatkeys),
                                  'restrictions': restrictions or {},
                                  'loose_restrictions': loose_restrictions,
-                                 'client': self.id,
                                  'priority': priority,
                                  'resources': resources})
 
