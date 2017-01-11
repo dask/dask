@@ -5,6 +5,7 @@ from functools import partial
 import numpy as np
 
 from .core import Array, normalize_chunks
+from . import chunk
 from ..base import tokenize
 
 
@@ -119,11 +120,7 @@ def arange(*args, **kwargs):
     if dtype is None:
         dtype = np.arange(0, 1, step).dtype
 
-    range_ = stop - start
-    num = int(abs(range_ // step))
-    if (range_ % step) != 0:
-        num += 1
-
+    num = max(np.ceil((stop - start) / step), 0)
     chunks = normalize_chunks(chunks, (num,))
 
     name = 'arange-' + tokenize((start, stop, step, chunks, num))
@@ -133,7 +130,7 @@ def arange(*args, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (np.arange, blockstart, blockstop, step, dtype)
+        task = (chunk.arange, blockstart, blockstop, step, bs, dtype)
         dsk[(name, i)] = task
         elem_count += bs
 
