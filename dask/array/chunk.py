@@ -186,3 +186,8 @@ def topk(k, x):
     k = np.minimum(k, len(x))
     ind = np.argpartition(x, -k)[-k:]
     return np.sort(x[ind])[::-1]
+
+
+def arange(start, stop, step, length, dtype):
+    res = np.arange(start, stop, step, dtype)
+    return res[:-1] if len(res) > length else res
