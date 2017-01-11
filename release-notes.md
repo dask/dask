@@ -1,5 +1,18 @@
-1.15.x -
-----------------------------
+1.15.1 - January 11th, 2017
+---------------------------
+
+*  Make compatibile with Bokeh 0.12.4 #803
+*  Avoid compressing arrays if not helpful  #777
+*  Optimize inter-worker data transfer #770 #790
+*  Add --local-directory keyword to worker #788
+*  Enable workers to arrive to the cluster with their own data.
+   Useful if a worker leaves and comes back #785
+*  Resolve thread safety bug when using local_client #802
+*  Resolve scheduling issues in worker #804
+
+
+1.15.0 - January 2nd, 2017
+--------------------------
 
 *  Major Worker refactor #704
 *  Major Scheduler refactor #717 #722 #724 #742 743
