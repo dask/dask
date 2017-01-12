@@ -251,9 +251,13 @@ def _nonempty_index(idx):
         return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        element = idx.categories[0]
-        return pd.CategoricalIndex([element, element],
-                                   categories=idx.categories,
+        if len(idx.categories):
+            data = [idx.categories[0]] * 2
+            cats = idx.categories
+        else:
+            data = _nonempty_index(idx.categories)
+            cats = data.unique()
+        return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(i) for i in idx.levels]
@@ -311,9 +315,13 @@ def _nonempty_series(s, idx):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
-        entry = s.cat.categories[0]
-        data = pd.Categorical([entry, entry],
-                              categories=s.cat.categories,
+        if len(s.cat.categories):
+            data = [s.cat.categories[0]] * 2
+            cats = s.cat.categories
+        else:
+            data = _nonempty_index(s.cat.categories)
+            cats = data.unique()
+        data = pd.Categorical(data, categories=cats,
                               ordered=s.cat.ordered)
     else:
         entry = _scalar_from_dtype(dtype)
