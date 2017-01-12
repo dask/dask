@@ -55,7 +55,7 @@ def has_arg(func, argname):
     """
     while True:
         try:
-            if 'dask_worker' in inspect.getargspec(func).args:
+            if argname in inspect.getargspec(func).args:
                 return True
         except TypeError:
             break

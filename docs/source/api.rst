@@ -22,6 +22,7 @@ API
    Client.replicate
    Client.restart
    Client.run
+   Client.run_on_scheduler
    Client.scatter
    Client.shutdown
    Client.scheduler_info

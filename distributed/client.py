@@ -1242,6 +1242,40 @@ class Client(object):
         return sync(self.loop, self._get_dataset, tokey(name))
 
     @gen.coroutine
+    def _run_on_scheduler(self, function, *args, **kwargs):
+        response = yield self.scheduler.run_function(function=dumps(function),
+                                                     args=dumps(args),
+                                                     kwargs=dumps(kwargs))
+        if response['status'] == 'error':
+            six.reraise(*clean_exception(**response))
+        else:
+            raise Return(response['result'])
+
+    def run_on_scheduler(self, function, *args, **kwargs):
+        """ Run a function on the scheduler process
+
+        This is typically used for live debugging.  The function should take a
+        keyword argument ``dask_scheduler=``, which will be given the scheduler
+        object itself.
+
+        Examples
+        --------
+
+        >>> def get_number_of_tasks(dask_scheduler=None):
+        ...     return len(dask_scheduler.task_state)
+
+        >>> client.run_on_scheduler(get_number_of_tasks)  # doctest: +SKIP
+        100
+
+        See Also
+        --------
+        Client.run: Run a function on all workers
+        Client.start_ipython_scheduler: Start an IPython session on scheduler
+        """
+        return sync(self.loop, self._run_on_scheduler, function, *args,
+                **kwargs)
+
+    @gen.coroutine
     def _run(self, function, *args, **kwargs):
         nanny = kwargs.pop('nanny', False)
         workers = kwargs.pop('workers', None)

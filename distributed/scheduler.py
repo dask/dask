@@ -296,6 +296,7 @@ class Scheduler(Server):
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
                          'start_ipython': self.start_ipython,
+                         'run_function': self.run_function,
                          'update_data': self.update_data}
 
         self.services = {}
@@ -1754,6 +1755,16 @@ class Scheduler(Server):
                 result = out
 
             return result
+
+    def run_function(self, stream, function, args=(), kwargs={}):
+        """ Run a function within this process
+
+        See Also
+        --------
+        Client.run_on_scheduler:
+        """
+        from .worker import run
+        return run(self, stream, function=function, args=args, kwargs=kwargs)
 
     #####################
     # State Transitions #

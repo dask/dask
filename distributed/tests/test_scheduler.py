@@ -19,7 +19,7 @@ from tornado import gen
 
 import pytest
 
-from distributed import Nanny, Worker
+from distributed import Nanny, Worker, Client
 from distributed.core import connect, read, write, close, rpc
 from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
 from distributed.client import _wait, _first_completed
@@ -27,7 +27,7 @@ from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
-        loop, readone, slowinc, slowadd)
+        loop, readone, slowinc, slowadd, cluster, div)
 from distributed.utils import All
 from distributed.utils_test import slow
 from dask.compatibility import apply
@@ -972,3 +972,26 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
     assert s.task_state[z.key] == 'processing'
 
     yield w._close()
+
+
+def test_run_on_scheduler_sync(loop):
+    def f(dask_scheduler=None):
+        return dask_scheduler.address
+
+    with cluster() as (s, [a, b]):
+        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+            address = c.run_on_scheduler(f)
+            ip, port = address.split(':')
+            assert int(port) == int(s['port'])
+
+            with pytest.raises(ZeroDivisionError):
+                c.run_on_scheduler(div, 1, 0)
+
+
+@gen_cluster(client=True)
+def test_run_on_scheduler(c, s, a, b):
+    def f(dask_scheduler=None):
+        return dask_scheduler.address
+
+    response = yield c._run_on_scheduler(f)
+    assert response == s.address
