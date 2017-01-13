@@ -653,7 +653,7 @@ class _GroupBy(object):
 
         name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
         cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
-                                 columns=columns,
+                                 columns=0 if columns is None else columns,
                                  chunk=M.last,
                                  meta=meta,
                                  token=name2)
@@ -676,7 +676,7 @@ class _GroupBy(object):
                                     aggregate, neutral)
             dask[(name, i)] = (_cum_agg_aligned,
                                (cumpart_ext._name, i), (cname, i),
-                               index, columns,
+                               index, 0 if columns is None else columns,
                                aggregate, neutral)
         return new_dd_object(merge(dask, cumpart_ext.dask, cumlast.dask),
                              name, chunk(self._meta), self.obj.divisions)
@@ -700,6 +700,13 @@ class _GroupBy(object):
                                  chunk=M.cumprod,
                                  aggregate=operator.mul,
                                  neutral=1)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def cumcount(self, axis=None):
+        return self._cum_agg('cumcount',
+                             chunk=M.cumcount,
+                             aggregate=_add_plus_one,
+                             neutral=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1):

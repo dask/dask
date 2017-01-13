@@ -976,7 +976,7 @@ def test_groupby_numeric_column():
 
 @pytest.mark.parametrize('sel', ['c', 'd', ['c', 'd']])
 @pytest.mark.parametrize('key', ['a', ['a', 'b']])
-@pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
+@pytest.mark.parametrize('func', ['cumsum', 'cumprod', 'cumcount'])
 def test_cumulative(func, key, sel):
     df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 6,
