@@ -485,3 +485,24 @@ def test_steal_communication_heavy_tasks(c, s, a, b):
     s.extensions['stealing'].balance()
 
     assert s.processing[b.address]
+
+
+@gen_cluster(client=True)
+def test_steal_twice(c, s, a, b):
+    x = c.submit(inc, 1, workers=a.address)
+    yield _wait(x)
+
+    futures = [c.submit(slowadd, x, i, delay=0.2) for i in range(100)]
+
+    while len(s.task_state) < 100:  # tasks are all allocated
+        yield gen.sleep(0.01)
+
+    workers = [Worker(s.ip, s.port, ip=a.ip, loop=s.loop) for _ in range(30)]
+    yield [w._start() for w in workers]  # army of new workers arrives to help
+
+    yield _wait(futures)
+
+    assert all(s.has_what.values())
+    assert max(map(len, s.has_what.values())) < 10
+
+    yield [w._close() for w in workers]

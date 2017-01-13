@@ -160,6 +160,7 @@ class WorkStealing(SchedulerPlugin):
             self.scheduler.rprocessing[key] = thief
             self.scheduler.occupancy[thief] += duration
             self.scheduler.total_occupancy += duration
+            self.put_key_in_stealable(key)
 
             self.scheduler.worker_streams[victim].send({'op': 'release-task',
                                                         'key': key})
