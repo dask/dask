@@ -334,7 +334,7 @@ def _nonempty_index(idx):
         return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        if len(idx.categories) and has_known_categories(idx):
+        if len(idx.categories):
             data = [idx.categories[0]] * 2
             cats = idx.categories
         else:
@@ -392,7 +392,7 @@ def _nonempty_series(s, idx):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
-        if len(s.cat.categories) and has_known_categories(s):
+        if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
             cats = s.cat.categories
         else:

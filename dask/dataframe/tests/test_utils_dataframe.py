@@ -131,7 +131,7 @@ def test_meta_nonempty():
                                        tz='America/New_York')
     assert df3['H'][0] == pd.Timedelta('1', 'ms')
     assert df3['I'][0] == 'foo'
-    assert df3['J'][0] == 'a'
+    assert df3['J'][0] == UNKNOWN_CATEGORIES
 
     s = meta_nonempty(df2['A'])
     assert s.dtype == df2['A'].dtype

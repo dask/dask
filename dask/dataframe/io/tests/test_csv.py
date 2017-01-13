@@ -19,7 +19,7 @@ from dask.async import get_sync
 import dask.dataframe as dd
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from dask.bytes.compression import compress, files as cfiles, seekable_files
@@ -335,6 +335,33 @@ def test_consistent_dtypes_2():
         df = dd.read_csv('foo.*.csv', blocksize=25)
         assert df.name.dtype == object
         assert df.name.compute().dtype == object
+
+
+def test_categorical_dtypes():
+    text1 = normalize_text("""
+    fruit,count
+    apple,10
+    apple,25
+    pear,100
+    orange,15
+    """)
+
+    text2 = normalize_text("""
+    fruit,count
+    apple,200
+    banana,300
+    orange,400
+    banana,10
+    """)
+
+    with filetexts({'foo.1.csv': text1, 'foo.2.csv': text2}):
+        df = dd.read_csv('foo.*.csv', dtype={'fruit': 'category'}, blocksize=25)
+        assert df.fruit.dtype == 'category'
+        assert not has_known_categories(df.fruit)
+        res = df.compute()
+        assert res.fruit.dtype == 'category'
+        assert (sorted(res.fruit.cat.categories) ==
+                ['apple', 'banana', 'orange', 'pear'])
 
 
 @pytest.mark.slow
