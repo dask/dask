@@ -8,8 +8,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .core import (DataFrame, Series, aca, map_partitions, no_default,
-                   split_out_on_index)
+from .core import (DataFrame, Series, aca, map_partitions, merge,
+                   new_dd_object, no_default, split_out_on_index)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
@@ -126,7 +126,7 @@ def _groupby_aggregate(df, aggfunc=None, levels=None):
 
 
 def _apply_chunk(df, *index, **kwargs):
-    func = kwargs.pop('func')
+    func = kwargs.pop('chunk')
     columns = kwargs.pop('columns')
 
     if isinstance(df, pd.Series) or columns is None:
@@ -530,6 +530,18 @@ def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
     return np.sqrt(result)
 
 
+def _cum_agg_aligned(part, cum_last, index, columns, func, neutral):
+    align = cum_last.reindex(part.set_index(index).index, fill_value=neutral)
+    align.index = part.index
+    return func(part[columns], align)
+
+
+def _cum_agg_filled(a, b, func, neutral):
+    union = a.index.union(b.index)
+    return func(a.reindex(union, fill_value=neutral),
+                b.reindex(union, fill_value=neutral))
+
+
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -598,7 +610,8 @@ class _GroupBy(object):
         grouped = sample.groupby(index_meta)
         return _maybe_slice(grouped, self._slice)
 
-    def _aca_agg(self, token, func, aggfunc=None, split_every=None, split_out=1):
+    def _aca_agg(self, token, func, aggfunc=None, split_every=None,
+                 split_out=1):
         if aggfunc is None:
             aggfunc = func
 
@@ -610,11 +623,80 @@ class _GroupBy(object):
 
         return aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
                    chunk=_apply_chunk,
-                   chunk_kwargs=dict(func=func, columns=columns),
+                   chunk_kwargs=dict(chunk=func, columns=columns),
                    aggregate=_groupby_aggregate,
                    meta=meta, token=token, split_every=split_every,
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
                    split_out=split_out, split_out_setup=split_out_on_index)
+
+    def _cum_agg(self, token, chunk, aggregate, neutral, skipna=True,
+                 chunk_kwargs=None):
+        """ Wrapper for cumulative groupby operation """
+        meta = chunk(self._meta)
+        columns = meta.name if isinstance(meta, pd.Series) else meta.columns
+        index = self.index if isinstance(self.index, list) else [self.index]
+
+        # cumulate each partitions
+        name1 = '{0}{1}-map'.format(self._token_prefix, token)
+        cumpart_raw = map_partitions(_apply_chunk, self.obj, *index,
+                                     chunk=chunk,
+                                     columns=columns,
+                                     token=name1,
+                                     meta=meta,
+                                     **chunk_kwargs)
+        cumpart_ext = (cumpart_raw.to_frame()
+                       if isinstance(meta, pd.Series)
+                       else cumpart_raw).assign(**{i: self.obj[i]
+                                                   for i in index})
+
+        name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
+        cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
+                                 skipna=skipna,
+                                 columns=columns,
+                                 chunk=M.last,
+                                 meta=meta,
+                                 token=name2)
+
+        name = '{0}{1}'.format(self._token_prefix, token)
+        cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+
+        # aggregate cumulated partisions and its previous last element
+        dask = {}
+        dask[(name, 0)] = (cumpart_raw._name, 0)
+
+        for i in range(1, self.obj.npartitions):
+            # store each cumulative step to graph to reduce computation
+            if i == 1:
+                dask[(cname, i)] = (cumlast._name, i - 1)
+            else:
+                # aggregate with previous cumulation results
+                dask[(cname, i)] = (_cum_agg_filled,
+                                    (cname, i - 1), (cumlast._name, i - 1),
+                                    aggregate, neutral)
+            dask[(name, i)] = (_cum_agg_aligned,
+                               (cumpart_ext._name, i), (cname, i),
+                               index, columns,
+                               aggregate, neutral)
+        return new_dd_object(merge(dask, cumpart_ext.dask, cumlast.dask),
+                             name, chunk(self._meta), self.obj.divisions)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def cumsum(self, skipna=True):
+        return self._cum_agg('cumsum',
+                             chunk=M.cumsum,
+                             aggregate=operator.add,
+                             neutral=0,
+                             skipna=skipna,
+                             chunk_kwargs=dict(skipna=skipna))
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def cumprod(self, axis=None, skipna=True):
+        return self._cum_agg('cumprod',
+                             chunk=M.cumprod,
+                             aggregate=operator.mul,
+                             neutral=1,
+                             skipna=skipna,
+                             chunk_kwargs=dict(skipna=skipna))
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1):

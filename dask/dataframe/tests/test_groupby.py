@@ -971,3 +971,21 @@ def test_groupby_numeric_column():
 
     assert_eq(ddf.groupby(ddf.A)[0].sum(),
               df.groupby(df.A)[0].sum())
+
+
+@pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
+@pytest.mark.parametrize('key', ['a', ['a', 'b']])
+@pytest.mark.parametrize('sel', ['d', ['c', 'd'], None])
+def test_cumulative(func, key, sel):
+    df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
+                       'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 6,
+                       'c': np.random.randn(54),
+                       'd': np.random.randn(54)},
+                      columns=['a', 'b', 'c', 'd'])
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    g, dg = [d.groupby(key) for d in (df, ddf)]
+    if sel:
+        g, dg = g[sel], dg[sel]
+
+    assert_eq(getattr(g, func)(), getattr(dg, func)())
