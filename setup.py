@@ -7,7 +7,7 @@ import versioneer
 extras_require = {
   'array': ['numpy', 'toolz >= 0.7.2'],
   'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.2', 'partd >= 0.3.7'],
-  'dataframe': ['numpy', 'pandas >= 0.18.0', 'toolz >= 0.7.2',
+  'dataframe': ['numpy', 'pandas >= 0.19.0', 'toolz >= 0.7.2',
                 'partd >= 0.3.7', 'cloudpickle >= 0.2.1'],
   'distributed': ['distributed >= 1.15', 's3fs >= 0.0.8'],
   'imperative': ['toolz >= 0.7.2'],

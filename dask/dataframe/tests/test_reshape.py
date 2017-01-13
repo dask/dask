@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -6,7 +5,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import assert_eq, PANDAS_ge_0190, make_meta
+from dask.dataframe.utils import assert_eq, make_meta
 
 
 @pytest.mark.parametrize('data', [
@@ -121,11 +120,7 @@ def test_pivot_table(aggfunc):
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
 
-    if PANDAS_ge_0190:
-        assert_eq(res, exp)
-    else:
-        # because of a pandas 0.18.x bug, categorical dtype is not preserved
-        assert_eq(res, exp, check_names=False, check_column_type=False)
+    assert_eq(res, exp)
 
     # method
     res = ddf.pivot_table(index='A', columns='C', values='B',
@@ -135,11 +130,7 @@ def test_pivot_table(aggfunc):
     if aggfunc == 'count':
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
-    if PANDAS_ge_0190:
-        assert_eq(res, exp)
-    else:
-        # because of a pandas 0.18.x bug, categorical dtype is not preserved
-        assert_eq(res, exp, check_names=False, check_column_type=False)
+    assert_eq(res, exp)
 
 
 def test_pivot_table_dtype():
@@ -158,11 +149,7 @@ def test_pivot_table_dtype():
     exp = pd.pivot_table(df, index='A', columns='B',
                          values='C', aggfunc='count').astype(np.float64)
 
-    if PANDAS_ge_0190:
-        assert_eq(res, exp)
-    else:
-        # because of a pandas 0.18.x bug, categorical dtype is not preserved
-        assert_eq(res, exp, check_names=False, check_column_type=False)
+    assert_eq(res, exp)
 
 
 def test_pivot_table_errors():

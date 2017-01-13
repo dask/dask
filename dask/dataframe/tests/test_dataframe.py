@@ -2187,12 +2187,7 @@ def test_sorted_index_single_partition():
 def test_info():
     from io import StringIO
     from dask.compatibility import unicode
-
-    # TODO This should be fixed in pandas 0.18.2
-    if pd.__version__ == '0.18.0':
-        from pandas.core import format
-    else:
-        from pandas.formats import format
+    from pandas.formats import format
     format._put_lines = put_lines
 
     test_frames = [
@@ -2233,12 +2228,7 @@ def test_categorize_info():
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
     from dask.compatibility import unicode
-
-    # TODO This should be fixed in pandas 0.18.2
-    if pd.__version__ == '0.18.0':
-        from pandas.core import format
-    else:
-        from pandas.formats import format
+    from pandas.formats import format
     format._put_lines = put_lines
 
     df = pd.DataFrame({'x': [1, 2, 3, 4],

@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from distutils.version import LooseVersion
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -1206,13 +1205,8 @@ class _Frame(Base):
             if isinstance(q, list):
                 # Not supported, the result will have current index as columns
                 raise ValueError("'q' must be scalar when axis=1 is specified")
-            if LooseVersion(pd.__version__) >= '0.19':
-                name = q
-            else:
-                name = None
-            meta = pd.Series([], dtype='f8', name=name)
             return map_partitions(M.quantile, self, q, axis,
-                                  token=keyname, meta=meta)
+                                  token=keyname, meta=(q, 'f8'))
         else:
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()

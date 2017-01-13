@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 from pandas.core.common import is_datetime64tz_dtype
+from pandas.api.types import is_categorical_dtype, is_scalar
 import toolz
 
 from ..core import get_deps
@@ -20,13 +21,6 @@ from ..async import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
-if PANDAS_VERSION >= '0.19.0':
-    PANDAS_ge_0190 = True
-    from pandas.api.types import is_categorical_dtype, is_scalar       # noqa
-else:
-    PANDAS_ge_0190 = False
-    from pandas.core.common import is_categorical_dtype                # noqa
-    is_scalar = pd.lib.isscalar                                        # noqa
 
 
 def shard_df_on_index(df, divisions):
