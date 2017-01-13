@@ -542,6 +542,10 @@ def _cum_agg_filled(a, b, func, neutral):
                 b.reindex(union, fill_value=neutral))
 
 
+def _add_plus_one(a, b):
+    return a + b + 1
+
+
 class _GroupBy(object):
     """ Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -629,8 +633,7 @@ class _GroupBy(object):
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
                    split_out=split_out, split_out_setup=split_out_on_index)
 
-    def _cum_agg(self, token, chunk, aggregate, neutral, skipna=True,
-                 chunk_kwargs=None):
+    def _cum_agg(self, token, chunk, aggregate, neutral):
         """ Wrapper for cumulative groupby operation """
         meta = chunk(self._meta)
         columns = meta.name if isinstance(meta, pd.Series) else meta.columns
@@ -642,8 +645,7 @@ class _GroupBy(object):
                                      chunk=chunk,
                                      columns=columns,
                                      token=name1,
-                                     meta=meta,
-                                     **chunk_kwargs)
+                                     meta=meta)
         cumpart_ext = (cumpart_raw.to_frame()
                        if isinstance(meta, pd.Series)
                        else cumpart_raw).assign(**{i: self.obj[i]
@@ -651,7 +653,6 @@ class _GroupBy(object):
 
         name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
         cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
-                                 skipna=skipna,
                                  columns=columns,
                                  chunk=M.last,
                                  meta=meta,
@@ -681,22 +682,24 @@ class _GroupBy(object):
                              name, chunk(self._meta), self.obj.divisions)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumsum(self, skipna=True):
-        return self._cum_agg('cumsum',
-                             chunk=M.cumsum,
-                             aggregate=operator.add,
-                             neutral=0,
-                             skipna=skipna,
-                             chunk_kwargs=dict(skipna=skipna))
+    def cumsum(self, axis=0):
+        if axis:
+            return self.obj.cumsum(axis=axis)
+        else:
+            return self._cum_agg('cumsum',
+                                 chunk=M.cumsum,
+                                 aggregate=operator.add,
+                                 neutral=0)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumprod(self, axis=None, skipna=True):
-        return self._cum_agg('cumprod',
-                             chunk=M.cumprod,
-                             aggregate=operator.mul,
-                             neutral=1,
-                             skipna=skipna,
-                             chunk_kwargs=dict(skipna=skipna))
+    def cumprod(self, axis=0):
+        if axis:
+            return self.obj.cumprod(axis=axis)
+        else:
+            return self._cum_agg('cumprod',
+                                 chunk=M.cumprod,
+                                 aggregate=operator.mul,
+                                 neutral=1)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1):

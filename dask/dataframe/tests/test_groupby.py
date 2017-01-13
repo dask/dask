@@ -5,6 +5,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 import pytest
+from distutils.version import LooseVersion
 
 import dask
 import dask.dataframe as dd
@@ -973,19 +974,30 @@ def test_groupby_numeric_column():
               df.groupby(df.A)[0].sum())
 
 
-@pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
+@pytest.mark.parametrize('sel', ['c', 'd', ['c', 'd']])
 @pytest.mark.parametrize('key', ['a', ['a', 'b']])
-@pytest.mark.parametrize('sel', ['d', ['c', 'd'], None])
+@pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
 def test_cumulative(func, key, sel):
     df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 6,
                        'c': np.random.randn(54),
                        'd': np.random.randn(54)},
                       columns=['a', 'b', 'c', 'd'])
+    df.d.iloc[-18, -12, -6] = np.nan
     ddf = dd.from_pandas(df, npartitions=10)
 
-    g, dg = [d.groupby(key) for d in (df, ddf)]
-    if sel:
-        g, dg = g[sel], dg[sel]
-
+    g, dg = [d.groupby(key)[sel] for d in (df, ddf)]
     assert_eq(getattr(g, func)(), getattr(dg, func)())
+
+
+@pytest.mark.skipif(LooseVersion(pd.__version__) < '0.19',
+                    reason="pandas-0.18 grp.cumsum(axis=1) seems to cumprod")
+@pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
+def test_cumulative_axis1(func):
+    df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
+                       'b': np.random.randn(18),
+                       'c': np.random.randn(18)})
+    df.b.iloc[-6] = np.nan
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert_eq(getattr(df.groupby('a'), func)(axis=1),
+              getattr(ddf.groupby('a'), func)(axis=1))
