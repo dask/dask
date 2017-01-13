@@ -22,6 +22,10 @@ install:
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
   - conda update conda
+  - git clone -b pull/4297/head --single-branch --depth 1000 https://github.com/conda/conda.git
+  - pushd conda
+  - $HOME/miniconda/bin/python setup.py install
+  - popd
 
   # Install dependencies
   - conda create -n test-environment python=$PYTHON
