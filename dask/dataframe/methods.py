@@ -139,6 +139,10 @@ def size(x):
     return x.size
 
 
+def cat_categories(x):
+    return x.cat.categories
+
+
 def sample(df, state, frac, replace):
     rs = np.random.RandomState(state)
     return df.sample(random_state=rs, frac=frac, replace=replace)

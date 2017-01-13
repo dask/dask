@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import pandas as pd
 
+from ..base import compute
+from ..utils import M
+from . import methods
 from .core import Series, map_partitions, partial
-from .utils import has_known_categories
+from .utils import has_known_categories, clear_known_categories
 
 
 class Accessor(object):
@@ -151,6 +154,37 @@ class CategoricalAccessor(Accessor):
     @staticmethod
     def call(obj, attr, *args, **kwargs):
         return getattr(obj.cat, attr)(*args, **kwargs)
+
+    @property
+    def known(self):
+        """Whether the categories are fully known"""
+        return has_known_categories(self._series)
+
+    def as_known(self, **kwargs):
+        """Ensure the categories in this series are known.
+
+        If the categories are known, this is a no-op. If unknown, the
+        categories are computed, and a new series with known categories is
+        returned.
+
+        Parameters
+        ----------
+        kwargs
+            Keywords to pass on to the call to `compute`.
+        """
+        if self.known:
+            return self
+        categories = self._series.reduction(methods.cat_categories, M.unique)
+        categories = compute(categories, **kwargs)[0]
+        return self.set_categories(categories)
+
+    def as_unknown(self):
+        """Ensure the categories in this series are unknown"""
+        if not self.known:
+            return self._series
+        out = self._series.copy()
+        out._meta = clear_known_categories(out._meta)
+        return out
 
     @property
     def categories(self):

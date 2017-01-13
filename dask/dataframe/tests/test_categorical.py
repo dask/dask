@@ -216,10 +216,18 @@ class TestCategoricalAccessor:
     def test_unknown_categories(self):
         a = pd.Series(pd.Categorical(['a', 'b', 'c', 'b', 'c'], list('abc')))
         da = dd.from_pandas(a, npartitions=2)
-        da._meta = make_meta((None, 'category'))
+        assert da.cat.known
+        da = da.cat.as_unknown()
+        assert not da.cat.known
 
         with pytest.raises(NotImplementedError):
             da.cat.categories
 
         db = da.cat.set_categories(['a', 'b', 'c'])
+        assert db.cat.known
         tm.assert_index_equal(db.cat.categories, a.cat.categories)
+
+        db = da.cat.as_known()
+        assert db.cat.known
+        res = db.compute()
+        tm.assert_index_equal(db.cat.categories, res.cat.categories)
