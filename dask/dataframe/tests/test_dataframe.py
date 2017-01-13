@@ -2100,6 +2100,22 @@ def test_astype():
     assert_eq(a.x.astype(float), df.x.astype(float))
 
 
+def test_astype_categoricals():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'b', 'c'],
+                       'y': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, 2)
+
+    ddf2 = ddf.astype({'x': 'category'})
+    assert not ddf2.x.cat.known
+    assert ddf2.x.dtype == 'category'
+    assert ddf2.compute().x.dtype == 'category'
+
+    dx = ddf.x.astype('category')
+    assert not dx.cat.known
+    assert dx.dtype == 'category'
+    assert dx.compute().dtype == 'category'
+
+
 def test_groupby_callable():
     a = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
                      index=[1, 2, 3, 4])

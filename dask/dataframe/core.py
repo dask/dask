@@ -30,7 +30,7 @@ from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
-                    raise_on_meta_error)
+                    raise_on_meta_error, clear_known_categories)
 from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
@@ -1339,8 +1339,9 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
-        return self.map_partitions(M.astype, dtype=dtype,
-                                   meta=self._meta.astype(dtype))
+        meta = self._meta.astype(dtype)
+        meta = clear_known_categories(meta)
+        return self.map_partitions(M.astype, dtype=dtype, meta=meta)
 
     @derived_from(pd.Series)
     def append(self, other):
