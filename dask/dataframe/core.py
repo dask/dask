@@ -1424,7 +1424,7 @@ class _Frame(Base):
 
         offset = pd.tseries.frequencies.to_offset(offset)
         date = self.divisions[0] + offset
-        end = self.loc._partition_of_index_value(date)
+        end = self.loc._get_partitions(date)
 
         include_right = offset.isAnchored() or not hasattr(offset, '_inc')
 
@@ -1449,7 +1449,7 @@ class _Frame(Base):
 
         offset = pd.tseries.frequencies.to_offset(offset)
         date = self.divisions[-1] - offset
-        start = self.loc._partition_of_index_value(date)
+        start = self.loc._get_partitions(date)
 
         if start == 0:
             divs = self.divisions
