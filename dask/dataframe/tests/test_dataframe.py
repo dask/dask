@@ -2836,7 +2836,7 @@ def test_setitem_series_mutation():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [2, 3, 4, 5]},
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
-    ddf = dd.from_pandas(df, 2)
+    ddf = dd.from_pandas(df.copy(), 2)
 
     ddf.x[ddf.y % 2 == 0] = 'x'
     df.x[df.y % 2 == 0] = 'x'
