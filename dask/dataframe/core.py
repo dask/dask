@@ -1630,6 +1630,18 @@ class Series(_Frame):
                           self._meta, self.divisions)
         raise NotImplementedError()
 
+    def __setitem__(self, index, value):
+        if isinstance(index, Series):
+            new = self.where(index, value)
+            self._meta = new._meta
+            self.divisions = new.divisions
+            self._name = new._name
+            self.dask = new.dask
+            return self
+        else:
+            msg = "Item assignment with %s is not supported" % type(index)
+            raise NotImplementedError(msg)
+
     @derived_from(pd.DataFrame)
     def _get_numeric_data(self, how='any', subset=None):
         return self
@@ -1912,6 +1924,9 @@ class Index(Series):
 
     def __array_wrap__(self, array, context=None):
         return pd.Index(array, name=self.name)
+
+    def __setitem__(self, index, value):
+        raise NotImplementedError("Index does not support mutable operations")
 
     def head(self, n=5, compute=True):
         """ First n items of the Index.
