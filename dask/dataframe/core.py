@@ -1665,9 +1665,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return {None: 0, 'index': 0}.get(axis, axis)
 
     @derived_from(pd.Series)
-    def groupby(self, index, **kwargs):
+    def groupby(self, by=None, **kwargs):
         from dask.dataframe.groupby import SeriesGroupBy
-        return SeriesGroupBy(self, index, **kwargs)
+        return SeriesGroupBy(self, by=by, **kwargs)
 
     @derived_from(pd.Series)
     def count(self, split_every=False):
@@ -2245,9 +2245,9 @@ class DataFrame(_Frame):
                    n=n, columns=columns)
 
     @derived_from(pd.DataFrame)
-    def groupby(self, key, **kwargs):
+    def groupby(self, by=None, **kwargs):
         from dask.dataframe.groupby import DataFrameGroupBy
-        return DataFrameGroupBy(self, key, **kwargs)
+        return DataFrameGroupBy(self, by=by, **kwargs)
 
     def categorize(self, columns=None, index=None, **kwargs):
         """Convert columns of the DataFrame to category dtype.
@@ -2650,18 +2650,20 @@ class DataFrame(_Frame):
             computations.update({'memory_usage': self.map_partitions(M.memory_usage, index=True)})
         computations = dict(zip(computations.keys(), da.compute(*computations.values())))
 
-        column_template = "{0:<%d} {1}" % (self.columns.str.len().max() + 5)
-
         if verbose:
             index = computations['index']
             counts = computations['count']
             lines.append(index.summary())
-            column_template = column_template.format('{0}', '{1} non-null {2}')
-            column_info = [column_template.format(*x) for x in zip(self.columns, counts, self.dtypes)]
-        else:
-            column_info = [column_template.format(*x) for x in zip(self.columns, self.dtypes)]
+            lines.append('Data columns (total {} columns):'.format(len(self.columns)))
 
-        lines.append('Data columns (total {} columns):'.format(len(self.columns)))
+            from pandas.formats.printing import pprint_thing
+            space = max([len(pprint_thing(k)) for k in self.columns]) + 3
+            column_template = '{!s:<%d} {} non-null {}' % space
+            column_info = [column_template.format(pprint_thing(x[0]), x[1], x[2])
+                           for x in zip(self.columns, counts, self.dtypes)]
+        else:
+            column_info = [self.columns.summary(name='Columns')]
+
         lines.extend(column_info)
         dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems(), key=str)]
         lines.append('dtypes: {}'.format(', '.join(dtype_counts)))

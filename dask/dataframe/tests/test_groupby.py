@@ -965,6 +965,38 @@ def test_split_out_multi_column_groupby():
     assert_eq(result, expected, check_dtype=False)
 
 
+def test_groupby_split_out_num():
+    # GH 1841
+    ddf = dd.from_pandas(pd.DataFrame({'A': [1, 1, 2, 2],
+                                       'B': [1, 2, 3, 4]}),
+                         npartitions=2)
+    assert ddf.groupby('A').sum().npartitions == 1
+    assert ddf.groupby('A').sum(split_out=2).npartitions == 2
+    assert ddf.groupby('A').sum(split_out=3).npartitions == 3
+
+    with pytest.raises(TypeError):
+        # groupby doesn't adcept split_out
+        ddf.groupby('A', split_out=2)
+
+
+def test_groupby_not_supported():
+    ddf = dd.from_pandas(pd.DataFrame({'A': [1, 1, 2, 2],
+                                       'B': [1, 2, 3, 4]}),
+                         npartitions=2)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', axis=1)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', level=1)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', as_index=False)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', sort=False)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', group_keys=False)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby('A', squeeze=True)
+
+
 def test_groupby_numeric_column():
     df = pd.DataFrame({'A' : ['foo', 'foo', 'bar'], 0: [1,2,3]})
     ddf = dd.from_pandas(df, npartitions=3)

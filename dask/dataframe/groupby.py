@@ -600,17 +600,64 @@ class _GroupBy(object):
 
     obj: DataFrame or Series
         DataFrame or Series to be grouped
-    index: str, list or Series
+    by: str, list or Series
         The key for grouping
+    slice: str, list
+        The slice keys applied to GroupBy result
+    axis: int
+        Not supported
+    level: int, level name, or sequence of such, default None
+        Not supported
+    as_index: bool, default True
+        Not supported, the returned objects always have group
+        labels as the index
+    sort: bool, default True
+        Not supported
+    group_keys: bool, default True
+        Not supported
+    squeeze: bool, default False
+        Not supported
     kwargs: dict
         Other keywords passed to groupby
     """
-    def __init__(self, df, index=None, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None, axis=0, level=None,
+                 as_index=True, sort=True, group_keys=True,
+                 squeeze=False, **kwargs):
+
+        if axis != 0:
+            msg = ("The keyword argument `axis` is not supported in "
+                   ".groupby")
+            raise NotImplementedError(msg)
+
+        if level is not None:
+            msg = ("The keyword argument `level` is not supported in "
+                   ".groupby")
+            raise NotImplementedError(msg)
+
+        if as_index is not True:
+            msg = ("The keyword argument `as_index=False` is not supported in "
+                   "dask.groupby")
+            raise NotImplementedError(msg)
+
+        if sort is not True:
+            msg = ("The keyword argument `sort` is not supported in "
+                   "dask.groupby")
+            raise NotImplementedError(msg)
+
+        if group_keys is not True:
+            msg = ("The keyword argument `group_keys` is not supported in "
+                   "dask.groupby")
+            raise NotImplementedError(msg)
+
+        if squeeze is not False:
+            msg = ("The keyword argument `squeeze` is not supported in "
+                   "dask.groupby")
+            raise NotImplementedError(msg)
+
         assert isinstance(df, (DataFrame, Series))
         self.obj = df
-
         # grouping key passed via groupby method
-        self.index = _normalize_index(df, index)
+        self.index = _normalize_index(df, by)
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
@@ -979,22 +1026,21 @@ class DataFrameGroupBy(_GroupBy):
 
     _token_prefix = 'dataframe-groupby-'
 
-    def __init__(self, df, index=None, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None, axis=0, level=None,
+                 as_index=True, sort=True, group_keys=True, squeeze=False):
 
-        if not kwargs.get('as_index', True):
-            msg = ("The keyword argument `as_index=False` is not supported in "
-                   "dask.dataframe.groupby")
-            raise NotImplementedError(msg)
-
-        super(DataFrameGroupBy, self).__init__(df, index=index,
-                                               slice=slice, **kwargs)
+        super(DataFrameGroupBy, self).__init__(df, by=by, slice=slice,
+                                               axis=axis, level=level,
+                                               as_index=as_index, sort=sort,
+                                               group_keys=group_keys,
+                                               squeeze=squeeze)
 
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, index=self.index,
+            g = DataFrameGroupBy(self.obj, by=self.index,
                                  slice=key, **self.kwargs)
         else:
-            g = SeriesGroupBy(self.obj, index=self.index,
+            g = SeriesGroupBy(self.obj, by=self.index,
                               slice=key, **self.kwargs)
 
         # error is raised from pandas
@@ -1027,25 +1073,30 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, index, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None, axis=0, level=None,
+                 as_index=True, sort=True, group_keys=True, squeeze=False):
         # for any non series object, raise pandas-compat error message
+
         if isinstance(df, Series):
-            if isinstance(index, Series):
+            if isinstance(by, Series):
                 pass
-            elif isinstance(index, list):
-                if len(index) == 0:
+            elif isinstance(by, list):
+                if len(by) == 0:
                     raise ValueError("No group keys passed!")
 
-                non_series_items = [item for item in index
+                non_series_items = [item for item in by
                                     if not isinstance(item, Series)]
                 # raise error from pandas, if applicable
                 df._meta.groupby(non_series_items)
             else:
                 # raise error from pandas, if applicable
-                df._meta.groupby(index)
+                df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, index=index,
-                                            slice=slice, **kwargs)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice,
+                                            axis=axis, level=level,
+                                            as_index=as_index, sort=sort,
+                                            group_keys=group_keys,
+                                            squeeze=squeeze)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
