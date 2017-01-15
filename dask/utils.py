@@ -800,15 +800,23 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "url_query": "q=1", "extra": "value"}
     """
     # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:\\', urlpath):
+    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
         return {'protocol': 'file',
                 'path': urlpath}
 
     parsed_path = urlsplit(urlpath)
+    protocol = parsed_path.scheme or 'file'
+    path = parsed_path.path
+    if protocol == 'file':
+        # Special case parsing file protocol URL on Windows according to:
+        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        if windows_path:
+            path = '%s:%s' % windows_path.groups()
 
     inferred_storage_options = {
-        'protocol': parsed_path.scheme or 'file',
-        'path': parsed_path.path,
+        'protocol': protocol,
+        'path': path,
     }
 
     if parsed_path.netloc:
