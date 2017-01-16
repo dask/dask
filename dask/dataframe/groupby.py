@@ -539,11 +539,11 @@ def _cum_agg_aligned(part, cum_last, index, columns, func, neutral):
 def _cum_agg_filled(a, b, func, neutral):
     union = a.index.union(b.index)
     return func(a.reindex(union, fill_value=neutral),
-                b.reindex(union, fill_value=neutral))
+                b.reindex(union, fill_value=neutral), fill_value=neutral)
 
 
-def _add_plus_one(a, b):
-    return a + b + 1
+def _add_plus_one(a, b, fill_value=None):
+    return a.add(b, fill_value=fill_value) + 1
 
 
 class _GroupBy(object):
@@ -688,7 +688,7 @@ class _GroupBy(object):
         else:
             return self._cum_agg('cumsum',
                                  chunk=M.cumsum,
-                                 aggregate=operator.add,
+                                 aggregate=M.add,
                                  neutral=0)
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -698,7 +698,7 @@ class _GroupBy(object):
         else:
             return self._cum_agg('cumprod',
                                  chunk=M.cumprod,
-                                 aggregate=operator.mul,
+                                 aggregate=M.mul,
                                  neutral=1)
 
     @derived_from(pd.core.groupby.GroupBy)

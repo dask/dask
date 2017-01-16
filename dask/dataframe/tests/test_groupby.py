@@ -983,7 +983,7 @@ def test_cumulative(func, key, sel):
                        'c': np.random.randn(54),
                        'd': np.random.randn(54)},
                       columns=['a', 'b', 'c', 'd'])
-    df.d.iloc[-18, -12, -6] = np.nan
+    df.iloc[[-18, -12, -6], -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=10)
 
     g, dg = [d.groupby(key)[sel] for d in (df, ddf)]
@@ -997,7 +997,7 @@ def test_cumulative_axis1(func):
     df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
                        'b': np.random.randn(18),
                        'c': np.random.randn(18)})
-    df.b.iloc[-6] = np.nan
-    ddf = dd.from_pandas(df, npartitions=3)
+    df.iloc[-6, -1] = np.nan
+    ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(getattr(df.groupby('a'), func)(axis=1),
               getattr(ddf.groupby('a'), func)(axis=1))
