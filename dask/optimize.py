@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from itertools import count
 from operator import getitem
 
-from .compatibility import zip_longest
+from .compatibility import unicode, zip_longest
 
 from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
@@ -133,10 +133,36 @@ def fuse(dsk, keys=None, dependencies=None):
 
     dependencies = dict((k, set(v)) for k, v in dependencies.items())
 
+    # TODO: perhaps make `renamed_fused_task` a keyword parameter
+    try:
+        from distributed.utils import key_split
+    except ImportError:
+        rename_fused_task = None
+    else:
+        def rename_fused_task(keys):
+            if isinstance(keys[0], (str, unicode)):
+                names = [key_split(x) for x in keys[:0:-1]]
+                names.append(keys[0])
+                return '-'.join(names)
+            elif (
+                isinstance(keys[0], tuple) and len(keys[0]) > 0
+                and isinstance(keys[0][0], (str, unicode))
+            ):
+                names = [key_split(x) for x in keys[:0:-1]]
+                names.append(keys[0][0])
+                return ('-'.join(names),) + keys[0][1:]
+            else:
+                return None
+
     # create a new dask with fused chains
     rv = {}
     fused = set()
+    aliases = set()
+    is_renamed = False
     for chain in chains:
+        if rename_fused_task is not None:
+            new_key_name = rename_fused_task(chain)
+            is_renamed = new_key_name is not None and new_key_name not in dsk
         child = chain.pop()
         val = dsk[child]
         while chain:
@@ -147,11 +173,28 @@ def fuse(dsk, keys=None, dependencies=None):
             fused.add(child)
             child = parent
         fused.add(child)
-        rv[child] = val
-
+        if is_renamed:
+            rv[new_key_name] = val
+            rv[child] = new_key_name
+            dependencies[new_key_name] = dependencies[child]
+            dependencies[child] = {new_key_name}
+            aliases.add(child)
+        else:
+            rv[child] = val
     for key, val in dsk.items():
         if key not in fused:
             rv[key] = val
+    if aliases:
+        rv = inline(rv, keys=aliases, inline_constants=False,
+                    dependencies=dependencies)
+        for deps in dependencies.values():
+            renamed = deps & aliases
+            if renamed:
+                deps.update(rv[key] for key in renamed)
+                deps.difference_update(renamed)
+        for key in aliases:
+            del rv[key]
+            del dependencies[key]
     return rv, dependencies
 
 
