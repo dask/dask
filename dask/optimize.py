@@ -203,9 +203,6 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
             if renamed:
                 deps.update(rv[key] for key in renamed)
                 deps -= renamed
-        for key in aliases:
-            del rv[key]
-            del dependencies[key]
     return rv, dependencies
 
 
