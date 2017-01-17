@@ -676,27 +676,27 @@ hex_pattern = re.compile('[a-f]+')
 def key_split(s):
     """
     >>> key_split('x')
-    'x'
+    u'x'
     >>> key_split('x-1')
-    'x'
+    u'x'
     >>> key_split('x-1-2-3')
-    'x'
+    u'x'
     >>> key_split(('x-2', 1))
     'x'
     >>> key_split("('x-2', 1)")
-    'x'
+    u'x'
     >>> key_split('hello-world-1')
-    'hello-world'
+    u'hello-world'
     >>> key_split(b'hello-world-1')
-    'hello-world'
+    u'hello-world'
     >>> key_split('ae05086432ca935f6eba409a8ecd4896')
     'data'
     >>> key_split('<module.submodule.myclass object at 0xdaf372')
-    'myclass'
+    u'myclass'
     >>> key_split(None)
     'Other'
     >>> key_split('x-abcdefab')  # ignores hex
-    'x'
+    u'x'
     """
     if type(s) is bytes:
         s = s.decode()
