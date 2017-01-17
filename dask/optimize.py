@@ -101,8 +101,11 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
+    {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
+    >>> dsk, dependencies = fuse(d, rename_fused_keys=False)
+    >>> dsk # doctest: +SKIP
     {'c': (inc, (inc, 1))}
-    >>> dsk, dependencies = fuse(d, keys=['b'])
+    >>> dsk, dependencies = fuse(d, keys=['b'], rename_fused_keys=False)
     >>> dsk  # doctest: +SKIP
     {'b': (inc, 1), 'c': (inc, 'b')}
 
