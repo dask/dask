@@ -72,7 +72,7 @@ def test_fuse():
         'b': 2,
     }
     assert dependencies == {'a': set(), 'b': set(), 'y': set(['a', 'b']),
-                           'w': set(['y']), 'NEW': set(['y'])}
+                            'w': set(['y']), 'NEW': set(['y'])}
 
     dsk, dependencies = fuse(d, rename_fused_keys=True)
     assert dsk == {

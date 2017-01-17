@@ -65,8 +65,8 @@ def default_fused_keys_renamer(keys):
         names.append(keys[0])
         return '-'.join(names)
     elif (
-        isinstance(keys[0], tuple) and len(keys[0]) > 0
-        and isinstance(keys[0][0], (str, unicode))
+        isinstance(keys[0], tuple) and len(keys[0]) > 0 and
+        isinstance(keys[0][0], (str, unicode))
     ):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
@@ -172,8 +172,8 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     for chain in chains:
         if key_renamer is not None:
             new_key = key_renamer(chain)
-            is_renamed = (new_key is not None and new_key not in dsk
-                          and new_key not in rv)
+            is_renamed = (new_key is not None and new_key not in dsk and
+                          new_key not in rv)
         child = chain.pop()
         val = dsk[child]
         while chain:
@@ -720,5 +720,5 @@ def key_split(s):
             if result[0] == '<':
                 result = result.strip('<>').split()[0].split('.')[-1]
             return result
-    except:
+    except Exception:
         return 'Other'
