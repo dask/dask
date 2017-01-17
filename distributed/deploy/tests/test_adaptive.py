@@ -60,8 +60,10 @@ def test_adaptive_local_cluster_multi_workers():
         assert time() < start + 5
 
     assert not cluster.workers
+    assert not cluster.scheduler.workers
     yield gen.sleep(0.2)
     assert not cluster.workers
+    assert not cluster.scheduler.workers
 
     futures = c.map(slowinc, range(100), delay=0.01)
     yield c._gather(futures)

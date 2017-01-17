@@ -1599,7 +1599,8 @@ class Scheduler(Server):
             return to_close
 
     @gen.coroutine
-    def retire_workers(self, stream=None, workers=None, remove=True):
+    def retire_workers(self, stream=None, workers=None, remove=True,
+                       close=False):
         with log_errors():
             if workers is None:
                 while True:
@@ -1626,6 +1627,9 @@ class Scheduler(Server):
             if remove:
                 for w in workers:
                     self.remove_worker(address=w, safe=True)
+            if close and workers:
+                yield [self.close_worker(w) for w in workers]
+
             raise gen.Return(list(workers))
 
     def add_keys(self, stream=None, worker=None, keys=()):
