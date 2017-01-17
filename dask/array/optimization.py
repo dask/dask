@@ -10,7 +10,8 @@ from ..optimize import cull, fuse, inline_functions
 
 
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
-             inline_functions_fast_functions=None, **kwargs):
+             inline_functions_fast_functions=None, rename_fused_keys=True,
+             **kwargs):
     """ Optimize dask for array computation
 
     1.  Cull tasks not necessary to evaluate keys
@@ -26,7 +27,8 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
                                            np.transpose}
 
     dsk2, dependencies = cull(dsk, keys)
-    dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies)
+    dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
+                              rename_fused_keys=rename_fused_keys)
     dsk5 = optimize_slices(dsk4)
     dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
                             fast_functions=inline_functions_fast_functions)

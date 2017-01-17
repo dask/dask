@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from importlib import import_module
 from threading import Lock
 import multiprocessing as mp
-from .import multiprocessing
+from . import multiprocessing
 import uuid
 from weakref import WeakValueDictionary
 
@@ -25,6 +25,7 @@ from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
                             urlsplit, unicode)
 from .core import get_deps
 from .context import _globals
+from .optimize import key_split
 
 
 system_encoding = sys.getdefaultencoding()

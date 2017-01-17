@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 from itertools import count
 from operator import getitem
 
@@ -57,7 +58,24 @@ def cull(dsk, keys):
     return out, dependencies
 
 
-def fuse(dsk, keys=None, dependencies=None):
+def default_fused_keys_renamer(keys):
+    """Create new keys for fused tasks"""
+    if isinstance(keys[0], (str, unicode)):
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0])
+        return '-'.join(names)
+    elif (
+        isinstance(keys[0], tuple) and len(keys[0]) > 0
+        and isinstance(keys[0][0], (str, unicode))
+    ):
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0][0])
+        return ('-'.join(names),) + keys[0][1:]
+    else:
+        return None
+
+
+def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
@@ -71,6 +89,12 @@ def fuse(dsk, keys=None, dependencies=None):
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
+    rename_fused_keys: bool or func, optional
+        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        func is also accepted, ``new_key = rename_fused_keys(fused_key_list)``.
 
     Examples
     --------
@@ -133,26 +157,12 @@ def fuse(dsk, keys=None, dependencies=None):
 
     dependencies = dict((k, set(v)) for k, v in dependencies.items())
 
-    # TODO: perhaps make `renamed_fused_task` a keyword parameter
-    try:
-        from distributed.utils import key_split
-    except ImportError:
-        rename_fused_task = None
+    if rename_fused_keys is True:
+        key_renamer = default_fused_keys_renamer
+    elif rename_fused_keys is False:
+        key_renamer = None
     else:
-        def rename_fused_task(keys):
-            if isinstance(keys[0], (str, unicode)):
-                names = [key_split(x) for x in keys[:0:-1]]
-                names.append(keys[0])
-                return '-'.join(names)
-            elif (
-                isinstance(keys[0], tuple) and len(keys[0]) > 0
-                and isinstance(keys[0][0], (str, unicode))
-            ):
-                names = [key_split(x) for x in keys[:0:-1]]
-                names.append(keys[0][0])
-                return ('-'.join(names),) + keys[0][1:]
-            else:
-                return None
+        key_renamer = rename_fused_keys
 
     # create a new dask with fused chains
     rv = {}
@@ -160,9 +170,10 @@ def fuse(dsk, keys=None, dependencies=None):
     aliases = set()
     is_renamed = False
     for chain in chains:
-        if rename_fused_task is not None:
-            new_key_name = rename_fused_task(chain)
-            is_renamed = new_key_name is not None and new_key_name not in dsk
+        if key_renamer is not None:
+            new_key = key_renamer(chain)
+            is_renamed = (new_key is not None and new_key not in dsk
+                          and new_key not in rv)
         child = chain.pop()
         val = dsk[child]
         while chain:
@@ -174,10 +185,10 @@ def fuse(dsk, keys=None, dependencies=None):
             child = parent
         fused.add(child)
         if is_renamed:
-            rv[new_key_name] = val
-            rv[child] = new_key_name
-            dependencies[new_key_name] = dependencies[child]
-            dependencies[child] = {new_key_name}
+            rv[new_key] = val
+            rv[child] = new_key
+            dependencies[new_key] = dependencies[child]
+            dependencies[child] = {new_key}
             aliases.add(child)
         else:
             rv[child] = val
@@ -191,7 +202,7 @@ def fuse(dsk, keys=None, dependencies=None):
             renamed = deps & aliases
             if renamed:
                 deps.update(rv[key] for key in renamed)
-                deps.difference_update(renamed)
+                deps -= renamed
         for key in aliases:
             del rv[key]
             del dependencies[key]
@@ -658,3 +669,59 @@ def fuse_getitem(dsk, func, place):
     """
     return fuse_selections(dsk, getitem, func,
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
+
+
+# Defining `key_split` (used by `default_fused_keys_renamer`) in utils.py
+# results in messy circular imports, so define it here instead.
+hex_pattern = re.compile('[a-f]+')
+
+
+def key_split(s):
+    """
+    >>> key_split('x')
+    'x'
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split("('x-2', 1)")
+    'x'
+    >>> key_split('hello-world-1')
+    'hello-world'
+    >>> key_split(b'hello-world-1')
+    'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    'myclass'
+    >>> key_split(None)
+    'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    'x'
+    """
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
+    try:
+        words = s.split('-')
+        if not words[0][0].isalpha():
+            result = words[0].lstrip("'(\"")
+        else:
+            result = words[0]
+        for word in words[1:]:
+            if word.isalpha() and not (len(word) == 8 and
+                                       hex_pattern.match(word) is not None):
+                result += '-' + word
+            else:
+                break
+        if len(result) == 32 and re.match(r'[a-f0-9]{32}', result):
+            return 'data'
+        else:
+            if result[0] == '<':
+                result = result.strip('<>').split()[0].split('.')[-1]
+            return result
+    except:
+        return 'Other'
