@@ -35,6 +35,7 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
+    'sphinx.ext.extlinks',
     'numpydoc',
 ]
 
@@ -367,3 +368,10 @@ epub_exclude_files = ['search.html']
 
 # If false, no index is generated.
 #epub_use_index = True
+
+# Link to GitHub issues and pull requests using :pr:`1234` and :issue:`1234`
+# syntax
+extlinks = {
+    'issue': ('https://github.com/dask/distributed/issues/%s', 'GH#'),
+    'pr': ('https://github.com/dask/distributed/pull/%s', 'GH#')
+}

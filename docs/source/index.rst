@@ -123,3 +123,4 @@ Contents
    journey
    protocol
    plugins
+   changelog
