@@ -436,6 +436,27 @@ class Scheduler(Server):
         self.stop()
 
     @gen.coroutine
+    def close_worker(self, stream=None, worker=None):
+        """ Remove a worker from the cluster
+
+        This both removes the worker from our local state and also sends a
+        signal to the worker to shut down.  This works regardless of whether or
+        not the worker has a nanny process restarting it
+        """
+        with log_errors():
+            original = worker
+            self.remove_worker(address=original)
+            with ignoring(KeyError):
+                nanny_port = self.worker_info[worker]['services']['nanny']
+                ip, port = worker.split(':')
+                worker = '%s:%s' % (ip, nanny_port)
+
+            with rpc(worker) as r:
+                yield r.terminate(report=False)
+
+            self.remove_worker(address=original)
+
+    @gen.coroutine
     def cleanup(self):
         """ Clean up queues and coroutines, prepare to stop """
         if self.status == 'closing':

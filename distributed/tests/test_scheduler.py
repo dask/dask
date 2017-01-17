@@ -995,3 +995,30 @@ def test_run_on_scheduler(c, s, a, b):
 
     response = yield c._run_on_scheduler(f)
     assert response == s.address
+
+
+@gen_cluster(client=True)
+def test_close_worker(c, s, a, b):
+    assert len(s.workers) == 2
+
+    yield s.close_worker(worker=a.address)
+
+    assert len(s.workers) == 1
+    assert a.address not in s.workers
+
+    yield gen.sleep(0.5)
+
+    assert len(s.workers) == 1
+
+
+@gen_cluster(client=True, Worker=Nanny)
+def test_close_nanny(c, s, a, b):
+    assert len(s.workers) == 2
+
+    yield s.close_worker(worker=a.address)
+
+    assert len(s.workers) == 1
+    assert a.address not in s.workers
+
+    yield gen.sleep(0.5)
+    assert len(s.workers) == 1
