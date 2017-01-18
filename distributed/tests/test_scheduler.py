@@ -1011,18 +1011,47 @@ def test_close_worker(c, s, a, b):
     assert len(s.workers) == 1
 
 
-@gen_cluster(client=True, Worker=Nanny)
+@slow
+@gen_cluster(client=True, Worker=Nanny, timeout=20)
 def test_close_nanny(c, s, a, b):
     assert len(s.workers) == 2
     old_process = a.process
 
-    yield s.close_worker(worker=a.address)
+    assert old_process.is_alive()
+    yield s.close_worker(worker=a.worker_address)
 
     assert len(s.workers) == 1
-    assert a.address not in s.workers
-
-    yield gen.sleep(0.5)
-    assert len(s.workers) == 1
-
+    assert a.worker_address not in s.workers
     assert not old_process.is_alive()
-    assert not a.process
+
+    for i in range(10):
+        yield gen.sleep(0.1)
+        assert len(s.workers) == 1
+
+        assert not old_process.is_alive()
+        assert not a.process
+
+
+@gen_cluster(client=True, timeout=20)
+def test_retire_workers_close(c, s, a, b):
+    yield s.retire_workers(close=True)
+    assert not s.workers
+
+
+@gen_cluster(client=True, timeout=20, Worker=Nanny)
+def test_retire_nannies_close(c, s, a, b):
+    processes = [a.process, b.process]
+    yield s.retire_workers(close=True, remove=True)
+    assert not s.workers
+
+    start = time()
+    while True:
+        if not any(proc.is_alive() for proc in processes):
+            break
+        else:
+            yield gen.sleep(0.1)
+        assert time() < start + 5
+
+    yield gen.sleep(1)
+    assert not any(proc.is_alive() for proc in processes)
+    assert not a.process and not b.process
