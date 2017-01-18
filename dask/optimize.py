@@ -72,7 +72,7 @@ def default_fused_keys_renamer(keys):
     else:
         return None
 
-@profile
+
 def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
