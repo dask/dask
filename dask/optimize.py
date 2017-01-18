@@ -64,17 +64,15 @@ def default_fused_keys_renamer(keys):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return '-'.join(names)
-    elif (
-        isinstance(keys[0], tuple) and len(keys[0]) > 0 and
-        isinstance(keys[0][0], (str, unicode))
-    ):
+    elif (isinstance(keys[0], tuple) and len(keys[0]) > 0 and
+          isinstance(keys[0][0], (str, unicode))):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
         return ('-'.join(names),) + keys[0][1:]
     else:
         return None
 
-
+@profile
 def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
@@ -158,7 +156,7 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
             chain.append(child)
         chains.append(chain)
 
-    dependencies = dict((k, set(v)) for k, v in dependencies.items())
+    dependencies = {k: set(v) for k, v in dependencies.items()}
 
     if rename_fused_keys is True:
         key_renamer = default_fused_keys_renamer
@@ -199,13 +197,12 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
         if key not in fused:
             rv[key] = val
     if aliases:
-        rv = inline(rv, keys=aliases, inline_constants=False,
-                    dependencies=dependencies)
-        for deps in dependencies.values():
-            renamed = deps & aliases
-            if renamed:
-                deps.update(rv[key] for key in renamed)
-                deps -= renamed
+        for key, deps in dependencies.items():
+            for old_key in deps & aliases:
+                new_key = rv[old_key]
+                deps.remove(old_key)
+                deps.add(new_key)
+                rv[key] = subs(rv[key], old_key, new_key)
     return rv, dependencies
 
 
