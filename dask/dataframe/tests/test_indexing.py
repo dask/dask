@@ -138,6 +138,9 @@ def test_loc2d_with_known_divisions():
     assert_eq(ddf.loc['a':'o', ['A']], df.loc['a':'o', ['A']])
     assert_eq(ddf.loc[['n'], ['A']], df.loc[['n'], ['A']])
     assert_eq(ddf.loc[['a', 'c', 'n'], ['A']], df.loc[['a', 'c', 'n'], ['A']])
+    assert_eq(ddf.loc[['t', 'b'], ['A']], df.loc[['t', 'b'], ['A']])
+    assert_eq(ddf.loc[['r', 'r', 'c', 'g', 'h'], ['A']],
+              df.loc[['r', 'r', 'c', 'g', 'h'], ['A']])
 
 
 def test_loc2d_with_unknown_divisions():

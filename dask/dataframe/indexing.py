@@ -214,9 +214,9 @@ def _partitions_of_index_values(divisions, values):
     Each key corresponds to the division which values are index values belong
     to the division.
 
-    >>> sorted(_partitions_of_index_svalue([0, 5, 10], [3]).items())
+    >>> sorted(_partitions_of_index_values([0, 5, 10], [3]).items())
     [(0, [3])]
-    >>> sorted(_partitions_of_index_svalue([0, 5, 10], [3, 8, 5]).items())
+    >>> sorted(_partitions_of_index_values([0, 5, 10], [3, 8, 5]).items())
     [(0, [3]), (1, [8, 5])]
     """
     if divisions[0] is None:
