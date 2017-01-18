@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 import pickle
 import numpy as np
+import string
 
 import dask
 import dask.dataframe as dd
@@ -127,6 +128,22 @@ def test_partitioning_index():
     res = partitioning_index(df2.index, 4)
     assert ((res < 4) & (res >= 0)).all()
     assert len(np.unique(res)) > 1
+
+
+def test_partitioning_index_categorical_on_values():
+    df = pd.DataFrame({'a': list(string.ascii_letters),
+                       'b': [1, 2, 3, 4] * 13})
+    df.a = df.a.astype('category')
+    df2 = df.copy()
+    df2.a = df2.a.cat.set_categories(list(reversed(df2.a.cat.categories)))
+
+    res = partitioning_index(df.a, 5)
+    res2 = partitioning_index(df2.a, 5)
+    assert (res == res2).all()
+
+    res = partitioning_index(df, 5)
+    res2 = partitioning_index(df2, 5)
+    assert (res == res2).all()
 
 
 @pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
