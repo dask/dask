@@ -203,6 +203,10 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
                 deps.remove(old_key)
                 deps.add(new_key)
                 rv[key] = subs(rv[key], old_key, new_key)
+        if keys is not None:
+            for key in aliases - keys:
+                del rv[key]
+                del dependencies[key]
     return rv, dependencies
 
 
