@@ -1014,6 +1014,7 @@ def test_close_worker(c, s, a, b):
 @gen_cluster(client=True, Worker=Nanny)
 def test_close_nanny(c, s, a, b):
     assert len(s.workers) == 2
+    old_process = a.process
 
     yield s.close_worker(worker=a.address)
 
@@ -1022,3 +1023,6 @@ def test_close_nanny(c, s, a, b):
 
     yield gen.sleep(0.5)
     assert len(s.workers) == 1
+
+    assert not old_process.is_alive()
+    assert not a.process
