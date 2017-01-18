@@ -538,8 +538,7 @@ def test_map_partitions():
     result = d.map_partitions(lambda df: df.sum(axis=1))
     assert_eq(result, full.sum(axis=1))
 
-    # dtype is inferred to np.array default (so on windows this is int32)
-    assert_eq(d.map_partitions(lambda df: 1), pd.Series([1, 1, 1], dtype=np.int),
+    assert_eq(d.map_partitions(lambda df: 1), pd.Series([1, 1, 1], dtype=np.int64),
               check_divisions=False)
     x = Scalar({('x', 0): 1}, 'x', int)
     result = dd.map_partitions(lambda x: 2, x)
