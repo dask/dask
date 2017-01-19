@@ -32,11 +32,15 @@ def test_loc():
     assert_eq(d.loc[3:8], full.loc[3:8])
     assert_eq(d.loc[:8], full.loc[:8])
     assert_eq(d.loc[3:], full.loc[3:])
+    assert_eq(d.loc[[5]], full.loc[[5]])
+    assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
 
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
+    assert_eq(d.a.loc[[5]], full.a.loc[[5]])
+    assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
@@ -100,10 +104,12 @@ def test_loc2d():
     assert_eq(d.loc[3:8, 'a'], full.loc[3:8, 'a'])
     assert_eq(d.loc[:8, 'a'], full.loc[:8, 'a'])
     assert_eq(d.loc[3:, 'a'], full.loc[3:, 'a'])
+    assert_eq(d.loc[[8], 'a'], full.loc[[8], 'a'])
 
     assert_eq(d.loc[3:8, ['a']], full.loc[3:8, ['a']])
     assert_eq(d.loc[:8, ['a']], full.loc[:8, ['a']])
     assert_eq(d.loc[3:, ['a']], full.loc[3:, ['a']])
+    assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
     # 3d
     with tm.assertRaises(pd.core.indexing.IndexingError):
@@ -118,6 +124,23 @@ def test_loc2d():
 
     with tm.assertRaises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
+
+
+def test_loc2d_with_known_divisions():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('ABCDE'))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(ddf.loc['a', 'A'], df.loc[['a'], 'A'])
+    assert_eq(ddf.loc['a', ['A']], df.loc[['a'], ['A']])
+    assert_eq(ddf.loc['a':'o', 'A'], df.loc['a':'o', 'A'])
+    assert_eq(ddf.loc['a':'o', ['A']], df.loc['a':'o', ['A']])
+    assert_eq(ddf.loc[['n'], ['A']], df.loc[['n'], ['A']])
+    assert_eq(ddf.loc[['a', 'c', 'n'], ['A']], df.loc[['a', 'c', 'n'], ['A']])
+    assert_eq(ddf.loc[['t', 'b'], ['A']], df.loc[['t', 'b'], ['A']])
+    assert_eq(ddf.loc[['r', 'r', 'c', 'g', 'h'], ['A']],
+              df.loc[['r', 'r', 'c', 'g', 'h'], ['A']])
 
 
 def test_loc2d_with_unknown_divisions():

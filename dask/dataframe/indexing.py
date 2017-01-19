@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from datetime import datetime
+from collections import defaultdict
 
 from toolz import merge
 import bisect
@@ -58,11 +59,18 @@ class _LocIndexer(object):
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
+            elif isinstance(iindexer, list):
+                return self._loc_list(iindexer, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
-            if not isinstance(iindexer, slice):
+            if isinstance(iindexer, list):
+                # applying map_pattition to each partitions
+                # results in duplicated NaN rows
+                msg = 'Cannot index with list against unknown division'
+                raise KeyError(msg)
+            elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
 
             meta = self._make_meta(iindexer, cindexer)
@@ -83,11 +91,27 @@ class _LocIndexer(object):
         return self.obj.map_partitions(methods.loc, iindexer, cindexer,
                                        token='loc-series', meta=meta)
 
-    def _loc_element(self, iindexer, cindexer):
-
+    def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
+        parts = self._get_partitions(iindexer)
+        dsk = {}
 
-        part = self._partition_of_index_value(iindexer)
+        divisions = []
+        items = sorted(parts.items())
+        for i, (div, indexer) in enumerate(items):
+            dsk[name, i] = (methods.loc, (self._name, div),
+                            indexer, cindexer)
+            # append minimum value as division
+            divisions.append(sorted(indexer)[0])
+        # append maximum value of the last division
+        divisions.append(sorted(items[-1][1])[-1])
+        meta = self._make_meta(iindexer, cindexer)
+        return new_dd_object(merge(self.obj.dask, dsk), name,
+                             meta=meta, divisions=divisions)
+
+    def _loc_element(self, iindexer, cindexer):
+        name = 'loc-%s' % tokenize(iindexer, self.obj)
+        part = self._get_partitions(iindexer)
 
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(iindexer))
@@ -99,8 +123,12 @@ class _LocIndexer(object):
         return new_dd_object(merge(self.obj.dask, dsk), name,
                              meta=meta, divisions=[iindexer, iindexer])
 
-    def _partition_of_index_value(self, key):
-        return _partition_of_index_value(self.obj.divisions, key)
+    def _get_partitions(self, keys):
+        if isinstance(keys, list):
+            return _partitions_of_index_values(self.obj.divisions, keys)
+        else:
+            # element
+            return _partition_of_index_value(self.obj.divisions, keys)
 
     def _coerce_loc_index(self, key):
         return _coerce_loc_index(self.obj.divisions, key)
@@ -112,11 +140,11 @@ class _LocIndexer(object):
         assert iindexer.step in (None, 1)
 
         if iindexer.start is not None:
-            start = self._partition_of_index_value(iindexer.start)
+            start = self._get_partitions(iindexer.start)
         else:
             start = 0
         if iindexer.stop is not None:
-            stop = self._partition_of_index_value(iindexer.stop)
+            stop = self._get_partitions(iindexer.stop)
         else:
             stop = self.obj.npartitions - 1
 
@@ -179,6 +207,29 @@ def _partition_of_index_value(divisions, val):
     val = _coerce_loc_index(divisions, val)
     i = bisect.bisect_right(divisions, val)
     return min(len(divisions) - 2, max(0, i - 1))
+
+
+def _partitions_of_index_values(divisions, values):
+    """ Return defaultdict of division and values pairs
+    Each key corresponds to the division which values are index values belong
+    to the division.
+
+    >>> sorted(_partitions_of_index_values([0, 5, 10], [3]).items())
+    [(0, [3])]
+    >>> sorted(_partitions_of_index_values([0, 5, 10], [3, 8, 5]).items())
+    [(0, [3]), (1, [8, 5])]
+    """
+    if divisions[0] is None:
+        msg = "Can not use loc on DataFrame without known divisions"
+        raise ValueError(msg)
+
+    results = defaultdict(list)
+    values = pd.Index(values, dtype=object)
+    for val in values:
+        i = bisect.bisect_right(divisions, val)
+        div = min(len(divisions) - 2, max(0, i - 1))
+        results[div].append(val)
+    return results
 
 
 def _coerce_loc_index(divisions, o):
