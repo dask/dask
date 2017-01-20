@@ -50,6 +50,33 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+def homogeneous_deepmap(func, seq):
+    n = 0
+    tmp = seq
+    while isinstance(tmp, list):
+        n += 1
+        tmp = tmp[0]
+
+    return ndeepmap(n, func, seq)
+
+
+def ndeepmap(n, func, seq):
+    """ Call a function on every element within a nested container
+
+    >>> def inc(x):
+    ...     return x + 1
+    >>> L = [[1, 2], [3, 4, 5]]
+    >>> ndeepmap(2, inc, L)
+    [[2, 3], [4, 5, 6]]
+    """
+    if n == 1:
+        return [func(item) for item in seq]
+    elif n > 1:
+        return [ndeepmap(n - 1, func, item) for item in seq]
+    else:
+        return func(seq)
+
+
 @contextmanager
 def ignoring(*exceptions):
     try:
