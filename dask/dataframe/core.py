@@ -1553,7 +1553,7 @@ class Series(_Frame):
 
     @cache_readonly
     def cat(self):
-        from .accessor import CategoricalAccessor
+        from .categorical import CategoricalAccessor
         return CategoricalAccessor(self)
 
     @cache_readonly
@@ -2181,31 +2181,28 @@ class DataFrame(_Frame):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, key, **kwargs)
 
-    def categorize(self, columns=None, **kwargs):
-        """
-        Convert columns of the DataFrame to category dtype
+    def categorize(self, columns=None, index=None, **kwargs):
+        """Convert columns of the DataFrame to category dtype.
 
         Parameters
         ----------
         columns : list, optional
-            A list of column names to convert to the category type. By
-            default any column with an object dtype is converted to a
-            categorical.
+            A list of column names to convert to categoricals. By default any
+            column with an object dtype is converted to a categorical, and any
+            unknown categoricals are made known.
+        index : bool, optional
+            Whether to categorize the index. By default, object indices are
+            converted to categorical, and unknown categorical indices are made
+            known. Set True to always categorize the index, False to never.
         kwargs
             Keyword arguments are passed on to compute.
-
-        Notes
-        -----
-        When dealing with columns of repeated text values converting to
-        categorical type is often much more performant, both in terms of memory
-        and in writing to disk or communication over the network.
 
         See also
         --------
         dask.dataframes.categorical.categorize
         """
-        from dask.dataframe.categorical import categorize
-        return categorize(self, columns, **kwargs)
+        from .categorical import categorize
+        return categorize(self, columns=columns, index=index, **kwargs)
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):

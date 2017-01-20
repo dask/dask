@@ -10,7 +10,7 @@ import dask
 from dask.async import get_sync
 import dask.dataframe as dd
 from dask.dataframe.core import _concat
-from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype
+from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories
 
 
 @pytest.fixture(params=[True, False])
@@ -19,17 +19,20 @@ def cat_series(request):
     return pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
 
 
-a = pd.DataFrame({'w': list('xxxxx'),
+a = pd.DataFrame({'v': list('abcde'),
+                  'w': list('xxxxx'),
                   'x': np.arange(5),
                   'y': list('abcbc'),
                   'z': np.arange(5, dtype='f8')})
 
-b = pd.DataFrame({'w': list('yyyyy'),
+b = pd.DataFrame({'v': list('fghij'),
+                  'w': list('yyyyy'),
                   'x': np.arange(5, 10),
                   'y': list('abbba'),
                   'z': np.arange(5, 10, dtype='f8')})
 
-c = pd.DataFrame({'w': list('zzzzz'),
+c = pd.DataFrame({'v': list('klmno'),
+                  'w': list('zzzzz'),
                   'x': np.arange(10, 15),
                   'y': list('bcbcc'),
                   'z': np.arange(10, 15, dtype='f8')})
@@ -76,8 +79,8 @@ def test_concat_unions_categoricals():
 def test_unknown_categoricals():
     ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames)},
                        'unknown',
-                       make_meta({'w': 'category', 'x': 'i8',
-                                  'y': 'category', 'z': 'f8'}),
+                       make_meta({'v': 'object', 'w': 'category',
+                                  'x': 'i8', 'y': 'category', 'z': 'f8'}),
                        [None] * 4)
     # Compute
     df = ddf.compute()
@@ -104,24 +107,70 @@ def test_is_categorical_dtype():
 
 
 def test_categorize():
-    dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
-                                   'b': ['C', 'D', 'E']},
-                                  index=[0, 1, 2]),
-           ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
-                                   'b': ['A', 'A', 'B']},
-                                  index=[3, 4, 5])}
-    meta = make_meta({'a': 'O', 'b': 'O'}, index=pd.Index([], 'i8'))
-    d = dd.DataFrame(dsk, 'x', meta, [0, 3, 5])
-    full = d.compute()
+    meta = clear_known_categories(frames4[0])
+    ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames3)},
+                       'unknown', meta, [None] * 4)
+    ddf = ddf.assign(w=ddf.w.cat.set_categories(['x', 'y', 'z']))
+    assert ddf.w.cat.known
+    assert not ddf.y.cat.known
+    assert not ddf.index.cat.known
+    df = ddf.compute()
 
-    c = d.categorize('a')
-    cfull = c.compute()
-    assert cfull.dtypes['a'] == 'category'
-    assert cfull.dtypes['b'] == 'O'
+    for index in [None, True, False]:
+        known_index = index is not False
+        # By default categorize object and unknown cat columns
+        ddf2 = ddf.categorize(index=index)
+        assert ddf2.y.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
-    assert list(cfull.a.astype('O')) == list(full.a)
-    assert (d._get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
-    assert (d.categorize().compute().dtypes == 'category').all()
+        # Specifying one column doesn't affect others
+        ddf2 = ddf.categorize('v', index=index)
+        assert not ddf2.y.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
+
+        ddf2 = ddf.categorize('y', index=index)
+        assert ddf2.y.cat.known
+        assert ddf2.v.dtype == 'object'
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df)
+
+    ddf_known_index = ddf.categorize(columns=[], index=True)
+    assert ddf_known_index.index.cat.known
+    assert_eq(ddf_known_index, df)
+
+    # Specifying known categorical or no columns is a no-op:
+    assert ddf.categorize(['w'], index=False) is ddf
+    assert ddf.categorize([], index=False) is ddf
+    assert ddf_known_index.categorize(['w']) is ddf_known_index
+    assert ddf_known_index.categorize([]) is ddf_known_index
+
+
+def test_categorize_index():
+    # Object dtype
+    ddf = dd.from_pandas(tm.makeDataFrame(), npartitions=5)
+    df = ddf.compute()
+
+    ddf2 = ddf.categorize()
+    assert ddf2.index.cat.known
+    assert_eq(ddf2, df.set_index(pd.CategoricalIndex(df.index)),
+              check_divisions=False, check_categorical=False)
+
+    assert ddf.categorize(index=False) is ddf
+
+    # Non-object dtype
+    ddf = dd.from_pandas(df.set_index(df.A), npartitions=5)
+    df = ddf.compute()
+
+    ddf2 = ddf.categorize(index=True)
+    assert ddf2.index.cat.known
+    assert_eq(ddf2, df.set_index(pd.CategoricalIndex(df.index)),
+              check_divisions=False, check_categorical=False)
+
+    assert ddf.categorize() is ddf
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -222,12 +271,16 @@ class TestCategoricalAccessor:
 
         with pytest.raises(NotImplementedError):
             da.cat.categories
+        with pytest.raises(NotImplementedError):
+            da.cat.codes
 
         db = da.cat.set_categories(['a', 'b', 'c'])
         assert db.cat.known
         tm.assert_index_equal(db.cat.categories, a.cat.categories)
+        assert_eq(db.cat.codes, a.cat.codes)
 
         db = da.cat.as_known()
         assert db.cat.known
         res = db.compute()
         tm.assert_index_equal(db.cat.categories, res.cat.categories)
+        assert_eq(db.cat.codes, res.cat.codes)

@@ -119,7 +119,7 @@ def assign(df, *pairs):
 
 def unique(x, series_name=None):
     # unique returns np.ndarray, it must be wrapped
-    return pd.Series(pd.Series.unique(x), name=series_name)
+    return pd.Series(x.unique(), name=series_name)
 
 
 def value_counts_combine(x):
@@ -136,10 +136,6 @@ def nbytes(x):
 
 def size(x):
     return x.size
-
-
-def cat_categories(x):
-    return x.cat.categories
 
 
 def sample(df, state, frac, replace):
