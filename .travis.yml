@@ -21,7 +21,7 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
-  - conda install conda=4.2  # XXX: version 4.3 has a bug
+  - conda update conda
 
   # Install dependencies
   - conda create -n test-environment python=$PYTHON
