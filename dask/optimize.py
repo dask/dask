@@ -726,3 +726,11 @@ def key_split(s):
             return result
     except Exception:
         return 'Other'
+
+
+try:
+    from functools import lru_cache
+except ImportError:
+    pass
+else:
+    key_split = lru_cache(100000)(key_split)
