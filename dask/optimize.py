@@ -60,11 +60,12 @@ def cull(dsk, keys):
 
 def default_fused_keys_renamer(keys):
     """Create new keys for fused tasks"""
-    if isinstance(keys[0], (str, unicode)):
+    typ = type(keys[0])
+    if typ is str or typ is unicode:
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return '-'.join(names)
-    elif (isinstance(keys[0], tuple) and len(keys[0]) > 0 and
+    elif (typ is tuple and len(keys[0]) > 0 and
           isinstance(keys[0][0], (str, unicode))):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
