@@ -193,7 +193,7 @@ function:
 We separate the message into two messages, one encoding all of the data to be
 serialized and, and one encoding everything else::
 
-   {'key': 'x', 'addresss': 'alice'}
+   {'key': 'x', 'address': 'alice'}
    {'data': <Serialize: [ 1.  1.  1.  1.  1.]>}
 
 The first message we pass normally with msgpack. The second we pass in multiple

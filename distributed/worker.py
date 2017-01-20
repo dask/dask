@@ -741,7 +741,7 @@ class Worker(WorkerBase):
     * **services:** ``{str: Server}``:
         Auxiliary web servers running on this worker
     * **service_ports:** ``{str: port}``:
-    * **total_connections**": ``int``
+    * **total_connections**: ``int``
         The maximum number of concurrent connections we want to see
     * **total_comm_nbytes**: ``int``
     * **batched_stream**: ``BatchedSend(IOstream)``
@@ -1014,7 +1014,7 @@ class Worker(WorkerBase):
                 if state in ('memory', 'error'):
                     if state == 'memory':
                         assert key in self.data
-                    logger.debug("Asked to compute prexisting result: %s: %s" ,
+                    logger.debug("Asked to compute pre-existing result: %s: %s" ,
                                  key, state)
                     self.send_task_state_to_scheduler(key)
                     return
