@@ -253,6 +253,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    caching.rst
    bytes.rst
    cite.rst
+   funding.rst
 
 Dask is part of the Blaze_ project supported and offered by
 `Continuum Analytics`_ and contributors under a `3-clause BSD license`_.
