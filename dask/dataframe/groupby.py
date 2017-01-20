@@ -530,19 +530,19 @@ def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
     return np.sqrt(result)
 
 
-def _cum_agg_aligned(part, cum_last, index, columns, func, neutral):
-    align = cum_last.reindex(part.set_index(index).index, fill_value=neutral)
+def _cum_agg_aligned(part, cum_last, index, columns, func, initial):
+    align = cum_last.reindex(part.set_index(index).index, fill_value=initial)
     align.index = part.index
     return func(part[columns], align)
 
 
-def _cum_agg_filled(a, b, func, neutral):
+def _cum_agg_filled(a, b, func, initial):
     union = a.index.union(b.index)
-    return func(a.reindex(union, fill_value=neutral),
-                b.reindex(union, fill_value=neutral), fill_value=neutral)
+    return func(a.reindex(union, fill_value=initial),
+                b.reindex(union, fill_value=initial), fill_value=initial)
 
 
-def _add_plus_one(a, b, fill_value=None):
+def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
@@ -633,33 +633,33 @@ class _GroupBy(object):
                    aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
                    split_out=split_out, split_out_setup=split_out_on_index)
 
-    def _cum_agg(self, token, chunk, aggregate, neutral):
+    def _cum_agg(self, token, chunk, aggregate, initial):
         """ Wrapper for cumulative groupby operation """
         meta = chunk(self._meta)
         columns = meta.name if isinstance(meta, pd.Series) else meta.columns
         index = self.index if isinstance(self.index, list) else [self.index]
 
+        name = self._token_prefix + token
+        name_part = name + '-map'
+        name_last = name + '-take-last'
+        name_cum = name + '-cum-last'
+
         # cumulate each partitions
-        name1 = '{0}{1}-map'.format(self._token_prefix, token)
         cumpart_raw = map_partitions(_apply_chunk, self.obj, *index,
                                      chunk=chunk,
                                      columns=columns,
-                                     token=name1,
+                                     token=name_part,
                                      meta=meta)
         cumpart_ext = (cumpart_raw.to_frame()
                        if isinstance(meta, pd.Series)
                        else cumpart_raw).assign(**{i: self.obj[i]
                                                    for i in index})
 
-        name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
         cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
                                  columns=0 if columns is None else columns,
                                  chunk=M.last,
                                  meta=meta,
-                                 token=name2)
-
-        name = '{0}{1}'.format(self._token_prefix, token)
-        cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+                                 token=name_last)
 
         # aggregate cumulated partisions and its previous last element
         dask = {}
@@ -668,16 +668,17 @@ class _GroupBy(object):
         for i in range(1, self.obj.npartitions):
             # store each cumulative step to graph to reduce computation
             if i == 1:
-                dask[(cname, i)] = (cumlast._name, i - 1)
+                dask[(name_cum, i)] = (cumlast._name, i - 1)
             else:
                 # aggregate with previous cumulation results
-                dask[(cname, i)] = (_cum_agg_filled,
-                                    (cname, i - 1), (cumlast._name, i - 1),
-                                    aggregate, neutral)
+                dask[(name_cum, i)] = (_cum_agg_filled,
+                                       (name_cum, i - 1),
+                                       (cumlast._name, i - 1),
+                                       aggregate, initial)
             dask[(name, i)] = (_cum_agg_aligned,
-                               (cumpart_ext._name, i), (cname, i),
+                               (cumpart_ext._name, i), (name_cum, i),
                                index, 0 if columns is None else columns,
-                               aggregate, neutral)
+                               aggregate, initial)
         return new_dd_object(merge(dask, cumpart_ext.dask, cumlast.dask),
                              name, chunk(self._meta), self.obj.divisions)
 
@@ -689,7 +690,7 @@ class _GroupBy(object):
             return self._cum_agg('cumsum',
                                  chunk=M.cumsum,
                                  aggregate=M.add,
-                                 neutral=0)
+                                 initial=0)
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, axis=0):
@@ -699,14 +700,14 @@ class _GroupBy(object):
             return self._cum_agg('cumprod',
                                  chunk=M.cumprod,
                                  aggregate=M.mul,
-                                 neutral=1)
+                                 initial=1)
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=None):
         return self._cum_agg('cumcount',
                              chunk=M.cumcount,
-                             aggregate=_add_plus_one,
-                             neutral=-1)
+                             aggregate=_cumcount_aggregate,
+                             initial=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1):
