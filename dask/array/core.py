@@ -3295,6 +3295,48 @@ def ndimlist(seq):
     else:
         return 1 + ndimlist(seq[0])
 
+def shapelist(a):
+    """ Get the shape of nested list """
+    if type(a) is list:
+        return tuple([len(a)] + list(shapelist(a[0])))
+    else:
+        return ()
+
+def reshapelist(shape, seq):
+    """ Reshape iterator to nested shape
+
+    >>> reshape((2, 3), range(6))
+    [[0, 1, 2], [3, 4, 5]]
+    """
+    if len(shape) == 1:
+        return list(seq)
+    else:
+        n = int(len(seq) / shape[0])
+        return [reshapelist(shape[1:], part) for part in partition(n, seq)]
+
+
+def transposelist(arrays, axes, extradims=0):
+    """ Permute axes of nested list
+
+    >>> transposelist([[1,1,1],[1,1,1]], [2,1])
+    [[[1, 1], [1, 1], [1, 1]]]
+
+    >>> transposelist([[1,1,1],[1,1,1]], [2,1], extradims=1) 
+    [[[[1], [1]], [[1], [1]], [[1], [1]]]]
+    """
+    if len(axes) != ndimlist(arrays):
+        raise ValueError("Length of axes should equal depth of nested arrays")
+    if extradims < 0:
+        raise ValueError("`newdims` should be positive")
+    if len(axes) > len(set(axes)):
+        raise ValueError("`axes` should be unique")
+
+    ndim = max(axes)+1
+    shape = shapelist(arrays)
+    newshape = [shape[axes.index(i)] if i in axes else 1 for i in xrange(ndim+extradims)]
+
+    result = list(core.flatten(arrays))
+    return reshapelist(newshape, result)
 
 def concatenate3(arrays):
     """ Recursive np.concatenate
@@ -3340,17 +3382,12 @@ def concatenate3(arrays):
 
 
 def concatenate_axes(arrays, axes):
-    """ Recurseively call np.concatenate along axes
-
-    TODO: This performs many copies.  We should be able to do this in one
-    TODO: Merge logic on concatenate3 with this
-    """
+    """ Recursively call np.concatenate along axes """
     if len(axes) != ndimlist(arrays):
         raise ValueError("Length of axes should equal depth of nested arrays")
-    if len(axes) > 1:
-        arrays = [concatenate_axes(a, axes[1:]) for a in arrays]
-    return np.concatenate(arrays, axis=axes[0])
 
+    extradims=max(0, deepfirst(arrays).ndim-(max(axes)+1))
+    return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 def to_hdf5(filename, *args, **kwargs):
     """ Store arrays in HDF5 file
