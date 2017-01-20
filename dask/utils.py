@@ -49,6 +49,16 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+def homogeneous_deepmap(func, seq):
+    n = 0
+    tmp = seq
+    while isinstance(tmp, list):
+        n += 1
+        tmp = tmp[0]
+
+    return ndeepmap(n, func, seq)
+
+
 def ndeepmap(n, func, seq):
     """ Call a function on every element within a nested container
 

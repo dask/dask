@@ -26,8 +26,9 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
-from ..utils import (ndeepmap, ignoring, concrete, is_integer,
-                     IndexCallable, funcname, derived_from, SerializableLock)
+from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
+                     is_integer, IndexCallable, funcname, derived_from,
+                     SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dasks
 from ..optimize import cull
@@ -199,14 +200,8 @@ def zero_broadcast_dimensions(lol, nblocks):
     --------
     lol_tuples
     """
-    n = 0
-    tmp = lol
-    while isinstance(tmp, list):
-        n += 1
-        tmp = tmp[0]
-
     f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return ndeepmap(n, f, lol)
+    return homogeneous_deepmap(f, lol)
 
 
 def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
