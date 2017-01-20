@@ -26,7 +26,7 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
-from ..utils import (deepmap, ignoring, concrete, is_integer,
+from ..utils import (ndeepmap, ignoring, concrete, is_integer,
                      IndexCallable, funcname, derived_from, SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dasks
@@ -199,8 +199,14 @@ def zero_broadcast_dimensions(lol, nblocks):
     --------
     lol_tuples
     """
+    n = 0
+    tmp = lol
+    while isinstance(tmp, list):
+        n += 1
+        tmp = tmp[0]
+
     f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return deepmap(f, lol)
+    return ndeepmap(n, f, lol)
 
 
 def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
@@ -384,12 +390,18 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         args = []
         for arg, ind in argpairs:
             tups = lol_tuples((arg,), ind, kd, dummies)
-            tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+            if any(nb == 1 for nb in numblocks[arg]):
+                tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+            else:
+                tups2 = tups
             if concatenate and isinstance(tups2, list):
                 axes = [n for n, i in enumerate(ind) if i in dummies]
                 tups2 = (concatenate_axes, tups2, axes)
             args.append(tups2)
-        valtups.append(tuple(args))
+        valtups.append(args)
+
+    if not kwargs:  # will not be used in an apply, should be a tuple
+        valtups = [tuple(vt) for vt in valtups]
 
     dsk = {}
 
@@ -405,7 +417,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = task
         else:
             kwargs2 = kwargs
-        vals = [(apply, func, list(vt), kwargs2) for vt in valtups]
+        vals = [(apply, func, vt, kwargs2) for vt in valtups]
     else:
         vals = [(func,) + vt for vt in valtups]
 
@@ -1698,7 +1710,7 @@ class Array(Base):
         dask.array.from_delayed
         """
         from ..delayed import Delayed
-        return np.array(deepmap(lambda k: Delayed(k, [self.dask]), self._keys()),
+        return np.array(ndeepmap(self.ndim, lambda k: Delayed(k, [self.dask]), self._keys()),
                         dtype=object)
 
     @wraps(np.repeat)

@@ -10,8 +10,9 @@ from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
                         methodcaller, M, skip_doctest, SerializableLock,
-                        funcname)
+                        funcname, ndeepmap)
 
+from dask.utils_test import inc
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
 
@@ -312,3 +313,14 @@ def test_funcname_multipledispatch():
 
     assert funcname(foo) == 'foo'
     assert funcname(functools.partial(foo, a=1)) == 'foo'
+
+
+def test_ndeepmap():
+    L = [1, 2, 3]
+    assert ndeepmap(1, inc, L) == [2, 3, 4]
+
+    L = [[1, 2], [3, 4]]
+    assert ndeepmap(2, inc, L) == [[2, 3], [4, 5]]
+
+    L = [[[1, 2], [3, 4, 5]], [[6], []]]
+    assert ndeepmap(3, inc, L) == [[[2, 3], [4, 5, 6]], [[7], []]]
