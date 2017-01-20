@@ -1410,9 +1410,14 @@ def test_datetime_accessor():
 
 
 def test_str_accessor():
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']}, index=['e', 'f', 'g', 'H'])
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'], 'y': [1, 2, 3, 4]},
+                      index=['e', 'f', 'g', 'H'])
 
     a = dd.from_pandas(df, 2, sort=False)
+
+    # Check that str not in dir/hasattr for non-object columns
+    assert 'str' not in dir(a.y)
+    assert not hasattr(a.y, 'str')
 
     assert 'upper' in dir(a.x.str)
     assert_eq(a.x.str.upper(), df.x.str.upper())

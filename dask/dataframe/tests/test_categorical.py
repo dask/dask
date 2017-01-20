@@ -13,10 +13,15 @@ from dask.dataframe.core import _concat
 from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories
 
 
-@pytest.fixture(params=[True, False])
-def cat_series(request):
-    ordered = request.param
-    return pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
+# Generate a list of categorical series and indices
+cat_series = []
+for ordered in [True, False]:
+    s = pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
+    ds = dd.from_pandas(s, npartitions=2)
+    cat_series.append((s, ds))
+s = pd.Series(range(6), index=pd.Categorical(list('bacbac')))
+ds = dd.from_pandas(s, npartitions=2)
+cat_series.append((ds.compute().index, ds.index))
 
 
 a = pd.DataFrame({'v': list('abcde'),
@@ -196,15 +201,20 @@ def test_categorical_set_index(shuffle):
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
 
-def test_dataframe_categoricals():
-    df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5),
-                       'y': range(15)})
+def test_categorical_accessor_presence():
+    df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5), 'y': range(15)})
     df.x = df.x.astype('category')
     ddf = dd.from_pandas(df, npartitions=2)
-    assert (ddf.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+
     assert 'cat' in dir(ddf.x)
-    assert not hasattr(df.y, 'cat')
     assert 'cat' not in dir(ddf.y)
+    assert hasattr(ddf.x, 'cat')
+    assert not hasattr(ddf.y, 'cat')
+
+    df2 = df.set_index(df.x)
+    ddf2 = dd.from_pandas(df2, npartitions=2, sort=False)
+    assert hasattr(ddf2.index, 'categories')
+    assert not hasattr(ddf.index, 'categories')
 
 
 def test_categorize_nan():
@@ -215,19 +225,27 @@ def test_categorize_nan():
     assert len(record) == 0
 
 
+def get_cat(x):
+    return x if isinstance(x, pd.CategoricalIndex) else x.cat
+
+
 class TestCategoricalAccessor:
 
+    @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('prop, compare', [
         ('categories', tm.assert_index_equal),
         ('ordered', assert_eq),
         ('codes', assert_eq),
     ])
-    def test_properties(self, cat_series, prop, compare):
-        a = dd.from_pandas(cat_series, npartitions=2)
-        expected = getattr(cat_series.cat, prop)
-        result = getattr(a.cat, prop)
+    def test_properties(self, series, prop, compare):
+        s, ds = series
+        expected = getattr(get_cat(s), prop)
+        if isinstance(expected, np.ndarray):
+            expected = pd.Index(expected)
+        result = getattr(get_cat(ds), prop)
         compare(result, expected)
 
+    @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('method, kwargs', [
         ('add_categories', dict(new_categories=['d', 'e'])),
         ('as_ordered', {}),
@@ -239,14 +257,16 @@ class TestCategoricalAccessor:
         ('set_categories', dict(new_categories=['a', 'e', 'b'])),
         ('remove_unused_categories', {}),
     ])
-    def test_callable(self, cat_series, method, kwargs):
-        a = dd.from_pandas(cat_series, npartitions=2)
+    def test_callable(self, series, method, kwargs):
         op = operator.methodcaller(method, **kwargs)
-        expected = op(cat_series.cat)
-        result = op(a.cat)
+
+        # Series
+        s, ds = series
+        expected = op(get_cat(s))
+        result = op(get_cat(ds))
         assert_eq(result, expected)
-        assert_eq(result._meta.cat.categories, expected.cat.categories)
-        assert_eq(result._meta.cat.ordered, expected.cat.ordered)
+        assert_eq(get_cat(result._meta).categories, get_cat(expected).categories)
+        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered)
 
     def test_categorical_empty(self):
         # GH 1705
@@ -262,9 +282,9 @@ class TestCategoricalAccessor:
         # Used to raise an IndexError
         a.A.cat.categories
 
-    def test_unknown_categories(self):
-        a = pd.Series(pd.Categorical(['a', 'b', 'c', 'b', 'c'], list('abc')))
-        da = dd.from_pandas(a, npartitions=2)
+    @pytest.mark.parametrize('series', cat_series)
+    def test_unknown_categories(self, series):
+        a, da = series
         assert da.cat.known
         da = da.cat.as_unknown()
         assert not da.cat.known
@@ -276,11 +296,13 @@ class TestCategoricalAccessor:
 
         db = da.cat.set_categories(['a', 'b', 'c'])
         assert db.cat.known
-        tm.assert_index_equal(db.cat.categories, a.cat.categories)
-        assert_eq(db.cat.codes, a.cat.codes)
+        tm.assert_index_equal(db.cat.categories, get_cat(a).categories)
+        assert_eq(db.cat.codes,
+                  pd.Index(a.codes) if isinstance(a, pd.Index) else a.cat.codes)
 
         db = da.cat.as_known()
         assert db.cat.known
         res = db.compute()
-        tm.assert_index_equal(db.cat.categories, res.cat.categories)
-        assert_eq(db.cat.codes, res.cat.codes)
+        tm.assert_index_equal(db.cat.categories, get_cat(res).categories)
+        assert_eq(db.cat.codes, (pd.Index(res.codes) if isinstance(res, pd.Index)
+                                 else res.cat.codes))

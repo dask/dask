@@ -24,7 +24,11 @@ class Accessor(object):
     def __init__(self, series):
         if not isinstance(series, Series):
             raise ValueError('Accessor cannot be initialized')
+        self._validate(series)
         self._series = series
+
+    def _validate(self, series):
+        pass
 
     def _property_map(self, key):
         meta = self._delegate_property(self._series._meta, key)
@@ -84,6 +88,10 @@ class StringAccessor(Accessor):
     """
     _accessor = pd.Series.str
     _accessor_name = 'str'
+
+    def _validate(self, series):
+        if not series.dtype == 'object':
+            raise AttributeError("Can only use .str accessor with object dtype")
 
     @staticmethod
     def _delegate_property(obj, attr):

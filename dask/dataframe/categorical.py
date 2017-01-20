@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 import pandas as pd
 
 from ..base import compute
@@ -110,10 +111,16 @@ class CategoricalAccessor(Accessor):
     _accessor = pd.Series.cat
     _accessor_name = 'cat'
 
+    def _validate(self, series):
+        if not is_categorical_dtype(series.dtype):
+            raise AttributeError("Can only use .cat accessor with a "
+                                 "'category' dtype")
+
     @staticmethod
     def _delegate_property(obj, attr):
         cat = obj if isinstance(obj, pd.CategoricalIndex) else obj.cat
-        return getattr(cat, attr)
+        out = getattr(cat, attr)
+        return pd.Index(out) if isinstance(out, np.ndarray) else out
 
     @staticmethod
     def _delegate_method(obj, attr, *args, **kwargs):
@@ -185,15 +192,16 @@ class CategoricalAccessor(Accessor):
         # get the set of used categories
         present = self._series.dropna().unique()
         present = pd.Index(present.compute())
-        # Reorder to keep cat:code relationship, filtering unused (-1)
-        ordered, mask = present.reindex(self._series._meta.cat.categories)
-        new_categories = ordered[mask != -1]
 
-        meta = self._series._meta.cat.set_categories(
-            new_categories,
-            ordered=self._series._meta.cat.ordered
-        )
-        result = self._series.map_partitions(self._delegate_method,
-                                             'set_categories', meta=meta,
-                                             new_categories=new_categories)
-        return result
+        if isinstance(self._series._meta, pd.CategoricalIndex):
+            meta_cat = self._series._meta
+        else:
+            meta_cat = self._series._meta.cat
+
+        # Reorder to keep cat:code relationship, filtering unused (-1)
+        ordered, mask = present.reindex(meta_cat.categories)
+        new_categories = ordered[mask != -1]
+        meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
+        return self._series.map_partitions(self._delegate_method,
+                                           'set_categories', meta=meta,
+                                           new_categories=new_categories)

@@ -29,7 +29,8 @@ from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
-                    raise_on_meta_error, clear_known_categories)
+                    raise_on_meta_error, clear_known_categories,
+                    is_categorical_dtype)
 from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
@@ -1564,8 +1565,12 @@ class Series(_Frame):
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        if not hasattr(self._meta, 'cat'):
-            o.remove('cat')  # cat only in `dir` if available
+        # Remove the `cat` and `str` accessors if not available. We can't
+        # decide this statically for the `dt` accessor, as it works on
+        # datetime-like things as well.
+        for accessor in ['cat', 'str']:
+            if not hasattr(self._meta, accessor):
+                o.remove(accessor)
         return list(o)
 
     @property
@@ -1881,6 +1886,21 @@ class Index(Series):
 
     _partition_type = pd.Index
     _token_prefix = 'index-'
+
+    def __getattr__(self, key):
+        # If categorical index, add categorical accessor methods
+        if (not key.startswith('_') and
+                is_categorical_dtype(self.dtype) and
+                hasattr(pd.Series.cat, key)):
+            return getattr(self.cat, key)
+        raise AttributeError("'Index' object has no attribute %r" % key)
+
+    def __dir__(self):
+        out = super(Index, self).__dir__()
+        # If categorical index, add categorical accessor methods
+        if is_categorical_dtype(self.dtype):
+            out.extend(dir(pd.Series.cat))
+        return out
 
     @property
     def index(self):
