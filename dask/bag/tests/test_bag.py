@@ -418,7 +418,7 @@ def test_inline_singleton_lists():
     assert inline_singleton_lists(inp) == out
 
     out = {'c': (f, 'a', 1)}
-    assert optimize(inp, ['c']) == out
+    assert optimize(inp, ['c'], rename_fused_keys=False) == out
 
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1),

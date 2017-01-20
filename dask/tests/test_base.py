@@ -241,8 +241,11 @@ def test_compute_no_opt():
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(get=dask.get)
-    assert len([k for k in keys if 'mul' in k[0]]) == 4
-    assert len([k for k in keys if 'add' in k[0]]) == 0
+    # Names of fused tasks have been merged, and the original key is an alias.
+    # Otherwise, the lengths below would be 4 and 0.
+    assert len([k for k in keys if 'mul' in k[0]]) == 8
+    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
 
 
 @pytest.mark.skipif('not da')

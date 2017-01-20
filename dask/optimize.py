@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 from itertools import count
 from operator import getitem
 
-from .compatibility import zip_longest
+from .compatibility import unicode, zip_longest
 
 from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
@@ -57,7 +58,23 @@ def cull(dsk, keys):
     return out, dependencies
 
 
-def fuse(dsk, keys=None, dependencies=None):
+def default_fused_keys_renamer(keys):
+    """Create new keys for fused tasks"""
+    typ = type(keys[0])
+    if typ is str or typ is unicode:
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0])
+        return '-'.join(names)
+    elif (typ is tuple and len(keys[0]) > 0 and
+          isinstance(keys[0][0], (str, unicode))):
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0][0])
+        return ('-'.join(names),) + keys[0][1:]
+    else:
+        return None
+
+
+def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
@@ -71,14 +88,23 @@ def fuse(dsk, keys=None, dependencies=None):
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
+    rename_fused_keys: bool or func, optional
+        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        func is also accepted, ``new_key = rename_fused_keys(fused_key_list)``.
 
     Examples
     --------
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
+    {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
+    >>> dsk, dependencies = fuse(d, rename_fused_keys=False)
+    >>> dsk # doctest: +SKIP
     {'c': (inc, (inc, 1))}
-    >>> dsk, dependencies = fuse(d, keys=['b'])
+    >>> dsk, dependencies = fuse(d, keys=['b'], rename_fused_keys=False)
     >>> dsk  # doctest: +SKIP
     {'b': (inc, 1), 'c': (inc, 'b')}
 
@@ -131,12 +157,25 @@ def fuse(dsk, keys=None, dependencies=None):
             chain.append(child)
         chains.append(chain)
 
-    dependencies = dict((k, set(v)) for k, v in dependencies.items())
+    dependencies = {k: set(v) for k, v in dependencies.items()}
+
+    if rename_fused_keys is True:
+        key_renamer = default_fused_keys_renamer
+    elif rename_fused_keys is False:
+        key_renamer = None
+    else:
+        key_renamer = rename_fused_keys
 
     # create a new dask with fused chains
     rv = {}
     fused = set()
+    aliases = set()
+    is_renamed = False
     for chain in chains:
+        if key_renamer is not None:
+            new_key = key_renamer(chain)
+            is_renamed = (new_key is not None and new_key not in dsk and
+                          new_key not in rv)
         child = chain.pop()
         val = dsk[child]
         while chain:
@@ -147,11 +186,28 @@ def fuse(dsk, keys=None, dependencies=None):
             fused.add(child)
             child = parent
         fused.add(child)
-        rv[child] = val
-
+        if is_renamed:
+            rv[new_key] = val
+            rv[child] = new_key
+            dependencies[new_key] = dependencies[child]
+            dependencies[child] = {new_key}
+            aliases.add(child)
+        else:
+            rv[child] = val
     for key, val in dsk.items():
         if key not in fused:
             rv[key] = val
+    if aliases:
+        for key, deps in dependencies.items():
+            for old_key in deps & aliases:
+                new_key = rv[old_key]
+                deps.remove(old_key)
+                deps.add(new_key)
+                rv[key] = subs(rv[key], old_key, new_key)
+        if keys is not None:
+            for key in aliases - keys:
+                del rv[key]
+                del dependencies[key]
     return rv, dependencies
 
 
@@ -615,3 +671,59 @@ def fuse_getitem(dsk, func, place):
     """
     return fuse_selections(dsk, getitem, func,
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
+
+
+# Defining `key_split` (used by `default_fused_keys_renamer`) in utils.py
+# results in messy circular imports, so define it here instead.
+hex_pattern = re.compile('[a-f]+')
+
+
+def key_split(s):
+    """
+    >>> key_split('x')
+    u'x'
+    >>> key_split('x-1')
+    u'x'
+    >>> key_split('x-1-2-3')
+    u'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split("('x-2', 1)")
+    u'x'
+    >>> key_split('hello-world-1')
+    u'hello-world'
+    >>> key_split(b'hello-world-1')
+    u'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    u'myclass'
+    >>> key_split(None)
+    'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    u'x'
+    """
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
+    try:
+        words = s.split('-')
+        if not words[0][0].isalpha():
+            result = words[0].lstrip("'(\"")
+        else:
+            result = words[0]
+        for word in words[1:]:
+            if word.isalpha() and not (len(word) == 8 and
+                                       hex_pattern.match(word) is not None):
+                result += '-' + word
+            else:
+                break
+        if len(result) == 32 and re.match(r'[a-f0-9]{32}', result):
+            return 'data'
+        else:
+            if result[0] == '<':
+                result = result.strip('<>').split()[0].split('.')[-1]
+            return result
+    except Exception:
+        return 'Other'
