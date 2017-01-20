@@ -563,6 +563,7 @@ class rpc(object):
     def __del__(self):
         if self.status != 'closed':
             rpc.active -= 1
+            self.status = 'closed'
             n_open = sum(not stream.closed() for stream in self.streams)
             if n_open:
                 logger.warn("rpc object %s deleted with %d open streams",
