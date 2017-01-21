@@ -23,7 +23,7 @@ from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, PY3
-from ..utils import (repr_long_list, random_state_data,
+from ..utils import (random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M)
 from ..base import Base, compute, tokenize, normalize_token
@@ -2688,7 +2688,6 @@ class DataFrame(_Frame):
         from .reshape import pivot_table
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
-
 
     def to_records(self, index=False):
         from .io import to_records
