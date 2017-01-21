@@ -277,16 +277,6 @@ class _Frame(Base):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def _repr_header(self):
-        name = self._name if len(self._name) < 10 else self._name[:7] + '...'
-        if self.known_divisions:
-            div_text = ', divisions=%s' % repr_long_list(self.divisions)
-        else:
-            div_text = ''
-
-        return ("dd.%s<%s, npartitions=%s%s>" %
-                (self.__class__.__name__, name, self.npartitions, div_text))
-
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
         x = np.array(self._computed)
@@ -315,14 +305,9 @@ class _Frame(Base):
         return divisions
 
     def __repr__(self):
-        with pd.option_context("display.max_rows", 5):
-            data = repr(self._repr_data)
-
-        return """{name}
-
-Dask {klass} Structure:
-{data}""".format(name=self._repr_header(),
-                 klass=self.__class__.__name__,
+        data = self._repr_data.to_string(max_rows=5, show_dimensions=False)
+        return """Dask {klass} Structure:
+{data}""".format(klass=self.__class__.__name__,
                  data=data)
 
     @property
@@ -1635,12 +1620,9 @@ class Series(_Frame):
         else:
             footer = "dtype: {dtype}".format(dtype=self.dtype)
 
-        return """{name}
-
-Dask {klass} Structure:
+        return """Dask {klass} Structure:
 {data}
-{footer}""".format(name=self._repr_header(),
-                   klass=self.__class__.__name__,
+{footer}""".format(klass=self.__class__.__name__,
                    data=self.to_string(),
                    footer=footer)
 
@@ -2715,9 +2697,9 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
-        data = self._repr_data.to_html(max_rows=max_rows)
-        return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
-                                     data=data)
+        data = self._repr_data.to_html(max_rows=max_rows,
+                                       show_dimensions=False)
+        return self._HTML_FMT.format(data=data)
 
     @cache_readonly
     def _repr_data(self):
@@ -2728,15 +2710,13 @@ class DataFrame(_Frame):
                             index=self._repr_divisions,
                             columns=self.columns)
 
-    _HTML_FMT = """{name}
-<div><strong>Dask DataFrame Structure:</strong></div>
+    _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}"""
 
     def _repr_html_(self):
-        with pd.option_context("display.max_rows", 5):
-            data = self._repr_data._repr_html_()
-        return self._HTML_FMT.format(name=_escape_html_tag(self._repr_header()),
-                                     data=data)
+        data = self._repr_data.to_html(max_rows=5,
+                                       show_dimensions=False, notebook=True)
+        return self._HTML_FMT.format(data=data)
 
 
 # bind operators

@@ -10,7 +10,6 @@ def test_repr():
 
     for x in [ddf, ddf.index, ddf.x]:
         assert type(x).__name__ in repr(x)
-        assert x._name[:5] in repr(x)
         assert str(x.npartitions) in repr(x)
 
 
@@ -19,8 +18,7 @@ def test_dataframe_format():
                        'B': list('ABCDEFGH'),
                        'C': pd.Categorical(list('AAABBBCC'))})
     ddf = dd.from_pandas(df, 3)
-    exp = ("dd.DataFrame<from_pa..., npartitions=3, divisions=(0, 3, 6, 7)>\n\n"
-           "Dask DataFrame Structure:\n"
+    exp = ("Dask DataFrame Structure:\n"
            "                   A       B         C\n"
            "npartitions=3                         \n"
            "0              int64  object  category\n"
@@ -81,14 +79,12 @@ def test_dataframe_format():
   </tbody>
 </table>"""
 
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3, divisions=(0, 3, 6, 7)&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3, divisions=(0, 3, 6, 7)&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
 </div>""".format(exp_table=exp_table)
@@ -101,8 +97,7 @@ def test_dataframe_format_with_index():
                        'C': pd.Categorical(list('AAABBBCC'))},
                       index=list('ABCDEFGH'))
     ddf = dd.from_pandas(df, 3)
-    exp = ("dd.DataFrame<from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')>\n\n"
-           "Dask DataFrame Structure:\n"
+    exp = ("Dask DataFrame Structure:\n"
            "                   A       B         C\n"
            "npartitions=3                         \n"
            "A              int64  object  category\n"
@@ -155,14 +150,12 @@ def test_dataframe_format_with_index():
   </tbody>
 </table>"""
 
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
 </div>""".format(exp_table=exp_table)
@@ -177,8 +170,7 @@ def test_dataframe_format_unknown_divisions():
     ddf = ddf.clear_divisions()
     assert not ddf.known_divisions
 
-    exp = ("dd.DataFrame<from_pa..., npartitions=3>\n\n"
-           "Dask DataFrame Structure:\n"
+    exp = ("Dask DataFrame Structure:\n"
            "                   A       B         C\n"
            "npartitions=3                         \n"
            "None           int64  object  category\n"
@@ -239,14 +231,12 @@ def test_dataframe_format_unknown_divisions():
   </tbody>
 </table>"""
 
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=3&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
 </div>""".format(exp_table=exp_table)
@@ -258,12 +248,14 @@ def test_dataframe_format_long():
                        'B': list('ABCDEFGH') * 10,
                        'C': pd.Categorical(list('AAABBBCC') * 10)})
     ddf = dd.from_pandas(df, 10)
-    exp = ("dd.DataFrame<from_pa..., npartitions=10, divisions=(0, 8, 16, ..., 72, 79)>\n\n"
-           "Dask DataFrame Structure:\n                    A       B         C\n"
-           "npartitions=10                         \n0               int64  object  category\n"
-           "8                 ...     ...       ...\n...               ...     ...       ...\n"
-           "72                ...     ...       ...\n79                ...     ...       ...\n\n"
-           "[11 rows x 3 columns]")
+    exp = ('Dask DataFrame Structure:\n'
+           '                    A       B         C\n'
+           'npartitions=10                         \n'
+           '0               int64  object  category\n'
+           '8                 ...     ...       ...\n'
+           '...               ...     ...       ...\n'
+           '72                ...     ...       ...\n'
+           '79                ...     ...       ...')
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
@@ -325,17 +317,14 @@ def test_dataframe_format_long():
   </tbody>
 </table>"""
 
-    exp = """dd.DataFrame&lt;from_pa..., npartitions=10, divisions=(0, 8, 16, ..., 72, 79)&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = u"""dd.DataFrame&lt;from_pa..., npartitions=10, divisions=(0, 8, 16, ..., 72, 79)&gt;
-<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
-<p>11 rows × 3 columns</p>
 </div>""".format(exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
@@ -344,9 +333,7 @@ def test_series_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=list('ABCDEFGH'))
     ds = dd.from_pandas(s, 3)
-    exp = """dd.Series<from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')>
-
-Dask Series Structure:
+    exp = """Dask Series Structure:
 npartitions=3
 A    int64
 D      ...
@@ -366,9 +353,7 @@ H      ..."""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=list('ABCDEFGH'), name='XXX')
     ds = dd.from_pandas(s, 3)
-    exp = """dd.Series<from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')>
-
-Dask Series Structure:
+    exp = """Dask Series Structure:
 npartitions=3
 A    int64
 D      ...
@@ -383,8 +368,7 @@ def test_series_format_long():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 10,
                   index=list('ABCDEFGHIJ') * 10)
     ds = dd.from_pandas(s, 10)
-    exp = ("dd.Series<from_pa..., npartitions=10, divisions=('A', 'B', 'C', ..., 'J', 'J')>\n\n"
-           "Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
+    exp = ("Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
            "     ...  \nJ      ...\nJ      ...\ndtype: int64")
     assert repr(ds) == exp
     assert str(ds) == exp
@@ -397,9 +381,7 @@ def test_index_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=list('ABCDEFGH'))
     ds = dd.from_pandas(s, 3)
-    exp = """dd.Index<from_pa..., npartitions=3, divisions=('A', 'D', 'G', 'H')>
-
-Dask Index Structure:
+    exp = """Dask Index Structure:
 npartitions=3
 A    object
 D       ...
@@ -412,9 +394,7 @@ dtype: object"""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=pd.CategoricalIndex([1, 2, 3, 4, 5, 6, 7, 8], name='YYY'))
     ds = dd.from_pandas(s, 3)
-    exp = """dd.Index<from_pa..., npartitions=3, divisions=(1, 4, 7, 8)>
-
-Dask Index Structure:
+    exp = """Dask Index Structure:
 npartitions=3
 1    category
 4         ...
