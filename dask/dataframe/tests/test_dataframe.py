@@ -1403,7 +1403,10 @@ def test_datetime_accessor():
     # pandas loses Series.name via datetime accessor
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(a.x.dt.date, df.x.dt.date, check_names=False)
-    assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
+
+    # to_pydatetime returns an array
+    from dask.array.utils import assert_eq as array_assert_eq
+    array_assert_eq(a.x.dt.to_pydatetime(), df.x.dt.to_pydatetime())
 
     assert set(a.x.dt.date.dask) == set(a.x.dt.date.dask)
     assert set(a.x.dt.to_pydatetime().dask) == set(a.x.dt.to_pydatetime().dask)
@@ -2003,11 +2006,14 @@ def test_apply_infer_columns():
 
 
 def test_index_time_properties():
+    # index properties return arrays
+    from dask.array.utils import assert_eq as array_assert_eq
     i = tm.makeTimeSeries()
     a = dd.from_pandas(i, npartitions=3)
 
-    assert (i.index.day == a.index.day.compute()).all()
-    assert (i.index.month == a.index.month.compute()).all()
+    assert 'day' in dir(a.index)
+    array_assert_eq(a.index.day, i.index.day)
+    array_assert_eq(a.index.month, i.index.month)
 
 
 def test_nlargest_nsmallest():

@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import pandas as pd
 
 from ..base import compute
@@ -119,11 +118,10 @@ class CategoricalAccessor(Accessor):
     @staticmethod
     def _delegate_property(obj, attr):
         cat = obj if isinstance(obj, pd.CategoricalIndex) else obj.cat
-        out = getattr(cat, attr)
-        return pd.Index(out) if isinstance(out, np.ndarray) else out
+        return getattr(cat, attr)
 
     @staticmethod
-    def _delegate_method(obj, attr, *args, **kwargs):
+    def _delegate_method(obj, attr, args, kwargs):
         cat = obj if isinstance(obj, pd.CategoricalIndex) else obj.cat
         return getattr(cat, attr)(*args, **kwargs)
 
@@ -167,8 +165,10 @@ class CategoricalAccessor(Accessor):
 
         If categories are unknown, an error is raised"""
         if not self.known:
-            raise NotImplementedError("`df.cat.categories` with unknown "
-                                      "categories")
+            msg = ("`df.column.cat.categories` with unknown categories is not "
+                   "supported.  Please use `column.cat.as_known()` or "
+                   "`df.categorize()` beforehand to ensure known categories")
+            raise NotImplementedError(msg)
         return self._delegate_property(self._series._meta, 'categories')
 
     @property
@@ -177,7 +177,10 @@ class CategoricalAccessor(Accessor):
 
         If categories are unknown, an error is raised"""
         if not self.known:
-            raise NotImplementedError("`df.cat.codes` with unknown categories")
+            msg = ("`df.column.cat.codes` with unknown categories is not "
+                   "supported.  Please use `column.cat.as_known()` or "
+                   "`df.categorize()` beforehand to ensure known categories")
+            raise NotImplementedError(msg)
         return self._property_map('codes')
 
     def remove_unused_categories(self):
@@ -203,5 +206,7 @@ class CategoricalAccessor(Accessor):
         new_categories = ordered[mask != -1]
         meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
         return self._series.map_partitions(self._delegate_method,
-                                           'set_categories', meta=meta,
-                                           new_categories=new_categories)
+                                           'set_categories', (),
+                                           {'new_categories': new_categories},
+                                           meta=meta,
+                                           token='cat-set_categories')

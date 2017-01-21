@@ -55,8 +55,9 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                    "convert to categorical dtype.")
 
     unknown_cat_msg = ("`get_dummies` with unknown categories is not "
-                       "supported. Please use `df.cat.set_categories` or "
-                       "`df.categorize` beforehand to ensure known categories")
+                       "supported. Please use `column.cat.as_known()` or "
+                       "`df.categorize()` beforehand to ensure known "
+                       "categories")
 
     if isinstance(data, Series):
         if not is_categorical_dtype(data):
@@ -119,7 +120,9 @@ def pivot_table(df, index=None, columns=None,
     if not is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
     if not has_known_categories(df[columns]):
-        raise ValueError("'columns' must have known categories")
+        raise ValueError("'columns' must have known categories. Please use "
+                         "`df[columns].cat.as_known()` beforehand to ensure "
+                         "known categories")
     if not is_scalar(values) or values is None:
         raise ValueError("'values' must be the name of an existing column")
     if not is_scalar(aggfunc) or aggfunc not in ('mean', 'sum', 'count'):

@@ -1,8 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 import pandas as pd
+from toolz import partial
 
-from .core import Series, partial
+from ..base import tokenize
+from .core import Series
 
 
 class Accessor(object):
@@ -31,18 +34,35 @@ class Accessor(object):
         pass
 
     def _property_map(self, key):
+        from ..array.core import Array
+
         meta = self._delegate_property(self._series._meta, key)
         token = '%s-%s' % (self._accessor_name, key)
-        return self._series.map_partitions(self._delegate_property, key,
-                                           token=token, meta=meta)
+        if not isinstance(meta, np.ndarray):
+            return self._series.map_partitions(self._delegate_property, key,
+                                               token=token, meta=meta)
+        chunks = ((np.nan,) * self._series.npartitions,)
+        name = '%s-%s' % (token, tokenize(self._series))
+        dsk = {(name, i): (self._delegate_property, old_key, key)
+               for (i, old_key) in enumerate(self._series._keys())}
+        dsk.update(self._series.dask)
+        return Array(dsk, name, chunks, meta.dtype)
 
     def _function_map(self, key, *args, **kwargs):
+        from ..array.core import Array
+
         meta = self._delegate_method(self._series._meta_nonempty, key,
-                                     *args, **kwargs)
+                                     args, kwargs)
         token = '%s-%s' % (self._accessor_name, key)
-        return self._series.map_partitions(self._delegate_method, key,
-                                           *args, meta=meta, token=token,
-                                           **kwargs)
+        if not isinstance(meta, np.ndarray):
+            return self._series.map_partitions(self._delegate_method, key,
+                                               args, kwargs, meta=meta, token=token)
+        chunks = ((np.nan,) * self._series.npartitions,)
+        name = '%s-%s' % (token, tokenize(self._series, args, kwargs))
+        dsk = {(name, i): (self._delegate_method, old_key, key, args, kwargs)
+               for (i, old_key) in enumerate(self._series._keys())}
+        dsk.update(self._series.dask)
+        return Array(dsk, name, chunks, meta.dtype)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
@@ -71,11 +91,11 @@ class DatetimeAccessor(Accessor):
 
     @staticmethod
     def _delegate_property(obj, attr):
-        return getattr(obj.dt, attr)
+        return getattr(getattr(obj, 'dt', obj), attr)
 
     @staticmethod
-    def _delegate_method(obj, attr, *args, **kwargs):
-        return getattr(obj.dt, attr)(*args, **kwargs)
+    def _delegate_method(obj, attr, args, kwargs):
+        return getattr(getattr(obj, 'dt', obj), attr)(*args, **kwargs)
 
 
 class StringAccessor(Accessor):
@@ -98,5 +118,5 @@ class StringAccessor(Accessor):
         return getattr(obj.str, attr)
 
     @staticmethod
-    def _delegate_method(obj, attr, *args, **kwargs):
+    def _delegate_method(obj, attr, args, kwargs):
         return getattr(obj.str, attr)(*args, **kwargs)

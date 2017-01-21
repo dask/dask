@@ -8,6 +8,7 @@ import pytest
 
 import dask
 from dask.async import get_sync
+from dask.array.utils import assert_eq as array_assert_eq
 import dask.dataframe as dd
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories
@@ -229,19 +230,28 @@ def get_cat(x):
     return x if isinstance(x, pd.CategoricalIndex) else x.cat
 
 
+def assert_array_or_index_eq(left, right):
+    if isinstance(left, pd.Index):
+        tm.assert_index_equal(left, right)
+    elif isinstance(left, np.ndarray):
+        tm.assert_numpy_array_equal(left, right)
+    elif isinstance(left, dd.Series):
+        assert_eq(left, right)
+    else:
+        array_assert_eq(left, right)
+
+
 class TestCategoricalAccessor:
 
     @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('prop, compare', [
-        ('categories', tm.assert_index_equal),
+        ('categories', assert_array_or_index_eq),
         ('ordered', assert_eq),
-        ('codes', assert_eq),
+        ('codes', assert_array_or_index_eq)
     ])
     def test_properties(self, series, prop, compare):
         s, ds = series
         expected = getattr(get_cat(s), prop)
-        if isinstance(expected, np.ndarray):
-            expected = pd.Index(expected)
         result = getattr(get_cat(ds), prop)
         compare(result, expected)
 
@@ -297,12 +307,10 @@ class TestCategoricalAccessor:
         db = da.cat.set_categories(['a', 'b', 'c'])
         assert db.cat.known
         tm.assert_index_equal(db.cat.categories, get_cat(a).categories)
-        assert_eq(db.cat.codes,
-                  pd.Index(a.codes) if isinstance(a, pd.Index) else a.cat.codes)
+        assert_array_or_index_eq(db.cat.codes, get_cat(a).codes)
 
         db = da.cat.as_known()
         assert db.cat.known
         res = db.compute()
         tm.assert_index_equal(db.cat.categories, get_cat(res).categories)
-        assert_eq(db.cat.codes, (pd.Index(res.codes) if isinstance(res, pd.Index)
-                                 else res.cat.codes))
+        assert_array_or_index_eq(db.cat.codes, get_cat(res).codes)

@@ -7,7 +7,7 @@ from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, partial, first, unique, partition_all
+from toolz import merge, first, unique, partition_all
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -1887,19 +1887,28 @@ class Index(Series):
     _partition_type = pd.Index
     _token_prefix = 'index-'
 
+    _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
+                      'minute', 'hour', 'day', 'dayofweek', 'second', 'week',
+                      'weekday', 'weekofyear', 'month', 'quarter', 'year'}
+
+    _cat_attributes = {'known', 'as_known', 'as_unknown', 'add_categories',
+                       'categories', 'remove_categories', 'reorder_categories',
+                       'as_ordered', 'codes', 'remove_unused_categories',
+                       'set_categories', 'as_unordered', 'ordered',
+                       'rename_categories'}
+
     def __getattr__(self, key):
-        # If categorical index, add categorical accessor methods
-        if (not key.startswith('_') and
-                is_categorical_dtype(self.dtype) and
-                hasattr(pd.Series.cat, key)):
+        if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
+        elif key in self._dt_attributes:
+            return getattr(self.dt, key)
         raise AttributeError("'Index' object has no attribute %r" % key)
 
     def __dir__(self):
         out = super(Index, self).__dir__()
-        # If categorical index, add categorical accessor methods
+        out.extend(self._dt_attributes)
         if is_categorical_dtype(self.dtype):
-            out.extend(dir(pd.Series.cat))
+            out.extend(self._cat_attributes)
         return out
 
     @property
@@ -2673,17 +2682,6 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
 
     meth = getattr(pd.Series, name)
     Series._bind_comparison_method(name, meth)
-
-
-def elemwise_property(attr, s):
-    meta = pd.Series([], dtype=getattr(s._meta, attr).dtype)
-    return map_partitions(getattr, s, attr, meta=meta)
-
-
-for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
-             'hour', 'day', 'dayofweek', 'dayofyear', 'week', 'weekday',
-             'weekofyear', 'month', 'quarter', 'year']:
-    setattr(Index, name, property(partial(elemwise_property, name)))
 
 
 def elemwise(op, *args, **kwargs):
