@@ -108,7 +108,6 @@ def test_Series():
     assert isinstance(d.a, dd.Series)
     assert isinstance(d.a + 1, dd.Series)
     assert_eq((d + 1), full + 1)
-    assert repr(d.a).startswith('dd.Series')
 
 
 def test_Index():
@@ -118,7 +117,6 @@ def test_Index():
                                                   periods=10))]:
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
-        assert repr(ddf.index).startswith('dd.Index')
         pytest.raises(AttributeError, lambda: ddf.index.index)
 
 

@@ -24,7 +24,8 @@ def test_dataframe_format():
            "0              int64  object  category\n"
            "3                ...     ...       ...\n"
            "6                ...     ...       ...\n"
-           "7                ...     ...       ...")
+           "7                ...     ...       ...\n"
+           "Dask Name: from_pa, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
@@ -80,14 +81,16 @@ def test_dataframe_format():
 </table>"""
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
-{exp_table}""".format(exp_table=exp_table)
+{exp_table}
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
-</div>""".format(exp_table=exp_table)
+</div>
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -103,7 +106,8 @@ def test_dataframe_format_with_index():
            "A              int64  object  category\n"
            "D                ...     ...       ...\n"
            "G                ...     ...       ...\n"
-           "H                ...     ...       ...")
+           "H                ...     ...       ...\n"
+           "Dask Name: from_pa, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
@@ -151,14 +155,16 @@ def test_dataframe_format_with_index():
 </table>"""
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
-{exp_table}""".format(exp_table=exp_table)
+{exp_table}
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
-</div>""".format(exp_table=exp_table)
+</div>
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -176,7 +182,8 @@ def test_dataframe_format_unknown_divisions():
            "None           int64  object  category\n"
            "None             ...     ...       ...\n"
            "None             ...     ...       ...\n"
-           "None             ...     ...       ...")
+           "None             ...     ...       ...\n"
+           "Dask Name: from_pa, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
@@ -232,14 +239,16 @@ def test_dataframe_format_unknown_divisions():
 </table>"""
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
-{exp_table}""".format(exp_table=exp_table)
+{exp_table}
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
-</div>""".format(exp_table=exp_table)
+</div>
+<div>Dask Name: from_pa, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -255,7 +264,8 @@ def test_dataframe_format_long():
            '8                 ...     ...       ...\n'
            '...               ...     ...       ...\n'
            '72                ...     ...       ...\n'
-           '79                ...     ...       ...')
+           '79                ...     ...       ...\n'
+           'Dask Name: from_pa, 10 tasks')
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
@@ -318,14 +328,16 @@ def test_dataframe_format_long():
 </table>"""
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
-{exp_table}""".format(exp_table=exp_table)
+{exp_table}
+<div>Dask Name: from_pa, 10 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
     # table is boxed with div
     exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {exp_table}
-</div>""".format(exp_table=exp_table)
+</div>
+<div>Dask Name: from_pa, 10 tasks</div>""".format(exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -339,7 +351,8 @@ A    int64
 D      ...
 G      ...
 H      ...
-dtype: int64"""
+dtype: int64
+Dask Name: from_pa, 3 tasks"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -359,7 +372,8 @@ A    int64
 D      ...
 G      ...
 H      ...
-Name: XXX, dtype: int64"""
+Name: XXX, dtype: int64
+Dask Name: from_pa, 3 tasks"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -369,7 +383,8 @@ def test_series_format_long():
                   index=list('ABCDEFGHIJ') * 10)
     ds = dd.from_pandas(s, 10)
     exp = ("Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
-           "     ...  \nJ      ...\nJ      ...\ndtype: int64")
+           "     ...  \nJ      ...\nJ      ...\ndtype: int64\n"
+           "Dask Name: from_pa, 10 tasks")
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -387,7 +402,8 @@ A    object
 D       ...
 G       ...
 H       ...
-dtype: object"""
+dtype: object
+Dask Name: from_pa, 6 tasks"""
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -400,6 +416,7 @@ npartitions=3
 4         ...
 7         ...
 8         ...
-Name: YYY, dtype: category"""
+Name: YYY, dtype: category
+Dask Name: from_pa, 6 tasks"""
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
