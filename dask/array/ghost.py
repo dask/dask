@@ -3,13 +3,13 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 
-from toolz import merge, pipe, concat, partition, partial
+from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
-from .core import Array, map_blocks, concatenate, concatenate3
+from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
 from . import chunk, wrap
 
 
@@ -79,20 +79,7 @@ def expand_key(k, dims):
 
     seq = list(product([k[0]], *[inds(i, ind)
                                  for i, ind in enumerate(k[1:])]))
-    return reshape(shape, seq)
-
-
-def reshape(shape, seq):
-    """ Reshape iterator to nested shape
-
-    >>> reshape((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshape(shape[1:], part) for part in partition(n, seq)]
+    return reshapelist(shape, seq)
 
 
 def ghost_internal(x, axes):
