@@ -3305,7 +3305,7 @@ def shapelist(a):
 def reshapelist(shape, seq):
     """ Reshape iterator to nested shape
 
-    >>> reshape((2, 3), range(6))
+    >>> reshapelist((2, 3), range(6))
     [[0, 1, 2], [3, 4, 5]]
     """
     if len(shape) == 1:
@@ -3333,7 +3333,7 @@ def transposelist(arrays, axes, extradims=0):
 
     ndim = max(axes)+1
     shape = shapelist(arrays)
-    newshape = [shape[axes.index(i)] if i in axes else 1 for i in xrange(ndim+extradims)]
+    newshape = [shape[axes.index(i)] if i in axes else 1 for i in range(ndim+extradims)]
 
     result = list(core.flatten(arrays))
     return reshapelist(newshape, result)
