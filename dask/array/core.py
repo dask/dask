@@ -3295,12 +3295,14 @@ def ndimlist(seq):
     else:
         return 1 + ndimlist(seq[0])
 
+
 def shapelist(a):
     """ Get the shape of nested list """
     if type(a) is list:
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
         return ()
+
 
 def reshapelist(shape, seq):
     """ Reshape iterator to nested shape
@@ -3321,7 +3323,7 @@ def transposelist(arrays, axes, extradims=0):
     >>> transposelist([[1,1,1],[1,1,1]], [2,1])
     [[[1, 1], [1, 1], [1, 1]]]
 
-    >>> transposelist([[1,1,1],[1,1,1]], [2,1], extradims=1) 
+    >>> transposelist([[1,1,1],[1,1,1]], [2,1], extradims=1)
     [[[[1], [1]], [[1], [1]], [[1], [1]]]]
     """
     if len(axes) != ndimlist(arrays):
@@ -3331,12 +3333,13 @@ def transposelist(arrays, axes, extradims=0):
     if len(axes) > len(set(axes)):
         raise ValueError("`axes` should be unique")
 
-    ndim = max(axes)+1
+    ndim = max(axes) + 1
     shape = shapelist(arrays)
-    newshape = [shape[axes.index(i)] if i in axes else 1 for i in range(ndim+extradims)]
+    newshape = [shape[axes.index(i)] if i in axes else 1 for i in range(ndim + extradims)]
 
     result = list(core.flatten(arrays))
     return reshapelist(newshape, result)
+
 
 def concatenate3(arrays):
     """ Recursive np.concatenate
@@ -3386,8 +3389,9 @@ def concatenate_axes(arrays, axes):
     if len(axes) != ndimlist(arrays):
         raise ValueError("Length of axes should equal depth of nested arrays")
 
-    extradims=max(0, deepfirst(arrays).ndim-(max(axes)+1))
+    extradims = max(0, deepfirst(arrays).ndim - (max(axes) + 1))
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
+
 
 def to_hdf5(filename, *args, **kwargs):
     """ Store arrays in HDF5 file

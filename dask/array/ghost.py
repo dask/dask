@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 
-from toolz import merge, pipe, concat, partition, partial
+from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
 from ..base import tokenize
