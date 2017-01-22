@@ -407,6 +407,14 @@ def redict_collection(c, dsk):
 
 
 def persist(*args, **kwargs):
+    try:
+        from distributed.client import default_client
+        if len(args) == 1:
+            return default_client().persist(*args, **kwargs)
+        else:
+            return default_client().persist(args, **kwargs)
+    except (ImportError, ValueError):
+        pass
     optimize_graph = kwargs.pop('optimize_graph', True)
     collections = [a for a in args if isinstance(a, Base)]
     if not collections:
