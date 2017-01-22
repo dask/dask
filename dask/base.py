@@ -407,18 +407,25 @@ def redict_collection(c, dsk):
 
 
 def persist(*args, **kwargs):
-    try:
-        from distributed.client import default_client
-        if len(args) == 1:
-            return default_client().persist(*args, **kwargs)
-        else:
-            return default_client().persist(args, **kwargs)
-    except (ImportError, ValueError):
-        pass
-    optimize_graph = kwargs.pop('optimize_graph', True)
     collections = [a for a in args if isinstance(a, Base)]
     if not collections:
         return args
+
+    try:
+        from distributed.client import default_client
+        collections = default_client().persist(collections, **kwargs)
+        if isinstance(collections, list):  # distributed is inconsistent here
+            collections = tuple(collections)
+        else:
+            collections = (collections,)
+        results_iter = iter(collections)
+        return tuple(a if not isinstance(a, Base)
+                     else next(results_iter)
+                     for a in args)
+
+    except (ImportError, ValueError):
+        pass
+    optimize_graph = kwargs.pop('optimize_graph', True)
 
     get = kwargs.pop('get', None) or _globals['get']
 
