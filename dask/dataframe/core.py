@@ -25,7 +25,7 @@ from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
-                     put_lines, M)
+                     put_lines, M, key_split)
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
@@ -294,10 +294,6 @@ class _Frame(Base):
         raise NotImplementedError
 
     @property
-    def _repr_name(self):
-        return self._name if len(self._name) < 10 else self._name[:7]
-
-    @property
     def _repr_divisions(self):
         name = "npartitions={0}".format(self.npartitions)
         if self.known_divisions:
@@ -313,7 +309,7 @@ class _Frame(Base):
         return """Dask {klass} Structure:
 {data}
 Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
-                                          data=data, name=self._repr_name,
+                                          data=data, name=key_split(self._name),
                                           task=len(self.dask))
 
     @property
@@ -1632,7 +1628,7 @@ class Series(_Frame):
 Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           data=self.to_string(),
                                           footer=footer,
-                                          name=self._repr_name,
+                                          name=key_split(self._name),
                                           task=len(self.dask))
 
     @derived_from(pd.Series)
@@ -2708,7 +2704,7 @@ class DataFrame(_Frame):
         # pd.Series doesn't have html repr
         data = self._repr_data.to_html(max_rows=max_rows,
                                        show_dimensions=False)
-        return self._HTML_FMT.format(data=data, name=self._repr_name,
+        return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
     @cache_readonly
@@ -2727,7 +2723,7 @@ class DataFrame(_Frame):
     def _repr_html_(self):
         data = self._repr_data.to_html(max_rows=5,
                                        show_dimensions=False, notebook=True)
-        return self._HTML_FMT.format(data=data, name=self._repr_name,
+        return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
 
