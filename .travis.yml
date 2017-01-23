@@ -22,11 +22,15 @@ install:
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
   - conda update conda
+  - git clone -b fix-not-in-cache-error --single-branch --depth 1000 https://github.com/conda/conda.git
+  - pushd conda
+  - $HOME/miniconda/bin/python setup.py install
+  - popd
 
   # Install dependencies
   - conda create -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -c conda-forge numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython numba
+  - conda install -c conda-forge numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython numba -vvv
   - if [[ $PYTHON != '3.3' ]]; then conda install -c conda-forge pandas=$PANDAS distributed cloudpickle bokeh python-lmdb sortedcollections; fi
   - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/zict --upgrade --no-deps; fi
   - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/distributed --upgrade --no-deps; fi
