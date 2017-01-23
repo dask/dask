@@ -24,8 +24,15 @@ else:
                     os.mkdir(os.path.dirname(destination))
                 except FileExistsError:
                     pass
-            shutil.copy(default_path, destination)
-
+            # Atomically create destination.  Parallel testing discovered
+            # a race condition where a process can be busy creating the
+            # destination while another process reads an empty config file.
+            tmp = '%s.tmp.%d' % (destination, os.getpid())
+            shutil.copy(default_path, tmp)
+            try:
+                os.rename(tmp, destination)
+            except OSError:
+                os.remove(tmp)
 
     def load_config_file(path=dask_config_path):
         if not os.path.exists(path):
