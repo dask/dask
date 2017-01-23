@@ -192,3 +192,18 @@ def test_roundtrip(df, write_kwargs, read_kwargs):
         to_parquet(tmp, ddf, **write_kwargs)
         ddf2 = read_parquet(tmp, index=df.index.name, **read_kwargs)
         assert_eq(ddf, ddf2)
+
+
+def test_categories(fn):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': list('caaab')})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf['y'] = ddf.y.astype('category')
+    ddf.to_parquet(fn)
+    ddf2 = dd.read_parquet(fn, categories=['y'])
+    with pytest.raises(NotImplementedError):
+        ddf2.y.cat.categories
+    assert set(ddf2.y.compute().cat.categories) == {'a', 'b', 'c'}
+    cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories).compute()
+    assert cats_set.tolist() == ['a', 'c', 'a', 'b']
+    assert ddf.compute().y.tolist() == ddf2.compute().y.tolist()
