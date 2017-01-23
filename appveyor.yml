@@ -27,7 +27,7 @@ init:
 install:
   # Update to a known good conda
   # (to workaround http://help.appveyor.com/discussions/problems/4910)
-  - conda install -q -y conda=4.2.9
+  - conda install -q -y conda -c conda-canary
   - continuous_integration\\setup_conda_environment.cmd
 
 build_script:
