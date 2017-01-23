@@ -102,11 +102,11 @@ The known/unknown status for a categorical column can be found using the
 
 Additionally, an unknown categorical can be converted to known using
 ``.cat.as_known()``. If you have multiple categorical columns in a dataframe,
-you may instead want to use ``df.categorize(cols=...)``, which will convert all
-specified columns to known categoricals. Since getting the categories requires
-a full scan of the data, using ``df.categorize()`` is more efficient than
-calling ``.cat.as_known()`` for each column (which would result in multiple
-scans).
+you may instead want to use ``df.categorize(columns=...)``, which will convert
+all specified columns to known categoricals. Since getting the categories
+requires a full scan of the data, using ``df.categorize()`` is more efficient
+than calling ``.cat.as_known()`` for each column (which would result in
+multiple scans).
 
 .. code-block:: python
 
@@ -124,15 +124,19 @@ change in the metadata.
 Non-categorical columns can be converted to categoricals in a few different
 ways:
 
-- ``ddf.astype({col_name: 'category', ...})`` and
-  ``ddf.col.astype('category')`` operate lazily, and result in unknown
-  categoricals.
-- ``ddf.categorize(cols=...)`` requires computation, and results in known
-  categoricals.
+.. code-block:: python
 
-Additionally, with pandas 0.19.2 and up, ``dd.read_csv`` and ``dd.read_table``
-can read data directly into unknown categorical columns by specifying
-a column dtype as ``'category'``:
+    # astype operates lazily, and results in unknown categoricals
+    ddf = ddf.astype({'mycol': 'category', ...})
+    # or
+    ddf['mycol'] = ddf.mycol.astype('category')
+
+    # categorize requires computation, and results in known categoricals
+    ddf = ddf.categorize(columns=['mycol', ...])
+
+Additionally, with pandas 0.19.2 and up ``dd.read_csv`` and ``dd.read_table``
+can read data directly into unknown categorical columns by specifying a column
+dtype as ``'category'``:
 
 .. code-block:: python
 
