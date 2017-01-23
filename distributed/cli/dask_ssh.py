@@ -29,12 +29,13 @@ from distributed.cli.utils import check_python_3
               help="Port to use for SSH connections.")
 @click.option('--ssh-private-key', default=None, type=str,
               help="Private key file to use for SSH connections.")
-
+@click.option('--nohost', is_flag=True,
+              help="Do not pass the hostname to the worker.")
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
               help="Directory to use on all cluster nodes for the output of dask-scheduler and dask-worker commands.")
 @click.pass_context
 def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
-          ssh_username, ssh_port, ssh_private_key, log_directory):
+          ssh_username, ssh_port, ssh_private_key, nohost, log_directory):
     try:
         hostnames = list(hostnames)
         if hostfile:
@@ -50,7 +51,7 @@ def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
         exit(1)
 
     c = SSHCluster(scheduler, scheduler_port, hostnames, nthreads, nprocs,
-                ssh_username, ssh_port, ssh_private_key, log_directory)
+                ssh_username, ssh_port, ssh_private_key, nohost, log_directory)
 
     import distributed
     print('\n---------------------------------------------------------------')

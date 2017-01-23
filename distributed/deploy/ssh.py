@@ -184,9 +184,12 @@ def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key)
     return merge(cmd_dict, {'thread': thread})
 
 def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, nprocs,
-                 ssh_username, ssh_port, ssh_private_key):
+                 ssh_username, ssh_port, ssh_private_key, nohost):
 
-    cmd = '{python} -m distributed.cli.dask_worker {scheduler_addr}:{scheduler_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
+    cmd = '{python} -m distributed.cli.dask_worker {scheduler_addr}:{scheduler_port} --nthreads {nthreads} --nprocs {nprocs}'
+    if not nohost:
+        cmd += ' --host {worker_addr}'
+    cmd = cmd.format(
         python = sys.executable,
         scheduler_addr = scheduler_addr, scheduler_port = scheduler_port,
         worker_addr = worker_addr,
@@ -221,7 +224,8 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
 
 class SSHCluster(object):
     def __init__(self, scheduler_addr, scheduler_port, worker_addrs, nthreads = 0, nprocs = 1,
-                 ssh_username = None, ssh_port = 22, ssh_private_key = None, logdir = None):
+                 ssh_username = None, ssh_port = 22, ssh_private_key = None,
+                 nohost = False, logdir = None):
 
         self.scheduler_addr = scheduler_addr
         self.scheduler_port = scheduler_port
@@ -231,6 +235,8 @@ class SSHCluster(object):
         self.ssh_username = ssh_username
         self.ssh_port = ssh_port
         self.ssh_private_key = ssh_private_key
+
+        self.nohost = nohost
 
         # Generate a universal timestamp to use for log files
         import datetime
@@ -276,7 +282,7 @@ class SSHCluster(object):
 
     def add_worker(self, address):
         self.workers.append(start_worker(self.logdir, self.scheduler_addr, self.scheduler_port, address, self.nthreads,
-                                         self.nprocs, self.ssh_username, self.ssh_port, self.ssh_private_key))
+                                         self.nprocs, self.ssh_username, self.ssh_port, self.ssh_private_key, self.nohost))
 
     def shutdown(self):
         all_processes = [self.scheduler] + self.workers
