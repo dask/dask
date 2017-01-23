@@ -439,6 +439,30 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
+def test_from_dask_array_unknown_chunks():
+    # Series
+    dx = da.Array({('x', 0): np.arange(5), ('x', 1): np.arange(5, 11)}, 'x',
+                  ((np.nan, np.nan,),), np.arange(1).dtype)
+    df = dd.from_dask_array(dx)
+    assert isinstance(df, dd.Series)
+    assert not df.known_divisions
+    assert_eq(df, pd.Series(np.arange(11)), check_index=False)
+
+    # DataFrame
+    dsk = {('x', 0, 0): np.random.random((2, 3)),
+           ('x', 1, 0): np.random.random((5, 3))}
+    dx = da.Array(dsk, 'x', ((np.nan, np.nan,), (3,)), np.float64)
+    df = dd.from_dask_array(dx)
+    assert isinstance(df, dd.DataFrame)
+    assert not df.known_divisions
+    assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
+
+    # Unknown width
+    dx = da.Array(dsk, 'x', ((np.nan, np.nan,), (np.nan,)), np.float64)
+    with pytest.raises(ValueError):
+        df = dd.from_dask_array(dx)
+
+
 def test_to_castra():
     castra = pytest.importorskip('castra')
     blosc = pytest.importorskip('blosc')
