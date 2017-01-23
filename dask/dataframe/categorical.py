@@ -115,16 +115,6 @@ class CategoricalAccessor(Accessor):
             raise AttributeError("Can only use .cat accessor with a "
                                  "'category' dtype")
 
-    @staticmethod
-    def _delegate_property(obj, attr):
-        cat = obj if isinstance(obj, pd.CategoricalIndex) else obj.cat
-        return getattr(cat, attr)
-
-    @staticmethod
-    def _delegate_method(obj, attr, args, kwargs):
-        cat = obj if isinstance(obj, pd.CategoricalIndex) else obj.cat
-        return getattr(cat, attr)(*args, **kwargs)
-
     @property
     def known(self):
         """Whether the categories are fully known"""
@@ -157,7 +147,7 @@ class CategoricalAccessor(Accessor):
 
     @property
     def ordered(self):
-        return self._delegate_property(self._series._meta, 'ordered')
+        return self._delegate_property(self._series._meta, 'cat', 'ordered')
 
     @property
     def categories(self):
@@ -169,7 +159,7 @@ class CategoricalAccessor(Accessor):
                    "supported.  Please use `column.cat.as_known()` or "
                    "`df.categorize()` beforehand to ensure known categories")
             raise NotImplementedError(msg)
-        return self._delegate_property(self._series._meta, 'categories')
+        return self._delegate_property(self._series._meta, 'cat', 'categories')
 
     @property
     def codes(self):
@@ -205,7 +195,7 @@ class CategoricalAccessor(Accessor):
         ordered, mask = present.reindex(meta_cat.categories)
         new_categories = ordered[mask != -1]
         meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
-        return self._series.map_partitions(self._delegate_method,
+        return self._series.map_partitions(self._delegate_method, 'cat',
                                            'set_categories', (),
                                            {'new_categories': new_categories},
                                            meta=meta,

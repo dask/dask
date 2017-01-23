@@ -1404,9 +1404,9 @@ def test_datetime_accessor():
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(a.x.dt.date, df.x.dt.date, check_names=False)
 
-    # to_pydatetime returns an array
-    from dask.array.utils import assert_eq as array_assert_eq
-    array_assert_eq(a.x.dt.to_pydatetime(), df.x.dt.to_pydatetime())
+    # to_pydatetime returns a numpy array in pandas, but a Series in dask
+    assert_eq(a.x.dt.to_pydatetime(),
+              pd.Series(df.x.dt.to_pydatetime(), index=df.index, dtype=object))
 
     assert set(a.x.dt.date.dask) == set(a.x.dt.date.dask)
     assert set(a.x.dt.to_pydatetime().dask) == set(a.x.dt.to_pydatetime().dask)
@@ -2006,14 +2006,13 @@ def test_apply_infer_columns():
 
 
 def test_index_time_properties():
-    # index properties return arrays
-    from dask.array.utils import assert_eq as array_assert_eq
     i = tm.makeTimeSeries()
     a = dd.from_pandas(i, npartitions=3)
 
     assert 'day' in dir(a.index)
-    array_assert_eq(a.index.day, i.index.day)
-    array_assert_eq(a.index.month, i.index.month)
+    # returns a numpy array in pandas, but a Index in dask
+    assert_eq(a.index.day, pd.Index(i.index.day))
+    assert_eq(a.index.month, pd.Index(i.index.month))
 
 
 def test_nlargest_nsmallest():
