@@ -51,14 +51,14 @@ functions support an optional ``meta`` keyword, which allows specifying the
 metadata directly, avoiding the inference step. For convenience, this supports
 several options:
 
-- A pandas object with appropriate dtypes and names. If not empty, an empty
-  slice will be taken:
+1. A pandas object with appropriate dtypes and names. If not empty, an empty
+   slice will be taken:
 
 .. code-block:: python
 
   >>> ddf.map_partitions(foo, meta=pd.DataFrame({'a': [1], 'b': [2]}))
 
-- A description of the appropriate names and dtypes. This can take several forms:
+2. A description of the appropriate names and dtypes. This can take several forms:
 
     * A ``dict`` of ``{name: dtype}`` or an iterable of ``(name, dtype)``
       specifies a dataframe
@@ -68,6 +68,56 @@ several options:
 This keyword is available on all functions/methods that take user provided
 callables (e.g. ``DataFrame.map_partitions``, ``DataFrame.apply``, etc...), as
 well as many creation functions (e.g. ``dd.from_delayed``).
+
+Categoricals
+------------
+
+Dask dataframe divides `categorical data`_ into two types:
+
+- Known categoricals have the ``categories`` known statically (on the ``_meta``
+  attribute). Each partition **must** have the same categories as found on the
+  ``_meta`` attribute.
+- Unknown categoricals don't known the categories statically, and may have
+  different categories in each partition.  Internally, unknown categoricals are
+  indicated by the presence of ``dd.utils.UNKNOWN_CATEGORIES`` in the
+  categories on the ``_meta`` attribute.  Since most dataframe operations
+  propogate the categories, the known/unknown status should propogate through
+  operations (similar to how ``NaN`` does).
+
+For metadata specified as a description (option 2 above), unknown categoricals
+are created.
+
+Certain operations are only available for known categoricals. For example,
+``df.col.cat.categories`` would only work if ``df.col`` has known categories,
+since the categorical mapping is only known statically on the metadata of known
+categoricals.
+
+The known/unknown status for a categorical column can be found using the
+``known`` property on the categorical accessor:
+
+.. code-block:: python
+
+    >>> ddf.col.cat.known
+    False
+
+Additionally, an unknown categorical can be converted to known using
+``.cat.as_known()``. If you have multiple categorical columns in a dataframe,
+you may instead want to use ``df.categorize(cols=...)``, which will convert all
+specified columns to known categoricals. Since getting the categories requires
+a full scan of the data, using ``df.categorize()`` is more efficient than
+calling ``.cat.as_known()`` for each column (which would result in multiple
+scans).
+
+.. code-block:: python
+
+    >>> col_known = ddf.col.cat.as_known()  # use for single column
+    >>> ddf_known = ddf.categorize()        # use for multiple columns
+
+To convert a known categorical to an unknown categorical, there is also the
+``.cat.as_unknown()`` method. This requires no computation, as it's just a
+change in the metadata.
+
+.. _`categorical data`: http://pandas.pydata.org/pandas-docs/stable/categorical.html
 
 Partitions
 ----------
@@ -110,4 +160,6 @@ divided.  In this case ``.divisions`` will be all ``None``:
    >>> df.divisions
    [None, None, None, None, None]
 
-In these cases any operation that requires a cleanly partitioned dataframe with known divisions will have to perform a sort.  This can generally achieved by calling ``df.set_index(...)``.
+In these cases any operation that requires a cleanly partitioned dataframe with
+known divisions will have to perform a sort.  This can generally achieved by
+calling ``df.set_index(...)``.
