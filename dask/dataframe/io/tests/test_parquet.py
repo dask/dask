@@ -206,4 +206,4 @@ def test_categories(fn):
     assert set(ddf2.y.compute().cat.categories) == {'a', 'b', 'c'}
     cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories).compute()
     assert cats_set.tolist() == ['a', 'c', 'a', 'b']
-    assert ddf.compute().y.tolist() == ddf2.compute().y.tolist()
+    assert_eq(ddf.y, ddf2.y, check_names=False)
