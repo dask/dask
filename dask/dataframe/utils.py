@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 from pandas.core.common import is_datetime64tz_dtype
+from pandas.api.types import is_categorical_dtype, is_scalar
 import toolz
 
 from ..core import get_deps
@@ -20,13 +21,6 @@ from ..async import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
-if PANDAS_VERSION >= '0.19.0':
-    PANDAS_ge_0190 = True
-    from pandas.api.types import is_categorical_dtype, is_scalar       # noqa
-else:
-    PANDAS_ge_0190 = False
-    from pandas.core.common import is_categorical_dtype                # noqa
-    is_scalar = pd.lib.isscalar                                        # noqa
 
 
 def shard_df_on_index(df, divisions):
@@ -167,6 +161,89 @@ def raise_on_meta_error(funcname=None):
         raise ValueError(msg)
 
 
+UNKNOWN_CATEGORIES = '__UNKNOWN_CATEGORIES__'
+
+
+def has_known_categories(x):
+    """Returns whether the categories in `x` are known.
+
+    Parameters
+    ----------
+    x : Series or CategoricalIndex
+    """
+    x = getattr(x, '_meta', x)
+    if isinstance(x, pd.Series):
+        return UNKNOWN_CATEGORIES not in x.cat.categories
+    elif isinstance(x, pd.CategoricalIndex):
+        return UNKNOWN_CATEGORIES not in x.categories
+    raise TypeError("Expected Series or CategoricalIndex")
+
+
+def strip_unknown_categories(x):
+    """Replace any unknown categoricals with empty categoricals.
+
+    Useful for preventing ``UNKNOWN_CATEGORIES`` from leaking into results.
+    """
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        x = x.copy()
+        if isinstance(x, pd.DataFrame):
+            cat_mask = x.dtypes == 'category'
+            if cat_mask.any():
+                cats = cat_mask[cat_mask].index
+                for c in cats:
+                    if not has_known_categories(x[c]):
+                        x[c].cat.set_categories([], inplace=True)
+        elif isinstance(x, pd.Series):
+            if is_categorical_dtype(x.dtype) and not has_known_categories(x):
+                x.cat.set_categories([], inplace=True)
+        if (isinstance(x.index, pd.CategoricalIndex) and not
+                has_known_categories(x.index)):
+            x.index = x.index.set_categories([])
+    elif isinstance(x, pd.CategoricalIndex) and not has_known_categories(x):
+        x = x.set_categories([])
+    return x
+
+
+def clear_known_categories(x, cols=None, index=True):
+    """Set categories to be unknown.
+
+    Parameters
+    ----------
+    x : DataFrame, Series, Index
+    cols : iterable, optional
+        If x is a DataFrame, set only categoricals in these columns to unknown.
+        By default, all categorical columns are set to unknown categoricals
+    index : bool, optional
+        If True and x is a Series or DataFrame, set the clear known categories
+        in the index as well.
+    """
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        x = x.copy()
+        if isinstance(x, pd.DataFrame):
+            mask = x.dtypes == 'category'
+            if cols is None:
+                cols = mask[mask].index
+            elif not mask.loc[cols].all():
+                raise ValueError("Not all columns are categoricals")
+            for c in cols:
+                x[c].cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+        elif isinstance(x, pd.Series):
+            if is_categorical_dtype(x.dtype):
+                x.cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+        if index and isinstance(x.index, pd.CategoricalIndex):
+            x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
+    elif isinstance(x, pd.CategoricalIndex):
+        x = x.set_categories([UNKNOWN_CATEGORIES])
+    return x
+
+
+def _empty_series(name, dtype, index=None):
+    if isinstance(dtype, str) and dtype == 'category':
+        return pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]),
+                         name=name, index=index).iloc[:0]
+    return pd.Series([], dtype=dtype, name=name, index=index)
+
+
 def make_meta(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -200,17 +277,17 @@ def make_meta(x, index=None):
     elif isinstance(x, pd.Index):
         return x[0:0]
     index = index if index is None else index[0:0]
+
     if isinstance(x, dict):
-        return pd.DataFrame({c: pd.Series([], dtype=d)
-                             for (c, d) in x.items()},
-                            index=index)
-    elif isinstance(x, tuple) and len(x) == 2:
-        return pd.Series([], dtype=x[1], name=x[0], index=index)
+        return pd.DataFrame({c: _empty_series(c, d, index=index)
+                             for (c, d) in x.items()}, index=index)
+    if isinstance(x, tuple) and len(x) == 2:
+        return _empty_series(x[0], x[1], index=index)
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError("Expected iterable of tuples of (name, dtype), "
                              "got {0}".format(x))
-        return pd.DataFrame({c: pd.Series([], dtype=d) for (c, d) in x},
+        return pd.DataFrame({c: _empty_series(c, d, index=index) for (c, d) in x},
                             columns=[c for c, d in x], index=index)
     elif not hasattr(x, 'dtype') and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
@@ -223,7 +300,7 @@ def make_meta(x, index=None):
             # Continue on to next check
             pass
 
-    if is_pd_scalar(x):
+    if is_scalar(x):
         return _nonempty_scalar(x)
 
     raise TypeError("Don't know how to create metadata from {0}".format(x))
@@ -256,7 +333,7 @@ def _nonempty_index(idx):
             cats = idx.categories
         else:
             data = _nonempty_index(idx.categories)
-            cats = data.unique()
+            cats = None
         return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
@@ -302,12 +379,6 @@ def _nonempty_scalar(x):
                         "'{0}'".format(type(x).__name__))
 
 
-def is_pd_scalar(x):
-    """Whether the object is a scalar type"""
-    return (np.isscalar(x) or isinstance(x, (pd.Timestamp, pd.Timedelta,
-                                             pd.Period)))
-
-
 def _nonempty_series(s, idx):
 
     dtype = s.dtype
@@ -320,7 +391,7 @@ def _nonempty_series(s, idx):
             cats = s.cat.categories
         else:
             data = _nonempty_index(s.cat.categories)
-            cats = data.unique()
+            cats = None
         data = pd.Categorical(data, categories=cats,
                               ordered=s.cat.ordered)
     else:
@@ -349,7 +420,7 @@ def meta_nonempty(x):
                            columns=np.arange(len(x.columns)))
         res.columns = x.columns
         return res
-    elif is_pd_scalar(x):
+    elif is_scalar(x):
         return _nonempty_scalar(x)
     else:
         raise TypeError("Expected Index, Series, DataFrame, or scalar, "

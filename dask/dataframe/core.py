@@ -1,14 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from distutils.version import LooseVersion
 import operator
 from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, partial, first, unique, partition_all
+from toolz import merge, first, unique, partition_all
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -30,7 +29,8 @@ from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
-                    raise_on_meta_error)
+                    raise_on_meta_error, clear_known_categories,
+                    is_categorical_dtype)
 from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
@@ -38,24 +38,22 @@ no_default = '__no_default__'
 pd.computation.expressions.set_use_numexpr(False)
 
 
-def _concat(args, **kwargs):
-    """ Generic concat operation """
+def _concat(args):
     if not args:
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if isinstance(args[0], (pd.DataFrame, pd.Series)):
-        args2 = [arg for arg in args if len(arg)]
-        if not args2:
-            return args[0]
-        return pd.concat(args2)
-    if isinstance(args[0], (pd.Index)):
-        args = [arg for arg in args if len(arg)]
-        return args[0].append(args[1:])
-    try:
-        return pd.Series(args)
-    except:
-        return args
+    if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
+        try:
+            return pd.Series(args)
+        except:
+            return args
+    # We filter out empty partitions here because pandas frequently has
+    # inconsistent dtypes in results between empty and non-empty frames.
+    # Ideally this would be handled locally for each operation, but in practice
+    # this seems easier. TODO: don't do this.
+    args2 = [i for i in args if len(i)]
+    return args[0] if not args2 else methods.concat(args2, uniform=True)
 
 
 def _get_return_type(meta):
@@ -1221,13 +1219,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             if isinstance(q, list):
                 # Not supported, the result will have current index as columns
                 raise ValueError("'q' must be scalar when axis=1 is specified")
-            if LooseVersion(pd.__version__) >= '0.19':
-                name = q
-            else:
-                name = None
-            meta = pd.Series([], dtype='f8', name=name)
             return map_partitions(M.quantile, self, q, axis,
-                                  token=keyname, meta=meta)
+                                  token=keyname, meta=(q, 'f8'))
         else:
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
@@ -1354,36 +1347,21 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
-        return self.map_partitions(M.astype, dtype=dtype,
-                                   meta=self._meta.astype(dtype))
+        meta = self._meta.astype(dtype)
+        meta = clear_known_categories(meta)
+        return self.map_partitions(M.astype, dtype=dtype, meta=meta)
 
     @derived_from(pd.Series)
     def append(self, other):
         # because DataFrame.append will override the method,
         # wrap by pd.Series.append docstring
+        from .multi import concat
 
         if isinstance(other, (list, dict)):
             msg = "append doesn't support list or dict input"
             raise NotImplementedError(msg)
 
-        if not isinstance(other, _Frame):
-            from .io import from_pandas
-            other = from_pandas(other, 1)
-
-        from .multi import _append
-        if self.known_divisions and other.known_divisions:
-            if self.divisions[-1] < other.divisions[0]:
-                divisions = self.divisions[:-1] + other.divisions
-                return _append(self, other, divisions)
-            else:
-                msg = ("Unable to append two dataframes to each other with known "
-                       "divisions if those divisions are not ordered. "
-                       "The divisions/index of the second dataframe must be "
-                       "greater than the divisions/index of the first dataframe.")
-                raise ValueError(msg)
-        else:
-            divisions = [None] * (self.npartitions + other.npartitions + 1)
-            return _append(self, other, divisions)
+        return concat([self, other], join='outer', interleave_partitions=False)
 
     @derived_from(pd.DataFrame)
     def align(self, other, join='outer', axis=None, fill_value=None):
@@ -1589,7 +1567,7 @@ class Series(_Frame):
 
     @cache_readonly
     def cat(self):
-        from .accessor import CategoricalAccessor
+        from .categorical import CategoricalAccessor
         return CategoricalAccessor(self)
 
     @cache_readonly
@@ -1600,8 +1578,12 @@ class Series(_Frame):
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        if not hasattr(self._meta, 'cat'):
-            o.remove('cat')  # cat only in `dir` if available
+        # Remove the `cat` and `str` accessors if not available. We can't
+        # decide this statically for the `dt` accessor, as it works on
+        # datetime-like things as well.
+        for accessor in ['cat', 'str']:
+            if not hasattr(self._meta, accessor):
+                o.remove(accessor)
         return list(o)
 
     @property
@@ -1945,6 +1927,30 @@ class Index(Series):
     _partition_type = pd.Index
     _token_prefix = 'index-'
 
+    _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
+                      'minute', 'hour', 'day', 'dayofweek', 'second', 'week',
+                      'weekday', 'weekofyear', 'month', 'quarter', 'year'}
+
+    _cat_attributes = {'known', 'as_known', 'as_unknown', 'add_categories',
+                       'categories', 'remove_categories', 'reorder_categories',
+                       'as_ordered', 'codes', 'remove_unused_categories',
+                       'set_categories', 'as_unordered', 'ordered',
+                       'rename_categories'}
+
+    def __getattr__(self, key):
+        if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
+            return getattr(self.cat, key)
+        elif key in self._dt_attributes:
+            return getattr(self.dt, key)
+        raise AttributeError("'Index' object has no attribute %r" % key)
+
+    def __dir__(self):
+        out = super(Index, self).__dir__()
+        out.extend(self._dt_attributes)
+        if is_categorical_dtype(self.dtype):
+            out.extend(self._cat_attributes)
+        return out
+
     @property
     def index(self):
         msg = "'{0}' object has no attribute 'index'"
@@ -2244,31 +2250,28 @@ class DataFrame(_Frame):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, key, **kwargs)
 
-    def categorize(self, columns=None, **kwargs):
-        """
-        Convert columns of the DataFrame to category dtype
+    def categorize(self, columns=None, index=None, **kwargs):
+        """Convert columns of the DataFrame to category dtype.
 
         Parameters
         ----------
         columns : list, optional
-            A list of column names to convert to the category type. By
-            default any column with an object dtype is converted to a
-            categorical.
+            A list of column names to convert to categoricals. By default any
+            column with an object dtype is converted to a categorical, and any
+            unknown categoricals are made known.
+        index : bool, optional
+            Whether to categorize the index. By default, object indices are
+            converted to categorical, and unknown categorical indices are made
+            known. Set True to always categorize the index, False to never.
         kwargs
             Keyword arguments are passed on to compute.
-
-        Notes
-        -----
-        When dealing with columns of repeated text values converting to
-        categorical type is often much more performant, both in terms of memory
-        and in writing to disk or communication over the network.
 
         See also
         --------
         dask.dataframes.categorical.categorize
         """
-        from dask.dataframe.categorical import categorize
-        return categorize(self, columns, **kwargs)
+        from .categorical import categorize
+        return categorize(self, columns=columns, index=index, **kwargs)
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
@@ -2752,17 +2755,6 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
 
     meth = getattr(pd.Series, name)
     Series._bind_comparison_method(name, meth)
-
-
-def elemwise_property(attr, s):
-    meta = pd.Series([], dtype=getattr(s._meta, attr).dtype)
-    return map_partitions(getattr, s, attr, meta=meta)
-
-
-for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
-             'hour', 'day', 'dayofweek', 'dayofyear', 'week', 'weekday',
-             'weekofyear', 'month', 'quarter', 'year']:
-    setattr(Index, name, property(partial(elemwise_property, name)))
 
 
 def elemwise(op, *args, **kwargs):

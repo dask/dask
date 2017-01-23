@@ -3,7 +3,7 @@ import pandas as pd
 import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
-                                  raise_on_meta_error)
+                                  raise_on_meta_error, UNKNOWN_CATEGORIES)
 
 import pytest
 
@@ -72,6 +72,14 @@ def test_make_meta():
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
 
+    # Categoricals
+    meta = make_meta({'a': 'category'})
+    assert len(meta.a.cat.categories) == 1
+    assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
+    meta = make_meta(('a', 'category'))
+    assert len(meta.cat.categories) == 1
+    assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+
     # Numpy scalar
     meta = make_meta(np.float64(1.0))
     assert isinstance(meta, np.float64)
@@ -105,8 +113,9 @@ def test_meta_nonempty():
                         'G': pd.date_range('2016-01-01', periods=3,
                                            tz='America/New_York'),
                         'H': pd.Timedelta('1 hours', 'ms'),
-                        'I': np.void(b' ')},
-                       columns=list('DCBAHGFEI'))
+                        'I': np.void(b' '),
+                        'J': pd.Categorical([UNKNOWN_CATEGORIES] * 3)},
+                       columns=list('DCBAHGFEIJ'))
     df2 = df1.iloc[0:0]
     df3 = meta_nonempty(df2)
     assert (df3.dtypes == df2.dtypes).all()
@@ -122,6 +131,7 @@ def test_meta_nonempty():
                                        tz='America/New_York')
     assert df3['H'][0] == pd.Timedelta('1', 'ms')
     assert df3['I'][0] == 'foo'
+    assert df3['J'][0] == UNKNOWN_CATEGORIES
 
     s = meta_nonempty(df2['A'])
     assert s.dtype == df2['A'].dtype
@@ -198,6 +208,12 @@ def test_meta_nonempty_index():
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert (res.categories == idx.categories).all()
+    assert res.ordered == idx.ordered
+    assert res.name == idx.name
+
+    idx = pd.CategoricalIndex([], [UNKNOWN_CATEGORIES], ordered=True, name='foo')
+    res = meta_nonempty(idx)
+    assert type(res) is pd.CategoricalIndex
     assert res.ordered == idx.ordered
     assert res.name == idx.name
 

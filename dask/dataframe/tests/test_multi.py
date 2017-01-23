@@ -1,12 +1,16 @@
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+import pandas.util.testing as tm
+
+from dask.async import get_sync
+from dask.dataframe.core import _Frame
+from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
-import pandas.util.testing as tm
-from dask.async import get_sync
-from dask.dataframe.utils import assert_eq, assert_divisions
+from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
+                                  has_known_categories, clear_known_categories)
 
 import pytest
 
@@ -817,3 +821,353 @@ def test_concat_unknown_divisions_errors():
 
     with pytest.raises(ValueError):
         dd.concat([aa, bb], axis=1).compute()
+
+
+def test_concat2():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    a = dd.DataFrame(dsk, 'x', meta, [None, None])
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    b = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
+    c = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60],
+                                   'd': [70, 80, 90]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10],
+                                   'd': [90, 80, 70]},
+                                  index=[3, 4, 5])}
+    meta = make_meta({'b': 'i8', 'c': 'i8', 'd': 'i8'},
+                     index=pd.Index([], 'i8'))
+    d = dd.DataFrame(dsk, 'y', meta, [0, 3, 5])
+
+    cases = [[a, b], [a, c], [a, d]]
+    assert dd.concat([a]) is a
+    for case in cases:
+        result = dd.concat(case)
+        pdcase = [_c.compute() for _c in case]
+
+        assert result.npartitions == case[0].npartitions + case[1].npartitions
+        assert result.divisions == (None, ) * (result.npartitions + 1)
+        assert_eq(pd.concat(pdcase), result)
+        assert set(result.dask) == set(dd.concat(case).dask)
+
+        result = dd.concat(case, join='inner')
+        assert result.npartitions == case[0].npartitions + case[1].npartitions
+        assert result.divisions == (None, ) * (result.npartitions + 1)
+        assert_eq(pd.concat(pdcase, join='inner'), result)
+        assert set(result.dask) == set(dd.concat(case, join='inner').dask)
+
+
+def test_concat3():
+    pdf1 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCDE'), index=list('abcdef'))
+    pdf2 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCFG'), index=list('ghijkl'))
+    pdf3 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCHI'), index=list('mnopqr'))
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    result = dd.concat([ddf1, ddf2])
+    assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
+    assert result.npartitions == ddf1.npartitions + ddf2.npartitions
+    assert_eq(result, pd.concat([pdf1, pdf2]))
+
+    assert_eq(dd.concat([ddf1, ddf2], interleave_partitions=True),
+              pd.concat([pdf1, pdf2]))
+
+    result = dd.concat([ddf1, ddf2, ddf3])
+    assert result.divisions == (ddf1.divisions[:-1] + ddf2.divisions[:-1] +
+                                ddf3.divisions)
+    assert result.npartitions == (ddf1.npartitions + ddf2.npartitions +
+                                  ddf3.npartitions)
+    assert_eq(result, pd.concat([pdf1, pdf2, pdf3]))
+
+    assert_eq(dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+              pd.concat([pdf1, pdf2, pdf3]))
+
+
+def test_concat4_interleave_partitions():
+    pdf1 = pd.DataFrame(np.random.randn(10, 5),
+                        columns=list('ABCDE'), index=list('abcdefghij'))
+    pdf2 = pd.DataFrame(np.random.randn(13, 5),
+                        columns=list('ABCDE'), index=list('fghijklmnopqr'))
+    pdf3 = pd.DataFrame(np.random.randn(13, 6),
+                        columns=list('CDEXYZ'), index=list('fghijklmnopqr'))
+
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    msg = ('All inputs have known divisions which cannot be '
+           'concatenated in order. Specify '
+           'interleave_partitions=True to ignore order')
+
+    cases = [[ddf1, ddf1], [ddf1, ddf2], [ddf1, ddf3], [ddf2, ddf1],
+             [ddf2, ddf3], [ddf3, ddf1], [ddf3, ddf2]]
+    for case in cases:
+        pdcase = [c.compute() for c in case]
+
+        with tm.assertRaisesRegexp(ValueError, msg):
+            dd.concat(case)
+
+        assert_eq(dd.concat(case, interleave_partitions=True),
+                  pd.concat(pdcase))
+        assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
+                  pd.concat(pdcase, join='inner'))
+
+    msg = "'join' must be 'inner' or 'outer'"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf1, ddf1], join='invalid', interleave_partitions=True)
+
+
+def test_concat5():
+    pdf1 = pd.DataFrame(np.random.randn(7, 5),
+                        columns=list('ABCDE'), index=list('abcdefg'))
+    pdf2 = pd.DataFrame(np.random.randn(7, 6),
+                        columns=list('FGHIJK'), index=list('abcdefg'))
+    pdf3 = pd.DataFrame(np.random.randn(7, 6),
+                        columns=list('FGHIJK'), index=list('cdefghi'))
+    pdf4 = pd.DataFrame(np.random.randn(7, 5),
+                        columns=list('FGHAB'), index=list('cdefghi'))
+    pdf5 = pd.DataFrame(np.random.randn(7, 5),
+                        columns=list('FGHAB'), index=list('fklmnop'))
+
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+    ddf4 = dd.from_pandas(pdf4, 2)
+    ddf5 = dd.from_pandas(pdf5, 3)
+
+    cases = [[ddf1, ddf2], [ddf1, ddf3], [ddf1, ddf4], [ddf1, ddf5],
+             [ddf3, ddf4], [ddf3, ddf5], [ddf5, ddf1, ddf4], [ddf5, ddf3],
+             [ddf1.A, ddf4.A], [ddf2.F, ddf3.F], [ddf4.A, ddf5.A],
+             [ddf1.A, ddf4.F], [ddf2.F, ddf3.H], [ddf4.A, ddf5.B],
+             [ddf1, ddf4.A], [ddf3.F, ddf2], [ddf5, ddf1.A, ddf2]]
+
+    for case in cases:
+        pdcase = [c.compute() for c in case]
+
+        assert_eq(dd.concat(case, interleave_partitions=True),
+                  pd.concat(pdcase))
+
+        assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
+                  pd.concat(pdcase, join='inner'))
+
+        assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+
+        assert_eq(dd.concat(case, axis=1, join='inner'),
+                  pd.concat(pdcase, axis=1, join='inner'))
+
+    # Dask + pandas
+    cases = [[ddf1, pdf2], [ddf1, pdf3], [pdf1, ddf4],
+             [pdf1.A, ddf4.A], [ddf2.F, pdf3.F],
+             [ddf1, pdf4.A], [ddf3.F, pdf2], [ddf2, pdf1, ddf3.F]]
+
+    for case in cases:
+        pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
+
+        assert_eq(dd.concat(case, interleave_partitions=True),
+                  pd.concat(pdcase))
+
+        assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
+                  pd.concat(pdcase, join='inner'))
+
+        assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+
+        assert_eq(dd.concat(case, axis=1, join='inner'),
+                  pd.concat(pdcase, axis=1, join='inner'))
+
+
+@pytest.mark.parametrize('known, cat_index, divisions',
+                         [(True, True, False), (True, False, True),
+                          (True, False, False), (False, True, False),
+                          (False, False, True), (False, False, False)])
+def test_concat_categorical(known, cat_index, divisions):
+    frames = [pd.DataFrame({'w': list('xxxxx'),
+                            'x': np.arange(5),
+                            'y': list('abcbc'),
+                            'z': np.arange(5, dtype='f8')}),
+              pd.DataFrame({'w': list('yyyyy'),
+                            'x': np.arange(5, 10),
+                            'y': list('abbba'),
+                            'z': np.arange(5, 10, dtype='f8')}),
+              pd.DataFrame({'w': list('zzzzz'),
+                            'x': np.arange(10, 15),
+                            'y': list('bcbcc'),
+                            'z': np.arange(10, 15, dtype='f8')})]
+    for df in frames:
+        df.w = df.w.astype('category')
+        df.y = df.y.astype('category')
+
+    if cat_index:
+        frames = [df.set_index(df.y) for df in frames]
+
+    dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
+
+    if not known:
+        dframes[0]._meta = clear_known_categories(dframes[0]._meta, ['y'],
+                                                  index=True)
+
+    def check_and_return(ddfs, dfs, join):
+        sol = concat(dfs, join=join)
+        res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
+        assert_eq(res, sol)
+        if known:
+            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+                res._meta == p  # will error if schemas don't align
+        assert not cat_index or has_known_categories(res.index) == known
+        return res
+
+    for join in ['inner', 'outer']:
+        # Frame
+        res = check_and_return(dframes, frames, join)
+        assert has_known_categories(res.w)
+        assert has_known_categories(res.y) == known
+
+        # Series
+        res = check_and_return([i.y for i in dframes],
+                               [i.y for i in frames], join)
+        assert has_known_categories(res) == known
+
+        # Non-cat series with cat index
+        if cat_index:
+            res = check_and_return([i.x for i in dframes],
+                                   [i.x for i in frames], join)
+
+        # Partition missing columns
+        res = check_and_return([dframes[0][['x', 'y']]] + dframes[1:],
+                               [frames[0][['x', 'y']]] + frames[1:], join)
+        assert not hasattr(res, 'w') or has_known_categories(res.w)
+        assert has_known_categories(res.y) == known
+
+
+def test_append():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                       'b': [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+    df3 = pd.DataFrame({'b': [1, 2, 3, 4, 5, 6],
+                        'c': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+
+    ddf = dd.from_pandas(df, 2)
+    ddf2 = dd.from_pandas(df2, 2)
+    ddf3 = dd.from_pandas(df3, 2)
+
+    s = pd.Series([7, 8], name=6, index=['a', 'b'])
+    assert_eq(ddf.append(s), df.append(s))
+
+    assert_eq(ddf.append(ddf2), df.append(df2))
+    assert_eq(ddf.a.append(ddf2.a), df.a.append(df2.a))
+    # different columns
+    assert_eq(ddf.append(ddf3), df.append(df3))
+    assert_eq(ddf.a.append(ddf3.b), df.a.append(df3.b))
+
+    # dask + pandas
+    assert_eq(ddf.append(df2), df.append(df2))
+    assert_eq(ddf.a.append(df2.a), df.a.append(df2.a))
+
+    assert_eq(ddf.append(df3), df.append(df3))
+    assert_eq(ddf.a.append(df3.b), df.a.append(df3.b))
+
+    df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[4, 5, 6, 7, 8, 9])
+    ddf4 = dd.from_pandas(df4, 2)
+    with pytest.raises(ValueError):
+        ddf.append(ddf4)
+
+
+def test_append2():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    meta = make_meta({'a': 'i8', 'b': 'i8'})
+    ddf1 = dd.DataFrame(dsk, 'x', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    ddf2 = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
+    meta = make_meta({'b': 'i8', 'c': 'i8'})
+    ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
+
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
+    assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
+    assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+
+    # Dask + pandas
+    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
+    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
+    assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
+    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
+    assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
+
+
+def test_append_categorical():
+    frames = [pd.DataFrame({'x': np.arange(5, 10),
+                            'y': list('abbba'),
+                            'z': np.arange(5, 10, dtype='f8')}),
+              pd.DataFrame({'x': np.arange(10, 15),
+                            'y': list('bcbcc'),
+                            'z': np.arange(10, 15, dtype='f8')})]
+    frames2 = []
+    for df in frames:
+        df.y = df.y.astype('category')
+        df2 = df.copy()
+        df2.y = df2.y.cat.set_categories(list('abc'))
+        df.index = df.y
+        frames2.append(df2.set_index(df2.y))
+
+    df1, df2 = frames2
+
+    for known in [True, False]:
+        dframes = [dd.from_pandas(p, npartitions=2, sort=False) for p in frames]
+        if not known:
+            dframes[0]._meta = clear_known_categories(dframes[0]._meta,
+                                                      ['y'], index=True)
+        ddf1, ddf2 = dframes
+
+        res = ddf1.append(ddf2)
+        assert_eq(res, df1.append(df2))
+        assert has_known_categories(res.index) == known
+        assert has_known_categories(res.y) == known
+
+        res = ddf1.y.append(ddf2.y)
+        assert_eq(res, df1.y.append(df2.y))
+        assert has_known_categories(res.index) == known
+        assert has_known_categories(res) == known
+
+        res = ddf1.index.append(ddf2.index)
+        assert_eq(res, df1.index.append(df2.index))
+        assert has_known_categories(res) == known

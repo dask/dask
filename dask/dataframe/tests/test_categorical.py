@@ -9,13 +9,93 @@ import pytest
 import dask
 from dask.async import get_sync
 import dask.dataframe as dd
-from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype
+from dask.dataframe.core import _concat
+from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories
 
 
-@pytest.fixture(params=[True, False])
-def cat_series(request):
-    ordered = request.param
-    return pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
+# Generate a list of categorical series and indices
+cat_series = []
+for ordered in [True, False]:
+    s = pd.Series(pd.Categorical(list('bacbac'), ordered=ordered))
+    ds = dd.from_pandas(s, npartitions=2)
+    cat_series.append((s, ds))
+s = pd.Series(range(6), index=pd.Categorical(list('bacbac')))
+ds = dd.from_pandas(s, npartitions=2)
+cat_series.append((ds.compute().index, ds.index))
+
+
+a = pd.DataFrame({'v': list('abcde'),
+                  'w': list('xxxxx'),
+                  'x': np.arange(5),
+                  'y': list('abcbc'),
+                  'z': np.arange(5, dtype='f8')})
+
+b = pd.DataFrame({'v': list('fghij'),
+                  'w': list('yyyyy'),
+                  'x': np.arange(5, 10),
+                  'y': list('abbba'),
+                  'z': np.arange(5, 10, dtype='f8')})
+
+c = pd.DataFrame({'v': list('klmno'),
+                  'w': list('zzzzz'),
+                  'x': np.arange(10, 15),
+                  'y': list('bcbcc'),
+                  'z': np.arange(10, 15, dtype='f8')})
+
+frames = [a, b, c]
+frames2 = []
+for df in frames:
+    df.w = df.w.astype('category')
+    df.y = df.y.astype('category')
+    frames2.append(df.assign(w=df.w.cat.set_categories(list('xyz')),
+                             y=df.y.cat.set_categories(list('abc'))))
+frames3 = [i.set_index(i.y) for i in frames]
+frames4 = [i.set_index(i.y) for i in frames2]
+
+
+def test_concat_unions_categoricals():
+    # Categorical DataFrame, regular index
+    tm.assert_frame_equal(_concat(frames), pd.concat(frames2))
+
+    # Categorical Series, regular index
+    tm.assert_series_equal(_concat([i.y for i in frames]),
+                           pd.concat([i.y for i in frames2]))
+
+    # Categorical Index
+    tm.assert_index_equal(_concat([i.index for i in frames3]),
+                          pd.concat([i for i in frames4]).index)
+
+    # Categorical DataFrame, Categorical Index
+    tm.assert_frame_equal(_concat(frames3), pd.concat(frames4))
+
+    # Non-categorical DataFrame, Categorical Index
+    tm.assert_frame_equal(_concat([i[['x', 'z']] for i in frames3]),
+                          pd.concat([i[['x', 'z']] for i in frames4]))
+
+    # Categorical Series, Categorical Index
+    tm.assert_series_equal(_concat([i.z for i in frames3]),
+                           pd.concat([i.z for i in frames4]))
+
+    # Non-categorical Series, Categorical Index
+    tm.assert_series_equal(_concat([i.x for i in frames3]),
+                           pd.concat([i.x for i in frames4]))
+
+
+def test_unknown_categoricals():
+    ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames)},
+                       'unknown',
+                       make_meta({'v': 'object', 'w': 'category',
+                                  'x': 'i8', 'y': 'category', 'z': 'f8'}),
+                       [None] * 4)
+    # Compute
+    df = ddf.compute()
+
+    assert_eq(ddf.w.value_counts(), df.w.value_counts())
+    assert_eq(ddf.w.nunique(), df.w.nunique())
+
+    assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
+    assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
+    assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
 
 def test_is_categorical_dtype():
@@ -32,24 +112,70 @@ def test_is_categorical_dtype():
 
 
 def test_categorize():
-    dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
-                                   'b': ['C', 'D', 'E']},
-                                  index=[0, 1, 2]),
-           ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
-                                   'b': ['A', 'A', 'B']},
-                                  index=[3, 4, 5])}
-    meta = make_meta({'a': 'O', 'b': 'O'}, index=pd.Index([], 'i8'))
-    d = dd.DataFrame(dsk, 'x', meta, [0, 3, 5])
-    full = d.compute()
+    meta = clear_known_categories(frames4[0])
+    ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames3)},
+                       'unknown', meta, [None] * 4)
+    ddf = ddf.assign(w=ddf.w.cat.set_categories(['x', 'y', 'z']))
+    assert ddf.w.cat.known
+    assert not ddf.y.cat.known
+    assert not ddf.index.cat.known
+    df = ddf.compute()
 
-    c = d.categorize('a')
-    cfull = c.compute()
-    assert cfull.dtypes['a'] == 'category'
-    assert cfull.dtypes['b'] == 'O'
+    for index in [None, True, False]:
+        known_index = index is not False
+        # By default categorize object and unknown cat columns
+        ddf2 = ddf.categorize(index=index)
+        assert ddf2.y.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
-    assert list(cfull.a.astype('O')) == list(full.a)
-    assert (d._get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
-    assert (d.categorize().compute().dtypes == 'category').all()
+        # Specifying one column doesn't affect others
+        ddf2 = ddf.categorize('v', index=index)
+        assert not ddf2.y.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
+
+        ddf2 = ddf.categorize('y', index=index)
+        assert ddf2.y.cat.known
+        assert ddf2.v.dtype == 'object'
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df)
+
+    ddf_known_index = ddf.categorize(columns=[], index=True)
+    assert ddf_known_index.index.cat.known
+    assert_eq(ddf_known_index, df)
+
+    # Specifying known categorical or no columns is a no-op:
+    assert ddf.categorize(['w'], index=False) is ddf
+    assert ddf.categorize([], index=False) is ddf
+    assert ddf_known_index.categorize(['w']) is ddf_known_index
+    assert ddf_known_index.categorize([]) is ddf_known_index
+
+
+def test_categorize_index():
+    # Object dtype
+    ddf = dd.from_pandas(tm.makeDataFrame(), npartitions=5)
+    df = ddf.compute()
+
+    ddf2 = ddf.categorize()
+    assert ddf2.index.cat.known
+    assert_eq(ddf2, df.set_index(pd.CategoricalIndex(df.index)),
+              check_divisions=False, check_categorical=False)
+
+    assert ddf.categorize(index=False) is ddf
+
+    # Non-object dtype
+    ddf = dd.from_pandas(df.set_index(df.A), npartitions=5)
+    df = ddf.compute()
+
+    ddf2 = ddf.categorize(index=True)
+    assert ddf2.index.cat.known
+    assert_eq(ddf2, df.set_index(pd.CategoricalIndex(df.index)),
+              check_divisions=False, check_categorical=False)
+
+    assert ddf.categorize() is ddf
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -75,15 +201,20 @@ def test_categorical_set_index(shuffle):
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
 
-def test_dataframe_categoricals():
-    df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5),
-                       'y': range(15)})
+def test_categorical_accessor_presence():
+    df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5), 'y': range(15)})
     df.x = df.x.astype('category')
     ddf = dd.from_pandas(df, npartitions=2)
-    assert (ddf.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+
     assert 'cat' in dir(ddf.x)
-    assert not hasattr(df.y, 'cat')
     assert 'cat' not in dir(ddf.y)
+    assert hasattr(ddf.x, 'cat')
+    assert not hasattr(ddf.y, 'cat')
+
+    df2 = df.set_index(df.x)
+    ddf2 = dd.from_pandas(df2, npartitions=2, sort=False)
+    assert hasattr(ddf2.index, 'categories')
+    assert not hasattr(ddf.index, 'categories')
 
 
 def test_categorize_nan():
@@ -94,19 +225,30 @@ def test_categorize_nan():
     assert len(record) == 0
 
 
+def get_cat(x):
+    return x if isinstance(x, pd.CategoricalIndex) else x.cat
+
+
+def assert_array_index_eq(left, right):
+    """left and right are equal, treating index and array as equivalent"""
+    assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else right)
+
+
 class TestCategoricalAccessor:
 
+    @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('prop, compare', [
-        ('categories', tm.assert_index_equal),
+        ('categories', assert_array_index_eq),
         ('ordered', assert_eq),
-        ('codes', assert_eq),
+        ('codes', assert_array_index_eq)
     ])
-    def test_properties(self, cat_series, prop, compare):
-        a = dd.from_pandas(cat_series, npartitions=2)
-        expected = getattr(cat_series.cat, prop)
-        result = getattr(a.cat, prop)
+    def test_properties(self, series, prop, compare):
+        s, ds = series
+        expected = getattr(get_cat(s), prop)
+        result = getattr(get_cat(ds), prop)
         compare(result, expected)
 
+    @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('method, kwargs', [
         ('add_categories', dict(new_categories=['d', 'e'])),
         ('as_ordered', {}),
@@ -118,14 +260,16 @@ class TestCategoricalAccessor:
         ('set_categories', dict(new_categories=['a', 'e', 'b'])),
         ('remove_unused_categories', {}),
     ])
-    def test_callable(self, cat_series, method, kwargs):
-        a = dd.from_pandas(cat_series, npartitions=2)
+    def test_callable(self, series, method, kwargs):
         op = operator.methodcaller(method, **kwargs)
-        expected = op(cat_series.cat)
-        result = op(a.cat)
+
+        # Series
+        s, ds = series
+        expected = op(get_cat(s))
+        result = op(get_cat(ds))
         assert_eq(result, expected)
-        assert_eq(result._meta.cat.categories, expected.cat.categories)
-        assert_eq(result._meta.cat.ordered, expected.cat.ordered)
+        assert_eq(get_cat(result._meta).categories, get_cat(expected).categories)
+        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered)
 
     def test_categorical_empty(self):
         # GH 1705
@@ -140,3 +284,26 @@ class TestCategoricalAccessor:
                              dask.delayed(make_full)()])
         # Used to raise an IndexError
         a.A.cat.categories
+
+    @pytest.mark.parametrize('series', cat_series)
+    def test_unknown_categories(self, series):
+        a, da = series
+        assert da.cat.known
+        da = da.cat.as_unknown()
+        assert not da.cat.known
+
+        with pytest.raises(NotImplementedError):
+            da.cat.categories
+        with pytest.raises(NotImplementedError):
+            da.cat.codes
+
+        db = da.cat.set_categories(['a', 'b', 'c'])
+        assert db.cat.known
+        tm.assert_index_equal(db.cat.categories, get_cat(a).categories)
+        assert_array_index_eq(db.cat.codes, get_cat(a).codes)
+
+        db = da.cat.as_known()
+        assert db.cat.known
+        res = db.compute()
+        tm.assert_index_equal(db.cat.categories, get_cat(res).categories)
+        assert_array_index_eq(db.cat.codes, get_cat(res).codes)

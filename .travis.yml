@@ -4,8 +4,8 @@ sudo: false
 env:
   matrix:
     - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.19.0 COVERAGE='true' PARALLEL='false' XTRATESTARGS=
-    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.18.1 COVERAGE='false' PARALLEL='true' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.18.1 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
+    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.19.0 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
     - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
     - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
 
@@ -21,7 +21,6 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
-  - conda update conda
 
   # Install dependencies
   - conda create -n test-environment python=$PYTHON

@@ -64,11 +64,12 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from .core import (_Frame, DataFrame, map_partitions,
-                   Index, _maybe_from_pandas, new_dd_object)
+from .core import (_Frame, DataFrame, map_partitions, Index,
+                   _maybe_from_pandas, new_dd_object)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
+from .utils import strip_unknown_categories
 
 
 def align_partitions(*dfs):
@@ -313,49 +314,6 @@ def single_partition_join(left, right, **kwargs):
                          meta, divisions)
 
 
-def concat_and_check(dfs):
-    if len(set(map(len, dfs))) != 1:
-        raise ValueError("Concatenated DataFrames of different lengths")
-    return pd.concat(dfs, axis=1)
-
-
-def concat_unindexed_dataframes(dfs):
-    name = 'concat-' + tokenize(*dfs)
-
-    dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
-           for i in range(dfs[0].npartitions)}
-
-    meta = pd.concat([df._meta for df in dfs], axis=1)
-
-    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
-                         name, meta, dfs[0].divisions)
-
-
-def concat_indexed_dataframes(dfs, axis=0, join='outer'):
-    """ Concatenate indexed dataframes together along the index """
-
-    if join not in ('inner', 'outer'):
-        raise ValueError("'join' must be 'inner' or 'outer'")
-
-    from dask.dataframe.core import _emulate
-    meta = _emulate(pd.concat, dfs, axis=axis, join=join)
-
-    dfs = _maybe_from_pandas(dfs)
-    dfs2, divisions, parts = align_partitions(*dfs)
-    empties = [df._meta for df in dfs]
-
-    parts2 = [[df if df is not None else empty
-               for df, empty in zip(part, empties)]
-              for part in parts]
-
-    name = 'concat-indexed-' + tokenize(join, *dfs)
-    dsk = dict(((name, i), (methods.concat, part, axis, join))
-               for i, part in enumerate(parts2))
-
-    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs2]),
-                         name, meta, divisions)
-
-
 @wraps(pd.merge)
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
@@ -446,35 +404,72 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 # Concat
 ###############################################################
 
-def _concat_dfs(dfs, name, join='outer'):
-    """ Internal function to concat dask dict and DataFrame.columns """
-    dsk = dict()
+def concat_and_check(dfs):
+    if len(set(map(len, dfs))) != 1:
+        raise ValueError("Concatenated DataFrames of different lengths")
+    return pd.concat(dfs, axis=1)
+
+
+def concat_unindexed_dataframes(dfs):
+    name = 'concat-' + tokenize(*dfs)
+
+    dsk = {(name, i): (concat_and_check, [(df._name, i) for df in dfs])
+           for i in range(dfs[0].npartitions)}
+
+    meta = pd.concat([df._meta for df in dfs], axis=1)
+
+    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
+                         name, meta, dfs[0].divisions)
+
+
+def concat_indexed_dataframes(dfs, axis=0, join='outer'):
+    """ Concatenate indexed dataframes together along the index """
+    meta = methods.concat([df._meta for df in dfs], axis=axis, join=join)
+    empties = [strip_unknown_categories(df._meta) for df in dfs]
+
+    dfs2, divisions, parts = align_partitions(*dfs)
+
+    name = 'concat-indexed-' + tokenize(join, *dfs)
+
+    parts2 = [[df if df is not None else empty
+               for df, empty in zip(part, empties)]
+              for part in parts]
+
+    dsk = dict(((name, i), (methods.concat, part, axis, join))
+               for i, part in enumerate(parts2))
+    for df in dfs2:
+        dsk.update(df.dask)
+
+    return new_dd_object(dsk, name, meta, divisions)
+
+
+def stack_partitions(dfs, divisions, join='outer'):
+    """Concatenate partitions on axis=0 by doing a simple stack"""
+    meta = methods.concat([df._meta for df in dfs], join=join)
+    empty = strip_unknown_categories(meta)
+
+    name = 'concat-{0}'.format(tokenize(*dfs))
+    dsk = {}
     i = 0
-
-    empties = [df._meta for df in dfs]
-    meta = pd.concat(empties, axis=0, join=join)
-
-    if isinstance(meta, pd.Series):
-        # in this case, input must be all Series. No need to care DataFrame.
-        columns = pd.Index([])
-    else:
-        columns = meta.columns
-        if len(columns) == 0:
-            raise ValueError('Failed to concat, no columns remain')
-
     for df in dfs:
-        if isinstance(df, DataFrame):
-            # filter DataFrame columns
-            if not columns.equals(df.columns):
-                df = df[[c for c in columns if c in df.columns]]
-        # Series must remain if output columns exist
+        dsk.update(df.dask)
+        # An error will be raised if the schemas or categories don't match. In
+        # this case we need to pass along the meta object to transform each
+        # partition, so they're all equivalent.
+        try:
+            df._meta == meta
+            match = True
+        except (ValueError, TypeError):
+            match = False
 
-        dsk = toolz.merge(dsk, df.dask)
         for key in df._keys():
-            dsk[(name, i)] = key
+            if match:
+                dsk[(name, i)] = key
+            else:
+                dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
             i += 1
 
-    return dsk, meta
+    return new_dd_object(dsk, name, meta, divisions)
 
 
 def concat(dfs, axis=0, join='outer', interleave_partitions=False):
@@ -545,9 +540,9 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
     """
     if not isinstance(dfs, list):
-        dfs = [dfs]
+        raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
-        raise ValueError('Input must be a list longer than 0')
+        raise ValueError('No objects to concatenate')
     if len(dfs) == 1:
         return dfs[0]
 
@@ -556,76 +551,38 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     axis = DataFrame._validate_axis(axis)
     dasks = [df for df in dfs if isinstance(df, _Frame)]
+    dfs = _maybe_from_pandas(dfs)
 
-    if all(df.known_divisions for df in dasks):
-        dfs = _maybe_from_pandas(dfs)
-        if axis == 1:
+    if axis == 1:
+        if all(df.known_divisions for df in dasks):
             return concat_indexed_dataframes(dfs, axis=axis, join=join)
+        elif (len(dasks) == len(dfs) and
+              all(not df.known_divisions for df in dfs) and
+              len({df.npartitions for df in dasks}) == 1):
+            warn("Concatenating dataframes with unknown divisions.\n"
+                 "We're assuming that the indexes of each dataframes are \n"
+                 "aligned. This assumption is not generally safe.")
+            return concat_unindexed_dataframes(dfs)
         else:
-            # must be converted here to check whether divisions can be
-            # concatenated
-            dfs = _maybe_from_pandas(dfs)
+            raise ValueError('Unable to concatenate DataFrame with unknown '
+                             'division specifying axis=1')
+    else:
+        if all(df.known_divisions for df in dasks):
             # each DataFrame's division must be greater than previous one
             if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
                    for i in range(len(dfs) - 1)):
-                name = 'concat-{0}'.format(tokenize(*dfs))
-                dsk, meta = _concat_dfs(dfs, name, join=join)
-
                 divisions = []
                 for df in dfs[:-1]:
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-                return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
-                                     name, meta, divisions)
+                return stack_partitions(dfs, divisions, join=join)
+            elif interleave_partitions:
+                return concat_indexed_dataframes(dfs, join=join)
             else:
-                if interleave_partitions:
-                    return concat_indexed_dataframes(dfs, join=join)
-
-                raise ValueError('All inputs have known divisions which cannot '
-                                 'be concatenated in order. Specify '
+                raise ValueError('All inputs have known divisions which '
+                                 'cannot be concatenated in order. Specify '
                                  'interleave_partitions=True to ignore order')
-    elif (axis == 1 and
-          len(dasks) == len(dfs) and
-          all(not df.known_divisions for df in dfs) and
-          len({df.npartitions for df in dasks}) == 1):
-        warn("Concatenating dataframes with unknown divisions.\n"
-             "We're assuming that the indexes of each dataframes are aligned\n."
-             "This assumption is not generally safe.")
-        return concat_unindexed_dataframes(dfs)
-
-    else:
-        if axis == 1:
-            raise ValueError('Unable to concatenate DataFrame with unknown '
-                             'division specifying axis=1')
         else:
-            # concat will not regard Series as row
-            dfs = _maybe_from_pandas(dfs)
-            name = 'concat-{0}'.format(tokenize(*dfs))
-            dsk, meta = _concat_dfs(dfs, name, join=join)
-
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
-                                 name, meta, divisions)
-
-
-###############################################################
-# Append
-###############################################################
-
-
-def _append(df, other, divisions):
-    """ Internal function to append 2 dd.DataFrame/Series instances """
-    # ToDo: might be possible to merge the logic to concat,
-    token = tokenize(df, other)
-    name = '{0}-append--{1}'.format(df._token_prefix, token)
-    dsk = {}
-
-    npart = df.npartitions
-    for i in range(npart):
-        dsk[(name, i)] = (df._name, i)
-    for j in range(other.npartitions):
-        dsk[(name, npart + j)] = (other._name, j)
-    dsk = toolz.merge(dsk, df.dask, other.dask)
-    meta = df._meta.append(other._meta)
-    return new_dd_object(dsk, name, meta, divisions)
+            return stack_partitions(dfs, divisions, join=join)

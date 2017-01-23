@@ -2,9 +2,9 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_categorical_dtype
+from pandas.types.concat import union_categoricals
 from toolz import partition
-
-from .utils import PANDAS_VERSION
 
 
 # ---------------------------------
@@ -119,7 +119,7 @@ def assign(df, *pairs):
 
 def unique(x, series_name=None):
     # unique returns np.ndarray, it must be wrapped
-    return pd.Series(pd.Series.unique(x), name=series_name)
+    return pd.Series(x.unique(), name=series_name)
 
 
 def value_counts_combine(x):
@@ -183,44 +183,91 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
-def concat(dfs, axis=0, join='outer'):
-    """ Concatenate caring empty Series """
+def concat(dfs, axis=0, join='outer', uniform=False):
+    """Concatenate, handling some edge cases:
 
-    # can be removed after pandas 0.18.1 or later
-    # see https://github.com/pandas-dev/pandas/pull/12846
-    if PANDAS_VERSION >= '0.18.1':
+    - Unions categoricals between partitions
+    - Ignores empty partitions
+
+    Parameters
+    ----------
+    dfs : list of DataFrame, Series, or Index
+    axis : int or str, optional
+    join : str, optional
+    uniform : bool, optional
+        Whether to treat ``dfs[0]`` as representative of ``dfs[1:]``. Set to
+        True if all arguments have the same columns and dtypes (but not
+        necessarily categories). Default is False.
+    """
+    if axis == 1:
         return pd.concat(dfs, axis=axis, join=join)
 
-    # Concat with empty Series with axis=1 will not affect to the
-    # result. Special handling is needed in each partition
-    if axis == 1:
-        # becahse dfs is a generator, once convert to list
-        dfs = list(dfs)
+    # Support concatenating indices along axis 0
+    if isinstance(dfs[0], pd.Index):
+        if isinstance(dfs[0], pd.CategoricalIndex):
+            return pd.CategoricalIndex(union_categoricals(dfs),
+                                       name=dfs[0].name)
+        return dfs[0].append(dfs[1:])
 
-        if join == 'outer':
-            # outer concat should keep all empty Series
+    # Handle categorical index separately
+    if isinstance(dfs[0].index, pd.CategoricalIndex):
+        dfs2 = [df.reset_index(drop=True) for df in dfs]
+        ind = concat([df.index for df in dfs])
+    else:
+        dfs2 = dfs
+        ind = None
 
-            # input must include one non-empty data at least
-            # because of the alignment
-            first = [df for df in dfs if len(df) > 0][0]
-
-            def _pad(base, fillby):
-                if isinstance(base, pd.Series) and len(base) == 0:
-                    # use aligned index to keep index for outer concat
-                    return pd.Series([np.nan] * len(fillby),
-                                     index=fillby.index, name=base.name)
-                else:
-                    return base
-
-            dfs = [_pad(df, first) for df in dfs]
+    # Concatenate the partitions together, handling categories as needed
+    if (isinstance(dfs2[0], pd.DataFrame) if uniform else
+            any(isinstance(df, pd.DataFrame) for df in dfs2)):
+        if uniform:
+            dfs3 = dfs2
+            cat_mask = dfs2[0].dtypes == 'category'
         else:
-            # inner concat should result in empty if any input is empty
-            if any(len(df) == 0 for df in dfs):
-                dfs = [pd.DataFrame(columns=df.columns)
-                       if isinstance(df, pd.DataFrame) else
-                       pd.Series(name=df.name) for df in dfs]
+            # When concatenating mixed dataframes and series on axis 1, Pandas
+            # converts series to dataframes with a single column named 0, then
+            # concatenates.
+            dfs3 = [df if isinstance(df, pd.DataFrame) else
+                    df.rename(0).to_frame() for df in dfs2]
+            cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
+                                  for df in dfs3], join=join).any()
 
-    return pd.concat(dfs, axis=axis, join=join)
+        if cat_mask.any():
+            not_cat = cat_mask[~cat_mask].index
+            out = pd.concat([df[df.columns.intersection(not_cat)]
+                             for df in dfs3], join=join)
+            for col in cat_mask.index.difference(not_cat):
+                # Find an example of categoricals in this column
+                for df in dfs3:
+                    sample = df.get(col)
+                    if sample is not None:
+                        break
+                # Extract partitions, subbing in missing if needed
+                parts = []
+                for df in dfs3:
+                    if col in df.columns:
+                        parts.append(df[col])
+                    else:
+                        codes = np.full(len(df), -1, dtype='i8')
+                        data = pd.Categorical.from_codes(codes,
+                                                         sample.cat.categories,
+                                                         sample.cat.ordered)
+                        parts.append(data)
+                out[col] = union_categoricals(parts)
+            out = out.reindex_axis(cat_mask.index, axis=1)
+        else:
+            out = pd.concat(dfs3, join=join)
+    else:
+        if is_categorical_dtype(dfs2[0].dtype):
+            if ind is None:
+                ind = concat([df.index for df in dfs2])
+            return pd.Series(union_categoricals(dfs2), index=ind,
+                             name=dfs2[0].name)
+        out = pd.concat(dfs2, join=join)
+    # Re-add the index if needed
+    if ind is not None:
+        out.index = ind
+    return out
 
 
 def merge(left, right, how, left_on, right_on,

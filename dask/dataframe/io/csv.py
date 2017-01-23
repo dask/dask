@@ -12,13 +12,15 @@ except ImportError:
 import numpy as np
 import pandas as pd
 
-from ...compatibility import PY2, PY3
-from ...delayed import delayed
-from .io import from_delayed
-
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
 from ...bytes.compression import seekable_files, files as cfiles
+from ...compatibility import PY2, PY3
+from ...delayed import delayed
+
+from ..utils import clear_known_categories
+
+from .io import from_delayed
 
 
 delayed = delayed(pure=True)
@@ -128,6 +130,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                                                 enforce=enforce))
 
     if collection:
+        head = clear_known_categories(head)
         return from_delayed(dfs, head)
     else:
         return dfs
