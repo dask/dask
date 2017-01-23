@@ -77,12 +77,12 @@ Dask dataframe divides `categorical data`_ into two types:
 - Known categoricals have the ``categories`` known statically (on the ``_meta``
   attribute). Each partition **must** have the same categories as found on the
   ``_meta`` attribute.
-- Unknown categoricals don't known the categories statically, and may have
+- Unknown categoricals don't know the categories statically, and may have
   different categories in each partition.  Internally, unknown categoricals are
   indicated by the presence of ``dd.utils.UNKNOWN_CATEGORIES`` in the
   categories on the ``_meta`` attribute.  Since most dataframe operations
   propogate the categories, the known/unknown status should propogate through
-  operations (similar to how ``NaN`` does).
+  operations (similar to how ``NaN`` propagates).
 
 For metadata specified as a description (option 2 above), unknown categoricals
 are created.
@@ -111,11 +111,32 @@ scans).
 .. code-block:: python
 
     >>> col_known = ddf.col.cat.as_known()  # use for single column
+    >>> col_known.cat.known
+    True
     >>> ddf_known = ddf.categorize()        # use for multiple columns
+    >>> ddf_known.col.cat.known
+    True
 
 To convert a known categorical to an unknown categorical, there is also the
 ``.cat.as_unknown()`` method. This requires no computation, as it's just a
 change in the metadata.
+
+Non-categorical columns can be converted to categoricals in a few different
+ways:
+
+- ``ddf.astype({col_name: 'category', ...})`` and
+  ``ddf.col.astype('category')`` operate lazily, and result in unknown
+  categoricals.
+- ``ddf.categorize(cols=...)`` requires computation, and results in known
+  categoricals.
+
+Additionally, with pandas 0.19.2 and up, ``dd.read_csv`` and ``dd.read_table``
+can read data directly into unknown categorical columns by specifying
+a column dtype as ``'category'``:
+
+.. code-block:: python
+
+    >>> ddf = dd.read_csv(..., dtype={col_name: 'category'})
 
 .. _`categorical data`: http://pandas.pydata.org/pandas-docs/stable/categorical.html
 
