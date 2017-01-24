@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import dask
+import dask.async
 from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
@@ -207,3 +208,10 @@ def test_categories(fn):
     cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories).compute()
     assert cats_set.tolist() == ['a', 'c', 'a', 'b']
     assert_eq(ddf.y, ddf2.y, check_names=False)
+    with pytest.raises(dask.async.RemoteException):
+        # attempt to load as category that which is not so encoded
+        ddf2 = dd.read_parquet(fn, categories=['x']).compute()
+
+    # attempt to load as category unknown column
+    ddf2 = dd.read_parquet(fn, categories=['foo'])
+    assert 'foo' not in ddf2._meta
