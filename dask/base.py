@@ -439,6 +439,59 @@ def redict_collection(c, dsk):
 
 
 def persist(*args, **kwargs):
+    """ Persist multiple Dask collections into memory
+
+    This turns lazy Dask collections into Dask collections with the same
+    metadata, but now with their results actively computing.
+
+    For example a lazy dask.array built up from many lazy calls will now be a
+    dask.array of the same shape, dtype, etc., but now with all of those lazy
+    operations either in memory (for single-machine computing) or actively
+    computing asynchronously (for distributed computing).
+
+    If using Dask on a single machine then you should ensure that the
+    dataset fits entirely within memory.
+
+    This function operates differently if a ``dask.distributed.Client`` exists
+    and is connected to a distributed scheduler.  In this case this function
+    will return as soon as the task graph has been submitted to the cluster,
+    but before the computations have completed.  Computations will continue
+    asynchronously in the background.  When using this function with the single
+    machine scheduler it blocks until the computations have finished.
+
+    Examples
+    --------
+
+    >>> df = dd.read_csv('/path/to/*.csv')  # doctest: +SKIP
+    >>> df = df[df.name == 'Alice']  # doctest: +SKIP
+    >>> df['in-debt'] = df.balance < 0  # doctest: +SKIP
+    >>> df = df.persist()  # triggers computation  # doctest: +SKIP
+
+    >>> df.value().min()  # future computations are now fast  # doctest: +SKIP
+    -10
+    >>> df.value().max()  # doctest: +SKIP
+    100
+
+    >>> from dask import persist  # use persist function on multiple collections
+    >>> a, b = persist(a, b)  # doctest: +SKIP
+
+    Parameters
+    ----------
+    args: Dask collections
+    get : callable, optional
+        A scheduler ``get`` function to use. If not provided, the default
+        is to check the global settings first, and then fall back to
+        the collection defaults.
+    optimize_graph : bool, optional
+        If True [default], the graph is optimized before computation.
+        Otherwise the graph is run as is. This can be useful for debugging.
+    kwargs
+        Extra keywords to forward to the scheduler ``get`` function.
+
+    Returns
+    -------
+    New dask collections backed by in-memory data
+    """
     collections = [a for a in args if isinstance(a, Base)]
     if not collections:
         return args
