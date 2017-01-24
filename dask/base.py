@@ -294,7 +294,12 @@ def normalize_ordered_dict(d):
     return type(d).__name__, normalize_token(list(d.items()))
 
 
-@normalize_token.register((tuple, list, set))
+@normalize_token.register(set)
+def normalize_set(s):
+    return normalize_token(sorted(s, key=str))
+
+
+@normalize_token.register((tuple, list))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
 
