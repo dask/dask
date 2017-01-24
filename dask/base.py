@@ -62,8 +62,40 @@ class Base(object):
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
 
+    def persist(self, **kwargs):
+        """ Persist this dask collection into memory
+
+        This turns a lazy Dask collection into a Dask collection with the same
+        metadata, but now with its results actively computing.  For example a
+        lazy dask.array built up from many lazy calls will now be a dask.array
+        of the same shape, dtype, etc., but now with all of those lazy
+        operations either in memory (for single-machine computing) or actively
+        computing asynchronously (for distributed computing).
+
+        If using Dask on a single machine then you should ensure that the
+        dataset fits entirely within memory.
+
+        Parameters
+        ----------
+        get : callable, optional
+            A scheduler ``get`` function to use. If not provided, the default
+            is to check the global settings first, and then fall back to
+            the collection defaults.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before computation.
+            Otherwise the graph is run as is. This can be useful for debugging.
+        kwargs
+            Extra keywords to forward to the scheduler ``get`` function.
+        """
+        return persist(self, **kwargs)[0]
+
     def compute(self, **kwargs):
-        """Compute several dask collections at once.
+        """ Compute this dask collection
+
+        This turns a lazy Dask collection into its in-memory equivalent.
+        For example a Dask.array turns into a NumPy array and a Dask.dataframe
+        turns into a Pandas dataframe.  The entire dataset must fit into memory
+        before calling this operation.
 
         Parameters
         ----------

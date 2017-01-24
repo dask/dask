@@ -261,6 +261,19 @@ def test_compute_array():
     assert np.allclose(out2, arr + 2)
 
 
+@pytest.mark.skipif('not da')
+def test_persist_array():
+    from dask.array.utils import assert_eq
+    arr = np.arange(100).reshape((10, 10))
+    x = da.from_array(arr, chunks=(5, 5))
+    x = (x + 1) - x.mean(axis=0)
+    y = x.persist()
+
+    assert_eq(x, y)
+    assert set(y.dask).issubset(x.dask)
+    assert len(y.dask) == y.npartitions
+
+
 @pytest.mark.skipif('not dd')
 def test_compute_dataframe():
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
