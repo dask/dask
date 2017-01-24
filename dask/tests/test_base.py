@@ -210,6 +210,10 @@ def test_tokenize_dict():
     assert tokenize({'x': 1, 1: 'x'}) == tokenize({'x': 1, 1: 'x'})
 
 
+def test_tokenize_set():
+    assert tokenize({1, 2, 'x', (1, 'x')}) == tokenize({1, 2, 'x', (1, 'x')})
+
+
 def test_tokenize_ordered_dict():
     with ignoring(ImportError):
         from collections import OrderedDict
