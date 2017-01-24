@@ -5,9 +5,9 @@ env:
   matrix:
     - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.19.0 COVERAGE='true' PARALLEL='false' XTRATESTARGS=
     - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-    - PYTHON=3.3 NUMPY=1.9.2 PANDAS=0.19.0 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
     - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
     - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
+    - PYTHON=3.6 NUMPY=1.11.2 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' XTRATESTARGS=
 
 addons:
     apt:
@@ -26,7 +26,7 @@ install:
   - conda create -n test-environment python=$PYTHON
   - source activate test-environment
   - conda install -c conda-forge numpy=$NUMPY scipy pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz chest blosc cython psutil ipython numba
-  - if [[ $PYTHON != '3.3' ]]; then conda install -c conda-forge pandas=$PANDAS distributed cloudpickle bokeh python-lmdb sortedcollections; fi
+  - if [[ $PYTHON != '3.3' ]]; then conda install -c conda-forge pandas=$PANDAS distributed cloudpickle bokeh sortedcollections; fi
   - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/zict --upgrade --no-deps; fi
   - if [[ $PYTHON != '3.3' ]]; then pip install git+https://github.com/dask/distributed --upgrade --no-deps; fi
   - if [[ $PYTHON == '3.3' ]]; then pip install cloudpickle pandas==$PANDAS; fi
