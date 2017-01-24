@@ -5,7 +5,6 @@ import pandas as pd
 import pandas.util.testing as tm
 
 import pytest
-from distutils.version import LooseVersion
 
 import dask
 import dask.dataframe as dd
@@ -990,8 +989,6 @@ def test_cumulative(func, key, sel):
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
 
-@pytest.mark.skipif(LooseVersion(pd.__version__) < '0.19',
-                    reason="pandas-0.18 grp.cumsum(axis=1) seems to cumprod")
 @pytest.mark.parametrize('func', ['cumsum', 'cumprod'])
 def test_cumulative_axis1(func):
     df = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
