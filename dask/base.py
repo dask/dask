@@ -11,7 +11,7 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import bind_method, unicode
+from .compatibility import bind_method, unicode, PY3
 from .context import _globals
 from .core import flatten
 from .utils import Dispatch
@@ -65,29 +65,10 @@ class Base(object):
     def persist(self, **kwargs):
         """ Persist this dask collection into memory
 
-        This turns a lazy Dask collection into a Dask collection with the same
-        metadata, but now with its results actively computing.  For example a
-        lazy dask.array built up from many lazy calls will now be a dask.array
-        of the same shape, dtype, etc., but now with all of those lazy
-        operations either in memory (for single-machine computing) or actively
-        computing asynchronously (for distributed computing).
-
-        If using Dask on a single machine then you should ensure that the
-        dataset fits entirely within memory.
-
-        Parameters
-        ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
-        optimize_graph : bool, optional
-            If True [default], the graph is optimized before computation.
-            Otherwise the graph is run as is. This can be useful for debugging.
-        kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
+        See ``dask.base.persist`` for full docstring
         """
-        return persist(self, **kwargs)[0]
+        (result,) = persist(self, **kwargs)
+        return result
 
     def compute(self, **kwargs):
         """ Compute this dask collection
@@ -109,7 +90,8 @@ class Base(object):
         kwargs
             Extra keywords to forward to the scheduler ``get`` function.
         """
-        return compute(self, **kwargs)[0]
+        (result,) = compute(self, **kwargs)
+        return result
 
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
@@ -442,15 +424,14 @@ def persist(*args, **kwargs):
     """ Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
-    metadata, but now with their results actively computing.
+    metadata, but now with their results fully computed or actively computing
+    in the background.
 
     For example a lazy dask.array built up from many lazy calls will now be a
-    dask.array of the same shape, dtype, etc., but now with all of those lazy
-    operations either in memory (for single-machine computing) or actively
-    computing asynchronously (for distributed computing).
-
-    If using Dask on a single machine then you should ensure that the
-    dataset fits entirely within memory.
+    dask.array of the same shape, dtype, chunks, etc., but now with all of
+    those previously lazy tasks either computed in memory as many small NumPy
+    arrays (in the single-machine case) or asynchronously running in the
+    background on a cluster (in the distributed case).
 
     This function operates differently if a ``dask.distributed.Client`` exists
     and is connected to a distributed scheduler.  In this case this function
@@ -459,9 +440,11 @@ def persist(*args, **kwargs):
     asynchronously in the background.  When using this function with the single
     machine scheduler it blocks until the computations have finished.
 
+    When using Dask on a single machine you should ensure that the dataset fits
+    entirely within memory.
+
     Examples
     --------
-
     >>> df = dd.read_csv('/path/to/*.csv')  # doctest: +SKIP
     >>> df = df[df.name == 'Alice']  # doctest: +SKIP
     >>> df['in-debt'] = df.balance < 0  # doctest: +SKIP
@@ -477,7 +460,7 @@ def persist(*args, **kwargs):
 
     Parameters
     ----------
-    args: Dask collections
+    *args: Dask collections
     get : callable, optional
         A scheduler ``get`` function to use. If not provided, the default
         is to check the global settings first, and then fall back to
@@ -485,7 +468,7 @@ def persist(*args, **kwargs):
     optimize_graph : bool, optional
         If True [default], the graph is optimized before computation.
         Otherwise the graph is run as is. This can be useful for debugging.
-    kwargs
+    **kwargs
         Extra keywords to forward to the scheduler ``get`` function.
 
     Returns
@@ -498,18 +481,24 @@ def persist(*args, **kwargs):
 
     try:
         from distributed.client import default_client
-        collections = default_client().persist(collections, **kwargs)
-        if isinstance(collections, list):  # distributed is inconsistent here
-            collections = tuple(collections)
-        else:
-            collections = (collections,)
-        results_iter = iter(collections)
-        return tuple(a if not isinstance(a, Base)
-                     else next(results_iter)
-                     for a in args)
-
-    except (ImportError, ValueError):
+    except ImportError:
         pass
+    else:
+        try:
+            client = default_client()
+        except ValueError:
+            pass
+        else:
+            collections = client.persist(collections, **kwargs)
+            if isinstance(collections, list):  # distributed is inconsistent here
+                collections = tuple(collections)
+            else:
+                collections = (collections,)
+            results_iter = iter(collections)
+            return tuple(a if not isinstance(a, Base)
+                         else next(results_iter)
+                         for a in args)
+
     optimize_graph = kwargs.pop('optimize_graph', True)
 
     get = kwargs.pop('get', None) or _globals['get']
@@ -535,3 +524,7 @@ def persist(*args, **kwargs):
     return tuple(a if not isinstance(a, Base)
                  else next(results_iter)
                  for a in args)
+
+
+if PY3:
+    Base.persist.__doc__ = persist.__doc__
