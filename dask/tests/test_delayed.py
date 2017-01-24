@@ -305,6 +305,12 @@ def test_array_bag_delayed():
     out = delayed(sum)([i.sum() for i in seq])
     assert out.compute() == 2 * arr1.sum() + 2 * arr2.sum() + sum([1, 2, 3])
 
+def test_deterministic_tokenize_function():
+    def myfunc(x):
+        return x+1
+    dask1 = delayed(myfunc)(1).dask
+    dask2 = delayed(myfunc)(1).dask
+    assert list(dask1.keys())[0] == list(dask2.keys())[0]
 
 def test_delayed_picklable():
     # Delayed
