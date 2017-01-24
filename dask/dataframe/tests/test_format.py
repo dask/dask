@@ -13,28 +13,39 @@ def test_repr():
         assert str(x.npartitions) in repr(x)
 
 
+def test_repr_meta_mutation():
+    # Check that the repr changes when meta changes
+    df = pd.DataFrame({'a': range(5),
+                       'b': ['a', 'b', 'c', 'd', 'e']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    s1 = repr(ddf)
+    assert repr(ddf) == s1
+    ddf.b = ddf.b.astype('category')
+    assert repr(ddf) != s1
+
+
 def test_dataframe_format():
     df = pd.DataFrame({'A': [1, 2, 3, 4, 5, 6, 7, 8],
                        'B': list('ABCDEFGH'),
                        'C': pd.Categorical(list('AAABBBCC'))})
     ddf = dd.from_pandas(df, 3)
     exp = ("Dask DataFrame Structure:\n"
-           "                   A       B         C\n"
-           "npartitions=3                         \n"
-           "0              int64  object  category\n"
-           "3                ...     ...       ...\n"
-           "6                ...     ...       ...\n"
-           "7                ...     ...       ...\n"
+           "                   A       B                C\n"
+           "npartitions=3                                \n"
+           "0              int64  object  category[known]\n"
+           "3                ...     ...              ...\n"
+           "6                ...     ...              ...\n"
+           "7                ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = ("                   A       B         C\n"
-           "npartitions=3                         \n"
-           "0              int64  object  category\n"
-           "3                ...     ...       ...\n"
-           "6                ...     ...       ...\n"
-           "7                ...     ...       ...")
+    exp = ("                   A       B                C\n"
+           "npartitions=3                                \n"
+           "0              int64  object  category[known]\n"
+           "3                ...     ...              ...\n"
+           "6                ...     ...              ...\n"
+           "7                ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -57,7 +68,7 @@ def test_dataframe_format():
       <th>0</th>
       <td>int64</td>
       <td>object</td>
-      <td>category</td>
+      <td>category[known]</td>
     </tr>
     <tr>
       <th>3</th>
@@ -101,12 +112,12 @@ def test_dataframe_format_with_index():
                       index=list('ABCDEFGH'))
     ddf = dd.from_pandas(df, 3)
     exp = ("Dask DataFrame Structure:\n"
-           "                   A       B         C\n"
-           "npartitions=3                         \n"
-           "A              int64  object  category\n"
-           "D                ...     ...       ...\n"
-           "G                ...     ...       ...\n"
-           "H                ...     ...       ...\n"
+           "                   A       B                C\n"
+           "npartitions=3                                \n"
+           "A              int64  object  category[known]\n"
+           "D                ...     ...              ...\n"
+           "G                ...     ...              ...\n"
+           "H                ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -131,7 +142,7 @@ def test_dataframe_format_with_index():
       <th>A</th>
       <td>int64</td>
       <td>object</td>
-      <td>category</td>
+      <td>category[known]</td>
     </tr>
     <tr>
       <th>D</th>
@@ -177,22 +188,22 @@ def test_dataframe_format_unknown_divisions():
     assert not ddf.known_divisions
 
     exp = ("Dask DataFrame Structure:\n"
-           "                   A       B         C\n"
-           "npartitions=3                         \n"
-           "None           int64  object  category\n"
-           "None             ...     ...       ...\n"
-           "None             ...     ...       ...\n"
-           "None             ...     ...       ...\n"
+           "                   A       B                C\n"
+           "npartitions=3                                \n"
+           "None           int64  object  category[known]\n"
+           "None             ...     ...              ...\n"
+           "None             ...     ...              ...\n"
+           "None             ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = ("                   A       B         C\n"
-           "npartitions=3                         \n"
-           "None           int64  object  category\n"
-           "None             ...     ...       ...\n"
-           "None             ...     ...       ...\n"
-           "None             ...     ...       ...")
+    exp = ("                   A       B                C\n"
+           "npartitions=3                                \n"
+           "None           int64  object  category[known]\n"
+           "None             ...     ...              ...\n"
+           "None             ...     ...              ...\n"
+           "None             ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -215,7 +226,7 @@ def test_dataframe_format_unknown_divisions():
       <th>None</th>
       <td>int64</td>
       <td>object</td>
-      <td>category</td>
+      <td>category[known]</td>
     </tr>
     <tr>
       <th>None</th>
@@ -258,24 +269,24 @@ def test_dataframe_format_long():
                        'C': pd.Categorical(list('AAABBBCC') * 10)})
     ddf = dd.from_pandas(df, 10)
     exp = ('Dask DataFrame Structure:\n'
-           '                    A       B         C\n'
-           'npartitions=10                         \n'
-           '0               int64  object  category\n'
-           '8                 ...     ...       ...\n'
-           '...               ...     ...       ...\n'
-           '72                ...     ...       ...\n'
-           '79                ...     ...       ...\n'
+           '                    A       B                C\n'
+           'npartitions=10                                \n'
+           '0               int64  object  category[known]\n'
+           '8                 ...     ...              ...\n'
+           '...               ...     ...              ...\n'
+           '72                ...     ...              ...\n'
+           '79                ...     ...              ...\n'
            'Dask Name: from_pandas, 10 tasks')
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = ("                    A       B         C\n"
-           "npartitions=10                         \n"
-           "0               int64  object  category\n"
-           "8                 ...     ...       ...\n"
-           "...               ...     ...       ...\n"
-           "72                ...     ...       ...\n"
-           "79                ...     ...       ...")
+    exp = ("                    A       B                C\n"
+           "npartitions=10                                \n"
+           "0               int64  object  category[known]\n"
+           "8                 ...     ...              ...\n"
+           "...               ...     ...              ...\n"
+           "72                ...     ...              ...\n"
+           "79                ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -298,7 +309,7 @@ def test_dataframe_format_long():
       <th>0</th>
       <td>int64</td>
       <td>object</td>
-      <td>category</td>
+      <td>category[known]</td>
     </tr>
     <tr>
       <th>8</th>
@@ -412,11 +423,31 @@ Dask Name: from_pandas, 6 tasks"""
     ds = dd.from_pandas(s, 3)
     exp = """Dask Index Structure:
 npartitions=3
-1    category
-4         ...
-7         ...
-8         ...
+1    category[known]
+4                ...
+7                ...
+8                ...
 Name: YYY, dtype: category
 Dask Name: from_pandas, 6 tasks"""
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
+
+
+def test_categorical_format():
+    s = pd.Series(['a', 'b', 'c']).astype('category')
+    known = dd.from_pandas(s, npartitions=1)
+    unknown = known.cat.as_unknown()
+    exp = ("Dask Series Structure:\n"
+           "npartitions=1\n"
+           "0    category[known]\n"
+           "2                ...\n"
+           "dtype: category\n"
+           "Dask Name: from_pandas, 1 tasks")
+    assert repr(known) == exp
+    exp = ("Dask Series Structure:\n"
+           "npartitions=1\n"
+           "0    category[unknown]\n"
+           "2                  ...\n"
+           "dtype: category\n"
+           "Dask Name: from_pandas, 1 tasks")
+    assert repr(unknown) == exp
