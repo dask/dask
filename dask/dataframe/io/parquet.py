@@ -116,7 +116,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                         for (c, d) in dtypes.items()},
                         columns=[c for c in pf.columns if c in dtypes])
 
-    for cat in categories:
+    for cat in categories or []:
         meta[cat] = pd.Series(pd.Categorical([],
                               categories=[UNKNOWN_CATEGORIES]))
 
