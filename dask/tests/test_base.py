@@ -7,8 +7,10 @@ import subprocess
 import sys
 
 import dask
+from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
-                       visualize)
+                       visualize, persist)
+from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
 from dask.compatibility import unicode
@@ -263,6 +265,19 @@ def test_compute_array():
     assert np.allclose(out2, arr + 2)
 
 
+@pytest.mark.skipif('not da')
+def test_persist_array():
+    from dask.array.utils import assert_eq
+    arr = np.arange(100).reshape((10, 10))
+    x = da.from_array(arr, chunks=(5, 5))
+    x = (x + 1) - x.mean(axis=0)
+    y = x.persist()
+
+    assert_eq(x, y)
+    assert set(y.dask).issubset(x.dask)
+    assert len(y.dask) == y.npartitions
+
+
 @pytest.mark.skipif('not dd')
 def test_compute_dataframe():
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
@@ -378,3 +393,42 @@ def test_default_imports():
                  'partd', 's3fs', 'distributed']
     for mod in blacklist:
         assert mod not in modules
+
+
+def test_persist_literals():
+    assert persist(1, 2, 3) == (1, 2, 3)
+
+
+def test_persist_delayed():
+    x1 = delayed(1)
+    x2 = delayed(inc)(x1)
+    x3 = delayed(inc)(x2)
+
+    xx, = persist(x3)
+    assert isinstance(xx, Delayed)
+    assert xx.key == x3.key
+    assert len(xx.dask) == 1
+
+    assert x3.compute() == xx.compute()
+
+
+@pytest.mark.skipif('not da or not db')
+def test_persist_array_bag():
+    x = da.arange(5, chunks=2) + 1
+    b = db.from_sequence([1, 2, 3]).map(inc)
+
+    with pytest.raises(ValueError):
+        persist(x, b)
+
+    xx, bb = persist(x, b, get=dask.async.get_sync)
+
+    assert isinstance(xx, da.Array)
+    assert isinstance(bb, db.Bag)
+
+    assert xx.name == x.name
+    assert bb.name == b.name
+    assert len(xx.dask) == xx.npartitions < len(x.dask)
+    assert len(bb.dask) == bb.npartitions < len(b.dask)
+
+    assert np.allclose(x, xx)
+    assert list(b) == list(bb)

@@ -8,7 +8,7 @@ try:
 except ImportError:
     pass
 try:
-    from .base import visualize, compute
+    from .base import visualize, compute, persist
 except ImportError:
     pass
 

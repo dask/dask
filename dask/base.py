@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
+import copy
 from functools import partial
 from hashlib import md5
-from operator import attrgetter
 import pickle
 import os
 import uuid
@@ -11,8 +11,9 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import bind_method, unicode
+from .compatibility import bind_method, unicode, PY3
 from .context import _globals
+from .core import flatten
 from .utils import Dispatch
 
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
@@ -61,8 +62,21 @@ class Base(object):
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
 
+    def persist(self, **kwargs):
+        """ Persist this dask collection into memory
+
+        See ``dask.base.persist`` for full docstring
+        """
+        (result,) = persist(self, **kwargs)
+        return result
+
     def compute(self, **kwargs):
-        """Compute several dask collections at once.
+        """ Compute this dask collection
+
+        This turns a lazy Dask collection into its in-memory equivalent.
+        For example a Dask.array turns into a NumPy array and a Dask.dataframe
+        turns into a Pandas dataframe.  The entire dataset must fit into memory
+        before calling this operation.
 
         Parameters
         ----------
@@ -76,7 +90,8 @@ class Base(object):
         kwargs
             Extra keywords to forward to the scheduler ``get`` function.
         """
-        return compute(self, **kwargs)[0]
+        (result,) = compute(self, **kwargs)
+        return result
 
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
@@ -119,24 +134,6 @@ class Base(object):
         raise NotImplementedError
 
 
-def _extract_graph_and_keys(vals):
-    """Given a list of dask vals, return a single graph and a list of keys such
-    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
-    dsk = {}
-    keys = []
-    for v in vals:
-        # Optimization to avoid merging dictionaries in Delayed values. Reduces
-        # memory usage for large graphs.
-        if hasattr(v, '_dasks'):
-            for d in v._dasks:
-                dsk.update(d)
-        else:
-            dsk.update(v.dask)
-        keys.append(v._keys())
-
-    return dsk, keys
-
-
 def compute(*args, **kwargs):
     """Compute several dask collections at once.
 
@@ -165,13 +162,12 @@ def compute(*args, **kwargs):
     >>> compute(a, b)
     (45, 4.5)
     """
+    optimize_graph = kwargs.pop('optimize_graph', True)
     variables = [a for a in args if isinstance(a, Base)]
     if not variables:
         return args
 
     get = kwargs.pop('get', None) or _globals['get']
-    optimizations = (kwargs.pop('optimizations', None) or
-                     _globals.get('optimizations', []))
 
     if not get:
         get = variables[0]._default_get
@@ -181,18 +177,8 @@ def compute(*args, **kwargs):
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    if kwargs.get('optimize_graph', True):
-        groups = groupby(attrgetter('_optimize'), variables)
-        groups = {opt: _extract_graph_and_keys(val)
-                  for opt, val in groups.items()}
-        for opt in optimizations:
-            groups = {k: [opt(dsk, keys), keys]
-                      for k, (dsk, keys) in groups.items()}
-        dsk = merge([opt(dsk, keys, **kwargs)
-                    for opt, (dsk, keys) in groups.items()])
-        keys = [var._keys() for var in variables]
-    else:
-        dsk, keys = _extract_graph_and_keys(variables)
+    dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
+    keys = [var._keys() for var in variables]
     results = get(dsk, keys, **kwargs)
 
     results_iter = iter(results)
@@ -388,3 +374,162 @@ def tokenize(*args, **kwargs):
     if kwargs:
         args = args + (kwargs,)
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+
+
+def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+    """
+    Convert many collections into a single dask graph, after optimization
+    """
+    optimizations = (kwargs.pop('optimizations', None) or
+                     _globals.get('optimizations', []))
+    if optimize_graph:
+        groups = groupby(lambda x: x._optimize, collections)
+        groups = {opt: _extract_graph_and_keys(val)
+                  for opt, val in groups.items()}
+        for opt in optimizations:
+            groups = {k: [opt(dsk, keys), keys]
+                      for k, (dsk, keys) in groups.items()}
+        dsk = merge([opt(dsk, keys, **kwargs)
+                     for opt, (dsk, keys) in groups.items()])
+    else:
+        dsk = merge(c.dask for c in collections)
+
+    return dsk
+
+
+def _extract_graph_and_keys(vals):
+    """Given a list of dask vals, return a single graph and a list of keys such
+    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    dsk = {}
+    keys = []
+    for v in vals:
+        # Optimization to avoid merging dictionaries in Delayed values. Reduces
+        # memory usage for large graphs.
+        if hasattr(v, '_dasks'):
+            for d in v._dasks:
+                dsk.update(d)
+        else:
+            dsk.update(v.dask)
+        keys.append(v._keys())
+
+    return dsk, keys
+
+
+def redict_collection(c, dsk):
+    from dask.delayed import Delayed
+    if isinstance(c, Delayed):
+        return Delayed(c.key, [dsk])
+    else:
+        cc = copy.copy(c)
+        cc.dask = dsk
+        return cc
+
+
+def persist(*args, **kwargs):
+    """ Persist multiple Dask collections into memory
+
+    This turns lazy Dask collections into Dask collections with the same
+    metadata, but now with their results fully computed or actively computing
+    in the background.
+
+    For example a lazy dask.array built up from many lazy calls will now be a
+    dask.array of the same shape, dtype, chunks, etc., but now with all of
+    those previously lazy tasks either computed in memory as many small NumPy
+    arrays (in the single-machine case) or asynchronously running in the
+    background on a cluster (in the distributed case).
+
+    This function operates differently if a ``dask.distributed.Client`` exists
+    and is connected to a distributed scheduler.  In this case this function
+    will return as soon as the task graph has been submitted to the cluster,
+    but before the computations have completed.  Computations will continue
+    asynchronously in the background.  When using this function with the single
+    machine scheduler it blocks until the computations have finished.
+
+    When using Dask on a single machine you should ensure that the dataset fits
+    entirely within memory.
+
+    Examples
+    --------
+    >>> df = dd.read_csv('/path/to/*.csv')  # doctest: +SKIP
+    >>> df = df[df.name == 'Alice']  # doctest: +SKIP
+    >>> df['in-debt'] = df.balance < 0  # doctest: +SKIP
+    >>> df = df.persist()  # triggers computation  # doctest: +SKIP
+
+    >>> df.value().min()  # future computations are now fast  # doctest: +SKIP
+    -10
+    >>> df.value().max()  # doctest: +SKIP
+    100
+
+    >>> from dask import persist  # use persist function on multiple collections
+    >>> a, b = persist(a, b)  # doctest: +SKIP
+
+    Parameters
+    ----------
+    *args: Dask collections
+    get : callable, optional
+        A scheduler ``get`` function to use. If not provided, the default
+        is to check the global settings first, and then fall back to
+        the collection defaults.
+    optimize_graph : bool, optional
+        If True [default], the graph is optimized before computation.
+        Otherwise the graph is run as is. This can be useful for debugging.
+    **kwargs
+        Extra keywords to forward to the scheduler ``get`` function.
+
+    Returns
+    -------
+    New dask collections backed by in-memory data
+    """
+    collections = [a for a in args if isinstance(a, Base)]
+    if not collections:
+        return args
+
+    try:
+        from distributed.client import default_client
+    except ImportError:
+        pass
+    else:
+        try:
+            client = default_client()
+        except ValueError:
+            pass
+        else:
+            collections = client.persist(collections, **kwargs)
+            if isinstance(collections, list):  # distributed is inconsistent here
+                collections = tuple(collections)
+            else:
+                collections = (collections,)
+            results_iter = iter(collections)
+            return tuple(a if not isinstance(a, Base)
+                         else next(results_iter)
+                         for a in args)
+
+    optimize_graph = kwargs.pop('optimize_graph', True)
+
+    get = kwargs.pop('get', None) or _globals['get']
+
+    if not get:
+        get = collections[0]._default_get
+        if not all(a._default_get == get for a in collections):
+            raise ValueError("Compute called on multiple collections with "
+                             "differing default schedulers. Please specify a "
+                             "scheduler `get` function using either "
+                             "the `get` kwarg or globally with `set_options`.")
+
+    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+    keys = list(flatten([var._keys() for var in collections]))
+    results = get(dsk, keys, **kwargs)
+
+    d = dict(zip(keys, results))
+
+    result = [redict_collection(c, {k: d[k]
+                                    for k in flatten(c._keys())})
+              for c in collections]
+    results_iter = iter(result)
+    return tuple(a if not isinstance(a, Base)
+                 else next(results_iter)
+                 for a in args)
+
+
+if PY3:
+    Base.persist.__doc__ = persist.__doc__
