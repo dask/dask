@@ -2745,6 +2745,41 @@ class DataFrame(_Frame):
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
+    def _select_columns_or_index(self, columns_or_index):
+        """
+        :param columns_or_index: Column name or list of column names
+        and/or the name of the DataFrame's index
+        :return: Dask DataFrame with columns corresponding to each column or
+        index level in columns_or_index.  If included, the column corresponding 
+        to the index level is named _index
+        """
+        # Ensure columns_or_index is a list
+        columns_or_index = (columns_or_index
+                            if isinstance(columns_or_index, list)
+                            else [columns_or_index])
+
+        column_names = [n for n in columns_or_index
+                        if np.isscalar(n)
+                        and n in self.columns]
+
+        selected_df = self[column_names]
+        if self._contains_index_name(columns_or_index):
+            # Index name was included
+            selected_df = selected_df.assign(_index=self.index)
+
+        return selected_df
+
+    def _contains_index_name(self, columns_or_index):
+        if isinstance(columns_or_index, list):
+            return (self.index.name
+                    and any(n == self.index.name and n not in self.columns
+                            for n in columns_or_index
+                            if np.isscalar(n)))
+        else:
+            return (columns_or_index
+                    and np.isscalar(columns_or_index)
+                    and columns_or_index == self.index.name)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,

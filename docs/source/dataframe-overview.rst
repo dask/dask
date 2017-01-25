@@ -108,6 +108,8 @@ The following class of computations works well:
 * Cleverly parallelizable operations (fast):
     *  groupby-aggregate (with common aggregations): ``df.groupby(df.x).y.max()``,
        ``df.groupby('x').max()``
+    *  groupby-apply on index: ``df.groupby(['idx', 'x']).apply(myfunc)``, where
+       ``idx`` is the index level name
     *  value_counts:  ``df.x.value_counts()``
     *  Drop duplicates:  ``df.x.drop_duplicates()``
     *  Join on index:  ``dd.merge(df1, df2, left_index=True, right_index=True)``
@@ -118,7 +120,7 @@ The following class of computations works well:
     *  Pearson Correlations: ``df[['col1', 'col2']].corr()``
 * Operations requiring a shuffle (slow-ish, unless on index)
     *  Set index:  ``df.set_index(df.x)``
-    *  groupby-apply (with anything):  ``df.groupby(df.x).apply(myfunc)``
+    *  groupby-apply not on index (with anything):  ``df.groupby(df.x).apply(myfunc)``
     *  Join not on the index:  ``dd.merge(df1, df2, on='name')``
 
 See :doc:`DataFrame API documentation<dataframe-api>` for a more extensive

@@ -695,10 +695,16 @@ class _GroupBy(object):
                                      columns=columns,
                                      token=name_part,
                                      meta=meta)
-        cumpart_ext = (cumpart_raw.to_frame()
-                       if isinstance(meta, pd.Series)
-                       else cumpart_raw).assign(**{i: self.obj[i]
-                                                   for i in index})
+
+        cumpart_raw_frame = (cumpart_raw.to_frame()
+                             if isinstance(meta, pd.Series)
+                             else cumpart_raw)
+
+        cumpart_ext = cumpart_raw_frame.assign(
+            **{i: self.obj[i]
+               if np.isscalar(i) and i in self.obj.columns
+               else self.obj.index
+               for i in index})
 
         cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
                                  columns=0 if columns is None else columns,
@@ -917,32 +923,41 @@ class _GroupBy(object):
                 meta = self._meta_nonempty.apply(func)
         meta = make_meta(meta)
 
-        df = self.obj
-        if isinstance(self.index, DataFrame):  # add index columns to dataframe
-            df2 = df.assign(**{'_index_' + c: self.index[c]
-                               for c in self.index.columns})
-            index = self.index
-        elif isinstance(self.index, Series):
-            df2 = df.assign(_index=self.index)
-            index = self.index
-        elif (isinstance(self.index, list) and
+        # Validate self.index
+        if (isinstance(self.index, list) and
               any(isinstance(item, Series) for item in self.index)):
             raise NotImplementedError("groupby-apply with a multiple Series "
                                       "is currently not supported")
+
+        df = self.obj
+        should_shuffle = not (df.known_divisions
+                              and df._contains_index_name(self.index))
+
+        if should_shuffle:
+            if isinstance(self.index, DataFrame):  # add index columns to dataframe
+                df2 = df.assign(**{'_index_' + c: self.index[c]
+                                   for c in self.index.columns})
+                index = self.index
+            elif isinstance(self.index, Series):
+                df2 = df.assign(_index=self.index)
+                index = self.index
+            else:
+                df2 = df
+                index = df._select_columns_or_index(self.index)
+
+            df3 = shuffle(df2, index)  # shuffle dataframe and index
         else:
-            df2 = df
-            index = df[self.index]
+            df3 = df
 
-        df3 = shuffle(df2, index)  # shuffle dataframe and index
-
-        if isinstance(self.index, DataFrame):  # extract index from dataframe
+        if should_shuffle and isinstance(self.index, DataFrame):
+            # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
             if isinstance(meta, pd.DataFrame):
                 df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
             else:
                 df4 = df3.drop(cols, axis=1)
-        elif isinstance(self.index, Series):
+        elif should_shuffle and isinstance(self.index, Series):
             index2 = df3['_index']
             index2.name = self.index.name
             if isinstance(meta, pd.DataFrame):

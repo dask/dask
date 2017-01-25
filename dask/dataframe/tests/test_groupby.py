@@ -1114,3 +1114,82 @@ def test_groupby_agg_grouper_multiple(slice_):
     result = a.groupby('a')[slice_].agg(['min', 'max'])
     expected = d.groupby('a')[slice_].agg(['min', 'max'])
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('agg_func', [
+    'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
+    'std', 'min', 'max',
+])
+def test_groupby_column_and_index_agg_funcs(agg_func):
+
+    def call(g, m, **kwargs):
+        return getattr(g, m)(**kwargs)
+
+    df = pd.DataFrame({'idx': [1, 1, 1, 2, 2, 2],
+                       'a': [1, 2, 1, 2, 1, 2],
+                       'b': np.arange(6),
+                       'c': [1, 1, 1, 2, 2, 2]}
+                      ).set_index('idx')
+
+    ddf = dd.from_pandas(df, npartitions=df.index.nunique())
+    ddf_no_divs = dd.from_pandas(df, npartitions=df.index.nunique(), sort=False)
+
+    # Index and then column
+
+    # Compute expected result
+    expected = call(df.groupby(['idx', 'a']), agg_func)
+    if agg_func in {'mean', 'var'}:
+        expected = expected.astype(float)
+
+    result = call(ddf.groupby(['idx', 'a']), agg_func)
+    assert_eq(expected, result)
+
+    result = call(ddf_no_divs.groupby(['idx', 'a']), agg_func)
+    assert_eq(expected, result)
+
+    # Test aggregate strings
+    if agg_func in {'sum', 'mean', 'var', 'size', 'std', 'count'}:
+        result = ddf_no_divs.groupby(['idx', 'a']).agg(agg_func)
+        assert_eq(expected, result)
+
+    # Column and then index
+    expected = call(df.groupby(['a', 'idx']), agg_func)
+    if agg_func in {'mean', 'var'}:
+        expected = expected.astype(float)
+
+    result = call(ddf.groupby(['a', 'idx']), agg_func)
+    assert_eq(expected, result)
+
+    result = call(ddf_no_divs.groupby(['a', 'idx']), agg_func)
+    assert_eq(expected, result)
+
+    # Test aggregate strings
+    if agg_func in {'sum', 'mean', 'var', 'size', 'std', 'count'}:
+        result = ddf_no_divs.groupby(['a', 'idx']).agg(agg_func)
+        assert_eq(expected, result)
+
+
+def test_groupby_column_and_index_apply():
+    df = pd.DataFrame({'idx': [1, 1, 1, 2, 2, 2],
+                       'a': [1, 2, 1, 2, 1, 2],
+                       'b': np.arange(6)}
+                      ).set_index('idx')
+
+    ddf = dd.from_pandas(df, npartitions=df.index.nunique())
+    ddf_no_divs = dd.from_pandas(df, npartitions=df.index.nunique(), sort=False)
+
+    # Specify apply function
+    def func(frame):
+        frame['b'] = frame.b - frame.b.mean()
+        return frame
+
+    # Expected result
+    expected = df.groupby(['idx', 'a']).apply(func)
+
+    # Compute on dask DataFrame with divisions (no shuffling)
+    result = ddf.groupby(['idx', 'a']).apply(func)
+    assert_eq(expected, result)
+
+    # Compute on dask DataFrame without divisions (requires shuffling)
+    result = ddf_no_divs.groupby(['idx', 'a']).apply(func)
+    assert_eq(expected, result)
