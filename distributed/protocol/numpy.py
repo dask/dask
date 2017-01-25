@@ -50,7 +50,7 @@ def serialize_numpy_ndarray(x):
 
     data = x.view('u1').data
 
-    if blosc and len(data) > 1e5:
+    if blosc and data.nbytes > 1e5:
         frames = frame_split_size([data])
         if sys.version_info.major == 2:
             frames = [ensure_bytes(frame) for frame in frames]
@@ -58,7 +58,7 @@ def serialize_numpy_ndarray(x):
         out = []
         compression = []
         for frame in frames:
-            sample = byte_sample(frame, 10000 * size, 5)
+            sample = byte_sample(frame, 10000 // size * size, 5)
             csample = blosc.compress(sample, typesize=size, cname='lz4', clevel=3)
             if len(csample) < 0.8 * len(sample):
                 compressed = blosc.compress(frame, typesize=size, cname='lz4', clevel=5)
