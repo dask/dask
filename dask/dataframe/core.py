@@ -30,7 +30,7 @@ from ..async import get_sync
 from . import methods
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
-                    is_categorical_dtype)
+                    is_categorical_dtype, has_known_categories)
 from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
@@ -1591,10 +1591,9 @@ class Series(_Frame):
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
 
-    @cache_readonly
+    @property
     def _repr_data(self):
-        values = [str(self.dtype)] + ['...'] * self.npartitions
-        return pd.Series(values, index=self._repr_divisions, name=self.name)
+        return _repr_data_series(self._meta, self._repr_divisions)
 
     def __repr__(self):
         """ have to overwrite footer """
@@ -2710,14 +2709,12 @@ class DataFrame(_Frame):
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
-    @cache_readonly
+    @property
     def _repr_data(self):
-        dtypes = self.dtypes
-        values = {key: [value] + ['...'] * self.npartitions for key, value
-                  in zip(dtypes.index, dtypes.values)}
-        return pd.DataFrame(values,
-                            index=self._repr_divisions,
-                            columns=self.columns)
+        meta = self._meta
+        index = self._repr_divisions
+        values = {c: _repr_data_series(meta[c], index) for c in meta.columns}
+        return pd.DataFrame(values, columns=meta.columns)
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}
@@ -3746,8 +3743,17 @@ def to_delayed(df):
     return [Delayed(k, [df.dask]) for k in df._keys()]
 
 
-def _escape_html_tag(s):
-    return s.replace('<', r'&lt;', 1).replace('>', r'&gt;', 1)
+def _repr_data_series(s, index):
+    """A helper for creating the ``_repr_data`` property"""
+    npartitions = len(index) - 1
+    if is_categorical_dtype(s):
+        if has_known_categories(s):
+            dtype = 'category[known]'
+        else:
+            dtype = 'category[unknown]'
+    else:
+        dtype = str(s.dtype)
+    return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
 
 
 if PY3:
