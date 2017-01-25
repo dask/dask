@@ -13,7 +13,7 @@ import os
 import sys
 from time import sleep
 import uuid
-from threading import Thread
+from threading import Thread, Lock
 import six
 import socket
 
@@ -2388,36 +2388,87 @@ def _first_completed(futures):
     raise gen.Return(result)
 
 
-def as_completed(fs):
-    """ Return futures in the order in which they complete
+class AsCompleted(object):
+    """
+    Return futures in the order in which they complete
 
     This returns an iterator that yields the input future objects in the order
     in which they complete.  Calling ``next`` on the iterator will block until
     the next future completes, irrespective of order.
 
-    This function does not return futures in the order in which they are input.
+    Additionally, you can also add more futures to this object during
+    computation with the ``.add`` method
+
+    Examples
+    --------
+    >>> x, y, z = client.map(inc, [1, 2, 3])  # doctest: +SKIP
+    >>> for future in as_completed([x, y, z]):  # doctest: +SKIP
+    ...     print(future.result())  # doctest: +SKIP
+    3
+    2
+    4
+
+    Add more futures during computation
+
+    >>> x, y, z = client.map(inc, [1, 2, 3])  # doctest: +SKIP
+    >>> ac = as_completed([x, y, z])  # doctest: +SKIP
+    >>> for future in ac:  # doctest: +SKIP
+    ...     print(future.result())  # doctest: +SKIP
+    ...     if random.random() < 0.5:  # doctest: +SKIP
+    ...         ac.add(c.submit(double, future))  # doctest: +SKIP
+    4
+    2
+    8
+    3
+    6
+    12
+    24
     """
-    fs = list(fs)
-    if not fs:
-        return
-    non_futures = [f for f in fs if not isinstance(f, Future)]
-    if non_futures:
-        raise TypeError("Using as_completed on non-future objects: %s" %
-                        non_futures)
-    if len(set(f.client for f in fs)) == 1:
-        loop = first(fs).client.loop
-    else:
-        # TODO: Groupby client, spawn many _as_completed coroutines
-        raise NotImplementedError(
-        "as_completed on many event loops not yet supported")
+    def __init__(self, futures=None, loop=None):
+        if futures is None:
+            futures = []
+        self.futures = defaultdict(lambda: 0)
+        self.queue = pyQueue()
+        self.lock = Lock()
+        self.loop = loop or default_client().loop
 
-    queue = pyQueue()
+        if futures:
+            for future in futures:
+                self.add(future)
 
-    coroutine = lambda: _as_completed(fs, queue)
-    loop.add_callback(coroutine)
+    @gen.coroutine
+    def track_future(self, future):
+        yield _wait(future)
+        with self.lock:
+            self.futures[future] -= 1
+            if not self.futures[future]:
+                del self.futures[future]
+            self.queue.put_nowait(future)
 
-    for i in range(len(fs)):
-        yield queue.get()
+    def add(self, future):
+        """ Add a future to the collection
+
+        This future will emit from the iterator once it finishes
+        """
+        if type(future) is not Future:
+            raise TypeError("Input must be a future, got %s" % str(future))
+        with self.lock:
+            self.futures[future] += 1
+        self.loop.add_callback(self.track_future, future)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self.lock:
+            if not self.futures and self.queue.empty():
+                raise StopIteration()
+        return self.queue.get()
+
+    next = __next__
+
+
+as_completed = AsCompleted
 
 
 def default_client(c=None):
