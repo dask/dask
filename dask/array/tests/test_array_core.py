@@ -2320,6 +2320,8 @@ def test_swapaxes():
     assert_eq(x.swapaxes(2, 1), d.swapaxes(2, 1))
     assert_eq(x.swapaxes(0, 0), d.swapaxes(0, 0))
     assert_eq(x.swapaxes(1, 2), d.swapaxes(1, 2))
+    assert_eq(x.swapaxes(0, -1), d.swapaxes(0, -1))
+    assert_eq(x.swapaxes(-1, 1), d.swapaxes(-1, 1))
 
     assert d.swapaxes(0, 1).name == d.swapaxes(0, 1).name
     assert d.swapaxes(0, 1).name != d.swapaxes(1, 0).name
