@@ -927,6 +927,19 @@ def test_repartition(nin, nout):
     assert all(results)
 
 
+def test_repartition_names():
+    b = db.from_sequence(range(100), npartitions=5)
+    c = b.repartition(2)
+    assert b.name != c.name
+
+    d = b.repartition(20)
+    assert b.name != c.name
+    assert c.name != d.name
+
+    c = b.repartition(5)
+    assert b is c
+
+
 @pytest.mark.skipif('not db.core._implement_accumulate')
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]

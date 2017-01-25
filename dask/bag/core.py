@@ -1118,7 +1118,7 @@ class Bag(Base):
         --------
         >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
         """
-        new_name = 'repartition-%d-%s' % (npartitions, tokenize(self))
+        new_name = 'repartition-%d-%s' % (npartitions, tokenize(self, npartitions))
         if npartitions == self.npartitions:
             return self
         elif npartitions < self.npartitions:
@@ -1136,7 +1136,7 @@ class Bag(Base):
                 dsk[new_name, new_partition_index] = value
         else:  # npartitions > self.npartitions
             ratio = npartitions / self.npartitions
-            split_name = 'split-%s' % tokenize(self)
+            split_name = 'split-%s' % tokenize(self, npartitions)
             dsk = {}
             last = 0
             j = 0
@@ -1145,7 +1145,7 @@ class Bag(Base):
                 if i == self.npartitions - 1:
                     k = npartitions - j
                 else:
-                    k = int(new) - int(last)
+                    k = int(new - last)
                 dsk[(split_name, i)] = (split, (self.name, i), k)
                 for jj in range(k):
                     dsk[(new_name, j)] = (getitem, (split_name, i), jj)
