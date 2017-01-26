@@ -1994,8 +1994,8 @@ def unify_chunks(*args, **kwargs):
     arrays = []
     for a, i in arginds:
         chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
-                                  if not np.isnan(sum(chunkss[j])) else None
-                                  for n, j in enumerate(i))
+                       if not np.isnan(sum(chunkss[j])) else None
+                       for n, j in enumerate(i))
         if chunks != a.chunks:
             arrays.append(a.rechunk(chunks))
         else:
