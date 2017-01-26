@@ -874,6 +874,8 @@ def blockdims_from_blockshape(shape, chunks):
 
     >>> blockdims_from_blockshape((10, 10), (4, 3))
     ((4, 4, 2), (3, 3, 3, 1))
+    >>> blockdims_from_blockshape((10, 0), (4, 0))
+    ((4, 4, 2), (0,))
     """
     if chunks is None:
         raise TypeError("Must supply chunks= keyword argument")
@@ -888,7 +890,8 @@ def blockdims_from_blockshape(shape, chunks):
         raise ValueError("shape can only contain integers.")
     shape = tuple(map(int, shape))
     chunks = tuple(map(int, chunks))
-    return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+    return tuple(((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                 if d else (0,))
                  for d, bd in zip(shape, chunks))
 
 
@@ -1987,11 +1990,16 @@ def unify_chunks(*args, **kwargs):
     if warn and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
-    arrays = [a.rechunk(tuple(chunkss[j]
-                              if a.shape[n] > 1 else 1
-                              if not np.isnan(sum(chunkss[j])) else None
-                              for n, j in enumerate(i)))
-              for a, i in arginds]
+
+    arrays = []
+    for a, i in arginds:
+        chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
+                                  if not np.isnan(sum(chunkss[j])) else None
+                                  for n, j in enumerate(i))
+        if chunks != a.chunks:
+            arrays.append(a.rechunk(chunks))
+        else:
+            arrays.append(a)
     return chunkss, arrays
 
 
