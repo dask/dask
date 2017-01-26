@@ -25,6 +25,7 @@ def test_eventstream(c, s, *workers):
     futures = c.map(div, [1] * 10, range(10))
     total = c.submit(sum, futures[1:])
     yield _wait(total)
+    yield _wait(futures)
 
     assert len(es.buffer) == 11
 
