@@ -50,7 +50,7 @@ def serialize_numpy_ndarray(x):
 
     data = x.view('u1').data
 
-    if blosc and data.nbytes > 1e5:
+    if blosc and x.nbytes > 1e5:
         frames = frame_split_size([data])
         if sys.version_info.major == 2:
             frames = [ensure_bytes(frame) for frame in frames]

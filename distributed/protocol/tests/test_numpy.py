@@ -138,4 +138,5 @@ def test_dont_compress_uncompressable_data():
     x = np.ones(100)
     header, [data] = serialize(x)
     assert 'compression' not in header
-    assert data.obj.ctypes.data == x.ctypes.data
+    if isinstance(data, memoryview):
+        assert data.obj.ctypes.data == x.ctypes.data
