@@ -1,6 +1,11 @@
 Presentations On Dask
 =====================
 
+* PLOTCON 2016, December 2016
+
+  * `Visualizing Distributed Computations with Dask and Bokeh
+    <https://www.youtube.com/watch?v=FTJwDeXkggU>`__
+
 * PyData DC, October 2016
 
   * `Using Dask for Parallel Computing in Python
