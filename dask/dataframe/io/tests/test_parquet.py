@@ -135,12 +135,17 @@ def test_categorical():
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
 
-def test_append(fn):
+
+def test_append():
+    """Test that appended parquet equal to the original one."""
     with tmpdir() as tmp:
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                             'i64': np.arange(1000, dtype=np.int64),
-                             'f': np.arange(1000, dtype=np.float64),
-                             'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
+                           'i64': np.arange(1000, dtype=np.int64),
+                           'f': np.arange(1000, dtype=np.float64),
+                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                                                      size=1000).astype("O")})
+        df.index.name = 'index'
+
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
         ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
@@ -148,7 +153,71 @@ def test_append(fn):
         ddf2.to_parquet(tmp, append=True)
 
         ddf3 = read_parquet(tmp)
-        assert_eq(df, ddf3, check_index=False)
+        assert_eq(df, ddf3)
+
+
+def test_append_wo_index():
+    """Test append with write_index=False."""
+    with tmpdir() as tmp:
+        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                           'i64': np.arange(1000, dtype=np.int64),
+                           'f': np.arange(1000, dtype=np.float64),
+                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                                                      size=1000).astype("O")})
+        half = len(df) // 2
+        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+        ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
+        ddf1.to_parquet(tmp)
+        with pytest.raises(ValueError) as excinfo:
+            ddf2.to_parquet(tmp, write_index=False, append=True)
+
+        assert 'Appended columns' in str(excinfo.value)
+
+    with tmpdir() as tmp:
+        ddf1.to_parquet(tmp, write_index=False)
+        ddf2.to_parquet(tmp, write_index=False, append=True)
+
+        ddf3 = read_parquet(tmp, index='f')
+        assert_eq(df.set_index('f'), ddf3)
+
+
+def test_append_overlapping_divisions():
+    """Test raising of error when divisions overlapping."""
+    with tmpdir() as tmp:
+        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                           'i64': np.arange(1000, dtype=np.int64),
+                           'f': np.arange(1000, dtype=np.float64),
+                           'bhello': np.random.choice(
+                               ['hello', 'you', 'people'],
+                               size=1000).astype("O")})
+        half = len(df) // 2
+        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+        ddf2 = dd.from_pandas(df.iloc[half-10:], chunksize=100)
+        ddf1.to_parquet(tmp)
+
+        with pytest.raises(ValueError) as excinfo:
+            ddf2.to_parquet(tmp, append=True)
+
+        assert 'Appended divisions' in str(excinfo.value)
+
+        ddf2.to_parquet(tmp, append=True, ignore_divisions=True)
+
+
+def test_append_different_columns():
+    """Test raising of error when non equal columns."""
+    with tmpdir() as tmp:
+        df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
+        df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
+
+        ddf1 = dd.from_pandas(df1, chunksize=2)
+        ddf2 = dd.from_pandas(df2, chunksize=2)
+
+        ddf1.to_parquet(tmp)
+
+        with pytest.raises(ValueError) as excinfo:
+            ddf2.to_parquet(tmp, append=True)
+
+        assert 'Appended columns' in str(excinfo.value)
 
 
 def test_ordering():
