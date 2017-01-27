@@ -7,6 +7,7 @@ matrix:
   fast_finish: true
   include:
     - python: "2.7"
+      env: PACKAGES=blosc
     - python: "3.4"
       env: COVERAGE=true
     - python: "3.5"
@@ -15,7 +16,7 @@ matrix:
       sudo: true
       dist: trusty
     - python: "3.5"
-      env: HDFS=true
+      env: HDFS=true PACKAGES=blosc
       sudo: true
       dist: trusty
 
@@ -48,7 +49,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click -c conda-forge
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click $PACKAGES -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost

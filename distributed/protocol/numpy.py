@@ -48,7 +48,7 @@ def serialize_numpy_ndarray(x):
               'strides': x.strides,
               'shape': x.shape}
 
-    data = x.view('u1').data
+    data = x.ravel().view('u1').data
 
     if blosc and x.nbytes > 1e5:
         frames = frame_split_size([data])

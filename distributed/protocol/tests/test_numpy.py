@@ -49,6 +49,8 @@ def test_serialize():
          np.array([(1, 'abc')], dtype=[('x', 'i4'), ('s', object)]),
          np.zeros(5000, dtype=[('x%d'%i,'<f8') for i in range(4)]),
          np.zeros(5000, dtype='S32'),
+         np.zeros((1, 1000, 1000)),
+         np.arange(12)[::2],  # non-contiguous array
          np.ones(shape=(5, 6)).astype(dtype=[('total', '<f8'), ('n', '<f8')])])
 def test_dumps_serialize_numpy(x):
     header, frames = serialize(x)
