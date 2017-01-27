@@ -1,6 +1,15 @@
 Changelog
 =========
 
+1.15.2 - January 27th, 2017
+---------------------------
+
+*  Fix a bug where arrays with large dtypes or shapes were being improperly compressed (:pr:`830` :pr:`832` :pr:`833`)
+*  Extend ``as_completed`` to accept new futures during iteration (:pr:`829`)
+*  Add ``--nohost`` keyword to ``dask-ssh`` startup utility (:pr:`827`)
+*  Support scheduler shutdown of remote workers, useful for adaptive clusters (:pr: `811` :pr:`816` :pr:`821`)
+*  Add ``Client.run_on_scheduler`` method for running debug functions on the scheduler (:pr:`808`)
+
 1.15.1 - January 11th, 2017
 ---------------------------
 
