@@ -1449,10 +1449,12 @@ def from_delayed(values):
 
 
 def merge_frequencies(seqs):
+    out = defaultdict(int)
+    if len(seqs) == 0:
+        return out
     first, rest = seqs[0], seqs[1:]
     if not rest:
         return first
-    out = defaultdict(int)
     out.update(first)
     for d in rest:
         for k, v in iteritems(d):

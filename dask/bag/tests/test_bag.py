@@ -208,6 +208,11 @@ def test_frequencies():
     assert c.name == b.frequencies().name
     assert c.name != c2.name
     assert c2.name == b.frequencies(split_every=2).name
+    # test bag with empty partitions
+    b2 = db.from_sequence(range(20), partition_size=2)
+    b2 = b2.filter(lambda x: x < 10)
+    d = b2.frequencies()
+    assert dict(d) == dict(zip(range(10), [1] * 10))
 
 
 def test_topk():
