@@ -161,7 +161,8 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
-               fixed_text=None, object_encoding=None, storage_options=None):
+               fixed_text=None, object_encoding=None, storage_options=None,
+               append=False, ignore_divisions=False):
     """
     Store Dask.dataframe to Parquet files
 
@@ -196,6 +197,13 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
         encoding is applied to all object columns.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
+    append: bool (False)
+        If False, construct data-set from scratch; if True, add new row-group(s)
+        to existing data-set. In the latter case, the data-set must exist,
+        and the schema must match the input data.
+    ignore_divisions: bool (False)
+        If False raises error when previous divisions overlap with the new
+        appended divisions.
 
     This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
@@ -218,7 +226,9 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     metadata_fn = sep.join([path, '_metadata'])
 
     if write_index is True or write_index is None and df.known_divisions:
+        new_divisions = df.divisions
         df = df.reset_index()
+        index_col = df._meta.columns[0]
 
     object_encoding = object_encoding or 'utf8'
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
@@ -229,8 +239,33 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                                            fixed_text=fixed_text,
                                            object_encoding=object_encoding)
 
+    if append:
+        pf = fastparquet.api.ParquetFile(path, open_with=myopen)
+        if pf.file_scheme != 'hive':
+            raise ValueError('Requested file scheme is hive, '
+                             'but existing file scheme is not.')
+
+        assert (all(pf.columns == df._meta.columns),
+                'Appended columns not exactly the same.\n'
+                'New: {} | Previous: {}'.
+                format(pf.columns,list(df._meta.columns)))
+
+        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        divisions = list(minmax[index_col]['min']) + [
+            minmax[index_col]['max'][-1]]
+        fmd = pf.fmd
+        i_offset = fastparquet.writer.find_max_part(fmd.row_groups)
+        if new_divisions[0] < divisions[-1] and not ignore_divisions:
+            raise ValueError(
+                'Appended divisions overlapping with the previous ones.\n'
+                'New: {} | Previous: {}'
+                .format(divisions[-1], new_divisions[0]))
+    else:
+        i_offset = 0
+
     partitions = df.to_delayed()
-    filenames = ['part.%i.parquet' % i for i in range(len(partitions))]
+    filenames = ['part.%i.parquet' % i
+                 for i in range(i_offset, len(partitions) + i_offset)]
     outfiles = [sep.join([path, fn]) for fn in filenames]
 
     writes = [delayed(fastparquet.writer.make_part_file)(

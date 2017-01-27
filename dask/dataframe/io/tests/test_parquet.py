@@ -136,15 +136,19 @@ def test_categorical():
         assert assert_eq(df, ddf2)
 
 def test_append(fn):
-    with tmpdir as tmp:
+    with tmpdir() as tmp:
+        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                             'i64': np.arange(1000, dtype=np.int64),
+                             'f': np.arange(1000, dtype=np.float64),
+                             'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
         half = len(df) // 2
-        ddf1 = dd.from_pandas(df.iloc[:half])
-        ddf2 = dd.from_pandas(df.iloc[half:])
+        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+        ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
         ddf1.to_parquet(tmp)
         ddf2.to_parquet(tmp, append=True)
 
         ddf3 = read_parquet(tmp)
-        assert_eq(df, ddf3)
+        assert_eq(df, ddf3, check_index=False)
 
 
 def test_ordering():
