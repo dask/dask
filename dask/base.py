@@ -261,7 +261,21 @@ def visualize(*args, **kwargs):
     return dot_graph(dsk, filename=filename, **kwargs)
 
 
+function_cache = {}
+
+
 def normalize_function(func):
+    try:
+        return function_cache[func]
+    except KeyError:
+        result = _normalize_function(func)
+        function_cache[func] = result
+        return result
+    except TypeError:  # not hashable
+        return _normalize_function(func)
+
+
+def _normalize_function(func):
     if isinstance(func, curry):
         func = func._partial
     if isinstance(func, Compose):
