@@ -296,7 +296,6 @@ API
 **Utility functions**
 
 .. autosummary::
-   dealias
    functions_of
 
 **Rewrite Rules**
@@ -318,7 +317,6 @@ Definitions
 .. autofunction:: inline
 .. autofunction:: inline_functions
 
-.. autofunction:: dealias
 .. autofunction:: functions_of
 
 .. currentmodule:: dask.rewrite
