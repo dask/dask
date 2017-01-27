@@ -135,6 +135,17 @@ def test_categorical():
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
 
+def test_append(fn):
+    with tmpdir as tmp:
+        half = len(df) // 2
+        ddf1 = dd.from_pandas(df.iloc[:half])
+        ddf2 = dd.from_pandas(df.iloc[half:])
+        ddf1.to_parquet(tmp)
+        ddf2.to_parquet(tmp, append=True)
+
+        ddf3 = read_parquet(tmp)
+        assert_eq(df, ddf3)
+
 
 def test_ordering():
     with tmpdir() as tmp:
