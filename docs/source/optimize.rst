@@ -296,12 +296,7 @@ API
 **Utility functions**
 
 .. autosummary::
-   dealias
-   dependency_dict
-   equivalent
    functions_of
-   merge_sync
-   sync_keys
 
 **Rewrite Rules**
 
@@ -322,12 +317,7 @@ Definitions
 .. autofunction:: inline
 .. autofunction:: inline_functions
 
-.. autofunction:: dealias
-.. autofunction:: dependency_dict
-.. autofunction:: equivalent
 .. autofunction:: functions_of
-.. autofunction:: merge_sync
-.. autofunction:: sync_keys
 
 .. currentmodule:: dask.rewrite
 

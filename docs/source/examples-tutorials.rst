@@ -14,6 +14,7 @@ Array
    examples/array-random.rst
    examples/array-extend.rst
 
+*  `Blogpost: Distributed NumPy and Image Analysis on a Cluster, January 2017<http://matthewrocklin.com/blog/work/2017/01/17/dask-images>`_
 *  `Use Dask.array to generate task graphs <https://gist.github.com/mrocklin/b61f795004ec0a70e43de350e453e97e>`_
 
 Bag
@@ -38,6 +39,7 @@ DataFrame
    examples/dataframe-csv.rst
    examples/dataframe-hdf5.rst
 
+*  `Blogpost: Dataframes on a cluster, January 2017 <http://matthewrocklin.com/blog/work/2017/01/12/dask-dataframes>`_
 *  `Distributed DataFrames on NYCTaxi data <https://gist.github.com/mrocklin/fa8e30776e82d46015bfe8fd3b35fcb1>`_
 *  `Build Parallel Algorithms for Pandas <https://gist.github.com/mrocklin/d009e5d4a1f49ecdb433107f3d72c7f3#file-pygotham-dataframes-ipynb>`_
 *  `Simple distributed joins <https://gist.github.com/mrocklin/7b3d3c1b9ed3e747aaf04ad70debc8e9>`_
@@ -55,6 +57,8 @@ Delayed
    examples/delayed-array.rst
    examples/delayed-custom.rst
 
+*  `Blogpost: Delayed on a cluster, January 2017 <http://matthewrocklin.com/blog/work/2017/01/24/dask-custom>`_
+*  `Blogpost: Dask and Celery, September 2016 <http://matthewrocklin.com/blog/work/2016/09/13/dask-and-celery>`_
 *  `Basic Delayed example <https://gist.github.com/mrocklin/d009e5d4a1f49ecdb433107f3d72c7f3#file-pygotham-delayed-ipynb>`_
 *  `Build Parallel Algorithms for Pandas <https://gist.github.com/mrocklin/d009e5d4a1f49ecdb433107f3d72c7f3#file-pygotham-dataframes-ipynb>`_
 *  `Build Dask.dataframes from custom format, feather <https://gist.github.com/mrocklin/e7b7b3a65f2835cda813096332ec73ca>`_
