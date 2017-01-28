@@ -192,7 +192,7 @@ def test_append_overlapping_divisions():
                                size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
-        ddf2 = dd.from_pandas(df.iloc[half-10:], chunksize=100)
+        ddf2 = dd.from_pandas(df.iloc[half - 10:], chunksize=100)
         ddf1.to_parquet(tmp)
 
         with pytest.raises(ValueError) as excinfo:
