@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 import dask
-from dask import delayed, dataframe
+from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist)
 from dask.delayed import Delayed
