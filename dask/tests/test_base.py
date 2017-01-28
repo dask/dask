@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 import dask
-from dask import delayed
+from dask import delayed, dataframe
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist)
 from dask.delayed import Delayed
@@ -432,3 +432,11 @@ def test_persist_array_bag():
 
     assert np.allclose(x, xx)
     assert list(b) == list(bb)
+
+
+def test_encoding():
+    """
+    Tests for: Unicode errors on string columns with NaNs #1883
+    """
+    df = pd.DataFrame({'x': [u'foo', u'Jos\xe9', np.nan]})
+    dd.from_pandas(df, npartitions=2)

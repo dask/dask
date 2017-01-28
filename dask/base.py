@@ -350,7 +350,8 @@ def register_numpy():
             try:
                 data = md5('-'.join(x.flat).encode('utf-8')).hexdigest()
             except TypeError:
-                data = md5(b'-'.join([str(item).encode() for item in x.flat])).hexdigest()
+                data = md5(b'-'.join([unicode(item).encode('utf-8') for item in
+                                      x.flat])).hexdigest()
         else:
             try:
                 data = md5(x.ravel().view('i1').data).hexdigest()
