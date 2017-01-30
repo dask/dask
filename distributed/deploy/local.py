@@ -38,6 +38,8 @@ class LocalCluster(object):
     silence_logs: logging level
         Level of logs to print out to stdout.  ``logging.CRITICAL`` by default.
         Use a falsey value like False or None for no change.
+    ip: string
+        IP address on which the scheduler will listen, defaults to only localhost
     kwargs: dict
         Extra worker arguments, will be passed to the Worker constructor.
 
@@ -59,7 +61,7 @@ class LocalCluster(object):
     >>> c.start_diagnostics_server(show=True)  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
-                 loop=None, start=True, scheduler_port=8786,
+                 loop=None, start=True, ip='127.0.0.1', scheduler_port=8786,
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
                  services={}, worker_services={}, **worker_kwargs):
         self.status = None
@@ -106,7 +108,7 @@ class LocalCluster(object):
         self.worker_kwargs = worker_kwargs
 
         if start:
-            sync(self.loop, self._start)
+            sync(self.loop, self._start, ip)
 
     def __str__(self):
         return ('LocalCluster(%r, workers=%d, ncores=%d)' %
@@ -117,7 +119,7 @@ class LocalCluster(object):
     __repr__ = __str__
 
     @gen.coroutine
-    def _start(self):
+    def _start(self, ip='127.0.0.1'):
         """
         Start all cluster services.
         Wait on this if you passed `start=False` to the LocalCluster
@@ -125,7 +127,7 @@ class LocalCluster(object):
         """
         if self.status == 'running':
             return
-        self.scheduler.start(('127.0.0.1', self.scheduler_port))
+        self.scheduler.start((ip, self.scheduler_port))
 
         yield self._start_all_workers(
             self.n_workers, ncores=self.threads_per_worker,
