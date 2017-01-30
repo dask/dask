@@ -35,7 +35,7 @@ def workers(s):
                    'cpu': 0.0,
                    'last-seen': 0.003068,
                    'latency': 0.01584628690034151,
-                   'ports': ['54871', '50943'],
+                   'addresses': ['tcp://127.0.0.1:54871', 'tcp://127.0.0.1:50943'],
                    'processing': {'inc': 2, 'add': 1},
                    'disk-read': 1234,
                    'disk-write': 1234,
@@ -44,8 +44,8 @@ def workers(s):
                    'memory': 16701911040,
                    'memory_percent': 85}}
     """
-    hosts = {host: ['%s:%s' % (host, port) for port in d['ports']]
-                for host, d in s.host_info.items()}
+    hosts = {host: d['addresses']
+             for host, d in s.host_info.items()}
 
     processing = {host: countby(key_split, concat(s.processing[w] for w in addrs))
                   for host, addrs in hosts.items()}
@@ -58,7 +58,7 @@ def workers(s):
         # info = dissoc(info, 'heartbeat', 'heartbeat-port')
         info['processing'] = processing[host]
         result[host] = info
-        info['ports'] = list(info['ports'])
+        info['addresses'] = sorted(info['addresses'])
         if 'last-seen' in info:
             info['last-seen'] = (now - info['last-seen'])
 

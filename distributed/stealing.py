@@ -7,10 +7,10 @@ import os
 from time import time
 
 from toolz import topk
-from tornado.iostream import StreamClosedError
 from tornado.ioloop import PeriodicCallback
 
 from .config import config
+from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 from .utils import key_split, log_errors, ignoring
 
@@ -162,15 +162,15 @@ class WorkStealing(SchedulerPlugin):
             self.scheduler.total_occupancy += duration
             self.put_key_in_stealable(key)
 
-            self.scheduler.worker_streams[victim].send({'op': 'release-task',
-                                                        'key': key})
+            self.scheduler.worker_comms[victim].send({'op': 'release-task',
+                                                      'key': key})
 
             try:
                 self.scheduler.send_task_to_worker(thief, key)
-            except StreamClosedError:
+            except CommClosedError:
                 self.scheduler.remove_worker(thief)
-        except StreamClosedError:
-            logger.info("Worker stream closed while stealing: %s", victim)
+        except CommClosedError:
+            logger.info("Worker comm closed while stealing: %s", victim)
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:

@@ -21,9 +21,9 @@ logger = logging.getLogger('distributed.remote')
 
 
 class RemoteClient(Server):
-    def __init__(self, ip=get_ip(), local_dir=tempfile.mkdtemp(prefix='client-'),
+    def __init__(self, ip=None, local_dir=tempfile.mkdtemp(prefix='client-'),
                  loop=None, **kwargs):
-        self.ip = ip
+        self.ip = ip or get_ip()
         self.loop = loop or IOLoop.current()
         self.local_dir = local_dir
         handlers = {'upload_file': self.upload_file, 'execute': self.execute}
@@ -78,7 +78,7 @@ def _remote(host, port, loop=IOLoop.current(), client=RemoteClient):
 
 @gen.coroutine
 def _submit(remote_client_address, filepath):
-    rc = rpc(addr=remote_client_address)
+    rc = rpc(remote_client_address)
     remote_file = os.path.basename(filepath)
     with open(filepath, 'rb') as f:
         bytes_read = f.read()

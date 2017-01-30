@@ -12,7 +12,7 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import _wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc
-from distributed.bokeh.worker import Counters
+from distributed.bokeh.worker import Counters, BokehWorker
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
         SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents)
 
@@ -34,13 +34,17 @@ def test_simple(c, s, a, b):
         assert 'bokeh' in response.body.decode().lower()
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, worker_kwargs=dict(services={'bokeh': BokehWorker}))
 def test_basic(c, s, a, b):
     for component in [SystemMonitor, StateTable, Occupancy, StealingTimeSeries]:
         ss = component(s)
 
         ss.update()
-        assert len(first(ss.source.data.values()))
+        data = ss.source.data
+        assert len(first(data.values()))
+        if component is Occupancy:
+            assert all(addr.startswith('127.0.0.1:')
+                       for addr in data['bokeh_address'])
 
 
 @gen_cluster(client=True)

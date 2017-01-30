@@ -458,7 +458,7 @@ class WorkerTable(DashboardComponent):
                     pass
 
             data['processing'] = [sorted(d[w]['processing']) for w in workers]
-            data['processes'] = [len(d[w]['ports']) for w in workers]
+            data['processes'] = [len(d[w]['addresses']) for w in workers]
             self.source.data.update(data)
 
 

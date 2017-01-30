@@ -17,7 +17,7 @@ from distributed.utils import get_ip
 
 def test_cluster(loop):
     with cluster() as (s, [a, b]):
-        with rpc(ip='127.0.0.1', port=s['port']) as s:
+        with rpc(s['address']) as s:
             ident = loop.run_sync(s.identity)
             assert ident['type'] == 'Scheduler'
             assert len(ident['workers']) == 2

@@ -12,6 +12,7 @@ from tornado.httpserver import HTTPServer
 
 from .. import metrics
 from ..utils import log_errors
+from ..comm.utils import get_tcp_server_address
 
 
 logger = logging.getLogger(__name__)
@@ -64,19 +65,26 @@ class Proxy(RequestHandler):
 
 
 class MyApp(HTTPServer):
+    _port = None
+
     @property
     def port(self):
-        if not hasattr(self, '_port'):
+        if self._port is None:
             try:
-                self._port = first(self._sockets.values()).getsockname()[1]
-            except StopIteration:
+                self._port = get_tcp_server_address(self)[1]
+            except RuntimeError:
                 raise OSError("Server has no port.  Please call .listen first")
         return self._port
 
-    def listen(self, port):
+    def listen(self, addr):
+        if isinstance(addr, tuple):
+            ip, port = addr
+        else:
+            port = addr
+            ip = None
         while True:
             try:
-                super(MyApp, self).listen(port)
+                super(MyApp, self).listen(port, ip)
                 break
             except (socket.error, OSError) as e:
                 if port:

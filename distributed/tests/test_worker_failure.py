@@ -14,7 +14,6 @@ from dask import delayed
 from distributed import Client, Nanny, wait
 from distributed.compatibility import PY3
 from distributed.client import _wait
-from distributed.core import coerce_to_address
 from distributed.metrics import time
 from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
@@ -24,7 +23,7 @@ from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
 
 def test_submit_after_failed_worker_sync(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -45,7 +44,7 @@ def test_submit_after_failed_worker(c, s, a, b):
 
 def test_gather_after_failed_worker(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -56,7 +55,7 @@ def test_gather_after_failed_worker(loop):
 @slow
 def test_gather_then_submit_after_failed_workers(loop):
     with cluster(nworkers=4) as (s, [w, x, y, z]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(20))
             wait(L)
             w['proc'].terminate()
@@ -64,13 +63,12 @@ def test_gather_then_submit_after_failed_workers(loop):
             wait([total])
 
             addr = c.who_has()[total.key][0]
-            _, port = coerce_to_address(addr, out=tuple)
             for d in [x, y, z]:
-                if d['port'] == port:
+                if d['address'] == addr:
                     d['proc'].terminate()
                     break
             else:
-                assert 0, "Could not find worker"
+                assert 0, "Could not find worker %r" % (addr,)
 
             result = c.gather([total])
             assert result == [sum(map(inc, range(20)))]
@@ -159,7 +157,7 @@ def test_restart_cleared(c, s, a, b):
 
 def test_restart_sync_no_center(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.submit(inc, 1)
             c.restart()
             assert x.cancelled()
@@ -170,7 +168,7 @@ def test_restart_sync_no_center(loop):
 
 def test_restart_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.submit(div, 1, 2)
             x.result()
 
@@ -205,7 +203,7 @@ def test_restart_fast(c, s, a, b):
 
 def test_restart_fast_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = c.map(sleep, range(10))
 
             start = time()
@@ -318,28 +316,3 @@ def test_restart_during_computation(c, s, a, b):
 
     assert len(s.ncores) == 2
     assert not s.task_state
-
-
-@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
-                    reason='Depends on large local file')
-@gen_cluster(client=True, Worker=Nanny, timeout=120)
-def test_upload_environment(c, s, a, b):
-    responses = yield c._upload_environment('myenv.zip')
-    assert os.path.exists(os.path.join(a.local_dir, 'myenv'))
-    assert os.path.exists(os.path.join(b.local_dir, 'myenv'))
-
-
-@pytest.mark.skipif(not os.path.exists('myenv.zip') or not PY3,
-                    reason='Depends on large local file')
-@gen_cluster(client=True, Worker=Nanny, timeout=120)
-def test_restart_environment(c, s, a, b):
-    yield c._restart(environment='myenv.zip')
-
-    def get_executable():
-        import sys
-        return sys.executable
-
-    results = yield c._run(get_executable)
-    assert results == {n.worker_address:
-                        os.path.join(n.local_dir, 'myenv', 'bin', 'python')
-                        for n in [a, b]}

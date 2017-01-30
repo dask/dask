@@ -6,7 +6,6 @@ import pytest
 from tornado import gen
 
 from dask import do
-from distributed.core import read
 from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
         nbytes_bar, progress_stream, task_stream_append)
@@ -61,8 +60,8 @@ def test_progress_stream(c, s, a, b):
 
     yield _wait(futures + [future])
 
-    stream = yield progress_stream(s.address, interval=0.010)
-    msg = yield read(stream)
+    comm = yield progress_stream(s.address, interval=0.010)
+    msg = yield comm.read()
     nbytes = msg.pop('nbytes')
     assert msg == {'all': {'div': 10, 'inc': 5, 'finalize': 1},
                    'erred': {'div': 1},
@@ -73,7 +72,7 @@ def test_progress_stream(c, s, a, b):
 
     assert progress_quads(msg)
 
-    stream.close()
+    yield comm.close()
 
 
 def test_nbytes_bar():

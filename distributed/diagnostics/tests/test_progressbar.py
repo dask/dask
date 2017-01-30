@@ -15,7 +15,7 @@ from distributed.worker import dumps_task
 
 def test_text_progressbar(capsys, loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             futures = c.map(inc, range(10))
             p = TextProgressBar(futures, interval=0.01, complete=True)
             c.gather(futures)
@@ -29,7 +29,7 @@ def test_text_progressbar(capsys, loop):
             assert p._last_response == {'all': 10,
                                         'remaining': 0,
                                         'status': 'finished'}
-            assert p.stream.closed()
+            assert p.comm.closed()
 
 
 @gen_cluster(client=True)
@@ -41,13 +41,13 @@ def test_TextProgressBar_error(c, s, a, b):
     yield progress.listen()
 
     assert progress.status == 'error'
-    assert progress.stream.closed()
+    assert progress.comm.closed()
 
     progress = TextProgressBar([x.key], scheduler=(s.ip, s.port),
                                start=False, interval=0.01)
     yield progress.listen()
     assert progress.status == 'error'
-    assert progress.stream.closed()
+    assert progress.comm.closed()
 
 
 def test_TextProgressBar_empty(loop, capsys):
@@ -82,7 +82,7 @@ def check_bar_completed(capsys, width=40):
 
 def test_progress_function(loop, capsys):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             f = c.submit(lambda: 1)
             g = c.submit(lambda: 2)
 

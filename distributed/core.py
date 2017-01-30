@@ -11,6 +11,8 @@ import sys
 import traceback
 import uuid
 
+from six import string_types
+
 from toolz import assoc, first
 
 try:
@@ -19,17 +21,17 @@ except ImportError:
     import pickle
 import cloudpickle
 from tornado import gen
-from tornado.locks import Event
-from tornado.tcpserver import TCPServer
-from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.iostream import IOStream, StreamClosedError
+from tornado.locks import Event
 
+from .comm import connect, listen, CommClosedError
+from .comm.core import (parse_address, normalize_address, Comm,
+                        unparse_host_port, get_address_host_port)
 from .compatibility import PY3, unicode, WINDOWS
 from .config import config
 from .metrics import time
 from .system_monitor import SystemMonitor
-from .utils import get_traceback, truncate_exception, ignoring
+from .utils import get_ip, get_traceback, truncate_exception, ignoring, shutting_down
 from . import protocol
 
 
@@ -55,28 +57,29 @@ def handle_signal(sig, frame):
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 
-class Server(TCPServer):
+class Server(object):
     """ Distributed TCP Server
 
-    Superclass for both Worker and Scheduler objects.
-    Inherits from ``tornado.tcpserver.TCPServer``, adding a protocol for RPC.
+    Superclass for endpoints in a distributed cluster, such as Worker
+    and Scheduler objects.
 
     **Handlers**
 
     Servers define operations with a ``handlers`` dict mapping operation names
-    to functions.  The first argument of a handler function must be a stream for
-    the connection to the client.  Other arguments will receive inputs from the
-    keys of the incoming message which will always be a dictionary.
+    to functions.  The first argument of a handler function will be a ``Comm``
+    for the communication established with the client.  Other arguments
+    will receive inputs from the keys of the incoming message which will
+    always be a dictionary.
 
-    >>> def pingpong(stream):
+    >>> def pingpong(comm):
     ...     return b'pong'
 
-    >>> def add(stream, x, y):
+    >>> def add(comm, x, y):
     ...     return x + y
 
     >>> handlers = {'ping': pingpong, 'add': add}
     >>> server = Server(handlers)  # doctest: +SKIP
-    >>> server.listen(8000)  # doctest: +SKIP
+    >>> server.listen('tcp://0.0.0.0:8000')  # doctest: +SKIP
 
     **Message Format**
 
@@ -89,21 +92,29 @@ class Server(TCPServer):
     *  ``{'op': 'ping'}``
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
     """
+    default_ip = ''
     default_port = 0
 
-    def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE,
-            connection_limit=512, deserialize=True, **kwargs):
+    def __init__(self, handlers, connection_limit=512, deserialize=True,
+                 io_loop=None):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
+        self._address = None
+        self._listen_address = None
         self._port = None
-        self._listen_streams = dict()
+        self._comms = {}
         self.rpc = ConnectionPool(limit=connection_limit,
                                   deserialize=deserialize)
         self.deserialize = deserialize
         self.monitor = SystemMonitor()
         self.counters = None
         self.digests = None
+
+        self.listener = None
+        self.io_loop = io_loop or IOLoop.current()
+
         if hasattr(self, 'loop'):
+            # XXX?
             with ignoring(ImportError):
                 from .counter import Digest
                 self.digests = defaultdict(partial(Digest, loop=self.loop))
@@ -118,15 +129,13 @@ class Server(TCPServer):
                 self._tick_pc = PeriodicCallback(self._measure_tick, 20, io_loop=self.loop)
                 self.loop.add_callback(self._tick_pc.start)
 
-
         self.__stopped = False
-
-        super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     def stop(self):
         if not self.__stopped:
             self.__stopped = True
-            super(Server, self).stop()
+            if self.listener is not None:
+                self.listener.stop()
 
     def _measure_tick(self):
         now = time()
@@ -134,34 +143,57 @@ class Server(TCPServer):
         self._last_tick = now
 
     @property
+    def address(self):
+        """
+        The address this Server can be contacted on.
+        """
+        if not self._address:
+            if self.listener is None:
+                raise ValueError("cannot get address of non-running Server")
+            self._address = self.listener.contact_address
+        return self._address
+
+    @property
+    def listen_address(self):
+        """
+        The address this Server is listening on.  This may be a wildcard
+        address such as `tcp://0.0.0.0:1234`.
+        """
+        if not self._listen_address:
+            if self.listener is None:
+                raise ValueError("cannot get listen address of non-running Server")
+            self._listen_address = self.listener.listen_address
+        return self._listen_address
+
+    @property
     def port(self):
+        """
+        The port number this Server is listening on.
+        """
         if not self._port:
-            try:
-                self._port = first(self._sockets.values()).getsockname()[1]
-            except StopIteration:
-                raise OSError("Server has no port.  Please call .listen first")
+            _, self._port = get_address_host_port(self.address)
         return self._port
 
-    def identity(self, stream):
+    def identity(self, comm):
         return {'type': type(self).__name__, 'id': self.id}
 
-    def listen(self, port=None):
-        if port is None:
-            port = self.default_port
-        while True:
-            try:
-                super(Server, self).listen(port)
-                break
-            except (socket.error, OSError):
-                if port:
-                    raise
-                else:
-                    logger.info('Randomly assigned port taken for %s. Retrying',
-                                type(self).__name__)
+    def listen(self, port_or_addr=None):
+        if port_or_addr is None:
+            port_or_addr = self.default_port
+        if isinstance(port_or_addr, int):
+            addr = unparse_host_port(self.default_ip, port_or_addr)
+        elif isinstance(port_or_addr, tuple):
+            addr = unparse_host_port(*port_or_addr)
+        else:
+            addr = port_or_addr
+            assert isinstance(addr, string_types)
+        self.listener = listen(addr, self.handle_comm,
+                               deserialize=self.deserialize)
+        self.listener.start()
 
     @gen.coroutine
-    def handle_stream(self, stream, address):
-        """ Dispatch new connections to coroutine-handlers
+    def handle_comm(self, comm, shutting_down=shutting_down):
+        """ Dispatch new communications to coroutine-handlers
 
         Handlers is a dictionary mapping operation names to functions or
         coroutines.
@@ -169,29 +201,27 @@ class Server(TCPServer):
             {'get_data': get_data,
              'ping': pingpong}
 
-        Coroutines should expect a single IOStream object.
+        Coroutines should expect a single Comm object.
         """
-        stream.set_nodelay(True)
-        set_tcp_timeout(stream)
+        address = comm.peer_address
         op = None
 
-        ip, port = address
-        logger.debug("Connection from %s:%d to %s", ip, port,
-                    type(self).__name__)
-        self._listen_streams[stream] = op
+        logger.debug("Connection from %r to %s", address, type(self).__name__)
+        self._comms[comm] = op
         try:
             while True:
                 try:
-                    msg = yield read(stream, deserialize=self.deserialize)
-                    logger.debug("Message from %s:%d: %s", ip, port, msg)
+                    msg = yield comm.read()
+                    logger.debug("Message from %r: %s", address, msg)
                 except EnvironmentError as e:
-                    logger.debug("Lost connection to %s while reading message: %s."
-                                " Last operation: %s",
-                                str(address), e, op)
+                    if not shutting_down():
+                        logger.debug("Lost connection to %r while reading message: %s."
+                                    " Last operation: %s",
+                                    address, e, op)
                     break
                 except Exception as e:
                     logger.exception(e)
-                    yield write(stream, error_message(e, status='uncaught-error'))
+                    yield comm.write(error_message(e, status='uncaught-error'))
                     continue
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
@@ -199,12 +229,12 @@ class Server(TCPServer):
                 op = msg.pop('op')
                 if self.counters is not None:
                     self.counters['op'].add(op)
-                self._listen_streams[stream] = op
+                self._comms[comm] = op
                 close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
-                        yield write(stream, 'OK')
+                        yield comm.write('OK')
                     break
                 try:
                     handler = self.handlers[op]
@@ -214,297 +244,128 @@ class Server(TCPServer):
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
-                        result = handler(stream, **msg)
+                        result = handler(comm, **msg)
                         if type(result) is gen.Future:
                             result = yield result
-                    except StreamClosedError as e:
-                        logger.warn("Lost connection to %s: %s", str(address), e)
+                    except CommClosedError as e:
+                        logger.warn("Lost connection to %r: %s", address, e)
                         break
                     except Exception as e:
                         logger.exception(e)
                         result = error_message(e, status='uncaught-error')
                 if reply and result != 'dont-reply':
                     try:
-                        yield write(stream, result)
+                        yield comm.write(result)
                     except EnvironmentError as e:
-                        logger.warn("Lost connection to %s while sending result: %s",
-                                    str(address), e)
+                        logger.warn("Lost connection to %r while sending result for op %r: %s",
+                                    address, op, e)
                         break
-                if close_desired or stream.closed():
+                if close_desired:
+                    yield comm.close()
+                if comm.closed():
                     break
+
         finally:
-            logger.debug("Closing connection from %s:%d to %s", ip, port,
-                         type(self).__name__)
-            del self._listen_streams[stream]
-            try:
-                yield close(stream)
-            except Exception as e:
-                logger.error("Failed while closing connection to %s: %s",
-                             address, e)
-            finally:
-                stream.close()
+            del self._comms[comm]
+            if not shutting_down() and not comm.closed():
+                try:
+                    comm.abort()
+                except Exception as e:
+                    logger.error("Failed while closing connection to %r: %s",
+                                 address, e)
 
 
-def set_tcp_timeout(stream):
-    """
-    Set kernel-level TCP timeout on the stream.
-    """
-    if stream.closed():
-        return
-
-    timeout = int(config.get('tcp-timeout', 30))
-
-    sock = stream.socket
-
-    # Default (unsettable) value on Windows
-    # https://msdn.microsoft.com/en-us/library/windows/desktop/dd877220(v=vs.85).aspx
-    nprobes = 10
-    assert timeout >= nprobes + 1, "Timeout too low"
-
-    idle = max(2, timeout // 4)
-    interval = max(1, (timeout - idle) // nprobes)
-    idle = timeout - interval * nprobes
-    assert idle > 0
-
-    try:
-        if sys.platform.startswith("win"):
-            logger.debug("Setting TCP keepalive: idle=%d, interval=%d",
-                         idle, interval)
-            sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, idle * 1000, interval * 1000))
-        else:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-            try:
-                TCP_KEEPIDLE = socket.TCP_KEEPIDLE
-                TCP_KEEPINTVL = socket.TCP_KEEPINTVL
-                TCP_KEEPCNT = socket.TCP_KEEPCNT
-            except AttributeError:
-                if sys.platform == "darwin":
-                    TCP_KEEPIDLE = 0x10  # (named "TCP_KEEPALIVE" in C)
-                    TCP_KEEPINTVL = 0x101
-                    TCP_KEEPCNT = 0x102
-                else:
-                    TCP_KEEPIDLE = None
-
-            if TCP_KEEPIDLE is not None:
-                logger.debug("Setting TCP keepalive: nprobes=%d, idle=%d, interval=%d",
-                             nprobes, idle, interval)
-                sock.setsockopt(socket.SOL_TCP, TCP_KEEPCNT, nprobes)
-                sock.setsockopt(socket.SOL_TCP, TCP_KEEPIDLE, idle)
-                sock.setsockopt(socket.SOL_TCP, TCP_KEEPINTVL, interval)
-
-        if sys.platform.startswith("linux"):
-            logger.debug("Setting TCP user timeout: %d ms",
-                         timeout * 1000)
-            TCP_USER_TIMEOUT = 18  # since Linux 2.6.37
-            sock.setsockopt(socket.SOL_TCP, TCP_USER_TIMEOUT, timeout * 1000)
-    except EnvironmentError as e:
-        logger.warn("Could not set timeout on TCP stream: %s", e)
-
-
-@gen.coroutine
-def read(stream, deserialize=True):
-    """ Read a message from a stream """
-    n_frames = yield stream.read_bytes(8)
-    n_frames = struct.unpack('Q', n_frames)[0]
-
-    lengths = yield stream.read_bytes(8 * n_frames)
-    lengths = struct.unpack('Q' * n_frames, lengths)
-
-    frames = []
-    for length in lengths:
-        if length:
-            frame = yield stream.read_bytes(length)
-        else:
-            frame = b''
-        frames.append(frame)
-
-    msg = protocol.loads(frames, deserialize=deserialize)
-    raise gen.Return(msg)
-
-
-@gen.coroutine
-def write(stream, msg):
-    """ Write a message to a stream """
-    try:
-        frames = protocol.dumps(msg)
-    except Exception as e:
-        logger.info("Unserializable Message: %s", msg)
-        logger.exception(e)
-        raise
-
-    lengths = ([struct.pack('Q', len(frames))] +
-               [struct.pack('Q', len(frame)) for frame in frames])
-    stream.write(b''.join(lengths))
-
-    for frame in frames:
-        # Can't wait for the write() Future as it may be lost
-        # ("If write is called again before that Future has resolved,
-        #   the previous future will be orphaned and will never resolve")
-        stream.write(frame)
-
-    yield gen.moment
-    raise gen.Return(sum(map(len, frames)))
-
-
-@gen.coroutine
-def close(stream):
-    """Close a stream after flushing it.
-    No concurrent write() should be issued during execution of this
-    coroutine.
-    """
-    if not stream.closed():
-        try:
-            # Flush the stream's write buffer by waiting for a last write.
-            if stream.writing():
-                yield stream.write(b'')
-        except EnvironmentError:
-            pass
-        finally:
-            stream.close()
-
-
-def pingpong(stream):
+def pingpong(comm):
     return b'pong'
 
 
 @gen.coroutine
-def connect(ip, port, timeout=3):
-    client = TCPClient()
-    start = time()
-    while True:
-        future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
-        try:
-            stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
-            stream.set_nodelay(True)
-            set_tcp_timeout(stream)
-            raise gen.Return(stream)
-        except EnvironmentError:
-            if time() - start < timeout:
-                yield gen.sleep(0.01)
-                logger.debug("sleeping on connect")
-            else:
-                raise
-        except gen.TimeoutError:
-            raise IOError("Timed out while connecting to %s:%d" % (ip, port))
-
-
-@gen.coroutine
-def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True,
-        deserialize=True, **kwargs):
-    """ Send and recv with a stream
+def send_recv(comm=None, addr=None, reply=True, deserialize=True, **kwargs):
+    """ Send and recv with a Comm.
 
     Keyword arguments turn into the message
 
-    response = yield send_recv(stream, op='ping', reply=True)
+    response = yield send_recv(comm, op='ping', reply=True)
     """
-    if arg:
-        if isinstance(arg, (unicode, bytes)):
-            addr = arg
-        if isinstance(arg, tuple):
-            ip, port = arg
-    if addr:
-        assert not ip and not port
-        if PY3 and isinstance(addr, bytes):
-            addr = addr.decode()
-        ip, port = addr.rsplit(':', 1)
-        port = int(port)
-    if PY3 and isinstance(ip, bytes):
-        ip = ip.decode()
-    if stream is None:
-        stream = yield connect(ip, port)
+    assert (comm is None) != (addr is None)
+    if comm is None:
+        comm = yield connect(addr_from_args(addr), deserialize=deserialize)
 
     msg = kwargs
     msg['reply'] = reply
+    please_close = kwargs.get('close')
 
-    yield write(stream, msg)
+    try:
+        yield comm.write(msg)
+        if reply:
+            response = yield comm.read()
+        else:
+            response = None
+    except EnvironmentError:
+        # On communication errors, we should simply close the communication
+        please_close = True
+        raise
+    finally:
+        if please_close:
+            yield comm.close()
 
-    if reply:
-        response = yield read(stream, deserialize=deserialize)
-        if isinstance(response, dict) and response.get('status') == 'uncaught-error':
-            six.reraise(*clean_exception(**response))
-    else:
-        response = None
-    if kwargs.get('close'):
-        close(stream)
+    if isinstance(response, dict) and response.get('status') == 'uncaught-error':
+        six.reraise(*clean_exception(**response))
     raise gen.Return(response)
 
 
-def ip_port_from_args(arg=None, addr=None, ip=None, port=None):
-    if arg:
-        if isinstance(arg, (unicode, bytes)):
-            addr = arg
-        if isinstance(arg, tuple):
-            ip, port = arg
-    if addr:
-        if PY3 and isinstance(addr, bytes):
-            addr = addr.decode()
-        assert not ip and not port
-        ip, port = addr.rsplit(':', 1)
-        port = int(port)
-    if PY3 and isinstance(ip, bytes):
-        ip = ip.decode()
-
-    return ip, port
+def addr_from_args(addr=None, ip=None, port=None):
+    if addr is None:
+        addr = (ip, port)
+    else:
+        assert ip is None and port is None
+    if isinstance(addr, tuple):
+        addr = unparse_host_port(*addr)
+    return normalize_address(addr)
 
 
 class rpc(object):
     """ Conveniently interact with a remote server
 
-    Normally we construct messages as dictionaries and send them with read/write
-
-    >>> stream = yield connect(ip, port)  # doctest: +SKIP
-    >>> msg = {'op': 'add', 'x': 10, 'y': 20}  # doctest: +SKIP
-    >>> yield write(stream, msg)  # doctest: +SKIP
-    >>> response = yield read(stream)  # doctest: +SKIP
-
-    To reduce verbosity we use an ``rpc`` object.
-
-    >>> remote = rpc(ip=ip, port=port)  # doctest: +SKIP
+    >>> remote = rpc(address)  # doctest: +SKIP
     >>> response = yield remote.add(x=10, y=20)  # doctest: +SKIP
 
     One rpc object can be reused for several interactions.
-    Additionally, this object creates and destroys many streams as necessary
+    Additionally, this object creates and destroys many comms as necessary
     and so is safe to use in multiple overlapping communications.
 
-    When done, close streams explicitly.
+    When done, close comms explicitly.
 
-    >>> remote.close_streams()  # doctest: +SKIP
+    >>> remote.close_comms()  # doctest: +SKIP
     """
     active = 0
+    comms = ()
+    address = None
 
-    def __init__(self, arg=None, stream=None, ip=None, port=None, addr=None,
-            deserialize=True, timeout=3):
-        ip, port = ip_port_from_args(arg=arg, addr=addr, ip=ip, port=port)
-        self.streams = dict()
-        self.ip = ip
-        self.port = port
+    def __init__(self, arg=None, comm=None, deserialize=True, timeout=3):
+        self.comms = {}
+        self.address = coerce_to_address(arg)
         self.timeout = timeout
         self.status = 'running'
         self.deserialize = deserialize
         rpc.active += 1
-        assert self.ip
-        assert self.port
-
-    @property
-    def address(self):
-        return '%s:%d' % (self.ip, self.port)
 
     @gen.coroutine
-    def live_stream(self):
-        """ Get an open stream
+    def live_comm(self):
+        """ Get an open communication
 
-        Some streams to the ip/port target may be in current use by other
-        coroutines.  We track this with the `streams` dict
+        Some comms to the ip/port target may be in current use by other
+        coroutines.  We track this with the `comms` dict
 
-            :: {stream: True/False if open and ready for use}
+            :: {comm: True/False if open and ready for use}
 
-        This function produces an open stream, either by taking one that we've
-        already made or making a new one if they are all taken.  This also
-        removes streams that have been closed.
+        This function produces an open communication, either by taking one
+        that we've already made or making a new one if they are all taken.
+        This also removes comms that have been closed.
 
         When the caller is done with the stream they should set
 
-            self.streams[stream] = True
+            self.comms[comm] = True
 
         As is done in __getattr__ below.
         """
@@ -512,39 +373,46 @@ class rpc(object):
             raise RPCClosed("RPC Closed")
         to_clear = set()
         open = False
-        for stream, open in self.streams.items():
-            if stream.closed():
-                to_clear.add(stream)
+        for comm, open in self.comms.items():
+            if comm.closed():
+                to_clear.add(comm)
             if open:
                 break
-        if not open or stream.closed():
-            stream = yield connect(self.ip, self.port, timeout=self.timeout)
         for s in to_clear:
-            del self.streams[s]
-        self.streams[stream] = False     # mark as taken
-        raise gen.Return(stream)
+            del self.comms[s]
+        if not open or comm.closed():
+            comm = yield connect(self.address, self.timeout,
+                                 deserialize=self.deserialize)
+        self.comms[comm] = False     # mark as taken
+        raise gen.Return(comm)
 
-    def close_streams(self):
-        for stream in self.streams:
-            if stream and not stream.closed():
-                try:
-                    close(stream)
-                except EnvironmentError:
-                    pass
-        self.streams.clear()
+    def close_comms(self):
+
+        @gen.coroutine
+        def _close_comm(comm):
+            # Make sure we tell the peer to close
+            try:
+                yield comm.write({'op': 'close', 'reply': False})
+                yield comm.close()
+            except EnvironmentError:
+                comm.abort()
+
+        for comm in list(self.comms):
+            if comm and not comm.closed():
+                _close_comm(comm)
+        self.comms.clear()
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
             try:
-                stream = yield self.live_stream()
-                result = yield send_recv(stream=stream, op=key,
-                        deserialize=self.deserialize, **kwargs)
-            except (RPCClosed, StreamClosedError) as e:
+                comm = yield self.live_comm()
+                result = yield send_recv(comm=comm, op=key, **kwargs)
+            except (RPCClosed, CommClosedError) as e:
                 raise e.__class__("%s: while trying to call remote method %r"
                                   % (e, key,))
 
-            self.streams[stream] = True  # mark as open
+            self.comms[comm] = True  # mark as open
             raise gen.Return(result)
         return send_recv_from_rpc
 
@@ -552,7 +420,7 @@ class rpc(object):
         if self.status != 'closed':
             rpc.active -= 1
         self.status = 'closed'
-        self.close_streams()
+        self.close_comms()
 
     def __enter__(self):
         return self
@@ -564,35 +432,36 @@ class rpc(object):
         if self.status != 'closed':
             rpc.active -= 1
             self.status = 'closed'
-            n_open = sum(not stream.closed() for stream in self.streams)
-            if n_open:
-                logger.warn("rpc object %s deleted with %d open streams",
-                            self, n_open)
+            still_open = [comm for comm in self.comms if not comm.closed()]
+            if still_open:
+                logger.warn("rpc object %s deleted with %d open comms",
+                            self, len(still_open))
+                for comm in still_open:
+                    comm.abort()
+
+    def __repr__(self):
+        return "<rpc to %r, %d comms>" % (self.address, len(self.comms))
 
 
-class RPCCall(object):
+class PooledRPCCall(object):
     """ The result of ConnectionPool()('host:port')
 
     See Also:
         ConnectionPool
     """
-    def __init__(self, ip, port, pool):
-        self.ip = ip
-        self.port = port
+    def __init__(self, addr, pool):
+        self.addr = addr
         self.pool = pool
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
-            stream = yield self.pool.connect(self.ip, self.port)
+            comm = yield self.pool.connect(self.addr)
             try:
-                result = yield send_recv(stream=stream, op=key,
+                result = yield send_recv(comm=comm, op=key,
                         deserialize=self.pool.deserialize, **kwargs)
             finally:
-                if not stream.closed():
-                    self.pool.available[self.ip, self.port].add(stream)
-                    self.pool.occupied[self.ip, self.port].remove(stream)
-                    self.pool.active -= 1
+                self.pool.reuse(self.addr, comm)
 
             raise gen.Return(result)
         return send_recv_from_rpc
@@ -600,9 +469,12 @@ class RPCCall(object):
     def close_rpc(self):
         pass
 
+    def __repr__(self):
+        return "<pooled rpc to %r>" % (self.addr,)
+
 
 class ConnectionPool(object):
-    """ A maximum sized pool of Tornado IOStreams
+    """ A maximum sized pool of Comm objects.
 
     This provides a connect method that mirrors the normal distributed.connect
     method, but provides connection sharing and tracks connection limits.
@@ -611,34 +483,36 @@ class ConnectionPool(object):
 
         >>> rpc = ConnectionPool(limit=512)
         >>> scheduler = rpc('127.0.0.1:8786')
-        >>> workers = [rpc(ip=ip, port=port) for ip, port in ...]
+        >>> workers = [rpc(address) for address ...]
 
         >>> info = yield scheduler.identity()
 
-    It creates enough streams to satisfy concurrent connections to any
+    It creates enough comms to satisfy concurrent connections to any
     particular address::
 
         >>> a, b = yield [scheduler.who_has(), scheduler.has_what()]
 
-    It reuses existing streams so that we don't have to continuously reconnect.
+    It reuses existing comms so that we don't have to continuously reconnect.
 
-    It also maintains a stream limit to avoid "too many open file handle"
-    issues.  Whenever this maximum is reached we clear out all idling streams.
-    If that doesn't do the trick then we wait until one of the occupied streams
+    It also maintains a comm limit to avoid "too many open file handle"
+    issues.  Whenever this maximum is reached we clear out all idling comms.
+    If that doesn't do the trick then we wait until one of the occupied comms
     closes.
 
     Parameters
     ----------
     limit: int
-        The number of open streams to maintain at once
+        The number of open comms to maintain at once
     deserialize: bool
         Whether or not to deserialize data by default or pass it through
     """
     def __init__(self, limit=512, deserialize=True):
-        self.open = 0
-        self.active = 0
-        self.limit = limit
+        self.open = 0          # Total number of open comms
+        self.active = 0        # Number of comms currently in use
+        self.limit = limit     # Max number of open comms
+        # Invariant: len(available) == open - active
         self.available = defaultdict(set)
+        # Invariant: len(occupied) == active
         self.occupied = defaultdict(set)
         self.deserialize = deserialize
         self.event = Event()
@@ -649,92 +523,91 @@ class ConnectionPool(object):
 
     __repr__ = __str__
 
-    def __call__(self, arg=None, ip=None, port=None, addr=None):
+    def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """
-        ip, port = ip_port_from_args(arg=arg, addr=addr, ip=ip, port=port)
-        return RPCCall(ip, port, self)
+        addr = addr_from_args(addr=addr, ip=ip, port=port)
+        return PooledRPCCall(addr, self)
 
     @gen.coroutine
-    def connect(self, ip, port, timeout=3):
-        if self.available.get((ip, port)):
-            stream = self.available[ip, port].pop()
-            self.active += 1
-            self.occupied[ip, port].add(stream)
-            raise gen.Return(stream)
+    def connect(self, addr, timeout=3):
+        """
+        Get a Comm to the given address.  For internal use.
+        """
+        available = self.available[addr]
+        occupied = self.occupied[addr]
+        if available:
+            comm = available.pop()
+            if not comm.closed():
+                self.active += 1
+                occupied.add(comm)
+                raise gen.Return(comm)
+            else:
+                self.open -= 1
 
         while self.open >= self.limit:
             self.event.clear()
             self.collect()
             yield self.event.wait()
-            yield gen.sleep(0.01)
 
         self.open += 1
-        stream = yield connect(ip=ip, port=port, timeout=timeout)
-        stream.set_close_callback(lambda: self.on_close(ip, port, stream))
+        try:
+            comm = yield connect(addr, timeout=timeout,
+                                 deserialize=self.deserialize)
+        except Exception:
+            self.open -= 1
+            raise
         self.active += 1
-        self.occupied[ip, port].add(stream)
+        occupied.add(comm)
 
         if self.open >= self.limit:
             self.event.clear()
 
-        raise gen.Return(stream)
+        raise gen.Return(comm)
 
-    def on_close(self, ip, port, stream):
-        self.open -= 1
-
-        if stream in self.available[ip, port]:
-            self.available[ip, port].remove(stream)
-        if stream in self.occupied[ip, port]:
-            self.occupied[ip, port].remove(stream)
-            self.active -= 1
-
-        if self.open <= self.limit:
-            self.event.set()
+    def reuse(self, addr, comm):
+        """
+        Reuse an open communication to the given address.  For internal use.
+        """
+        self.occupied[addr].remove(comm)
+        self.active -= 1
+        if comm.closed():
+            self.open -= 1
+            if self.open < self.limit:
+                self.event.set()
+        else:
+            self.available[addr].add(comm)
 
     def collect(self):
-        logger.info("Collecting unused streams.  open: %d, active: %d",
+        """
+        Collect open but unused communications, to allow opening other ones.
+        """
+        logger.info("Collecting unused comms.  open: %d, active: %d",
                     self.open, self.active)
-        for streams in list(self.available.values()):
-            for stream in streams:
-                close(stream)
+        for addr, comms in self.available.items():
+            for comm in comms:
+                comm.close()
+            comms.clear()
+        self.open = self.active
+        if self.open < self.limit:
+            self.event.set()
 
     def close(self):
-        for streams in list(self.available.values()):
-            for stream in streams:
-                close(stream)
-        for streams in list(self.occupied.values()):
-            for stream in streams:
-                close(stream)
+        """
+        Close all communications abruptly.
+        """
+        for comms in self.available.values():
+            for comm in comms:
+                comm.abort()
+        for comms in self.occupied.values():
+            for comm in comms:
+                comm.abort()
 
 
-def coerce_to_address(o, out=str):
-    if PY3 and isinstance(o, bytes):
-        o = o.decode()
-    if isinstance(o, (unicode, str)):
-        ip, port = o.rsplit(':', 1)
-        port = int(port)
-        o = (ip, port)
-    if isinstance(o, list):
-        o = tuple(o)
-    if isinstance(o, tuple) and isinstance(o[0], bytes):
-        o = (o[0].decode(), o[1])
+def coerce_to_address(o):
+    if isinstance(o, (list, tuple)):
+        o = unparse_host_port(*o)
 
-    if out == str:
-        o = '%s:%s' % o
-
-    return o
-
-
-def coerce_to_rpc(o, **kwargs):
-    if isinstance(o, (bytes, str, tuple, list)):
-        ip, port = coerce_to_address(o, out=tuple)
-        return rpc(ip=ip, port=int(port), **kwargs)
-    elif isinstance(o, IOStream):
-        return rpc(stream=o, **kwargs)
-    elif isinstance(o, rpc):
-        return o
-    else:
-        raise TypeError()
+    return normalize_address(o)
 
 
 def error_message(e, status='error'):
@@ -784,6 +657,6 @@ def clean_exception(exception, traceback, **kwargs):
         exception = protocol.pickle.loads(exception)
     if isinstance(traceback, bytes):
         traceback = protocol.pickle.loads(traceback)
-    if isinstance(traceback, str):
-        traceback = None
+    elif isinstance(traceback, string_types):
+        traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback

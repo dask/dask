@@ -1,3 +1,5 @@
+from __future__ import print_function, division, absolute_import
+
 py3_err_msg = """
 Your terminal does not properly support unicode text required by command line
 utilities running Python 3.  This is commonly solved by specifying encoding
@@ -8,6 +10,11 @@ environment variables, though exact solutions may depend on your system:
 
 For more information see: http://click.pocoo.org/5/python3/
 """.strip()
+
+
+from distributed.comm.core import (parse_address, unparse_address,
+                                   parse_host_port, unparse_host_port)
+from ..utils import get_ip, ensure_ip
 
 
 def check_python_3():
@@ -33,3 +40,26 @@ def install_signal_handlers():
 
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
+
+
+def uri_from_host_port(host_arg, port_arg, default_port):
+    """
+    Process the *host* and *port* CLI options.
+    Return a URI.
+    """
+    # Much of distributed depends on a well-known IP being assigned to
+    # each entity (Worker, Scheduler, etc.), so avoid "universal" addresses
+    # like '' which would listen on all registered IPs and interfaces.
+    scheme, loc = parse_address(host_arg or '')
+    host, port = parse_host_port(loc, port_arg or default_port)
+    if port and port_arg and port != port_arg:
+        raise ValueError("port number given twice in options: "
+                         "host %r and port %r" % (host_arg, port_arg))
+    port = port_arg or port
+    # Note `port = 0` means "choose a random port"
+    if port is None:
+        port = default_port
+    loc = unparse_host_port(host, port)
+    addr = unparse_address(scheme, loc)
+
+    return addr

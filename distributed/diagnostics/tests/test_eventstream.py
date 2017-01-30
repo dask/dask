@@ -7,7 +7,6 @@ import pytest
 from tornado import gen
 
 from distributed import Client, Scheduler, Worker
-from distributed.core import read
 from distributed.client import _wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
 from distributed.diagnostics.progress_stream import task_stream_append
@@ -46,7 +45,7 @@ def test_eventstream(c, s, *workers):
 @gen_cluster(client=True)
 def test_eventstream_remote(c, s, a, b):
     base_plugins = len(s.plugins)
-    stream = yield eventstream(s.address, interval=0.010)
+    comm = yield eventstream(s.address, interval=0.010)
 
     start = time()
     while len(s.plugins) == base_plugins:
@@ -58,12 +57,12 @@ def test_eventstream_remote(c, s, a, b):
     start = time()
     total = []
     while len(total) < 10:
-        msgs = yield read(stream)
+        msgs = yield comm.read()
         assert isinstance(msgs, list)
         total.extend(msgs)
         assert time() < start + 5
 
-    stream.close()
+    yield comm.close()
     start = time()
     while len(s.plugins) > base_plugins:
         yield gen.sleep(0.01)

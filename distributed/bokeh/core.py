@@ -7,14 +7,20 @@ from bokeh.application import Application
 
 
 class BokehServer(object):
-    def listen(self, port):
+    def listen(self, addr):
         if self.server:
             return
+        if isinstance(addr, tuple):
+            ip, port = addr
+        else:
+            port = addr
+            ip = None
         for i in range(5):
             try:
-                self.server = Server(self.apps, io_loop=self.loop, port=port,
+                self.server = Server(self.apps, io_loop=self.loop,
+                                     port=port, address=ip, host=['*'],
                                      check_unused_sessions_milliseconds=500,
-                                     host=['*'])
+                                     )
                 if bokeh.__version__ <= '0.12.3':
                     self.server.start(start_loop=False)
                 else:

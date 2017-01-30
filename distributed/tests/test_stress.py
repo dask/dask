@@ -37,7 +37,7 @@ def test_stress_1(c, s, a, b):
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
 def test_stress_gc(loop, func, n):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.submit(func, 1)
             for i in range(n):
                 x = c.submit(func, x)
@@ -65,7 +65,7 @@ def test_cancel_stress_sync(loop):
     da = pytest.importorskip('dask.array')
     x = da.random.random((40, 40), chunks=(1, 1))
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.persist(x)
             y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()
             wait(x)
@@ -179,7 +179,7 @@ def test_stress_communication(c, s, *workers):
         pytest.skip("file descriptor limit too low and can't be increased :"
                     + str(e))
 
-    n = 40
+    n = 20
     xs = [da.random.random((100, 100), chunks=(5, 5)) for i in range(n)]
     ys = [x + x.T for x in xs]
     z = da.atop(vsum, 'ij', *concat(zip(ys, ['ij'] * n)), dtype='float64')
@@ -230,8 +230,8 @@ def test_close_connections(c, s, *workers):
     while any(s.processing.values()):
         yield gen.sleep(0.5)
         worker = random.choice(list(workers))
-        for stream in worker._listen_streams:
-            stream.close()
+        for comm in worker._comms:
+            comm.abort()
         # print(frequencies(s.task_state.values()))
         # for w in workers:
         #     print(w)

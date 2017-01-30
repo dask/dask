@@ -6,10 +6,13 @@ import sys
 
 from .compatibility import FileExistsError, logging_names
 
+
+config = {}
+
 try:
     import yaml
 except ImportError:
-    config = {}
+    pass
 else:
     dirname = os.path.dirname(__file__)
     default_path = os.path.join(dirname, 'config.yaml')
@@ -34,21 +37,34 @@ else:
             except OSError:
                 os.remove(tmp)
 
-    def load_config_file(path=dask_config_path):
+    def load_config_file(config, path=dask_config_path):
         if not os.path.exists(path):
             path = default_path
         with open(path) as f:
             text = f.read()
-            return yaml.load(text)
+            config.update(yaml.load(text))
 
 
     ensure_config_file()
-    config = load_config_file()
+    load_config_file(config)
+
+
+def load_env_vars(config):
+    for name, value in os.environ.items():
+        if name.startswith('DASK_'):
+            varname = name[5:].lower().replace('_', '-')
+            config[varname] = value
+
+
+load_env_vars(config)
 
 
 def initialize_logging(config):
     loggers = config.get('logging', {})
     loggers.setdefault('distributed', 'info')
+    # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
+    loggers.setdefault('tornado', 'critical')
+    loggers.setdefault('tornado.application', 'error')
 
     fmt = '%(name)s - %(levelname)s - %(message)s'
 
@@ -60,10 +76,6 @@ def initialize_logging(config):
         logger.setLevel(LEVEL)
         logger.addHandler(handler)
         logger.propagate = False
-
-    # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
-    # XXX this silences legitimate error messages
-    logging.getLogger('tornado').setLevel(logging.CRITICAL)
 
 
 initialize_logging(config)

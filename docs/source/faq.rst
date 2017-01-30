@@ -73,8 +73,12 @@ improve load times for users.
 
 
 PermissionError [Errno 13] Permission Denied: \`/root/.dask\`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This error can be seen when starting distributed through the stardard process control tool supervisor and running as a non-root suer. This is caused by supervisor not passing the shell environment variables through to the subprocess, head to `this section`_ of the supervisor documentation to see how to pass the $HOME and $USER variables through.
+This error can be seen when starting distributed through the standard process
+control tool ``supervisor`` and running as a non-root suer. This is caused
+by ``supervisor`` not passing the shell environment variables through to the
+subprocess, head to `this section`_ of the supervisor documentation to see
+how to pass the ``$HOME`` and ``$USER`` variables through.
 
 .. _this section: http://supervisord.org/subprocess.html#subprocess-environment

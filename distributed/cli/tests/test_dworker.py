@@ -11,7 +11,6 @@ from toolz import first
 
 from distributed import Scheduler, Client
 from distributed.core import rpc
-from distributed.nanny import isalive
 from distributed.metrics import time
 from distributed.utils import sync, ignoring, tmpfile
 from distributed.utils_test import (loop, popen, slow, terminate_process,
@@ -32,7 +31,7 @@ def test_nanny_worker_ports(loop):
                     else:
                         assert time() - start < 5
                         sleep(0.1)
-                assert d['workers']['127.0.0.1:9684']['services']['nanny'] == 5273
+                assert d['workers']['tcp://127.0.0.1:9684']['services']['nanny'] == 5273
 
 
 def test_memory_limit(loop):
@@ -60,20 +59,20 @@ def test_no_nanny(loop):
 @pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])
 def test_no_reconnect(nanny, loop):
     with popen(['dask-scheduler', '--no-bokeh']) as sched:
-        wait_for_port('127.0.0.1:8786')
-        with popen(['dask-worker', '127.0.0.1:8786', '--no-reconnect', nanny,
+        wait_for_port(('127.0.0.1', 8786))
+        with popen(['dask-worker', 'tcp://127.0.0.1:8786', '--no-reconnect', nanny,
                     '--no-bokeh']) as worker:
             sleep(2)
             terminate_process(sched)
         start = time()
-        while isalive(worker):
+        while worker.poll() is None:
             sleep(0.1)
             assert time() < start + 10
 
 
 def test_resources(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as sched:
-        with popen(['dask-worker', '127.0.0.1:8786', '--no-bokeh',
+        with popen(['dask-worker', 'tcp://127.0.0.1:8786', '--no-bokeh',
                     '--resources', 'A=1 B=2,C=3']) as worker:
             with Client('127.0.0.1:8786', loop=loop) as c:
                 while not c.scheduler_info()['workers']:

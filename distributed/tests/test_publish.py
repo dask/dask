@@ -87,7 +87,7 @@ def test_unpublish(c, s, a, b):
 
 def test_unpublish_sync(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address']) as c:
             data = c.scatter([0, 1, 2])
             c.publish_dataset(data=data)
             c.unpublish_dataset(name='data')
@@ -111,7 +111,7 @@ def test_publish_multiple_datasets(c, s, a, b):
 
 def test_unpublish_multiple_datasets_sync(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address']) as c:
             x = delayed(inc)(1)
             y = delayed(inc)(2)
             c.publish_dataset(x=x, y=y)

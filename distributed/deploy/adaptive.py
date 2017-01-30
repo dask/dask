@@ -6,7 +6,7 @@ from ..utils import log_errors
 from tornado import gen
 from tornado.ioloop import PeriodicCallback
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class Adaptive(object):

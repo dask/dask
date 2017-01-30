@@ -9,7 +9,7 @@ matrix:
     - python: "2.7"
       env: PACKAGES=blosc
     - python: "3.4"
-      env: COVERAGE=true
+      env: COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
     - python: "3.5"
     - python: "2.7"
       env: HDFS=true

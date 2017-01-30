@@ -22,7 +22,7 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
         funcname, ensure_bytes)
 from distributed.utils_test import (loop, inc, throws, div, captured_handler,
-                                    captured_logger)
+                                    captured_logger, has_ipv6)
 
 
 def test_All(loop):
@@ -134,11 +134,12 @@ def test_is_kernel():
 
 
 def test_ensure_ip():
-    assert ensure_ip('localhost') == '127.0.0.1'
-    assert ensure_ip('localhost:8787') == '127.0.0.1:8787'
-    assert ensure_ip(b'localhost:8787') == '127.0.0.1:8787'
+    assert ensure_ip('localhost') in ('127.0.0.1', '::1')
     assert ensure_ip('123.123.123.123') == '123.123.123.123'
-    assert ensure_ip('123.123.123.123:8787') == '123.123.123.123:8787'
+    assert ensure_ip('8.8.8.8') == '8.8.8.8'
+    if has_ipv6():
+        assert ensure_ip('2001:4860:4860::8888') == '2001:4860:4860::8888'
+        assert ensure_ip('::1') == '::1'
 
 
 def test_truncate_exception():
@@ -287,6 +288,33 @@ def test_ensure_bytes():
         assert result == b'1'
 
 
+def dump_logger_list():
+    root = logging.getLogger()
+    loggers = root.manager.loggerDict
+    print()
+    print("== Loggers (name, level, effective level, propagate) ==")
+
+    def logger_info(name, logger):
+        return (name, logging.getLevelName(logger.level),
+                logging.getLevelName(logger.getEffectiveLevel()),
+                logger.propagate)
+
+    infos = []
+    infos.append(logger_info('<root>', root))
+
+    for name, logger in sorted(loggers.items()):
+        if not isinstance(logger, logging.Logger):
+            # Skip 'PlaceHolder' objects
+            continue
+        assert logger.name == name
+        infos.append(logger_info(name, logger))
+
+    for info in infos:
+        print("%-40s %-8s %-8s %-5s" % info)
+
+    print()
+
+
 def test_logging():
     """
     Test default logging configuration.
@@ -295,39 +323,51 @@ def test_logging():
     assert len(d.handlers) == 1
     assert isinstance(d.handlers[0], logging.StreamHandler)
 
+    # Work around Bokeh messing with the root logger level
+    # https://github.com/bokeh/bokeh/issues/5793
     root = logging.getLogger('')
-    dfb = logging.getLogger('distributed.foo.bar')
-    f = logging.getLogger('foo')
-    fb = logging.getLogger('foo.bar')
+    old_root_level = root.level
+    root.setLevel('WARN')
 
-    with captured_handler(d.handlers[0]) as distributed_log:
-        with captured_logger(root) as foreign_log:
-            h = logging.StreamHandler(foreign_log)
-            fmt = '[%(levelname)s in %(name)s] - %(message)s'
-            h.setFormatter(logging.Formatter(fmt))
-            fb.addHandler(h)
-            fb.propagate = False
+    try:
+        dfb = logging.getLogger('distributed.foo.bar')
+        f = logging.getLogger('foo')
+        fb = logging.getLogger('foo.bar')
 
-            d.debug("1: debug")
-            d.info("2: info")
-            dfb.info("3: info")
-            fb.info("4: info")
-            fb.error("5: error")
-            f.info("6: info")
-            f.error("7: error")
+        with captured_handler(d.handlers[0]) as distributed_log:
+            with captured_logger(root) as foreign_log:
+                h = logging.StreamHandler(foreign_log)
+                fmt = '[%(levelname)s in %(name)s] - %(message)s'
+                h.setFormatter(logging.Formatter(fmt))
+                fb.addHandler(h)
+                fb.propagate = False
 
-    distributed_log = distributed_log.getvalue().splitlines()
-    foreign_log = foreign_log.getvalue().splitlines()
+                # For debugging
+                dump_logger_list()
 
-    # distributed log is configured at INFO level by default
-    assert distributed_log == [
-        "distributed - INFO - 2: info",
-        "distributed.foo.bar - INFO - 3: info",
-        ]
+                d.debug("1: debug")
+                d.info("2: info")
+                dfb.info("3: info")
+                fb.info("4: info")
+                fb.error("5: error")
+                f.info("6: info")
+                f.error("7: error")
 
-    # foreign logs should be unaffected by distributed's logging
-    # configuration.  They get the default ERROR level from logging.
-    assert foreign_log == [
-        "[ERROR in foo.bar] - 5: error",
-        "7: error",
-        ]
+        distributed_log = distributed_log.getvalue().splitlines()
+        foreign_log = foreign_log.getvalue().splitlines()
+
+        # distributed log is configured at INFO level by default
+        assert distributed_log == [
+            "distributed - INFO - 2: info",
+            "distributed.foo.bar - INFO - 3: info",
+            ]
+
+        # foreign logs should be unaffected by distributed's logging
+        # configuration.  They get the default ERROR level from logging.
+        assert foreign_log == [
+            "[ERROR in foo.bar] - 5: error",
+            "7: error",
+            ]
+
+    finally:
+        root.setLevel(old_root_level)

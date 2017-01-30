@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import pytest
 
 from distributed.utils_test import gen_cluster
-from distributed.utils_comm import ( scatter_to_workers, pack_data,
+from distributed.utils_comm import (scatter_to_workers, pack_data,
         gather_from_workers)
 
 

@@ -183,9 +183,10 @@ a few ways to handle this:
     ``--bokeh-port PORT`` option on the ``dask-scheduler`` command.
 3.  Use fancier techniques, like `Port Forwarding`_
 
-.. _`Port Forwarding`: https://en.wikipedia.org/wiki/Port_forwarding
 Running distributed on a remote machine can cause issues with viewing the web
 UI -- this depends on the remote machines network configuration.
+
+.. _`Port Forwarding`: https://en.wikipedia.org/wiki/Port_forwarding
 
 
 Port Forwarding

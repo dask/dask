@@ -8,7 +8,7 @@ from toolz import pluck
 
 from ..utils import ignoring, log_errors
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 with ignoring(ImportError):
     from bokeh.models import (

@@ -12,7 +12,7 @@ else:
 
 from ..utils import ignoring
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def _always_use_pickle_for(x):

@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from .config import config
-from .core import connect, read, write, rpc
+from .core import connect, rpc
 from .deploy import LocalCluster
 from .diagnostics import progress
 from .client import (Client, Executor, CompatibleExecutor, wait, as_completed,

@@ -155,14 +155,14 @@ def test_multi_progressbar_widget_after_close(s, a, b):
 
 def test_values(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = [c.submit(inc, i) for i in range(5)]
             wait(L)
             p = MultiProgressWidget(L)
             sync(loop, p.listen)
             assert set(p.bars) == {'inc'}
             assert p.status == 'finished'
-            assert p.stream.closed()
+            assert p.comm.closed()
             assert '5 / 5' in p.bar_texts['inc'].value
             assert p.bars['inc'].value == 1.0
 
@@ -174,7 +174,7 @@ def test_values(loop):
 
 def test_progressbar_done(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = [c.submit(inc, i) for i in range(5)]
             wait(L)
             p = ProgressWidget(L)
@@ -195,7 +195,7 @@ def test_progressbar_done(loop):
 
 def test_progressbar_cancel(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             import time
             L = [c.submit(lambda: time.sleep(0.3), i) for i in range(5)]
             p = ProgressWidget(L)
@@ -231,7 +231,7 @@ def test_multibar_complete(s, a, b):
 
 def test_fast(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(100))
             L2 = c.map(dec, L)
             L3 = c.map(add, L, L2)

@@ -54,7 +54,7 @@ class StateTable(DashboardComponent):
                  'Ready': [len(w.ready)],
                  'Waiting': [len(w.waiting_for_data)],
                  'Connections': [len(w.in_flight_workers)],
-                 'Serving': [len(w._listen_streams)]}
+                 'Serving': [len(w._comms)]}
             self.source.data.update(d)
 
 
@@ -168,7 +168,7 @@ class CommunicatingTimeSeries(DashboardComponent):
     def update(self):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
-                                'out': [len(self.worker._listen_streams)],
+                                'out': [len(self.worker._comms)],
                                 'in': [len(self.worker.in_flight_workers)]},
                                 10000)
 

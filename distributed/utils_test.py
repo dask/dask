@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
+from datetime import timedelta
 import gc
 from glob import glob
 import logging
@@ -16,14 +17,14 @@ import uuid
 
 import six
 
-from toolz import merge
+from toolz import merge, memoize
 from tornado import gen, queues
-from tornado.ioloop import IOLoop, TimeoutError
-from tornado.iostream import StreamClosedError
+from tornado.gen import TimeoutError
+from tornado.ioloop import IOLoop
 
-from .core import connect, read, write, close, rpc, coerce_to_address
+from .core import connect, rpc, coerce_to_address, CommClosedError
 from .metrics import time
-from .utils import ignoring, log_errors, sync, mp_context
+from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
 import pytest
 
 
@@ -53,8 +54,9 @@ def invalid_python_script(tmpdir_factory):
 
 
 @pytest.yield_fixture
-def current_loop():
+def loop():
     IOLoop.clear_instance()
+    IOLoop.clear_current()
     loop = IOLoop()
     loop.make_current()
     yield loop
@@ -63,28 +65,14 @@ def current_loop():
     for i in range(5):
         try:
             loop.close(all_fds=True)
+            IOLoop.clear_instance()
             break
         except Exception as e:
             f = e
     else:
         print(f)
     IOLoop.clear_instance()
-
-
-@pytest.yield_fixture
-def loop():
-    loop = IOLoop()
-    yield loop
-    if loop._running:
-        sync(loop, loop.stop)
-    for i in range(5):
-        try:
-            loop.close(all_fds=True)
-            break
-        except Exception as e:
-            f = e
-    else:
-        print(f)
+    IOLoop.clear_current()
 
 
 @pytest.yield_fixture
@@ -98,6 +86,7 @@ def zmq_ctx():
 @contextmanager
 def pristine_loop():
     IOLoop.clear_instance()
+    IOLoop.clear_current()
     loop = IOLoop()
     loop.make_current()
     try:
@@ -105,6 +94,7 @@ def pristine_loop():
     finally:
         loop.close(all_fds=True)
         IOLoop.clear_instance()
+        IOLoop.clear_current()
 
 
 @contextmanager
@@ -216,87 +206,92 @@ else:
 _readone_queues = {}
 
 @gen.coroutine
-def readone(stream):
+def readone(comm):
     """
-    Read one message at a time from a stream that reads lists of
+    Read one message at a time from a comm that reads lists of
     messages.
     """
     try:
-        q = _readone_queues[stream]
+        q = _readone_queues[comm]
     except KeyError:
-        q = _readone_queues[stream] = queues.Queue()
+        q = _readone_queues[comm] = queues.Queue()
 
         @gen.coroutine
         def background_read():
             while True:
                 try:
-                    messages = yield read(stream)
-                except StreamClosedError:
+                    messages = yield comm.read()
+                except CommClosedError:
                     break
                 for msg in messages:
                     q.put_nowait(msg)
             q.put_nowait(None)
-            del _readone_queues[stream]
+            del _readone_queues[comm]
 
         background_read()
 
     msg = yield q.get()
     if msg is None:
-        raise StreamClosedError
+        raise CommClosedError
     else:
         raise gen.Return(msg)
 
 
-def run_scheduler(q, scheduler_port=0, **kwargs):
+def run_scheduler(q, nputs, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
-    IOLoop.clear_instance()
-    loop = IOLoop(); loop.make_current()
-    PeriodicCallback(lambda: None, 500).start()
 
-    scheduler = Scheduler(loop=loop, validate=True, **kwargs)
-    done = scheduler.start(scheduler_port)
+    # On Python 2.7 and Unix, fork() is used to spawn child processes,
+    # so avoid inheriting the parent's IO loop.
+    with pristine_loop() as loop:
+        PeriodicCallback(lambda: None, 500).start()
 
-    q.put(scheduler.port)
-    try:
-        loop.start()
-    finally:
-        loop.close(all_fds=True)
+        scheduler = Scheduler(validate=True, **kwargs)
+        done = scheduler.start('127.0.0.1')
+
+        for i in range(nputs):
+            q.put(scheduler.address)
+        try:
+            loop.start()
+        finally:
+            loop.close(all_fds=True)
 
 
-def run_worker(q, scheduler_port, **kwargs):
+def run_worker(q, scheduler_q, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
+
     with log_errors():
-        IOLoop.clear_instance()
-        loop = IOLoop(); loop.make_current()
-        PeriodicCallback(lambda: None, 500).start()
-        worker = Worker('127.0.0.1', scheduler_port, ip='127.0.0.1',
-                        loop=loop, validate=True, **kwargs)
-        loop.run_sync(lambda: worker._start(0))
-        q.put(worker.port)
-        try:
-            loop.start()
-        finally:
-            loop.close(all_fds=True)
+        with pristine_loop() as loop:
+            PeriodicCallback(lambda: None, 500).start()
+
+            scheduler_addr = scheduler_q.get()
+            worker = Worker(scheduler_addr, validate=True, **kwargs)
+            loop.run_sync(lambda: worker._start(0))
+            q.put(worker.address)
+            try:
+                loop.start()
+            finally:
+                loop.close(all_fds=True)
 
 
-def run_nanny(q, scheduler_port, **kwargs):
+def run_nanny(q, scheduler_q, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
+
     with log_errors():
-        IOLoop.clear_instance()
-        loop = IOLoop(); loop.make_current()
-        PeriodicCallback(lambda: None, 500).start()
-        worker = Nanny('127.0.0.1', scheduler_port, ip='127.0.0.1',
-                       loop=loop, validate=True, **kwargs)
-        loop.run_sync(lambda: worker._start(0))
-        q.put(worker.port)
-        try:
-            loop.start()
-        finally:
-            loop.run_sync(worker._close)
-            loop.close(all_fds=True)
+        with pristine_loop() as loop:
+            PeriodicCallback(lambda: None, 500).start()
+
+            scheduler_addr = scheduler_q.get()
+            worker = Nanny(scheduler_addr, validate=True, **kwargs)
+            loop.run_sync(lambda: worker._start(0))
+            q.put(worker.address)
+            try:
+                loop.start()
+            finally:
+                loop.run_sync(worker._close)
+                loop.close(all_fds=True)
 
 
 @contextmanager
@@ -308,8 +303,8 @@ def check_active_rpc(loop, active_rpc_timeout=0):
     yield
     if rpc.active > rpc_active and active_rpc_timeout:
         # Some streams can take a bit of time to notice their peer
-        # has closed, and keep a coroutine (*) waiting for a StreamClosedError
-        # before calling close_rpc() after a StreamClosedError.
+        # has closed, and keep a coroutine (*) waiting for a CommClosedError
+        # before calling close_rpc() after a CommClosedError.
         # This would happen especially if a non-localhost address is used,
         # as Nanny does.
         # (*) (example: gather_from_workers())
@@ -335,32 +330,38 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0,
                 _run_worker = run_nanny
             else:
                 _run_worker = run_worker
+
+            # The scheduler queue will receive the scheduler's address
             scheduler_q = mp_context.Queue()
+
+            # Launch scheduler
             scheduler = mp_context.Process(target=run_scheduler,
-                                           args=(scheduler_q,),
+                                           args=(scheduler_q, nworkers + 1),
                                            kwargs=scheduler_kwargs)
             scheduler.daemon = True
             scheduler.start()
-            sport = scheduler_q.get()
 
+            # Launch workers
             workers = []
             for i in range(nworkers):
                 q = mp_context.Queue()
                 fn = '_test_worker-%s' % uuid.uuid1()
-                proc = mp_context.Process(target=_run_worker, args=(q, sport),
-                                kwargs=merge({'ncores': 1, 'local_dir': fn},
-                                             worker_kwargs))
+                kwargs = merge({'ncores': 1, 'local_dir': fn}, worker_kwargs)
+                proc = mp_context.Process(target=_run_worker,
+                                          args=(q, scheduler_q),
+                                          kwargs=kwargs)
                 workers.append({'proc': proc, 'queue': q, 'dir': fn})
 
             for worker in workers:
                 worker['proc'].start()
-
             for worker in workers:
-                worker['port'] = worker['queue'].get()
+                worker['address'] = worker['queue'].get()
+
+            saddr = scheduler_q.get()
 
             start = time()
             try:
-                with rpc(ip='127.0.0.1', port=sport) as s:
+                with rpc(saddr) as s:
                     while True:
                         ncores = loop.run_sync(s.ncores)
                         if len(ncores) == nworkers:
@@ -368,22 +369,23 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0,
                         if time() - start > 5:
                             raise Exception("Timeout on cluster creation")
 
-                yield {'proc': scheduler, 'port': sport}, workers
+                yield {'proc': scheduler, 'address': saddr}, workers
             finally:
                 logger.debug("Closing out test cluster")
-                with ignoring(socket.error, TimeoutError, StreamClosedError):
-                    loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
-                scheduler.terminate()
-                scheduler.join(timeout=2)
 
-                for port in [w['port'] for w in workers]:
-                    with ignoring(socket.error, TimeoutError, StreamClosedError):
-                        loop.run_sync(lambda: disconnect('127.0.0.1', port),
-                                      timeout=0.5)
+                loop.run_sync(lambda: disconnect_all([w['address'] for w in workers],
+                                                     timeout=0.5))
+                loop.run_sync(lambda: disconnect(saddr, timeout=0.5))
+
+                scheduler.terminate()
                 for proc in [w['proc'] for w in workers]:
                     with ignoring(EnvironmentError):
                         proc.terminate()
-                        proc.join(timeout=2)
+
+                scheduler.join(timeout=2)
+                for proc in [w['proc'] for w in workers]:
+                    proc.join(timeout=2)
+
                 for q in [w['queue'] for w in workers]:
                     q.close()
                 for fn in glob('_test_worker-*'):
@@ -391,13 +393,24 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0,
 
 
 @gen.coroutine
-def disconnect(ip, port):
-    stream = yield connect(ip, port)
-    try:
-        yield write(stream, {'op': 'terminate', 'close': True})
-        response = yield read(stream)
-    finally:
-        yield close(stream)
+def disconnect(addr, timeout=3):
+    @gen.coroutine
+    def do_disconnect():
+        with ignoring(EnvironmentError, CommClosedError):
+            comm = yield connect(addr)
+            try:
+                yield comm.write({'op': 'terminate', 'close': True})
+                response = yield comm.read()
+            finally:
+                yield comm.close()
+
+    with ignoring(TimeoutError):
+        yield gen.with_timeout(timedelta(seconds=timeout), do_disconnect())
+
+
+@gen.coroutine
+def disconnect_all(addresses, timeout=3):
+    yield [disconnect(addr, timeout) for addr in addresses]
 
 
 import pytest
@@ -441,9 +454,9 @@ from .client import Client
 @gen.coroutine
 def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
                   worker_kwargs={}):
-    s = Scheduler(ip='127.0.0.1', loop=loop, validate=True, **scheduler_kwargs)
-    done = s.start(0)
-    workers = [Worker(s.ip, s.port, ncores=ncore[1], ip=ncore[0], name=i,
+    s = Scheduler(loop=loop, validate=True, **scheduler_kwargs)
+    done = s.start('127.0.0.1')
+    workers = [Worker(s.address, ncores=ncore[1], name=i,
                       loop=loop, validate=True,
                       **(merge(worker_kwargs, ncore[2])
                          if len(ncore) > 2
@@ -452,7 +465,7 @@ def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
     for w in workers:
         w.rpc = workers[0].rpc
 
-    yield [w._start() for w in workers]
+    yield [w._start(ncore[0]) for ncore, w in zip(ncores, workers)]
 
     start = time()
     while len(s.ncores) < len(ncores):
@@ -465,13 +478,16 @@ def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
 @gen.coroutine
 def end_cluster(s, workers):
     logger.debug("Closing out test cluster")
-    scheduler_close = s.close()  # shut down periodic callbacks immediately
-    for w in workers:
-        with ignoring(TimeoutError, StreamClosedError, OSError):
+
+    @gen.coroutine
+    def end_worker(w):
+        with ignoring(TimeoutError, CommClosedError, EnvironmentError):
             yield w._close(report=False)
         if w.local_dir and os.path.exists(w.local_dir):
             shutil.rmtree(w.local_dir)
-    yield scheduler_close  # wait until scheduler stops completely
+
+    yield [end_worker(w) for w in workers]
+    yield s.close() # wait until scheduler stops completely
     s.stop()
 
 
@@ -501,7 +517,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                     args = [s] + workers
 
                     if client:
-                        e = Client((s.ip, s.port), loop=loop, start=False)
+                        e = Client(s.address, loop=loop, start=False)
                         loop.run_sync(e._start)
                         args = [e] + args
                     try:
@@ -512,7 +528,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                         loop.run_sync(lambda: end_cluster(s, workers))
 
                     for w in workers:
-                        assert not w._listen_streams
+                        assert not w._comms
 
         return test_func
     return _
@@ -593,7 +609,7 @@ def popen(*args, **kwargs):
 
 
 def wait_for_port(address, timeout=5):
-    address = coerce_to_address(address, out=tuple)
+    assert isinstance(address, tuple)
     deadline = time() + timeout
 
     while True:
@@ -607,6 +623,142 @@ def wait_for_port(address, timeout=5):
         else:
             sock.close()
             break
+
+
+@memoize
+def has_ipv6():
+    """
+    Return whether IPv6 is locally functional.  This doesn't guarantee IPv6
+    is properly configured outside of localhost.
+    """
+    serv = cli = None
+    try:
+        serv = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        serv.bind(('::', 0))
+        serv.listen(5)
+        cli = socket.create_connection(serv.getsockname()[:2])
+    except EnvironmentError:
+        return False
+    else:
+        return True
+    finally:
+        if cli is not None:
+            cli.close()
+        if serv is not None:
+            serv.close()
+
+
+if has_ipv6():
+    def requires_ipv6(test_func):
+        return test_func
+
+else:
+    requires_ipv6 = pytest.mark.skip("ipv6 required")
+
+
+@gen.coroutine
+def assert_can_connect(addr, timeout=None):
+    """
+    Check that it is possible to connect to the distributed *addr*
+    within the given *timeout*.
+    """
+    if timeout is None:
+        timeout = 0.2
+    comm = yield connect(addr, timeout=timeout)
+    comm.abort()
+
+
+@gen.coroutine
+def assert_cannot_connect(addr, timeout=None):
+    """
+    Check that it is impossible to connect to the distributed *addr*
+    within the given *timeout*.
+    """
+    if timeout is None:
+        timeout = 0.2
+    with pytest.raises(EnvironmentError):
+        comm = yield connect(addr, timeout=timeout)
+        comm.abort()
+
+
+@gen.coroutine
+def assert_can_connect_from_everywhere_4_6(port, timeout=None):
+    """
+    Check that the local *port* is reachable from all IPv4 and IPv6 addresses.
+    """
+    futures = [
+        assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
+        assert_can_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        ]
+    if has_ipv6():
+        futures += [
+            assert_can_connect('tcp://[::1]:%d' % port, timeout),
+            assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            ]
+    yield futures
+
+@gen.coroutine
+def assert_can_connect_from_everywhere_4(port, timeout=None):
+    """
+    Check that the local *port* is reachable from all IPv4 addresses.
+    """
+    futures = [
+            assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
+            assert_can_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        ]
+    if has_ipv6():
+        futures += [
+            assert_cannot_connect('tcp://[::1]:%d' % port, timeout),
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            ]
+    yield futures
+
+@gen.coroutine
+def assert_can_connect_locally_4(port, timeout=None):
+    """
+    Check that the local *port* is only reachable from local IPv4 addresses.
+    """
+    futures = [
+        assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
+        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        ]
+    if has_ipv6():
+        futures += [
+            assert_cannot_connect('tcp://[::1]:%d' % port, timeout),
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            ]
+    yield futures
+
+@gen.coroutine
+def assert_can_connect_from_everywhere_6(port, timeout=None):
+    """
+    Check that the local *port* is reachable from all IPv6 addresses.
+    """
+    assert has_ipv6()
+    futures = [
+        assert_cannot_connect('tcp://127.0.0.1:%d' % port, timeout),
+        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        assert_can_connect('tcp://[::1]:%d' % port, timeout),
+        assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+        ]
+    yield futures
+
+@gen.coroutine
+def assert_can_connect_locally_6(port, timeout=None):
+    """
+    Check that the local *port* is only reachable from local IPv6 addresses.
+    """
+    assert has_ipv6()
+    futures = [
+        assert_cannot_connect('tcp://127.0.0.1:%d' % port, timeout),
+        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        assert_can_connect('tcp://[::1]:%d' % port, timeout),
+        ]
+    if get_ipv6() != '::1':  # Can happen if no outside IPv6 connectivity
+        futures += [
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            ]
+    yield futures
 
 
 @contextmanager

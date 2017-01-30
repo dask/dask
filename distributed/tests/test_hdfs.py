@@ -13,9 +13,8 @@ import dask.dataframe as dd
 from dask import compute, delayed
 
 from distributed.compatibility import unicode
-from distributed.utils_test import gen_cluster, cluster, make_hdfs
+from distributed.utils_test import gen_cluster, cluster, make_hdfs, loop
 from distributed.utils import get_ip
-from distributed.utils_test import loop
 from distributed import Client
 from distributed.client import _wait, Future
 
@@ -147,7 +146,7 @@ def test_read_bytes_sync(loop, nworkers):
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
-            with Client(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(s['address'], loop=loop) as e:
                 sample, values = read_bytes('hdfs://%s/file.*' % basedir)
                 results = delayed(values).compute()
                 assert [b''.join(r) for r in results] == 100 * [data]
@@ -238,7 +237,7 @@ def test_read_csv_sync(loop):
             with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-            with Client(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(s['address'], loop=loop) as e:
                 values = dd.read_csv('hdfs://%s/*.csv' % basedir,
                                      lineterminator='\n',
                                      collection=False, header=0)
@@ -264,7 +263,7 @@ def test_read_csv_sync_compute(loop):
             with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-            with Client(('127.0.0.1', s['port']), loop=loop) as e:
+            with Client(s['address'], loop=loop) as e:
                 df = dd.read_csv('hdfs://%s/*.csv' % basedir, collection=True)
                 assert df.amount.sum().compute(get=e.get) == 1000
 
@@ -381,7 +380,7 @@ def test_read_text_sync(loop):
             f.write(b'hello\nworld')
 
         with cluster(nworkers=3) as (s, [a, b, c]):
-            with Client(('127.0.0.1', s['port']), loop=loop):
+            with Client(s['address'], loop=loop) as e:
                 b = db.read_text('hdfs://%s/*.txt' % basedir)
                 assert list(b.str.strip().str.upper()) == ['HELLO', 'WORLD']
 

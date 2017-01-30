@@ -103,12 +103,11 @@ class Occupancy(DashboardComponent):
         with log_errors():
             o = self.scheduler.occupancy
             workers = list(self.scheduler.workers)
-            wi = self.scheduler.worker_info
-            try:
-                bokeh_addresses = [worker.split(':')[0] + ':' + str(wi[worker]['services']['bokeh'])
-                                   for worker in workers]
-            except Exception as e:
-                bokeh_addresses = [''] * len(workers)
+
+            bokeh_addresses = []
+            for worker in workers:
+                addr = self.scheduler.get_worker_service_addr(worker, 'bokeh')
+                bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
             occupancy = [o[w] for w in workers]

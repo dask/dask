@@ -4,6 +4,7 @@ import pytest
 pytest.importorskip('requests')
 
 from contextlib import contextmanager
+import itertools
 import os
 import requests
 import signal
@@ -11,19 +12,36 @@ import socket
 import sys
 from time import sleep
 
+from tornado import gen
 
 from distributed import Scheduler, Client
 from distributed.utils import get_ip, ignoring, tmpfile
-from distributed.utils_test import loop, popen
+from distributed.utils_test import (loop, popen,
+                                    assert_can_connect_from_everywhere_4,
+                                    assert_can_connect_from_everywhere_4_6,
+                                    assert_can_connect_locally_4,
+                                    )
 from distributed.metrics import time
 
 
 def test_defaults(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as proc:
+
+        @gen.coroutine
+        def f():
+            # Default behaviour is to listen on all addresses
+            yield [
+                assert_can_connect_from_everywhere_4_6(8786, 2.0),  # main port
+                assert_can_connect_from_everywhere_4_6(9786, 2.0),  # HTTP port
+                ]
+
+        loop.run_sync(f)
+
         with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             response = requests.get('http://127.0.0.1:9786/info.json')
             assert response.ok
             assert response.json()['status'] == 'running'
+
     with pytest.raises(Exception):
         response = requests.get('http://127.0.0.1:9786/info.json')
     with pytest.raises(Exception):
@@ -31,7 +49,19 @@ def test_defaults(loop):
 
 
 def test_hostport(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--host', '127.0.0.1:8978']):
+    with popen(['dask-scheduler', '--no-bokeh', '--host', '127.0.0.1:8978',
+                '--http-port', '8979']):
+        @gen.coroutine
+        def f():
+            yield [
+                # The scheduler's main port can't be contacted from the outside
+                assert_can_connect_locally_4(8978, 2.0),
+                # ... but its HTTP port can
+                assert_can_connect_from_everywhere_4_6(8979, 2.0),
+                ]
+
+        loop.run_sync(f)
+
         with Client('127.0.0.1:8978', loop=loop) as c:
             assert len(c.ncores()) == 0
 
@@ -61,14 +91,17 @@ def test_bokeh(loop):
         start = time()
         while True:
             try:
+                # All addresses should respond
                 for name in names:
-                    response = requests.get('http://%s:8787/status/' % name)
+                    uri = 'http://%s:8787/status/' % name
+                    response = requests.get(uri)
                     assert response.ok
                 break
             except Exception as f:
-                print(f)
+                print('got error on %r: %s' % (uri, f))
                 sleep(0.1)
                 assert time() < start + 10
+
     with pytest.raises(Exception):
         requests.get('http://127.0.0.1:8787/status/')
 

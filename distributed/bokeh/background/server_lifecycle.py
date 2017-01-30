@@ -9,11 +9,10 @@ import sys
 
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPError
-from tornado.iostream import StreamClosedError
 from tornado.ioloop import IOLoop
 
 from distributed.compatibility import ConnectionRefusedError
-from distributed.core import read, connect, write
+from distributed.core import connect, CommClosedError, coerce_to_address
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.diagnostics.eventstream import eventstream
@@ -74,11 +73,11 @@ def workers():
 @gen.coroutine
 def progress():
     with log_errors():
-        stream = yield progress_stream('%(host)s:%(tcp-port)d' % options, 0.050)
+        comm = yield progress_stream('%(host)s:%(tcp-port)d' % options, 0.050)
         while True:
             try:
-                msg = yield read(stream)
-            except StreamClosedError:
+                msg = yield comm.read()
+            except CommClosedError:
                 break
             else:
                 messages['progress'] = msg
@@ -88,14 +87,15 @@ def progress():
 def processing():
     with log_errors():
         from distributed.diagnostics.scheduler import processing
-        stream = yield connect(ip=options['host'], port=options['tcp-port'])
-        yield write(stream, {'op': 'feed',
-                             'function': dumps(processing),
-                             'interval': 0.200})
+        addr = coerce_to_address((options['host'], options['tcp-port']))
+        comm = yield connect(addr)
+        yield comm.write({'op': 'feed',
+                          'function': dumps(processing),
+                          'interval': 0.200})
         while True:
             try:
-                msg = yield read(stream)
-            except StreamClosedError:
+                msg = yield comm.read()
+            except CommClosedError:
                 break
             else:
                 messages['processing'] = msg
@@ -105,9 +105,9 @@ def processing():
 def task_events(interval, deque, times, index, rectangles, workers, last_seen):
     i = 0
     try:
-        stream = yield eventstream('%(host)s:%(tcp-port)d' % options, 0.100)
+        comm = yield eventstream('%(host)s:%(tcp-port)d' % options, 0.100)
         while True:
-            msgs = yield read(stream)
+            msgs = yield comm.read()
             if not msgs:
                 continue
 
@@ -120,8 +120,8 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
                         index.append(i)
                         i += 1
 
-    except StreamClosedError:
-        pass  # don't log StreamClosedErrors
+    except CommClosedError:
+        pass  # don't log CommClosedErrors
     except Exception as e:
         logger.exception(e)
     finally:

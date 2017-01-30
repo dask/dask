@@ -6,7 +6,7 @@ from tornado import gen
 
 from .plugin import SchedulerPlugin
 
-from ..core import connect, write, coerce_to_address
+from ..core import connect, coerce_to_address
 from ..worker import dumps_function
 
 
@@ -63,11 +63,11 @@ def eventstream(address, interval):
     [{'key': 'x', 'status': 'OK', 'worker': '192.168.0.1:54684', ...},
      {'key': 'y', 'status': 'error', 'worker': '192.168.0.1:54684', ...}]
     """
-    ip, port = coerce_to_address(address, out=tuple)
-    stream = yield connect(ip, port)
-    yield write(stream, {'op': 'feed',
-                         'setup': dumps_function(EventStream),
-                         'function': dumps_function(swap_buffer),
-                         'interval': interval,
-                         'teardown': dumps_function(teardown)})
-    raise gen.Return(stream)
+    address = coerce_to_address(address)
+    comm = yield connect(address)
+    yield comm.write({'op': 'feed',
+                      'setup': dumps_function(EventStream),
+                      'function': dumps_function(swap_buffer),
+                      'interval': interval,
+                      'teardown': dumps_function(teardown)})
+    raise gen.Return(comm)

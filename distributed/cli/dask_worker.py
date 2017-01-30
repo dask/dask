@@ -11,13 +11,14 @@ import sys
 from time import sleep
 
 import click
-from distributed import Nanny, Worker, sync, rpc
+from distributed import Nanny, Worker, rpc
 from distributed.nanny import isalive
-from distributed.utils import get_ip, All, ignoring
+from distributed.utils import All, ignoring
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.metrics import time
 from distributed.cli.utils import check_python_3
+
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado import gen
@@ -76,19 +77,12 @@ def handle_signal(sig, frame):
 @click.option('--resources', type=str, default='',
               help='Resources for task constraints like "GPU=2 MEM=10e9"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-        nanny, name, memory_limit, pid_file, temp_filename, reconnect,
-        resources, bokeh, bokeh_port, local_directory):
+         nanny, name, memory_limit, pid_file, temp_filename, reconnect,
+         resources, bokeh, bokeh_port, local_directory):
     if nanny:
         port = nanny_port
     else:
         port = worker_port
-
-    try:
-        scheduler_host, scheduler_port = scheduler.split(':')
-        scheduler_ip = socket.gethostbyname(scheduler_host)
-        scheduler_port = int(scheduler_port)
-    except IndexError:
-        logger.info("Usage:  dask-worker scheduler_host:scheduler_port")
 
     if nprocs > 1 and worker_port != 0:
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
@@ -138,20 +132,17 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
             kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
 
-    if host is not None:
-        ip = socket.gethostbyname(host)
-    else:
-        # lookup the ip address of a local interface on a network that
-        # reach the scheduler
-        ip = get_ip(scheduler_ip, scheduler_port)
-    nannies = [t(scheduler_ip, scheduler_port, ncores=nthreads, ip=ip,
+    nannies = [t(scheduler, ncores=nthreads,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, **kwargs)
                for i in range(nprocs)]
 
     for n in nannies:
-        n.start(port)
+        if host:
+            n.start((host, port))
+        else:
+            n.start(port)
         if t is Nanny:
             global_nannies.append(n)
 
@@ -180,16 +171,18 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         logger.info("End worker")
         loop.close()
 
+    # Clean exit: unregister all workers from scheduler
+
     loop2 = IOLoop()
 
     @gen.coroutine
     def f():
-        scheduler = rpc(ip=nannies[0].scheduler.ip,
-                        port=nannies[0].scheduler.port)
+        scheduler = rpc(nannies[0].scheduler.address)
         if nanny:
             yield gen.with_timeout(timedelta(seconds=2),
                     All([scheduler.unregister(address=n.worker_address, close=True)
-                        for n in nannies if n.process and n.worker_port]), io_loop=loop2)
+                         for n in nannies if n.process and n.worker_address]),
+                    io_loop=loop2)
 
     loop2.run_sync(f)
 

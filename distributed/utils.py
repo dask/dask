@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 from collections import Iterable
 from contextlib import contextmanager
 import inspect
@@ -13,7 +14,8 @@ import six
 import sys
 import tblib.pickling_support
 import tempfile
-from threading import Thread
+import threading
+import warnings
 
 try:
     import resource
@@ -23,20 +25,30 @@ except ImportError:
 from dask import istask
 from toolz import memoize, valmap
 from tornado import gen
-from tornado.iostream import StreamClosedError
 
-from .compatibility import Queue, PY3, PY2
+from .compatibility import Queue, PY3, PY2, get_thread_identity
 from .config import config
+from .comm import CommClosedError
+
 
 logger = logging.getLogger(__name__)
 
 
-if PY3 and not sys.platform.startswith('win'):
-    mp_context = multiprocessing.get_context('forkserver')
-    # Makes the test suite much faster
-    mp_context.set_forkserver_preload(['distributed'])
-else:
-    mp_context = multiprocessing
+def _initialize_mp_context():
+    if PY3 and not sys.platform.startswith('win'):
+        ctx = multiprocessing.get_context('forkserver')
+        # Makes the test suite much faster
+        preload = ['distributed']
+        if 'pkg_resources' in sys.modules:
+            preload.append('pkg_resources')
+        ctx.set_forkserver_preload(preload)
+    else:
+        ctx = multiprocessing
+
+    return ctx
+
+
+mp_context = _initialize_mp_context()
 
 
 def funcname(func):
@@ -79,12 +91,39 @@ def get_fileno_limit():
         return 512
 
 
-def get_ip(host='8.8.8.8', port=80):
+@memoize
+def _get_ip(host, port, family, default):
+    # By using a UDP socket, we don't actually try to connect but
+    # simply select the local address through which *host* is reachable.
+    sock = socket.socket(family, socket.SOCK_DGRAM)
     try:
-        return [(s.connect((host, port)), s.getsockname()[0], s.close())
-                for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
-    except OSError:
-        return '127.0.0.1'
+        sock.connect((host, 0))
+        ip = sock.getsockname()[0]
+        return ip
+    except EnvironmentError as e:
+        warnings.warn("Couldn't detect a suitable IP address for "
+                      "reaching %r, defaulting to %r: %s"
+                      % (host, default, e), RuntimeWarning)
+        return default
+    finally:
+        sock.close()
+
+
+def get_ip(host='8.8.8.8', port=80):
+    """
+    Get the local IP address through which the *host* is reachable.
+
+    *host* defaults to a well-known Internet host (one of Google's public
+    DNS servers).
+    """
+    return _get_ip(host, port, family=socket.AF_INET, default='127.0.0.1')
+
+
+def get_ipv6(host='2001:4860:4860::8888', port=80):
+    """
+    The same as get_ip(), but for IPv6.
+    """
+    return _get_ip(host, port, family=socket.AF_INET6, default='::1')
 
 
 @contextmanager
@@ -130,29 +169,30 @@ def All(*args):
 
 
 def sync(loop, func, *args, **kwargs):
-    """ Run coroutine in loop running in separate thread """
+    """
+    Run coroutine in loop running in separate thread.
+    """
     if not loop._running:
         try:
             return loop.run_sync(lambda: func(*args, **kwargs))
         except RuntimeError:  # loop already running
             pass
 
-    from threading import Event
-    e = Event()
+    e = threading.Event()
+    main_tid = get_thread_identity()
     result = [None]
     error = [False]
-    traceback = [False]
 
     @gen.coroutine
     def f():
         try:
+            if main_tid == get_thread_identity():
+                raise RuntimeError("sync() called from thread of running loop")
+            yield gen.moment
             result[0] = yield gen.maybe_future(func(*args, **kwargs))
         except Exception as exc:
             logger.exception(exc)
-            result[0] = exc
-            error[0] = exc
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            traceback[0] = exc_traceback
+            error[0] = sys.exc_info()
         finally:
             e.set()
 
@@ -160,7 +200,7 @@ def sync(loop, func, *args, **kwargs):
     while not e.is_set():
         e.wait(1000000)
     if error[0]:
-        six.reraise(type(error[0]), error[0], traceback[0])
+        six.reraise(*error[0])
     else:
         return result[0]
 
@@ -263,7 +303,7 @@ else:
 def log_errors(pdb=False):
     try:
         yield
-    except (StreamClosedError, gen.Return):
+    except (CommClosedError, gen.Return):
         raise
     except Exception as e:
         logger.exception(e)
@@ -282,23 +322,20 @@ def ensure_ip(hostname):
     '127.0.0.1'
     >>> ensure_ip('123.123.123.123')  # pass through IP addresses
     '123.123.123.123'
-    >>> ensure_ip('localhost:5000')
-    '127.0.0.1:5000'
     """
-    if PY3 and isinstance(hostname, bytes):
-        hostname = hostname.decode()
-    if ':' in hostname:
-        host, port = hostname.rsplit(':', 1)
-        return ':'.join([ensure_ip(host), port])
-    if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
-        return hostname
-    else:
+    # Prefer IPv4 over IPv6, for compatibility
+    families = [socket.AF_INET, socket.AF_INET6]
+    for fam in families:
         try:
-            return socket.gethostbyname(hostname)
-        except Exception as e:
-            logger.warn("Could not resolve hostname: %s", hostname,
-                        exc_info=True)
-            raise
+            results = socket.getaddrinfo(hostname,
+                                         1234,  # dummy port number
+                                         fam, socket.SOCK_STREAM)
+        except socket.gaierror as e:
+            exc = e
+        else:
+            return results[0][4][0]
+
+    raise exc
 
 
 tblib.pickling_support.install()
@@ -343,7 +380,7 @@ def _dump_to_queue(seq, q):
 def iterator_to_queue(seq, maxsize=0):
     q = Queue(maxsize=maxsize)
 
-    t = Thread(target=_dump_to_queue, args=(seq, q))
+    t = threading.Thread(target=_dump_to_queue, args=(seq, q))
     t.daemon = True
     t.start()
 
@@ -557,3 +594,27 @@ def divide_n_among_bins(n, bins):
 def mean(seq):
     seq = list(seq)
     return sum(seq) / len(seq)
+
+
+if hasattr(sys, "is_finalizing"):
+    def shutting_down(is_finalizing=sys.is_finalizing):
+        return is_finalizing()
+
+else:
+    _shutting_down = [False]
+
+    def _at_shutdown(l=_shutting_down):
+        l[0] = True
+
+    def shutting_down(l=_shutting_down):
+        return l[0]
+
+    atexit.register(_at_shutdown)
+
+
+shutting_down.__doc__ = """
+    Whether the interpreter is currently shutting down.
+    For use in finalizers, __del__ methods, and similar; it is advised
+    to early bind this function rather than look it up when calling it,
+    since at shutdown module globals may be cleared.
+    """

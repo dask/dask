@@ -29,7 +29,7 @@ def test__as_completed(c, s, a, b):
 
 def test_as_completed(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.submit(inc, 1)
             y = c.submit(inc, 2)
             z = c.submit(inc, 1)
@@ -43,14 +43,14 @@ def test_as_completed(loop):
 
 def test_as_completed_with_non_futures(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             with pytest.raises(TypeError):
                 list(as_completed([1, 2, 3]))
 
 
 def test_as_completed_add(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             total = 0
             expected = sum(map(inc, range(10)))
             futures = c.map(inc, range(10))
@@ -67,7 +67,7 @@ def test_as_completed_add(loop):
 
 def test_as_completed_repeats(loop):
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             ac = AsCompleted()
             x = c.submit(inc, 1)
             ac.add(x)

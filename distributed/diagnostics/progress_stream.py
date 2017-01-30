@@ -10,7 +10,7 @@ from tornado import gen
 
 from .progress import AllProgress
 
-from ..core import connect, write, coerce_to_address
+from ..core import connect, coerce_to_address
 from ..scheduler import Scheduler
 from ..utils import key_split
 from ..worker import dumps_function
@@ -57,14 +57,14 @@ def progress_stream(address, interval):
     >>> stream = yield eventstream('127.0.0.1:8786', 0.100)  # doctest: +SKIP
     >>> print(yield read(stream))  # doctest: +SKIP
     """
-    ip, port = coerce_to_address(address, out=tuple)
-    stream = yield connect(ip, port)
-    yield write(stream, {'op': 'feed',
-                         'setup': dumps_function(AllProgress),
-                         'function': dumps_function(counts),
-                         'interval': interval,
-                         'teardown': dumps_function(Scheduler.remove_plugin)})
-    raise gen.Return(stream)
+    address = coerce_to_address(address)
+    comm = yield connect(address)
+    yield comm.write({'op': 'feed',
+                      'setup': dumps_function(AllProgress),
+                      'function': dumps_function(counts),
+                      'interval': interval,
+                      'teardown': dumps_function(Scheduler.remove_plugin)})
+    raise gen.Return(comm)
 
 
 def nbytes_bar(nbytes):

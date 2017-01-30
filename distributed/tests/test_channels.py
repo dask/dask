@@ -74,7 +74,7 @@ def test_local_client(loop):
             y.flush()
 
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address'], loop=loop) as c:
             x = c.channel('x')
             y = c.channel('y')
 
@@ -167,7 +167,7 @@ def test_stop(loop):
             x.flush()
 
     with cluster() as (s, [a, b]):
-        with Client(('127.0.0.1', s['port']), loop=loop) as c:
+        with Client(s['address']) as c:
             x = c.channel('x')
 
             producer = c.submit(produce, 5)
@@ -178,7 +178,7 @@ def test_stop(loop):
             with pytest.raises(StopIteration):
                 x.append(c.submit(inc, 1))
 
-            with Client(('127.0.0.1', s['port']), loop=loop) as c2:
+            with Client(s['address']) as c2:
                 xx = c2.channel('x')
                 futures = list(xx)
                 assert len(futures) == 5

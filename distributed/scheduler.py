@@ -9,6 +9,7 @@ from math import log
 import os
 import pickle
 import random
+import six
 import socket
 from timeit import default_timer
 
@@ -21,16 +22,17 @@ from toolz import memoize, valmap, first, second, keymap, unique, concat, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.iostream import StreamClosedError, IOStream
 
 from dask.compatibility import PY3, unicode
 from dask.core import reverse_dict
 from dask.order import order
 
 from .batched import BatchedSend
+from .comm.core import (normalize_address, resolve_address,
+                        get_address_host_port, unparse_host_port)
 from .config import config
-from .core import (rpc, connect, read, write, close, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address, error_message, clean_exception)
+from .core import (rpc, connect, Server, send_recv,
+                   error_message, clean_exception, CommClosedError)
 from .metrics import time
 from .publish import PublishExtension
 from .channels import ChannelScheduler
@@ -51,6 +53,9 @@ LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
 DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 
+# XXX avoid inheriting from Server? there is some large potential for confusion
+# between base and derived attribute namespaces...
+
 class Scheduler(Server):
     """ Dynamic distributed task scheduler
 
@@ -64,7 +69,7 @@ class Scheduler(Server):
     accomplish this the scheduler tracks a lot of state.  Every operation
     maintains the consistency of this state.
 
-    The scheduler communicates with the outside world through Tornado IOStreams
+    The scheduler communicates with the outside world through Comm objects.
     It maintains a consistent and valid view of the world even when listening
     to several clients at once.
 
@@ -174,8 +179,8 @@ class Scheduler(Server):
         Other services running on this scheduler, like HTTP
     * **loop:** ``IOLoop``:
         The running Tornado IOLoop
-    * **streams:** ``[IOStreams]``:
-        A list of Tornado IOStreams from which we both accept stimuli and
+    * **comms:** ``[Comm]``:
+        A list of Comms from which we both accept stimuli and
         report results
     * **task_duration:** ``{key-prefix: time}``
         Time we expect certain functions to take, e.g. ``{'sum': 0.25}``
@@ -185,26 +190,25 @@ class Scheduler(Server):
     default_port = 8786
 
     def __init__(self, center=None, loop=None,
-            max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            synchronize_worker_interval=60000,
-            ip=None, services=None, allowed_failures=ALLOWED_FAILURES,
-            extensions=[ChannelScheduler, PublishExtension, WorkStealing],
-            validate=False,
-            **kwargs):
+                 delete_interval=500, synchronize_worker_interval=60000,
+                 services=None, allowed_failures=ALLOWED_FAILURES,
+                 extensions=[ChannelScheduler, PublishExtension, WorkStealing],
+                 validate=False, **kwargs):
 
         # Attributes
-        self.ip = ip or get_ip()
         self.allowed_failures = allowed_failures
         self.validate = validate
         self.status = None
         self.delete_interval = delete_interval
         self.synchronize_worker_interval = synchronize_worker_interval
         self.digests = None
+        self.service_specs = services or {}
+        self.services = {}
 
         # Communication state
         self.loop = loop or IOLoop.current()
-        self.worker_streams = dict()
-        self.streams = dict()
+        self.worker_comms = dict()
+        self.comms = dict()
         self.coroutines = []
         self._worker_coroutines = []
         self._ipython_kernel = None
@@ -299,21 +303,6 @@ class Scheduler(Server):
                          'run_function': self.run_function,
                          'update_data': self.update_data}
 
-        self.services = {}
-        for k, v in (services or {}).items():
-            if isinstance(k, tuple):
-                k, port = k
-            else:
-                port = 0
-
-            try:
-                service = v(self, io_loop=self.loop)
-                service.listen(port)
-                self.services[k] = service
-            except Exception as e:
-                logger.info("Could not launch service: %s-%d", k, port,
-                            exc_info=True)
-
         self._transitions = {
                  ('released', 'waiting'): self.transition_released_waiting,
                  ('waiting', 'released'): self.transition_waiting_released,
@@ -333,9 +322,9 @@ class Scheduler(Server):
 
         connection_limit = get_fileno_limit() / 2
 
-        super(Scheduler, self).__init__(handlers=self.handlers,
-                max_buffer_size=max_buffer_size, io_loop=self.loop,
-                connection_limit=connection_limit, deserialize=False, **kwargs)
+        super(Scheduler, self).__init__(
+            handlers=self.handlers, io_loop=self.loop,
+            connection_limit=connection_limit, deserialize=False, **kwargs)
 
         for ext in extensions:
             ext(self)
@@ -345,20 +334,12 @@ class Scheduler(Server):
     ##################
 
     def __str__(self):
-        return '<Scheduler: "%s:%d" processes: %d cores: %d>' % (
-                self.ip, self.port, len(self.workers), self.total_ncores)
+        return '<Scheduler: "%s" processes: %d cores: %d>' % (
+                self.address, len(self.workers), self.total_ncores)
 
     __repr__ = __str__
 
-    @property
-    def address(self):
-        return '%s:%d' % (self.ip, self.port)
-
-    @property
-    def address_tuple(self):
-        return (self.ip, self.port)
-
-    def identity(self, stream):
+    def identity(self, comm):
         """ Basic information about ourselves and our cluster """
         d = {'type': type(self).__name__,
              'id': str(self.id),
@@ -367,11 +348,42 @@ class Scheduler(Server):
              'workers': dict(self.worker_info)}
         return d
 
-    def get_versions(self, stream):
+    def get_worker_service_addr(self, worker, service_name):
+        """
+        Get the (host, port) address of the named service on the *worker*.
+        Returns None if the service doesn't exist.
+        """
+        info = self.worker_info[worker]
+        port = info['services'].get(service_name)
+        if port is None:
+            return None
+        else:
+            return info['host'], port
+
+    def get_versions(self, comm):
         """ Basic information about ourselves and our cluster """
         return get_versions()
 
-    def start(self, port=8786, start_queues=True):
+    def start_services(self, listen_ip=''):
+        for k, v in self.service_specs.items():
+            if isinstance(k, tuple):
+                k, port = k
+            else:
+                port = 0
+
+            try:
+                service = v(self, io_loop=self.loop)
+                service.listen((listen_ip, port))
+                self.services[k] = service
+            except Exception as e:
+                logger.info("Could not launch service: %r", (k, port),
+                            exc_info=True)
+
+    def stop_services(self):
+        for service in self.services.values():
+            service.stop()
+
+    def start(self, addr_or_port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
         collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.released, self.priority,
@@ -392,12 +404,22 @@ class Scheduler(Server):
                     raise exc
 
         if self.status != 'running':
-            self.listen(port)
+            if isinstance(addr_or_port, int):
+                self.ip = get_ip()
+                # Listen on all interfaces.  `self.ip` is not suitable
+                # as its default value would prevent connecting via 127.0.0.1.
+                self.listen(('', addr_or_port))
+            else:
+                self.listen(addr_or_port)
+                self.ip, _ = get_address_host_port(self.listen_address)
+
+            # Services listen on all addresses
+            self.start_services()
 
             self.status = 'running'
-            logger.info("  Scheduler at: %20s:%s", self.ip, self.port)
+            logger.info("  Scheduler at: %25s", self.address)
             for k, v in self.services.items():
-                logger.info("%11s at: %20s:%s", k, self.ip, v.port)
+                logger.info("%11s at: %25s", k, '%s:%d' % (self.ip, v.port))
 
         return self.finished()
 
@@ -407,14 +429,14 @@ class Scheduler(Server):
         while any(not c.done() for c in self.coroutines):
             yield All(self.coroutines)
 
-    def close_streams(self):
-        """ Close all active IOStreams """
-        for stream in self.streams.values():
-            close(stream.stream)
+    def close_comms(self):
+        """ Close all active Comms."""
+        for comm in self.comms.values():
+            comm.abort()
         self.rpc.close()
 
     @gen.coroutine
-    def close(self, stream=None, fast=False):
+    def close(self, comm=None, fast=False):
         """ Send cleanup signal to all coroutines then wait until finished
 
         See Also
@@ -423,15 +445,16 @@ class Scheduler(Server):
         """
         if self.status == 'closed':
             return
-        for service in self.services.values():
-            service.stop()
+        logger.info("Scheduler closing...")
+        self.stop_services()
         for ext in self.extensions:
             with ignoring(AttributeError):
                 ext.teardown()
+        logger.info("Scheduler closing all comms")
         yield self.cleanup()
         if not fast:
             yield self.finished()
-        self.close_streams()
+        self.close_comms()
         self.status = 'closed'
         self.stop()
 
@@ -444,21 +467,12 @@ class Scheduler(Server):
         not the worker has a nanny process restarting it
         """
         with log_errors():
-            original = worker
-            try:
-                nanny_port = self.worker_info[worker]['services']['nanny']
-            except KeyError:
-                nanny_port = False
+            nanny_addr = self.get_worker_service_addr(worker, 'nanny')
+            address = nanny_addr or worker
 
             self.remove_worker(address=worker)
 
-            if nanny_port:
-                ip, port = worker.split(':')
-                address = '%s:%s' % (ip, nanny_port)
-            else:
-                address = worker
-
-            with rpc(addr=address) as r:
+            with rpc(address) as r:
                 yield r.terminate(report=False)
 
             self.remove_worker(address=worker)
@@ -472,16 +486,16 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
 
-        for w, bstream in list(self.worker_streams.items()):
+        for w, comm in list(self.worker_comms.items()):
             with ignoring(AttributeError):
-                yield bstream.close(ignore_closed=True)
+                yield comm.close()
 
     ###########
     # Stimuli #
     ###########
 
-    def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                   name=None, coerce_address=True, nbytes=None, now=None,
+    def add_worker(self, comm=None, address=None, keys=(), ncores=None,
+                   name=None, resolve_address=True, nbytes=None, now=None,
                    resources=None, host_info=None, **info):
         """ Add a new worker to the cluster """
         with log_errors():
@@ -489,10 +503,12 @@ class Scheduler(Server):
             now = now or time()
             info = info or {}
             host_info = host_info or {}
-            if coerce_address:
-                address = self.coerce_address(address)
-                host, port = address.split(':')
-                self.host_info[host]['last-seen'] = local_now
+
+            address = self.coerce_address(address, resolve_address)
+            host, port = get_address_host_port(address)
+            self.host_info[host]['last-seen'] = local_now
+
+            address = normalize_address(address)
 
             if address not in self.worker_info:
                 self.worker_info[address] = dict()
@@ -517,18 +533,18 @@ class Scheduler(Server):
             if name in self.aliases:
                 return 'name taken, %s' % name
 
-            if coerce_address:
-                if 'ports' not in self.host_info[host]:
-                    self.host_info[host].update({'ports': set(), 'cores': 0})
+            if 'addresses' not in self.host_info[host]:
+                self.host_info[host].update({'addresses': set(), 'cores': 0})
 
-                self.host_info[host]['ports'].add(port)
-                self.host_info[host]['cores'] += ncores
+            self.host_info[host]['addresses'].add(address)
+            self.host_info[host]['cores'] += ncores
 
             self.ncores[address] = ncores
             self.workers.add(address)
             self.total_ncores += ncores
             self.aliases[name] = address
             self.worker_info[address]['name'] = name
+            self.worker_info[address]['host'] = host
 
             if address not in self.processing:
                 self.has_what[address] = set()
@@ -540,7 +556,7 @@ class Scheduler(Server):
             # for key in keys:  # TODO
             #     self.mark_key_in_memory(key, [address])
 
-            self.worker_streams[address] = BatchedSend(interval=5, loop=self.loop)
+            self.worker_comms[address] = BatchedSend(interval=5, loop=self.loop)
             self._worker_coroutines.append(self.handle_worker(address))
 
             if self.ncores[address] > len(self.processing[address]):
@@ -563,7 +579,7 @@ class Scheduler(Server):
             recommendations = {}
             for key in list(self.unrunnable):
                 valid = self.valid_workers(key)
-                if valid is True or address in valid:
+                if valid is True or address in valid or name in valid:
                     recommendations[key] = 'waiting'
 
             if recommendations:
@@ -635,14 +651,22 @@ class Scheduler(Server):
                 self.priority[key] = (self.generation, new_priority[key]) # prefer old
 
         if restrictions:
-            restrictions = {k: v for k, v in restrictions.items()
-                                 if v is not None}
-            restrictions = {k: set(map(self.coerce_address, v))
-                            for k, v in restrictions.items()}
-            worker_restrictions = {k: {w for w in s if ':' in w}
-                                    for k, s in restrictions.items()}
-            host_restrictions = {k: {w for w in s if ':' not in w}
-                                 for k, s in restrictions.items()}
+            # *restrictions* is a dict keying task ids to lists of
+            # restriction specifications (either worker names or addresses)
+            worker_restrictions = defaultdict(set)
+            host_restrictions = defaultdict(set)
+            for k, v in restrictions.items():
+                if v is None:
+                    continue
+                for w in v:
+                    try:
+                        w = self.coerce_address(w)
+                    except ValueError:
+                        # Not a valid address, but perhaps it's a hostname
+                        host_restrictions[k].add(w)
+                    else:
+                        worker_restrictions[k].add(w)
+
             self.worker_restrictions.update(worker_restrictions)
             self.host_restrictions.update(host_restrictions)
 
@@ -750,7 +774,7 @@ class Scheduler(Server):
 
             return {}
 
-    def remove_worker(self, stream=None, address=None, safe=False):
+    def remove_worker(self, comm=None, address=None, safe=False):
         """
         Remove worker from cluster
 
@@ -759,24 +783,24 @@ class Scheduler(Server):
         state.
         """
         with log_errors():
-            address = self.coerce_address(address)
-            logger.info("Remove worker %s", address)
             if address not in self.processing:
-                logger.info("Worker already removed")
                 return 'already-removed'
-            with ignoring(AttributeError, StreamClosedError):
-                self.worker_streams[address].send({'op': 'close'})
 
-            host, port = address.split(':')
+            address = self.coerce_address(address)
+            host, port = get_address_host_port(address)
+
+            logger.info("Remove worker %s", address)
+            with ignoring(AttributeError, CommClosedError):
+                self.worker_comms[address].send({'op': 'close'})
 
             self.host_info[host]['cores'] -= self.ncores[address]
-            self.host_info[host]['ports'].remove(port)
+            self.host_info[host]['addresses'].remove(address)
             self.total_ncores -= self.ncores[address]
 
-            if not self.host_info[host]['ports']:
+            if not self.host_info[host]['addresses']:
                 del self.host_info[host]
 
-            del self.worker_streams[address]
+            del self.worker_comms[address]
             del self.ncores[address]
             self.workers.remove(address)
             del self.aliases[self.worker_info[address]['name']]
@@ -816,7 +840,7 @@ class Scheduler(Server):
             self.transitions(recommendations)
 
             if self.validate:
-                assert all(self.who_has.values())
+                assert all(self.who_has.values()), len(self.who_has)
 
             for plugin in self.plugins[:]:
                 try:
@@ -830,7 +854,7 @@ class Scheduler(Server):
             logger.info("Removed worker %s", address)
         return 'OK'
 
-    def stimulus_cancel(self, stream, keys=None, client=None):
+    def stimulus_cancel(self, comm, keys=None, client=None):
         """ Stop execution on a list of keys """
         logger.info("Client %s requests to cancel %d keys", client, len(keys))
         for key in keys:
@@ -977,7 +1001,7 @@ class Scheduler(Server):
                 set(self.has_what) ==
                 set(self.processing) ==
                 set(self.worker_info) ==
-                set(self.worker_streams)):
+                set(self.worker_comms)):
             raise ValueError("Workers not the same in all collections")
 
         assert self.worker_bytes == {w: sum(self.nbytes[k] for k in keys)
@@ -1002,49 +1026,49 @@ class Scheduler(Server):
 
     def report(self, msg, client=None):
         """
-        Publish updates to all listening Queues and Streams
+        Publish updates to all listening Queues and Comms
 
         If the message contains a key then we only send the message to those
-        streams that care about the key.
+        comms that care about the key.
         """
         if client is not None:
             try:
-                stream = self.streams[client]
-                stream.send(msg)
-            except StreamClosedError:
-                logger.critical("Tried writing to closed stream: %s", msg)
+                comm = self.comms[client]
+                comm.send(msg)
+            except CommClosedError:
+                logger.critical("Tried writing to closed comm: %s", msg)
             except KeyError:
                 pass
 
         if 'key' in msg:
             if msg['key'] not in self.who_wants:
                 return
-            streams = [self.streams[c]
-                       for c in self.who_wants.get(msg['key'], ())
-                       if c in self.streams]
+            comms = [self.comms[c]
+                     for c in self.who_wants.get(msg['key'], ())
+                     if c in self.comms]
         else:
-            streams = self.streams.values()
-        for s in streams:
+            comms = self.comms.values()
+        for c in comms:
             try:
-                s.send(msg)
+                c.send(msg)
                 # logger.debug("Scheduler sends message to client %s", msg)
-            except StreamClosedError:
-                logger.critical("Tried writing to closed stream: %s", msg)
+            except CommClosedError:
+                logger.critical("Tried writing to closed comm: %s", msg)
 
     @gen.coroutine
-    def add_client(self, stream, client=None):
+    def add_client(self, comm, client=None):
         """ Add client to network
 
-        We listen to all future messages from this IOStream.
+        We listen to all future messages from this Comm.
         """
         logger.info("Receive client connection: %s", client)
         try:
-            yield self.handle_client(stream, client=client)
+            yield self.handle_client(comm, client=client)
         finally:
-            if not stream.closed():
-                self.streams[client].send({'op': 'stream-closed'})
-                yield self.streams[client].close(ignore_closed=True)
-            del self.streams[client]
+            if not comm.closed():
+                self.comms[client].send({'op': 'stream-closed'})
+                yield self.comms[client].close()
+            del self.comms[client]
             logger.info("Close client connection: %s", client)
 
     def remove_client(self, client=None):
@@ -1055,33 +1079,33 @@ class Scheduler(Server):
             del self.wants_what[client]
 
     @gen.coroutine
-    def handle_client(self, stream, client=None):
+    def handle_client(self, comm, client=None):
         """
         Listen and respond to messages from clients
 
-        This runs once per Client IOStream or Queue.
+        This runs once per Client Comm or Queue.
 
         See Also
         --------
         Scheduler.worker_stream: The equivalent function for workers
         """
-        bstream = BatchedSend(interval=2, loop=self.loop)
-        bstream.start(stream)
-        self.streams[client] = bstream
+        bcomm = BatchedSend(interval=2, loop=self.loop)
+        bcomm.start(comm)
+        self.comms[client] = bcomm
 
         with log_errors(pdb=LOG_PDB):
-            bstream.send({'op': 'stream-start'})
+            bcomm.send({'op': 'stream-start'})
 
             breakout = False
 
             while True:
                 try:
-                    msgs = yield read(stream, deserialize=self.deserialize)
-                except (StreamClosedError, AssertionError, GeneratorExit):
+                    msgs = yield comm.read(deserialize=self.deserialize)
+                except (CommClosedError, AssertionError, GeneratorExit):
                     break
                 except Exception as e:
                     logger.exception(e)
-                    bstream.send(error_message(e, status='scheduler-error'))
+                    bcomm.send(error_message(e, status='scheduler-error'))
                     continue
 
                 if not isinstance(msgs, list):
@@ -1093,7 +1117,7 @@ class Scheduler(Server):
                         op = msg.pop('op')
                     except Exception as e:
                         logger.exception(e)
-                        bstream.end(error_message(e, status='scheduler-error'))
+                        bcomm.end(error_message(e, status='scheduler-error'))
 
                     if op == 'close-stream':
                         breakout = True
@@ -1149,9 +1173,10 @@ class Scheduler(Server):
             else:
                 msg['task'] = task
 
-            self.worker_streams[worker].send(msg)
-        except StreamClosedError:
-            logger.info("Tried to send task to removed worker")
+            self.worker_comms[worker].send(msg)
+        except CommClosedError:
+            logger.info("Tried to send task %r to closed worker %r", key, worker)
+            # Worker will be removed by handle_worker()
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -1189,29 +1214,27 @@ class Scheduler(Server):
         --------
         Scheduler.handle_client: Equivalent coroutine for clients
         """
-        yield gen.sleep(0)
-        ip, port = coerce_to_address(worker, out=tuple)
         try:
-            stream = yield connect(ip, port)
+            comm = yield connect(worker)
         except Exception as e:
-            logger.error("Failed to connect to worker '%s:%s': %s",
-                         ip, port, e)
+            logger.error("Failed to connect to worker %r: %s",
+                         worker, e)
             return
-        yield write(stream, {'op': 'compute-stream'})
-        self.worker_streams[worker].start(stream)
+        yield comm.write({'op': 'compute-stream', 'reply': False})
+        self.worker_comms[worker].start(comm)
         logger.info("Starting worker compute stream, %s", worker)
 
+        io_error = None
         try:
             while True:
-                msgs = yield read(stream)
+                msgs = yield comm.read()
                 start = time()
 
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
-                if worker in self.worker_info and not stream.closed():
+                if worker in self.worker_info and not comm.closed():
                     self.counters['worker-message-length'].add(len(msgs))
-                    recommendations = OrderedDict()
                     for msg in msgs:
                         if msg == 'OK':  # from close
                             break
@@ -1229,16 +1252,23 @@ class Scheduler(Server):
                 if self.digests is not None:
                     self.digests['handle-worker-duration'].add(end - start)
 
-        except (StreamClosedError, IOError, OSError):
-            logger.info("Worker failed from closed stream: %s", worker)
+        except (CommClosedError, EnvironmentError) as e:
+            io_error = e
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
         finally:
-            close(stream)
-            self.remove_worker(address=worker)
+            if worker in self.worker_comms:
+                # Worker didn't send us a close message
+                if io_error:
+                    logger.info("Worker %r failed from closed comm: %s",
+                                worker, io_error)
+                yield comm.close()
+                self.remove_worker(address=worker)
+            else:
+                assert comm.closed()
 
     def correct_time_delay(self, worker, msg):
         """
@@ -1277,7 +1307,7 @@ class Scheduler(Server):
     ############################
 
     @gen.coroutine
-    def scatter(self, stream=None, data=None, workers=None, client=None,
+    def scatter(self, comm=None, data=None, workers=None, client=None,
             broadcast=False, timeout=2):
         """ Send data out to workers
 
@@ -1313,7 +1343,7 @@ class Scheduler(Server):
         raise gen.Return(keys)
 
     @gen.coroutine
-    def gather(self, stream=None, keys=None):
+    def gather(self, comm=None, keys=None):
         """ Collect data in from workers """
         keys = list(keys)
         who_has = {key: self.who_has.get(key, ()) for key in keys}
@@ -1328,14 +1358,14 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def restart(self, environment=None, client=None):
+    def restart(self, client=None):
         """ Restart all workers.  Reset local state. """
         n = len(self.workers)
         with log_errors():
             logger.debug("Send shutdown signal to workers")
 
-            nannies = {addr: d['services']['nanny']
-                       for addr, d in self.worker_info.items()}
+            nannies = {addr: self.get_worker_service_addr(addr, 'nanny')
+                       for addr in self.worker_info}
 
             for addr in nannies:
                 self.remove_worker(address=addr)
@@ -1344,11 +1374,13 @@ class Scheduler(Server):
                 self.client_releases_keys(keys=keys, client=client)
 
             logger.debug("Send kill signal to nannies: %s", nannies)
-            nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
-                       for worker_address, n_port in nannies.items()]
+
+            nannies = [rpc(nanny_address)
+                       for nanny_address in nannies.values()
+                       if nanny_address is not None]
             try:
-                resps = yield All([nanny.restart(environment=environment, close=True)
-                           for nanny in nannies])
+                resps = yield All([nanny.restart(close=True)
+                                   for nanny in nannies])
                 assert all(resp == 'OK' for resp in resps)
             finally:
                 for nanny in nannies:
@@ -1366,7 +1398,7 @@ class Scheduler(Server):
                     logger.exception(e)
 
     @gen.coroutine
-    def broadcast(self, stream=None, msg=None, workers=None, hosts=None,
+    def broadcast(self, comm=None, msg=None, workers=None, hosts=None,
             nanny=False):
         """ Broadcast message to workers, return all results """
         if workers is None:
@@ -1377,26 +1409,23 @@ class Scheduler(Server):
         if hosts is not None:
             for host in hosts:
                 if host in self.host_info:
-                    workers.extend([host + ':' + port
-                            for port in self.host_info[host]['ports']])
+                    workers.extend(self.host_info[host]['addresses'])
         # TODO replace with worker_list
 
         if nanny:
-            addresses = []
-            for addr in workers:
-                ip = addr.split(':')[0]
-                port = self.worker_info[addr]['services']['nanny']
-                addresses.append('%s:%d' % (ip, port))
+            addresses = [self.get_worker_service_addr(w, 'nanny')
+                         for w in workers]
         else:
             addresses = workers
 
-        results = yield All([send_recv(arg=address, close=True, **msg)
-                             for address in addresses])
+        results = yield All([send_recv(addr=address, close=True, **msg)
+                             for address in addresses
+                             if address is not None])
 
         raise Return(dict(zip(workers, results)))
 
     @gen.coroutine
-    def rebalance(self, stream=None, keys=None, workers=None):
+    def rebalance(self, comm=None, keys=None, workers=None):
         """ Rebalance keys so that each worker stores roughly equal bytes
 
         **Policy**
@@ -1486,7 +1515,7 @@ class Scheduler(Server):
             raise Return({'status': 'OK'})
 
     @gen.coroutine
-    def replicate(self, stream=None, keys=None, n=None, workers=None,
+    def replicate(self, comm=None, keys=None, n=None, workers=None,
             branching_factor=2, delete=True):
         """ Replicate data throughout cluster
 
@@ -1606,8 +1635,7 @@ class Scheduler(Server):
             return to_close
 
     @gen.coroutine
-    def retire_workers(self, stream=None, workers=None, remove=True,
-                       close=False):
+    def retire_workers(self, comm=None, workers=None, remove=True, close=False):
         with log_errors():
             if workers is None:
                 while True:
@@ -1640,14 +1668,13 @@ class Scheduler(Server):
 
             raise gen.Return(list(workers))
 
-    def add_keys(self, stream=None, worker=None, keys=()):
+    def add_keys(self, comm=None, worker=None, keys=()):
         """
         Learn that a worker has certain keys
 
         This should not be used in practice and is mostly here for legacy
         reasons.
         """
-        worker = coerce_to_address(worker)
         if worker not in self.worker_info:
             return 'not found'
         for key in keys:
@@ -1661,7 +1688,7 @@ class Scheduler(Server):
                 # TODO: delete key from worker
         return 'OK'
 
-    def update_data(self, stream=None, who_has=None, nbytes=None, client=None):
+    def update_data(self, comm=None, who_has=None, nbytes=None, client=None):
         """
         Learn that new data has entered the network from an external source
 
@@ -1717,9 +1744,9 @@ class Scheduler(Server):
 
 
     @gen.coroutine
-    def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
+    def feed(self, comm, function=None, setup=None, teardown=None, interval=1, **kwargs):
         """
-        Provides a data stream to external requester
+        Provides a data Comm to external requester
 
         Caution: this runs arbitrary Python code on the scheduler.  This should
         eventually be phased out.  It is mostly used by diagnostics.
@@ -1741,40 +1768,40 @@ class Scheduler(Server):
                         response = function(self)
                     else:
                         response = function(self, state)
-                    yield write(stream, response)
+                    yield comm.write(response)
                     yield gen.sleep(interval)
-            except (OSError, IOError, StreamClosedError):
+            except (EnvironmentError, CommClosedError):
                 if teardown:
                     teardown(self, state)
 
-    def get_processing(self, stream=None, workers=None):
+    def get_processing(self, comm=None, workers=None):
         if workers is not None:
             workers = set(map(self.coerce_address, workers))
             return {w: list(self.processing[w]) for w in workers}
         else:
             return valmap(list, self.processing)
 
-    def get_who_has(self, stream=None, keys=None):
+    def get_who_has(self, comm=None, keys=None):
         if keys is not None:
             return {k: list(self.who_has.get(k, [])) for k in keys}
         else:
             return valmap(list, self.who_has)
 
-    def get_has_what(self, stream=None, workers=None):
+    def get_has_what(self, comm=None, workers=None):
         if workers is not None:
             workers = map(self.coerce_address, workers)
             return {w: list(self.has_what.get(w, ())) for w in workers}
         else:
             return valmap(list, self.has_what)
 
-    def get_ncores(self, stream=None, workers=None):
+    def get_ncores(self, comm=None, workers=None):
         if workers is not None:
             workers = map(self.coerce_address, workers)
             return {w: self.ncores.get(w, None) for w in workers}
         else:
             return self.ncores
 
-    def get_nbytes(self, stream=None, keys=None, summary=True):
+    def get_nbytes(self, comm=None, keys=None, summary=True):
         with log_errors():
             if keys is not None:
                 result = {k: self.nbytes[k] for k in keys}
@@ -1971,10 +1998,7 @@ class Scheduler(Server):
 
             # logger.debug("Send job to worker: %s, %s", worker, key)
 
-            try:
-                self.send_task_to_worker(worker, key)
-            except StreamClosedError:
-                self.remove_worker(worker)
+            self.send_task_to_worker(worker, key)
 
             if self.validate:
                 assert key not in self.waiting
@@ -2137,7 +2161,7 @@ class Scheduler(Server):
             self.check_idle_saturated(w)
             if w != worker:
                 msg = {'op': 'release-task', 'key': key}
-                # self.worker_streams[w].send(msg)
+                # self.worker_comms[w].send(msg)
 
             recommendations = OrderedDict()
 
@@ -2212,7 +2236,7 @@ class Scheduler(Server):
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
                     try:
-                        self.worker_streams[w].send({'op': 'delete-data',
+                        self.worker_comms[w].send({'op': 'delete-data',
                                                      'keys': [key], 'report': False})
                     except EnvironmentError:
                         self.loop.add_callback(self.remove_worker, address=w)
@@ -2493,7 +2517,7 @@ class Scheduler(Server):
                     self.worker_bytes[w] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
                     try:
-                        self.worker_streams[w].send({'op': 'delete-data',
+                        self.worker_comms[w].send({'op': 'delete-data',
                                                      'keys': [key], 'report': False})
                     except EnvironmentError:
                         self.loop.add_callback(self.remove_worker, address=w)
@@ -2727,8 +2751,12 @@ class Scheduler(Server):
                     self.worker_info}
 
         if key in self.host_restrictions:
-            hr = self.host_restrictions[key]
-            ss = {w for w in self.worker_info if w.split(':')[0] in hr}
+            # Resolve the alias here rather than early, for the worker
+            # may not be connected when host_restrictions is populated
+            hr = [self.coerce_hostname(h) for h in self.host_restrictions[key]]
+            ss = [self.host_info[h]['addresses']
+                  for h in hr if h in self.host_info]
+            ss = set.union(*ss) if ss else set()
             if s is True:
                 s = ss
             else:
@@ -2777,33 +2805,37 @@ class Scheduler(Server):
             for resource, quantity in self.worker_resources.pop(worker).items():
                 del self.resources[resource][worker]
 
-    def coerce_address(self, addr):
+    def coerce_address(self, addr, resolve=True):
         """
-        Coerce possible input addresses to canonical form
+        Coerce possible input addresses to canonical form.
+        *resolve* can be disabled for testing with fake hostnames.
 
-        Handles lists, strings, bytes, tuples, or aliases
+        Handles strings, tuples, or aliases.
         """
-        if isinstance(addr, list):
-            addr = tuple(addr)
+        # XXX how many address-parsing routines do we have?
         if addr in self.aliases:
             addr = self.aliases[addr]
-        if isinstance(addr, bytes):
-            addr = addr.decode()
-        if addr in self.aliases:
-            addr = self.aliases[addr]
-        if isinstance(addr, unicode):
-            if ':' in addr:
-                addr = tuple(addr.rsplit(':', 1))
-            else:
-                addr = ensure_ip(addr)
         if isinstance(addr, tuple):
-            ip, port = addr
-            if PY3 and isinstance(ip, bytes):
-                ip = ip.decode()
-            ip = ensure_ip(ip)
-            port = int(port)
-            addr = '%s:%d' % (ip, port)
+            addr = unparse_host_port(*addr)
+        if not isinstance(addr, six.string_types):
+            raise TypeError("addresses should be strings or tuples, got %r"
+                            % (addr,))
+
+        if resolve:
+            addr = resolve_address(addr)
+        else:
+            addr = normalize_address(addr)
+
         return addr
+
+    def coerce_hostname(self, host):
+        """
+        Coerce the hostname of a worker.
+        """
+        if host in self.aliases:
+            return self.worker_info[self.aliases[host]]['host']
+        else:
+            return host
 
     def workers_list(self, workers):
         """
@@ -2823,7 +2855,7 @@ class Scheduler(Server):
                 out.update({ww for ww in self.workers if w in ww}) # TODO: quadratic
         return list(out)
 
-    def start_ipython(self, stream=None):
+    def start_ipython(self, comm=None):
         """Start an IPython kernel
 
         Returns Jupyter connection info dictionary.

@@ -97,15 +97,23 @@ def test_broadcast(s, a, b):
 @gen_test()
 def test_services():
     s = Scheduler(services={'http': HTTPScheduler})
-    assert isinstance(s.services['http'], HTTPServer)
-    assert s.services['http'].port
+    s.start()
+    try:
+        assert isinstance(s.services['http'], HTTPServer)
+        assert s.services['http'].port > 0
+    finally:
+        s.close()
 
 
 @gen_test()
 def test_services_with_port():
     s = Scheduler(services={('http', 9999): HTTPScheduler})
-    assert isinstance(s.services['http'], HTTPServer)
-    assert s.services['http'].port == 9999
+    s.start()
+    try:
+        assert isinstance(s.services['http'], HTTPServer)
+        assert s.services['http'].port == 9999
+    finally:
+        s.close()
 
 
 @gen_cluster(client=True)

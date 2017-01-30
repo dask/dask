@@ -19,8 +19,8 @@ from distributed.deploy.utils_test import ClusterTest
 
 def test_simple(loop):
     with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False,
-            diagnostics_port=None, loop=loop) as c:
-        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+                      diagnostics_port=None, loop=loop) as c:
+        with Client(c.scheduler_address, loop=loop) as e:
             x = e.submit(inc, 1)
             x.result()
             assert x.key in c.scheduler.tasks
@@ -33,7 +33,7 @@ def test_procs(loop):
             diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
-        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+        with Client(c.scheduler.address, loop=loop) as e:
             assert all(w.ncores == 3 for w in c.workers)
         repr(c)
 
@@ -41,7 +41,7 @@ def test_procs(loop):
             diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
-        with Client((c.scheduler.ip, c.scheduler.port), loop=loop) as e:
+        with Client(c.scheduler.address, loop=loop) as e:
             assert all(v == 3 for v in e.ncores().values())
 
             c.start_worker(nanny=False)

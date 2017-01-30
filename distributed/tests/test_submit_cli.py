@@ -4,11 +4,11 @@ from mock import Mock
 from tornado import gen
 from tornado.ioloop import IOLoop
 from distributed.submit import RemoteClient, _submit, _remote
-from distributed.utils_test import valid_python_script, invalid_python_script,\
-    current_loop
+from distributed.utils_test import (
+    valid_python_script, invalid_python_script, loop)
 
 
-def test_dask_submit_cli_writes_result_to_stdout(current_loop, tmpdir,
+def test_dask_submit_cli_writes_result_to_stdout(loop, tmpdir,
                                                  valid_python_script):
     @gen.coroutine
     def test():
@@ -20,10 +20,10 @@ def test_dask_submit_cli_writes_result_to_stdout(current_loop, tmpdir,
         assert b'hello world!' in out
         yield remote_client._close()
 
-    current_loop.run_sync(test, timeout=5)
+    loop.run_sync(test, timeout=5)
 
 
-def test_dask_submit_cli_writes_traceback_to_stdout(current_loop, tmpdir,
+def test_dask_submit_cli_writes_traceback_to_stdout(loop, tmpdir,
                                                     invalid_python_script):
     @gen.coroutine
     def test():
@@ -35,7 +35,7 @@ def test_dask_submit_cli_writes_traceback_to_stdout(current_loop, tmpdir,
         assert b'Traceback' in err
         yield remote_client._close()
 
-    current_loop.run_sync(test, timeout=5)
+    loop.run_sync(test, timeout=5)
 
 
 def test_cli_runs_remote_client():

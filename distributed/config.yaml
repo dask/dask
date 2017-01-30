@@ -13,3 +13,4 @@ transition-log-length: 100000
 
 # Communication options
 tcp-timeout: 30         # delay (in s.) before considering an unresponsive connection dead
+default-scheme: tcp

@@ -68,8 +68,8 @@ def test_no_divisions(c, s, a, b):
 
 
 def test_futures_to_dask_dataframe(loop):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             remote_dfs = c.map(lambda x: x, dfs)
             ddf = futures_to_dask_dataframe(remote_dfs, divisions=True)
 
@@ -162,8 +162,8 @@ def test__futures_to_dask_arrays(c, s, a, b):
 
 
 def test_futures_to_dask_arrays(loop):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             futures = c.map(np.ones, [(5, i) for i in range(1, 6)])
             x = future_to_dask_array(futures[0])
             assert x.shape == (5, 1)
@@ -232,8 +232,8 @@ def test__futures_to_dask_bag(c, s, a, b):
 
 def test_futures_to_dask_bag(loop):
     import dask.bag as db
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
             futures = c.scatter(data)
             b = futures_to_dask_bag(futures)
@@ -245,8 +245,8 @@ def test_futures_to_dask_bag(loop):
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason='KQueue error - uncertain cause')
 def test_futures_to_dask_array(loop):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             remote_arrays = [[c.submit(np.full, (3, 3), i + j)
                                 for i in range(3)]
                                 for j in range(3)]
@@ -296,8 +296,8 @@ def test_bag_groupby_tasks_default(c, s, a, b):
 
 @pytest.mark.parametrize('wait', [wait, lambda x: None])
 def test_dataframe_set_index_sync(loop, wait):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             with dask.set_options(get=c.get):
                 df = dd.demo.make_timeseries('2000', '2001',
                         {'value': float, 'name': str, 'id': int},
@@ -312,16 +312,16 @@ def test_dataframe_set_index_sync(loop, wait):
 
 
 def test_loc_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             df = pd.util.testing.makeTimeDataFrame()
             ddf = dd.from_pandas(df, npartitions=10)
             ddf.loc['2000-01-17':'2000-01-24'].compute(get=c.get)
 
 
 def test_rolling_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             df = pd.util.testing.makeTimeDataFrame()
             ddf = dd.from_pandas(df, npartitions=10)
             dd.rolling_mean(ddf.A, 2).compute(get=c.get)
@@ -340,8 +340,8 @@ def test_dataframe_groupby_tasks(loop):
     df['A'] = df.A // 0.1
     df['B'] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
-    with cluster() as (c, [a, b]):
-        with Client(('127.0.0.1', c['port']), loop=loop) as c:
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
             with dask.set_options(get=c.get):
                 for ind in [lambda x: 'A', lambda x: x.A]:
                     a = df.groupby(ind(df)).apply(len)

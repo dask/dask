@@ -23,7 +23,7 @@ from ..utils import ignoring
 _deserialize = deserialize
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def dumps(msg):
@@ -74,8 +74,6 @@ def dumps(msg):
             header['headers'][key] = head
             header['keys'].append(key)
             out_frames.extend(frames)
-
-        out_frames = [bytes(f) for f in out_frames]
 
         return [small_header, small_payload,
                 msgpack.dumps(header, use_bin_type=True)] + out_frames

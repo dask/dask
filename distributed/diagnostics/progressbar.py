@@ -11,7 +11,7 @@ from tornado.ioloop import IOLoop
 
 from .progress import format_time, Progress, MultiProgress
 
-from ..core import connect, read, write
+from ..core import connect, coerce_to_address, CommClosedError
 from ..client import default_client, futures_of
 from ..protocol.pickle import dumps
 from ..utils import sync, ignoring, key_split, is_kernel
@@ -22,13 +22,8 @@ logger = logging.getLogger(__name__)
 
 def get_scheduler(scheduler):
     if scheduler is None:
-        scheduler = default_client().scheduler
-        return scheduler.ip, scheduler.port
-    if isinstance(scheduler, str):
-        scheduler = scheduler.split(':')
-    if isinstance(scheduler, tuple):
-        return scheduler
-    raise TypeError("Expected None, string, or tuple")
+        return default_client().scheduler.address
+    return coerce_to_address(scheduler)
 
 
 class ProgressBar(object):
@@ -60,21 +55,24 @@ class ProgressBar(object):
                     'remaining': len(p.keys),
                     'status': p.status}
 
-        self.stream = yield connect(*self.scheduler)
+        self.comm = yield connect(self.scheduler)
         logger.debug("Progressbar Connected to scheduler")
 
-        yield write(self.stream, {'op': 'feed',
-                                  'setup': dumps(setup),
-                                  'function': dumps(function),
-                                  'interval': self.interval})
+        yield self.comm.write({'op': 'feed',
+                               'setup': dumps(setup),
+                               'function': dumps(function),
+                               'interval': self.interval})
 
         while True:
-            response = yield read(self.stream)
+            try:
+                response = yield self.comm.read()
+            except CommClosedError:
+                break
             self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
             if response['status'] in ('error', 'finished'):
-                self.stream.close()
+                yield self.comm.close()
                 self._draw_stop(**response)
                 break
 
@@ -85,7 +83,7 @@ class ProgressBar(object):
 
     def __del__(self):
         with ignoring(AttributeError):
-            self.stream.close()
+            self.comm.abort()
 
 
 class TextProgressBar(ProgressBar):
@@ -181,21 +179,21 @@ class MultiProgressBar(object):
                     'remaining': valmap(len, p.keys),
                     'status': p.status}
 
-        self.stream = yield connect(*self.scheduler)
+        self.comm = yield connect(self.scheduler)
         logger.debug("Progressbar Connected to scheduler")
 
-        yield write(self.stream, {'op': 'feed',
-                                  'setup': dumps(setup),
-                                  'function': dumps(function),
-                                  'interval': self.interval})
+        yield self.comm.write({'op': 'feed',
+                               'setup': dumps(setup),
+                               'function': dumps(function),
+                               'interval': self.interval})
 
         while True:
-            response = yield read(self.stream)
+            response = yield self.comm.read()
             self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
             if response['status'] in ('error', 'finished'):
-                self.stream.close()
+                yield self.comm.close()
                 self._draw_stop(**response)
                 break
         logger.debug("Progressbar disconnected from scheduler")
@@ -205,7 +203,7 @@ class MultiProgressBar(object):
 
     def __del__(self):
         with ignoring(AttributeError):
-            self.stream.close()
+            self.comm.abort()
 
 
 class MultiProgressWidget(MultiProgressBar):

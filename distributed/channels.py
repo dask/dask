@@ -6,9 +6,8 @@ import logging
 from time import sleep
 import threading
 
-from tornado.iostream import StreamClosedError
-
 from .client import Future
+from .core import CommClosedError
 from .utils import tokey, log_errors
 
 logger = logging.getLogger(__name__)
@@ -48,15 +47,15 @@ class ChannelScheduler(object):
             self.stopped[channel] = False
         self.clients[channel].add(client)
 
-        stream = self.scheduler.streams[client]
+        comm = self.scheduler.comms[client]
         for key in self.deques[channel]:
-            stream.send({'op': 'channel-append',
-                         'key': key,
-                         'channel': channel})
+            comm.send({'op': 'channel-append',
+                       'key': key,
+                       'channel': channel})
 
         if self.stopped[channel]:
-            stream.send({'op': 'channel-stop',
-                         'channel': channel})
+            comm.send({'op': 'channel-stop',
+                       'channel': channel})
 
     def unsubscribe(self, channel=None, client=None):
         logger.info("Remove client from channel, %s, %s", client, channel)
@@ -88,20 +87,20 @@ class ChannelScheduler(object):
         logger.info("Stop channel %s", channel)
         for client in list(self.clients[channel]):
             try:
-                stream = self.scheduler.streams[client]
-                stream.send({'op': 'channel-stop',
-                             'channel': channel})
-            except (KeyError, StreamClosedError):
+                comm = self.scheduler.comms[client]
+                comm.send({'op': 'channel-stop',
+                           'channel': channel})
+            except (KeyError, CommClosedError):
                 self.unsubscribe(channel, client)
 
     def report(self, channel, key):
         for client in list(self.clients[channel]):
             try:
-                stream = self.scheduler.streams[client]
-                stream.send({'op': 'channel-append',
-                             'key': key,
-                             'channel': channel})
-            except (KeyError, StreamClosedError):
+                comm = self.scheduler.comms[client]
+                comm.send({'op': 'channel-append',
+                           'key': key,
+                           'channel': channel})
+            except (KeyError, CommClosedError):
                 self.unsubscribe(channel, client)
 
 
@@ -227,7 +226,7 @@ class Channel(object):
             sleep(0.01)
 
     def __del__(self):
-        if not self.client.scheduler_stream.stream:
+        if not self.client.scheduler_comm.comm:
             self.client._send_to_scheduler({'op': 'channel-unsubscribe',
                                             'channel': self.name,
                                             'client': self.client.id})

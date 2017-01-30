@@ -37,16 +37,23 @@ class Processing(RequestHandler):
 
 
 class Broadcast(RequestHandler):
-    """ Send call to all workers, collate their responses """
+    """
+    Broadcast request to all workers with an HTTP servoce enabled,
+    collate their responses.
+    """
     @gen.coroutine
     def get(self, rest):
-        addresses = [addr.split(':') + [d['services']['http']]
+        """
+        Broadcast request.  *rest* is the path in the HTTP hosts'
+        URL space (e.g. "/foo/bar/somequery?id=5").
+        """
+        addresses = [(addr, (d['host'], d['services']['http']))
                      for addr, d in self.server.worker_info.items()
                      if 'http' in d['services']]
         client = AsyncHTTPClient()
-        responses = {'%s:%s' % (ip, tcp_port): client.fetch("http://%s:%s/%s" %
-                                                  (ip, http_port, rest))
-                     for ip, tcp_port, http_port in addresses}
+        responses = {addr: client.fetch("http://%s:%s/%s" %
+                                        (http_host, http_port, rest))
+                     for addr, (http_host, http_port) in addresses}
         responses2 = yield responses
         responses3 = {k: json.loads(v.body.decode())
                       for k, v in responses2.items()}

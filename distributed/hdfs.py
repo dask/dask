@@ -14,6 +14,7 @@ from toolz import merge
 from hdfs3 import HDFileSystem
 
 from .client import default_client, ensure_default_get
+from .utils import PY3
 
 
 logger = logging.getLogger(__name__)
@@ -70,8 +71,17 @@ class DaskHDFileSystem(HDFileSystem):
             out = HDFileSystem.get_block_locations(self, path)
             offsets.append([o['offset'] for o in out])
             lengths.append([o['length'] for o in out])
-            machines.append([o['hosts'] for o in out])
+            hosts = [[self._decode_hostname(h) for h in o['hosts']] for o in out]
+            machines.append(hosts)
         return offsets, lengths, machines
+
+    def _decode_hostname(self, host):
+        # XXX this should be folded into the hdfs3 library
+        if PY3 and isinstance(host, bytes):
+            return host.decode()
+        else:
+            assert isinstance(host, str)
+            return host
 
 
 core._filesystems['hdfs'] = DaskHDFileSystem

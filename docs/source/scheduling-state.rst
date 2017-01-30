@@ -47,7 +47,7 @@ Each of the following is a dictionary keyed by task name (described below):
     The value of this dictionary is the task, which is an unevaluated function
     and arguments.  This is stored in one of two forms:
 
-    *  ``{'function': inc, 'args': (1,), 'kwargs': {}}``; a dictionary with the
+    * ``{'function': inc, 'args': (1,), 'kwargs': {}}``; a dictionary with the
       function, arguments, and keyword arguments (kwargs).  However in the
       scheduler these are stored serialized, as they were sent from the client,
       so it looks more like ``{'function': b'\x80\x04\x95\xcb\...', 'args':

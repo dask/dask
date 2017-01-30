@@ -1,3 +1,4 @@
+===========
 Foundations
 ===========
 
@@ -18,7 +19,7 @@ is welcome.
 
 
 Concurrency with Tornado Coroutines
------------------------------------
+===================================
 
 Worker and Scheduler nodes operate concurrently.  They serve several overlapping
 requests and perform several overlapping computations at the same time without
@@ -33,24 +34,73 @@ chosen to use Tornado for the following reasons:
 .. _`Tornado's documentation`: https://tornado.readthedocs.io/en/latest/coroutine.html
 
 
-Communication with Tornado Streams (raw sockets)
-------------------------------------------------
+Network Communication
+=====================
 
-Workers, the Scheduler, and clients communicate with each other over the
-network.  They use *raw sockets* as mediated by tornado streams.  We separate
-messages by a sentinel value.
+Workers, the Scheduler, and Clients communicate with each other over the
+network.  By default they use TCP connections as mediated by the abstract
+communications layer.  The basic unit for dealing with established
+communications is the ``Comm`` object:
 
-.. autofunction:: distributed.core.read
-.. autofunction:: distributed.core.write
+.. autoclass:: distributed.comm.Comm
+   :members:
 
+You don't create ``Comm`` objects directly: you either ``listen`` for
+incoming communications, or ``connect`` to a peer listening for connections:
+
+.. autofunction:: distributed.comm.connect
+
+.. autofunction:: distributed.comm.listen
+
+Listener objects expose the following interface:
+
+.. autoclass:: distributed.comm.core.Listener
+   :members:
+
+
+Addresses
+---------
+
+Communication addresses are canonically represented as URIs, such as
+``tcp://127.0.0.1:1234``.  For compatibility with existing code, if the
+URI scheme is omitted, a default scheme of ``tcp`` is assumed (so
+``127.0.0.1:456`` is really the same as ``tcp://127.0.0.1:456``).
+The default scheme may change in the future.
+
+The following schemes are currently implemented in the ``distributed``
+source tree:
+
+* ``tcp`` is the main transport; it uses TCP sockets and allows for IPv4
+  and IPv6 addresses.
+
+* ``zmq`` is an experimental transport using ZeroMQ sockets; it is not
+  recommended for production use.
+
+Note that some URIs may be valid for listening but not for connecting.
+For example, the URI ``tcp://`` will listen on all IPv4 and IPv6 addresses
+and on an arbitrary port, but you cannot connect to that address.
+
+Higher-level APIs in ``distributed`` may accept other address formats for
+convenience or compatibility, for example a ``(host, port)`` pair.  However,
+the abstract communications layer always deals with URIs.
+
+
+Protocol Handling
+=================
+
+While the abstract communication layer can transfer arbitrary Python
+objects (as long as they are serializable),  participants in a ``distributed``
+cluster concretely obey the distributed :ref:`protocol`, which specifies
+request-response semantics using a well-defined message format.
+
+Dedicated infrastructure in ``distributed`` handles the various aspects
+of the protocol, such as dispatching the various operations supported by
+an endpoint.
 
 Servers
 -------
 
-Worker and Scheduler nodes serve requests over TCP.  Both Worker and Scheduler
-objects inherit from a ``Server`` class.  This Server class thinly wraps
-``tornado.tcpserver.TCPServer``.  These servers expect requests of a particular
-form.
+Worker, Scheduler, and Nanny objects all inherit from a ``Server`` class.
 
 .. autoclass:: distributed.core.Server
 
@@ -58,58 +108,60 @@ form.
 RPC
 ---
 
-To interact with remote servers we typically use ``rpc`` objects.
+To interact with remote servers we typically use ``rpc`` objects which
+expose a familiar method call interface to invoke remote operations.
 
 .. autoclass:: distributed.core.rpc
 
 
-Example
--------
+Examples
+========
 
 Here is a small example using distributed.core to create and interact with a
 custom server.
 
 
 Server Side
-~~~~~~~~~~~
+-----------
 
 .. code-block:: python
 
    from tornado import gen
    from tornado.ioloop import IOLoop
-   from distributed.core import write, Server
+   from distributed.core import Server
 
-   def add(stream, x=None, y=None):  # simple handler, just a function
+   def add(comm, x=None, y=None):  # simple handler, just a function
        return x + y
 
    @gen.coroutine
-   def stream_data(stream, interval=1):  # complex handler, multiple responses
+   def stream_data(comm, interval=1):  # complex handler, multiple responses
        data = 0
        while True:
            yield gen.sleep(interval)
            data += 1
-           yield write(stream, data)
+           yield comm.write(data)
 
-   s = Server({'add': add, 'stream': stream_data})
+   s = Server({'add': add, 'stream_data': stream_data})
    s.listen(8888)
 
    IOLoop.current().start()
 
 
 Client Side
-~~~~~~~~~~~
+-----------
 
 .. code-block:: python
 
    from tornado import gen
    from tornado.ioloop import IOLoop
-   from distributed.core import connect, read, write
+   from distributed.core import connect
 
    @gen.coroutine
    def f():
-       stream = yield connect('127.0.0.1', 8888)
-       yield write(stream, {'op': 'add', 'x': 1, 'y': 2})
-       result = yield read(stream)
+       comm = yield connect('tcp://127.0.0.1:8888')
+       yield comm.write({'op': 'add', 'x': 1, 'y': 2})
+       result = yield comm.read()
+       yield comm.close()
        print(result)
 
    >>> IOLoop().run_sync(f)
@@ -117,10 +169,10 @@ Client Side
 
    @gen.coroutine
    def g():
-       stream = yield connect('127.0.0.1', 8888)
-       yield write(stream, {'op': 'stream', 'interval': 1})
+       comm = yield connect('tcp://127.0.0.1:8888')
+       yield comm.write({'op': 'stream_data', 'interval': 1})
        while True:
-           result = yield read(stream)
+           result = yield comm.read()
            print(result)
 
    >>> IOLoop().run_sync(g)
@@ -130,12 +182,12 @@ Client Side
    ...
 
 
-Client Side with rpc
-~~~~~~~~~~~~~~~~~~~~
+Client Side with ``rpc``
+------------------------
 
 RPC provides a more pythonic interface.  It also provides other benefits, such
 as using multiple streams in concurrent cases.  Most distributed code uses
-rpc.  The exception is when we need to perform multiple reads or writes, as
+``rpc``.  The exception is when we need to perform multiple reads or writes, as
 with the stream data case above.
 
 .. code-block:: python
@@ -146,21 +198,15 @@ with the stream data case above.
 
    @gen.coroutine
    def f():
-       # stream = yield connect('127.0.0.1', 8888)
-       # yield write(stream, {'op': 'add', 'x': 1, 'y': 2})
-       # result = yield read(stream)
-       r = rpc(ip='127.0.0.1', 8888)
+       # comm = yield connect('127.0.0.1', 8888)
+       # yield comm.write({'op': 'add', 'x': 1, 'y': 2})
+       # result = yield comm.read()
+       r = rpc('tcp://127.0.0.1:8888')
        result = yield r.add(x=1, y=2)
+       r.close_comms()
 
        print(result)
 
    >>> IOLoop().run_sync(f)
    3
 
-Everything is a Server
-----------------------
-
-Workers, Scheduler, and Nanny objects all inherit from Server.  Each maintains
-separate state and serves separate functions but all communicate in the way
-shown above.  They talk to each other by opening connections, writing messages
-that trigger remote functions, and then collect the results with read.

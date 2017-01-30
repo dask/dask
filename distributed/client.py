@@ -6,6 +6,7 @@ from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from contextlib import contextmanager
 import copy
 from datetime import timedelta
+import errno
 from functools import partial
 from glob import glob
 import logging
@@ -20,20 +21,19 @@ import socket
 import dask
 from dask.base import tokenize, normalize_token, Base
 from dask.core import flatten, get_dependencies
-from dask.compatibility import apply
+from dask.compatibility import apply, unicode
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
 from tornado import gen
 from tornado.gen import Return, TimeoutError
 from tornado.locks import Event
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .batched import BatchedSend
 from .utils_comm import WrappedKey, unpack_remotedata, pack_data
 from .compatibility import Queue as pyQueue, Empty, isqueue
-from .core import (read, write, connect, coerce_to_rpc, clean_exception)
+from .core import connect, rpc, clean_exception, CommClosedError
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .worker import dumps_function, dumps_task
@@ -312,10 +312,10 @@ class Client(object):
 
     Parameters
     ----------
-    address: string, tuple, or ``Scheduler``
+    address: string, tuple, or ``LocalCluster``
         This can be the address of a ``Scheduler`` server, either
         as a string ``'127.0.0.1:8787'`` or tuple ``('127.0.0.1', 8787)``
-        or it can be a local ``Scheduler`` object.
+        or it can be a local ``LocalCluster`` object.
 
     Examples
     --------
@@ -354,9 +354,11 @@ class Client(object):
         self._pending_msg_buffer = []
         self.extensions = {}
 
-        if hasattr(address, 'scheduler_address'):
+        if hasattr(address, "scheduler_address"):
+            # It's a LocalCluster or LocalCluster-compatible object
             self.cluster = address
-            address = address.scheduler_address
+        else:
+            self.cluster = None
         self._start_arg = address
         if set_as_default:
             self._previous_get = _globals.get('get')
@@ -382,14 +384,14 @@ class Client(object):
     def __str__(self):
         if hasattr(self, '_loop_thread'):
             n = sync(self.loop, self.scheduler.ncores)
-            return '<%s: scheduler="%s:%d" processes=%d cores=%d>' % (
+            return '<%s: scheduler=%r processes=%d cores=%d>' % (
                     self.__class__.__name__,
-                    self.scheduler.ip, self.scheduler.port, len(n),
-                    sum(n.values()))
+                    self.scheduler.address, len(n), sum(n.values()))
+        elif hasattr(self, 'scheduler'):
+            return '<%s: scheduler="%r">' % (
+                    self.__class__.__name__, self.scheduler.address)
         else:
-            return '<%s: scheduler="%s:%d">' % (
-                    self.__class__.__name__,
-                    self.scheduler.ip, self.scheduler.port)
+            return '<%s: not connected>' % (self.__class__.__name__,)
 
     __repr__ = __str__
 
@@ -412,7 +414,7 @@ class Client(object):
 
     def _send_to_scheduler(self, msg):
         if self.status is 'running':
-            self.loop.add_callback(self.scheduler_stream.send, msg)
+            self.loop.add_callback(self.scheduler_comm.send, msg)
         elif self.status is 'connecting':
             self._pending_msg_buffer.append(msg)
         else:
@@ -420,20 +422,36 @@ class Client(object):
 
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
-        if self._start_arg is None:
-            from distributed.deploy import LocalCluster
+        if self.cluster is not None:
+            # Ensure the cluster is started (no-op if already running)
+            yield self.cluster._start()
+            self._start_arg = self.cluster.scheduler_address
+
+        elif self._start_arg is None:
+            # Special case: if Client() was instantiated without a
+            # scheduler address or cluster reference, spawn a new cluster
+            from .deploy import LocalCluster
+
             try:
                 self.cluster = LocalCluster(loop=self.loop, start=False)
-            except (OSError, socket.error):
+                yield self.cluster._start()
+            except (OSError, socket.error) as e:
+                if e.errno != errno.EADDRINUSE:
+                    raise
+                # The default port was taken, use a random one
                 self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
                                             start=False)
-            self._start_arg = self.cluster.scheduler_address
+                yield self.cluster._start()
+
+            # Wait for all workers to be ready
             while (not self.cluster.workers or
-               len(self.cluster.scheduler.ncores) < len(self.cluster.workers)):
+                   len(self.cluster.scheduler.ncores) < len(self.cluster.workers)):
                 yield gen.sleep(0.01)
 
-        self.scheduler = coerce_to_rpc(self._start_arg, timeout=timeout)
-        self.scheduler_stream = None
+            self._start_arg = self.cluster.scheduler_address
+
+        self.scheduler = rpc(self._start_arg, timeout=timeout)
+        self.scheduler_comm = None
 
         yield self.ensure_connected(timeout=timeout)
 
@@ -442,9 +460,9 @@ class Client(object):
     @gen.coroutine
     def reconnect(self, timeout=0.1):
         with log_errors():
-            assert self.scheduler_stream.stream.closed()
+            assert self.scheduler_comm.comm.closed()
             self.status = 'connecting'
-            self.scheduler_stream = None
+            self.scheduler_comm = None
 
             for st in self.futures.values():
                 st.cancel()
@@ -459,27 +477,27 @@ class Client(object):
 
     @gen.coroutine
     def ensure_connected(self, timeout=3):
-        if self.scheduler_stream and not self.scheduler_stream.closed():
+        if self.scheduler_comm and not self.scheduler_comm.closed():
             return
 
         try:
-            stream = yield connect(self.scheduler.ip, self.scheduler.port,
-                                   timeout=timeout)
+            comm = yield connect(self.scheduler.address,
+                                 timeout=timeout)
         except:
-            raise IOError("Could not connect to %s:%d" %
-                          (self.scheduler.ip, self.scheduler.port))
+            raise IOError("Could not connect to %r"
+                          % (self.scheduler.address,))
 
         ident = yield self.scheduler.identity()
 
-        yield write(stream, {'op': 'register-client',
-                             'client': self.id})
-        msg = yield read(stream)
+        yield comm.write({'op': 'register-client',
+                          'client': self.id, 'reply': False})
+        msg = yield comm.read()
         assert len(msg) == 1
         assert msg[0]['op'] == 'stream-start'
 
-        bstream = BatchedSend(interval=10, loop=self.loop)
-        bstream.start(stream)
-        self.scheduler_stream = bstream
+        bcomm = BatchedSend(interval=10, loop=self.loop)
+        bcomm.start(comm)
+        self.scheduler_comm = bcomm
 
         _global_client[0] = self
         self.status = 'running'
@@ -527,8 +545,8 @@ class Client(object):
         with log_errors():
             while True:
                 try:
-                    msgs = yield read(self.scheduler_stream.stream)
-                except StreamClosedError:
+                    msgs = yield self.scheduler_comm.comm.read()
+                except CommClosedError:
                     if self.status == 'running':
                         logger.warn("Client report stream closed to scheduler")
                         logger.info("Reconnecting...")
@@ -608,7 +626,8 @@ class Client(object):
         with log_errors():
             if self.status == 'closed':
                 raise Return()
-            self._send_to_scheduler({'op': 'close-stream'})
+            if self.status == 'running':
+                self._send_to_scheduler({'op': 'close-stream'})
             self.status = 'closed'
             if _global_client[0] is self:
                 _global_client[0] = None
@@ -617,7 +636,7 @@ class Client(object):
                     yield [gen.with_timeout(timedelta(seconds=2), f)
                             for f in self.coroutines]
             with ignoring(AttributeError):
-                yield self.scheduler_stream.close(ignore_closed=True)
+                yield self.scheduler_comm.close()
             with ignoring(AttributeError):
                 self.scheduler.close_rpc()
 
@@ -709,7 +728,7 @@ class Client(object):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        if isinstance(workers, str):
+        if isinstance(workers, six.string_types):
             workers = [workers]
         if workers is not None:
             restrictions = {skey: workers}
@@ -826,7 +845,7 @@ class Client(object):
             dsk = {key: (apply, func, (tuple, list(args)), kwargs)
                    for key, args in zip(keys, zip(*iterables))}
 
-        if isinstance(workers, str):
+        if isinstance(workers, six.string_types):
             workers = [workers]
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
@@ -979,10 +998,10 @@ class Client(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
-        if isinstance(workers, str):
+        if isinstance(workers, six.string_types):
             workers = [workers]
-        if isinstance(data, dict) and not all(isinstance(k, (bytes, str))
-                                               for k in data):
+        if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
+                                              for k in data):
             d = yield self._scatter(keymap(tokey, data), workers, broadcast)
             raise gen.Return({k: d[tokey(k)] for k in data})
 
@@ -1418,10 +1437,10 @@ class Client(object):
         return futures
 
     @gen.coroutine
-    def _get(self, dsk, keys, restrictions=None, raise_on_error=True,
-            resources=None):
+    def _get(self, dsk, keys, restrictions=None, loose_restrictions=None,
+             resources=None, raise_on_error=True):
         futures = self._graph_to_futures(dsk, set(flatten([keys])),
-                restrictions, resources=resources)
+                restrictions, loose_restrictions, resources=resources)
 
         packed = pack_data(keys, futures)
         try:
@@ -1462,18 +1481,9 @@ class Client(object):
         --------
         Client.compute: Compute asynchronous collections
         """
-        futures = self._graph_to_futures(dsk, set(flatten([keys])),
-                restrictions, loose_restrictions, resources=resources)
-
-        try:
-            results = self.gather(futures)
-        except (KeyboardInterrupt, Exception) as e:
-            for f in futures.values():
-                f.release()
-            raise
-
-        results2 = pack_data(keys, results)
-        return results2
+        return sync(self.loop, self._get, dsk, keys, restrictions=restrictions,
+                    loose_restrictions=loose_restrictions,
+                    resources=resources)
 
     def _optimize_insert_futures(self, dsk, keys):
         """ Replace known keys in dask graph with Futures
@@ -1721,10 +1731,8 @@ class Client(object):
         return sync(self.loop, self._upload_environment, name, zipfile)
 
     @gen.coroutine
-    def _restart(self, environment=None):
-        if environment:
-            environment = yield self._upload_environment(environment)
-        self._send_to_scheduler({'op': 'restart', 'environment': environment})
+    def _restart(self):
+        self._send_to_scheduler({'op': 'restart'})
         self._restart_event = Event()
         yield self._restart_event.wait()
         self.generation += 1
@@ -1732,13 +1740,13 @@ class Client(object):
 
         raise gen.Return(self)
 
-    def restart(self, environment=None):
+    def restart(self):
         """ Restart the distributed network
 
         This kills all active work, deletes all data on the network, and
         restarts the worker processes.
         """
-        return sync(self.loop, self._restart, environment=environment)
+        return sync(self.loop, self._restart)
 
     @gen.coroutine
     def _upload_file(self, filename, raise_on_error=True):
@@ -2232,10 +2240,10 @@ class Client(object):
         if qtconsole:
             from ._ipython_utils import connect_qtconsole
             for worker, connection_info in info_dict.items():
-                connect_qtconsole(connection_info,
-                                  name='dask-' + worker.replace(':','-'),
+                name = 'dask-' + worker.replace(':', '-').replace('/', '-')
+                connect_qtconsole(connection_info, name=name,
                                   extra_args=qtconsole_args,
-                )
+                                  )
         return info_dict
 
     def start_ipython_scheduler(self, magic_name='scheduler_if_ipython',

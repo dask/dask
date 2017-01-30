@@ -20,7 +20,7 @@ compressions = {None: {'compress': identity,
 default_compression = None
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 with ignoring(ImportError):
@@ -30,14 +30,26 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     import snappy
+    def _fixed_snappy_decompress(data):
+        # snappy.decompress() doesn't accept memoryviews
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+        return snappy.decompress(data)
+
     compressions['snappy'] = {'compress': snappy.compress,
-                              'decompress': snappy.decompress}
+                              'decompress': _fixed_snappy_decompress}
     default_compression = 'snappy'
 
 with ignoring(ImportError):
     import lz4
+    def _fixed_lz4_decompress(data):
+        # lz4.LZ4_uncompress() doesn't accept memoryviews
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+        return lz4.LZ4_uncompress(data)
+
     compressions['lz4'] = {'compress': lz4.LZ4_compress,
-                           'decompress': lz4.LZ4_uncompress}
+                           'decompress': _fixed_lz4_decompress}
     default_compression = 'lz4'
 
 with ignoring(ImportError):

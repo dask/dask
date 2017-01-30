@@ -13,22 +13,24 @@ import click
 
 import distributed
 from distributed import Scheduler
-from distributed.utils import get_ip, ignoring
+from distributed.utils import ignoring
 from distributed.http import HTTPScheduler
-from distributed.cli.utils import check_python_3, install_signal_handlers
+from distributed.cli.utils import (check_python_3, install_signal_handlers,
+                                   uri_from_host_port)
 from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
 
 
 @click.command()
-@click.option('--port', type=int, default=8786, help="Serving port")
+@click.option('--port', type=int, default=None, help="Serving port")
+# XXX default port (or URI) values should be centralized somewhere
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
-@click.option('--host', type=str, default=None,
-              help="IP or hostname of this server")
+@click.option('--host', type=str, default='',
+              help="IP, hostname or URI of this server")
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
@@ -56,12 +58,8 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         limit = max(soft, hard // 2)
         resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
 
-    given_host = host
-    host = host or get_ip()
-    if ':' in host and port == 8786:
-        host, port = host.rsplit(':', 1)
-        port = int(port)
-    ip = socket.gethostbyname(host)
+    addr = uri_from_host_port(host, port, 8786)
+
     loop = IOLoop.current()
     logger.info('-' * 47)
 
@@ -70,15 +68,15 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
             services[('bokeh', 8788)] = BokehScheduler
-    scheduler = Scheduler(ip=ip, loop=loop, services=services)
-    scheduler.start(port)
+    scheduler = Scheduler(loop=loop, services=services)
+    scheduler.start(addr)
 
     bokeh_proc = None
     if _bokeh:
         try:
             from distributed.bokeh.application import BokehWebInterface
-            bokeh_proc = BokehWebInterface(host=host, http_port=http_port,
-                    tcp_port=port, bokeh_port=bokeh_port,
+            bokeh_proc = BokehWebInterface(http_port=http_port,
+                    tcp_port=scheduler.port, bokeh_port=bokeh_port,
                     bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
                     use_xheaders=use_xheaders, quiet=False)
         except ImportError:
@@ -95,7 +93,7 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
         if bokeh_proc:
             bokeh_proc.close()
 
-        logger.info("End scheduler at %s:%d", ip, port)
+        logger.info("End scheduler at %r", addr)
 
 
 def go():

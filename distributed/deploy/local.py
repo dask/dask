@@ -6,17 +6,16 @@ import math
 from threading import Thread
 from time import sleep
 
-from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
 from tornado import gen
+from tornado.ioloop import IOLoop
 
+from ..core import CommClosedError
 from ..utils import sync, ignoring, All
-from ..client import Client
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class LocalCluster(object):
@@ -60,9 +59,9 @@ class LocalCluster(object):
     >>> c.start_diagnostics_server(show=True)  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
-            loop=None, start=True, scheduler_port=8786,
-            silence_logs=logging.CRITICAL, diagnostics_port=8787,
-            services={}, worker_services={}, **kwargs):
+                 loop=None, start=True, scheduler_port=8786,
+                 silence_logs=logging.CRITICAL, diagnostics_port=8787,
+                 services={}, worker_services={}, **worker_kwargs):
         self.status = None
         self.nanny = nanny
         self.silence_logs = silence_logs
@@ -93,32 +92,55 @@ class LocalCluster(object):
             while not self.loop._running:
                 sleep(0.001)
 
-        self.scheduler = Scheduler(loop=self.loop, ip='127.0.0.1',
+        self.scheduler = Scheduler(loop=self.loop,
                                    services=services)
-        self.scheduler.start(scheduler_port)
+        self.scheduler_port = scheduler_port
+
+        self.diagnostics_port = diagnostics_port
+        self.diagnostics = None
+
         self.workers = []
+        self.n_workers = n_workers
+        self.threads_per_worker = threads_per_worker
+        self.worker_services = worker_services
+        self.worker_kwargs = worker_kwargs
 
         if start:
-            _start_worker = self.start_worker
-        else:
-            _start_worker = partial(self.loop.add_callback, self._start_worker)
-        for i in range(n_workers):
-            _start_worker(ncores=threads_per_worker, nanny=nanny,
-                    services=worker_services, **kwargs)
-        self.status = 'running'
-
-        self.diagnostics = None
-        if diagnostics_port is not None:
-            self.start_diagnostics_server(diagnostics_port,
-                                          silence=silence_logs)
+            sync(self.loop, self._start)
 
     def __str__(self):
-        return 'LocalCluster("%s", workers=%d, ncores=%d)' % (
-                self.scheduler_address,
-                len(self.workers),
-                sum(w.ncores for w in self.workers))
+        return ('LocalCluster(%r, workers=%d, ncores=%d)' %
+                (self.scheduler_address, len(self.workers),
+                 sum(w.ncores for w in self.workers))
+                )
 
     __repr__ = __str__
+
+    @gen.coroutine
+    def _start(self):
+        """
+        Start all cluster services.
+        Wait on this if you passed `start=False` to the LocalCluster
+        constructor.
+        """
+        if self.status == 'running':
+            return
+        self.scheduler.start(('127.0.0.1', self.scheduler_port))
+
+        yield self._start_all_workers(
+            self.n_workers, ncores=self.threads_per_worker,
+            nanny=self.nanny, services=self.worker_services,
+            **self.worker_kwargs)
+
+        if self.diagnostics_port is not None:
+            self.start_diagnostics_server(self.diagnostics_port,
+                                          silence=self.silence_logs)
+
+        self.status = 'running'
+
+    @gen.coroutine
+    def _start_all_workers(self, n_workers, **kwargs):
+        yield [self._start_worker(**kwargs) for i in range(n_workers)]
 
     @gen.coroutine
     def _start_worker(self, port=0, nanny=None, **kwargs):
@@ -129,9 +151,12 @@ class LocalCluster(object):
             kwargs['quiet'] = True
         else:
             W = Worker
-        w = W(self.scheduler.ip, self.scheduler.port, loop=self.loop,
-              silence_logs=self.silence_logs, **kwargs)
-        yield w._start(port)
+        try:
+            w = W(self.scheduler.address, loop=self.loop,
+                  silence_logs=self.silence_logs, **kwargs)
+            yield w._start(port)
+        except Exception as e:
+            raise
 
         self.workers.append(w)
 
@@ -209,9 +234,9 @@ class LocalCluster(object):
 
     @gen.coroutine
     def _close(self):
-        with ignoring(gen.TimeoutError, StreamClosedError, OSError):
+        with ignoring(gen.TimeoutError, CommClosedError, OSError):
             yield All([w._close() for w in self.workers])
-        with ignoring(gen.TimeoutError, StreamClosedError, OSError):
+        with ignoring(gen.TimeoutError, CommClosedError, OSError):
             yield self.scheduler.close(fast=True)
         del self.workers[:]
         if self.diagnostics:
@@ -269,4 +294,7 @@ class LocalCluster(object):
 
     @property
     def scheduler_address(self):
-        return self.scheduler.address
+        try:
+            return self.scheduler.address
+        except ValueError:
+            return '<unstarted>'
