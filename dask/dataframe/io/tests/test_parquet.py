@@ -208,16 +208,21 @@ def test_append_different_columns():
     with tmpdir() as tmp:
         df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
         df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
+        df3 = pd.DataFrame({'i32': np.arange(100, dtype=np.int64)})
 
         ddf1 = dd.from_pandas(df1, chunksize=2)
         ddf2 = dd.from_pandas(df2, chunksize=2)
+        ddf3 = dd.from_pandas(df3, chunksize=2)
 
         ddf1.to_parquet(tmp)
 
         with pytest.raises(ValueError) as excinfo:
             ddf2.to_parquet(tmp, append=True)
-
         assert 'Appended columns' in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            ddf3.to_parquet(tmp, append=True)
+        assert 'Appended dtypes' in str(excinfo.value)
 
 
 def test_ordering():

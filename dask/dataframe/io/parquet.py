@@ -203,7 +203,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
         and the schema must match the input data.
     ignore_divisions: bool (False)
         If False raises error when previous divisions overlap with the new
-        appended divisions.
+        appended divisions. Ignored if append=False.
 
     This uses the fastparquet project: http://fastparquet.readthedocs.io/en/latest
 
@@ -228,7 +228,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if write_index is True or write_index is None and df.known_divisions:
         new_divisions = df.divisions
         df = df.reset_index()
-        index_col = df._meta.columns[0]
+        index_col = df.columns[0]
     else:
         ignore_divisions = True
 
@@ -246,11 +246,16 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
         if pf.file_scheme != 'hive':
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
-
-        if len(set(pf.columns) ^ set(df._meta.columns)):
+        elif set(pf.columns) != set(df.columns):
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
-                             .format(pf.columns, list(df._meta.columns)))
+                             .format(pf.columns, list(df.columns)))
+        elif set(pf.dtypes.items()) != set(df.dtypes.items()):
+            raise ValueError('Appended dtypes differ.\n{}'
+                             .format(set(pf.dtypes.items()) ^
+                                     set(df.dtypes.items())))
+        # elif fmd.schema != pf.fmd.schema:
+        #    raise ValueError('Appended schema differs.')
         else:
             df = df[pf.columns]
 
