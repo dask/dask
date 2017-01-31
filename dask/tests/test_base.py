@@ -227,6 +227,12 @@ def test_tokenize_ordered_dict():
         assert tokenize(a) != tokenize(c)
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_object_array_with_nans():
+    a = np.array([u'foo', u'Jos\xe9', np.nan], dtype='O')
+    assert tokenize(a) == tokenize(a)
+
+
 @pytest.mark.skipif('not db')
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
