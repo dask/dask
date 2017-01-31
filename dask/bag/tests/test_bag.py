@@ -1028,6 +1028,14 @@ def test_reduction_empty():
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
 
 
+def test_reduction_empty_aggregate():
+    b = db.from_sequence([0, 0, 0, 1], npartitions=4)
+    assert b.filter(None).min(split_every=2).compute(get=dask.get) == 1
+    with pytest.raises(ValueError):
+        b = db.from_sequence([0, 0, 0, 0], npartitions=4)
+        b.filter(None).min(split_every=2).compute(get=dask.get)
+
+
 class StrictReal(int):
     def __eq__(self, other):
         assert isinstance(other, StrictReal)

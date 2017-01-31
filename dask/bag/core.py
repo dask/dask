@@ -727,8 +727,9 @@ class Bag(Base):
         depth = 0
         while k > 1:
             c = fmt + str(depth)
+            is_last = k <= split_every
             dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
-                                  [(b, j) for j in inds]))
+                                  [(b, j) for j in inds], is_last))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -1646,8 +1647,10 @@ def empty_safe_apply(func, part):
         return func(part)
 
 
-def empty_safe_aggregate(func, parts):
-    parts2 = [p for p in parts if not eq_strict(p, no_result)]
+def empty_safe_aggregate(func, parts, is_last):
+    parts2 = (p for p in parts if not eq_strict(p, no_result))
+    if is_last:
+        parts2 = list(parts2)
     return empty_safe_apply(func, parts2)
 
 
