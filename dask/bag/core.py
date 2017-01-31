@@ -1450,6 +1450,10 @@ def from_delayed(values):
 
 
 def merge_frequencies(seqs):
+    if isinstance(seqs, Iterable):
+        seqs = list(seqs)
+    if not seqs:
+        return {}
     first, rest = seqs[0], seqs[1:]
     if not rest:
         return first

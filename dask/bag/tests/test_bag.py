@@ -208,6 +208,9 @@ def test_frequencies():
     assert c.name == b.frequencies().name
     assert c.name != c2.name
     assert c2.name == b.frequencies(split_every=2).name
+    bag = db.from_sequence([0, 0, 0, 0], npartitions=4)
+    bag2 = bag.filter(None).frequencies(split_every=2)
+    assert dict(bag2.compute(get=dask.get)) == {}
 
 
 def test_topk():
