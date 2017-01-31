@@ -687,7 +687,7 @@ class Bag(Base):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        return self.reduction(set, curry(apply, set.union), out_type=Bag,
+        return self.reduction(set, merge_distinct, out_type=Bag,
                               name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
@@ -1447,6 +1447,10 @@ def from_delayed(values):
     dsk2 = dict(zip(names, values))
 
     return Bag(merge(dsk, dsk2), name, len(values))
+
+
+def merge_distinct(seqs):
+    return set().union(*seqs)
 
 
 def merge_frequencies(seqs):
