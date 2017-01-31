@@ -198,7 +198,7 @@ def test_distinct():
     assert b.distinct().name == b.distinct().name
     assert 'distinct' in b.distinct().name
     assert b.distinct().count().compute() == 5
-    bag = db.from_sequence([0]*50, npartitions=50)
+    bag = db.from_sequence([0] * 50, npartitions=50)
     assert bag.filter(None).distinct().compute() == []
 
 
