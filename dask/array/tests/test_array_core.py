@@ -845,6 +845,13 @@ def test_map_blocks_with_kwargs():
               np.array([4, 9]))
 
 
+def test_map_blocks_with_chunks():
+    dx = da.ones((5, 3), chunks=(2, 2))
+    dy = da.ones((5, 3), chunks=(2, 2))
+    dz = da.map_blocks(np.add, dx, dy, chunks=dx.chunks)
+    assert_eq(dz, np.ones((5, 3)) * 2)
+
+
 def test_map_blocks_dtype_inference():
     x = np.arange(50).reshape((5, 10))
     y = np.arange(10)
