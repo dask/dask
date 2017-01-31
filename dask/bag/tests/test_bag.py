@@ -198,6 +198,8 @@ def test_distinct():
     assert b.distinct().name == b.distinct().name
     assert 'distinct' in b.distinct().name
     assert b.distinct().count().compute() == 5
+    bag = db.from_sequence([0] * 50, npartitions=50)
+    assert bag.filter(None).distinct().compute() == []
 
 
 def test_frequencies():
@@ -213,6 +215,9 @@ def test_frequencies():
     b2 = b2.filter(lambda x: x < 10)
     d = b2.frequencies()
     assert dict(d) == dict(zip(range(10), [1] * 10))
+    bag = db.from_sequence([0, 0, 0, 0], npartitions=4)
+    bag2 = bag.filter(None).frequencies(split_every=2)
+    assert dict(bag2.compute(get=dask.get)) == {}
 
 
 def test_topk():
@@ -1031,6 +1036,14 @@ def test_reduction_empty():
     b = db.from_sequence(range(10), npartitions=100)
     assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
+
+
+def test_reduction_empty_aggregate():
+    b = db.from_sequence([0, 0, 0, 1], npartitions=4)
+    assert b.filter(None).min(split_every=2).compute(get=dask.get) == 1
+    with pytest.raises(ValueError):
+        b = db.from_sequence([0, 0, 0, 0], npartitions=4)
+        b.filter(None).min(split_every=2).compute(get=dask.get)
 
 
 class StrictReal(int):

@@ -687,7 +687,7 @@ class Bag(Base):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        return self.reduction(set, curry(apply, set.union), out_type=Bag,
+        return self.reduction(set, merge_distinct, out_type=Bag,
                               name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
@@ -727,8 +727,9 @@ class Bag(Base):
         depth = 0
         while k > 1:
             c = fmt + str(depth)
+            is_last = k <= split_every
             dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
-                                  [(b, j) for j in inds]))
+                                  [(b, j) for j in inds], is_last))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -1448,13 +1449,19 @@ def from_delayed(values):
     return Bag(merge(dsk, dsk2), name, len(values))
 
 
+def merge_distinct(seqs):
+    return set().union(*seqs)
+
+
 def merge_frequencies(seqs):
-    out = defaultdict(int)
-    if len(seqs) == 0:
-        return out
+    if isinstance(seqs, Iterable):
+        seqs = list(seqs)
+    if not seqs:
+        return {}
     first, rest = seqs[0], seqs[1:]
     if not rest:
         return first
+    out = defaultdict(int)
     out.update(first)
     for d in rest:
         for k, v in iteritems(d):
@@ -1648,8 +1655,10 @@ def empty_safe_apply(func, part):
         return func(part)
 
 
-def empty_safe_aggregate(func, parts):
-    parts2 = [p for p in parts if not eq_strict(p, no_result)]
+def empty_safe_aggregate(func, parts, is_last):
+    parts2 = (p for p in parts if not eq_strict(p, no_result))
+    if is_last:
+        parts2 = list(parts2)
     return empty_safe_apply(func, parts2)
 
 
