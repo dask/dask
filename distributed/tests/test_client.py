@@ -3643,6 +3643,7 @@ def test_interleave_computations(c, s, a, b):
     assert_no_data_loss(s)
 
 
+@pytest.mark.xfail(reason="Now prefer first-in-first-out")
 @gen_cluster(client=True, timeout=None)
 def test_interleave_computations_map(c, s, a, b):
     xs = c.map(slowinc, range(30), delay=0.02)

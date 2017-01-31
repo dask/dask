@@ -982,7 +982,6 @@ class Worker(WorkerBase):
             closed = False
 
             while not closed:
-                self.priority_counter += 1
                 try:
                     msgs = yield comm.read()
                 except CommClosedError:
@@ -1003,8 +1002,6 @@ class Worker(WorkerBase):
                         break
                     elif op == 'compute-task':
                         priority = msg.pop('priority')
-                        priority = [self.priority_counter] + priority
-                        priority = tuple(-x for x in priority)
                         self.add_task(priority=priority, **msg)
                     elif op == 'release-task':
                         self.log.append((msg['key'], 'release-task'))

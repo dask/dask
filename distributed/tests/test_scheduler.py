@@ -1058,3 +1058,14 @@ def test_retire_nannies_close(c, s, a, b):
     yield gen.sleep(1)
     assert not any(proc.is_alive() for proc in processes)
     assert not a.process and not b.process
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2)])
+def test_fifo_submission(c, s, w):
+    futures = []
+    for i in range(20):
+        future = c.submit(slowinc, i, delay=0.1, key='inc-%02d' % i)
+        futures.append(future)
+        yield gen.sleep(0.01)
+    yield _wait(futures[-1])
+    assert futures[10].status == 'finished'

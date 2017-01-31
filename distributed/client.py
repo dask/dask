@@ -1425,6 +1425,11 @@ class Client(object):
         for k, v in dsk3.items():
             dependencies[k] |= get_dependencies(dsk3, task=v)
 
+        if priority is None:
+            dependencies2 = {key: {dep for dep in deps if dep in dependencies}
+                             for key, deps in dependencies.items()}
+            priority = dask.order.order(dsk3, dependencies2)
+
         self._send_to_scheduler({'op': 'update-graph',
                                  'tasks': valmap(dumps_task, dsk3),
                                  'dependencies': valmap(list, dependencies),
