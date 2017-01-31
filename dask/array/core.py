@@ -457,7 +457,7 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def apply_infer_dtype(func, args, kwargs, funcname=None):
+def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
     args = [np.ones((1,) * x.ndim, dtype=x.dtype)
             if isinstance(x, Array) else x for x in args]
     try:
@@ -465,15 +465,19 @@ def apply_infer_dtype(func, args, kwargs, funcname=None):
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        msg = ("`dtype` inference failed{0}.\n\n"
+        suggest = ("Please specify the dtype explicitly using the "
+                   "`dtype` kwarg.\n\n") if suggest_dtype else ""
+        msg = ("`dtype` inference failed in `{0}`.\n\n"
+               "{1}"
                "Original error is below:\n"
                "------------------------\n"
-               "{1}\n\n"
+               "{2}\n\n"
                "Traceback:\n"
                "---------\n"
-               "{2}"
-               ).format(" in `{0}`".format(funcname) if funcname else "",
-                        repr(e), tb)
+               "{3}").format(funcname, suggest, repr(e), tb)
+    else:
+        msg = None
+    if msg is not None:
         raise ValueError(msg)
     return o.dtype
 
@@ -2587,7 +2591,7 @@ def elemwise(op, *args, **kwargs):
         vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
-        dt = apply_infer_dtype(op, vals, {}, 'elemwise')
+        dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))

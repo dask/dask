@@ -867,6 +867,7 @@ def test_map_blocks_dtype_inference():
         dx.map_blocks(foo)
     except Exception as e:
         assert e.args[0].startswith("`dtype` inference failed")
+        assert "Please specify the dtype explicitly" in e.args[0]
         assert 'RuntimeError' in e.args[0]
     else:
         assert False, "Should have errored"
