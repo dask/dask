@@ -998,3 +998,38 @@ def test_cumulative_axis1(func):
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(getattr(df.groupby('a'), func)(axis=1),
               getattr(ddf.groupby('a'), func)(axis=1))
+
+
+def test_groupby_unaligned_index():
+    df = pd.DataFrame({'a': np.random.randint(0, 10, 50),
+                       'b': np.random.randn(50),
+                       'c': np.random.randn(50)})
+    ddf = dd.from_pandas(df, npartitions=5)
+    filtered = df[df.b < 0.5]
+    dfiltered = ddf[ddf.b < 0.5]
+
+    ddf_group = dfiltered.groupby(ddf.a)
+    ds_group = dfiltered.b.groupby(ddf.a)
+
+    bad = [ddf_group.mean(),
+           ddf_group.var(),
+           ddf_group.b.nunique(),
+           ddf_group.get_group(0),
+           ds_group.mean(),
+           ds_group.var(),
+           ds_group.nunique(),
+           ds_group.get_group(0)]
+
+    for obj in bad:
+        with pytest.raises(ValueError):
+            obj.compute()
+
+    def add1(x):
+        return x + 1
+
+    df_group = filtered.groupby(df.a)
+    good = [(ddf_group.apply(add1, meta=ddf), df_group.apply(add1)),
+            (ddf_group.b.apply(add1, meta=ddf.b), df_group.b.apply(add1))]
+
+    for (res, sol) in good:
+        assert_eq(res, sol)
