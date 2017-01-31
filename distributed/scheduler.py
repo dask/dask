@@ -932,6 +932,7 @@ class Scheduler(Server):
         assert key not in self.released
         for dep in self.dependencies[key]:
             assert (dep in self.who_has) + (dep in self.waiting[key]) == 1
+            assert key in self.waiting_data[dep]
 
     def validate_processing(self, key):
         assert key not in self.waiting
@@ -942,6 +943,7 @@ class Scheduler(Server):
         assert key not in self.who_has
         for dep in self.dependencies[key]:
             assert dep in self.who_has
+            assert key in self.waiting_data[dep]
 
     def validate_memory(self, key):
         assert key in self.who_has
@@ -1722,7 +1724,8 @@ class Scheduler(Server):
                                                             DEFAULT_DATA_SIZE)
                     self.has_what[w].add(key)
                     self.who_has[key].add(w)
-                self.waiting_data[key] = set()
+                if key not in self.waiting_data:
+                    self.waiting_data[key] = set()
                 self.report({'op': 'key-in-memory',
                              'key': key,
                              'workers': list(workers)})

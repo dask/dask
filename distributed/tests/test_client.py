@@ -106,6 +106,7 @@ def test_map(c, s, a, b):
     s.validate_state()
 
 
+
 @gen_cluster(client=True)
 def test_map_empty(c, s, a, b):
     L1 = c.map(inc, [], pure=False)
@@ -3690,3 +3691,37 @@ def test_client_timeout():
 
     yield c._shutdown()
     yield s.close()
+
+
+@gen_cluster(client=True)
+def test_submit_list_kwargs(c, s, a, b):
+    futures = yield c._scatter([1, 2, 3])
+    def f(L=None):
+        return sum(L)
+
+    future = c.submit(f, L=futures)
+    result = yield future._result()
+    assert result == 1 + 2 + 3
+
+
+@gen_cluster(client=True)
+def test_map_list_kwargs(c, s, a, b):
+    futures = yield c._scatter([1, 2, 3])
+    def f(i, L=None):
+        return i + sum(L)
+
+    futures = c.map(f, range(10), L=futures)
+    results = yield c._gather(futures)
+    assert results == [i + 6 for i in range(10)]
+
+
+@gen_cluster(client=True)
+def test_dont_clear_waiting_data(c, s, a, b):
+    [x] = yield c._scatter([1])
+    y = c.submit(slowinc, x, delay=0.2)
+    while y.key not in s.task_state:
+        yield gen.sleep(0.01)
+    [x] = yield c._scatter([1])
+    for i in range(5):
+        assert s.waiting_data[x.key]
+        yield gen.moment
