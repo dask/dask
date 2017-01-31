@@ -639,7 +639,7 @@ def map_blocks(func, *args, **kwargs):
         numblocks = list(arrs[0].numblocks)
     else:
         dims = broadcast_dimensions(argpairs, numblocks)
-        numblocks = [b for (_, b) in reversed(list(dims.items()))]
+        numblocks = [b for (_, b) in sorted(dims.items(), reverse=True)]
 
     if drop_axis:
         if any(numblocks[i] > 1 for i in drop_axis):
