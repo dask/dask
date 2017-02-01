@@ -177,7 +177,7 @@ For administrative messages like updating status msgpack is sufficient.
 However for large results or Python specific data, like NumPy arrays or Pandas Dataframes, or
 for larger results we need to use something else to convert Python objects to
 bytestrings.  Exactly how we do this is described more in the
-`:doc:Serialization documentation <serialize.rst>`.
+:doc:`Serialization documentation <serialization>`.
 
 The application code marks Python specific results with the ``to_serialize``
 function:
@@ -199,8 +199,8 @@ serialized and, and one encoding everything else::
    {'data': <Serialize: [ 1.  1.  1.  1.  1.]>}
 
 The first message we pass normally with msgpack. The second we pass in multiple
-parts, one part for each serialized piece of data (see `:doc: serialization
-<serialize.rst>`) and one header including types, compression, etc. used for each
+parts, one part for each serialized piece of data (see :doc:`serialization
+<serialization>`) and one header including types, compression, etc. used for each
 value::
 
    {'keys': ['data'],
