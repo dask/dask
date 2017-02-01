@@ -1041,7 +1041,8 @@ def test_reduction_empty():
 def test_reduction_empty_aggregate():
     b = db.from_sequence([0, 0, 0, 1], npartitions=4).filter(None)
     assert b.min(split_every=2).compute(get=dask.get) == 1
-    assert db.compute(b.min(), b.max(), get=dask.get) == (1, 1)
+    vals = db.compute(b.min(split_every=2), b.max(split_every=2), get=dask.get)
+    assert vals == (1, 1)
     with pytest.raises(ValueError):
         b = db.from_sequence([0, 0, 0, 0], npartitions=4)
         b.filter(None).min(split_every=2).compute(get=dask.get)
