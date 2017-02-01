@@ -95,6 +95,7 @@ Contents
    scheduling-state
    worker
    work-stealing
+   limitations
    related-work
 
 .. toctree::
