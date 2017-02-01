@@ -1188,7 +1188,7 @@ class Array(Base):
 
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if (isinstance(index, (str, unicode)) or
-                (isinstance(index, list) and
+                (isinstance(index, list) and index and
                  all(isinstance(i, (str, unicode)) for i in index))):
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
