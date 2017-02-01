@@ -719,7 +719,8 @@ class Bag(Base):
             split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
-        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i)))
+        is_last = self.npartitions == 1
+        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i), is_last))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
@@ -1644,22 +1645,23 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
 
-def empty_safe_apply(func, part):
+def empty_safe_apply(func, part, is_last):
     if isinstance(part, Iterator):
         try:
             _, part = peek(part)
-            return func(part)
         except StopIteration:
-            return no_result
+            if not is_last:
+                return no_result
+        return func(part)
+    elif not is_last and len(part) == 0:
+        return no_result
     else:
         return func(part)
 
 
 def empty_safe_aggregate(func, parts, is_last):
     parts2 = (p for p in parts if not eq_strict(p, no_result))
-    if is_last:
-        parts2 = list(parts2)
-    return empty_safe_apply(func, parts2)
+    return empty_safe_apply(func, parts2, is_last)
 
 
 def safe_take(n, b):
