@@ -27,6 +27,8 @@ logger = logging.getLogger('distributed.scheduler')
 # XXX default port (or URI) values should be centralized somewhere
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
+@click.option('--bokeh-internal-port', type=int, default=8788,
+              help="Internal Bokeh port")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default='',
@@ -40,7 +42,7 @@ logger = logging.getLogger('distributed.scheduler')
               help="User xheaders in bokeh app for ssl termination in header")
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
-def main(host, port, http_port, bokeh_port, show, _bokeh,
+def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
          bokeh_whitelist, prefix, use_xheaders, pid_file):
 
     if pid_file:
@@ -67,7 +69,7 @@ def main(host, port, http_port, bokeh_port, show, _bokeh,
     if _bokeh:
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
-            services[('bokeh', 8788)] = BokehScheduler
+            services[('bokeh', bokeh_internal_port)] = BokehScheduler
     scheduler = Scheduler(loop=loop, services=services)
     scheduler.start(addr)
 
