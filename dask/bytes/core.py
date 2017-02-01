@@ -253,6 +253,7 @@ class OpenFileCreator(object):
         self.compression = compression
         self.text = text
         self.encoding = encoding
+        self.errors = errors
         self.storage_options = infer_storage_options(urlpath, inherit_storage_options=kwargs)
         self.protocol = self.storage_options.pop('protocol')
         ensure_protocol(self.protocol)
@@ -265,7 +266,7 @@ class OpenFileCreator(object):
     def __call__(self, path, mode='rb'):
         """Produces `OpenFile` instance"""
         return OpenFile(self.fs.open, path, self.compression, mode,
-                        self.text, self.encoding)
+                        self.text, self.encoding, self.errors)
 
 
 @partial(normalize_token.register, OpenFileCreator)
@@ -378,15 +379,15 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
     fs, paths, myopen = get_fs_paths_myopen(urlpath, compression, mode,
                                             encoding=encoding, num=num,
                                             name_function=name_function,
-                                            **kwargs)
+                                            errors=errors, **kwargs)
     return [myopen(path, mode) for path in paths]
 
 
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
-                        num=1, name_function=None, **kwargs):
+                        errors='strict', num=1, name_function=None, **kwargs):
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
-                                 encoding=encoding, **kwargs)
+                                 encoding=encoding, errors=errors, **kwargs)
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
@@ -429,7 +430,7 @@ def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
     List of ``dask.delayed`` objects that compute to text file-like objects
     """
     return open_files(urlpath, compression, mode.replace('b', 't'), encoding,
-                      **kwargs)
+                      errors=errors, **kwargs)
 
 
 def _expand_paths(path, name_function, num):

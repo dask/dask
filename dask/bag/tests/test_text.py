@@ -45,3 +45,13 @@ def test_read_text(fmt, bs, encoding):
                            encoding=encoding, collection=False)
         L = compute(*blocks)
         assert ''.join(line for block in L for line in block) == expected
+
+
+def test_errors():
+    with filetexts({'.test.foo': 'Jos\xe9\nAlice'}):
+        with pytest.raises(UnicodeDecodeError):
+            read_text('.test.foo', encoding='ascii').compute()
+
+        result = read_text('.test.foo', encoding='ascii', errors='ignore')
+        result = result.compute(get=get)
+        assert result == ['Jos\n', 'Alice']
