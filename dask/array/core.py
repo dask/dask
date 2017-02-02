@@ -1989,7 +1989,7 @@ def unify_chunks(*args, **kwargs):
     max_parts = max(arg.npartitions for arg in args[::2])
     nparts = np.prod(list(map(len, chunkss.values())))
 
-    if warn and nparts >= max_parts * 10:
+    if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
 
