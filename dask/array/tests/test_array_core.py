@@ -2684,3 +2684,11 @@ def test_zero_sized_array_rechunk():
     x = da.arange(5, chunks=1)[:0]
     y = da.atop(identity, 'i', x, 'i', dtype=x.dtype)
     assert_eq(x, y)
+
+
+def test_atop_zero_shape():
+    x = da.atop(lambda x: x, 'i',
+                da.arange(10, chunks=10), 'i',
+                da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
+                da.from_array(np.ones((0,)), ((),)), 'a',
+                dtype='float64')

@@ -1901,6 +1901,8 @@ def common_blockdim(blockdims):
         ...
     ValueError: Chunks do not align
     """
+    if not any(blockdims):
+        return ()
     non_trivial_dims = set([d for d in blockdims if len(d) > 1])
     if len(non_trivial_dims) == 1:
         return first(non_trivial_dims)
@@ -1996,7 +1998,7 @@ def unify_chunks(*args, **kwargs):
         chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
                        if not np.isnan(sum(chunkss[j])) else None
                        for n, j in enumerate(i))
-        if chunks != a.chunks:
+        if chunks != a.chunks and all(a.chunks):
             arrays.append(a.rechunk(chunks))
         else:
             arrays.append(a)
