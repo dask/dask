@@ -212,6 +212,6 @@ def test_categories(fn):
         # attempt to load as category that which is not so encoded
         ddf2 = dd.read_parquet(fn, categories=['x']).compute()
 
-    # attempt to load as category unknown column
-    ddf2 = dd.read_parquet(fn, categories=['foo'])
-    assert 'foo' not in ddf2._meta
+    with pytest.raises(ValueError):
+        # attempt to load as category unknown column
+        ddf2 = dd.read_parquet(fn, categories=['foo'])

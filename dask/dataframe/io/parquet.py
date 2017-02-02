@@ -13,6 +13,7 @@ try:
     from fastparquet import parquet_thrift
     from fastparquet.core import read_row_group_file
     from fastparquet.api import _pre_allocate
+    from fastparquet.util import check_column_names
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
@@ -72,6 +73,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     except:
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
+    check_column_names(pf.columns, categories)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
