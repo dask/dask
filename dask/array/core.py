@@ -2554,9 +2554,9 @@ def broadcast_shapes(*shapes):
     if len(shapes) == 1:
         return shapes[0]
     out = []
-    for sizes in zip_longest(*map(reversed, shapes), fillvalue=1):
+    for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
         dim = max(sizes)
-        if any(i != 1 and i != dim and not np.isnan(i) for i in sizes):
+        if any(i != -1 and i != 1 and i != dim and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
         out.append(dim)
