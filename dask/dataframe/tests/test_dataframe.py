@@ -2229,11 +2229,7 @@ def test_groupby_multilevel_info():
     from io import StringIO
     from dask.compatibility import unicode
 
-    # TODO This should be fixed in pandas 0.18.2
-    if pd.__version__ == '0.18.0':
-        from pandas.core import format
-    else:
-        from pandas.formats import format
+    from pandas.formats import format
     format._put_lines = put_lines
 
     df = pd.DataFrame({'A': [1, 1, 2, 2],
