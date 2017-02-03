@@ -1901,6 +1901,8 @@ def common_blockdim(blockdims):
         ...
     ValueError: Chunks do not align
     """
+    if not any(blockdims):
+        return ()
     non_trivial_dims = set([d for d in blockdims if len(d) > 1])
     if len(non_trivial_dims) == 1:
         return first(non_trivial_dims)
@@ -1987,7 +1989,7 @@ def unify_chunks(*args, **kwargs):
     max_parts = max(arg.npartitions for arg in args[::2])
     nparts = np.prod(list(map(len, chunkss.values())))
 
-    if warn and nparts >= max_parts * 10:
+    if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
                       (nparts / max_parts))
 
@@ -1996,7 +1998,7 @@ def unify_chunks(*args, **kwargs):
         chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
                        if not np.isnan(sum(chunkss[j])) else None
                        for n, j in enumerate(i))
-        if chunks != a.chunks:
+        if chunks != a.chunks and all(a.chunks):
             arrays.append(a.rechunk(chunks))
         else:
             arrays.append(a)
@@ -2552,9 +2554,9 @@ def broadcast_shapes(*shapes):
     if len(shapes) == 1:
         return shapes[0]
     out = []
-    for sizes in zip_longest(*map(reversed, shapes), fillvalue=1):
+    for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
         dim = max(sizes)
-        if any(i != 1 and i != dim and not np.isnan(i) for i in sizes):
+        if any(i != -1 and i != 1 and i != dim and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
         out.append(dim)

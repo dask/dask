@@ -2684,3 +2684,33 @@ def test_zero_sized_array_rechunk():
     x = da.arange(5, chunks=1)[:0]
     y = da.atop(identity, 'i', x, 'i', dtype=x.dtype)
     assert_eq(x, y)
+
+
+def test_atop_zero_shape():
+    da.atop(lambda x: x, 'i',
+            da.arange(10, chunks=10), 'i',
+            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((),)), 'a',
+            dtype='float64')
+
+
+def test_atop_zero_shape_new_axes():
+    da.atop(lambda x: np.ones(42), 'i',
+            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((),)), 'a',
+            dtype='float64', new_axes={'i': 42})
+
+
+def test_broadcast_against_zero_shape():
+    assert_eq(da.arange(1, chunks=1)[:0] + 0,
+              np.arange(1)[:0] + 0)
+    assert_eq(da.arange(1, chunks=1)[:0] + 0.1,
+              np.arange(1)[:0] + 0.1)
+    assert_eq(da.ones((5, 5), chunks=(2, 3))[:0] + 0,
+              np.ones((5, 5))[:0] + 0)
+    assert_eq(da.ones((5, 5), chunks=(2, 3))[:0] + 0.1,
+              np.ones((5, 5))[:0] + 0.1)
+    assert_eq(da.ones((5, 5), chunks=(2, 3))[:, :0] + 0,
+              np.ones((5, 5))[:0] + 0)
+    assert_eq(da.ones((5, 5), chunks=(2, 3))[:, :0] + 0.1,
+              np.ones((5, 5))[:0] + 0.1)
