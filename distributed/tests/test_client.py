@@ -31,7 +31,7 @@ from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_client,
         default_client, _first_completed, ensure_default_get, futures_of,
-        temp_default_client, get_restrictions)
+        temp_default_client)
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
@@ -3407,19 +3407,19 @@ def test_get_restrictions():
     total = delayed(sum)(L1)
     L2 = [delayed(add)(i, total) for i in L1]
 
-    r1, loose = get_restrictions(L2, '127.0.0.1', False)
+    r1, loose = Client.get_restrictions(L2, '127.0.0.1', False)
     assert r1 == {d.key: ['127.0.0.1'] for d in L2}
     assert not loose
 
-    r1, loose = get_restrictions(L2, ['127.0.0.1'], True)
+    r1, loose = Client.get_restrictions(L2, ['127.0.0.1'], True)
     assert r1 == {d.key: ['127.0.0.1'] for d in L2}
     assert set(loose) == {d.key for d in L2}
 
-    r1, loose = get_restrictions(L2, {total: '127.0.0.1'}, True)
+    r1, loose = Client.get_restrictions(L2, {total: '127.0.0.1'}, True)
     assert r1 == {total.key: ['127.0.0.1']}
     assert loose == [total.key]
 
-    r1, loose = get_restrictions(L2, {(total,): '127.0.0.1'}, True)
+    r1, loose = Client.get_restrictions(L2, {(total,): '127.0.0.1'}, True)
     assert r1 == {total.key: ['127.0.0.1']}
     assert loose == [total.key]
 

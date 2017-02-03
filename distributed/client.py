@@ -1602,15 +1602,15 @@ class Client(object):
 
         variables = [a for a in collections if isinstance(a, Base)]
 
-        dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
+        dsk = self.collections_to_dsk(variables, optimize_graph, **kwargs)
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
-        restrictions, loose_restrictions = get_restrictions(collections,
+        restrictions, loose_restrictions = self.get_restrictions(collections,
                 workers, allow_other_workers)
 
         if resources:
-            resources = expand_resources(resources)
+            resources = self.expand_resources(resources)
 
         futures_dict = self._graph_to_futures(merge(dsk2, dsk), names,
                                               restrictions, loose_restrictions,
@@ -1683,15 +1683,15 @@ class Client(object):
 
         assert all(isinstance(c, Base) for c in collections)
 
-        dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+        dsk = self.collections_to_dsk(collections, optimize_graph, **kwargs)
 
         names = {k for c in collections for k in flatten(c._keys())}
 
-        restrictions, loose_restrictions = get_restrictions(collections,
+        restrictions, loose_restrictions = self.get_restrictions(collections,
                 workers, allow_other_workers)
 
         if resources:
-            resources = expand_resources(resources)
+            resources = self.expand_resources(resources)
 
         futures = self._graph_to_futures(dsk, names, restrictions,
                 loose_restrictions, resources=resources)
@@ -2307,6 +2307,71 @@ class Client(object):
                               extra_args=qtconsole_args,)
         return info
 
+    @staticmethod
+    def expand_resources(resources):
+        assert isinstance(resources, dict)
+        out = {}
+        for k, v in resources.items():
+            if not isinstance(k, tuple):
+                k = (k,)
+            for kk in k:
+                if hasattr(kk, '_keys'):
+                    for kkk in kk._keys():
+                        out[tokey(kkk)] = v
+                else:
+                    out[tokey(kk)] = v
+        return out
+
+    @staticmethod
+    def get_restrictions(collections, workers, allow_other_workers):
+        """ Get restrictions from inputs to compute/persist """
+        if isinstance(workers, (str, tuple, list)):
+            workers = {tuple(collections): workers}
+        if isinstance(workers, dict):
+            restrictions = {}
+            for colls, ws in workers.items():
+                if isinstance(ws, str):
+                    ws = [ws]
+                if hasattr(colls, '._keys'):
+                    keys = flatten(colls._keys())
+                else:
+                    keys = list({k for c in flatten(colls)
+                                    for k in flatten(c._keys())})
+                restrictions.update({k: ws for k in keys})
+        else:
+            restrictions = {}
+
+        if allow_other_workers is True:
+            loose_restrictions = list(restrictions)
+        elif allow_other_workers:
+            loose_restrictions = list({k for c in flatten(allow_other_workers)
+                                         for k in c._keys()})
+        else:
+            loose_restrictions = []
+
+        return restrictions, loose_restrictions
+
+    @staticmethod
+    def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+        """
+        Convert many collections into a single dask graph, after optimization
+        """
+        optimizations = _globals.get('optimizations', [])
+        if optimize_graph:
+            groups = groupby(lambda x: x._optimize, collections)
+            groups = {opt: [merge([v.dask for v in val]),
+                           [v._keys() for v in val]]
+                      for opt, val in groups.items()}
+            for opt in optimizations:
+                groups = {k: [opt(dsk, keys), keys]
+                          for k, (dsk, keys) in groups.items()}
+            dsk = merge([opt(dsk, keys, **kwargs)
+                         for opt, (dsk, keys) in groups.items()])
+        else:
+            dsk = merge(c.dask for c in collections)
+
+        return dsk
+
 
 Executor = Client
 
@@ -2551,68 +2616,3 @@ def temp_default_client(c):
         yield
     finally:
         _global_client[0] = old_exec
-
-
-def expand_resources(resources):
-    assert isinstance(resources, dict)
-    out = {}
-    for k, v in resources.items():
-        if not isinstance(k, tuple):
-            k = (k,)
-        for kk in k:
-            if hasattr(kk, '_keys'):
-                for kkk in kk._keys():
-                    out[tokey(kkk)] = v
-            else:
-                out[tokey(kk)] = v
-    return out
-
-
-def get_restrictions(collections, workers, allow_other_workers):
-    """ Get restrictions from inputs to compute/persist """
-    if isinstance(workers, (str, tuple, list)):
-        workers = {tuple(collections): workers}
-    if isinstance(workers, dict):
-        restrictions = {}
-        for colls, ws in workers.items():
-            if isinstance(ws, str):
-                ws = [ws]
-            if hasattr(colls, '._keys'):
-                keys = flatten(colls._keys())
-            else:
-                keys = list({k for c in flatten(colls)
-                                for k in flatten(c._keys())})
-            restrictions.update({k: ws for k in keys})
-    else:
-        restrictions = {}
-
-    if allow_other_workers is True:
-        loose_restrictions = list(restrictions)
-    elif allow_other_workers:
-        loose_restrictions = list({k for c in flatten(allow_other_workers)
-                                     for k in c._keys()})
-    else:
-        loose_restrictions = []
-
-    return restrictions, loose_restrictions
-
-
-def collections_to_dsk(collections, optimize_graph=True, **kwargs):
-    """
-    Convert many collections into a single dask graph, after optimization
-    """
-    optimizations = _globals.get('optimizations', [])
-    if optimize_graph:
-        groups = groupby(lambda x: x._optimize, collections)
-        groups = {opt: [merge([v.dask for v in val]),
-                       [v._keys() for v in val]]
-                  for opt, val in groups.items()}
-        for opt in optimizations:
-            groups = {k: [opt(dsk, keys), keys]
-                      for k, (dsk, keys) in groups.items()}
-        dsk = merge([opt(dsk, keys, **kwargs)
-                     for opt, (dsk, keys) in groups.items()])
-    else:
-        dsk = merge(c.dask for c in collections)
-
-    return dsk
