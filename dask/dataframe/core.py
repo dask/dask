@@ -100,7 +100,7 @@ class Scalar(Base):
         self._name = name
         meta = make_meta(meta)
         if isinstance(meta, (pd.DataFrame, pd.Series, pd.Index)):
-            raise ValueError("Expected meta to specify scalar, got "
+            raise TypeError("Expected meta to specify scalar, got "
                              "{0}".format(type(meta).__name__))
         self._meta = meta
 
@@ -228,7 +228,7 @@ class _Frame(Base):
         self._name = name
         meta = make_meta(meta)
         if not isinstance(meta, self._partition_type):
-            raise ValueError("Expected meta to specify type {0}, got type "
+            raise TypeError("Expected meta to specify type {0}, got type "
                              "{1}".format(self._partition_type.__name__,
                                           type(meta).__name__))
         self._meta = meta

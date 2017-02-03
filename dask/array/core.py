@@ -1844,6 +1844,8 @@ def from_delayed(value, shape, dtype, name=None):
     >>> array.compute()
     array([ 1.,  1.,  1.,  1.,  1.])
     """
+    from dask import delayed
+    value = delayed(value)
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
     dsk.update(value.dask)

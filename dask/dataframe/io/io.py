@@ -550,6 +550,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
+    dfs = list(map(delayed, dfs))
     dsk = merge(df.dask for df in dfs)
 
     name = prefix + '-' + tokenize(*dfs)
