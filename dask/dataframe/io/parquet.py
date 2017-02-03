@@ -74,6 +74,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
     check_column_names(pf.columns, categories)
+    categories = categories or []
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
@@ -111,16 +112,14 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
+    dtypes = {k: ('category' if k in categories else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in dtypes.items()},
                         columns=[c for c in pf.columns if c in dtypes])
 
-    for cat in categories or []:
-        if cat not in meta:
-            continue
+    for cat in categories:
         meta[cat] = pd.Series(pd.Categorical([],
                               categories=[UNKNOWN_CATEGORIES]))
 
