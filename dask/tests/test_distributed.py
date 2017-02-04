@@ -3,7 +3,7 @@ pytest.importorskip('distributed')
 
 from dask import persist, delayed
 from distributed.client import _wait, Client
-from distributed.utils_test import gen_cluster, inc, loop, cluster
+from distributed.utils_test import gen_cluster, inc, cluster, loop
 
 
 def test_can_import_client():
