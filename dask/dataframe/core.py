@@ -101,7 +101,7 @@ class Scalar(Base):
         meta = make_meta(meta)
         if isinstance(meta, (pd.DataFrame, pd.Series, pd.Index)):
             raise TypeError("Expected meta to specify scalar, got "
-                             "{0}".format(type(meta).__name__))
+                            "{0}".format(type(meta).__name__))
         self._meta = meta
 
     @property
@@ -229,8 +229,8 @@ class _Frame(Base):
         meta = make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError("Expected meta to specify type {0}, got type "
-                             "{1}".format(self._partition_type.__name__,
-                                          type(meta).__name__))
+                            "{1}".format(self._partition_type.__name__,
+                                         type(meta).__name__))
         self._meta = meta
         self.divisions = tuple(divisions)
 
