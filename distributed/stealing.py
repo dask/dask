@@ -163,6 +163,7 @@ class WorkStealing(SchedulerPlugin):
             self.put_key_in_stealable(key)
 
             self.scheduler.worker_comms[victim].send({'op': 'release-task',
+                                                      'reason': 'stolen',
                                                       'key': key})
 
             try:
