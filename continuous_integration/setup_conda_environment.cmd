@@ -25,6 +25,7 @@ call activate %CONDA_ENV%
 
 %PIP_INSTALL% git+https://github.com/mrocklin/partd --upgrade
 %PIP_INSTALL% git+https://github.com/mrocklin/cachey --upgrade
+%PIP_INSTALL% git+https://github.com/mrocklin/distributed --upgrade
 %PIP_INSTALL% blosc --upgrade
 %PIP_INSTALL% moto
 
