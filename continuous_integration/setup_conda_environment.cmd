@@ -23,9 +23,9 @@ call activate %CONDA_ENV%
 %CONDA_INSTALL% numpy=%NUMPY% pandas=%PANDAS% cloudpickle distributed
 %CONDA_INSTALL% s3fs psutil pytables bokeh bcolz scipy h5py ipython
 
-%PIP_INSTALL% git+https://github.com/mrocklin/partd --upgrade
-%PIP_INSTALL% git+https://github.com/mrocklin/cachey --upgrade
-%PIP_INSTALL% git+https://github.com/mrocklin/distributed --upgrade
+%PIP_INSTALL% git+https://github.com/dask/partd --upgrade
+%PIP_INSTALL% git+https://github.com/dask/cachey --upgrade
+%PIP_INSTALL% git+https://github.com/dask/distributed --upgrade
 %PIP_INSTALL% blosc --upgrade
 %PIP_INSTALL% moto
 
