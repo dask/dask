@@ -210,7 +210,7 @@ def task_stream_append(lists, msg, workers, palette=task_stream_palette):
         worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
         lists['worker_thread'].append(worker_thread)
         if worker_thread not in workers:
-            workers[worker_thread] = len(workers)
+            workers[worker_thread] = len(workers) / 2
         lists['y'].append(workers[worker_thread])
 
     return len(startstops)

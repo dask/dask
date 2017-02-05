@@ -71,7 +71,7 @@ class TaskStream(DashboardComponent):
 
         self.root.add_glyph(
             self.source,
-            Rect(x="start", y="y", width="duration", height=0.8, fill_color="color",
+            Rect(x="start", y="y", width="duration", height=0.4, fill_color="color",
                  line_color="color", line_alpha=0.6, fill_alpha="alpha", line_width=3)
         )
 
@@ -80,6 +80,8 @@ class TaskStream(DashboardComponent):
         ticker = BasicTicker(num_minor_ticks=0)
         self.root.add_layout(LinearAxis(axis_label="Worker Core", ticker=ticker), "left")
         self.root.add_layout(Grid(dimension=1, grid_line_alpha=0.4, ticker=ticker))
+
+        self.root.yaxis.major_label_text_alpha = 0
 
         hover = HoverTool(
             point_policy="follow_mouse",
