@@ -301,7 +301,8 @@ class Scheduler(Server):
                          'replicate': self.replicate,
                          'start_ipython': self.start_ipython,
                          'run_function': self.run_function,
-                         'update_data': self.update_data}
+                         'update_data': self.update_data,
+                         'set_resources': self.add_resources}
 
         self._transitions = {
                  ('released', 'waiting'): self.transition_released_waiting,
@@ -523,7 +524,7 @@ class Scheduler(Server):
             self.worker_info[address]['time-delay'] = delay
             self.worker_info[address]['last-seen'] = time()
             if resources:
-                self.add_resources(address, resources)
+                self.add_resources(worker=address, resources=resources)
                 self.worker_info[address]['resources'] = resources
 
             if address in self.workers:
@@ -2791,14 +2792,13 @@ class Scheduler(Server):
     # Utility functions #
     #####################
 
-    def add_resources(self, worker, resources):
+    def add_resources(self, stream=None, worker=None, resources=None):
         if worker not in self.worker_resources:
             self.worker_resources[worker] = resources
             self.used_resources[worker] = resources
             for resource, quantity in resources.items():
                 self.resources[resource][worker] = quantity
-
-        # TODO: add host_resources
+        return 'OK'
 
     def remove_resources(self, worker):
         if worker in self.worker_resources:

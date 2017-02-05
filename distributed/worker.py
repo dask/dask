@@ -415,6 +415,18 @@ class WorkerBase(Server):
 
         raise gen.Return('dont-reply')
 
+    @gen.coroutine
+    def set_resources(self, **resources):
+        for r, quantity in resources.items():
+            if r in self.total_resources:
+                self.available_resources[r] += quantity - self.total_resources[r]
+            else:
+                self.available_resources[r] = quantity
+            self.total_resources[r] = quantity
+
+        yield self.scheduler.set_resources(resources=self.total_resources,
+                                           worker=self.address)
+
     def start_ipython(self, comm):
         """Start an IPython kernel
 

@@ -1,12 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
-from tornado import gen
+from time import time
 
 from dask import delayed
+import pytest
+from tornado import gen
 
 from distributed import Worker
 from distributed.client import _wait
-
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop, readone, slowinc, slowadd)
 
@@ -164,6 +165,7 @@ def test_submit_many_non_overlapping(c, s, a, b):
     assert a.total_resources == a.available_resources
     assert b.total_resources == b.available_resources
 
+
 @gen_cluster(client=True, ncores=[('127.0.0.1', 4, {'resources': {'A': 2, 'B': 1}})])
 def test_minimum_resource(c, s, a):
     futures = c.map(slowinc, range(30), resources={'A': 1, 'B': 1}, delay=0.02)
@@ -174,3 +176,44 @@ def test_minimum_resource(c, s, a):
 
     yield _wait(futures)
     assert a.total_resources == a.available_resources
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2, {'resources': {'A': 1}})])
+def test_prefer_constrained(c, s, a):
+    futures = c.map(slowinc, range(1000), delay=0.1)
+    constrained = c.map(inc, range(10), resources={'A': 1})
+
+    start = time()
+    yield _wait(constrained)
+    end = time()
+    assert end - start < 1
+    assert s.processing[a.address]
+
+
+@pytest.mark.xfail(reason="")
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2, {'resources': {'A': 1}}),
+                                  ('127.0.0.1', 2, {'resources': {'A': 1}})])
+def test_balance_resources(c, s, a, b):
+    futures = c.map(slowinc, range(100), delay=0.1, workers=a.address)
+    constrained = c.map(inc, range(2), resources={'A': 1})
+
+    yield _wait(constrained)
+    assert any(f.key in a.data for f in constrained)  # share
+    assert any(f.key in b.data for f in constrained)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2)])
+def test_set_resources(c, s, a):
+    yield a.set_resources(A=2)
+    assert a.total_resources['A'] == 2
+    assert a.available_resources['A'] == 2
+    assert s.worker_resources[a.address] == {'A': 2}
+
+    future = c.submit(slowinc, 1, delay=1, resources={'A': 1})
+    while a.available_resources['A'] == 2:
+        yield gen.sleep(0.01)
+
+    yield a.set_resources(A=3)
+    assert a.total_resources['A'] == 3
+    assert a.available_resources['A'] == 2
+    assert s.worker_resources[a.address] == {'A': 3}
