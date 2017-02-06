@@ -908,6 +908,22 @@ def test_from_delayed():
     assert asum_value.compute() == asum_item.compute() == 6
 
 
+def test_from_delayed_iterator():
+    from dask.delayed import delayed
+
+    def lazy_records(n):
+        return ({'operations': [1, 2]} for _ in range(n))
+
+    delayed_records = delayed(lazy_records, pure=False)
+    bag = db.from_delayed([delayed_records(5) for _ in range(5)])
+    assert db.compute(
+        bag.count(),
+        bag.pluck('operations').count(),
+        bag.pluck('operations').concat().count(),
+        get=dask.get,
+    ) == (25, 25, 50)
+
+
 def test_range():
     for npartitions in [1, 7, 10, 28]:
         b = db.range(100, npartitions=npartitions)
