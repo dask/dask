@@ -440,11 +440,11 @@ class SerializableProxy(object):
     by ``delayed``, allowing pickle to work properly on both ``DelayedLeaf``
     and on the resulting graph.
     """
-    __slots__ = ('func', 'cache')
+    __slots__ = ('func', 'path')
 
-    def __init__(self, func, cache):
+    def __init__(self, func, path):
         self.func = func
-        self.cache = cache
+        self.path = path
 
     @property
     def __call__(self):
@@ -452,11 +452,11 @@ class SerializableProxy(object):
         return self.func
 
     def __reduce__(self):
-        return (_restore_serializable_proxy, (self.cache,))
+        return (_restore_serializable_proxy, (self.path,))
 
 
-def _restore_serializable_proxy(func):
-    modname, qualname = func.rsplit(':', 1)
+def _restore_serializable_proxy(path):
+    modname, qualname = path.rsplit(':', 1)
     obj = import_module(modname)
     for attr in qualname.split('.'):
         obj = getattr(obj, attr)
