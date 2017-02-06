@@ -1444,7 +1444,7 @@ def from_delayed(values):
 
     name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
-    values = [v.key for v in values]
+    values = [(reify, v.key) for v in values]
     dsk2 = dict(zip(names, values))
 
     return Bag(merge(dsk, dsk2), name, len(values))
