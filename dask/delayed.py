@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from itertools import chain
+from importlib import import_module
+from types import FunctionType
 import operator
 import uuid
 
@@ -400,13 +402,14 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-def call_function(func, args, kwargs, pure=False, nout=None):
+def call_function(func, function_token, args, kwargs, pure=False, nout=None):
     dask_key_name = kwargs.pop('dask_key_name', None)
     pure = kwargs.pop('pure', pure)
 
     if dask_key_name is None:
-        name = '%s-%s' % (funcname(func), tokenize(func, *args,
-                                                   pure=pure, **kwargs))
+        bfunc = func.func if type(func) is SerializableProxy else func
+        name = '%s-%s' % (funcname(bfunc),
+                          tokenize(function_token, *args, pure=pure, **kwargs))
     else:
         name = dask_key_name
 
@@ -424,25 +427,95 @@ def call_function(func, args, kwargs, pure=False, nout=None):
     return Delayed(name, dasks, length=nout)
 
 
+class SerializableProxy(object):
+    """Properly pickle decorated functions.
+
+    Functions are pickled by their global name (combination of ``__module__``
+    and ``__qualname__``). Since decorating a function in python replaces the
+    name with the result from the decorator, this can cause problems if you
+    still want to be able to pickle the underlying function (as we do in
+    ``dask.delayed``).
+
+    This class is used to wrap any function that is determined to be decorated
+    by ``delayed``, allowing pickle to work properly on both ``DelayedLeaf``
+    and on the resulting graph.
+    """
+    __slots__ = ('func', 'path')
+
+    def __init__(self, func, path):
+        self.func = func
+        self.path = path
+
+    @property
+    def __call__(self):
+        # This is much faster than forwarding the arguments
+        return self.func
+
+    def __reduce__(self):
+        return (_restore_serializable_proxy, (self.path,))
+
+
+def _restore_serializable_proxy(path):
+    modname, qualname = path.rsplit(':', 1)
+    obj = import_module(modname)
+    for attr in qualname.split('.'):
+        obj = getattr(obj, attr)
+    return obj._obj
+
+
 class DelayedLeaf(Delayed):
-    __slots__ = ('_obj', '_key', '_pure', '_nout')
+    __slots__ = ('_base_obj', '_checked', '_key', '_pure', '_nout')
 
     def __init__(self, obj, key, pure=False, nout=None):
-        self._obj = obj
+        self._base_obj = obj
+        self._checked = False
         self._key = key
         self._pure = pure
         self._nout = nout
 
+    def __getstate__(self):
+        return (self._obj, self._key, self._pure, self._nout)
+
+    def __setstate__(self, state):
+        self._base_obj, self._key, self._pure, self._nout = state
+        self._checked = True
+
+    @property
+    def _obj(self):
+        if not self._checked:
+            obj = self._base_obj
+            if type(obj) is FunctionType:
+                modname = getattr(obj, '__module__', None)
+                qualname = getattr(obj, '__qualname__', None)
+                if qualname is None:
+                    qualname = getattr(obj, '__name__', None)
+                if modname and qualname:
+                    attrs = []
+                    obj2 = import_module(modname)
+                    for attr in qualname.split('.'):
+                        obj2 = getattr(obj2, attr, None)
+                        if obj2 is None:
+                            break
+                        attrs.append(attr)
+                    if obj2 is self:
+                        path = '%s:%s' % (modname, '.'.join(attrs))
+                        self._base_obj = SerializableProxy(obj, path)
+            self._checked = True
+        return self._base_obj
+
     @property
     def dask(self):
-        return {self._key: self._obj}
+        obj = self._obj
+        if type(obj) is SerializableProxy:
+            return {self._key: (getattr, obj, 'func')}
+        return {self._key: obj}
 
     @property
     def _dasks(self):
         return [self.dask]
 
     def __call__(self, *args, **kwargs):
-        return call_function(self._obj, args, kwargs,
+        return call_function(self._obj, self._key, args, kwargs,
                              pure=self._pure, nout=self._nout)
 
 
@@ -459,7 +532,8 @@ class DelayedAttr(Delayed):
         return [{self._key: (getattr, self._obj._key, self._attr)}] + self._obj._dasks
 
     def __call__(self, *args, **kwargs):
-        return call_function(methodcaller(self._attr), (self._obj,) + args, kwargs)
+        return call_function(methodcaller(self._attr), self._attr,
+                             (self._obj,) + args, kwargs)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
@@ -471,4 +545,4 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
     Delayed._bind_operator(op)
 
 
-base.normalize_token.register(Delayed, lambda a: a.key)
+base.normalize_token.register(Delayed, lambda a: a._key)
