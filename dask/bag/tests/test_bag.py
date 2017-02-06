@@ -920,9 +920,8 @@ def test_from_delayed_iterator():
         bag.count(),
         bag.pluck('operations').count(),
         bag.pluck('operations').concat().count(),
-        bag.pluck('operations').concat().pluck('bad', None).count(),
         get=dask.get,
-    ) == (25, 25, 50, 50)
+    ) == (25, 25, 50)
 
 
 def test_range():
