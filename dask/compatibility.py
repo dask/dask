@@ -253,11 +253,3 @@ def bind_method(cls, name, func):
         setattr(cls, name, types.MethodType(func, None, cls))
     else:
         setattr(cls, name, func)
-
-
-try:
-    from importlib import import_module
-except ImportError:
-    def import_module(name):
-        __import__(name)
-        return sys.modules[name]
