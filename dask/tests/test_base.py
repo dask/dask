@@ -368,7 +368,7 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 def test_optimizations_keyword():
     def inc_to_dec(dsk, keys):
         for key in dsk:
-            if dsk[key][0] == inc:
+            if dsk[key][0].func == inc:
                 dsk[key] = (dec,) + dsk[key][1:]
         return dsk
 
