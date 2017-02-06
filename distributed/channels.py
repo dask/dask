@@ -5,6 +5,7 @@ from functools import partial
 import logging
 from time import sleep
 import threading
+import warnings
 
 from .client import Future
 from .core import CommClosedError
@@ -48,9 +49,10 @@ class ChannelScheduler(object):
         self.clients[channel].add(client)
 
         comm = self.scheduler.comms[client]
-        for key in self.deques[channel]:
+        for type, value in self.deques[channel]:
             comm.send({'op': 'channel-append',
-                       'key': key,
+                       'type': type,
+                       'value': value,
                        'channel': channel})
 
         if self.stopped[channel]:
@@ -66,21 +68,24 @@ class ChannelScheduler(object):
             del self.clients[channel]
             del self.stopped[channel]
 
-    def append(self, channel=None, key=None, client=None):
+    def append(self, channel=None, type=None, value=None, client=None):
         if self.stopped[channel]:
             return
 
         if len(self.deques[channel]) == self.deques[channel].maxlen:
             # TODO: future might still be in deque
-            self.scheduler.client_releases_keys(keys=[self.deques[channel][0]],
-                                                client='streaming-%s' % channel)
+            typ, val = self.deques[channel].popleft()
+            if typ == 'Future':
+                self.scheduler.client_releases_keys(keys=[val],
+                                                    client='streaming-%s' % channel)
 
-        self.deques[channel].append(key)
+        self.deques[channel].append((type, value))
         self.counts[channel] += 1
-        self.report(channel, key)
+        self.report(channel, type, value)
 
         client='streaming-%s' % channel
-        self.scheduler.client_desires_keys(keys=[key], client=client)
+        if type == 'Future':
+            self.scheduler.client_desires_keys(keys=[value], client=client)
 
     def stop(self, channel=None, client=None):
         self.stopped[channel] = True
@@ -93,12 +98,13 @@ class ChannelScheduler(object):
             except (KeyError, CommClosedError):
                 self.unsubscribe(channel, client)
 
-    def report(self, channel, key):
+    def report(self, channel, type, value):
         for client in list(self.clients[channel]):
             try:
                 comm = self.scheduler.comms[client]
                 comm.send({'op': 'channel-append',
-                           'key': key,
+                           'type': type,
+                           'value': value,
                            'channel': channel})
             except (KeyError, CommClosedError):
                 self.unsubscribe(channel, client)
@@ -125,10 +131,10 @@ class ChannelClient(object):
         else:
             return self.channels[channel]
 
-    def receive_key(self, channel=None, key=None):
+    def receive_key(self, channel=None, type=None, value=None):
         if channel not in self.channels:
             self._create_channel(channel)
-        self.channels[channel]._receive_update(key)
+        self.channels[channel]._receive_update(type, value)
 
     def receive_stop(self, channel=None):
         self.channels[channel]._receive_stop()
@@ -136,43 +142,57 @@ class ChannelClient(object):
 
 class Channel(object):
     """
-    A changing stream of futures shared between clients
+    A changing stream of futures or data shared between clients
 
     Several clients connected to the same scheduler can communicate a sequence
-    of futures between each other through shared *channels*.  All clients can
-    append to the channel at any time.  All clients will be updated when a
-    channel updates.  The central scheduler maintains consistency and ordering
-    of events.
+    of data or futures between each other through shared *channels*.  All
+    clients can append to the channel at any time.  All clients will be updated
+    when a channel updates.  The central scheduler maintains consistency and
+    ordering of events.
+
+    Channels can contain Future objects or generic data.  All data should be
+    small and msgpack encodable (strings, numbers, lists, dicts.)  Channels
+    should not be used to send large datasets directly.  Instead scatter the
+    data into a Future and send that instead.
 
     Examples
     --------
 
     Create channels from your Client:
 
-    >>> client = Client('scheduler-address:8786')
-    >>> chan = client.channel('my-channel')
+    >>> client = Client('scheduler-address:8786')  # doctest: +SKIP
+    >>> chan = client.channel('my-channel')  # doctest: +SKIP
 
     Append futures onto a channel
 
-    >>> future = client.submit(add, 1, 2)
-    >>> chan.append(future)
+    >>> future = client.submit(add, 1, 2)  # doctest: +SKIP
+    >>> chan.append(future)  # doctest: +SKIP
 
     A channel maintains a collection of current futures added by both your
     client, and others.
 
-    >>> chan.futures
+    >>> chan.data  # doctest: +SKIP
     deque([<Future: status: pending, key: add-12345>,
            <Future: status: pending, key: sub-56789>])
 
     You can iterate over a channel to get back futures.
 
-    >>> for future in chan:
+    >>> for future in chan:  # doctest: +SKIP
     ...     pass
+
+    You can send small and simple data as well
+
+    >>> chan.append({'score': 123})  # doctest: +SKIP
+
+    To publish large amounts of data, scatter the data into a future
+
+    >>> [future] = client.scatter([large_numpy_array])  # doctest: +SKIP
+    >>> chan.append(future)  # doctest: +SKIP
     """
     def __init__(self, client, name, maxlen=None):
         self.client = client
         self.name = name
-        self.futures = deque(maxlen=maxlen)
+        self.data = deque(maxlen=maxlen)
         self.stopped = False
         self.count = 0
         self._pending = dict()
@@ -184,14 +204,28 @@ class Channel(object):
                                         'maxlen': maxlen,
                                         'client': self.client.id})
 
-    def append(self, future):
+    @property
+    def futures(self):
+        warnings.warn("The .futures attribute has moved to .data")
+        return self.data
+
+    def append(self, value):
         """ Append a future onto the channel """
         if self.stopped:
             raise StopIteration()
-        self.client._send_to_scheduler({'op': 'channel-append',
-                                        'channel': self.name,
-                                        'key': tokey(future.key)})
-        self._pending[future.key] = future  # hold on to reference until ack
+        if isinstance(value, Future):
+            msg = {'op': 'channel-append',
+                   'channel': self.name,
+                   'type': 'Future',
+                   'value': tokey(value.key)}
+            self._pending[value.key] = value  # hold on to reference until ack
+        else:
+            msg = {'op': 'channel-append',
+                   'channel': self.name,
+                   'type': 'value',
+                   'value': value}
+
+        self.client._send_to_scheduler(msg)
 
     def stop(self):
         if self.stopped:
@@ -199,15 +233,19 @@ class Channel(object):
         self.client._send_to_scheduler({'op': 'channel-stop',
                                         'channel': self.name})
 
-    def _receive_update(self, key=None):
+    def _receive_update(self, type=None, value=None):
         with self._lock:
             self.count += 1
-            self.futures.append(Future(key, self.client))
-        self.client._send_to_scheduler({'op': 'client-desires-keys',
-                                        'keys': [key],
-                                        'client': self.client.id})
-        if key in self._pending:
-            del self._pending[key]
+            if type == 'Future':
+                self.data.append(Future(value, self.client))
+            else:
+                self.data.append(value)
+        if type == 'Future':
+            self.client._send_to_scheduler({'op': 'client-desires-keys',
+                                            'keys': [value],
+                                            'client': self.client.id})
+            if value in self._pending:
+                del self._pending[value]
 
         with self._thread_condition:
             self._thread_condition.notify_all()
@@ -235,7 +273,7 @@ class Channel(object):
         with log_errors():
             with self._lock:
                 last = self.count
-                L = list(self.futures)
+                L = list(self.data)
             for future in L:
                 yield future
 
@@ -248,17 +286,17 @@ class Channel(object):
                     self._thread_condition.release()
 
                 with self._lock:
-                    n = min(self.count - last, len(self.futures))
-                    L = [self.futures[i] for i in range(-n, 0)]
+                    n = min(self.count - last, len(self.data))
+                    L = [self.data[i] for i in range(-n, 0)]
                     last = self.count
                 for f in L:
                     yield f
 
 
     def __len__(self):
-        return len(self.futures)
+        return len(self.data)
 
     def __str__(self):
-        return "<Channel: %s - %d elements>" % (self.name, len(self.futures))
+        return "<Channel: %s - %d elements>" % (self.name, len(self.data))
 
     __repr__ = __str__
