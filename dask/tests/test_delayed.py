@@ -306,6 +306,63 @@ def test_array_bag_delayed():
     assert out.compute() == 2 * arr1.sum() + 2 * arr2.sum() + sum([1, 2, 3])
 
 
+@delayed(pure=True)
+def decorated_function(a, b):
+    return a + b
+
+
+def undecorated_function(a, b):
+    return a + b
+
+
+def test_decorated_function_picklable():
+    # Function is picklable
+    f = pickle.loads(pickle.dumps(decorated_function))
+    assert f._obj is decorated_function._obj
+
+    # Result is picklable (including graph)
+    res = decorated_function(1, 2)
+    res2 = pickle.loads(pickle.dumps(res))
+    assert res.compute() == res2.compute()
+
+    # Non-decorated function deserializes to self
+    delayed_f = delayed(undecorated_function, pure=True)
+    assert delayed_f._obj.func is undecorated_function
+    delayed_f2 = pickle.loads(pickle.dumps(delayed_f))
+    assert delayed_f2._obj is undecorated_function
+
+
+def test_local_function_picklable_with_cloudpickle():
+    # Non-global function isn't resolvable with qualname, needs cloudpickle
+    cp = pytest.importorskip('cloudpickle')
+    f = delayed(lambda x: x + 1, pure=True)
+    f2 = cp.loads(cp.dumps(f))
+    sol = f(1).compute()
+    res = f2(1)
+    assert res.compute() == sol
+    assert cp.loads(cp.dumps(res)).compute() == sol
+
+
+class HasDelayedStaticmethod(object):
+    @staticmethod
+    @delayed(pure=True)
+    def foo(a, b):
+        return a + b
+
+
+@pytest.mark.skipif(not PY3, reason='methods not picklable in py2')
+def test_decorated_method_picklable():
+    # Method is picklable
+    obj = HasDelayedStaticmethod()
+    f = pickle.loads(pickle.dumps(obj.foo))
+    assert f._obj is obj.foo._obj
+
+    # Result is picklable (including graph)
+    res = obj.foo(1, 2)
+    res2 = pickle.loads(pickle.dumps(res))
+    assert res.compute() == res2.compute()
+
+
 def test_delayed_picklable():
     # Delayed
     x = delayed(divmod, nout=2, pure=True)(1, 2)

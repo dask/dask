@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from itertools import chain
+from types import FunctionType
 import operator
 import uuid
 
@@ -10,7 +11,7 @@ from toolz import merge, unique, curry, first
 from .core import quote
 from .utils import concrete, funcname, methodcaller
 from . import base
-from .compatibility import apply
+from .compatibility import apply, import_module
 from . import threaded
 
 __all__ = ['compute', 'do', 'Delayed', 'delayed']
@@ -405,8 +406,9 @@ def call_function(func, args, kwargs, pure=False, nout=None):
     pure = kwargs.pop('pure', pure)
 
     if dask_key_name is None:
-        name = '%s-%s' % (funcname(func), tokenize(func, *args,
-                                                   pure=pure, **kwargs))
+        bfunc = func.func if type(func) is MaybeDecorated else func
+        name = '%s-%s' % (funcname(bfunc),
+                          tokenize(bfunc, *args, pure=pure, **kwargs))
     else:
         name = dask_key_name
 
@@ -424,10 +426,78 @@ def call_function(func, args, kwargs, pure=False, nout=None):
     return Delayed(name, dasks, length=nout)
 
 
+class MaybeDecorated(object):
+    """Properly pickle decorated functions.
+
+    Functions are pickled by their global name (combination of ``__module__``
+    and ``__qualname__``). Since decorating a function in python replaces the
+    name with the result from the decorator, this can cause problems if you
+    still want to be able to pickle the underlying function (as we do in
+    ``dask.delayed``).
+
+    To deal with this, we wrap all functions in ``DelayedLeaf`` in a proxy
+    object that supports ``__call__`` and ``__reduce__``. These objects then
+    serve as callables in the resulting dask graph. On a single machine, there
+    is negligible overhead (ns increase per-call). When distributed, the
+    ``__reduce__`` method determines if the global name of the underlying
+    callable points to a ``DelayedLeaf``, indicating that it was created by a
+    decorator.  If so, the callable is serialized to get the global
+    ``DelayedLeaf``, and then extract the function from the ``_obj`` attribute.
+    Otherwise, the function is serialized as normal. This computation is
+    cached, and takes microseconds on my machine. Note that in the case where
+    the function is serialized normally, the deserialized result will be just
+    the function, instead of an instance of ``MaybeDecorated``. This is
+    because we know that the proxy object isn't needed in these cases, so it's
+    not necessary to recreate it.
+    """
+    __slots__ = ('func', 'cache')
+
+    def __init__(self, func):
+        self.func = func
+        self.cache = None
+
+    @property
+    def __call__(self):
+        # This is much faster than forwarding the arguments
+        return self.func
+
+    def __reduce__(self):
+        if self.cache is None:
+            func = self.func
+            modname = getattr(func, '__module__', None)
+            qualname = getattr(func, '__qualname__', None)
+            if qualname is None:
+                qualname = getattr(func, '__name__', None)
+            if modname and qualname:
+                attrs = []
+                obj = import_module(modname)
+                for attr in qualname.split('.'):
+                    obj = getattr(obj, attr, None)
+                    if obj is None:
+                        break
+                    attrs.append(attr)
+                if type(obj) is DelayedLeaf and obj._obj is self:
+                    func = '%s:%s' % (modname, '.'.join(attrs))
+            self.cache = func
+        return (_restore_decorated, (self.cache,))
+
+
+def _restore_decorated(func):
+    if type(func) is str:
+        modname, qualname = func.rsplit(':', 1)
+        obj = import_module(modname)
+        for attr in qualname.split('.'):
+            obj = getattr(obj, attr)
+        return obj._obj
+    return func
+
+
 class DelayedLeaf(Delayed):
     __slots__ = ('_obj', '_key', '_pure', '_nout')
 
     def __init__(self, obj, key, pure=False, nout=None):
+        if type(obj) is FunctionType:
+            obj = MaybeDecorated(obj)
         self._obj = obj
         self._key = key
         self._pure = pure
