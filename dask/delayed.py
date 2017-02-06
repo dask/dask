@@ -400,13 +400,13 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-def call_function(func, args, kwargs, pure=False, nout=None):
+def call_function(func, func_token, args, kwargs, pure=False, nout=None):
     dask_key_name = kwargs.pop('dask_key_name', None)
     pure = kwargs.pop('pure', pure)
 
     if dask_key_name is None:
-        name = '%s-%s' % (funcname(func), tokenize(func, *args,
-                                                   pure=pure, **kwargs))
+        name = '%s-%s' % (funcname(func),
+                          tokenize(func_token, *args, pure=pure, **kwargs))
     else:
         name = dask_key_name
 
@@ -442,7 +442,7 @@ class DelayedLeaf(Delayed):
         return [self.dask]
 
     def __call__(self, *args, **kwargs):
-        return call_function(self._obj, args, kwargs,
+        return call_function(self._obj, self._key, args, kwargs,
                              pure=self._pure, nout=self._nout)
 
 
@@ -459,7 +459,7 @@ class DelayedAttr(Delayed):
         return [{self._key: (getattr, self._obj._key, self._attr)}] + self._obj._dasks
 
     def __call__(self, *args, **kwargs):
-        return call_function(methodcaller(self._attr), (self._obj,) + args, kwargs)
+        return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
