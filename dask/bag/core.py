@@ -1442,7 +1442,10 @@ def from_delayed(values):
     from dask.delayed import Delayed, delayed
     if isinstance(values, Delayed):
         values = [values]
-    values = list(map(delayed, values))
+    values = [delayed(v)
+              if not isinstance(v, Delayed) and hasattr(v, 'key')
+              else v
+              for v in values]
     dsk = merge(v.dask for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)

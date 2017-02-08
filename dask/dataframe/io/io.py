@@ -550,7 +550,14 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
-    dfs = list(map(delayed, dfs))
+    dfs = [delayed(df)
+           if not isinstance(df, Delayed) and hasattr(df, 'key')
+           else df
+           for df in dfs]
+    for df in dfs:
+        if not isinstance(df, Delayed):
+            raise TypeError("Expected Delayed object, got %s" %
+                            type(df).__name__)
     dsk = merge(df.dask for df in dfs)
 
     name = prefix + '-' + tokenize(*dfs)
