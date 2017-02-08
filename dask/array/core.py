@@ -1790,6 +1790,7 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
           like ((1000, 1000, 500), (400, 400)).
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
+        Use ``name=False`` to generate a random name instead of hashing (fast)
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
@@ -1817,9 +1818,14 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
     if tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Chunks do not add up to shape. "
                          "Got chunks=%s, shape=%s" % (chunks, x.shape))
-    token = tokenize(x, chunks)
-    original_name = (name or 'array-') + 'original-' + token
-    name = name or 'array-' + token
+    if name in (None, True):
+        token = tokenize(x, chunks)
+        original_name = 'array-original-' + token
+        name = name or 'array-' + token
+    elif name is False:
+        original_name = name = 'array-' + str(uuid.uuid1())
+    else:
+        original_name = name
     if lock is True:
         lock = SerializableLock()
     dsk = getem(original_name, chunks, out_name=name, fancy=fancy, lock=lock)

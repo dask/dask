@@ -2714,3 +2714,22 @@ def test_broadcast_against_zero_shape():
               np.ones((5, 5))[:0] + 0)
     assert_eq(da.ones((5, 5), chunks=(2, 3))[:, :0] + 0.1,
               np.ones((5, 5))[:0] + 0.1)
+
+
+def test_fast_from_array():
+    x = np.zeros(10000000)
+    start = time.time()
+    da.from_array(x, chunks=x.shape[0] / 10, name='x')
+    end = time.time()
+    assert end - start < 0.100
+
+
+def test_random_from_array():
+    x = np.zeros(10000000)
+    start = time.time()
+    y = da.from_array(x, chunks=x.shape[0] / 10, name=False)
+    end = time.time()
+    assert end - start < 0.100
+
+    y2 = da.from_array(x, chunks=x.shape[0] / 10, name=False)
+    assert y.name != y2.name
