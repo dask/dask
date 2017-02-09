@@ -604,55 +604,8 @@ class _GroupBy(object):
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
-    axis: int
-        Not supported
-    level: int, level name, or sequence of such, default None
-        Not supported
-    as_index: bool, default True
-        Not supported, the returned objects always have group
-        labels as the index
-    sort: bool, default True
-        Not supported
-    group_keys: bool, default True
-        Not supported
-    squeeze: bool, default False
-        Not supported
-    kwargs: dict
-        Other keywords passed to groupby
     """
-    def __init__(self, df, by=None, slice=None, axis=0, level=None,
-                 as_index=True, sort=True, group_keys=True,
-                 squeeze=False, **kwargs):
-
-        if axis != 0:
-            msg = ("The keyword argument `axis` is not supported in "
-                   ".groupby")
-            raise NotImplementedError(msg)
-
-        if level is not None:
-            msg = ("The keyword argument `level` is not supported in "
-                   ".groupby")
-            raise NotImplementedError(msg)
-
-        if as_index is not True:
-            msg = ("The keyword argument `as_index=False` is not supported in "
-                   "dask.groupby")
-            raise NotImplementedError(msg)
-
-        if sort is not True:
-            msg = ("The keyword argument `sort` is not supported in "
-                   "dask.groupby")
-            raise NotImplementedError(msg)
-
-        if group_keys is not True:
-            msg = ("The keyword argument `group_keys` is not supported in "
-                   "dask.groupby")
-            raise NotImplementedError(msg)
-
-        if squeeze is not False:
-            msg = ("The keyword argument `squeeze` is not supported in "
-                   "dask.groupby")
-            raise NotImplementedError(msg)
+    def __init__(self, df, by=None, slice=None):
 
         assert isinstance(df, (DataFrame, Series))
         self.obj = df
@@ -675,7 +628,6 @@ class _GroupBy(object):
 
         # slicing key applied to _GroupBy instance
         self._slice = slice
-        self.kwargs = kwargs
 
         if isinstance(self.index, list):
             index_meta = [item._meta if isinstance(item, Series) else item for item in self.index]
@@ -993,7 +945,7 @@ class _GroupBy(object):
             df2 = df
             index = df[self.index]
 
-        df3 = shuffle(df2, index, **self.kwargs)  # shuffle dataframe and index
+        df3 = shuffle(df2, index)  # shuffle dataframe and index
 
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
@@ -1026,22 +978,11 @@ class DataFrameGroupBy(_GroupBy):
 
     _token_prefix = 'dataframe-groupby-'
 
-    def __init__(self, df, by=None, slice=None, axis=0, level=None,
-                 as_index=True, sort=True, group_keys=True, squeeze=False):
-
-        super(DataFrameGroupBy, self).__init__(df, by=by, slice=slice,
-                                               axis=axis, level=level,
-                                               as_index=as_index, sort=sort,
-                                               group_keys=group_keys,
-                                               squeeze=squeeze)
-
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, by=self.index,
-                                 slice=key, **self.kwargs)
+            g = DataFrameGroupBy(self.obj, by=self.index, slice=key)
         else:
-            g = SeriesGroupBy(self.obj, by=self.index,
-                              slice=key, **self.kwargs)
+            g = SeriesGroupBy(self.obj, by=self.index, slice=key)
 
         # error is raised from pandas
         g._meta = g._meta[key]
@@ -1073,8 +1014,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None, axis=0, level=None,
-                 as_index=True, sort=True, group_keys=True, squeeze=False):
+    def __init__(self, df, by=None, slice=None):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1092,11 +1032,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice,
-                                            axis=axis, level=level,
-                                            as_index=as_index, sort=sort,
-                                            group_keys=group_keys,
-                                            squeeze=squeeze)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name

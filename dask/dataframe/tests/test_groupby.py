@@ -318,7 +318,7 @@ def test_groupby_index_array():
 def test_groupby_set_index():
     df = tm.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
-    pytest.raises(NotImplementedError,
+    pytest.raises(TypeError,
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
@@ -983,17 +983,17 @@ def test_groupby_not_supported():
     ddf = dd.from_pandas(pd.DataFrame({'A': [1, 1, 2, 2],
                                        'B': [1, 2, 3, 4]}),
                          npartitions=2)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', axis=1)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', level=1)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', as_index=False)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', sort=False)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', group_keys=False)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         ddf.groupby('A', squeeze=True)
 
 
