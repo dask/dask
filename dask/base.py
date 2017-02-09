@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
+from collections import OrderedDict, Iterator
 import copy
 from functools import partial
 from hashlib import md5
@@ -90,7 +90,7 @@ class Base(object):
         kwargs
             Extra keywords to forward to the scheduler ``get`` function.
         """
-        (result,) = compute(self, **kwargs)
+        (result,) = compute(self, traverse=False, **kwargs)
         return result
 
     @classmethod
@@ -140,9 +140,15 @@ def compute(*args, **kwargs):
     Parameters
     ----------
     args : object
-        Any number of objects. If the object is a dask collection, it's
-        computed and the result is returned. Otherwise it's passed through
-        unchanged.
+        Any number of objects. If it is a dask object, it's computed and the
+        result is returned. By default, python builtin collections are also
+        traversed to look for dask objects (for more information see the
+        ``traverse`` keyword). Non-dask arguments are passed through unchanged.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``compute``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     get : callable, optional
         A scheduler ``get`` function to use. If not provided, the default is
         to check the global settings first, and then fall back to defaults for
@@ -161,7 +167,19 @@ def compute(*args, **kwargs):
     >>> b = da.arange(10, chunks=2).mean()
     >>> compute(a, b)
     (45, 4.5)
+
+    By default, dask objects inside python collections will also be computed:
+
+    >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
+    ({'a': 45, 'b': 4.5, 'c': 1},)
     """
+    from dask.delayed import delayed
+    traverse = kwargs.pop('traverse', True)
+    if traverse:
+        args = tuple(delayed(a)
+                     if isinstance(a, (list, set, tuple, dict, Iterator))
+                     else a for a in args)
+
     optimize_graph = kwargs.pop('optimize_graph', True)
     variables = [a for a in args if isinstance(a, Base)]
     if not variables:

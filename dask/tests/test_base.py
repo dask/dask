@@ -330,6 +330,19 @@ def test_compute_with_literal():
     assert compute(5) == (5,)
 
 
+def test_compute_nested():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    assert (compute({'a': a, 'b': [1, 2, b]}, (c, 2)) ==
+            ({'a': 6, 'b': [1, 2, 7]}, (8, 2)))
+
+    res = compute([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1] == 8
+
+
 @pytest.mark.skipif('not da')
 @pytest.mark.skipif(sys.flags.optimize == 2,
                     reason="graphviz exception with Python -OO flag")
