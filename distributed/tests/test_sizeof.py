@@ -36,3 +36,15 @@ def test_pandas():
     assert isinstance(sizeof(df), int)
     assert isinstance(sizeof(df.x), int)
     assert isinstance(sizeof(df.index), int)
+
+
+def test_sparse_matrix():
+    sparse = pytest.importorskip('scipy.sparse')
+    sp = sparse.eye(10)
+    assert sizeof(sp.todia()) >= 152
+    assert sizeof(sp.tobsr()) >= 232
+    assert sizeof(sp.tocoo()) >= 252
+    assert sizeof(sp.tocsc()) >= 232
+    assert sizeof(sp.tocsr()) >= 260
+    assert sizeof(sp.todok()) >= 260
+    assert sizeof(sp.tolil()) >= 324

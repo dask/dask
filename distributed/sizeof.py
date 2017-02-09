@@ -62,3 +62,18 @@ def register_pandas():
         p = int(i.memory_usage())
         obj = len(i) * 100 if i.dtype == object else 0
         return int(p + obj) + 1000
+
+
+@sizeof.register_lazy("scipy")
+def register_spmatrix():
+    from scipy import sparse
+    @sizeof.register(sparse.dok_matrix)
+    def sizeof_spmatrix_dok(s):
+        return s.__sizeof__()
+
+    @sizeof.register(sparse.spmatrix)
+    def sizeof_spmatrix(s):
+        return sum(
+            sizeof(v) for v in s.__dict__.values()
+        )
+
