@@ -4,16 +4,16 @@ from collections import Iterator
 from itertools import chain
 import operator
 import uuid
+import warnings
 
 from toolz import merge, unique, curry, first
 
 from . import base, threaded
-from .base import compute  # noqa: compute import for backwards compatability
 from .compatibility import apply
 from .core import quote
 from .utils import concrete, funcname, methodcaller
 
-__all__ = ['do', 'Delayed', 'delayed']
+__all__ = ['Delayed', 'delayed']
 
 
 def flat_unique(ls):
@@ -280,6 +280,20 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
 
 
 do = delayed
+
+
+def do(*args, **kwargs):
+    """deprecated, please use ``dask.delayed.delayed``"""
+    warnings.warn("`dask.delayed.do` is deprecated, please use "
+                  "`dask.delayed.delayed` instead")
+    return delayed(*args, **kwargs)
+
+
+def compute(*args, **kwargs):
+    """deprecated, please use ``dask.compute``"""
+    warnings.warn("`dask.delayed.compute` is deprecated, please use "
+                  "`dask.compute` instead")
+    return base.compute(*args, **kwargs)
 
 
 def right(method):
