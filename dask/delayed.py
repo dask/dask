@@ -7,13 +7,13 @@ import uuid
 
 from toolz import merge, unique, curry, first
 
+from . import base, threaded
+from .base import compute  # noqa: compute import for backwards compatability
+from .compatibility import apply
 from .core import quote
 from .utils import concrete, funcname, methodcaller
-from . import base
-from .compatibility import apply
-from . import threaded
 
-__all__ = ['compute', 'do', 'Delayed', 'delayed']
+__all__ = ['do', 'Delayed', 'delayed']
 
 
 def flat_unique(ls):
@@ -280,27 +280,6 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
 
 
 do = delayed
-
-
-def compute(*args, **kwargs):
-    """Evaluate more than one ``Delayed`` at once.
-
-    Note that the only difference between this function and
-    ``dask.base.compute`` is that this implicitly wraps python objects in
-    ``Delayed``, allowing for collections of dask objects to be computed.
-
-    Examples
-    --------
-    >>> a = delayed(1)
-    >>> b = a + 2
-    >>> c = a + 3
-    >>> compute(b, c)  # Compute both simultaneously
-    (3, 4)
-    >>> compute(a, [b, c])  # Works for lists of Delayed
-    (1, [3, 4])
-    """
-    args = [delayed(a) for a in args]
-    return base.compute(*args, **kwargs)
 
 
 def right(method):

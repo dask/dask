@@ -103,15 +103,6 @@ def test_delayed_errors():
     pytest.raises(TypeError, lambda: bool(a))
 
 
-def test_compute():
-    a = delayed(1) + 5
-    b = a + 1
-    c = a + 2
-    assert compute(b, c) == (7, 8)
-    assert compute(b) == (7,)
-    assert compute([a, b], c) == ([6, 7], 8)
-
-
 def test_common_subexpressions():
     a = delayed([1, 2, 3])
     res = a[0] + a[0]
