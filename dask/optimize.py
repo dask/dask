@@ -427,6 +427,180 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
+def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=4,
+                    max_height=10, max_width=10):
+    """ WIP. Probably broken.  Fuse tasks that form reductions.
+
+    This trades parallelism opportunities for faster scheduling by making
+    tasks less granular.
+
+    There are many options (and opinions) for what the parameterization
+    of this function should be.  For the sake of experimentation, I have
+    included many parameters as described below.  My gut feeling right
+    now is that we only need one parameter, `ave_width`, and to choose
+    a reasonable value of `max_depth_new_edges` based on `ave_width`
+    (this controls against pathologies while allowing desirable behavior).
+
+    This optimization operation is more general than "single input, single
+    output".  It applies to all reductions, so it may be "multiple input,
+    single output".  I have attempted to make this well-behaved and
+    robust against pathologies.  Notably, by allowing multiple inputs
+    (what I refer to as `edges` in the code), there may be parallelism
+    opportunities w.r.t. the edges that are otherwise not captured by
+    analyzing the fusible reduction tasks alone.  I added a cheap-to-
+    compute heuristic that is conservative; i.e., it will never
+    underestimate the degree of edge parallelism.  This heuristic
+    increases the value compared against `min_width`--a measure of
+    parallizability--which is one of the reasons I prefer `min_width`.
+
+    I think it will be easy for this operation to supercede `fuse`.
+    I'm ignoring task renaming for now.
+
+    Parameters
+    ----------
+    dsk: dict
+        dask graph
+    keys: list or set
+        Keys that must remain in the dask graph
+    ave_width: float
+        Limit for `width = num_nodes / height`, a good measure of
+        parallelizability.
+    max_depth_new_edges: int
+        Don't fuse if new dependencies are added after this many levels
+    max_height: int
+        Don't fuse more than this many levels
+    max_width: int
+        Don't fuse if total width is greater than this
+
+    """
+    if keys is not None and not isinstance(keys, set):
+        if not isinstance(keys, list):
+            keys = [keys]
+        keys = set(flatten(keys))
+
+    # TODO: accept `dependencies=` keyword and return updated dependencies
+    deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
+
+    rdeps = {}
+    for k, vals in deps.items():
+        for v in vals:
+            if v not in rdeps:
+                rdeps[v] = []
+            rdeps[v].append(k)
+
+    reducible = set(k for k, vals in rdeps.items() if len(vals) < 2)
+    if keys:
+        reducible -= keys
+    if not reducible:
+        return dsk
+    irreducible = reducible.symmetric_difference(rdeps)
+
+    rv = dsk.copy()
+    while reducible:
+        parent = next(iter(reducible))
+        info_stack = []
+        num_processing = []  # The number of `info_stack` objects to process
+        children_stack = [parent]
+        while True:
+            child = children_stack[-1]
+            children = reducible.intersection(deps[child])
+            if children:
+                # Depth-first search
+                num_processing.append(len(children))
+                children_stack.extend(children)
+                parent = child
+                reducible -= children
+                continue
+
+            else:
+                # Prepare and handle fusing
+                edges = irreducible.intersection(deps[child])
+                # key, task, height, width, number of nodes, set of edges
+                info_stack.append((child, dsk[child], 0, 1, 1, edges))
+
+                children_stack.pop()
+                if children_stack and children_stack[-1] == parent:
+                    # Fuse as appropriate
+                    children_stack.pop()
+                    num_children = num_processing.pop()
+
+                    height = 1
+                    width = 0
+                    num_single_nodes = 0
+                    num_nodes = 0
+                    edges = set()
+                    max_num_edges = 0
+                    children_info = info_stack[-num_children:]
+                    del info_stack[-num_children:]
+                    for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_edges in children_info:
+                        if cur_height == 0:
+                            num_single_nodes += 1
+                        elif cur_height > height:
+                            height = cur_height
+                        width += cur_width
+                        num_nodes += cur_num_nodes
+                        if len(cur_edges) > max_num_edges:
+                            max_num_edges = len(cur_edges)
+                        edges |= cur_edges
+
+                    is_fused = False
+                    if (
+                        width <= max_width and
+                        height <= max_height and
+                        num_single_nodes <= ave_width and
+                        num_nodes / height <= ave_width
+                    ):
+                        parent_edges = irreducible.intersection(deps[parent])
+                        len_wo_parent = len(edges)
+                        edges |= parent_edges
+                        # Sanity check; don't go too deep if new levels
+                        # introduce new edge dependencies
+                        if len(edges) <= len_wo_parent and height < max_depth_new_edges:
+                            if len(parent_edges) > max_num_edges:
+                                max_num_edges = len(parent_edges)
+                            # Fudge factor to account for possible parallelism
+                            # with the boundaries
+                            num_nodes += min(num_children - 1,
+                                             len(edges) - max_num_edges)
+                            if num_nodes / height <= ave_width:
+                                # Perform substitutions as we go
+                                val = dsk[parent]
+                                for child_info in children_info:
+                                    val = subs(val, child_info[0], child_info[1])
+                                    del rv[child_info[0]]
+                                # key, task, height, width, number of nodes, set of edges
+                                info_stack.append((parent, val, height, width,
+                                                   num_nodes, edges))
+                                is_fused = True
+
+                    if not is_fused:
+                        for child_info in children_info:
+                            rv[child_info[0]] = child_info[1]
+
+                if num_processing:
+                    parent = rdeps[parent][0]
+                    continue
+
+                if parent in reducible:
+                    # Traverse upwards if possible
+                    new_parent = rdeps[parent][0]
+                    reducible.discard(parent)
+                    siblings = reducible.intersection(deps[new_parent])
+                    if siblings:
+                        num_processing.append(len(siblings) + 1)
+                        children_stack = [new_parent] + list(siblings)
+                        reducible -= siblings
+                        parent = new_parent
+                        continue
+
+                # All done in this region
+                if info_stack:
+                    parent_info = info_stack.pop()
+                    rv[parent_info[0]] = parent_info[1]
+                break
+    return rv
+
+
 # Defining `key_split` (used by `default_fused_keys_renamer`) in utils.py
 # results in messy circular imports, so define it here instead.
 hex_pattern = re.compile('[a-f]+')
