@@ -512,92 +512,90 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=4,
                 reducible -= children
                 continue
 
-            else:
-                # Prepare and handle fusing
-                edges = irreducible.intersection(deps[child])
-                # key, task, height, width, number of nodes, set of edges
-                info_stack.append((child, dsk[child], 0, 1, 1, edges))
+            # Prepare and handle fusing
+            edges = irreducible.intersection(deps[child])
+            # key, task, height, width, number of nodes, set of edges
+            info_stack.append((child, dsk[child], 0, 1, 1, edges))
 
+            children_stack.pop()
+            if children_stack and children_stack[-1] == parent:
+                # Fuse as appropriate
                 children_stack.pop()
-                if children_stack and children_stack[-1] == parent:
-                    # Fuse as appropriate
-                    children_stack.pop()
-                    num_children = num_processing.pop()
+                num_children = num_processing.pop()
 
-                    height = 1
-                    width = 0
-                    num_single_nodes = 0
-                    num_nodes = 0
-                    edges = set()
-                    max_num_edges = 0
-                    children_info = info_stack[-num_children:]
-                    del info_stack[-num_children:]
-                    for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_edges in children_info:
-                        if cur_height == 0:
-                            num_single_nodes += 1
-                        elif cur_height > height:
-                            height = cur_height
-                        width += cur_width
-                        num_nodes += cur_num_nodes
-                        if len(cur_edges) > max_num_edges:
-                            max_num_edges = len(cur_edges)
-                        edges |= cur_edges
+                height = 1
+                width = 0
+                num_single_nodes = 0
+                num_nodes = 0
+                edges = set()
+                max_num_edges = 0
+                children_info = info_stack[-num_children:]
+                del info_stack[-num_children:]
+                for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_edges in children_info:
+                    if cur_height == 0:
+                        num_single_nodes += 1
+                    elif cur_height > height:
+                        height = cur_height
+                    width += cur_width
+                    num_nodes += cur_num_nodes
+                    if len(cur_edges) > max_num_edges:
+                        max_num_edges = len(cur_edges)
+                    edges |= cur_edges
 
-                    is_fused = False
-                    if (
-                        width <= max_width and
-                        height <= max_height and
-                        num_single_nodes <= ave_width and
-                        num_nodes / height <= ave_width
-                    ):
-                        parent_edges = irreducible.intersection(deps[parent])
-                        len_wo_parent = len(edges)
-                        edges |= parent_edges
-                        # Sanity check; don't go too deep if new levels
-                        # introduce new edge dependencies
-                        if len(edges) <= len_wo_parent and height < max_depth_new_edges:
-                            if len(parent_edges) > max_num_edges:
-                                max_num_edges = len(parent_edges)
-                            # Fudge factor to account for possible parallelism
-                            # with the boundaries
-                            num_nodes += min(num_children - 1,
-                                             len(edges) - max_num_edges)
-                            if num_nodes / height <= ave_width:
-                                # Perform substitutions as we go
-                                val = dsk[parent]
-                                for child_info in children_info:
-                                    val = subs(val, child_info[0], child_info[1])
-                                    del rv[child_info[0]]
-                                # key, task, height, width, number of nodes, set of edges
-                                info_stack.append((parent, val, height, width,
-                                                   num_nodes, edges))
-                                is_fused = True
+                is_fused = False
+                if (
+                    width <= max_width and
+                    height <= max_height and
+                    num_single_nodes <= ave_width and
+                    num_nodes / height <= ave_width
+                ):
+                    parent_edges = irreducible.intersection(deps[parent])
+                    len_wo_parent = len(edges)
+                    edges |= parent_edges
+                    # Sanity check; don't go too deep if new levels introduce new edge dependencies
+                    if len(edges) <= len_wo_parent and height < max_depth_new_edges:
+                        if len(parent_edges) > max_num_edges:
+                            max_num_edges = len(parent_edges)
+                        # Fudge factor to account for possible parallelism with the boundaries
+                        num_nodes += min(num_children - 1, len(edges) - max_num_edges)
+                        if num_nodes / height <= ave_width:
+                            # Perform substitutions as we go
+                            val = dsk[parent]
+                            for child_info in children_info:
+                                val = subs(val, child_info[0], child_info[1])
+                                del rv[child_info[0]]
+                            # key, task, height, width, number of nodes, set of edges
+                            info_stack.append((parent, val, height, width, num_nodes, edges))
+                            is_fused = True
 
-                    if not is_fused:
-                        for child_info in children_info:
-                            rv[child_info[0]] = child_info[1]
+                if not is_fused:
+                    for child_info in children_info:
+                        rv[child_info[0]] = child_info[1]
 
                 if num_processing:
                     parent = rdeps[parent][0]
                     continue
 
-                if parent in reducible:
-                    # Traverse upwards if possible
-                    new_parent = rdeps[parent][0]
-                    reducible.discard(parent)
-                    siblings = reducible.intersection(deps[new_parent])
-                    if siblings:
-                        num_processing.append(len(siblings) + 1)
-                        children_stack = [new_parent] + list(siblings)
-                        reducible -= siblings
-                        parent = new_parent
-                        continue
+            if num_processing:
+                continue
 
-                # All done in this region
-                if info_stack:
-                    parent_info = info_stack.pop()
-                    rv[parent_info[0]] = parent_info[1]
-                break
+            if parent in reducible:
+                # Traverse upwards if possible
+                new_parent = rdeps[parent][0]
+                reducible.discard(parent)
+                siblings = reducible.intersection(deps[new_parent])
+                if siblings:
+                    num_processing.append(len(siblings) + 1)
+                    children_stack = [new_parent] + list(siblings)
+                    reducible -= siblings
+                    parent = new_parent
+                    continue
+
+            # All done in this region
+            if info_stack:
+                parent_info = info_stack.pop()
+                rv[parent_info[0]] = parent_info[1]
+            break
     return rv
 
 

@@ -5,7 +5,7 @@ import pytest
 
 from dask.utils_test import add, inc
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-                           fuse_getitem, fuse_selections)
+                           fuse_getitem, fuse_selections, fuse_reductions)
 
 
 def double(x):
@@ -378,3 +378,49 @@ def test_inline_cull_dependencies():
 
     d2, dependencies = cull(d, ['d', 'e'])
     inline(d2, {'b'}, dependencies=dependencies)
+
+
+def test_fuse_reductions():
+    def f(*args):
+        return args
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a', 'a'),
+        'c': (f, 'b1', 'b2'),
+    }
+    assert fuse_reductions(d, ave_width=2) == {
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a', 'a')),
+    }
+    assert fuse_reductions(d, ave_width=1.9) == d
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a', 'a'),
+        'b3': (f, 'a', 'a', 'a'),
+        'c': (f, 'b1', 'b2', 'b3'),
+    }
+    assert fuse_reductions(d, ave_width=3) == {
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a', 'a'), (f, 'a', 'a', 'a')),
+    }
+    assert fuse_reductions(d, ave_width=2.9) == d
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c': (f, 'b1', 'b2'),
+        'd1': (f, 'c'),
+        'd2': (f, 'c'),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse_reductions(d, ave_width=2) == {
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a')),
+        'e': (f, (f, 'c'), (f, 'c')),
+    }
+    assert fuse_reductions(d, ave_width=1.9) == d
