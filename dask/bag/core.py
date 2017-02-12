@@ -292,7 +292,9 @@ class Item(Base):
 
         See ``dask.bag.from_delayed`` for details
         """
-        from dask.delayed import Delayed
+        from dask.delayed import Delayed, delayed
+        if not isinstance(value, Delayed) and hasattr(value, 'key'):
+            value = delayed(value)
         assert isinstance(value, Delayed)
         return Item(value.dask, value.key)
 
@@ -1437,9 +1439,13 @@ def from_delayed(values):
     --------
     dask.delayed
     """
-    from dask.delayed import Delayed
+    from dask.delayed import Delayed, delayed
     if isinstance(values, Delayed):
         values = [values]
+    values = [delayed(v)
+              if not isinstance(v, Delayed) and hasattr(v, 'key')
+              else v
+              for v in values]
     dsk = merge(v.dask for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)
