@@ -109,3 +109,18 @@ def test_h5py_serialize(c, s, a, b):
             y = c.compute(x)
             y = yield y._result()
             assert (y[:] == dset[:]).all()
+
+
+@gen_cluster(client=True)
+def test_h5py_serialize_2(c, s, a, b):
+    with tmpfile() as fn:
+        with h5py.File(fn, mode='a') as f:
+            x = f.create_dataset('/group/x', shape=(12,), dtype='i4',
+                                 chunks=(4,))
+            x[:] = [1, 2, 3, 4] * 3
+        with h5py.File(fn, mode='r') as f:
+            dset = f['/group/x']
+            x = da.from_array(dset, chunks=(3,))
+            y = c.compute(x.sum())
+            y = yield y._result()
+            assert y == (1 + 2 + 3 + 4) * 3

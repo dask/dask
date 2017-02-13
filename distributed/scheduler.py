@@ -2162,7 +2162,8 @@ class Scheduler(Server):
                 self.occupancy[w] -= duration
             self.check_idle_saturated(w)
             if w != worker:
-                msg = {'op': 'release-task', 'key': key}
+                pass
+                # msg = {'op': 'release-task', 'key': key}
                 # self.worker_comms[w].send(msg)
 
             recommendations = OrderedDict()

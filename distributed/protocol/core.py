@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 def dumps(msg):
     """ Transform Python message to bytestream suitable for communication """
+    original = msg
     try:
         data = {}
         # Only lists and dicts can contain serialized values
@@ -104,8 +105,11 @@ def loads(frames, deserialize=True):
             head = headers[key]
             lengths = head['lengths']
             count = head['count']
-            fs = frames[-count::][::-1]
-            del frames[-count:]
+            if count:
+                fs = frames[-count::][::-1]
+                del frames[-count:]
+            else:
+                fs = []
 
             if deserialize or key in bytestrings:
                 fs = decompress(head, fs)
