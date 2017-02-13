@@ -497,35 +497,39 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
 
     rv = dsk.copy()
     while reducible:
-        parent = next(iter(reducible))
+        child = next(iter(reducible))
+        parent = rdeps[child][0]
+        siblings = reducible.intersection(deps[parent])
+
+        # These are the stacks we use to store data as we traverse the graph
         info_stack = []
-        num_processing = []  # The number of `info_stack` objects to process
-        children_stack = [parent]
+        num_processing = [len(siblings)]  # The number of `info_stack` objects to process
+        children_stack = [parent] + list(siblings)
         while True:
             child = children_stack[-1]
-            children = reducible.intersection(deps[child])
-            if children:
-                # Depth-first search
-                num_processing.append(len(children))
-                children_stack.extend(children)
-                parent = child
-                reducible -= children
-                continue
-
-            # Prepare and handle fusing
-            if children_stack[-1] != parent or not num_processing:
+            if child != parent:
+                if child in reducible:
+                    reducible.remove(child)
+                    children = reducible.intersection(deps[child])
+                    if children:
+                        # Depth-first search
+                        num_processing.append(len(children))
+                        children_stack.extend(children)
+                        parent = child
+                        continue
                 # This is a leaf node in the reduction region
                 edges = irreducible.intersection(deps[child])
                 # key, task, height, width, number of nodes, set of edges
                 info_stack.append((child, dsk[child], 0, 1, 1, edges))
-                children_stack.pop()
+                child = children_stack.pop()
 
-            if children_stack and children_stack[-1] == parent:
+            if child == parent:
                 # Fuse as appropriate
                 is_fused = False
                 children_stack.pop()
                 num_children = num_processing.pop()
                 if num_children > 0:
+                    # Calculate metrics
                     height = 1
                     width = 0
                     num_single_nodes = 0
@@ -575,27 +579,27 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
                         rv[child_info[0]] = child_info[1]
                     if num_processing:
                         num_processing[-1] -= 1
-
+                        irreducible.add(parent)
                 if num_processing:
+                    # We are finished with the current reducible node and its children.
+                    # Move back up the stack.
                     parent = rdeps[parent][0]
-                    continue
 
             if num_processing:
+                # We have more processing to do at this level (either DFS or fusing)
                 continue
 
             if parent in reducible:
                 # Traverse upwards if possible
                 new_parent = rdeps[parent][0]
-                reducible.discard(parent)
+                reducible.remove(parent)
                 siblings = reducible.intersection(deps[new_parent])
-                if siblings:
-                    num_processing.append(len(siblings) + len(info_stack))
-                    children_stack = [new_parent] + list(siblings)
-                    reducible -= siblings
-                    parent = new_parent
-                    continue
+                num_processing.append(len(siblings) + len(info_stack))
+                children_stack = [new_parent] + list(siblings)
+                parent = new_parent
+                continue
 
-            # All done in this region
+            # All done in this region.
             if info_stack:
                 parent_info = info_stack.pop()
                 rv[parent_info[0]] = parent_info[1]
