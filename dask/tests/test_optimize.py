@@ -449,3 +449,135 @@ def test_fuse_reductions_single_input():
         'd': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
     }
     assert fuse_reductions(d, ave_width=3) == expected
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'b5': (f, 'a'),
+        'b6': (f, 'a'),
+        'b7': (f, 'a'),
+        'b8': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'c3': (f, 'b5', 'b6'),
+        'c4': (f, 'b7', 'b8'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse_reductions(d, ave_width=1.9) == d
+    expected = {
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'c3': (f, (f, 'a'), (f, 'a')),
+        'c4': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse_reductions(d, ave_width=2) == expected
+    assert fuse_reductions(d, ave_width=2.9) == expected
+    expected = {
+        'a': 1,
+        'd1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse_reductions(d, ave_width=3) == expected
+    assert fuse_reductions(d, ave_width=4.6) == expected
+    expected = {
+        'a': 1,
+        'e': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+              (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))
+    }
+    assert fuse_reductions(d, ave_width=4.7) == expected
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'b5': (f, 'a'),
+        'b6': (f, 'a'),
+        'b7': (f, 'a'),
+        'b8': (f, 'a'),
+        'b9': (f, 'a'),
+        'b10': (f, 'a'),
+        'b11': (f, 'a'),
+        'b12': (f, 'a'),
+        'b13': (f, 'a'),
+        'b14': (f, 'a'),
+        'b15': (f, 'a'),
+        'b16': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'c3': (f, 'b5', 'b6'),
+        'c4': (f, 'b7', 'b8'),
+        'c5': (f, 'b9', 'b10'),
+        'c6': (f, 'b11', 'b12'),
+        'c7': (f, 'b13', 'b14'),
+        'c8': (f, 'b15', 'b16'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'd3': (f, 'c5', 'c6'),
+        'd4': (f, 'c7', 'c8'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    }
+    assert fuse_reductions(d, ave_width=1.9) == d
+    expected = {
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'c3': (f, (f, 'a'), (f, 'a')),
+        'c4': (f, (f, 'a'), (f, 'a')),
+        'c5': (f, (f, 'a'), (f, 'a')),
+        'c6': (f, (f, 'a'), (f, 'a')),
+        'c7': (f, (f, 'a'), (f, 'a')),
+        'c8': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'd3': (f, 'c5', 'c6'),
+        'd4': (f, 'c7', 'c8'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    }
+    assert fuse_reductions(d, ave_width=2) == expected
+    assert fuse_reductions(d, ave_width=2.9) == expected
+    expected = {
+        'a': 1,
+        'd1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd3': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd4': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    }
+    assert fuse_reductions(d, ave_width=3) == expected
+    assert fuse_reductions(d, ave_width=4.6) == expected
+    expected = {
+        'a': 1,
+        'e1': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+        'e2': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+        'f': (f, 'e1', 'e2'),
+    }
+    assert fuse_reductions(d, ave_width=4.7) == expected
+    assert fuse_reductions(d, ave_width=7.4) == expected
+    expected = {
+        'a': 1,
+        'f': (f, (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+                  (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+              (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))),
+    }
+    assert fuse_reductions(d, ave_width=7.5, max_width=16) == expected
