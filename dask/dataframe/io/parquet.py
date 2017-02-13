@@ -2,6 +2,7 @@ import pandas as pd
 from toolz import first, partial
 
 from ..core import DataFrame, Series
+from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
 from ...compatibility import PY3
 from ...delayed import delayed
@@ -12,6 +13,7 @@ try:
     from fastparquet import parquet_thrift
     from fastparquet.core import read_row_group_file
     from fastparquet.api import _pre_allocate
+    from fastparquet.util import check_column_names
     default_encoding = parquet_thrift.Encoding.PLAIN
 except:
     fastparquet = False
@@ -71,16 +73,13 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     except:
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
+    check_column_names(pf.columns, categories)
+    categories = categories or []
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
            not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
-
-    # get category values from first row-group
-    categories = categories or []
-    cats = pf.grab_cats(categories)
-    categories = [cat for cat in categories if cats.get(cat, None) is not None]
 
     # Find an index among the partially sorted columns
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
@@ -113,7 +112,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    dtypes = {k: ('category' if k in (categories or []) else v) for k, v in
+    dtypes = {k: ('category' if k in categories else v) for k, v in
               pf.dtypes.items() if k in all_columns}
 
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
@@ -121,7 +120,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                         columns=[c for c in pf.columns if c in dtypes])
 
     for cat in categories:
-        meta[cat] = pd.Series(pd.Categorical([], categories=cats[cat]))
+        meta[cat] = pd.Series(pd.Categorical([],
+                              categories=[UNKNOWN_CATEGORIES]))
 
     if index_col:
         meta = meta.set_index(index_col)

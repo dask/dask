@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import dask
+import dask.async
 from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
@@ -130,7 +131,7 @@ def test_categorical():
 
         ddf2 = read_parquet(tmp, categories=['x'])
 
-        assert ddf2.x.cat.categories.tolist() == ['a', 'b', 'c']
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
@@ -281,3 +282,25 @@ def test_roundtrip(df, write_kwargs, read_kwargs):
         to_parquet(tmp, ddf, **write_kwargs)
         ddf2 = read_parquet(tmp, index=df.index.name, **read_kwargs)
         assert_eq(ddf, ddf2)
+
+
+def test_categories(fn):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': list('caaab')})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf['y'] = ddf.y.astype('category')
+    ddf.to_parquet(fn)
+    ddf2 = dd.read_parquet(fn, categories=['y'])
+    with pytest.raises(NotImplementedError):
+        ddf2.y.cat.categories
+    assert set(ddf2.y.compute().cat.categories) == {'a', 'b', 'c'}
+    cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories).compute()
+    assert cats_set.tolist() == ['a', 'c', 'a', 'b']
+    assert_eq(ddf.y, ddf2.y, check_names=False)
+    with pytest.raises(dask.async.RemoteException):
+        # attempt to load as category that which is not so encoded
+        ddf2 = dd.read_parquet(fn, categories=['x']).compute()
+
+    with pytest.raises(ValueError):
+        # attempt to load as category unknown column
+        ddf2 = dd.read_parquet(fn, categories=['foo'])
