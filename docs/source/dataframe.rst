@@ -21,6 +21,7 @@ exhibit similar performance characteristics as are found in Pandas.
    dataframe-overview.rst
    dataframe-create.rst
    dataframe-api.rst
+   dataframe-performance.rst
 
 Other topics
 
