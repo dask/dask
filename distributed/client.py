@@ -962,9 +962,22 @@ class Client(object):
         Accepts a future, nested container of futures, iterator, or queue.
         The return type will match the input type.
 
+        Parametrs
+        ---------
+        futures: Collection of futures
+            This can be a possibly nested collection of Future objects.
+            Collections can be lists, sets, iterators, queues or dictionaries
+        errors: string
+            Either 'raise' or 'skip' if we should raise if a future has erred
+            or skip its inclusion in the output collection
+        maxsize: int
+            If the input is a queue then this produces an output queue with a
+            maximum size.
+
         Returns
         -------
-        Future results
+        results: a collection of the same type as the input, but now with
+        gathered results rather than futures
 
         Examples
         --------
