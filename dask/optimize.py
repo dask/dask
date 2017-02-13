@@ -427,7 +427,7 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=4,
+def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
                     max_height=10, max_width=10):
     """ WIP. Probably broken.  Fuse tasks that form reductions.
 
@@ -513,11 +513,13 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=4,
                 continue
 
             # Prepare and handle fusing
-            edges = irreducible.intersection(deps[child])
-            # key, task, height, width, number of nodes, set of edges
-            info_stack.append((child, dsk[child], 0, 1, 1, edges))
+            if len(children_stack) > 1 or not num_processing:
+                # This is a leaf node in the reduction region
+                edges = irreducible.intersection(deps[child])
+                # key, task, height, width, number of nodes, set of edges
+                info_stack.append((child, dsk[child], 0, 1, 1, edges))
+                children_stack.pop()
 
-            children_stack.pop()
             if children_stack and children_stack[-1] == parent:
                 # Fuse as appropriate
                 children_stack.pop()
@@ -565,7 +567,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=4,
                                 val = subs(val, child_info[0], child_info[1])
                                 del rv[child_info[0]]
                             # key, task, height, width, number of nodes, set of edges
-                            info_stack.append((parent, val, height, width, num_nodes, edges))
+                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
                             is_fused = True
 
                 if not is_fused:

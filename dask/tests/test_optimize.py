@@ -380,7 +380,7 @@ def test_inline_cull_dependencies():
     inline(d2, {'b'}, dependencies=dependencies)
 
 
-def test_fuse_reductions():
+def test_fuse_reductions_single_input():
     def f(*args):
         return args
 
@@ -424,3 +424,28 @@ def test_fuse_reductions():
         'e': (f, (f, 'c'), (f, 'c')),
     }
     assert fuse_reductions(d, ave_width=1.9) == d
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'd': (f, 'c1', 'c2'),
+    }
+    assert fuse_reductions(d, ave_width=1.9) == d
+    expected = {
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'd': (f, 'c1', 'c2'),
+    }
+    assert fuse_reductions(d, ave_width=2) == expected
+    assert fuse_reductions(d, ave_width=2.9) == expected
+    expected = {
+        'a': 1,
+        'd': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+    }
+    assert fuse_reductions(d, ave_width=3) == expected
