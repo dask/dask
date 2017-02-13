@@ -125,12 +125,12 @@ these "partitions".  Often the number of partitions is decided for you; for
 example it might be the number of CSV files from which you are reading. However
 over time as you reduce or increase the size of your pandas dataframes by
 filtering or joining it may be wise to reconsider how many partitions you need.
-There is a cost to having too man or having too few.
+There is a cost to having too many or having too few.
 
 Partitions should fit comfortably in memory (smaller than a gigabyte) but also
 not be too numerous.  Every operation on every partition takes the central
 scheduler a few hundred microseconds to process.  If you have a few thousand
-tasks this is barely noticeable, but it is nice to reduce the number is
+tasks this is barely noticeable, but it is nice to reduce the number if
 possible.
 
 A common situation is that you load lots of data into reasonably sized
@@ -164,7 +164,7 @@ Joining two dataframes can be either very expensive or very cheap depending on
 the situation.  It is cheap in the following cases:
 
 1.  Joining a Dask.dataframe with a Pandas dataframe
-2.  Joining a Dask.dataframe with a Dask.datafrmae of a single partition.
+2.  Joining a Dask.dataframe with a Dask.dataframe of a single partition.
 3.  Joining Dask.dataframes along their indexes
 
 It is expensive in the following case:
