@@ -525,16 +525,14 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     parent = child
                     continue
                 # This is a leaf node in the reduction region
-                edges = deps[child] - reducible
-
                 # key, task, height, width, number of nodes, set of edges
-                info_stack.append((child, dsk[child], 0, 1, 1, edges))
+                info_stack.append((child, dsk[child], 0, 1, 1, deps[child] - reducible))
                 child = children_stack.pop()
 
             if child == parent:
+                children_stack.pop()
                 # Calculate metrics and fuse as appropriate
                 is_fused = False
-                children_stack.pop()
                 num_children = num_processing.pop()
                 height = 1
                 width = 0
@@ -579,7 +577,10 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                                 del rv[child]
                                 reducible.remove(child)
                             # key, task, height, width, number of nodes, set of edges
-                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
+                            if parent in reducible:
+                                info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
+                            else:
+                                rv[parent] = val
                             is_fused = True
 
                 if not is_fused:
@@ -607,22 +608,14 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
             if parent in reducible:
                 # Traverse upwards
                 new_parent = rdeps[parent][0]
-                if info_stack:
-                    siblings = reducible & deps[new_parent]
-                    siblings.remove(parent)
-                else:
-                    reducible.remove(parent)
-                    siblings = reducible & deps[new_parent]
-                num_processing.append(len(siblings) + len(info_stack))
+                siblings = reducible & deps[new_parent]
+                siblings.remove(parent)
+                num_processing.append(len(siblings) + 1)
                 children_stack = [new_parent] + list(siblings)
                 parent = new_parent
                 continue
 
             # All done in this region.
-            if info_stack:
-                parent_info = info_stack.pop()
-                rv[parent_info[0]] = parent_info[1]
-                reducible.discard(parent_info[0])
             break
     return rv
 
