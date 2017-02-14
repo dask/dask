@@ -505,14 +505,15 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
         return dsk
 
     rv = dsk.copy()
+    # These are the stacks we use to store data as we traverse the graph
+    info_stack = []
+    children_stack = []
     while reducible:
         child = next(iter(reducible))
         parent = rdeps[child][0]
         siblings = reducible & deps[parent]
-
-        # These are the stacks we use to store data as we traverse the graph
-        info_stack = []
-        children_stack = [parent] + list(siblings)
+        children_stack.append(parent)
+        children_stack.extend(siblings)
         while True:
             child = children_stack[-1]
             if child != parent:
@@ -565,15 +566,15 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     # Perform substitutions as we go
                     val = dsk[parent]
                     for child_info in children_info:
-                        child = child_info[0]
-                        val = subs(val, child, child_info[1])
-                        del rv[child]
-                        reducible.remove(child)
+                        val = subs(val, child_info[0], child_info[1])
+                        del rv[child_info[0]]
+                        reducible.remove(child_info[0])
                     if parent in reducible:
                         # key, task, height, width, number of nodes, set of edges
                         info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
                     else:
                         rv[parent] = val
+                        break
                 else:
                     for child_info in children_info:
                         rv[child_info[0]] = child_info[1]
@@ -586,27 +587,16 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                             width -= 1
                         # key, task, height, width, number of nodes, set of edges
                         info_stack.append((parent, dsk[parent], 0, width, width, edges))
+                    else:
+                        break
 
-                if children_stack:
-                    # We are finished with the current reducible node and its children.
-                    # Move back up the stack.
-                    parent = rdeps[parent][0]
-
-            if children_stack:
-                # We have more processing to do at this level (either DFS or fusing)
-                continue
-
-            if parent in reducible:
                 # Traverse upwards
-                new_parent = rdeps[parent][0]
-                siblings = reducible & deps[new_parent]
-                siblings.remove(parent)
-                children_stack = [new_parent] + list(siblings)
-                parent = new_parent
-                continue
-
-            # All done in this region.
-            break
+                parent = rdeps[parent][0]
+                if not children_stack:
+                    siblings = reducible & deps[parent]
+                    siblings.remove(child)
+                    children_stack.append(parent)
+                    children_stack.extend(siblings)
     return rv
 
 
