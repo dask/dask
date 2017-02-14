@@ -26,6 +26,7 @@ def test_cull():
 
 
 def test_fuse():
+    # fuse = fuse_reductions  # XXX
     d = {
         'w': (inc, 'x'),
         'x': (inc, 'y'),
@@ -186,6 +187,7 @@ def test_fuse():
 
 
 def test_fuse_keys():
+    # fuse = fuse_reductions  # XXX
     d = {
         'a': 1,
         'b': (inc, 'a'),
@@ -399,7 +401,7 @@ def test_fuse_reductions_single_input():
             'a': 1,
             'c': (f, (f, 'a'), (f, 'a', 'a')),
         },
-        {'a': set(), 'c': {'a', 'b1', 'b2'}}
+        {'a': set(), 'c': {'a'}}
     )
 
     d = {
