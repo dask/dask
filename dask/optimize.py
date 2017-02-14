@@ -511,9 +511,8 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
     while reducible:
         child = next(iter(reducible))
         parent = rdeps[child][0]
-        siblings = reducible & deps[parent]
         children_stack.append(parent)
-        children_stack.extend(siblings)
+        children_stack.extend(reducible & deps[parent])
         while True:
             child = children_stack[-1]
             if child != parent:
@@ -571,7 +570,11 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                         reducible.remove(child_info[0])
                     if parent in reducible:
                         # key, task, height, width, number of nodes, set of edges
-                        info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
+                        if num_children == 1 and len(edges) == len(children_edges):
+                            # Linear fuse
+                            info_stack.append((parent, val, height, width, num_nodes, edges))
+                        else:
+                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
                     else:
                         rv[parent] = val
                         break

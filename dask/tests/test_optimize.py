@@ -607,6 +607,65 @@ def test_fuse_reductions_single_input():
     }
     assert fuse_reductions(d, ave_width=1) == {'d': (f, (f, (f, 1)))}
 
+    d = {
+        'a': 1,
+        'b': (f, 'a'),
+        'c': (f, 'a', 'b'),
+        'd': (f, 'a', 'c'),
+    }
+    assert fuse_reductions(d, ave_width=1) == {
+        'a': 1,
+        'd': (f, 'a', (f, 'a', (f, 'a'))),
+    }
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c1': (f, 'b1'),
+        'd1': (f, 'c1'),
+        'e1': (f, 'd1'),
+        'f': (f, 'e1', 'b2'),
+    }
+    expected = {
+        'a': 1,
+        'b2': (f, 'a'),
+        'e1': (f, (f, (f, (f, 'a')))),
+        'f': (f, 'e1', 'b2'),
+
+    }
+    assert fuse_reductions(d, ave_width=1) == expected
+    assert fuse_reductions(d, ave_width=1.9) == expected
+    expected = {
+        'a': 1,
+        'f': (f, (f, (f, (f, (f, 'a')))), (f, 'a')),
+    }
+    assert fuse_reductions(d, ave_width=2) == expected
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c1': (f, 'a', 'b1'),
+        'd1': (f, 'a', 'c1'),
+        'e1': (f, 'a', 'd1'),
+        'f': (f, 'a', 'e1', 'b2'),
+    }
+    expected = {
+        'a': 1,
+        'b2': (f, 'a'),
+        'e1': (f, 'a', (f, 'a', (f, 'a', (f, 'a')))),
+        'f': (f, 'a', 'e1', 'b2'),
+
+    }
+    assert fuse_reductions(d, ave_width=1) == expected
+    assert fuse_reductions(d, ave_width=1.9) == expected
+    expected = {
+        'a': 1,
+        'f': (f, 'a', (f, 'a', (f, 'a', (f, 'a', (f, 'a')))), (f, 'a')),
+    }
+    assert fuse_reductions(d, ave_width=2) == expected
+
 
 def test_fuse_reductions_multiple_input():
     def f(*args):
