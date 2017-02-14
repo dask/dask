@@ -50,6 +50,8 @@ class WorkStealing(SchedulerPlugin):
         self.log = deque(maxlen=100000)
         self.count = 0
 
+        scheduler.worker_handlers['long-running'] = self.transition_long_running
+
     def add_worker(self, scheduler=None, worker=None):
         self.stealable[worker] = [set() for i in range(15)]
 
@@ -72,6 +74,9 @@ class WorkStealing(SchedulerPlugin):
                     for k in self.stealable_unknown_durations.pop(ks):
                         if self.scheduler.task_state[k] == 'processing':
                             self.put_key_in_stealable(k, split=ks)
+
+    def transition_long_running(self, key=None, worker=None):
+        self.remove_key_from_stealable(key)
 
     def put_key_in_stealable(self, key, split=None):
         worker = self.scheduler.rprocessing[key]

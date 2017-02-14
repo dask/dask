@@ -1344,6 +1344,7 @@ class Worker(WorkerBase):
 
             self.executing.remove(key)
             self.long_running.add(key)
+            self.batched_stream.send({'op': 'long-running', 'key': key})
 
             self.ensure_computing()
         except Exception as e:
