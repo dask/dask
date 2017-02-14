@@ -592,7 +592,7 @@ def test_fuse_reductions_single_input():
               (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
                (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))),
     }
-    assert fuse_reductions(d, ave_width=7.5, max_width=16) == expected
+    assert fuse_reductions(d, ave_width=7.5) == expected
 
     d = {
         'a': 1,
@@ -608,7 +608,7 @@ def test_fuse_reductions_single_input():
     assert fuse_reductions(d, ave_width=1) == {'d': (f, (f, (f, 1)))}
 
 
-def test_fuse_reductions__input():
+def test_fuse_reductions_multiple_input():
     def f(*args):
         return args
 

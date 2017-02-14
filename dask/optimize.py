@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import re
 from operator import getitem
 
@@ -427,8 +428,8 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
-                    max_height=10, max_width=10):
+def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
+                    max_height=None, max_width=None):
     """ WIP. Probably broken.  Fuse tasks that form reductions.
 
     This trades parallelism opportunities for faster scheduling by making
@@ -478,6 +479,14 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
             keys = [keys]
         keys = set(flatten(keys))
 
+    # Assign reasonable, not too restrictive defaults
+    if max_depth_new_edges is None:
+        max_depth_new_edges = ave_width + 1.5
+    if max_width is None:
+        max_width = 1.5 + ave_width * math.log(ave_width + 1)
+    if max_height is None:
+        max_height = len(dsk)
+
     # TODO: accept `dependencies=` keyword and return updated dependencies
     deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
 
@@ -488,7 +497,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
                 rdeps[v] = []
             rdeps[v].append(k)
 
-    reducible = set(k for k, vals in rdeps.items() if len(vals) < 2)
+    reducible = set(k for k, vals in rdeps.items() if len(vals) == 1)
     if keys:
         reducible -= keys
     if not reducible:
@@ -508,15 +517,14 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
         while True:
             child = children_stack[-1]
             if child != parent:
-                if child in reducible:
-                    reducible.remove(child)
-                    children = reducible.intersection(deps[child])
-                    if children:
-                        # Depth-first search
-                        num_processing.append(len(children))
-                        children_stack.extend(children)
-                        parent = child
-                        continue
+                reducible.remove(child)
+                children = reducible.intersection(deps[child])
+                if children:
+                    # Depth-first search
+                    num_processing.append(len(children))
+                    children_stack.extend(children)
+                    parent = child
+                    continue
                 # This is a leaf node in the reduction region
                 edges = irreducible.intersection(deps[child])
                 # key, task, height, width, number of nodes, set of edges
@@ -559,7 +567,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
                         len_wo_parent = len(edges)
                         edges |= parent_edges
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
-                        if len(edges) <= len_wo_parent and height < max_depth_new_edges:
+                        if len(edges) == len_wo_parent or height < max_depth_new_edges:
                             if len(parent_edges) > max_num_edges:
                                 max_num_edges = len(parent_edges)
                             # Fudge factor to account for possible parallelism with the boundaries
@@ -580,17 +588,18 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=10,
                     if num_processing:
                         num_processing[-1] -= 1
                         irreducible.add(parent)
-                if num_processing:
+
+                if children_stack:
                     # We are finished with the current reducible node and its children.
                     # Move back up the stack.
                     parent = rdeps[parent][0]
 
-            if num_processing:
+            if children_stack:
                 # We have more processing to do at this level (either DFS or fusing)
                 continue
 
             if parent in reducible:
-                # Traverse upwards if possible
+                # Traverse upwards
                 new_parent = rdeps[parent][0]
                 reducible.remove(parent)
                 siblings = reducible.intersection(deps[new_parent])
