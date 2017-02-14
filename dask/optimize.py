@@ -530,14 +530,13 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
             if child == parent:
                 children_stack.pop()
                 # Calculate metrics and fuse as appropriate
-                is_fused = False
-                parent_edges = deps[parent] - reducible
-                num_children = len(deps[parent]) - len(parent_edges)
+                edges = deps[parent] - reducible
+                num_children = len(deps[parent]) - len(edges)
                 height = 1
                 width = 0
                 num_single_nodes = 0
                 num_nodes = 0
-                edges = set()
+                children_edges = set()
                 max_num_edges = 0
                 children_info = info_stack[-num_children:]
                 del info_stack[-num_children:]
@@ -550,38 +549,32 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     num_nodes += cur_num_nodes
                     if len(cur_edges) > max_num_edges:
                         max_num_edges = len(cur_edges)
-                    edges |= cur_edges
+                    children_edges |= cur_edges
 
+                edges |= children_edges
+                # Fudge factor to account for possible parallelism with the boundaries
+                num_nodes += min(num_children - 1, max(0, len(edges) - max_num_edges))
                 if (
                     width <= max_width and
                     height <= max_height and
                     num_single_nodes <= ave_width and
-                    num_nodes / height <= ave_width
-                ):
-                    len_wo_parent = len(edges)
-                    edges |= parent_edges
+                    num_nodes / height <= ave_width and
                     # Sanity check; don't go too deep if new levels introduce new edge dependencies
-                    if len(edges) == len_wo_parent or height < max_depth_new_edges:
-                        if len(parent_edges) > max_num_edges:
-                            max_num_edges = len(parent_edges)
-                        # Fudge factor to account for possible parallelism with the boundaries
-                        num_nodes += min(num_children - 1, len(edges) - max_num_edges)
-                        if num_nodes / height <= ave_width:
-                            # Perform substitutions as we go
-                            val = dsk[parent]
-                            for child_info in children_info:
-                                child = child_info[0]
-                                val = subs(val, child, child_info[1])
-                                del rv[child]
-                                reducible.remove(child)
-                            # key, task, height, width, number of nodes, set of edges
-                            if parent in reducible:
-                                info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
-                            else:
-                                rv[parent] = val
-                            is_fused = True
-
-                if not is_fused:
+                    (len(edges) == len(children_edges) or height < max_depth_new_edges)
+                ):
+                    # Perform substitutions as we go
+                    val = dsk[parent]
+                    for child_info in children_info:
+                        child = child_info[0]
+                        val = subs(val, child, child_info[1])
+                        del rv[child]
+                        reducible.remove(child)
+                    if parent in reducible:
+                        # key, task, height, width, number of nodes, set of edges
+                        info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
+                    else:
+                        rv[parent] = val
+                else:
                     for child_info in children_info:
                         rv[child_info[0]] = child_info[1]
                         reducible.remove(child_info[0])
