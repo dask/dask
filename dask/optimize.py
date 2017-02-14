@@ -514,21 +514,19 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
         children_stack.append(parent)
         children_stack.extend(reducible & deps[parent])
         while True:
-            child = children_stack[-1]
+            child = children_stack.pop()
             if child != parent:
                 children = reducible & deps[child]
                 if children:
                     # Depth-first search
+                    children_stack.append(child)
                     children_stack.extend(children)
                     parent = child
-                    continue
-                # This is a leaf node in the reduction region
-                # key, task, height, width, number of nodes, set of edges
-                info_stack.append((child, dsk[child], 0, 1, 1, deps[child] - reducible))
-                child = children_stack.pop()
-
-            if child == parent:
-                children_stack.pop()
+                else:
+                    # This is a leaf node in the reduction region
+                    # key, task, height, width, number of nodes, set of edges
+                    info_stack.append((child, dsk[child], 0, 1, 1, deps[child] - reducible))
+            else:
                 # Calculate metrics and fuse as appropriate
                 edges = deps[parent] - reducible
                 num_children = len(deps[parent]) - len(edges)
