@@ -428,8 +428,8 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
-                    max_height=None, max_width=None):
+def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=2,
+                    max_depth_new_edges=None, max_height=None, max_width=None):
     """ WIP. Probably broken.  Fuse tasks that form reductions.
 
     This trades parallelism opportunities for faster scheduling by making
@@ -487,8 +487,10 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
     if max_height is None:
         max_height = len(dsk)
 
-    # TODO: accept `dependencies=` keyword and return updated dependencies
-    deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
+    if dependencies is None:
+        deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
+    else:
+        deps = dict(deps)
 
     rdeps = {}
     for k, vals in deps.items():
@@ -502,7 +504,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
     if keys:
         reducible -= keys
     if not reducible:
-        return dsk
+        return dsk, deps
 
     rv = dsk.copy()
     # These are the stacks we use to store data as we traverse the graph
@@ -563,9 +565,11 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     # Perform substitutions as we go
                     val = dsk[parent]
                     for child_info in children_info:
-                        val = subs(val, child_info[0], child_info[1])
-                        del rv[child_info[0]]
-                        reducible.remove(child_info[0])
+                        cur_child = child_info[0]
+                        val = subs(val, cur_child, child_info[1])
+                        del rv[cur_child]
+                        del deps[cur_child]
+                        reducible.remove(cur_child)
                     if parent in reducible:
                         # key, task, height, width, number of nodes, set of edges
                         if num_children == 1 and len(edges) == len(children_edges):
@@ -575,10 +579,12 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                             info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
                     else:
                         rv[parent] = val
+                        deps[parent] |= edges
                         break
                 else:
                     for child_info in children_info:
                         rv[child_info[0]] = child_info[1]
+                        deps[child_info[0]] |= child_info[-1]
                         reducible.remove(child_info[0])
                     if parent in reducible:
                         # Allow the parent to be fused, but only under strict circumstances
@@ -598,7 +604,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     siblings.remove(child)
                     children_stack.append(parent)
                     children_stack.extend(siblings)
-    return rv
+    return rv, deps
 
 
 # Defining `key_split` (used by `default_fused_keys_renamer`) in utils.py
