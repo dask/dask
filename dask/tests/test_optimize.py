@@ -619,3 +619,8 @@ def test_fuse_reductions_multiple_input():
         'c': (f, 'b'),
     }
     assert fuse_reductions(d, ave_width=2) == {'c': (f, (f, 1, 2))}
+    assert fuse_reductions(d, ave_width=1) == {
+        'a1': 1,
+        'a2': 2,
+        'c': (f, (f, 'a1', 'a2')),
+    }
