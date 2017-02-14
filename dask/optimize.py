@@ -498,7 +498,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
             rdeps[v].append(k)
         deps[k] = set(vals)
 
-    reducible = set(k for k, vals in rdeps.items() if len(vals) == 1)
+    reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
     if keys:
         reducible -= keys
     if not reducible:
@@ -512,7 +512,6 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
 
         # These are the stacks we use to store data as we traverse the graph
         info_stack = []
-        num_processing = [len(siblings)]  # The number of `info_stack` objects to process
         children_stack = [parent] + list(siblings)
         while True:
             child = children_stack[-1]
@@ -520,7 +519,6 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                 children = reducible & deps[child]
                 if children:
                     # Depth-first search
-                    num_processing.append(len(children))
                     children_stack.extend(children)
                     parent = child
                     continue
@@ -533,7 +531,8 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                 children_stack.pop()
                 # Calculate metrics and fuse as appropriate
                 is_fused = False
-                num_children = num_processing.pop()
+                parent_edges = deps[parent] - reducible
+                num_children = len(deps[parent]) - len(parent_edges)
                 height = 1
                 width = 0
                 num_single_nodes = 0
@@ -559,7 +558,6 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                     num_single_nodes <= ave_width and
                     num_nodes / height <= ave_width
                 ):
-                    parent_edges = deps[parent] - reducible
                     len_wo_parent = len(edges)
                     edges |= parent_edges
                     # Sanity check; don't go too deep if new levels introduce new edge dependencies
@@ -594,7 +592,7 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                         if width > 1:
                             width -= 1
                         # key, task, height, width, number of nodes, set of edges
-                        info_stack.append((parent, dsk[parent], 0, width, width, deps[parent]))
+                        info_stack.append((parent, dsk[parent], 0, width, width, edges))
 
                 if children_stack:
                     # We are finished with the current reducible node and its children.
@@ -610,7 +608,6 @@ def fuse_reductions(dsk, keys=None, ave_width=2, max_depth_new_edges=None,
                 new_parent = rdeps[parent][0]
                 siblings = reducible & deps[new_parent]
                 siblings.remove(parent)
-                num_processing.append(len(siblings) + 1)
                 children_stack = [new_parent] + list(siblings)
                 parent = new_parent
                 continue
