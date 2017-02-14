@@ -490,7 +490,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=2,
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
-        deps = dict(deps)
+        deps = dict(dependencies)
 
     rdeps = {}
     for k, vals in deps.items():
