@@ -2180,6 +2180,22 @@ def test_sorted_index_single_partition():
               df.set_index('x'))
 
 
+def _assert_info(df, ddf, memory_usage=True):
+    from io import StringIO
+    assert isinstance(df, pd.DataFrame)
+    assert isinstance(ddf, dd.DataFrame)
+
+    buf_pd, buf_da = StringIO(), StringIO()
+
+    df.info(buf=buf_pd, memory_usage=memory_usage)
+    ddf.info(buf=buf_da, verbose=True, memory_usage=memory_usage)
+
+    stdout_pd = buf_pd.getvalue()
+    stdout_da = buf_da.getvalue()
+    stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
+    assert stdout_pd == stdout_da
+
+
 def test_info():
     from io import StringIO
     from dask.compatibility import unicode
@@ -2192,17 +2208,8 @@ def test_info():
     ]
 
     for df in test_frames:
-        buf_pd, buf_da = StringIO(), StringIO()
-
         ddf = dd.from_pandas(df, npartitions=4)
-        df.info(buf=buf_pd)
-        ddf.info(buf=buf_da, verbose=True, memory_usage=True)
-
-        stdout_pd = buf_pd.getvalue()
-        stdout_da = buf_da.getvalue()
-        stdout_da = stdout_da.replace(str(type(ddf)), str(type(df)))
-
-        assert stdout_pd == stdout_da
+        _assert_info(df, ddf)
 
     buf = StringIO()
     ddf = dd.from_pandas(pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=range(4)), npartitions=4)
@@ -2210,13 +2217,45 @@ def test_info():
     # Verbose=False
     ddf.info(buf=buf, verbose=False)
     assert buf.getvalue() == unicode("<class 'dask.dataframe.core.DataFrame'>\n"
-                                     "Data columns (total 2 columns):\n"
-                                     "x      int64\n"
-                                     "y      int64\n"
+                                     "Columns: 2 entries, x to y\n"
                                      "dtypes: int64(2)")
 
     # buf=None
     assert ddf.info(buf=None) is None
+
+
+def test_groupby_multilevel_info():
+    # GH 1844
+    from io import StringIO
+    from dask.compatibility import unicode
+
+    from pandas.formats import format
+    format._put_lines = put_lines
+
+    df = pd.DataFrame({'A': [1, 1, 2, 2],
+                       'B': [1, 2, 3, 4],
+                       'C': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    g = ddf.groupby(['A', 'B']).sum()
+    # slight difference between memory repr (single additional space)
+    _assert_info(g.compute(), g, memory_usage=False)
+
+    buf = StringIO()
+    g.info(buf, verbose=False)
+    assert buf.getvalue() == unicode("""<class 'dask.dataframe.core.DataFrame'>
+Columns: 1 entries, C to C
+dtypes: int64(1)""")
+
+    # multilevel
+    g = ddf.groupby(['A', 'B']).agg(['count', 'sum'])
+    _assert_info(g.compute(), g, memory_usage=False)
+
+    buf = StringIO()
+    g.info(buf, verbose=False)
+    assert buf.getvalue() == unicode("""<class 'dask.dataframe.core.DataFrame'>
+Columns: 2 entries, (C, count) to (C, sum)
+dtypes: int64(2)""")
 
 
 def test_categorize_info():

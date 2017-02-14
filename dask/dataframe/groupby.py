@@ -600,17 +600,17 @@ class _GroupBy(object):
 
     obj: DataFrame or Series
         DataFrame or Series to be grouped
-    index: str, list or Series
+    by: str, list or Series
         The key for grouping
-    kwargs: dict
-        Other keywords passed to groupby
+    slice: str, list
+        The slice keys applied to GroupBy result
     """
-    def __init__(self, df, index=None, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None):
+
         assert isinstance(df, (DataFrame, Series))
         self.obj = df
-
         # grouping key passed via groupby method
-        self.index = _normalize_index(df, index)
+        self.index = _normalize_index(df, by)
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
@@ -628,7 +628,6 @@ class _GroupBy(object):
 
         # slicing key applied to _GroupBy instance
         self._slice = slice
-        self.kwargs = kwargs
 
         if isinstance(self.index, list):
             index_meta = [item._meta if isinstance(item, Series) else item for item in self.index]
@@ -946,7 +945,7 @@ class _GroupBy(object):
             df2 = df
             index = df[self.index]
 
-        df3 = shuffle(df2, index, **self.kwargs)  # shuffle dataframe and index
+        df3 = shuffle(df2, index)  # shuffle dataframe and index
 
         if isinstance(self.index, DataFrame):  # extract index from dataframe
             cols = ['_index_' + c for c in self.index.columns]
@@ -979,23 +978,11 @@ class DataFrameGroupBy(_GroupBy):
 
     _token_prefix = 'dataframe-groupby-'
 
-    def __init__(self, df, index=None, slice=None, **kwargs):
-
-        if not kwargs.get('as_index', True):
-            msg = ("The keyword argument `as_index=False` is not supported in "
-                   "dask.dataframe.groupby")
-            raise NotImplementedError(msg)
-
-        super(DataFrameGroupBy, self).__init__(df, index=index,
-                                               slice=slice, **kwargs)
-
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, index=self.index,
-                                 slice=key, **self.kwargs)
+            g = DataFrameGroupBy(self.obj, by=self.index, slice=key)
         else:
-            g = SeriesGroupBy(self.obj, index=self.index,
-                              slice=key, **self.kwargs)
+            g = SeriesGroupBy(self.obj, by=self.index, slice=key)
 
         # error is raised from pandas
         g._meta = g._meta[key]
@@ -1027,25 +1014,25 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, index, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None):
         # for any non series object, raise pandas-compat error message
+
         if isinstance(df, Series):
-            if isinstance(index, Series):
+            if isinstance(by, Series):
                 pass
-            elif isinstance(index, list):
-                if len(index) == 0:
+            elif isinstance(by, list):
+                if len(by) == 0:
                     raise ValueError("No group keys passed!")
 
-                non_series_items = [item for item in index
+                non_series_items = [item for item in by
                                     if not isinstance(item, Series)]
                 # raise error from pandas, if applicable
                 df._meta.groupby(non_series_items)
             else:
                 # raise error from pandas, if applicable
-                df._meta.groupby(index)
+                df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, index=index,
-                                            slice=slice, **kwargs)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
