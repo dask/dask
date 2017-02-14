@@ -6,6 +6,7 @@ from operator import getitem
 
 from .compatibility import unicode
 
+from .context import _globals
 from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, ishashable)
@@ -428,7 +429,7 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=2,
+def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                     max_depth_new_edges=None, max_height=None, max_width=None):
     """ WIP. Probably broken.  Fuse tasks that form reductions.
 
@@ -480,12 +481,18 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=2,
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    if max_depth_new_edges is None:
-        max_depth_new_edges = ave_width + 1.5
-    if max_width is None:
-        max_width = 1.5 + ave_width * math.log(ave_width + 1)
-    if max_height is None:
-        max_height = len(dsk)
+    ave_width = ave_width or _globals.get('fuse_ave_width') or 2
+    max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
+    max_depth_new_edges = (
+        max_depth_new_edges or
+        _globals.get('fuse_max_depth_new_edges') or
+        ave_width + 1.5
+    )
+    max_width = (
+        max_width or
+        _globals.get('fuse_max_width') or
+        1.5 + ave_width * math.log(ave_width + 1)
+    )
 
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
