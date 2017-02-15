@@ -42,6 +42,10 @@ class ShareDict(MutableMapping):
         self.order = []
 
     def _add_dict(self, name, d):
+        if isinstance(d, ShareDict):
+            for o in d.order:
+                self._add_dict(o, d.dicts[o])
+            return
         if name in self.dicts:
             self.order.remove(name)
         else:

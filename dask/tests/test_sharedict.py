@@ -65,3 +65,21 @@ def test_keys_items():
 
     for fn in [lambda x: x.values(), lambda x: x.keys(), lambda x: x.items()]:
         assert set(fn(s)) == set(fn(d))
+
+
+def test_update_with_sharedict():
+    s = ShareDict()
+    s.update(a=a)
+    s.update(b=b)
+    s.update(c=c)
+
+    d = {'z': 5}
+
+    s2 = ShareDict()
+    s2.update(a=a)
+    s2.update(d=d)
+
+    s.update(s2)
+
+    assert s.order == ['b', 'c', 'a', 'd']
+    assert s.dicts['a'] is s.dicts['a']
