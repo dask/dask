@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterable, MutableMapping
+from collections import Iterable, MutableMapping, Mapping
 from collections import Iterator
 from functools import partial, wraps
 import inspect
@@ -939,7 +939,7 @@ class Array(Base):
     _finalize = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype, shape=None):
-        assert isinstance(dask, MutableMapping)
+        assert isinstance(dask, Mapping)
         if not isinstance(dask, ShareDict):
             s = ShareDict()
             s.update(dask)

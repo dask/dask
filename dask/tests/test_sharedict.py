@@ -22,7 +22,7 @@ def test_core():
     with pytest.raises(KeyError):
         s['abc']
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises((NotImplementedError, TypeError)):
         s['abc'] = 123
 
     s.update(c)

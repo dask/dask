@@ -1,8 +1,8 @@
 from toolz import concat, unique
-from collections import MutableMapping
+from collections import Mapping
 
 
-class ShareDict(MutableMapping):
+class ShareDict(Mapping):
     """ A MutableMapping composed of other MutableMappings
 
     This mapping is composed of a mapping of dictionaries
@@ -84,12 +84,6 @@ class ShareDict(MutableMapping):
 
     def __iter__(self):
         return unique(concat([self.dicts[o] for o in self.order[::-1]]))
-
-    def __setitem__(self, key, value):
-        raise NotImplementedError()
-
-    def __delitem__(self, key):
-        raise NotImplementedError()
 
 
 def merge(*dicts):
