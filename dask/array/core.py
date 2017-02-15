@@ -856,7 +856,6 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
-
     updates = [insert_to_ooc(tgt, src, lock=lock, region=reg)
                for tgt, src, reg in zip(targets, sources, regions)]
     keys = [key for u in updates for key in u]
