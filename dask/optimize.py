@@ -475,16 +475,13 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
         Don't fuse if total width is greater than this
 
     """
-    # XXX: uncomment to allow `fuse_reducible` to run against the `fuse` tests
-    # if rename_fused_keys:
-    #     return fuse(dsk, keys=keys, dependencies=dependencies, rename_fused_keys=True)
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
             keys = [keys]
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    ave_width = ave_width or _globals.get('fuse_ave_width') or 1
+    ave_width = ave_width or _globals.get('fuse_ave_width') or 2
     max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
     max_depth_new_edges = (
         max_depth_new_edges or
@@ -564,7 +561,9 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
 
                 edges |= children_edges
                 # Fudge factor to account for possible parallelism with the boundaries
-                num_nodes += min(num_children - 1, max(0, len(edges) - max_num_edges))
+                num_nodes += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
+                if len(edges) > len(children_edges):
+                    num_nodes += 1
                 if (
                     width <= max_width and
                     height <= max_height and
