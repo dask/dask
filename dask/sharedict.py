@@ -49,10 +49,15 @@ class ShareDict(MutableMapping):
         if name in self.dicts:
             self.order.remove(name)
         else:
+            assert isinstance(d, dict)
             self.dicts[name] = d
         self.order.append(name)
 
     def update(self, *args, **kwargs):
+        if 'key' in kwargs:
+            assert len(args) == 1 and len(kwargs) == 1
+            self._add_dict(kwargs['key'], args[0])
+            return
         for arg in args:
             self._add_dict(id(arg), arg)
         for key, value in kwargs.items():
@@ -85,3 +90,14 @@ class ShareDict(MutableMapping):
 
     def __delitem__(self, key):
         raise NotImplementedError()
+
+
+def merge(*dicts):
+    result = ShareDict()
+    for d in dicts:
+        if isinstance(d, tuple):
+            key, d = d
+            result.update(d, key=key)
+        else:
+            result.update(d)
+    return result

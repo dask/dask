@@ -17,8 +17,9 @@ from threading import Lock
 import uuid
 import warnings
 
+import toolz
 from toolz.curried import (pipe, partition, concat, pluck, join, first, map,
-                           groupby, valmap, accumulate, merge, reduce,
+                           groupby, valmap, accumulate, reduce,
                            interleave, sliding_window, assoc)
 import numpy as np
 
@@ -33,6 +34,7 @@ from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dasks
 from ..optimize import cull
 from .. import threaded, core
+from ..sharedict import ShareDict, merge
 
 
 def getarray(a, b, lock=None):
@@ -695,7 +697,8 @@ def map_blocks(func, *args, **kwargs):
 
     chunks = tuple(chunks2)
 
-    return Array(merge(dsk, *[a.dask for a in arrs]), name, chunks, dtype)
+    return Array(merge((name, dsk), *[a.dask for a in arrs]),
+                 name, chunks, dtype)
 
 
 def broadcast_chunks(*chunkss):
@@ -751,12 +754,9 @@ def squeeze(a, axis=None):
     old_keys = list(product([b.name], *[range(len(bd)) for bd in b.chunks]))
     new_keys = list(product([b.name], *[range(len(bd)) for bd in chunks]))
 
-    dsk = b.dask.copy()
-    for o, n in zip(old_keys, new_keys):
-        dsk[n] = dsk[o]
-        del dsk[o]
+    dsk = {n: b.dask[o] for o, n in zip(old_keys, new_keys)}
 
-    return Array(dsk, b.name, chunks, dtype=a.dtype)
+    return Array(merge(b.dask, dsk), b.name, chunks, dtype=a.dtype)
 
 
 def topk(k, x):
@@ -788,7 +788,7 @@ def topk(k, x):
                        slice(-1, -k - 1, -1))
     chunks = ((k,),)
 
-    return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
+    return Array(merge(dsk, (name2, x.dask)), name2, chunks, dtype=x.dtype)
 
 
 def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
@@ -856,17 +856,18 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
+
     updates = [insert_to_ooc(tgt, src, lock=lock, region=reg)
                for tgt, src, reg in zip(targets, sources, regions)]
-    dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
+    name = 'store-' + tokenize(*keys)
+    dsk = merge((name, toolz.merge(updates)), *[src.dask for src in sources])
     if compute:
         Array._get(dsk, keys, **kwargs)
     else:
         from ..delayed import Delayed
-        name = 'store-' + tokenize(*keys)
-        dsk[name] = keys
-        return Delayed(name, [dsk])
+        dsk.update({name: keys})
+        return Delayed(name, [dict(dsk)])
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -938,6 +939,11 @@ class Array(Base):
     _finalize = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype, shape=None):
+        assert isinstance(dask, MutableMapping)
+        if not isinstance(dask, ShareDict):
+            s = ShareDict()
+            s.update(dask)
+            dask = s
         self.dask = dask
         self.name = name
         self._chunks = normalize_chunks(chunks, shape)
@@ -1224,9 +1230,9 @@ class Array(Base):
         if len(dsk) < self.npartitions / 2:  # significant reduction in graph
             needed = core.get_dependencies(self.dask, task=list(dsk.values()))
             dsk2, _ = cull(self.dask, needed)
-            dsk2.update(dsk)
+            dsk2.update(dsk, key=out)
         else:
-            dsk2 = merge(self.dask, dsk)
+            dsk2 = merge(self.dask, (out, dsk))
 
         return Array(dsk2, out, chunks, dtype=self.dtype)
 
@@ -1829,7 +1835,8 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
     if lock is True:
         lock = SerializableLock()
     dsk = getem(original_name, chunks, out_name=name, fancy=fancy, lock=lock)
-    return Array(merge({original_name: x}, dsk), name, chunks, dtype=x.dtype)
+    dsk[original_name] = x
+    return Array(dsk, name, chunks, dtype=x.dtype)
 
 
 def from_delayed(value, shape, dtype, name=None):
@@ -2146,7 +2153,7 @@ def atop(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
+    return Array(merge((out, dsk), *dsks), out, chunks, dtype=dtype)
 
 
 def unpack_singleton(x):
@@ -2226,7 +2233,7 @@ def stack(seq, axis=0):
               for inp in inputs]
 
     dsk = dict(zip(keys, values))
-    dsk2 = merge(dsk, *[a.dask for a in seq])
+    dsk2 = merge((name, dsk), *[a.dask for a in seq])
 
     dt = reduce(np.promote_types, [a.dtype for a in seq])
 
@@ -2300,7 +2307,7 @@ def concatenate(seq, axis=0):
               key[axis + 2:] for key in keys]
 
     dsk = dict(zip(keys, values))
-    dsk2 = merge(dsk, * [a.dask for a in seq])
+    dsk2 = merge((name, dsk), * [a.dask for a in seq])
 
     return Array(dsk2, name, chunks, dtype=dt)
 
@@ -2710,7 +2717,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
                    for i, bds in enumerate(x.chunks))
 
     dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    return Array(merge(x.dask, dsk), name, chunks, dtype=dt)
+    return Array(merge(x.dask, (name, dsk)), name, chunks, dtype=dt)
 
 
 def split_at_breaks(array, breaks, axis=0):
@@ -2795,7 +2802,7 @@ def broadcast_to(x, shape):
                 (chunk.broadcast_to, key, shape[:ndim_new] +
                  tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:]))))
                for key in core.flatten(x._keys()))
-    return Array(merge(dsk, x.dask), name, chunks, dtype=x.dtype)
+    return Array(merge((name, dsk), x.dask), name, chunks, dtype=x.dtype)
 
 
 @wraps(np.ravel)
@@ -2883,7 +2890,8 @@ def reshape(array, shape):
                      shape[prev_index_count:])
         dsk[new_key] = (np.reshape, key, new_shape)
 
-    return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
+    return Array(merge((name, dsk), array.dask), name, chunks,
+                 dtype=array.dtype)
 
 
 def offset_func(func, offset, *args):
@@ -2928,7 +2936,7 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
 def unique(x):
     name = 'unique-' + x.name
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = Array._get(merge(dsk, x.dask), list(dsk.keys()))
+    parts = Array._get(merge((name, dsk), x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
 
 
@@ -3151,7 +3159,7 @@ def diag(v):
                                       "chunked arrays")
     chunks_1d = v.chunks[0]
     blocks = v._keys()
-    dsk = v.dask.copy()
+    dsk = {}
     for i, m in enumerate(chunks_1d):
         for j, n in enumerate(chunks_1d):
             key = (name, i, j)
@@ -3159,7 +3167,9 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+
+    return Array(merge(v.dask, (name, dsk)), name, (chunks_1d, chunks_1d),
+                 dtype=v.dtype)
 
 
 def triu(m, k=0):
@@ -3555,7 +3565,10 @@ def _vindex(x, *indexes):
     chunks.insert(0, (len(points),) if points else ())
     chunks = tuple(chunks)
 
-    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge-' + token, chunks, x.dtype)
+    name = 'vindex-merge-' + token
+    dsk.update(dsk2)
+
+    return Array(merge(x.dask, (name, dsk)), name, chunks, x.dtype)
 
 
 def _get_axis(indexes):
@@ -3849,4 +3862,4 @@ def slice_with_dask_array(x, index):
            for i, k in enumerate(core.flatten(y._keys()))}
     chunks = ((np.nan,) * y.npartitions,)
 
-    return Array(merge(y.dask, dsk), name, chunks, x.dtype)
+    return Array(merge(y.dask, (name, dsk)), name, chunks, x.dtype)
