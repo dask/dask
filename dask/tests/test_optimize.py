@@ -876,4 +876,4 @@ def test_fuse_reductions_multiple_input():
     )
     # XXX: A more aggressive heuristic could do this at `ave_width=2`.  Perhaps
     # we can improve this.  Nevertheless, this is behaving as intended.
-    assert fuse_reductions(d, ave_width=4) == expected
+    assert fuse_reductions(d, ave_width=3) == expected

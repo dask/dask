@@ -533,8 +533,8 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                     parent = child
                 else:
                     # This is a leaf node in the reduction region
-                    # key, task, height, width, number of nodes, set of edges
-                    info_stack.append((child, dsk[child], 0, 1, 1, deps[child] - reducible))
+                    # key, task, height, width, number of nodes, fudge, set of edges
+                    info_stack.append((child, dsk[child], 0, 1, 1, 0, deps[child] - reducible))
             else:
                 # Calculate metrics and fuse as appropriate
                 edges = deps[parent] - reducible
@@ -544,31 +544,35 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                 width = 0
                 num_single_nodes = 0
                 num_nodes = 0
+                fudge = 0
                 children_edges = set()
                 max_num_edges = 0
                 children_info = info_stack[-num_children:]
                 del info_stack[-num_children:]
-                for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_edges in children_info:
+                for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_fudge, cur_edges in children_info:
                     if cur_height == 0:
                         num_single_nodes += 1
                     elif cur_height > height:
                         height = cur_height
                     width += cur_width
                     num_nodes += cur_num_nodes
+                    fudge += cur_fudge
                     if len(cur_edges) > max_num_edges:
                         max_num_edges = len(cur_edges)
                     children_edges |= cur_edges
 
                 edges |= children_edges
                 # Fudge factor to account for possible parallelism with the boundaries
-                num_nodes += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
+                fudge += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
+                if fudge > len(children_edges) - 1 >= 0:
+                    fudge = len(children_edges) - 1
                 if len(edges) > len(children_edges):
-                    num_nodes += 1
+                    fudge += 1
                 if (
                     width <= max_width and
                     height <= max_height and
                     num_single_nodes <= ave_width and
-                    num_nodes / height <= ave_width and
+                    (num_nodes + fudge) / height <= ave_width and
                     # Sanity check; don't go too deep if new levels introduce new edge dependencies
                     (len(edges) == len(children_edges) or height < max_depth_new_edges)
                 ):
@@ -584,12 +588,12 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                     deps[parent] -= children
                     deps[parent] |= children_deps
                     if parent in reducible:
-                        # key, task, height, width, number of nodes, set of edges
+                        # key, task, height, width, number of nodes, fudge, set of edges
                         if num_children == 1 and len(edges) == len(children_edges):
                             # Linear fuse
-                            info_stack.append((parent, val, height, width, num_nodes, edges))
+                            info_stack.append((parent, val, height, width, num_nodes, fudge, edges))
                         else:
-                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, edges))
+                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
                     else:
                         rv[parent] = val
                         break
@@ -601,11 +605,14 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                         # Allow the parent to be fused, but only under strict circumstances
                         if width > max_width:
                             width = max_width
+                        # XXX: why subtract one here?
                         if width > 1:
                             width -= 1
-                        # key, task, height, width, number of nodes, set of edges
+                        if fudge > 1:
+                            fudge -= 1
+                        # key, task, height, width, number of nodes, fudge, set of edges
                         # This task *implicitly* depends on `edges`
-                        info_stack.append((parent, dsk[parent], 0, width, width, edges))
+                        info_stack.append((parent, dsk[parent], 0, width, 1, fudge, edges))
                     else:
                         break
 
