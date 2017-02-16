@@ -32,7 +32,6 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dasks
-from ..optimize import cull
 from .. import threaded, core
 from ..sharedict import ShareDict, merge
 
@@ -1225,12 +1224,7 @@ class Array(Base):
 
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
-        if len(dsk) < self.npartitions / 2:  # significant reduction in graph
-            needed = core.get_dependencies(self.dask, task=list(dsk.values()))
-            dsk2, _ = cull(self.dask, needed)
-            dsk2.update(dsk, key=out)
-        else:
-            dsk2 = merge(self.dask, (out, dsk))
+        dsk2 = merge(self.dask, (out, dsk))
 
         return Array(dsk2, out, chunks, dtype=self.dtype)
 
