@@ -9,6 +9,7 @@ from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
+
 fastparquet = pytest.importorskip('fastparquet')
 
 

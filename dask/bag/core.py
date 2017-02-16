@@ -329,7 +329,7 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        return Delayed(self.key, [self.dask])
+        return Delayed(self.key, self.dask)
 
 
 class Bag(Base):
@@ -1113,7 +1113,7 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        return [Delayed(k, [self.dask]) for k in self._keys()]
+        return [Delayed(k, self.dask) for k in self._keys()]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
