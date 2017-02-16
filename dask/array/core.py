@@ -786,7 +786,7 @@ def topk(k, x):
                        slice(-1, -k - 1, -1))
     chunks = ((k,),)
 
-    return Array(merge(dsk, (name2, x.dask)), name2, chunks, dtype=x.dtype)
+    return Array(merge((name2, dsk), x.dask), name2, chunks, dtype=x.dtype)
 
 
 def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
