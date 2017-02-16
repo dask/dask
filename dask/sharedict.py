@@ -35,7 +35,7 @@ class ShareDict(Mapping):
     def __init__(self):
         self.dicts = dict()
 
-    def update(self, arg, key=None):
+    def update_with_key(self, arg, key=None):
         if type(arg) is ShareDict:
             self.dicts.update(arg.dicts)
             return
@@ -45,6 +45,9 @@ class ShareDict(Mapping):
 
         assert isinstance(arg, dict)
         self.dicts[key] = arg
+
+    def update(self, arg):
+        self.update_with_key(arg)
 
     def __getitem__(self, key):
         for d in self.dicts.values():
@@ -79,7 +82,7 @@ def merge(*dicts):
     for d in sorted(dicts, key=sortkey):
         if isinstance(d, tuple):
             key, d = d
-            result.update(d, key=key)
+            result.update_with_key(d, key=key)
         else:
-            result.update(d)
+            result.update_with_key(d)
     return result

@@ -39,22 +39,22 @@ def test_structure():
 @pytest.mark.skip
 def test_structure_2():
     s = ShareDict()
-    s.update(a, key='a')
-    s.update(b, key='b')
-    s.update(c, key='c')
+    s.update_with_key(a, key='a')
+    s.update_with_key(b, key='b')
+    s.update_with_key(c, key='c')
 
     assert s.order == ['a', 'b', 'c']
 
-    s.update(b, key='b')
+    s.update_with_key(b, key='b')
 
     assert s.order == ['a', 'c', 'b']
 
 
 def test_keys_items():
     s = ShareDict()
-    s.update(a, key='a')
-    s.update(b, key='b')
-    s.update(c, key='c')
+    s.update_with_key(a, key='a')
+    s.update_with_key(b, key='b')
+    s.update_with_key(c, key='c')
 
     d = merge(a, b, c)
 
@@ -67,15 +67,15 @@ def test_keys_items():
 
 def test_update_with_sharedict():
     s = ShareDict()
-    s.update(a, key='a')
-    s.update(b, key='b')
-    s.update(c, key='c')
+    s.update_with_key(a, key='a')
+    s.update_with_key(b, key='b')
+    s.update_with_key(c, key='c')
 
     d = {'z': 5}
 
     s2 = ShareDict()
-    s2.update(a, key='a')
-    s2.update(d, key='d')
+    s2.update_with_key(a, key='a')
+    s2.update_with_key(d, key='d')
 
     s.update(s2)
 
@@ -84,11 +84,11 @@ def test_update_with_sharedict():
 
 def test_sortkey():
     s1 = ShareDict()
-    s1.update(a, key='a')
-    s1.update(b, key='b')
+    s1.update_with_key(a, key='a')
+    s1.update_with_key(b, key='b')
 
     s2 = ShareDict()
-    s2.update(c, key='c')
+    s2.update_with_key(c, key='c')
 
     d = {}
 

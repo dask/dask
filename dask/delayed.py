@@ -12,7 +12,7 @@ from . import base, threaded
 from .compatibility import apply
 from .core import quote
 from .utils import concrete, funcname, methodcaller
-from .sharedict import merge
+from .sharedict import merge, ShareDict
 
 __all__ = ['Delayed', 'delayed']
 
@@ -259,7 +259,7 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
         task, dsk = to_task_dasks(obj)
     else:
         task = quote(obj)
-        dsk = {}
+        dsk = ShareDict()
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
@@ -276,7 +276,7 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
-        dsk.update({name: task}, key=name)
+        dsk.update_with_key({name: task}, key=name)
         return Delayed(name, dsk)
 
 
@@ -411,7 +411,7 @@ def call_function(func, func_token, args, kwargs, pure=False, nout=None):
         task = (func,) + args
 
     dsk = merge(*dasks)
-    dsk.update({name: task}, key=name)
+    dsk.update_with_key({name: task}, key=name)
     nout = nout if nout is not None else None
     return Delayed(name, dsk, length=nout)
 
