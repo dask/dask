@@ -429,51 +429,45 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
-                    max_depth_new_edges=None, max_height=None, rename_fused_keys=False):
-    """ WIP. Probably broken.  Fuse tasks that form reductions.
+def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
+                    max_width=None, max_height=None, max_depth_new_edges=None):
+    """ Fuse tasks that form reductions; a more advanced version of ``fuse``
 
     This trades parallelism opportunities for faster scheduling by making
-    tasks less granular.
+    tasks less granular.  It can replace ``fuse`` in optimization passes.
 
-    There are many options (and opinions) for what the parameterization
-    of this function should be.  For the sake of experimentation, I have
-    included many parameters as described below.  My gut feeling right
-    now is that we only need one parameter, `ave_width`, and to choose
-    a reasonable value of `max_depth_new_edges` based on `ave_width`
-    (this controls against pathologies while allowing desirable behavior).
-
-    This optimization operation is more general than "single input, single
-    output".  It applies to all reductions, so it may be "multiple input,
-    single output".  I have attempted to make this well-behaved and
-    robust against pathologies.  Notably, by allowing multiple inputs
-    (what I refer to as `edges` in the code), there may be parallelism
-    opportunities w.r.t. the edges that are otherwise not captured by
-    analyzing the fusible reduction tasks alone.  I added a cheap-to-
-    compute heuristic that is conservative; i.e., it will never
-    underestimate the degree of edge parallelism.  This heuristic
-    increases the value compared against `min_width`--a measure of
-    parallizability--which is one of the reasons I prefer `min_width`.
-
-    I think it will be easy for this operation to supercede `fuse`.
-    I'm ignoring task renaming for now.
+    This optimization applies to all reductions--tasks that have at most one
+    dependent--so it may be viewed as fusing "multiple input, single output"
+    groups of tasks into a single task.  There are many parameters to fine
+    tune the behavior, which are described below.  ``ave_width`` is the
+    natural parameter with which to compare parallelism to granularity, so
+    it should always be specified.  Reasonable values for other parameters
+    with be determined using ``ave_width`` if necessary.
 
     Parameters
     ----------
     dsk: dict
         dask graph
-    keys: list or set
-        Keys that must remain in the dask graph
-    ave_width: float
-        Limit for `width = num_nodes / height`, a good measure of
-        parallelizability.
-    max_depth_new_edges: int
-        Don't fuse if new dependencies are added after this many levels
-    max_height: int
-        Don't fuse more than this many levels
+    keys: list or set, optional
+        Keys that must remain in the returned dask graph
+    dependencies: dict, optional
+        {key: [list-of-keys]}.  Must be a list to provide count of each key
+        This optional input often comes from ``cull``
+    ave_width: float (default 2)
+        Upper limit for ``width = num_nodes / height``, a good measure of
+        parallelizability
     max_width: int
         Don't fuse if total width is greater than this
+    max_height: int
+        Don't fuse more than this many levels
+    max_depth_new_edges: int
+        Don't fuse if new dependencies are added after this many levels
 
+    Returns
+    -------
+    dsk: output graph with keys fused
+    dependencies: dict mapping dependencies after fusion.  Useful side effect
+        to accelerate other downstream optimizations.
     """
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
@@ -534,7 +528,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                 else:
                     # This is a leaf node in the reduction region
                     # key, task, height, width, number of nodes, fudge, set of edges
-                    info_stack.append((child, dsk[child], 0, 1, 1, 0, deps[child] - reducible))
+                    info_stack.append((child, dsk[child], 1, 1, 1, 0, deps[child] - reducible))
             else:
                 # Calculate metrics and fuse as appropriate
                 edges = deps[parent] - reducible
@@ -550,7 +544,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                 children_info = info_stack[-num_children:]
                 del info_stack[-num_children:]
                 for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_fudge, cur_edges in children_info:
-                    if cur_height == 0:
+                    if cur_height == 1:
                         num_single_nodes += 1
                     elif cur_height > height:
                         height = cur_height
@@ -602,17 +596,15 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                         rv[child_info[0]] = child_info[1]
                         reducible.remove(child_info[0])
                     if parent in reducible:
-                        # Allow the parent to be fused, but only under strict circumstances
+                        # Allow the parent to be fused, but only under strict circumstances.
+                        # Ensure that linear chains may still be fused.
                         if width > max_width:
                             width = max_width
-                        # XXX: why subtract one here?
-                        if width > 1:
-                            width -= 1
-                        if fudge > 1:
-                            fudge -= 1
+                        if fudge > int(ave_width - 1):
+                            fudge = int(ave_width - 1)
                         # key, task, height, width, number of nodes, fudge, set of edges
                         # This task *implicitly* depends on `edges`
-                        info_stack.append((parent, dsk[parent], 0, width, 1, fudge, edges))
+                        info_stack.append((parent, dsk[parent], 1, width, 1, fudge, edges))
                     else:
                         break
 
