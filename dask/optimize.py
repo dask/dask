@@ -543,30 +543,35 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                 edges = deps_parent - reducible
                 children = deps_parent - edges
                 num_children = len(children)
-                height = 1
-                width = 0
-                num_single_nodes = 0
-                num_nodes = 0
-                fudge = 0
-                children_edges = set()
-                max_num_edges = 0
-                children_info = info_stack[-num_children:]
-                del info_stack[-num_children:]
-                for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_fudge, cur_edges in children_info:
-                    if cur_height == 1:
-                        num_single_nodes += 1
-                    elif cur_height > height:
-                        height = cur_height
-                    width += cur_width
-                    num_nodes += cur_num_nodes
-                    fudge += cur_fudge
-                    if len(cur_edges) > max_num_edges:
-                        max_num_edges = len(cur_edges)
-                    children_edges |= cur_edges
+                if num_children == 1:
+                    child_key, child_task, height, width, num_nodes, fudge, children_edges = info_stack.pop()
+                    num_single_nodes = int(height == 1)
+                    max_num_edges = len(children_edges)
+                else:
+                    height = 1
+                    width = 0
+                    num_single_nodes = 0
+                    num_nodes = 0
+                    fudge = 0
+                    children_edges = set()
+                    max_num_edges = 0
+                    children_info = info_stack[-num_children:]
+                    del info_stack[-num_children:]
+                    for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_fudge, cur_edges in children_info:
+                        if cur_height == 1:
+                            num_single_nodes += 1
+                        elif cur_height > height:
+                            height = cur_height
+                        width += cur_width
+                        num_nodes += cur_num_nodes
+                        fudge += cur_fudge
+                        if len(cur_edges) > max_num_edges:
+                            max_num_edges = len(cur_edges)
+                        children_edges |= cur_edges
+                    # Fudge factor to account for possible parallelism with the boundaries
+                    fudge += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
 
                 edges |= children_edges
-                # Fudge factor to account for possible parallelism with the boundaries
-                fudge += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
                 if fudge > len(children_edges) - 1 >= 0:
                     fudge = len(children_edges) - 1
                 if len(edges) > len(children_edges):
@@ -580,16 +585,23 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                     (len(edges) == len(children_edges) or height < max_depth_new_edges)
                 ):
                     # Perform substitutions as we go
-                    val = dsk[parent]
-                    children_deps = set()
-                    for child_info in children_info:
-                        cur_child = child_info[0]
-                        val = subs(val, cur_child, child_info[1])
-                        del rv[cur_child]
-                        children_deps.update(deps_pop(cur_child))
-                        reducible_remove(cur_child)
-                    deps_parent -= children
-                    deps_parent |= children_deps
+                    if num_children == 1:
+                        val = subs(dsk[parent], child_key, child_task)
+                        del rv[child_key]
+                        deps_parent.remove(child_key)
+                        deps_parent |= deps_pop(child_key)
+                        reducible_remove(child_key)
+                    else:
+                        val = dsk[parent]
+                        children_deps = set()
+                        for child_info in children_info:
+                            cur_child = child_info[0]
+                            val = subs(val, cur_child, child_info[1])
+                            del rv[cur_child]
+                            children_deps.update(deps_pop(cur_child))
+                            reducible_remove(cur_child)
+                        deps_parent -= children
+                        deps_parent |= children_deps
                     if parent in reducible:
                         # key, task, height, width, number of nodes, fudge, set of edges
                         if num_children == 1 and len(edges) == len(children_edges):
@@ -601,9 +613,13 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                         rv[parent] = val
                         break
                 else:
-                    for child_info in children_info:
-                        rv[child_info[0]] = child_info[1]
-                        reducible_remove(child_info[0])
+                    if num_children == 1:
+                        rv[child_key] = child_task
+                        reducible_remove(child_key)
+                    else:
+                        for child_info in children_info:
+                            rv[child_info[0]] = child_info[1]
+                            reducible_remove(child_info[0])
                     if parent in reducible:
                         # Allow the parent to be fused, but only under strict circumstances.
                         # Ensure that linear chains may still be fused.
