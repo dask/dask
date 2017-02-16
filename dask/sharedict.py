@@ -1,5 +1,6 @@
 from toolz import concat, unique
 from collections import Mapping
+import random
 
 
 class ShareDict(Mapping):
@@ -31,64 +32,52 @@ class ShareDict(Mapping):
     >>> s.update(b=b)
     >>> s.dicts  # doctest: +SKIP
     {'a': {'x': 1, 'y': 2}, 'b': {'x': 10, 'z': 3}}
-
-    Precedence among these dicts are ordered by an internal list
-
-    >>> s.order
-    ['a', 'b']
     """
     def __init__(self):
         self.dicts = dict()
-        self.order = []
 
-    def _add_dict(self, name, d):
-        if isinstance(d, ShareDict):
-            for o in d.order:
-                self._add_dict(o, d.dicts[o])
+    def update(self, arg, key=None):
+        if type(arg) is ShareDict:
+            self.dicts.update(arg.dicts)
             return
-        if name in self.dicts:
-            self.order.remove(name)
-        else:
-            assert isinstance(d, dict)
-            self.dicts[name] = d
-        self.order.append(name)
 
-    def update(self, *args, **kwargs):
-        if 'key' in kwargs:
-            assert len(args) == 1 and len(kwargs) == 1
-            self._add_dict(kwargs['key'], args[0])
-            return
-        for arg in args:
-            self._add_dict(id(arg), arg)
-        for key, value in kwargs.items():
-            self._add_dict(key, value)
+        if key is None:
+            key = id(arg)
+
+        assert isinstance(arg, dict)
+        self.dicts[key] = arg
 
     def __getitem__(self, key):
-        for o in self.order[::-1]:
-            d = self.dicts[o]
+        for d in self.dicts.values():
             if key in d:
                 return d[key]
         raise KeyError(key)
 
     def __len__(self):
-        return len(set.union(*map(set, self.dicts.values())))
+        return sum(map(len, self.dicts.values()))
 
     def items(self):
         seen = set()
-        for o in self.order[::-1]:
-            d = self.dicts[o]
+        for d in self.dicts.values():
             for key in d:
                 if key not in seen:
                     seen.add(key)
                     yield (key, d[key])
 
     def __iter__(self):
-        return unique(concat([self.dicts[o] for o in self.order[::-1]]))
+        return concat(self.dicts.values())
+
+
+def sortkey(d):
+    if type(d) is ShareDict:
+        return (0, -len(d.dicts))
+    else:
+        return (1, -len(d))
 
 
 def merge(*dicts):
     result = ShareDict()
-    for d in dicts:
+    for d in sorted(dicts, key=sortkey):
         if isinstance(d, tuple):
             key, d = d
             result.update(d, key=key)

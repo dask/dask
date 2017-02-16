@@ -407,10 +407,9 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Unpack delayed objects in kwargs
     if kwargs:
-        task, dasks = to_task_dasks(kwargs)
-        if dasks:
-            for d in dasks:
-                dsk.update(d)
+        task, dsk2 = to_task_dasks(kwargs)
+        if dsk2:
+            dsk.update(dsk2)
             kwargs2 = task
         else:
             kwargs2 = kwargs
@@ -866,7 +865,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
     else:
         from ..delayed import Delayed
         dsk.update({name: keys})
-        return Delayed(name, [dict(dsk)])
+        return Delayed(name, dict(dsk))
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1717,7 +1716,7 @@ class Array(Base):
         dask.array.from_delayed
         """
         from ..delayed import Delayed
-        return np.array(ndeepmap(self.ndim, lambda k: Delayed(k, [self.dask]), self._keys()),
+        return np.array(ndeepmap(self.ndim, lambda k: Delayed(k, self.dask), self._keys()),
                         dtype=object)
 
     @wraps(np.repeat)

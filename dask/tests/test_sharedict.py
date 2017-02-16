@@ -3,12 +3,12 @@ from collections import Mapping
 import pytest
 from toolz import merge
 
-from dask.sharedict import ShareDict
+from dask.sharedict import ShareDict, sortkey
 
 
 a = {'x': 1, 'y': 2}
 b = {'z': 3}
-c = {'x': 4, 'w': 2}
+c = {'w': 2}
 
 
 def test_core():
@@ -25,9 +25,6 @@ def test_core():
     with pytest.raises((NotImplementedError, TypeError)):
         s['abc'] = 123
 
-    s.update(c)
-    assert s['x'] == 4
-
 
 def test_structure():
     s = ShareDict()
@@ -39,24 +36,25 @@ def test_structure():
                for x in [a, b, c])
 
 
+@pytest.mark.skip
 def test_structure_2():
     s = ShareDict()
-    s.update(a=a)
-    s.update(b=b)
-    s.update(c=c)
+    s.update(a, key='a')
+    s.update(b, key='b')
+    s.update(c, key='c')
 
     assert s.order == ['a', 'b', 'c']
 
-    s.update(b=b)
+    s.update(b, key='b')
 
     assert s.order == ['a', 'c', 'b']
 
 
 def test_keys_items():
     s = ShareDict()
-    s.update(a=a)
-    s.update(b=b)
-    s.update(c=c)
+    s.update(a, key='a')
+    s.update(b, key='b')
+    s.update(c, key='c')
 
     d = merge(a, b, c)
 
@@ -69,17 +67,31 @@ def test_keys_items():
 
 def test_update_with_sharedict():
     s = ShareDict()
-    s.update(a=a)
-    s.update(b=b)
-    s.update(c=c)
+    s.update(a, key='a')
+    s.update(b, key='b')
+    s.update(c, key='c')
 
     d = {'z': 5}
 
     s2 = ShareDict()
-    s2.update(a=a)
-    s2.update(d=d)
+    s2.update(a, key='a')
+    s2.update(d, key='d')
 
     s.update(s2)
 
-    assert s.order == ['b', 'c', 'a', 'd']
     assert s.dicts['a'] is s.dicts['a']
+
+
+def test_sortkey():
+    s1 = ShareDict()
+    s1.update(a, key='a')
+    s1.update(b, key='b')
+
+    s2 = ShareDict()
+    s2.update(c, key='c')
+
+    d = {}
+
+    L = [s2, c, s1, d]
+    L2 = sorted(L, key=sortkey)
+    assert L2 == [s1, s2, c, d]

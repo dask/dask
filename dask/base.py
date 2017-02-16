@@ -15,6 +15,7 @@ from .compatibility import bind_method, unicode, PY3
 from .context import _globals
 from .core import flatten
 from .utils import Dispatch
+from .sharedict import ShareDict
 
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
@@ -96,7 +97,7 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = cls._optimize(dsk, keys, **kwargs)
+        dsk2 = cls._optimize(dict(dsk), keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -250,7 +251,8 @@ def visualize(*args, **kwargs):
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks.extend([arg._optimize(arg.dask, arg._keys()) for arg in args])
+        dsks.extend([arg._optimize(dict(arg.dask), arg._keys())
+                     for arg in args])
     else:
         dsks.extend([arg.dask for arg in args])
     dsk = merge(dsks)
@@ -424,9 +426,10 @@ def _extract_graph_and_keys(vals):
     for v in vals:
         # Optimization to avoid merging dictionaries in Delayed values. Reduces
         # memory usage for large graphs.
-        if hasattr(v, '_dasks'):
-            for d in v._dasks:
-                dsk.update(d)
+        d = v.dask
+        if type(d) is ShareDict:
+            for dd in d.dicts.values():
+                dsk.update(dd)
         else:
             dsk.update(v.dask)
         keys.append(v._keys())
