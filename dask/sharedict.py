@@ -1,6 +1,5 @@
-from toolz import concat, unique
+from toolz import concat
 from collections import Mapping
-import random
 
 
 class ShareDict(Mapping):
