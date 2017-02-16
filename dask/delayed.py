@@ -316,6 +316,8 @@ class Delayed(base.Base):
 
     def __init__(self, key, dsk, length=None):
         self._key = key
+        if type(dsk) is list:  # compatibility with older versions
+            dsk = merge(*dsk)
         self.dask = dsk
         self._length = length
 
