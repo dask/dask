@@ -408,12 +408,12 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:
-            groups = {k: [opt(dsk, keys), keys]
+            groups = {k: [opt(dict(dsk), keys), keys]
                       for k, (dsk, keys) in groups.items()}
         dsk = merge([opt(dsk, keys, **kwargs)
                      for opt, (dsk, keys) in groups.items()])
     else:
-        dsk = merge(c.dask for c in collections)
+        dsk = merge(dict(c.dask) for c in collections)
 
     return dsk
 
@@ -438,13 +438,9 @@ def _extract_graph_and_keys(vals):
 
 
 def redict_collection(c, dsk):
-    from dask.delayed import Delayed
-    if isinstance(c, Delayed):
-        return Delayed(c.key, [dsk])
-    else:
-        cc = copy.copy(c)
-        cc.dask = dsk
-        return cc
+    cc = copy.copy(c)
+    cc.dask = dsk
+    return cc
 
 
 def persist(*args, **kwargs):
