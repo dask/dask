@@ -11,27 +11,27 @@ class ShareDict(Mapping):
     Examples
     --------
     >>> a = {'x': 1, 'y': 2}
-    >>> b = {'x': 10, 'z': 3}
+    >>> b = {'z': 3}
     >>> s = ShareDict()
     >>> s.update(a)
     >>> s.update(b)
 
     >>> dict(s)  # doctest: +SKIP
-    {'x': 10, 'y': 2, 'z': 3}
+    {'x': 1, 'y': 2, 'z': 3}
 
     These dictionaries are stored within an internal dictionary of dictionaries
 
     >>> list(s.dicts.values())  # doctest: +SKIP
-    [{'x': 1, 'y': 2}, {'x': 10, 'z': 3}]
+    [{'x': 1, 'y': 2}, {'z': 3}]
 
     By default these are named by their object id.  However, you can also
     provide explicit names.
 
     >>> s = ShareDict()
-    >>> s.update(a=a)
-    >>> s.update(b=b)
+    >>> s.update(a, key='a')
+    >>> s.update(b, key='b')
     >>> s.dicts  # doctest: +SKIP
-    {'a': {'x': 1, 'y': 2}, 'b': {'x': 10, 'z': 3}}
+    {'a': {'x': 1, 'y': 2}, 'b': {'z': 3}}
     """
     def __init__(self):
         self.dicts = dict()
