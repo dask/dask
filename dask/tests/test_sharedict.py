@@ -3,7 +3,7 @@ from collections import Mapping
 import pytest
 from toolz import merge
 
-from dask.sharedict import ShareDict, sortkey
+from dask.sharedict import ShareDict
 
 
 a = {'x': 1, 'y': 2}
@@ -80,18 +80,3 @@ def test_update_with_sharedict():
     s.update(s2)
 
     assert s.dicts['a'] is s.dicts['a']
-
-
-def test_sortkey():
-    s1 = ShareDict()
-    s1.update_with_key(a, key='a')
-    s1.update_with_key(b, key='b')
-
-    s2 = ShareDict()
-    s2.update_with_key(c, key='c')
-
-    d = {}
-
-    L = [s2, c, s1, d]
-    L2 = sorted(L, key=sortkey)
-    assert L2 == [s1, s2, c, d]

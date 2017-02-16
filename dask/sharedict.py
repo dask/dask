@@ -3,9 +3,22 @@ from collections import Mapping
 
 
 class ShareDict(Mapping):
-    """ A MutableMapping composed of other MutableMappings
+    """ A Mapping composed of other Mappings
 
-    This mapping is composed of a mapping of dictionaries
+    This is a union of other disjoint mappings.  It allows the combination of
+    many dicts into a single dict-like object without creating copies of the
+    underlying dicts.  It provides cheap ``update``, ``len`` and ``__iter__``
+    operations as well as a fairly cheap ``__getitem__`` operation (linear in
+    the number of constituent mappings).
+
+    This class is optimized for Dask's use, and may not be generally useful.
+    Users may want to consider the standard ``collections.ChainMap`` data
+    structure.
+
+    This class makes the following assumptions:
+
+    1.  Constituent mappings are disjoint.  No key is in more than one mapping.
+    2.  Constituent mappings will not be modified
 
     Examples
     --------
@@ -27,8 +40,8 @@ class ShareDict(Mapping):
     provide explicit names.
 
     >>> s = ShareDict()
-    >>> s.update(a, key='a')
-    >>> s.update(b, key='b')
+    >>> s.update_with_key(a, key='a')
+    >>> s.update_with_key(b, key='b')
     >>> s.dicts  # doctest: +SKIP
     {'a': {'x': 1, 'y': 2}, 'b': {'z': 3}}
     """
@@ -70,16 +83,9 @@ class ShareDict(Mapping):
         return concat(self.dicts.values())
 
 
-def sortkey(d):
-    if type(d) is ShareDict:
-        return (0, -len(d.dicts))
-    else:
-        return (1, -len(d))
-
-
 def merge(*dicts):
     result = ShareDict()
-    for d in sorted(dicts, key=sortkey):
+    for d in dicts:
         if isinstance(d, tuple):
             key, d = d
             result.update_with_key(d, key=key)
