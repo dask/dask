@@ -497,8 +497,9 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
     for k, vals in deps.items():
         for v in vals:
             if v not in rdeps:
-                rdeps[v] = []
-            rdeps[v].append(k)
+                rdeps[v] = [k]
+            else:
+                rdeps[v].append(k)
         deps[k] = set(vals)
 
     reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
@@ -511,28 +512,36 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
     # These are the stacks we use to store data as we traverse the graph
     info_stack = []
     children_stack = []
+    # For speed
+    deps_pop = deps.pop
+    reducible_remove = reducible.remove
+    info_stack_append = info_stack.append
+    children_stack_append = children_stack.append
+    children_stack_extend = children_stack.extend
+    children_stack_pop = children_stack.pop
     while reducible:
         child = next(iter(reducible))
         parent = rdeps[child][0]
-        children_stack.append(parent)
-        children_stack.extend(reducible & deps[parent])
+        children_stack_append(parent)
+        children_stack_extend(reducible & deps[parent])
         while True:
-            child = children_stack.pop()
+            child = children_stack_pop()
             if child != parent:
                 children = reducible & deps[child]
                 if children:
                     # Depth-first search
-                    children_stack.append(child)
-                    children_stack.extend(children)
+                    children_stack_append(child)
+                    children_stack_extend(children)
                     parent = child
                 else:
                     # This is a leaf node in the reduction region
                     # key, task, height, width, number of nodes, fudge, set of edges
-                    info_stack.append((child, dsk[child], 1, 1, 1, 0, deps[child] - reducible))
+                    info_stack_append((child, dsk[child], 1, 1, 1, 0, deps[child] - reducible))
             else:
                 # Calculate metrics and fuse as appropriate
-                edges = deps[parent] - reducible
-                children = deps[parent] - edges
+                deps_parent = deps[parent]
+                edges = deps_parent - reducible
+                children = deps_parent - edges
                 num_children = len(children)
                 height = 1
                 width = 0
@@ -577,24 +586,24 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                         cur_child = child_info[0]
                         val = subs(val, cur_child, child_info[1])
                         del rv[cur_child]
-                        children_deps.update(deps.pop(cur_child))
-                        reducible.remove(cur_child)
-                    deps[parent] -= children
-                    deps[parent] |= children_deps
+                        children_deps.update(deps_pop(cur_child))
+                        reducible_remove(cur_child)
+                    deps_parent -= children
+                    deps_parent |= children_deps
                     if parent in reducible:
                         # key, task, height, width, number of nodes, fudge, set of edges
                         if num_children == 1 and len(edges) == len(children_edges):
                             # Linear fuse
-                            info_stack.append((parent, val, height, width, num_nodes, fudge, edges))
+                            info_stack_append((parent, val, height, width, num_nodes, fudge, edges))
                         else:
-                            info_stack.append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
+                            info_stack_append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
                     else:
                         rv[parent] = val
                         break
                 else:
                     for child_info in children_info:
                         rv[child_info[0]] = child_info[1]
-                        reducible.remove(child_info[0])
+                        reducible_remove(child_info[0])
                     if parent in reducible:
                         # Allow the parent to be fused, but only under strict circumstances.
                         # Ensure that linear chains may still be fused.
@@ -604,7 +613,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                             fudge = int(ave_width - 1)
                         # key, task, height, width, number of nodes, fudge, set of edges
                         # This task *implicitly* depends on `edges`
-                        info_stack.append((parent, dsk[parent], 1, width, 1, fudge, edges))
+                        info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
                     else:
                         break
 
@@ -613,8 +622,8 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                 if not children_stack:
                     siblings = reducible & deps[parent]
                     siblings.remove(child)
-                    children_stack.append(parent)
-                    children_stack.extend(siblings)
+                    children_stack_append(parent)
+                    children_stack_extend(siblings)
     return rv, deps
 
 
