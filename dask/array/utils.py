@@ -1,10 +1,13 @@
 from distutils.version import LooseVersion
 import difflib
 import os
+
 import numpy as np
+from toolz import frequencies, concat
 
 from .core import Array
 from ..async import get_sync
+from ..sharedict import ShareDict
 
 if LooseVersion(np.__version__) >= '1.10.0':
     allclose = np.allclose
@@ -30,15 +33,27 @@ def _maybe_check_dtype(a, dtype=None):
         assert a.dtype == dtype
 
 
+def _check_dsk(dsk):
+    if not isinstance(dsk, ShareDict):
+        return
+
+    assert all(isinstance(k, str) for k in dsk.dicts)
+    freqs = frequencies(concat(dsk.dicts.values()))
+    nonone = {k: v for k, v in freqs.items() if v != 1}
+    assert not nonone, nonone
+
+
 def assert_eq(a, b, **kwargs):
     if isinstance(a, Array):
         adt = a.dtype
+        _check_dsk(a.dask)
         a = a.compute(get=get_sync)
         _maybe_check_dtype(a, adt)
     else:
         adt = getattr(a, 'dtype', None)
     if isinstance(b, Array):
         bdt = b.dtype
+        _check_dsk(b.dask)
         assert bdt is not None
         b = b.compute(get=get_sync)
         _maybe_check_dtype(b, bdt)

@@ -749,12 +749,14 @@ def squeeze(a, axis=None):
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
     b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
     chunks = tuple(bd for bd in b.chunks if bd != (1,))
+
+    name = 'squeeze-' + tokenize(a, axis)
     old_keys = list(product([b.name], *[range(len(bd)) for bd in b.chunks]))
-    new_keys = list(product([b.name], *[range(len(bd)) for bd in chunks]))
+    new_keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
     dsk = {n: b.dask[o] for o, n in zip(old_keys, new_keys)}
 
-    return Array(merge(b.dask, dsk), b.name, chunks, dtype=a.dtype)
+    return Array(merge(b.dask, (name, dsk)), name, chunks, dtype=a.dtype)
 
 
 def topk(k, x):
@@ -939,7 +941,7 @@ class Array(Base):
         assert isinstance(dask, Mapping)
         if not isinstance(dask, ShareDict):
             s = ShareDict()
-            s.update(dask)
+            s.update_with_key(dask, key=name)
             dask = s
         self.dask = dask
         self.name = name
@@ -1854,9 +1856,8 @@ def from_delayed(value, shape, dtype, name=None):
         value = delayed(value)
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
-    dsk.update(value.dask)
     chunks = tuple((d,) for d in shape)
-    return Array(dsk, name, chunks, dtype)
+    return Array(merge(value.dask, (name, dsk)), name, chunks, dtype)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
@@ -3048,12 +3049,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         w_keys = core.flatten(weights._keys())
         dsk = dict(((name, i, 0), (block_hist, k, w))
                    for i, (k, w) in enumerate(zip(a_keys, w_keys)))
-        dsk.update(weights.dask)
         dtype = weights.dtype
 
-    dsk.update(a.dask)
+    all_dsk = merge(a.dask, (name, dsk))
+    if weights is not None:
+        all_dsk.update(weights.dask)
 
-    mapped = Array(dsk, name, chunks, dtype=dtype)
+    mapped = Array(all_dsk, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
@@ -3144,8 +3146,7 @@ def diag(v):
         if v.chunks[0] == v.chunks[1]:
             dsk = dict(((name, i), (np.diag, row[i])) for (i, row)
                        in enumerate(v._keys()))
-            dsk.update(v.dask)
-            return Array(dsk, name, (v.chunks[0],), dtype=v.dtype)
+            return Array(merge(v.dask, (name, dsk)), name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")

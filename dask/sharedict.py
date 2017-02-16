@@ -1,4 +1,4 @@
-from toolz import concat
+from toolz import concat, unique, count
 from collections import Mapping
 
 
@@ -58,7 +58,8 @@ class ShareDict(Mapping):
             key = id(arg)
 
         assert isinstance(arg, dict)
-        self.dicts[key] = arg
+        if arg:
+            self.dicts[key] = arg
 
     def update(self, arg):
         self.update_with_key(arg)
@@ -70,7 +71,7 @@ class ShareDict(Mapping):
         raise KeyError(key)
 
     def __len__(self):
-        return sum(map(len, self.dicts.values()))
+        return count(iter(self))
 
     def items(self):
         seen = set()
@@ -81,7 +82,7 @@ class ShareDict(Mapping):
                     yield (key, d[key])
 
     def __iter__(self):
-        return concat(self.dicts.values())
+        return unique(concat(self.dicts.values()))
 
 
 def merge(*dicts):

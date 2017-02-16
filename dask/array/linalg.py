@@ -3,10 +3,11 @@ from __future__ import absolute_import, division, print_function
 import operator
 
 import numpy as np
-from toolz import merge
+import toolz
 
 from ..base import tokenize
 from ..compatibility import apply
+from ..sharedict import merge, ShareDict
 from .core import top, dotmany, Array, eye
 from .random import RandomState
 
@@ -118,10 +119,10 @@ def tsqr(data, name=None, compute_svd=False):
             (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
             for i in range(numblocks[0])}
 
-        dsk_q_blockslices = merge(dsk_n,
-                                  dsk_q2_shapes,
-                                  dsk_q2_cumsum,
-                                  dsk_block_slices)
+        dsk_q_blockslices = toolz.merge(dsk_n,
+                                        dsk_q2_shapes,
+                                        dsk_q2_cumsum,
+                                        dsk_block_slices)
 
         block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
@@ -138,31 +139,25 @@ def tsqr(data, name=None, compute_svd=False):
                     name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                  name_q_st2: numblocks})
 
-    dsk_q = {}
-    dsk_q.update(data.dask)
-    dsk_q.update(dsk_qr_st1)
-    dsk_q.update(dsk_q_st1)
-    dsk_q.update(dsk_r_st1)
-    dsk_q.update(dsk_r_st1_stacked)
-    dsk_q.update(dsk_qr_st2)
-    dsk_q.update(dsk_q_st2_aux)
-    dsk_q.update(dsk_q_st2)
-    dsk_q.update(dsk_q_st3)
-    dsk_q.update(dsk_q_blockslices)
-    dsk_r = {}
-    dsk_r.update(data.dask)
-    dsk_r.update(dsk_qr_st1)
-    dsk_r.update(dsk_r_st1)
-    dsk_r.update(dsk_r_st1_stacked)
-    dsk_r.update(dsk_qr_st2)
-    dsk_r.update(dsk_r_st2)
+    dsk = ShareDict()
+    dsk.update(data.dask)
+    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
+    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
+    dsk.update_with_key(dsk_r_st1, key=name_r_st1)
+    dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
+    dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
+    dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
+    dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+    dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+    dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
+    dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
     if not compute_svd:
         qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
-        q = Array(dsk_q, name_q_st3, shape=data.shape, chunks=data.chunks,
-                  dtype=qq.dtype)
-        r = Array(dsk_r, name_r_st2, shape=(n, n), chunks=(n, n),
-                  dtype=rr.dtype)
+        q = Array(dsk, name_q_st3,
+                  shape=data.shape, chunks=data.chunks, dtype=qq.dtype)
+        r = Array(dsk, name_r_st2,
+                  shape=(n, n), chunks=(n, n), dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
@@ -187,27 +182,18 @@ def tsqr(data, name=None, compute_svd=False):
                         name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
                                                      name_u_st2: (1, 1)})
 
-        dsk_u = {}
-        dsk_u.update(dsk_q)
-        dsk_u.update(dsk_r)
-        dsk_u.update(dsk_svd_st2)
-        dsk_u.update(dsk_u_st2)
-        dsk_u.update(dsk_u_st4)
-        dsk_s = {}
-        dsk_s.update(dsk_r)
-        dsk_s.update(dsk_svd_st2)
-        dsk_s.update(dsk_s_st2)
-        dsk_v = {}
-        dsk_v.update(dsk_r)
-        dsk_v.update(dsk_svd_st2)
-        dsk_v.update(dsk_v_st2)
+        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2)
+        dsk.update_with_key(dsk_u_st2, key=name_u_st2)
+        dsk.update_with_key(dsk_u_st4, key=name_u_st4)
+        dsk.update_with_key(dsk_s_st2, key=name_s_st2)
+        dsk.update_with_key(dsk_v_st2, key=name_v_st2)
 
         uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks,
+        u = Array(dsk, name_u_st4, shape=data.shape, chunks=data.chunks,
                   dtype=uu.dtype)
-        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
-        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
+        s = Array(dsk, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
+        v = Array(dsk, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
                   dtype=vv.dtype)
         return u, s, v
 
@@ -488,7 +474,7 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk.update(a.dask)
+    dsk = merge(a.dask, ('lu-' + token, dsk))
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
     l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
@@ -578,8 +564,7 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    dsk.update(a.dask)
-    dsk.update(b.dask)
+    dsk = merge(a.dask, b.dask, (name, dsk))
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
@@ -728,7 +713,7 @@ def _cholesky(a):
                 dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk.update(a.dask)
+    dsk = merge(a.dask, (name, dsk))
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
@@ -787,7 +772,7 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk.update(r.dask)
+    rdsk = merge(r.dask, (rname, rdsk))
     # rank must be an integer
     rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
 
@@ -798,7 +783,7 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk.update(rt.dask)
+    sdsk = merge(rt.dask, (sname, sdsk))
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     s = Array(sdsk, sname, shape=(r.shape[0], ),
