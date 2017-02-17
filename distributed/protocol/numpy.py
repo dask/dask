@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 import numpy as np
+from numpy.lib import stride_tricks
 
 try:
     import blosc
@@ -42,13 +43,21 @@ def serialize_numpy_ndarray(x):
     else:
         dt = x.dtype.str
 
-    x = np.ascontiguousarray(x)  # cannot get .data attribute from discontiguous
+    if not x.shape:
+        strides = x.strides
+        data = x.ravel().view('u1').data
+    elif np.isfortran(x):
+        strides = x.strides
+        data = stride_tricks.as_strided(x, shape=(np.prod(x.shape),),
+                                           strides=(x.dtype.itemsize,)).view('u1').data
+    else:
+        x = np.ascontiguousarray(x)
+        strides = x.strides
+        data = x.ravel().view('u1').data
 
     header = {'dtype': dt,
-              'strides': x.strides,
-              'shape': x.shape}
-
-    data = x.ravel().view('u1').data
+              'shape': x.shape,
+              'strides': strides}
 
     if blosc and x.nbytes > 1e5:
         frames = frame_split_size([data])
@@ -89,7 +98,9 @@ def deserialize_numpy_ndarray(header, frames):
             dt = list(dt)
 
         x = np.ndarray(header['shape'], dtype=dt, buffer=frames[0],
-                       strides=header['strides'])
+                strides=header['strides'])
+
+        x = stride_tricks.as_strided(x, strides=header['strides'])
 
         return x
 

@@ -30,6 +30,8 @@ def test_serialize():
         [np.ones(5),
          np.array(5),
          np.asfortranarray(np.random.random((5, 5))),
+         np.asfortranarray(np.random.random((5, 5)))[::2, :],
+         np.asfortranarray(np.random.random((5, 5)))[:, ::2],
          np.random.random(5).astype('f4'),
          np.random.random(5).astype('>i8'),
          np.random.random(5).astype('<i8'),
@@ -59,6 +61,8 @@ def test_dumps_serialize_numpy(x):
     y = deserialize(header, frames)
 
     np.testing.assert_equal(x, y)
+    if np.isfortran(x):
+        assert x.strides == y.strides
 
 
 def test_memmap():
