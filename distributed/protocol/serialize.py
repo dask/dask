@@ -189,7 +189,6 @@ class Serialized(object):
     def __init__(self, header, frames):
         self.header = header
         self.frames = frames
-        assert len(header['lengths']) == header['count'] == len(self.frames)
 
     def deserialize(self):
         from .core import decompress

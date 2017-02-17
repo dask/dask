@@ -9,7 +9,7 @@ from distributed.protocol import (serialize, deserialize, decompress, dumps,
         loads, to_serialize)
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
 from distributed.utils import tmpfile
-from distributed.utils_test import slow
+from distributed.utils_test import slow, gen_cluster
 from distributed.protocol.numpy import itemsize
 from distributed.protocol.compression import maybe_compress
 
@@ -142,3 +142,9 @@ def test_dont_compress_uncompressable_data():
     assert 'compression' not in header
     if isinstance(data, memoryview):
         assert data.obj.ctypes.data == x.ctypes.data
+
+
+@gen_cluster(client=True, timeout=60)
+def test_dumps_large_blosc(c, s, a, b):
+    x = c.submit(np.ones, BIG_BYTES_SHARD_SIZE * 2, dtype='u1')
+    result = yield x._result()
