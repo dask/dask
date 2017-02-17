@@ -14,7 +14,7 @@ Array
    examples/array-random.rst
    examples/array-extend.rst
 
-*  `Blogpost: Distributed NumPy and Image Analysis on a Cluster, January 2017<http://matthewrocklin.com/blog/work/2017/01/17/dask-images>`_
+*  `Blogpost: Distributed NumPy and Image Analysis on a Cluster, January 2017 <http://matthewrocklin.com/blog/work/2017/01/17/dask-images>`_
 *  `Use Dask.array to generate task graphs <https://gist.github.com/mrocklin/b61f795004ec0a70e43de350e453e97e>`_
 
 Bag
