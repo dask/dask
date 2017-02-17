@@ -718,15 +718,21 @@ class Scheduler(Server):
         if self.task_state[key] == 'processing':
             recommendations = self.transition(key, 'memory', worker=worker,
                                               **kwargs)
-        else:
-            recommendations = {}
 
-        if self.task_state[key] == 'memory':
-            if key not in self.has_what[worker]:
-                self.worker_bytes[worker] += self.nbytes.get(key,
-                                                             DEFAULT_DATA_SIZE)
-            self.who_has[key].add(worker)
-            self.has_what[worker].add(key)
+            if self.task_state[key] == 'memory':
+                if key not in self.has_what[worker]:
+                    self.worker_bytes[worker] += self.nbytes.get(key,
+                                                                 DEFAULT_DATA_SIZE)
+                self.who_has[key].add(worker)
+                self.has_what[worker].add(key)
+        else:
+            logger.debug("Received already computed task, worker: %s, state: %s"
+                         ", key: %s, who_has: %s",
+                         worker, self.task_state.get(key), key,
+                         self.who_has.get(key))
+            if worker not in self.who_has.get(key, ()):
+                self.worker_comms[worker].send({'op': 'release-task', 'key': key})
+            recommendations = {}
 
         return recommendations
 
@@ -1351,12 +1357,28 @@ class Scheduler(Server):
         keys = list(keys)
         who_has = {key: self.who_has.get(key, ()) for key in keys}
 
-        try:
-            data = yield gather_from_workers(who_has, rpc=self.rpc, close=False)
+        data, missing_keys, missing_workers = yield gather_from_workers(
+                who_has, rpc=self.rpc, close=False, permissive=True)
+        if not missing_keys:
             result = {'status': 'OK', 'data': data}
-        except KeyError as e:
-            logger.debug("Couldn't gather keys %s", e)
-            result = {'status': 'error', 'keys': e.args}
+        else:
+            logger.debug("Couldn't gather keys %s state: %s workers: %s",
+                         missing_keys,
+                         [self.task_state.get(key) for key in missing_keys],
+                         missing_workers)
+            result = {'status': 'error', 'keys': missing_keys}
+            with log_errors():
+                for worker in missing_workers:
+                    self.remove_worker(address=worker)  # this is extreme
+                for key, workers in missing_keys.items():
+                    logger.exception("Workers don't have promised keys. "
+                                     "This should never occur")
+                    for worker in workers:
+                        if worker in self.workers and key in self.has_what[worker]:
+                            self.has_what[worker].remove(key)
+                            self.who_has[key].remove(worker)
+                            self.worker_bytes[worker] -= self.nbytes.get(key, DEFAULT_DATA_SIZE)
+                            self.transitions({key: 'released'})
 
         raise gen.Return(result)
 
@@ -2162,7 +2184,9 @@ class Scheduler(Server):
                 self.occupancy[w] -= duration
             self.check_idle_saturated(w)
             if w != worker:
-                pass
+                logger.info("Unexpected worker completed task, likely due to"
+                            " work stealing.  Expected: %s, Got: %s, Key: %s",
+                            w, worker, key)
                 # msg = {'op': 'release-task', 'key': key}
                 # self.worker_comms[w].send(msg)
 

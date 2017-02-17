@@ -31,6 +31,25 @@ def test_submit_after_failed_worker_sync(loop):
             assert total.result() == sum(map(inc, range(10)))
 
 
+
+@gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
+def test_submit_after_failed_worker_async(c, s, a, b):
+    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n.start(0)
+    while len(s.workers) < 3:
+        yield gen.sleep(0.1)
+
+    L = c.map(inc, range(10))
+    yield _wait(L)
+
+    s.loop.add_callback(n._kill)
+    total = c.submit(sum, L)
+    result = yield total._result()
+    assert result == sum(map(inc, range(10)))
+
+    yield n._close()
+
+
 @gen_cluster(client=True)
 def test_submit_after_failed_worker(c, s, a, b):
     L = c.map(inc, range(10))

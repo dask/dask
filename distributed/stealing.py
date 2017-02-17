@@ -286,5 +286,9 @@ class WorkStealing(SchedulerPlugin):
         self.key_stealable.clear()
         self.stealable_unknown_durations.clear()
 
+    def story(self, *keys):
+        keys = set(keys)
+        return [t for L in self.log for t in L if any(x in keys for x in t)]
+
 
 fast_tasks = {'shuffle-split'}

@@ -515,12 +515,12 @@ class WorkerBase(Server):
         who_has = {k: [coerce_to_address(addr) for addr in v]
                     for k, v in who_has.items()
                     if k not in self.data}
-        try:
-            result = yield gather_from_workers(who_has)
-        except KeyError as e:
+        result, missing_keys, missing_workers = yield gather_from_workers(
+                who_has, permissive=True)
+        if missing_keys:
             logger.warn("Could not find data", e)
             raise Return({'status': 'missing-data',
-                          'keys': e.args})
+                          'keys': missing_keys})
         else:
             self.update_data(data=result, report=False)
             raise Return({'status': 'OK'})
@@ -1653,9 +1653,10 @@ class Worker(WorkerBase):
         try:
             if key not in self.task_state:
                 return
-            if reason == 'stolen' and key in self.executing:
-                return
             state = self.task_state.pop(key)
+            if reason == 'stolen' and state in ('executing', 'long-running', 'memory'):
+                self.task_state[key] = state
+                return
             if cause:
                 self.log.append((key, 'release-key', cause))
             else:
@@ -1817,7 +1818,7 @@ class Worker(WorkerBase):
                 if self.digests is not None:
                     self.digests['disk-load-duration'].add(stop - start)
 
-            logger.debug("Execute key: %s", key)  # TODO: comment out?
+            logger.debug("Execute key: %s worker: %s", key, self.address)  # TODO: comment out?
             try:
                 result = yield self.executor_submit(key, apply_function, function,
                                                     args2, kwargs2,

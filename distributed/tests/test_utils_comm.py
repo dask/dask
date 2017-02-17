@@ -22,8 +22,8 @@ def test_gather_from_workers_permissive(s, a, b):
     with pytest.raises(KeyError):
         yield gather_from_workers({'x': [a.address], 'y': [b.address]})
 
-    data, bad = yield gather_from_workers({'x': [a.address], 'y': [b.address]},
-                                          permissive=True)
+    data, missing, bad_workers = yield gather_from_workers(
+            {'x': [a.address], 'y': [b.address]}, permissive=True)
 
     assert data == {'x': 1}
-    assert list(bad) == ['y']
+    assert list(missing) == ['y']

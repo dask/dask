@@ -38,6 +38,8 @@ def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
     _gather
     """
     bad_addresses = set()
+    missing_workers = set()
+    original_who_has = who_has
     who_has = {k: set(v) for k, v in who_has.items()}
     results = dict()
     all_bad_keys = set()
@@ -63,19 +65,26 @@ def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
 
         rpcs = {addr: rpc(addr) for addr in d}
         try:
-            coroutines = [rpcs[address].get_data(keys=keys, close=close)
-                          for address, keys in d.items()]
-            response = yield ignore_exceptions(coroutines, EnvironmentError)
+            coroutines = {address: rpcs[address].get_data(keys=keys, close=close)
+                          for address, keys in d.items()}
+            response = {}
+            for worker, c in coroutines.items():
+                try:
+                    r = yield c
+                except EnvironmentError:
+                    missing_workers.add(worker)
+                else:
+                    response.update(r)
         finally:
             for r in rpcs.values():
                 r.close_rpc()
 
-        response = merge(response)
         bad_addresses |= {v for k, v in rev.items() if k not in response}
-        results.update(merge(response))
+        results.update(response)
 
     if permissive:
-        raise Return((results, all_bad_keys))
+        bad_keys = {k: list(original_who_has[k]) for k in all_bad_keys}
+        raise Return((results, bad_keys, list(missing_workers)))
     else:
         raise Return(results)
 

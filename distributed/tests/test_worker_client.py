@@ -114,3 +114,24 @@ def test_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             assert delayed(mysum)().compute(get=c.get) == 9900
+
+
+@gen_cluster(client=True)
+def test_async(c, s, a, b):
+    def mysum():
+        result = 0
+        sub_tasks = [delayed(double)(i) for i in range(100)]
+
+        with local_client() as lc:
+            futures = lc.compute(sub_tasks)
+            for f in as_completed(futures):
+                result += f.result()
+        return result
+
+    future = c.compute(delayed(mysum)())
+    yield future._result()
+
+    start = time()
+    while len(a.data) + len(b.data) > 1:
+        yield gen.sleep(0.1)
+        assert time() < start + 3
