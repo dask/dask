@@ -520,33 +520,80 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
     children_stack_extend = children_stack.extend
     children_stack_pop = children_stack.pop
     while reducible:
-        child = next(iter(reducible))
-        parent = rdeps[child][0]
+        parent = next(iter(reducible))
+        while parent in reducible:
+            # Go to the top
+            parent = rdeps[parent][0]
         children_stack_append(parent)
         children_stack_extend(reducible & deps[parent])
         while True:
-            child = children_stack_pop()
+            child = children_stack[-1]
             if child != parent:
                 children = reducible & deps[child]
-                if children:
+                while children:
                     # Depth-first search
-                    children_stack_append(child)
                     children_stack_extend(children)
                     parent = child
+                    child = children_stack[-1]
+                    children = reducible & deps[child]
                 else:
+                    children_stack_pop()
                     # This is a leaf node in the reduction region
                     # key, task, height, width, number of nodes, fudge, set of edges
                     info_stack_append((child, dsk[child], 1, 1, 1, 0, deps[child] - reducible))
             else:
+                children_stack_pop()
                 # Calculate metrics and fuse as appropriate
                 deps_parent = deps[parent]
                 edges = deps_parent - reducible
                 children = deps_parent - edges
                 num_children = len(children)
+
                 if num_children == 1:
                     child_key, child_task, height, width, num_nodes, fudge, children_edges = info_stack.pop()
-                    num_single_nodes = int(height == 1)
-                    max_num_edges = len(children_edges)
+                    num_children_edges = len(children_edges)
+
+                    if fudge > num_children_edges - 1 >= 0:
+                        fudge = num_children_edges - 1
+                    edges |= children_edges
+                    no_new_edges = len(edges) == num_children_edges
+                    if not no_new_edges:
+                        fudge += 1
+                    if (
+                        (num_nodes + fudge) / height <= ave_width and
+                        # Sanity check; don't go too deep if new levels introduce new edge dependencies
+                        (no_new_edges or height < max_depth_new_edges)
+                    ):
+                        # Perform substitutions as we go
+                        val = subs(dsk[parent], child_key, child_task)
+                        del rv[child_key]
+                        deps_parent.remove(child_key)
+                        deps_parent |= deps_pop(child_key)
+                        reducible_remove(child_key)
+
+                        if children_stack:
+                            # key, task, height, width, number of nodes, fudge, set of edges
+                            if no_new_edges:
+                                # Linear fuse
+                                info_stack_append((parent, val, height, width, num_nodes, fudge, edges))
+                            else:
+                                info_stack_append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
+                        else:
+                            rv[parent] = val
+                            break
+                    else:
+                        rv[child_key] = child_task
+                        reducible_remove(child_key)
+                        if children_stack:
+                            # Allow the parent to be fused, but only under strict circumstances.
+                            # Ensure that linear chains may still be fused.
+                            if fudge > int(ave_width - 1):
+                                fudge = int(ave_width - 1)
+                            # key, task, height, width, number of nodes, fudge, set of edges
+                            # This task *implicitly* depends on `edges`
+                            info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
+                        else:
+                            break
                 else:
                     height = 1
                     width = 0
@@ -569,29 +616,24 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                             max_num_edges = len(cur_edges)
                         children_edges |= cur_edges
                     # Fudge factor to account for possible parallelism with the boundaries
-                    fudge += min(num_children - 1, max(0, len(children_edges) - max_num_edges))
+                    num_children_edges = len(children_edges)
+                    fudge += min(num_children - 1, max(0, num_children_edges - max_num_edges))
 
-                edges |= children_edges
-                if fudge > len(children_edges) - 1 >= 0:
-                    fudge = len(children_edges) - 1
-                if len(edges) > len(children_edges):
-                    fudge += 1
-                if (
-                    width <= max_width and
-                    height <= max_height and
-                    num_single_nodes <= ave_width and
-                    (num_nodes + fudge) / height <= ave_width and
-                    # Sanity check; don't go too deep if new levels introduce new edge dependencies
-                    (len(edges) == len(children_edges) or height < max_depth_new_edges)
-                ):
-                    # Perform substitutions as we go
-                    if num_children == 1:
-                        val = subs(dsk[parent], child_key, child_task)
-                        del rv[child_key]
-                        deps_parent.remove(child_key)
-                        deps_parent |= deps_pop(child_key)
-                        reducible_remove(child_key)
-                    else:
+                    if fudge > num_children_edges - 1 >= 0:
+                        fudge = num_children_edges - 1
+                    edges |= children_edges
+                    no_new_edges = len(edges) == num_children_edges
+                    if not no_new_edges:
+                        fudge += 1
+                    if (
+                        (num_nodes + fudge) / height <= ave_width and
+                        num_single_nodes <= ave_width and
+                        width <= max_width and
+                        height <= max_height and
+                        # Sanity check; don't go too deep if new levels introduce new edge dependencies
+                        (no_new_edges or height < max_depth_new_edges)
+                    ):
+                        # Perform substitutions as we go
                         val = dsk[parent]
                         children_deps = set()
                         for child_info in children_info:
@@ -602,44 +644,31 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                             reducible_remove(cur_child)
                         deps_parent -= children
                         deps_parent |= children_deps
-                    if parent in reducible:
-                        # key, task, height, width, number of nodes, fudge, set of edges
-                        if num_children == 1 and len(edges) == len(children_edges):
-                            # Linear fuse
-                            info_stack_append((parent, val, height, width, num_nodes, fudge, edges))
-                        else:
+
+                        if children_stack:
+                            # key, task, height, width, number of nodes, fudge, set of edges
                             info_stack_append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
-                    else:
-                        rv[parent] = val
-                        break
-                else:
-                    if num_children == 1:
-                        rv[child_key] = child_task
-                        reducible_remove(child_key)
+                        else:
+                            rv[parent] = val
+                            break
                     else:
                         for child_info in children_info:
                             rv[child_info[0]] = child_info[1]
                             reducible_remove(child_info[0])
-                    if parent in reducible:
-                        # Allow the parent to be fused, but only under strict circumstances.
-                        # Ensure that linear chains may still be fused.
-                        if width > max_width:
-                            width = max_width
-                        if fudge > int(ave_width - 1):
-                            fudge = int(ave_width - 1)
-                        # key, task, height, width, number of nodes, fudge, set of edges
-                        # This task *implicitly* depends on `edges`
-                        info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
-                    else:
-                        break
-
+                        if children_stack:
+                            # Allow the parent to be fused, but only under strict circumstances.
+                            # Ensure that linear chains may still be fused.
+                            if width > max_width:
+                                width = max_width
+                            if fudge > int(ave_width - 1):
+                                fudge = int(ave_width - 1)
+                            # key, task, height, width, number of nodes, fudge, set of edges
+                            # This task *implicitly* depends on `edges`
+                            info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
+                        else:
+                            break
                 # Traverse upwards
                 parent = rdeps[parent][0]
-                if not children_stack:
-                    siblings = reducible & deps[parent]
-                    siblings.remove(child)
-                    children_stack_append(parent)
-                    children_stack_extend(siblings)
     return rv, deps
 
 
