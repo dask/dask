@@ -12,7 +12,7 @@ from . import base, threaded
 from .compatibility import apply
 from .core import quote
 from .utils import concrete, funcname, methodcaller
-from .sharedict import merge, ShareDict
+from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
 
@@ -78,7 +78,7 @@ def to_task_dasks(expr):
     if isinstance(expr, (Iterator, list, tuple, set)):
         args, dasks = unzip((to_task_dasks(e) for e in expr), 2)
         args = list(args)
-        dsk = merge(*dasks)
+        dsk = sharedict.merge(*dasks)
         # Ensure output type matches input type
         if isinstance(expr, (tuple, set)):
             return (type(expr), args), dsk
@@ -259,7 +259,7 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
         task, dsk = to_task_dasks(obj)
     else:
         task = quote(obj)
-        dsk = ShareDict()
+        dsk = sharedict.ShareDict()
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
@@ -317,7 +317,7 @@ class Delayed(base.Base):
     def __init__(self, key, dsk, length=None):
         self._key = key
         if type(dsk) is list:  # compatibility with older versions
-            dsk = merge(*dsk)
+            dsk = sharedict.merge(*dsk)
         self.dask = dsk
         self._length = length
 
@@ -410,7 +410,7 @@ def call_function(func, func_token, args, kwargs, pure=False, nout=None):
     else:
         task = (func,) + args
 
-    dsk = merge(*dasks)
+    dsk = sharedict.merge(*dasks)
     dsk.update_with_key({name: task}, key=name)
     nout = nout if nout is not None else None
     return Delayed(name, dsk, length=nout)
@@ -445,7 +445,7 @@ class DelayedAttr(Delayed):
     @property
     def dask(self):
         dsk = {self._key: (getattr, self._obj._key, self._attr)}
-        return merge(self._obj.dask, (self._key, dsk))
+        return sharedict.merge(self._obj.dask, (self._key, dsk))
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)

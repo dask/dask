@@ -18,7 +18,7 @@ from toolz import accumulate, reduce
 
 from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
-from ..sharedict import merge
+from .. import sharedict
 
 
 def cumdims_label(chunks, const):
@@ -525,7 +525,7 @@ def _compute_rechunk(x, chunks):
     assert new_idx == tuple(len(c) - 1 for c in chunks)
     del old_blocks, new_index
 
-    x2 = merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
+    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
     return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
 
 
