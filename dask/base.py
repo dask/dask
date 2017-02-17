@@ -424,8 +424,6 @@ def _extract_graph_and_keys(vals):
     dsk = {}
     keys = []
     for v in vals:
-        # Optimization to avoid merging dictionaries in Delayed values. Reduces
-        # memory usage for large graphs.
         d = v.dask
         if type(d) is ShareDict:
             for dd in d.dicts.values():

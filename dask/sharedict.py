@@ -20,6 +20,9 @@ class ShareDict(Mapping):
     1.  Constituent mappings are disjoint.  No key is in more than one mapping.
     2.  Constituent mappings will not be modified
 
+    Note that ShareDict does not enforce these assumptions.  It is up to the
+    user to guarantee them.
+
     Examples
     --------
     >>> a = {'x': 1, 'y': 2}
