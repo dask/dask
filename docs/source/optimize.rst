@@ -74,7 +74,8 @@ to a scheduler ``get`` function:
 
     >>> from dask.threaded import get
 
-    >>> results = get(dsk, ['print1', 'print2'])
+    >>> outputs = ['print1', 'print2']
+    >>> results = get(dsk, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
@@ -92,7 +93,7 @@ later steps:
 .. code-block:: python
 
     >>> from dask.optimize import cull
-    >>> dsk1, dependencies = cull(dsk, ['print1', 'print2'])
+    >>> dsk1, dependencies = cull(dsk, outputs)
 
 .. image:: images/optimize_dask2.png
    :width: 60 %
@@ -106,7 +107,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
 
     >>> from dask.optimize import inline
     >>> dsk2 = inline(dsk1, dependencies=dependencies)
-    >>> results = get(dsk2, ['print1', 'print2'])
+    >>> results = get(dsk2, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
@@ -124,8 +125,9 @@ can be used:
 .. code-block:: python
 
     >>> from dask.optimize import inline_functions
-    >>> dsk3 = inline_functions(dsk2, [len, str.split], dependencies=dependencies)
-    >>> results = get(dsk3, ['print1', 'print2'])
+    >>> dsk3 = inline_functions(dsk2, outputs, [len, str.split],
+    ...                         dependencies=dependencies)
+    >>> results = get(dsk3, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
@@ -142,7 +144,7 @@ One option is just to merge these linear chains into one big task using the
 
     >>> from dask.optimize import fuse
     >>> dsk4, dependencies = fuse(dsk3)
-    >>> results = get(dsk4, ['print1', 'print2'])
+    >>> results = get(dsk4, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
@@ -158,11 +160,12 @@ Putting it all together:
     >>> def optimize_and_get(dsk, keys):
     ...     dsk1, deps = cull(dsk, keys)
     ...     dsk2 = inline(dsk1, dependencies=deps)
-    ...     dsk3 = inline_functions(dsk2, [len, str.split], dependencies=deps)
-    ...     dsk4, deps = fuse(dsk2)
+    ...     dsk3 = inline_functions(dsk2, keys, [len, str.split],
+    ...                             dependencies=deps)
+    ...     dsk4, deps = fuse(dsk3)
     ...     return get(dsk4, keys)
 
-    >>> optimize_and_get(dsk, ['print1', 'print2'])
+    >>> optimize_and_get(dsk, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
