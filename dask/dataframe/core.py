@@ -3742,7 +3742,7 @@ def to_delayed(df):
     >>> partitions = df.to_delayed()  # doctest: +SKIP
     """
     from ..delayed import Delayed
-    return [Delayed(k, [df.dask]) for k in df._keys()]
+    return [Delayed(k, df.dask) for k in df._keys()]
 
 
 def _repr_data_series(s, index):

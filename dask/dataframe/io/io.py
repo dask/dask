@@ -462,7 +462,7 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     if compute:
         return DataFrame._get(dsk, keys, get=get)[0]
     else:
-        return delayed([Delayed(key, [dsk]) for key in keys])[0]
+        return delayed([Delayed(key, dsk) for key in keys])[0]
 
 
 def _df_to_bag(df, index=False):

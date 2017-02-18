@@ -483,6 +483,7 @@ def test_index_with_dask_array_errors():
         x[0, x > 10]
 
 
+@pytest.mark.xfail
 def test_cull():
     x = da.ones(1000, chunks=(10,))
 
