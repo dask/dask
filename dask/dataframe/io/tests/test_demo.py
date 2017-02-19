@@ -1,6 +1,7 @@
 import dask.dataframe as dd
 import pandas.util.testing as tm
 import pandas as pd
+from dask.dataframe.utils import assert_eq
 
 
 def test_make_timeseries():
@@ -32,3 +33,10 @@ def test_no_overlaps():
     assert all(df.get_partition(i).index.max().compute() <
                df.get_partition(i + 1).index.min().compute()
                for i in range(df.npartitions - 2))
+
+
+def test_finance():
+    df = dd.demo.daily_stock('GOOG', start='2010-01-01', stop='2010-01-30', freq='1h')
+    assert isinstance(df, dd.DataFrame)
+    assert 10 < df.npartitions < 31
+    assert_eq(df, df)
