@@ -52,6 +52,9 @@ the following::
 
    s3://bucket/keys-*.csv
 
+The various back-ends accept optional extra keywords, detailing authentication
+and other parameters, see :doc:`remote data services <remote-data-services>`
+
 Compression
 -----------
 
