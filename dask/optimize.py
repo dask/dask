@@ -457,6 +457,28 @@ def default_fused_keys_renamer2(keys_tree):
         return None
 
 
+def default_fused_keys_renamer3(keys_tree):
+    """Create new keys for ``fuse_reductions`` tasks"""
+    it = reversed(keys_tree)
+    first_key = next(it)
+    typ = type(first_key)
+    if typ is str or typ is unicode:
+        first_name = key_split(first_key)
+        names = {key_split(k) for k in it}
+        names.discard(first_name)
+        names = sorted(names)
+        names.append(first_key)
+        return '-'.join(names)
+    elif (typ is tuple and len(first_key) > 0 and
+          isinstance(first_key[0], (str, unicode))):
+        first_name = key_split(first_key)
+        names = {key_split(k) for k in it}
+        names.discard(first_name)
+        names = sorted(names)
+        names.append(first_key[0])
+        return ('-'.join(names),) + first_key[1:]
+
+
 def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                     max_height=None, max_depth_new_edges=None, rename_keys=None):
     """ Fuse tasks that form reductions; a more advanced version of ``fuse``
@@ -524,7 +546,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
     if rename_keys is None:
         rename_keys = _globals.get('fuse_rename_keys', True)
     if rename_keys is True:
-        key_renamer = default_fused_keys_renamer2
+        key_renamer = default_fused_keys_renamer3
     elif rename_keys is False:
         key_renamer = None
     else:
@@ -552,7 +574,6 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
 
     rv = dsk.copy()
     fused_trees = {}
-    fused_keys = None
     # These are the stacks we use to store data as we traverse the graph
     info_stack = []
     children_stack = []
@@ -619,16 +640,16 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                         deps_parent |= deps_pop(child_key)
                         reducible_remove(child_key)
                         if key_renamer is not None:
-                            fused_keys = [parent, child_keys]
-                            fused_trees[parent] = fused_keys
+                            child_keys.append(parent)
+                            fused_trees[parent] = child_keys
                             fused_trees_pop(child_key, None)
 
                         if children_stack:
                             if no_new_edges:
                                 # Linear fuse
-                                info_stack_append((parent, val, fused_keys, height, width, num_nodes, fudge, edges))
+                                info_stack_append((parent, val, child_keys, height, width, num_nodes, fudge, edges))
                             else:
-                                info_stack_append((parent, val, fused_keys, height + 1, width, num_nodes + 1, fudge,
+                                info_stack_append((parent, val, child_keys, height + 1, width, num_nodes + 1, fudge,
                                                    edges))
                         else:
                             rv[parent] = val
@@ -697,15 +718,15 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                             reducible_remove(cur_child)
                             if key_renamer is not None:
                                 fused_trees_pop(cur_child, None)
-                                child_keys.append(child_info[2])
+                                child_keys.extend(child_info[2])
 
                         deps_parent -= children
                         if key_renamer is not None:
-                            fused_keys = [parent, child_keys]
-                            fused_trees[parent] = fused_keys
+                            child_keys.append(parent)
+                            fused_trees[parent] = child_keys
 
                         if children_stack:
-                            info_stack_append((parent, val, fused_keys, height + 1, width, num_nodes + 1, fudge, edges))
+                            info_stack_append((parent, val, child_keys, height + 1, width, num_nodes + 1, fudge, edges))
                         else:
                             rv[parent] = val
                             break
