@@ -121,9 +121,9 @@ def generate_day(date, open, high, low, close, volume,
         values[ind] = (values[ind] - mx) * (high - mx) / (values.max() - mx) + mx
         ind = values < mn
         values[ind] = (values[ind] - mn) * (low - mn) / (values.min() - mn) + mn
-        if (np.allclose(values.max(), high) and  # The process fails if min/max
-            np.allclose(values.min(), low)):     # are the same as open close
-            break                                # this is pretty rare though
+        # The process fails if min/max are the same as open close.  This is rare
+        if (np.allclose(values.max(), high) and np.allclose(values.min(), low)):
+            break
 
     s = pd.Series(values.round(3), index=time)
     rs = s.resample(freq)
