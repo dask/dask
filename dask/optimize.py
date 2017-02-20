@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import re
 from operator import getitem
+from toolz import concat, map, unique
 
 from .compatibility import unicode
 
@@ -74,7 +75,7 @@ def default_fused_keys_renamer(keys):
         return None
 
 
-def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
+def fuse(dsk, keys=None, dependencies=None, rename_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
@@ -88,12 +89,12 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
-    rename_fused_keys: bool or func, optional
+    rename_keys: bool or func, optional
         Whether to rename the fused keys with ``default_fused_keys_renamer``
         or not.  Renaming fused keys can keep the graph more understandable
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
-        func is also accepted, ``new_key = rename_fused_keys(fused_key_list)``.
+        func is also accepted, ``new_key = rename_keys(fused_key_list)``.
 
     Examples
     --------
@@ -101,10 +102,10 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
     {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
-    >>> dsk, dependencies = fuse(d, rename_fused_keys=False)
+    >>> dsk, dependencies = fuse(d, rename_keys=False)
     >>> dsk # doctest: +SKIP
     {'c': (inc, (inc, 1))}
-    >>> dsk, dependencies = fuse(d, keys=['b'], rename_fused_keys=False)
+    >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
     >>> dsk  # doctest: +SKIP
     {'b': (inc, 1), 'c': (inc, 'b')}
 
@@ -159,12 +160,12 @@ def fuse(dsk, keys=None, dependencies=None, rename_fused_keys=True):
 
     dependencies = {k: set(v) for k, v in dependencies.items()}
 
-    if rename_fused_keys is True:
+    if rename_keys is True:
         key_renamer = default_fused_keys_renamer
-    elif rename_fused_keys is False:
+    elif rename_keys is False:
         key_renamer = None
     else:
-        key_renamer = rename_fused_keys
+        key_renamer = rename_keys
 
     # create a new dask with fused chains
     rv = {}
@@ -429,8 +430,35 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
-                    max_width=None, max_height=None, max_depth_new_edges=None):
+def default_fused_keys_renamer2(keys_tree):
+    """Create new keys for ``fuse_reductions`` tasks"""
+    first_key = keys_tree[0]
+    typ = type(first_key)
+    flattened_keys = []
+    while keys_tree:
+        flattened_keys.append([x for x in keys_tree if type(x) is not list])
+        keys_tree = list(concat(x for x in keys_tree if type(x) is list))
+    generate_names = unique(concat(
+        sorted(x, reverse=True) if len(x) > 1 else x
+        for x in map(list, (map(key_split, x) for x in flattened_keys))
+    ))
+    if typ is str or typ is unicode:
+        key_names = list(reversed(list(generate_names)))
+        key_names.pop()
+        key_names.append(first_key)
+        return '-'.join(key_names)
+    elif (typ is tuple and len(first_key) > 0 and
+          isinstance(first_key[0], (str, unicode))):
+        key_names = list(reversed(list(generate_names)))
+        key_names.pop()
+        key_names.append(first_key[0])
+        return ('-'.join(key_names),) + first_key[1:]
+    else:
+        return None
+
+
+def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
+                    max_height=None, max_depth_new_edges=None, rename_keys=None):
     """ Fuse tasks that form reductions; a more advanced version of ``fuse``
 
     This trades parallelism opportunities for faster scheduling by making
@@ -462,6 +490,12 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
         Don't fuse more than this many levels
     max_depth_new_edges: int
         Don't fuse if new dependencies are added after this many levels
+    rename_keys: bool or func, optional
+        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        function to create the new name is also accepted.
 
     Returns
     -------
@@ -475,7 +509,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    ave_width = ave_width or _globals.get('fuse_ave_width') or 2
+    ave_width = ave_width or _globals.get('fuse_ave_width') or 1
     max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
     max_depth_new_edges = (
         max_depth_new_edges or
@@ -487,6 +521,14 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
         _globals.get('fuse_max_width') or
         1.5 + ave_width * math.log(ave_width + 1)
     )
+    if rename_keys is None:
+        rename_keys = _globals.get('fuse_rename_keys', True)
+    if rename_keys is True:
+        key_renamer = default_fused_keys_renamer2
+    elif rename_keys is False:
+        key_renamer = None
+    else:
+        key_renamer = rename_keys
 
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
@@ -509,13 +551,17 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
         return dsk, deps
 
     rv = dsk.copy()
+    fused_trees = {}
+    fused_keys = None
     # These are the stacks we use to store data as we traverse the graph
     info_stack = []
     children_stack = []
     # For speed
     deps_pop = deps.pop
     reducible_remove = reducible.remove
+    fused_trees_pop = fused_trees.pop
     info_stack_append = info_stack.append
+    info_stack_pop = info_stack.pop
     children_stack_append = children_stack.append
     children_stack_extend = children_stack.extend
     children_stack_pop = children_stack.pop
@@ -539,8 +585,9 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                 else:
                     children_stack_pop()
                     # This is a leaf node in the reduction region
-                    # key, task, height, width, number of nodes, fudge, set of edges
-                    info_stack_append((child, dsk[child], 1, 1, 1, 0, deps[child] - reducible))
+                    # key, task, fused_keys, height, width, number of nodes, fudge, set of edges
+                    info_stack_append((child, rv[child], None if key_renamer is None else [child],
+                                       1, 1, 1, 0, deps[child] - reducible))
             else:
                 children_stack_pop()
                 # Calculate metrics and fuse as appropriate
@@ -550,7 +597,8 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                 num_children = len(children)
 
                 if num_children == 1:
-                    child_key, child_task, height, width, num_nodes, fudge, children_edges = info_stack.pop()
+                    (child_key, child_task, child_keys, height, width, num_nodes, fudge,
+                     children_edges) = info_stack_pop()
                     num_children_edges = len(children_edges)
 
                     if fudge > num_children_edges - 1 >= 0:
@@ -570,14 +618,18 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                         deps_parent.remove(child_key)
                         deps_parent |= deps_pop(child_key)
                         reducible_remove(child_key)
+                        if key_renamer is not None:
+                            fused_keys = [parent, child_keys]
+                            fused_trees[parent] = fused_keys
+                            fused_trees_pop(child_key, None)
 
                         if children_stack:
-                            # key, task, height, width, number of nodes, fudge, set of edges
                             if no_new_edges:
                                 # Linear fuse
-                                info_stack_append((parent, val, height, width, num_nodes, fudge, edges))
+                                info_stack_append((parent, val, fused_keys, height, width, num_nodes, fudge, edges))
                             else:
-                                info_stack_append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
+                                info_stack_append((parent, val, fused_keys, height + 1, width, num_nodes + 1, fudge,
+                                                   edges))
                         else:
                             rv[parent] = val
                             break
@@ -589,12 +641,13 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                             # Ensure that linear chains may still be fused.
                             if fudge > int(ave_width - 1):
                                 fudge = int(ave_width - 1)
-                            # key, task, height, width, number of nodes, fudge, set of edges
                             # This task *implicitly* depends on `edges`
-                            info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
+                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                                               1, width, 1, fudge, edges))
                         else:
                             break
                 else:
+                    child_keys = []
                     height = 1
                     width = 0
                     num_single_nodes = 0
@@ -604,7 +657,8 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                     max_num_edges = 0
                     children_info = info_stack[-num_children:]
                     del info_stack[-num_children:]
-                    for cur_key, cur_task, cur_height, cur_width, cur_num_nodes, cur_fudge, cur_edges in children_info:
+                    for cur_key, cur_task, cur_keys, cur_height, cur_width, cur_num_nodes, cur_fudge, \
+                            cur_edges in children_info:
                         if cur_height == 1:
                             num_single_nodes += 1
                         elif cur_height > height:
@@ -635,19 +689,23 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                     ):
                         # Perform substitutions as we go
                         val = dsk[parent]
-                        children_deps = set()
                         for child_info in children_info:
                             cur_child = child_info[0]
                             val = subs(val, cur_child, child_info[1])
                             del rv[cur_child]
-                            children_deps.update(deps_pop(cur_child))
+                            deps_parent |= deps_pop(cur_child)
                             reducible_remove(cur_child)
+                            if key_renamer is not None:
+                                fused_trees_pop(cur_child, None)
+                                child_keys.append(child_info[2])
+
                         deps_parent -= children
-                        deps_parent |= children_deps
+                        if key_renamer is not None:
+                            fused_keys = [parent, child_keys]
+                            fused_trees[parent] = fused_keys
 
                         if children_stack:
-                            # key, task, height, width, number of nodes, fudge, set of edges
-                            info_stack_append((parent, val, height + 1, width, num_nodes + 1, fudge, edges))
+                            info_stack_append((parent, val, fused_keys, height + 1, width, num_nodes + 1, fudge, edges))
                         else:
                             rv[parent] = val
                             break
@@ -664,11 +722,42 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None,
                                 fudge = int(ave_width - 1)
                             # key, task, height, width, number of nodes, fudge, set of edges
                             # This task *implicitly* depends on `edges`
-                            info_stack_append((parent, dsk[parent], 1, width, 1, fudge, edges))
+                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                                               1, width, 1, fudge, edges))
                         else:
                             break
                 # Traverse upwards
                 parent = rdeps[parent][0]
+
+    if key_renamer is not None:
+        alias_names = {}
+        for root_key, fused_keys in fused_trees.items():
+            alias = key_renamer(fused_keys)
+            if alias is not None and alias not in rv:
+                alias_names[root_key] = alias
+                rv[alias] = rv[root_key]
+                rv[root_key] = alias
+                deps[alias] = deps[root_key]
+                deps[root_key] = {alias}
+        aliases_set = set(alias_names)
+        for root_key, alias in alias_names.items():
+            if root_key in rdeps:
+                for key in set(rdeps[root_key]) - aliases_set:
+                    if key in rv and root_key in deps[key]:
+                        rv[key] = subs(rv[key], root_key, alias)
+                        deps[key].remove(root_key)
+                        deps[key].add(alias)
+        for root_key in fused_trees:
+            alias = alias_names[root_key] if root_key in alias_names else root_key
+            for key in deps[alias] & aliases_set:
+                key_alias = alias_names[key]
+                rv[alias] = subs(rv[alias], key, key_alias)
+                deps[alias].remove(key)
+                deps[alias].add(key_alias)
+        if keys is not None:
+            for key in aliases_set - keys:
+                del rv[key]
+                del deps[key]
     return rv, deps
 
 
