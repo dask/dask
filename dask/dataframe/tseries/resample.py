@@ -81,7 +81,7 @@ class Resampler(object):
     def __init__(self, obj, rule, **kwargs):
         if not obj.known_divisions:
             msg = ("Can only resample dataframes with known divisions\n"
-                   "See dask.pydata.io/en/latest/dataframe-partitions.html\n"
+                   "See dask.pydata.org/en/latest/dataframe-design.html#partitions\n"
                    "for more information.")
             raise ValueError(msg)
         self.obj = obj
