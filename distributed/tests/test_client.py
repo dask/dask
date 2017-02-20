@@ -3550,7 +3550,7 @@ def test_normalize_collection_dask_array(c, s, a, b):
     yy = c.persist(y)
 
     z = y.sum()
-    zdsk = z.dask.copy()
+    zdsk = dict(z.dask)
     zz = c.normalize_collection(z)
     assert z.dask == zdsk  # do not mutate input
 
