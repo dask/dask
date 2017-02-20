@@ -1,24 +1,20 @@
 language: python
 sudo: false
+dist: trusty
 services:
   - docker
 
 matrix:
   fast_finish: true
-  include:
-    - python: "2.7"
-      env: PACKAGES=blosc
-    - python: "3.4"
-      env: COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
-    - python: "3.5"
-    - python: "2.7"
-      env: HDFS=true
-      sudo: true
-      dist: trusty
-    - python: "3.5"
-      env: HDFS=true PACKAGES=blosc
-      sudo: true
-      dist: trusty
+
+env:
+  matrix:
+    - PYTHON=2.7 PACKAGES="blosc futures"
+    - PYTHON=3.4 COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
+    - PYTHON=3.5 CRICK=true
+    - PYTHON=3.6 PACKAGES=blosc
+    - HDFS=true PYTHON=2.7
+    - HDFS=true PYTHON=3.5 PACKAGES=blosc
 
 addons:
   hosts:
@@ -47,9 +43,9 @@ install:
   - conda update -q conda
 
   # Install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - conda create -q -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click $PACKAGES -c conda-forge
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click $PACKAGES -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
@@ -61,7 +57,11 @@ install:
   - pip install -q git+https://github.com/dask/s3fs.git --upgrade
   - pip install -q git+https://github.com/dask/zict.git --upgrade
   - pip install -q sortedcollections msgpack-python
-  - if [[ $PYTHON == '3.5' ]]; then pip install git+https://github.com/jcrist/crick.git; fi
+  - |
+    if [[ $CRICK == true ]]; then
+        conda install -q cython
+        pip install git+https://github.com/jcrist/crick.git
+    fi;
 
   # Install distributed
   - pip install --no-deps -e .
