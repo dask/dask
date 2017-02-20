@@ -288,12 +288,16 @@ def send_recv(comm=None, addr=None, reply=True, deserialize=True, **kwargs):
     response = yield send_recv(comm, op='ping', reply=True)
     """
     assert (comm is None) != (addr is None)
-    if comm is None:
-        comm = yield connect(addr_from_args(addr), deserialize=deserialize)
 
     msg = kwargs
     msg['reply'] = reply
     please_close = kwargs.get('close')
+
+    if comm is None:
+        comm = yield connect(addr_from_args(addr), deserialize=deserialize)
+        force_close = True
+    else:
+        force_close = False
 
     try:
         yield comm.write(msg)
@@ -303,11 +307,13 @@ def send_recv(comm=None, addr=None, reply=True, deserialize=True, **kwargs):
             response = None
     except EnvironmentError:
         # On communication errors, we should simply close the communication
-        please_close = True
+        force_close = True
         raise
     finally:
         if please_close:
             yield comm.close()
+        elif force_close:
+            comm.abort()
 
     if isinstance(response, dict) and response.get('status') == 'uncaught-error':
         six.reraise(*clean_exception(**response))

@@ -13,6 +13,7 @@ from tornado.tcpclient import TCPClient
 from tornado.tcpserver import TCPServer
 
 from .. import config
+from ..compatibility import finalize
 from ..utils import ensure_bytes
 from .core import (connectors, listeners, Comm, Listener, CommClosedError,
                    parse_host_port, unparse_host_port)
@@ -111,8 +112,22 @@ class TCP(Comm):
         self._peer_addr = peer_addr
         self.stream = stream
         self.deserialize = deserialize
+        self._finalizer = finalize(self, self._get_finalizer())
+        self._finalizer.atexit = False
+
         stream.set_nodelay(True)
         set_tcp_timeout(stream)
+
+    def _get_finalizer(self):
+        def finalize(stream=self.stream, r=repr(self)):
+            if not stream.closed():
+                logger.warn("Closing dangling stream in %s" % (r,))
+                stream.close()
+
+        return finalize
+
+    def __repr__(self):
+        return "<TCP %r>" % (self._peer_addr,)
 
     @property
     def peer_address(self):
@@ -183,17 +198,17 @@ class TCP(Comm):
             except EnvironmentError:
                 pass
             finally:
+                self._finalizer.detach()
                 stream.close()
 
     def abort(self):
         stream, self.stream = self.stream, None
         if stream is not None and not stream.closed():
+            self._finalizer.detach()
             stream.close()
 
     def closed(self):
         return self.stream is None or self.stream.closed()
-
-    # XXX add a __del__?
 
 
 class TCPConnector(object):
