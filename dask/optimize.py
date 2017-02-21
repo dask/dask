@@ -480,12 +480,19 @@ def default_fused_keys_renamer3(keys_tree):
 
 
 def fancy_subs(task, children, deps):
-    deps = tuple(deps)
+    """Cheap substitution of multiple keys at once.
+
+    This effectively creates a sub-dask graph.
+
+    ``deps`` is the dependencies of ``task``.
+    """
+    deps = tuple(deps.difference(children))
     keys, vals = zip(*children.items())
     return (fancy_get, {'task': task, 'keys': deps + keys},) + deps + vals
 
 
 def fancy_get(delayed_task, *vals):
+    """Calculate a task that was created by ``fancy_subs``"""
     subdsk = dict(zip(delayed_task['keys'], vals))
     return _get_recursive(subdsk, delayed_task['task'])
 
@@ -644,13 +651,13 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
                         (no_new_edges or height < max_depth_new_edges)
                     ):
-                        deps_parent.remove(child_key)
-                        deps_parent |= deps_pop(child_key)
                         # Perform substitutions as we go
                         if is_fancy:
                             val = fancy_subs(dsk[parent], {child_key: child_task}, deps_parent)
                         else:
                             val = subs(dsk[parent], child_key, child_task)
+                        deps_parent.remove(child_key)
+                        deps_parent |= deps_pop(child_key)
                         del rv[child_key]
                         reducible_remove(child_key)
                         if key_renamer is not None:
@@ -725,6 +732,7 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                         # Perform substitutions as we go
                         val = dsk[parent]
                         fancy_children = {}
+                        children_deps = set()
                         for child_info in children_info:
                             cur_child = child_info[0]
                             if is_fancy:
@@ -732,14 +740,15 @@ def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width
                             else:
                                 val = subs(val, cur_child, child_info[1])
                             del rv[cur_child]
-                            deps_parent |= deps_pop(cur_child)
+                            children_deps |= deps_pop(cur_child)
                             reducible_remove(cur_child)
                             if key_renamer is not None:
                                 fused_trees_pop(cur_child, None)
                                 child_keys.extend(child_info[2])
-                        deps_parent -= children
                         if is_fancy:
                             val = fancy_subs(val, fancy_children, deps_parent)
+                        deps_parent -= children
+                        deps_parent |= children_deps
 
                         if key_renamer is not None:
                             child_keys.append(parent)
