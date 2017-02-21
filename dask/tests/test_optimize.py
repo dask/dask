@@ -29,6 +29,8 @@ def test_cull():
 def fuse2(*args, **kwargs):
     """Run both `fuse` and `fuse_reductions` and compare results"""
     rv1 = fuse(*args, **kwargs)
+    if kwargs.get('rename_keys') is not False:
+        return rv1
     rv2 = fuse_reductions(*args, **kwargs)
     assert rv1 == rv2
     return rv1
@@ -781,8 +783,8 @@ def test_fuse_reductions_single_input():
     })
     assert fuse_reductions(d, ave_width=2, rename_keys=True) == with_deps({
         'a': 1,
-        'b1-c1-d1-b2-e1-f': (f, (f, (f, (f, (f, 'a')))), (f, 'a')),
-        'f': 'b1-c1-d1-b2-e1-f',
+        'b1-b2-c1-d1-e1-f': (f, (f, (f, (f, (f, 'a')))), (f, 'a')),
+        'f': 'b1-b2-c1-d1-e1-f',
     })
 
     d = {
@@ -818,8 +820,8 @@ def test_fuse_reductions_single_input():
     })
     assert fuse_reductions(d, ave_width=2, rename_keys=True) == with_deps({
         'a': 1,
-        'b1-c1-d1-b2-e1-f': (f, 'a', (f, 'a', (f, 'a', (f, 'a', (f, 'a')))), (f, 'a')),
-        'f': 'b1-c1-d1-b2-e1-f',
+        'b1-b2-c1-d1-e1-f': (f, 'a', (f, 'a', (f, 'a', (f, 'a', (f, 'a')))), (f, 'a')),
+        'f': 'b1-b2-c1-d1-e1-f',
     })
 
     d = {
@@ -945,7 +947,6 @@ def test_fuse_stressed():
         ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0),
         ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1),
     }
-
     fuse_reductions(d, keys=keys, ave_width=2, rename_keys=True)
 
 
