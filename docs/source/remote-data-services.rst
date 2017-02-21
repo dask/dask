@@ -119,7 +119,7 @@ Important environment variables:
 .. _libhdfs3 client: https://github.com/Pivotal-Data-Attic/pivotalrd-libhdfs3/wiki/Configure-Parameters
 
 S3
---
+-----
 
 Amazon S3 (Simple Storage Service) is a web service offered by Amazon Web
 Services.
@@ -212,3 +212,26 @@ Possible additional storage options:
 
    -  token: either an actual dictionary of a google token, or location of
       a JSON file created by gcloud.
+
+
+Developer API
+~~~~~~~~~~~~~
+
+The prototype for any file-system back-end can be found in
+``bytes.local.LocalFileSystem``. Any new implementation should provide the
+same API, and make itself available as a protocol to dask. For example, the
+following would register the protocol "myproto", described by the implementation
+class ``MyProtoFileSystem``. URLs of the form ``myproto://`` would thereafter
+be dispatched to the methods of this class.
+
+.. code-block:: python
+
+   dask.bytes.core._filesystems['myproto'] = MyProtoFileSystem
+
+For a more complicated example, users may wish to also see
+``dask.bytes.s3.DaskS3FileSystem``.
+
+.. currentmodule:: dask.bytes.local
+
+.. autoclass:: LocalFileSystem
+   :members:

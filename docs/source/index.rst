@@ -239,6 +239,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`bytes`
+* :doc:`remote-data-services`
 * :doc:`cite`
 
 .. toctree::
@@ -254,6 +255,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    spark.rst
    caching.rst
    bytes.rst
+   remote-data-services.rst
    cite.rst
    funding.rst
 
