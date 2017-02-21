@@ -154,7 +154,7 @@ The following parameters may be passed to s3fs using ``storage_options``:
       as `region_name`, `endpoint_url`
 
     - requester_pays: set True if the authenticated user will assume transfer
-      costs, which is required by some providers of bulk daya
+      costs, which is required by some providers of bulk data
 
     - default_block_size, default_fill_cache: these are not of particular
       interest to dask users, as they concern the behaviour of the buffer
@@ -201,10 +201,9 @@ operations. The project can be defined using the  variable
 GCSFS_DEFAULT_PROJECT in the environment of every worker, or by passing
 something like the following
 
-.. .code-block:: python
+.. code-block:: python
 
-   dd.read_parquet('gs://bucket/path',
-        storage_options={'project': 'myproject'}
+   dd.read_parquet('gs://bucket/path', storage_options={'project': 'myproject'}
 
 Possible additional storage options:
 
