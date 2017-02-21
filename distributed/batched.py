@@ -84,8 +84,8 @@ class BatchedSend(object):
             try:
                 nbytes = yield self.comm.write(payload)
                 self.byte_count += nbytes
-            except CommClosedError:
-                logger.info("Batched Comm Closed")
+            except CommClosedError as e:
+                logger.info("Batched Comm Closed: %s", e)
                 break
             except Exception:
                 logger.exception("Error in batched write")

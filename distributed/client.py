@@ -472,7 +472,7 @@ class Client(object):
                 try:
                     yield self.ensure_connected()
                     break
-                except IOError:
+                except EnvironmentError:
                     yield gen.sleep(timeout)
 
     @gen.coroutine
@@ -480,12 +480,8 @@ class Client(object):
         if self.scheduler_comm and not self.scheduler_comm.closed():
             return
 
-        try:
-            comm = yield connect(self.scheduler.address,
-                                 timeout=timeout)
-        except:
-            raise IOError("Could not connect to %r"
-                          % (self.scheduler.address,))
+        comm = yield connect(self.scheduler.address,
+                             timeout=timeout)
 
         ident = yield self.scheduler.identity()
 

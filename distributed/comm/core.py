@@ -252,6 +252,13 @@ def connect(addr, timeout=3, deserialize=True):
     start = time()
     deadline = start + timeout
     error = None
+
+    def _raise(error):
+        error = error or "connect() didn't finish in time"
+        msg = ("Timed out trying to connect to %r after %s s: %s"
+               % (addr, timeout, error))
+        raise IOError(msg)
+
     while True:
         try:
             future = connector.connect(loc, deserialize=deserialize)
@@ -259,17 +266,14 @@ def connect(addr, timeout=3, deserialize=True):
                                           future,
                                           quiet_exceptions=EnvironmentError)
         except EnvironmentError as e:
+            error = str(e)
             if time() < deadline:
-                error = str(e)
                 yield gen.sleep(0.01)
                 logger.debug("sleeping on connect")
             else:
-                raise
+                _raise(error)
         except gen.TimeoutError:
-            msg = "Timed out trying to connect to %r" % (addr,)
-            if error is not None:
-                msg = "%s: %s" % (msg, error)
-            raise IOError(msg)
+            _raise(error)
         else:
             break
 

@@ -5,7 +5,6 @@ from time import sleep
 from tornado import gen
 from toolz import keymap, valmap, merge, assoc
 import uuid
-import uuid
 
 from dask.base import tokenize
 from tornado import gen
@@ -19,7 +18,7 @@ from .worker import thread_state
 
 
 @contextmanager
-def local_client():
+def local_client(timeout=3):
     """ Get client for this thread
 
     Note: This interface is new and experimental.  It may change without
@@ -46,9 +45,11 @@ def local_client():
     secede()  # have this thread secede from the thread pool
               # so that it doesn't take up a fixed resource while waiting
     worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
+
     with WorkerClient(address, loop=worker.loop) as wc:
-        while wc.status != 'running':
-            sleep(0.01)
+        # Make sure connection errors are bubbled to the caller
+        sync(wc.loop, wc._start, timeout=timeout)
+        assert wc.status == 'running'
         yield wc
 
 
@@ -67,7 +68,6 @@ class WorkerClient(Client):
         loop = kwargs.get('loop')
         self.worker = get_worker()
         sync(loop, apply, Client.__init__, (self,) + args, assoc(kwargs, 'start', False))
-        loop.add_callback(self._start)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):

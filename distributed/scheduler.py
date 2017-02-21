@@ -1249,7 +1249,8 @@ class Scheduler(Server):
                             break
 
                         if 'status' in msg and 'error' in msg['status']:
-                            logger.exception(clean_exception(**msg)[1])
+                            logger.error("error from worker %s: %s",
+                                         worker, clean_exception(**msg)[1])
 
                         op = msg.pop('op')
                         if op:
