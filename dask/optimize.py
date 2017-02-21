@@ -75,12 +75,14 @@ def default_fused_keys_renamer(keys):
         return None
 
 
-def fuse(dsk, keys=None, dependencies=None, rename_keys=True):
+def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
     Supply ``dependencies`` from output of ``cull`` if available to avoid
     recomputing dependencies.
+
+    **This function is mostly superseded by ``fuse``**
 
     Parameters
     ----------
@@ -431,7 +433,7 @@ def fuse_getitem(dsk, func, place):
 
 
 def default_fused_keys_renamer2(keys_tree):
-    """Create new keys for ``fuse_reductions`` tasks"""
+    """Create new keys for ``fuse`` tasks"""
     first_key = keys_tree[0]
     typ = type(first_key)
     flattened_keys = []
@@ -458,7 +460,7 @@ def default_fused_keys_renamer2(keys_tree):
 
 
 def default_fused_keys_renamer3(keys_tree):
-    """Create new keys for ``fuse_reductions`` tasks"""
+    """Create new keys for ``fuse`` tasks"""
     it = reversed(keys_tree)
     first_key = next(it)
     typ = type(first_key)
@@ -497,8 +499,8 @@ def fancy_get(delayed_task, *vals):
     return _get_recursive(subdsk, delayed_task['task'])
 
 
-def fuse_reductions(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
-                    max_height=None, max_depth_new_edges=None, rename_keys=None, is_fancy=False):
+def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
+         max_height=None, max_depth_new_edges=None, rename_keys=None, is_fancy=False):
     """ Fuse tasks that form reductions; a more advanced version of ``fuse``
 
     This trades parallelism opportunities for faster scheduling by making
