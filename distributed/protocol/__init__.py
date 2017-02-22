@@ -21,3 +21,7 @@ def _register_h5py():
 @partial(register_serialization_lazy, "netCDF4")
 def _register_netcdf4():
     from . import netcdf4
+
+@partial(register_serialization_lazy, "keras")
+def _register_keras():
+    from . import keras

@@ -44,8 +44,7 @@ def merge_frames(header, frames):
     >>> merge_frames({'lengths': [6]}, [b'123', b'456'])
     [b'123456']
     """
-    lengths = list(header['lengths'])[::-1]
-    frames = list(frames)[::-1]
+    lengths = list(header['lengths'])
 
     if not frames:
         return frames
@@ -54,6 +53,9 @@ def merge_frames(header, frames):
 
     if all(len(f) == l for f, l in zip(frames, lengths)):
         return frames
+
+    frames = frames[::-1]
+    lengths = lengths[::-1]
 
     out = []
     while lengths:

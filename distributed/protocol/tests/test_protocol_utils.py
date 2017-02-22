@@ -11,3 +11,6 @@ def test_merge_frames():
 
     b = b'123'
     assert merge_frames({'lengths': [3]}, [b])[0] is b
+
+    L = [b'123', b'456']
+    assert merge_frames({'lengths': [3, 3]}, L) is L
