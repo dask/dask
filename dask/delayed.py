@@ -30,12 +30,12 @@ def unzip(ls, nout):
     return out
 
 
-def to_task_dasks(expr):
-    """Normalize a python object and extract all sub-dasks.
+def to_task_dask(expr):
+    """Normalize a python object and merge all sub-graphs.
 
     - Replace ``Delayed`` with their keys
     - Convert literals to things the schedulers can handle
-    - Extract dasks from all enclosed values
+    - Extract dask graphs from all enclosed values
 
     Parameters
     ----------
@@ -46,24 +46,23 @@ def to_task_dasks(expr):
     Returns
     -------
     task : normalized task to be run
-    dasks : list of dasks that form the dag for this task
+    dask : a merged dask graph that forms the dag for this task
 
     Examples
     --------
-
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
-    >>> task, dasks = to_task_dasks([a, b, 3])
-    >>> task # doctest: +SKIP
+    >>> task, dask = to_task_dask([a, b, 3])
+    >>> task  # doctest: +SKIP
     ['a', 'b', 3]
-    >>> dasks # doctest: +SKIP
-    [{'a': 1}, {'b': 2}]
+    >>> dict(dask)  # doctest: +SKIP
+    {'a': 1, 'b': 2}
 
-    >>> task, dasks = to_task_dasks({a: 1, b: 2})
-    >>> task # doctest: +SKIP
+    >>> task, dasks = to_task_dask({a: 1, b: 2})
+    >>> task  # doctest: +SKIP
     (dict, [['a', 1], ['b', 2]])
-    >>> dasks # doctest: +SKIP
-    [{'a': 1}, {'b': 2}]
+    >>> dict(dask)  # doctest: +SKIP
+    {'a': 1, 'b': 2}
     """
     if isinstance(expr, Delayed):
         return expr.key, expr.dask
@@ -76,7 +75,7 @@ def to_task_dasks(expr):
     if isinstance(expr, tuple) and type(expr) != tuple:
         return expr, {}
     if isinstance(expr, (Iterator, list, tuple, set)):
-        args, dasks = unzip((to_task_dasks(e) for e in expr), 2)
+        args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
         dsk = sharedict.merge(*dasks)
         # Ensure output type matches input type
@@ -85,7 +84,7 @@ def to_task_dasks(expr):
         else:
             return args, dsk
     if isinstance(expr, dict):
-        args, dsk = to_task_dasks([[k, v] for k, v in expr.items()])
+        args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
     return expr, {}
 
@@ -256,10 +255,10 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
         return obj
 
     if isinstance(obj, base.Base) or traverse:
-        task, dsk = to_task_dasks(obj)
+        task, dsk = to_task_dask(obj)
     else:
         task = quote(obj)
-        dsk = sharedict.ShareDict()
+        dsk = {}
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
@@ -276,11 +275,8 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
-        dsk.update_with_key({name: task}, key=name)
+        dsk = sharedict.merge(dsk, (name, {name: task}))
         return Delayed(name, dsk)
-
-
-do = delayed
 
 
 def do(*args, **kwargs):
@@ -402,15 +398,15 @@ def call_function(func, func_token, args, kwargs, pure=False, nout=None):
     else:
         name = dask_key_name
 
-    args, dasks = unzip(map(to_task_dasks, args), 2)
+    args, dasks = unzip(map(to_task_dask, args), 2)
+    dsk = sharedict.merge(*dasks)
     if kwargs:
-        dask_kwargs, dsk2 = to_task_dasks(kwargs)
-        dasks = dasks + (dsk2,)
+        dask_kwargs, dsk2 = to_task_dask(kwargs)
+        dsk.update(dsk2)
         task = (apply, func, list(args), dask_kwargs)
     else:
         task = (func,) + args
 
-    dsk = sharedict.merge(*dasks)
     dsk.update_with_key({name: task}, key=name)
     nout = nout if nout is not None else None
     return Delayed(name, dsk, length=nout)
