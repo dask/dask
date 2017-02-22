@@ -31,7 +31,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
-from ..delayed import to_task_dasks
+from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
@@ -407,7 +407,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Unpack delayed objects in kwargs
     if kwargs:
-        task, dsk2 = to_task_dasks(kwargs)
+        task, dsk2 = to_task_dask(kwargs)
         if dsk2:
             dsk.update(dsk2)
             kwargs2 = task
