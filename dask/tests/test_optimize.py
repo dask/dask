@@ -947,7 +947,8 @@ def test_fuse_stressed():
         ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0),
         ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1),
     }
-    fuse(d, keys=keys, ave_width=2, rename_keys=True)
+    rv = fuse(d, keys=keys, ave_width=2, rename_keys=True)
+    assert rv == with_deps(rv[0])
 
 
 def test_fuse_reductions_multiple_input():

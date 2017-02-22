@@ -3,14 +3,13 @@ from __future__ import absolute_import, division, print_function
 import math
 import re
 from operator import getitem
-from toolz import concat, map, unique
 
 from .compatibility import unicode
 
 from .context import _globals
 from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
-                   reverse_dict, ishashable, _get_recursive)
+                   reverse_dict, ishashable)
 
 
 def cull(dsk, keys):
@@ -59,7 +58,7 @@ def cull(dsk, keys):
     return out, dependencies
 
 
-def default_fused_keys_renamer(keys):
+def default_fused_linear_keys_renamer(keys):
     """Create new keys for fused tasks"""
     typ = type(keys[0])
     if typ is str or typ is unicode:
@@ -92,7 +91,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
     rename_keys: bool or func, optional
-        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        Whether to rename fused keys with ``default_fused_linear_keys_renamer``
         or not.  Renaming fused keys can keep the graph more understandable
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
@@ -163,7 +162,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
     dependencies = {k: set(v) for k, v in dependencies.items()}
 
     if rename_keys is True:
-        key_renamer = default_fused_keys_renamer
+        key_renamer = default_fused_linear_keys_renamer
     elif rename_keys is False:
         key_renamer = None
     else:
@@ -432,36 +431,9 @@ def fuse_getitem(dsk, func, place):
                            lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
 
 
-def default_fused_keys_renamer2(keys_tree):
+def default_fused_keys_renamer(keys):
     """Create new keys for ``fuse`` tasks"""
-    first_key = keys_tree[0]
-    typ = type(first_key)
-    flattened_keys = []
-    while keys_tree:
-        flattened_keys.append([x for x in keys_tree if type(x) is not list])
-        keys_tree = list(concat(x for x in keys_tree if type(x) is list))
-    generate_names = unique(concat(
-        sorted(x, reverse=True) if len(x) > 1 else x
-        for x in map(list, (map(key_split, x) for x in flattened_keys))
-    ))
-    if typ is str or typ is unicode:
-        key_names = list(reversed(list(generate_names)))
-        key_names.pop()
-        key_names.append(first_key)
-        return '-'.join(key_names)
-    elif (typ is tuple and len(first_key) > 0 and
-          isinstance(first_key[0], (str, unicode))):
-        key_names = list(reversed(list(generate_names)))
-        key_names.pop()
-        key_names.append(first_key[0])
-        return ('-'.join(key_names),) + first_key[1:]
-    else:
-        return None
-
-
-def default_fused_keys_renamer3(keys_tree):
-    """Create new keys for ``fuse`` tasks"""
-    it = reversed(keys_tree)
+    it = reversed(keys)
     first_key = next(it)
     typ = type(first_key)
     if typ is str or typ is unicode:
@@ -481,30 +453,12 @@ def default_fused_keys_renamer3(keys_tree):
         return ('-'.join(names),) + first_key[1:]
 
 
-def fancy_subs(task, children, deps):
-    """Cheap substitution of multiple keys at once.
-
-    This effectively creates a sub-dask graph.
-
-    ``deps`` is the dependencies of ``task``.
-    """
-    deps = tuple(deps.difference(children))
-    keys, vals = zip(*children.items())
-    return (fancy_get, {'task': task, 'keys': deps + keys},) + deps + vals
-
-
-def fancy_get(delayed_task, *vals):
-    """Calculate a task that was created by ``fancy_subs``"""
-    subdsk = dict(zip(delayed_task['keys'], vals))
-    return _get_recursive(subdsk, delayed_task['task'])
-
-
 def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
-         max_height=None, max_depth_new_edges=None, rename_keys=None, is_fancy=False):
-    """ Fuse tasks that form reductions; a more advanced version of ``fuse``
+         max_height=None, max_depth_new_edges=None, rename_keys=None):
+    """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
-    This trades parallelism opportunities for faster scheduling by making
-    tasks less granular.  It can replace ``fuse`` in optimization passes.
+    This trades parallelism opportunities for faster scheduling by making tasks
+    less granular.  It can replace ``fuse_linear`` in optimization passes.
 
     This optimization applies to all reductions--tasks that have at most one
     dependent--so it may be viewed as fusing "multiple input, single output"
@@ -566,14 +520,14 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     if rename_keys is None:
         rename_keys = _globals.get('fuse_rename_keys', True)
     if rename_keys is True:
-        key_renamer = default_fused_keys_renamer3
+        key_renamer = default_fused_keys_renamer
     elif rename_keys is False:
         key_renamer = None
     else:
         key_renamer = rename_keys
 
     if dependencies is None:
-        deps = {k: get_dependencies(dsk, k, as_list=not is_fancy) for k in dsk}
+        deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
         deps = dict(dependencies)
 
@@ -654,10 +608,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                         (no_new_edges or height < max_depth_new_edges)
                     ):
                         # Perform substitutions as we go
-                        if is_fancy:
-                            val = fancy_subs(dsk[parent], {child_key: child_task}, deps_parent)
-                        else:
-                            val = subs(dsk[parent], child_key, child_task)
+                        val = subs(dsk[parent], child_key, child_task)
                         deps_parent.remove(child_key)
                         deps_parent |= deps_pop(child_key)
                         del rv[child_key]
@@ -733,22 +684,16 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                     ):
                         # Perform substitutions as we go
                         val = dsk[parent]
-                        fancy_children = {}
                         children_deps = set()
                         for child_info in children_info:
                             cur_child = child_info[0]
-                            if is_fancy:
-                                fancy_children[cur_child] = child_info[1]
-                            else:
-                                val = subs(val, cur_child, child_info[1])
+                            val = subs(val, cur_child, child_info[1])
                             del rv[cur_child]
                             children_deps |= deps_pop(cur_child)
                             reducible_remove(cur_child)
                             if key_renamer is not None:
                                 fused_trees_pop(cur_child, None)
                                 child_keys.extend(child_info[2])
-                        if is_fancy:
-                            val = fancy_subs(val, fancy_children, deps_parent)
                         deps_parent -= children
                         deps_parent |= children_deps
 
@@ -813,7 +758,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     return rv, deps
 
 
-# Defining `key_split` (used by `default_fused_keys_renamer`) in utils.py
+# Defining `key_split` (used by key renamers in `fuse`) in utils.py
 # results in messy circular imports, so define it here instead.
 hex_pattern = re.compile('[a-f]+')
 
