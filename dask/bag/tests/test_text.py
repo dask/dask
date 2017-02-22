@@ -48,7 +48,7 @@ def test_read_text(fmt, bs, encoding):
 
 
 def test_errors():
-    with filetexts({'.test.foo': 'Jos\xe9\nAlice'}):
+    with filetexts({'.test.foo': b'Jos\xe9\nAlice'}, mode='b'):
         with pytest.raises(UnicodeDecodeError):
             read_text('.test.foo', encoding='ascii').compute()
 
