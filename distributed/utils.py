@@ -97,10 +97,11 @@ def _get_ip(host, port, family, default):
     # simply select the local address through which *host* is reachable.
     sock = socket.socket(family, socket.SOCK_DGRAM)
     try:
-        sock.connect((host, 0))
+        sock.connect((host, port))
         ip = sock.getsockname()[0]
         return ip
     except EnvironmentError as e:
+        # XXX Should first try getaddrinfo() on socket.gethostname() and getfqdn()
         warnings.warn("Couldn't detect a suitable IP address for "
                       "reaching %r, defaulting to %r: %s"
                       % (host, default, e), RuntimeWarning)

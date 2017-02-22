@@ -720,8 +720,11 @@ def assert_can_connect_locally_4(port, timeout=None):
     """
     futures = [
         assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
-        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
         ]
+    if get_ip() != '127.0.0.1':  # No outside IPv4 connectivity?
+        futures += [
+            assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+            ]
     if has_ipv6():
         futures += [
             assert_cannot_connect('tcp://[::1]:%d' % port, timeout),
@@ -754,7 +757,7 @@ def assert_can_connect_locally_6(port, timeout=None):
         assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
         assert_can_connect('tcp://[::1]:%d' % port, timeout),
         ]
-    if get_ipv6() != '::1':  # Can happen if no outside IPv6 connectivity
+    if get_ipv6() != '::1':  # No outside IPv6 connectivity?
         futures += [
             assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
             ]

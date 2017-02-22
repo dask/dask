@@ -96,7 +96,9 @@ def test_resolve_address():
     if has_ipv6():
         assert f('tcp://[::1]:123') == 'tcp://[::1]:123'
         assert f('zmq://[::1]:456') == 'zmq://[::1]:456'
-        assert f('[::2]:789') == 'tcp://[::2]:789'
+        # OS X returns '::0.0.0.2' as canonical representation
+        assert f('[::2]:789') in ('tcp://[::2]:789',
+                                  'tcp://[::0.0.0.2]:789')
         assert f('tcp://[::]:123') == 'tcp://[::]:123'
 
     assert f('localhost:123') == 'tcp://127.0.0.1:123'

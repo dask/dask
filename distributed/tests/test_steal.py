@@ -208,6 +208,8 @@ def test_dont_steal_worker_restrictions(c, s, a, b):
     assert len(b.task_state) == 0
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1), ('127.0.0.2', 1)])
 def test_dont_steal_host_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
@@ -226,7 +228,7 @@ def test_dont_steal_host_restrictions(c, s, a, b):
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 2}}),
-                                  ('127.0.0.2', 1)])
+                                  ('127.0.0.1', 1)])
 def test_dont_steal_resource_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
     yield future._result()
