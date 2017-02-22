@@ -27,7 +27,7 @@ from tornado.locks import Event
 from .batched import BatchedSend
 from .comm.core import get_address_host_port
 from .config import config
-from .compatibility import reload, unicode
+from .compatibility import reload, unicode, invalidate_caches, cache_from_source
 from .core import (connect, send_recv, error_message, CommClosedError,
                    rpc, Server, pingpong, coerce_to_address, RPCClosed)
 from .metrics import time
@@ -452,19 +452,31 @@ class WorkerBase(Server):
         if load:
             try:
                 name, ext = os.path.splitext(filename)
+                names_to_import = []
                 if ext in ('.py', '.pyc'):
-                    logger.info("Reload module %s from .py file", name)
-                    name = name.split('-')[0]
-                    reload(import_module(name))
-                if ext == '.egg':
-                    import pkg_resources
-                    sys.path.append(out_filename)
-                    pkgs = pkg_resources.find_distributions(out_filename)
-                    for pkg in pkgs:
-                        logger.info("Load module %s from egg", pkg.project_name)
-                        reload(import_module(pkg.project_name))
-                    if not pkgs:
-                        logger.warning("Found no packages in egg file")
+                    names_to_import.append(name)
+                    # Ensures that no pyc file will be reused
+                    cache_file = cache_from_source(out_filename)
+                    if os.path.exists(cache_file):
+                        os.remove(cache_file)
+                if ext in ('.egg', '.zip'):
+                    if out_filename not in sys.path:
+                        sys.path.insert(0, out_filename)
+                    if ext == '.egg':
+                        import pkg_resources
+                        pkgs = pkg_resources.find_distributions(out_filename)
+                        for pkg in pkgs:
+                            names_to_import.append(pkg.project_name)
+                    elif ext == '.zip':
+                        names_to_import.append(name)
+                
+                if not names_to_import:
+                    logger.warning("Found nothing to import from %s", filename)
+                else:
+                    invalidate_caches()
+                    for name in names_to_import:
+                        logger.info("Reload module %s from %s file", name, ext)
+                        reload(import_module(name))
             except Exception as e:
                 logger.exception(e)
                 return {'status': 'error', 'exception': dumps(e)}

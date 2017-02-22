@@ -35,12 +35,23 @@ if sys.version_info[0] == 2:
                 hasattr(o, '__module__') and
                 o.__module__ == 'Queue')
 
+    def invalidate_caches():
+        pass
+    
+    def cache_from_source(path):
+        import os
+        name, ext = os.path.splitext(path)
+        return name + '.pyc'
+    
     logging_names = logging._levelNames
 
 if sys.version_info[0] == 3:
     from queue import Queue, Empty
     from importlib import reload
     from threading import get_ident as get_thread_identity
+    from importlib import invalidate_caches
+    from importlib.util import cache_from_source
+    
     PY2 = False
     PY3 = True
     unicode = str

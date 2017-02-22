@@ -14,6 +14,7 @@ import sys
 from threading import Thread, Semaphore
 from time import sleep
 import traceback
+import zipfile, sys
 
 import mock
 import pytest
@@ -1101,21 +1102,45 @@ def test_upload_file(c, s, a, b):
         import myfile
         return myfile.f()
 
-    with tmp_text('myfile.py', 'def f():\n    return 123') as fn:
-        yield c._upload_file(fn)
+    try:
+        for value in [123, 456]:
+            with tmp_text('myfile.py', 'def f():\n    return {}'.format(value)) as fn:
+                yield c._upload_file(fn)
+        
+            x = c.submit(g, pure=False)
+            result = yield x._result()
+            assert result == value
+    finally:
+        # Ensure that this test won't impact the others
+        if 'myfile' in sys.modules:
+            del sys.modules['myfile']
+            
+@gen_cluster(client=True)
+def test_upload_file_zip(c, s, a, b):
+    def g():
+        import myfile
+        return myfile.f()
 
-    sleep(1)  # TODO:  why is this necessary?
-    x = c.submit(g, pure=False)
-    result = yield x._result()
-    assert result == 123
-
-    with tmp_text('myfile.py', 'def f():\n    return 456') as fn:
-        yield c._upload_file(fn)
-
-    y = c.submit(g, pure=False)
-    result = yield y._result()
-    assert result == 456
-
+    try:
+        for value in [123, 456]:
+            with tmp_text('myfile.py', 'def f():\n    return {}'.format(value)) as fn_my_file:
+                with zipfile.ZipFile('myfile.zip', 'w') as z:
+                    z.write(fn_my_file, arcname=os.path.basename(fn_my_file))
+                yield c._upload_file('myfile.zip')
+                    
+                x = c.submit(g, pure=False)
+                result = yield x._result()
+                assert result == value
+    finally:
+        # Ensure that this test won't impact the others
+        if os.path.exists('myfile.zip'):
+            os.remove('myfile.zip')
+        if 'myfile' in sys.modules:
+            del sys.modules['myfile']
+        for path in sys.path:
+            if os.path.basename(path) == 'myfile.zip':
+                sys.path.remove(path)
+                break
 
 @gen_cluster(client=True)
 def test_upload_large_file(c, s, a, b):
