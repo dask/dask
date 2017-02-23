@@ -344,7 +344,6 @@ class Scheduler(Server):
         """ Basic information about ourselves and our cluster """
         d = {'type': type(self).__name__,
              'id': str(self.id),
-             'workers': list(self.workers),
              'services': {key: v.port for (key, v) in self.services.items()},
              'workers': dict(self.worker_info)}
         return d
@@ -519,6 +518,8 @@ class Scheduler(Server):
 
             if host_info:
                 self.host_info[host].update(host_info)
+
+            self.worker_info[address]['ncores'] = ncores
 
             delay = time() - now
             self.worker_info[address]['time-delay'] = delay
