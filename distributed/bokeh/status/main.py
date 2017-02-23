@@ -16,6 +16,7 @@ WIDTH = 600
 messages = distributed.bokeh.messages  # global message store
 
 doc = curdoc()
+doc.title = "Dask Status"
 
 task_stream = TaskStream(1000, sizing_mode=SIZING_MODE, width=WIDTH, height=300, clear_interval=10000)
 doc.add_periodic_callback(lambda: task_stream.update(messages), messages['task-events']['interval'])

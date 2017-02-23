@@ -9,6 +9,7 @@ import distributed.bokeh
 
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
+doc.title = "Dask Task Stream"
 
 task_stream = TaskStream(100000, sizing_mode='stretch_both',
                          clear_interval=60*1000)

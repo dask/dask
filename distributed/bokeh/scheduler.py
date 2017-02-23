@@ -238,6 +238,7 @@ def systemmonitor_doc(scheduler, doc):
     with log_errors():
         table = StateTable(scheduler)
         sysmon = SystemMonitor(scheduler, sizing_mode='scale_width')
+        doc.title = "Dask Scheduler Internal Monitor"
         doc.add_periodic_callback(table.update, 500)
         doc.add_periodic_callback(sysmon.update, 500)
 
@@ -252,6 +253,7 @@ def workers_doc(scheduler, doc):
         stealing_ts = StealingTimeSeries(scheduler, sizing_mode='scale_width')
         stealing_events = StealingEvents(scheduler, sizing_mode='scale_width')
         stealing_events.root.x_range = stealing_ts.root.x_range
+        doc.title = "Dask Workers Monitor"
         doc.add_periodic_callback(table.update, 500)
         doc.add_periodic_callback(occupancy.update, 500)
         doc.add_periodic_callback(stealing_ts.update, 500)

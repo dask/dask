@@ -14,6 +14,7 @@ WIDTH = 600
 
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
+doc.title = "Dask Worker"
 
 processing = Processing(sizing_mode=SIZING_MODE, width=WIDTH, height=150)
 doc.add_periodic_callback(lambda: processing.update(messages), 200)

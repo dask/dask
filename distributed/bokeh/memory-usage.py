@@ -8,5 +8,6 @@ from distributed.bokeh.components import MemoryUsage
 component = MemoryUsage(sizing_mode='stretch_both')
 
 doc = curdoc()
+doc.title = "Dask Memory Usage"
 doc.add_periodic_callback(lambda: component.update(messages), 50)
 doc.add_root(component.root)

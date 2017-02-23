@@ -8,6 +8,7 @@ from distributed.bokeh.components import WorkerTable
 component = WorkerTable(sizing_mode='stretch_both')
 
 doc = curdoc()
+doc.title = "Dask Workers"
 doc.add_periodic_callback(lambda: component.update(messages),
                           messages['workers']['interval'])
 doc.add_root(component.root)
