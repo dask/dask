@@ -15,11 +15,10 @@ Release per project:
 *  Upload to PyPI
 
         git clean -xfd
-        python setup.py register sdist bdist_wheel --universal
+        python setup.py sdist bdist_wheel --universal
         twine upload dist/*
 
-*   Update anaconda recipe.
-
-    This should happen automatically within a day or two.
-
 *   Update conda recipe feedstock on `conda-forge <https://conda-forge.github.io/>`_.
+    *  Update conda-smithy and run conda-smithy rerender
+    *  Get sha256 hash from pypi.org
+    *  Update version number and hash in recipe

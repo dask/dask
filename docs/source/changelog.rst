@@ -1,7 +1,57 @@
 Changelog
 =========
 
-0.13.0 / ?
+0.14.0 / 2017-02-24
+-------------------
+
+Array
++++++
+
+- Fix corner cases with zero shape and misaligned values in ``arange``
+  (:pr:`1902`), (:pr:`1904`), (:pr:`1935`), (:pr:`1955`), (:pr:`1956`)
+- Improve concatenation efficiency (:pr:`1923`)
+- Avoid hashing in ``from_array`` if name is provided (:pr:`1972`)
+
+Bag
++++
+
+- Repartition can now increase number of partitions (:pr:`1934`)
+- Fix bugs in some reductions with empty partitions (:pr:`1939`), (:pr:`1950`),
+  (:pr:`1953`)
+
+
+DataFrame
++++++++++
+
+- Support non-uniform categoricals (:pr:`1877`), (:pr:`1930`)
+- Groupby cumulative reductions (:pr:`1909`)
+- DataFrame.loc indexing now supports lists (:pr:`1913`)
+- Improve multi-level groupbys (:pr:`1914`)
+- Improved HTML and string repr for DataFrames (:pr:`1637`)
+- Parquet append (:pr:`1940`)
+- Add ``dd.demo.daily_stock`` function for teaching (:pr:`1992`)
+
+Delayed
++++++++
+
+- Add ``traverse=`` keyword to delayed to optionally avoid traversing nested
+  data structures (:pr:`1899`)
+- Support Futures in from_delayed functions (:pr:`1961`)
+- Improve serialization of decorated delayed functions (:pr:`1969`)
+
+Core
+++++
+
+- Improve windows path parsing in corner cases (:pr:`1910`)
+- Rename tasks when fusing (:pr:`1919`)
+- Add top level ``persist`` function (:pr:`1927`)
+- Propagate ``errors=`` keyword in byte handling (:pr:`1954`)
+- Dask.compute traverses Python collections (:pr:`1975`)
+- Structural sharing between graphs in dask.array and dask.delayed (:pr:`1985`)
+
+
+0.13.0 / 2017-01-02
+-------------------
 
 Array
 +++++
