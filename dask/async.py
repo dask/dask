@@ -441,7 +441,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
-    dsk = dsk.copy()
+    dsk = dict(dsk)
     started_cbs = []
     try:
         for cb in callbacks:

@@ -125,3 +125,13 @@ class GetFunctionTestMixin(object):
             assert False, msg
 
         assert self.get(d, 'x4999') == 4999
+
+    def test_with_sharedict(self):
+        from .sharedict import ShareDict
+
+        dsk = ShareDict()
+        dsk.update({'x': 1,
+                    'y': (inc, 'x')})
+        dsk.update({'z': (add, (inc, 'x'), 'y')})
+
+        assert self.get(dsk, 'z') == 4
