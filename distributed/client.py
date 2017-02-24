@@ -9,6 +9,7 @@ from datetime import timedelta
 import errno
 from functools import partial
 from glob import glob
+import json
 import logging
 import os
 import sys
@@ -342,7 +343,7 @@ class Client(object):
     distributed.scheduler.Scheduler: Internal scheduler
     """
     def __init__(self, address=None, start=True, loop=None, timeout=3,
-                 set_as_default=True):
+                 set_as_default=True, scheduler_file=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
@@ -353,6 +354,7 @@ class Client(object):
         self.status = None
         self._pending_msg_buffer = []
         self.extensions = {}
+        self.scheduler_file = scheduler_file
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
@@ -426,7 +428,17 @@ class Client(object):
             # Ensure the cluster is started (no-op if already running)
             yield self.cluster._start()
             self._start_arg = self.cluster.scheduler_address
-
+        elif self.scheduler_file is not None:
+            while not os.path.exists(self.scheduler_file):
+                yield gen.sleep(0.01)
+            for i in range(10):
+                try:
+                    with open(self.scheduler_file) as f:
+                        cfg = json.load(f)
+                    self._start_arg = cfg['address']
+                    break
+                except (ValueError, KeyError):  # JSON file not yet flushed
+                    yield gen.sleep(0.01)
         elif self._start_arg is None:
             # Special case: if Client() was instantiated without a
             # scheduler address or cluster reference, spawn a new cluster

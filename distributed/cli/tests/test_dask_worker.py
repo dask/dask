@@ -94,3 +94,15 @@ def test_local_directory(loop, nanny):
                     info = c.scheduler_info()
                     worker = list(info['workers'].values())[0]
                     assert worker['local_directory'] == fn
+
+
+@pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])
+def test_scheduler_file(loop, nanny):
+    with tmpfile() as fn:
+        with popen(['dask-scheduler', '--no-bokeh', '--scheduler-file', fn]) as sched:
+            with popen(['dask-worker', '--scheduler-file', fn, nanny, '--no-bokeh']):
+                with Client(scheduler_file=fn, loop=loop) as c:
+                    start = time()
+                    while not c.scheduler_info()['workers']:
+                        sleep(0.1)
+                        assert time() < start + 10

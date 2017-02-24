@@ -4,6 +4,7 @@ import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
 from datetime import timedelta
+import json
 from operator import add, mul
 import sys
 from time import sleep
@@ -27,7 +28,7 @@ from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop, readone, slowinc, slowadd, cluster, div)
-from distributed.utils import All
+from distributed.utils import All, tmpfile
 from distributed.utils_test import slow
 from dask.compatibility import apply
 
@@ -1069,3 +1070,17 @@ def test_fifo_submission(c, s, w):
         yield gen.sleep(0.01)
     yield _wait(futures[-1])
     assert futures[10].status == 'finished'
+
+
+@gen_test()
+def test_scheduler_file():
+    with tmpfile() as fn:
+        s = Scheduler(scheduler_file=fn)
+        s.start(0)
+        with open(fn) as f:
+            data = json.load(f)
+        assert data['address'] == s.address
+
+        c = Client(scheduler_file=fn, loop=s.loop, start=False)
+        yield c._start()
+    yield s.close()

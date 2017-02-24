@@ -4,6 +4,7 @@ from collections import Iterator
 from functools import partial
 import io
 import logging
+import socket
 from time import sleep
 from threading import Thread
 import threading
@@ -20,7 +21,7 @@ from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
-        funcname, ensure_bytes)
+        funcname, ensure_bytes, open_port)
 from distributed.utils_test import (loop, inc, throws, div, captured_handler,
                                     captured_logger, has_ipv6)
 
@@ -371,3 +372,10 @@ def test_logging():
 
     finally:
         root.setLevel(old_root_level)
+
+
+def test_open_port():
+    port = open_port()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('', port))
+    s.close()

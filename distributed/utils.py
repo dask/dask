@@ -619,3 +619,18 @@ shutting_down.__doc__ = """
     to early bind this function rather than look it up when calling it,
     since at shutdown module globals may be cleared.
     """
+
+
+def open_port(host=''):
+    """ Return a probably-open port
+
+    There is a chance that this port will be taken by the operating system soon
+    after returning from this function.
+    """
+    # http://stackoverflow.com/questions/2838244/get-open-tcp-port-in-python
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((host, 0))
+    s.listen(1)
+    port = s.getsockname()[1]
+    s.close()
+    return port

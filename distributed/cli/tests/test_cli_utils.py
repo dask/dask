@@ -17,6 +17,7 @@ def test_uri_from_host_port():
     assert f('', 456, 123) == 'tcp://:456'
     assert f('', None, 123) == 'tcp://:123'
     assert f('', None, 0) == 'tcp://'
+    assert f('', 0, 123) == 'tcp://'
 
     assert f('localhost', 456, None) == 'tcp://localhost:456'
     assert f('localhost', 456, 123) == 'tcp://localhost:456'

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import atexit
 from datetime import timedelta
+import json
 import logging
 import os
 import shutil
@@ -43,7 +44,7 @@ def handle_signal(sig, frame):
 
 
 @click.command()
-@click.argument('scheduler', type=str)
+@click.argument('scheduler', type=str, required=False)
 @click.option('--worker-port', type=int, default=0,
               help="Serving worker port, defaults to randomly assigned")
 @click.option('--http-port', type=int, default=0,
@@ -76,9 +77,12 @@ def handle_signal(sig, frame):
               help="Internal use only")
 @click.option('--resources', type=str, default='',
               help='Resources for task constraints like "GPU=2 MEM=10e9"')
+@click.option('--scheduler-file', type=str, default='',
+              help='Filename to JSON encoded scheduler information. '
+                   'Use with dask-scheduler --scheduler-file')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, temp_filename, reconnect,
-         resources, bokeh, bokeh_port, local_directory):
+         resources, bokeh, bokeh_port, local_directory, scheduler_file):
     if nanny:
         port = nanny_port
     else:
@@ -131,6 +135,22 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         if nanny_port:
             kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
+
+    if scheduler_file:
+        while not os.path.exists(scheduler_file):
+            sleep(0.01)
+        for i in range(10):
+            try:
+                with open(scheduler_file) as f:
+                    cfg = json.load(f)
+                scheduler = cfg['address']
+                break
+            except (ValueError, KeyError):  # race with scheduler on file
+                sleep(0.01)
+
+    if not scheduler:
+        raise ValueError("Need to provide scheduler address like\n"
+                         "dask-worker SCHEDULER_ADDRESS:8786")
 
     nannies = [t(scheduler, ncores=nthreads,
                  services=services, name=name, loop=loop, resources=resources,

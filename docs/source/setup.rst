@@ -68,6 +68,35 @@ The ``dask-ssh`` utility depends on the ``paramiko``::
     pip install paramiko
 
 
+Using a Shared Network File System and a Job Scheduler
+------------------------------------------------------
+
+Some clusters benefit from a shared network file system (NFS) and can use this
+to communicate the scheduler location to the workers::
+
+   dask-scheduler --scheduler-file /path/to/scheduler.json
+
+   dask-worker --scheduler-file /path/to/scheduler.json
+   dask-worker --scheduler-file /path/to/scheduler.json
+
+.. code-block:: python
+
+   >>> client = Client(scheduler_file='/path/to/scheduler.json')
+
+This can be particularly useful when deploying ``dask-scheduler`` and
+``dask-worker`` processes using a job scheduler like
+``SGE/SLURM/Torque/etc..``  Here is an example using SGE's ``qsub`` command::
+
+    # Start a dask-scheduler somewhere and write connection information to file
+    qsub -b y /path/to/dask-scheduler --scheduler-file /path/to/scheduler.json
+
+    # Start 100 dask-worker processes in an array job pointing to the same file
+    qsub -b y -t 1-100 /path/to/dask-worker --scheduler-file /path/to/scheduler.json
+
+Note, the ``--scheduler-file`` option is *only* valuable if your scheduler and
+workers share a standard POSIX file system.
+
+
 Using the Python API
 --------------------
 

@@ -13,7 +13,7 @@ import click
 
 import distributed
 from distributed import Scheduler
-from distributed.utils import ignoring
+from distributed.utils import ignoring, open_port
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
@@ -42,8 +42,12 @@ logger = logging.getLogger('distributed.scheduler')
               help="User xheaders in bokeh app for ssl termination in header")
 @click.option('--pid-file', type=str, default='',
               help="File to write the process PID")
+@click.option('--scheduler-file', type=str, default='',
+              help="File to write connection information. "
+              "This may be a good way to share connection information if your "
+              "cluster is on a shared network file system.")
 def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
-         bokeh_whitelist, prefix, use_xheaders, pid_file):
+         bokeh_whitelist, prefix, use_xheaders, pid_file, scheduler_file):
 
     if pid_file:
         with open(pid_file, 'w') as f:
@@ -70,12 +74,15 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
             services[('bokeh', bokeh_internal_port)] = BokehScheduler
-    scheduler = Scheduler(loop=loop, services=services)
+    scheduler = Scheduler(loop=loop, services=services,
+                          scheduler_file=scheduler_file)
     scheduler.start(addr)
 
     bokeh_proc = None
     if _bokeh:
-        try:
+        if bokeh_port == 0:          # This is a hack and not robust
+            bokeh_port = open_port() # This port may be taken by the OS
+        try:                         # before we successfully pass it to Bokeh
             from distributed.bokeh.application import BokehWebInterface
             bokeh_proc = BokehWebInterface(http_port=http_port,
                     tcp_port=scheduler.port, bokeh_port=bokeh_port,

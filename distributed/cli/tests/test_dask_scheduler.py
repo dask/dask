@@ -216,3 +216,25 @@ def test_pid_file(loop):
             with popen(['dask-worker', '127.0.0.1:8786', '--pid-file', w,
                         '--no-bokeh']) as worker:
                 check_pidfile(worker, w)
+
+
+def test_scheduler_port_zero(loop):
+    with tmpfile() as fn:
+        with popen(['dask-scheduler', '--no-bokeh', '--scheduler-file', fn,
+                    '--port', '0']) as sched:
+            with Client(scheduler_file=fn, loop=loop) as c:
+                assert c.scheduler.port
+                assert c.scheduler.port != 8786
+
+
+def test_bokeh_port_zero(loop):
+    with tmpfile() as fn:
+        with popen(['dask-scheduler',
+                    '--bokeh-port', '0',
+                    '--bokeh-internal-port', '0']) as proc:
+            count = 0
+            while count < 2:
+                line = proc.stderr.readline()
+                if b'bokeh' in line.lower() or b'web' in line.lower():
+                    count += 1
+                    assert b':0' not in line
