@@ -1,6 +1,22 @@
 Changelog
 =========
 
+1.16.0 - February 24th, 2017
+----------------------------
+
+- First come first served priorities on client submissions (:pr:`840`)
+- Can specify Bokeh internal ports (:pr:`850`)
+- Allow stolen tasks to return from either worker (:pr:`853`), (:pr:`875`)
+- Add worker resource constraints during execution (:pr:`857`)
+- Send small data through Channels (:pr:`858`)
+- Better estimates for SciPy sparsse matrix memory costs (:pr:`863`)
+- Avoid stealing long running tasks (:pr:`873`)
+- Maintain fortran ordering of NumPy arrays (:pr:`876`)
+- Add ``--scheduler-file`` keyword to dask-scheduler (:pr:`877`)
+- Add serializer for Keras models (:pr:`878`)
+- Support uploading modules from zip files (:pr:`886`)
+- Improve titles of Bokeh dashboards (:pr:`895`)
+
 1.15.2 - January 27th, 2017
 ---------------------------
 

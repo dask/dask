@@ -42,7 +42,7 @@ setup(name='distributed',
                 'distributed.diagnostics',
                 'distributed.protocol',
                 'distributed.http'],
-      long_description=(open('README.md').read() if os.path.exists('README.md')
+      long_description=(open('README.rst').read() if os.path.exists('README.rst')
                         else ''),
       entry_points='''
         [console_scripts]
