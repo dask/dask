@@ -28,7 +28,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
 
     dsk2, dependencies = cull(dsk, keys)
     dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
-                              rename_fused_keys=rename_fused_keys)
+                              rename_keys=rename_fused_keys)
     dsk5 = optimize_slices(dsk4)
     dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
                             fast_functions=inline_functions_fast_functions)
