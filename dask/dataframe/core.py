@@ -2249,7 +2249,7 @@ class DataFrame(_Frame):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, by=by, **kwargs)
 
-    def categorize(self, columns=None, index=None, **kwargs):
+    def categorize(self, columns=None, index=None, split_every=False, **kwargs):
         """Convert columns of the DataFrame to category dtype.
 
         Parameters
@@ -2262,6 +2262,10 @@ class DataFrame(_Frame):
             Whether to categorize the index. By default, object indices are
             converted to categorical, and unknown categorical indices are made
             known. Set True to always categorize the index, False to never.
+        split_every : int, optional
+            Group partitions into groups of this size while performing a
+            tree-reduction. If set to False, no tree-reduction will be used.
+            Default is False.
         kwargs
             Keyword arguments are passed on to compute.
 
@@ -2270,7 +2274,8 @@ class DataFrame(_Frame):
         dask.dataframes.categorical.categorize
         """
         from .categorical import categorize
-        return categorize(self, columns=columns, index=index, **kwargs)
+        return categorize(self, columns=columns, index=index, split_every=8,
+                          **kwargs)
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
