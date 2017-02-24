@@ -13,7 +13,7 @@ from tornado import gen
 
 import dask
 from dask import delayed
-from distributed import Worker, Nanny, local_client
+from distributed import Worker, Nanny, worker_client
 from distributed.config import config
 from distributed.client import Client, _wait, wait
 from distributed.metrics import time
@@ -531,7 +531,7 @@ def test_accept_old_result_if_stolen(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_dont_steal_long_running_tasks(c, s, a, b):
     def long(delay):
-        with local_client() as c:
+        with worker_client() as c:
             sleep(delay)
 
     yield c.submit(long, 0.1)._result()  # learn duration

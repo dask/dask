@@ -8,7 +8,7 @@ from toolz import take
 from tornado import gen
 
 from distributed import Client
-from distributed import local_client
+from distributed import worker_client
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, loop, cluster, slowinc
 
@@ -52,9 +52,9 @@ def test_channel(c, s, a, b):
     assert '1' in repr(x)
 
 
-def test_local_client(loop):
+def test_worker_client(loop):
     def produce(n):
-        with local_client() as c:
+        with worker_client() as c:
             x = c.channel('x')
             for i in range(n):
                 future = c.submit(slowinc, i, delay=0.01, key='f-%d' % i)
@@ -63,7 +63,7 @@ def test_local_client(loop):
             x.flush()
 
     def consume():
-        with local_client() as c:
+        with worker_client() as c:
             x = c.channel('x')
             y = c.channel('y')
             last = 0
@@ -157,7 +157,7 @@ def test_multiple_maxlen(c, s, a, b):
 
 def test_stop(loop):
     def produce(n):
-        with local_client() as c:
+        with worker_client() as c:
             x = c.channel('x')
             for i in range(n):
                 future = c.submit(slowinc, i, delay=0.01, key='f-%d' % i)

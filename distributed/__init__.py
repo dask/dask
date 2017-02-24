@@ -10,7 +10,7 @@ from .nanny import Nanny
 from .scheduler import Scheduler
 from .utils import sync
 from .worker import Worker
-from .worker_client import local_client
+from .worker_client import local_client, worker_client
 
 try:
     from .collections import futures_to_collection

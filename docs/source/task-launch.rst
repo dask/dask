@@ -86,15 +86,15 @@ on worker nodes.
 To submit new tasks from a worker that worker must first create a new client
 object that connects to the scheduler.  There is a convenience function to do
 this for you so that you don't have to pass around connection information.
-However you must use this function ``local_client`` as a context manager to
+However you must use this function ``worker_client`` as a context manager to
 ensure proper cleanup on the worker.
 
 .. code-block:: python
 
-   from distributed import local_client
+   from distributed import worker_client
 
    def process_all(data):
-       with local_client() as e:
+       with worker_client() as e:
            elements = e.scatter(data)
            futures = e.map(process_element, elements)
            analysis = e.submit(aggregate, futures)
@@ -115,7 +115,7 @@ that submit tasks that submit other tasks, etc..
 
 .. code-block:: python
 
-   In [1]: from distributed import Client, local_client
+   In [1]: from distributed import Client, worker_client
 
    In [2]: client = Client()
 
@@ -123,7 +123,7 @@ that submit tasks that submit other tasks, etc..
       ...:     if n < 2:
       ...:         return n
       ...:     else:
-      ...:         with local_client() as c
+      ...:         with worker_client() as c
       ...:             a = c.submit(fib, n - 1)
       ...:             b = c.submit(fib, n - 2)
       ...:             a, b = c.gather([a, b])
@@ -146,11 +146,11 @@ that even pathological cases function robustly.
 Technical details
 ~~~~~~~~~~~~~~~~~
 
-Tasks that invoke ``local_client`` are conservatively assumed to be *long
+Tasks that invoke ``worker_client`` are conservatively assumed to be *long
 running*.  They can take a long time blocking, waiting for other tasks to
 finish, gathering results, etc..  In order to avoid having them take up
 processing slots the following actions occur whenever a task invokes
-``local_client``.
+``worker_client``.
 
 1.  The thread on the worker running this function *secedes* from the thread
     pool and goes off on its own.  This allows the thread pool to populate that

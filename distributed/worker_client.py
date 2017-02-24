@@ -18,7 +18,7 @@ from .worker import thread_state
 
 
 @contextmanager
-def local_client(timeout=3):
+def worker_client(timeout=3):
     """ Get client for this thread
 
     Note: This interface is new and experimental.  It may change without
@@ -32,7 +32,7 @@ def local_client(timeout=3):
     --------
 
     >>> def func(x):
-    ...     with local_client() as e:  # connect from worker back to scheduler
+    ...     with worker_client() as e:  # connect from worker back to scheduler
     ...         a = e.submit(inc, x)     # this task can submit more tasks
     ...         b = e.submit(dec, x)
     ...         result = e.gather([a, b])  # and gather results
@@ -52,6 +52,8 @@ def local_client(timeout=3):
         assert wc.status == 'running'
         yield wc
 
+
+local_client = worker_client
 
 def get_worker():
     return thread_state.execution_state['worker']

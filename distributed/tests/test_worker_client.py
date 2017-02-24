@@ -5,7 +5,7 @@ from datetime import timedelta
 from dask import delayed
 from tornado import gen
 
-from distributed import local_client, Client, as_completed
+from distributed import worker_client, Client, as_completed
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, double, cluster, loop
 
@@ -13,7 +13,7 @@ from distributed.utils_test import gen_cluster, inc, double, cluster, loop
 @gen_cluster(client=True)
 def test_submit_from_worker(c, s, a, b):
     def func(x):
-        with local_client() as c:
+        with worker_client() as c:
             x = c.submit(inc, x)
             y = c.submit(double, x)
             result = x.result() + y.result()
@@ -32,7 +32,7 @@ def test_submit_from_worker(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_scatter_from_worker(c, s, a, b):
     def func():
-        with local_client() as c:
+        with worker_client() as c:
             futures = c.scatter([1, 2, 3, 4, 5])
             assert isinstance(futures, (list, tuple))
             assert len(futures) == 5
@@ -49,7 +49,7 @@ def test_scatter_from_worker(c, s, a, b):
     assert result == sum([1, 2, 3, 4, 5])
 
     def func():
-        with local_client() as c:
+        with worker_client() as c:
             correct = True
             for data in [[1, 2], (1, 2), {1, 2}]:
                 futures = c.scatter(data)
@@ -76,7 +76,7 @@ def test_gather_multi_machine(c, s, a, b):
     a_address = b.address
     b_address = b.address
     def func():
-        with local_client() as ee:
+        with worker_client() as ee:
             x = ee.submit(inc, 1, workers=a_address)
             y = ee.submit(inc, 2, workers=b_address)
 
@@ -92,7 +92,7 @@ def test_gather_multi_machine(c, s, a, b):
 @gen_cluster(client=True)
 def test_same_loop(c, s, a, b):
     def f():
-        with local_client() as lc:
+        with worker_client() as lc:
             return lc.loop is lc.worker.loop
 
     future = c.submit(f)
@@ -105,7 +105,7 @@ def test_sync(loop):
         result = 0
         sub_tasks = [delayed(double)(i) for i in range(100)]
 
-        with local_client() as lc:
+        with worker_client() as lc:
             futures = lc.compute(sub_tasks)
             for f in as_completed(futures):
                 result += f.result()
@@ -122,7 +122,7 @@ def test_async(c, s, a, b):
         result = 0
         sub_tasks = [delayed(double)(i) for i in range(100)]
 
-        with local_client() as lc:
+        with worker_client() as lc:
             futures = lc.compute(sub_tasks)
             for f in as_completed(futures):
                 result += f.result()

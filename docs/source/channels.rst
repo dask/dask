@@ -64,27 +64,27 @@ fully registered with the scheduler.
     >>> chan.flush()
 
 
-Example with local_client
+Example with worker_client
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Using channels with `local client`_ allows for a more decoupled version
+Using channels with `worker client`_ allows for a more decoupled version
 of what is possible with :doc:`Data Streams with Queues<queues>`
 in that independent worker clients can build up a set of results
 which can be read later by a different client.
 This opens up Dask/Distributed to being integrated in a wider application
 environment similar to other python task queues such as Celery_.
 
-.. _local client: http://distributed.readthedocs.io/en/latest/task-launch.html#submit-tasks-from-worker
+.. _worker client: http://distributed.readthedocs.io/en/latest/task-launch.html#submit-tasks-from-worker
 .. _Celery: http://www.celeryproject.org/
 
 .. code-block:: python
 
     import random, time, operator
-    from distributed import Client, local_client
+    from distributed import Client, worker_client
     from time import sleep
 
     def emit(name):
-        with local_client() as c:
+        with worker_client() as c:
            chan = c.channel(name)
            while True:
                future = c.submit(random.random, pure=False)
@@ -92,7 +92,7 @@ environment similar to other python task queues such as Celery_.
                sleep(1)
 
     def combine():
-        with local_client() as c:
+        with worker_client() as c:
             a_chan = c.channel('a')
             b_chan = c.channel('b')
             out_chan = c.channel('adds')
