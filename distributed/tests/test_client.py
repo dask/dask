@@ -1106,7 +1106,7 @@ def test_upload_file(c, s, a, b):
         for value in [123, 456]:
             with tmp_text('myfile.py', 'def f():\n    return {}'.format(value)) as fn:
                 yield c._upload_file(fn)
-        
+
             x = c.submit(g, pure=False)
             result = yield x._result()
             assert result == value
@@ -1114,7 +1114,7 @@ def test_upload_file(c, s, a, b):
         # Ensure that this test won't impact the others
         if 'myfile' in sys.modules:
             del sys.modules['myfile']
-            
+
 @gen_cluster(client=True)
 def test_upload_file_zip(c, s, a, b):
     def g():
@@ -1127,7 +1127,7 @@ def test_upload_file_zip(c, s, a, b):
                 with zipfile.ZipFile('myfile.zip', 'w') as z:
                     z.write(fn_my_file, arcname=os.path.basename(fn_my_file))
                 yield c._upload_file('myfile.zip')
-                    
+
                 x = c.submit(g, pure=False)
                 result = yield x._result()
                 assert result == value
@@ -3750,3 +3750,10 @@ def test_dont_clear_waiting_data(c, s, a, b):
     for i in range(5):
         assert s.waiting_data[x.key]
         yield gen.moment
+
+
+@gen_cluster(client=True)
+def test_retire_workers(c, s, a, b):
+    assert s.workers == {a.address, b.address}
+    yield c.scheduler.retire_workers(workers=[a.address])
+    assert s.workers == {b.address}

@@ -305,7 +305,8 @@ class Scheduler(Server):
                          'start_ipython': self.start_ipython,
                          'run_function': self.run_function,
                          'update_data': self.update_data,
-                         'set_resources': self.add_resources}
+                         'set_resources': self.add_resources,
+                         'retire_workers': self.retire_workers}
 
         self._transitions = {
                  ('released', 'waiting'): self.transition_released_waiting,
