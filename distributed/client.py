@@ -390,7 +390,7 @@ class Client(object):
                     self.__class__.__name__,
                     self.scheduler.address, len(n), sum(n.values()))
         elif hasattr(self, 'scheduler'):
-            return '<%s: scheduler="%r">' % (
+            return '<%s: scheduler=%r>' % (
                     self.__class__.__name__, self.scheduler.address)
         else:
             return '<%s: not connected>' % (self.__class__.__name__,)

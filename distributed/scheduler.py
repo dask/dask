@@ -2201,8 +2201,8 @@ class Scheduler(Server):
                 self.occupancy[w] -= duration
             self.check_idle_saturated(w)
             if w != worker:
-                logger.info("Unexpected worker completed task, likely due to"
-                            " work stealing.  Expected: %s, Got: %s, Key: %s",
+                logger.debug("Unexpected worker completed task, likely due to"
+                             " work stealing.  Expected: %s, Got: %s, Key: %s",
                             w, worker, key)
                 msg = {'op': 'release-task', 'key': key, 'reason': 'stolen'}
                 self.worker_comms[w].send(msg)
