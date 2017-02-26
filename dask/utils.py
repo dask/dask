@@ -17,7 +17,6 @@ from contextlib import contextmanager
 from importlib import import_module
 from threading import Lock
 import multiprocessing as mp
-from . import multiprocessing
 import uuid
 from weakref import WeakValueDictionary
 
@@ -1033,6 +1032,7 @@ def effective_get(get=None, collection=None):
 def get_scheduler_lock(get=None, collection=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
+    from . import multiprocessing
     actual_get = effective_get(get, collection)
 
     if actual_get == multiprocessing.get:
