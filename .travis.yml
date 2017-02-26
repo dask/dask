@@ -18,8 +18,8 @@ addons:
 install: source continuous_integration/travis/install.sh
 script:
     - source continuous_integration/travis/run_tests.sh
-    - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
     - flake8 dask
+    - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 after_success: source continuous_integration/travis/after_success.sh
 
 notifications:

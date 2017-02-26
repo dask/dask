@@ -37,9 +37,9 @@ pip install \
     cachey \
     flake8 \
     graphviz \
+    moto \
     pandas_datareader \
-    pytest-xdist \
-    moto --upgrade --no-deps
+    pytest-xdist
 
 pip install git+https://github.com/dask/zict --upgrade --no-deps
 pip install git+https://github.com/dask/distributed --upgrade --no-deps
