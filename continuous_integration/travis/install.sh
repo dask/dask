@@ -35,9 +35,12 @@ conda install \
 
 pip install \
     cachey \
-    flake8 \
     graphviz \
     moto \
+    --upgrade --no-deps
+
+pip install \
+    flake8 \
     pandas_datareader \
     pytest-xdist
 
