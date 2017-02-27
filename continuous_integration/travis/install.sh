@@ -7,9 +7,7 @@ conda config --add channels conda-forge
 conda create -n test-environment python=$PYTHON
 source activate test-environment
 
-
-# Install dependencies
-conda install \
+conda install -c conda-forge \
     numpy=$NUMPY \
     pandas=$PANDAS \
     bcolz \
@@ -24,7 +22,6 @@ conda install \
     h5py \
     ipython \
     numba \
-    partd \
     psutil \
     pytables \
     pytest \
@@ -34,7 +31,9 @@ conda install \
     toolz
 
 pip install \
+    partd \
     cachey \
+    blosc \
     graphviz \
     moto \
     --upgrade --no-deps
