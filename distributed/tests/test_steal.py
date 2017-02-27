@@ -282,7 +282,7 @@ def test_balance_without_dependencies(c, s, *workers):
     yield _wait(futures)
 
     durations = [sum(w.data.values()) for w in workers]
-    assert max(durations) / min(durations) < 2
+    assert max(durations) / min(durations) < 3
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 4)] * 2)
