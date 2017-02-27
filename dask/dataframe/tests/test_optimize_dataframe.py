@@ -1,7 +1,8 @@
 import pytest
-from distutils.version import LooseVersion
 from operator import getitem
 from toolz import merge
+
+import dask
 from dask.dataframe.optimize import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
@@ -35,26 +36,16 @@ def test_column_optimizations_with_bcolz_and_rewrite():
         assert result == expected
 
 
-def test_castra_column_store():
-    castra = pytest.importorskip('castra')
-    blosc = pytest.importorskip('blosc')
-    if (LooseVersion(blosc.__version__) == '1.3.0' or
-            LooseVersion(castra.__version__) < '0.1.8'):
-        pytest.skip()
+def test_fuse_ave_width():
+    df = pd.DataFrame({'x': range(10)})
+    df = dd.from_pandas(df, npartitions=5)
 
-    df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    s = ((df.x + 1) + (df.x + 2))
 
-    with castra.Castra(template=df) as c:
-        c.extend(df)
+    with dask.set_options(fuse_ave_width=4):
+        a = s._optimize(s.dask, s._keys())
 
-        df = c.to_dask()
+    b = s._optimize(s.dask, s._keys())
 
-        df2 = df[['x']]
-
-        dsk = dd.optimize(df2.dask, df2._keys())
-
-        assert dsk == {(df2._name, 0): (castra.Castra.load_partition, c,
-                                        '0--2', ['x'])}
-        df3 = df.index
-        dsk = dd.optimize(df3.dask, df3._keys())
-        assert dsk == {(df3._name, 0): (castra.Castra.load_index, c, '0--2')}
+    assert len(a) < len(b)
+    assert len(a) <= 10
