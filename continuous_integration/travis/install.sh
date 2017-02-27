@@ -15,15 +15,14 @@ source activate test-environment
 # seems to have to do with differences between conda-forge and defaults.
 conda install -c conda-forge \
     numpy=$NUMPY \
+    pandas=$PANDAS \
     bcolz \
     blosc \
     chest \
     coverage \
-    cython \
     cytoolz \
     h5py \
     ipython \
-    numba \
     partd \
     psutil \
     pytables \
@@ -32,22 +31,25 @@ conda install -c conda-forge \
     scipy \
     toolz
 
+# Specify numpy/pandas here to prevent upgrade/downgrade
 conda install -c conda-forge \
+    numpy=$NUMPY \
     pandas=$PANDAS \
     distributed \
     cloudpickle \
     bokeh \
-    sortedcollections
 
 pip install git+https://github.com/dask/zict --upgrade --no-deps
 pip install git+https://github.com/dask/distributed --upgrade --no-deps
 
 if [[ $PYTHON == '2.7' ]]; then
     pip install backports.lzma mock
-    pip install git+https://github.com/Blosc/castra
+    conda install -c conda-forge bloscpack
+    pip install git+https://github.com/Blosc/castra --upgrade --no-deps
 fi
 
 if [[ $PYTHON == '3.5' ]]; then
+    conda install -c conda-forge numba
     pip install git+https://github.com/dask/fastparquet
 fi
 
