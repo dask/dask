@@ -49,7 +49,7 @@ if [[ $PYTHON == '2.7' ]]; then
 fi
 
 if [[ $PYTHON == '3.5' ]]; then
-    conda install -c conda-forge numba
+    conda install -c conda-forge numba cython
     pip install git+https://github.com/dask/fastparquet
 fi
 
