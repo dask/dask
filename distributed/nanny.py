@@ -176,7 +176,7 @@ class Nanny(Server):
                         self.address, self.worker_address)
 
         self.should_watch = should_watch
-        raise gen.Return('OK')
+        return
 
     @gen.coroutine
     def instantiate(self, comm=None):

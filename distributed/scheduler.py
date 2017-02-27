@@ -486,6 +486,7 @@ class Scheduler(Server):
         signal to the worker to shut down.  This works regardless of whether or
         not the worker has a nanny process restarting it
         """
+        logger.info("Closing worker %s", worker)
         with log_errors():
             nanny_addr = self.get_worker_service_addr(worker, 'nanny')
             address = nanny_addr or worker
@@ -493,7 +494,10 @@ class Scheduler(Server):
             self.remove_worker(address=worker)
 
             with rpc(address) as r:
-                yield r.terminate(report=False)
+                try:
+                    yield r.terminate(report=False)
+                except EnvironmentError as e:
+                    logger.info("Exception from worker while closing: %s", e)
 
             self.remove_worker(address=worker)
 
@@ -1682,7 +1686,12 @@ class Scheduler(Server):
             return to_close
 
     @gen.coroutine
-    def retire_workers(self, comm=None, workers=None, remove=True, close=False):
+    def retire_workers(self, comm=None, workers=None, remove=True, close=False,
+                       close_workers=False):
+        if close:
+            logger.warn("The keyword close= has been deprecated. "
+                        "Use close_workers= instead")
+        close_workers = close_workers or close
         with log_errors():
             if workers is None:
                 while True:
@@ -1690,7 +1699,7 @@ class Scheduler(Server):
                         workers = self.workers_to_close()
                         if workers:
                             yield self.retire_workers(workers=workers,
-                                    remove=remove, close=close)
+                                    remove=remove, close_workers=close_workers)
                         raise gen.Return(list(workers))
                     except KeyError:  # keys left during replicate
                         pass
@@ -1707,7 +1716,7 @@ class Scheduler(Server):
                 else:
                     raise gen.Return([])
 
-            if close and workers:
+            if close_workers and workers:
                 yield [self.close_worker(worker=w) for w in workers]
             if remove:
                 for w in workers:

@@ -3755,5 +3755,10 @@ def test_dont_clear_waiting_data(c, s, a, b):
 @gen_cluster(client=True)
 def test_retire_workers(c, s, a, b):
     assert s.workers == {a.address, b.address}
-    yield c.scheduler.retire_workers(workers=[a.address])
+    yield c.scheduler.retire_workers(workers=[a.address], close_workers=True)
     assert s.workers == {b.address}
+
+    start = time()
+    while a.status != 'closed':
+        yield gen.sleep(0.01)
+        assert time() < start + 5
