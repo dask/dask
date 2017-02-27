@@ -61,7 +61,7 @@ def _get_categories_agg(parts):
     return res, res_ind[0].append(res_ind[1:]).drop_duplicates()
 
 
-def categorize(df, columns=None, index=None, split_every=False, **kwargs):
+def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     """Convert columns of the DataFrame to category dtype.
 
     Parameters
@@ -77,7 +77,7 @@ def categorize(df, columns=None, index=None, split_every=False, **kwargs):
     split_every : int, optional
         Group partitions into groups of this size while performing a
         tree-reduction. If set to False, no tree-reduction will be used.
-        Default is False.
+        Default is 16.
     kwargs
         Keyword arguments are passed on to compute.
     """
@@ -97,13 +97,15 @@ def categorize(df, columns=None, index=None, split_every=False, **kwargs):
         elif index is None:
             index = meta.index.dtype == object
 
-    # Nothin to do
+    # Nothing to do
     if not len(columns) and index is False:
         return df
 
-    if split_every is False:
+    if split_every is None:
+        split_every = 16
+    elif split_every is False:
         split_every = df.npartitions
-    elif split_every < 2 or not isinstance(split_every, int):
+    elif not isinstance(split_every, int) or split_every < 2:
         raise ValueError("split_every must be an integer >= 2")
 
     token = tokenize(df, columns, index, split_every)

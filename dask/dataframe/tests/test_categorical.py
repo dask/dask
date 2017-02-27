@@ -160,6 +160,13 @@ def test_categorize():
     assert ddf_known_index.categorize(['w']) is ddf_known_index
     assert ddf_known_index.categorize([]) is ddf_known_index
 
+    # Bad split_every fails
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every=1)
+
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every='foo')
+
 
 def test_categorize_index():
     # Object dtype
