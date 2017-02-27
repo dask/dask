@@ -1,7 +1,7 @@
 test_import () {
     # Install dependencies
     if [[ -n "$2" ]]; then
-        output=$(conda install $2)
+        output=$(conda install -c conda-forge $2)
         if [[ $? -eq 1 ]]; then
             echo $output
             echo "$1 install failed" >&2

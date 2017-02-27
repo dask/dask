@@ -17,13 +17,9 @@ addons:
 
 install: source continuous_integration/travis/install.sh
 script:
-  # Need to make test order deterministic when parallelizing tests, hence PYTHONHASHSEED
-  # (see https://github.com/pytest-dev/pytest-xdist/issues/63)
-  - if [[ $PARALLEL == 'true' ]]; then export XTRATESTARGS="-n3 $XTRATESTARGS"; export PYTHONHASHSEED=42; fi
-  - if [[ $COVERAGE == 'true' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose $XTRATESTARGS; else py.test dask --runslow --verbose $XTRATESTARGS; fi
+  - source continuous_integration/travis/run_tests.sh
   - flake8 dask
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
-
 after_success: source continuous_integration/travis/after_success.sh
 
 notifications:
