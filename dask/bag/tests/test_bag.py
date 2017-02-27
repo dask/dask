@@ -501,6 +501,7 @@ def test_from_castra():
 
 
 @pytest.mark.slow
+@pytest.mark.network
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
@@ -561,6 +562,7 @@ def test_read_text_large_gzip():
 
 
 @pytest.mark.slow
+@pytest.mark.network
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci
