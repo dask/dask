@@ -432,10 +432,13 @@ def meta_nonempty(x):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True):
+def _check_dask(dsk, check_names=True, check_dtypes=True, computed=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
-        result = dsk.compute(get=get_sync)
+        if computed is None:
+            result = dsk.compute(get=get_sync)
+        else:
+            result = computed
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
             if check_names:
@@ -493,34 +496,38 @@ def _maybe_sort(a):
 
 def assert_eq(a, b, check_names=True, check_dtypes=True,
               check_divisions=True, check_index=True, **kwargs):
+    a_computed = None
+    b_computed = None
     if check_divisions:
-        assert_divisions(a)
-        assert_divisions(b)
+        a_computed = assert_divisions(a)
+        a_computed = assert_divisions(b)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
-    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
+    a_computed = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes,
+                             computed=a_computed)
+    b_computed = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes,
+                             computed=a_computed)
     if not check_index:
-        a = a.reset_index(drop=True)
-        b = b.reset_index(drop=True)
-    if isinstance(a, pd.DataFrame):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Series):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
-        tm.assert_series_equal(a, b, check_names=check_names, **kwargs)
-    elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
+        a_computed = a_computed.reset_index(drop=True)
+        b_computed = b_computed.reset_index(drop=True)
+    if isinstance(a_computed, pd.DataFrame):
+        a_computed = _maybe_sort(a_computed)
+        b_computed = _maybe_sort(b_computed)
+        tm.assert_frame_equal(a_computed, b_computed, **kwargs)
+    elif isinstance(a_computed, pd.Series):
+        a_computed = _maybe_sort(a_computed)
+        b_computed = _maybe_sort(b_computed)
+        tm.assert_series_equal(a_computed, b_computed, check_names=check_names, **kwargs)
+    elif isinstance(a_computed, pd.Index):
+        tm.assert_index_equal(a_computed, b_computed, **kwargs)
     else:
-        if a == b:
+        if a_computed == b_computed:
             return True
         else:
-            if np.isnan(a):
-                assert np.isnan(b)
+            if np.isnan(a_computed):
+                assert np.isnan(b_computed)
             else:
-                assert np.allclose(a, b)
+                assert np.allclose(a_computed, b_computed)
     return True
 
 
@@ -562,6 +569,8 @@ def assert_divisions(ddf):
     if len(results[-1]):
         assert index(results[-1]).min() >= ddf.divisions[-2]
         assert index(results[-1]).max() <= ddf.divisions[-1]
+
+    return ddf._finalize(results)
 
 
 def assert_sane_keynames(ddf):
