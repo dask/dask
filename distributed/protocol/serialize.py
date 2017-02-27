@@ -174,6 +174,16 @@ class Serialize(object):
 
     __repr__ = __str__
 
+    def __eq__(self, other):
+        return (isinstance(other, Serialize) and
+                other.data == self.data)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash(self.data)
+
 
 to_serialize = Serialize
 
@@ -194,6 +204,14 @@ class Serialized(object):
         from .core import decompress
         frames = decompress(self.header, self.frames)
         return deserialize(self.header, frames)
+
+    def __eq__(self, other):
+        return (isinstance(other, Serialized) and
+                other.header == self.header and
+                other.frames == self.frames)
+
+    def __ne__(self, other):
+        return not (self == other)
 
 
 def container_copy(c):
@@ -254,6 +272,43 @@ def _extract_serialize(x, ser, path=()):
             elif (typ is Serialize or typ is Serialized
                   or typ is bytes and len(v) > 2**16):
                 ser[path + (k,)] = v
+
+
+def nested_deserialize(x):
+    """
+    Replace all Serialize and Serialized values nested in *x*
+    with the original values.  Returns a copy of *x*.
+
+    >>> msg = {'op': 'update', 'data': to_serialize(123)}
+    >>> nested_deserialize(msg)
+    {'op': 'update', 'data': 123}
+    """
+    def replace_inner(x):
+        if type(x) is dict:
+            x = x.copy()
+            for k, v in x.items():
+                typ = type(v)
+                if typ is dict or typ is list:
+                    x[k] = replace_inner(v)
+                elif typ is Serialize:
+                    x[k] = v.data
+                elif typ is Serialized:
+                    x[k] = deserialize(v.header, v.frames)
+
+        elif type(x) is list:
+            x = list(x)
+            for k, v in enumerate(x):
+                typ = type(v)
+                if typ is dict or typ is list:
+                    x[k] = replace_inner(v)
+                elif typ is Serialize:
+                    x[k] = v.data
+                elif typ is Serialized:
+                    x[k] = deserialize(v.header, v.frames)
+
+        return x
+
+    return replace_inner(x)
 
 
 

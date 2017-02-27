@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
 from functools import partial
+import os
 import socket
 
 from tornado import gen, ioloop
@@ -14,7 +15,8 @@ from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (
     slow, loop, gen_test, gen_cluster, has_ipv6,
-    assert_can_connect, assert_can_connect_from_everywhere_4,
+    assert_can_connect, assert_cannot_connect,
+    assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6)
 
@@ -150,29 +152,58 @@ def test_server_listen():
             yield assert_can_connect(server.address)
             yield assert_can_connect_locally_6(server.port)
 
+    # InProc
 
-def test_rpc(loop):
-    @gen.coroutine
-    def f():
-        server = Server({'ping': pingpong})
-        server.listen(8883)
+    with listen_on(Server, 'inproc://') as server:
+        inproc_addr1 = server.address
+        assert inproc_addr1.startswith('inproc://%s/%d/' % (get_ip(), os.getpid()))
+        yield assert_can_connect(inproc_addr1)
 
-        with rpc('127.0.0.1:8883') as remote:
-            response = yield remote.ping()
-            assert response == b'pong'
+        with listen_on(Server, 'inproc://') as server2:
+            inproc_addr2 = server2.address
+            assert inproc_addr2.startswith('inproc://%s/%d/' % (get_ip(), os.getpid()))
+            yield assert_can_connect(inproc_addr2)
 
-            assert remote.comms
-            assert remote.address == 'tcp://127.0.0.1:8883'
+        yield assert_can_connect(inproc_addr1)
+        yield assert_cannot_connect(inproc_addr2)
 
-            response = yield remote.ping(close=True)
-            assert response == b'pong'
 
-        assert not remote.comms
-        assert remote.status == 'closed'
+@gen.coroutine
+def check_rpc(listen_arg, rpc_arg=None):
+    server = Server({'ping': pingpong})
+    server.listen(listen_arg)
+    if rpc_arg is None:
+        rpc_arg = server.address
 
-        server.stop()
+    with rpc(rpc_arg) as remote:
+        response = yield remote.ping()
+        assert response == b'pong'
+        assert remote.comms
 
-    loop.run_sync(f)
+        response = yield remote.ping(close=True)
+        assert response == b'pong'
+        response = yield remote.ping()
+        assert response == b'pong'
+
+    assert not remote.comms
+    assert remote.status == 'closed'
+
+    server.stop()
+
+
+@gen_test()
+def test_rpc_default():
+    yield check_rpc(8883, '127.0.0.1:8883')
+    yield check_rpc(8883)
+
+@gen_test()
+def test_rpc_tcp():
+    yield check_rpc('tcp://:8883', 'tcp://127.0.0.1:8883')
+    yield check_rpc('tcp://')
+
+@gen_test()
+def test_rpc_inproc():
+    yield check_rpc('inproc://', None)
 
 
 def test_rpc_inputs():
@@ -187,70 +218,85 @@ def test_rpc_inputs():
         r.close_rpc()
 
 
-def test_rpc_with_many_connections(loop):
-    remote = rpc(('127.0.0.1', 8885))
-
+@gen.coroutine
+def check_rpc_with_many_connections(listen_arg):
     @gen.coroutine
     def g():
         for i in range(10):
             yield remote.ping()
 
-    @gen.coroutine
-    def f():
-        server = Server({'ping': pingpong})
-        server.listen(8885)
+    server = Server({'ping': pingpong})
+    server.listen(listen_arg)
 
-        yield [g() for i in range(10)]
+    remote = rpc(server.address)
+    yield [g() for i in range(10)]
 
-        server.stop()
+    server.stop()
 
-        remote.close_comms()
-        assert all(comm.closed() for comm in remote.comms)
+    remote.close_comms()
+    assert all(comm.closed() for comm in remote.comms)
 
-    loop.run_sync(f)
+@gen_test()
+def test_rpc_with_many_connections_tcp():
+    yield check_rpc_with_many_connections('tcp://')
+
+@gen_test()
+def test_rpc_with_many_connections_inproc():
+    yield check_rpc_with_many_connections('inproc://')
 
 
-def echo(stream, x):
+def echo(comm, x):
     return x
 
-@slow
-def test_large_packets(loop):
+@gen.coroutine
+def check_large_packets(listen_arg):
     """ tornado has a 100MB cap by default """
-    @gen.coroutine
-    def f():
-        server = Server({'echo': echo})
-        server.listen(8886)
+    server = Server({'echo': echo})
+    server.listen(listen_arg)
 
-        data = b'0' * int(200e6)  # slightly more than 100MB
-        conn = rpc('127.0.0.1:8886')
-        result = yield conn.echo(x=data)
-        assert result == data
+    data = b'0' * int(200e6)  # slightly more than 100MB
+    conn = rpc(server.address)
+    result = yield conn.echo(x=data)
+    assert result == data
 
-        d = {'x': data}
-        result = yield conn.echo(x=d)
-        assert result == d
+    d = {'x': data}
+    result = yield conn.echo(x=d)
+    assert result == d
 
-        conn.close_comms()
-        server.stop()
-
-    loop.run_sync(f)
+    conn.close_comms()
+    server.stop()
 
 
-def test_identity(loop):
-    @gen.coroutine
-    def f():
-        server = Server({})
-        server.listen(8887)
+@slow
+@gen_test()
+def test_large_packets_tcp():
+    yield check_large_packets('tcp://')
 
-        with rpc(('127.0.0.1', 8887)) as remote:
-            a = yield remote.identity()
-            b = yield remote.identity()
-            assert a['type'] == 'Server'
-            assert a['id'] == b['id']
+@gen_test()
+def test_large_packets_inproc():
+    yield check_large_packets('inproc://')
 
-        server.stop()
 
-    loop.run_sync(f)
+@gen.coroutine
+def check_identity(listen_arg):
+    server = Server({})
+    server.listen(listen_arg)
+
+    with rpc(server.address) as remote:
+        a = yield remote.identity()
+        b = yield remote.identity()
+        assert a['type'] == 'Server'
+        assert a['id'] == b['id']
+
+    server.stop()
+
+@gen_test()
+def test_identity_tcp():
+    yield check_identity('tcp://')
+
+@gen_test()
+def test_identity_inproc():
+    yield check_identity('inproc://')
 
 
 def test_ports(loop):

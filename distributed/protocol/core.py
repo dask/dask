@@ -55,7 +55,7 @@ def dumps(msg):
 
         for key, (head, frames) in data.items():
             if 'lengths' not in head:
-                head['lengths'] = list(map(len, frames))
+                head['lengths'] = tuple(map(len, frames))
             if 'compression' not in head:
                 frames = frame_split_size(frames)
                 if frames:
@@ -70,7 +70,7 @@ def dumps(msg):
 
         for key, (head, frames) in pre.items():
             if 'lengths' not in head:
-                head['lengths'] = list(map(len, frames))
+                head['lengths'] = tuple(map(len, frames))
             head['count'] = len(frames)
             header['headers'][key] = head
             header['keys'].append(key)
@@ -112,7 +112,8 @@ def loads(frames, deserialize=True):
                 fs = []
 
             if deserialize or key in bytestrings:
-                fs = decompress(head, fs)
+                if 'compression' in head:
+                    fs = decompress(head, fs)
                 fs = merge_frames(head, fs)
                 value = _deserialize(head, fs)
             else:

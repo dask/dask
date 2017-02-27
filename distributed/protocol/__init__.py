@@ -4,7 +4,8 @@ from functools import partial
 
 from .compression import compressions, default_compression
 from .core import dumps, loads, maybe_compress, decompress, msgpack
-from .serialize import (serialize, deserialize, Serialize, Serialized,
+from .serialize import (
+    serialize, deserialize, nested_deserialize, Serialize, Serialized,
     to_serialize, register_serialization, register_serialization_lazy)
 
 from ..utils  import ignoring

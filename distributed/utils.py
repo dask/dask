@@ -28,7 +28,6 @@ from tornado import gen
 
 from .compatibility import Queue, PY3, PY2, get_thread_identity
 from .config import config
-from .comm import CommClosedError
 
 
 logger = logging.getLogger(__name__)
@@ -302,6 +301,7 @@ else:
 
 @contextmanager
 def log_errors(pdb=False):
+    from .comm import CommClosedError
     try:
         yield
     except (CommClosedError, gen.Return):

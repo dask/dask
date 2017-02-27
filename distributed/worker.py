@@ -25,7 +25,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
 from .batched import BatchedSend
-from .comm.core import get_address_host_port
+from .comm import get_address_host_port
 from .config import config
 from .compatibility import reload, unicode, invalidate_caches, cache_from_source
 from .core import (connect, send_recv, error_message, CommClosedError,
@@ -212,13 +212,18 @@ class WorkerBase(Server):
         # XXX Factor this out
         if isinstance(addr_or_port, int):
             # Default ip is the required one to reach the scheduler
+            # XXX get local listening address
             self.ip = get_ip(
                 get_address_host_port(self.scheduler.address)[0]
                 )
             self.listen((self.ip, addr_or_port))
         else:
             self.listen(addr_or_port)
-            self.ip = get_address_host_port(self.address)[0]
+            try:
+                self.ip = get_address_host_port(self.address)[0]
+            except ValueError:
+                # Address scheme does not have a notion of host and port
+                self.ip = get_ip()
 
         self.name = self.name or self.address
         # Services listen on all addresses

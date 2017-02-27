@@ -15,8 +15,8 @@ from tornado.tcpserver import TCPServer
 from .. import config
 from ..compatibility import finalize
 from ..utils import ensure_bytes
-from .core import (connectors, listeners, Comm, Listener, CommClosedError,
-                   parse_host_port, unparse_host_port)
+from .addressing import parse_host_port, unparse_host_port
+from .core import connectors, listeners, Comm, Listener, CommClosedError
 from .utils import (to_frames, from_frames,
                     get_tcp_server_address, ensure_concrete_host)
 

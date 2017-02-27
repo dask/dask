@@ -24,9 +24,10 @@ from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
-from .comm import connect, listen, CommClosedError
-from .comm.core import (parse_address, normalize_address, Comm,
-                        unparse_host_port, get_address_host_port)
+from .comm import (connect, listen, CommClosedError,
+                   parse_address, normalize_address,
+                   unparse_host_port, get_address_host_port)
+from .comm.core import Comm
 from .compatibility import PY3, unicode, WINDOWS
 from .config import config
 from .metrics import time

@@ -6,7 +6,8 @@ import pytest
 
 from distributed.protocol import (loads, dumps, msgpack, maybe_compress,
         to_serialize)
-from distributed.protocol.serialize import Serialize, Serialized, deserialize
+from distributed.protocol.serialize import (Serialize, Serialized,
+                                            serialize, deserialize)
 from distributed.utils_test import slow
 
 
@@ -165,6 +166,25 @@ def test_dumps_loads_Serialize():
     assert any(a is b
                for a in result2['data'].frames
                for b in frames)
+
+    frames2 = dumps(result2)
+    assert all(map(eq_frames, frames, frames2))
+
+    result3 = loads(frames2)
+    assert result == result3
+
+
+def test_dumps_loads_Serialized():
+    msg = {'x': 1,
+           'data': Serialized(*serialize(123)),
+           }
+    frames = dumps(msg)
+    assert len(frames) > 2
+    result = loads(frames)
+    assert result == {'x': 1, 'data': 123}
+
+    result2 = loads(frames, deserialize=False)
+    assert result2 == msg
 
     frames2 = dumps(result2)
     assert all(map(eq_frames, frames, frames2))

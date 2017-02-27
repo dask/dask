@@ -14,7 +14,7 @@ import weakref
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from .comm.core import get_address_host_port
+from .comm import get_address_host_port
 from .compatibility import JSONDecodeError
 from .core import Server, rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import disk_io_counters, net_io_counters, time
