@@ -1130,7 +1130,7 @@ class Scheduler(Server):
 
             while True:
                 try:
-                    msgs = yield comm.read(deserialize=self.deserialize)
+                    msgs = yield comm.read()
                 except (CommClosedError, AssertionError, GeneratorExit):
                     break
                 except Exception as e:

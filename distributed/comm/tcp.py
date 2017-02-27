@@ -134,12 +134,10 @@ class TCP(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self, deserialize=None):
+    def read(self):
         stream = self.stream
         if stream is None:
             raise CommClosedError
-        if deserialize is None:
-            deserialize = self.deserialize
 
         try:
             n_frames = yield stream.read_bytes(8)
@@ -158,7 +156,7 @@ class TCP(Comm):
             self.stream = None
             convert_stream_closed_error(e)
 
-        msg = from_frames(frames, deserialize=deserialize)
+        msg = from_frames(frames, deserialize=self.deserialize)
         raise gen.Return(msg)
 
     @gen.coroutine

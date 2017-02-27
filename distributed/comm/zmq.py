@@ -117,18 +117,18 @@ class ZMQ(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self, deserialize=None):
+    def read(self):
         if self.sock is None:
             raise CommClosedError
-        if deserialize is None:
-            deserialize = self.deserialize
 
         frames = yield self.sock.recv_multipart(copy=False)
         if PY3:
-            msg = from_frames([f.buffer for f in frames], deserialize=deserialize)
+            msg = from_frames([f.buffer for f in frames],
+                              deserialize=self.deserialize)
         else:
             # On Python 2, msgpack-python doesn't accept new-style buffer objects
-            msg = from_frames([f.bytes for f in frames], deserialize=deserialize)
+            msg = from_frames([f.bytes for f in frames],
+                              deserialize=self.deserialize)
         raise gen.Return(msg)
 
     @gen.coroutine

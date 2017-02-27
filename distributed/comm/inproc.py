@@ -169,7 +169,7 @@ class InProc(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self, deserialize=None):
+    def read(self):
         if self._closed:
             raise CommClosedError
 
@@ -179,8 +179,7 @@ class InProc(Comm):
             self._finalizer.detach()
             raise CommClosedError
 
-        deserialize = deserialize if deserialize is not None else self.deserialize
-        if deserialize:
+        if self.deserialize:
             msg = nested_deserialize(msg)
         raise gen.Return(msg)
 

@@ -51,10 +51,9 @@ class Comm(with_metaclass(ABCMeta)):
     # XXX add set_close_callback()?
 
     @abstractmethod
-    def read(self, deserialize=None):
+    def read(self):
         """
-        Read and return a message (a Python object).  If *deserialize*
-        is not None, it overrides this communication's default setting.
+        Read and return a message (a Python object).
 
         This method is a coroutine.
         """

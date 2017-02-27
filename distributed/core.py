@@ -465,8 +465,7 @@ class PooledRPCCall(object):
         def send_recv_from_rpc(**kwargs):
             comm = yield self.pool.connect(self.addr)
             try:
-                result = yield send_recv(comm=comm, op=key,
-                        deserialize=self.pool.deserialize, **kwargs)
+                result = yield send_recv(comm=comm, op=key, **kwargs)
             finally:
                 self.pool.reuse(self.addr, comm)
 
