@@ -305,3 +305,20 @@ def test_categories(fn):
     with pytest.raises(ValueError):
         # attempt to load as category unknown column
         ddf2 = dd.read_parquet(fn, categories=['foo'])
+
+
+def test_empty_partition(fn):
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    # fails as there are empty partitions
+    ddf2 = ddf[ddf.a <= 5]
+    ddf2.to_parquet(fn)
+
+    ddf3 = dd.read_parquet(fn)
+    assert_eq(ddf2.compute(), ddf3.compute(), check_names=False,
+              check_index=False)
+
+    ddf2 = ddf[ddf.a <= -5]
+    with pytest.raises(ValueError):
+        ddf2.to_parquet(fn)
