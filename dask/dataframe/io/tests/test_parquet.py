@@ -251,13 +251,13 @@ def test_read_parquet_custom_columns():
         data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                              'f': np.arange(1000, dtype=np.float64)})
         df = dd.from_pandas(data, chunksize=50)
-        df.to_parquet(tmp, write_index=False)
+        df.to_parquet(tmp)
 
-        columns = ['i32', 'f']
-        df2 = read_parquet(tmp, index=False, columns=columns)
+        df2 = read_parquet(tmp, columns=['i32', 'f'])
+        assert_eq(df2, df2, check_index=False)
 
-        assert (df2._meta.columns == np.asarray(columns)).all(), \
-            'Order of columns incorrect.'
+        df3 = read_parquet(tmp, columns=['f', 'i32'])
+        assert_eq(df3, df3, check_index=False)
 
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
