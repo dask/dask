@@ -245,6 +245,21 @@ def test_ordering():
         assert_eq(ddf, ddf2)
 
 
+def test_read_parquet_custom_columns():
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                             'f': np.arange(1000, dtype=np.float64)})
+        df = dd.from_pandas(data, chunksize=50)
+        df.to_parquet(tmp, write_index=False)
+
+        columns = ['i32', 'f']
+        df2 = read_parquet(tmp, index=False, columns=columns)
+
+        assert (df2._meta.columns == np.asarray(columns)).all(), \
+            'Order of columns incorrect.'
+
+
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
     (pd.DataFrame({'x': [3, 2, 1]}), {}, {}),
     (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),

@@ -118,6 +118,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in dtypes.items()},
                         columns=[c for c in pf.columns if c in dtypes])
+    meta = meta[list(all_columns)]
 
     for cat in categories:
         meta[cat] = pd.Series(pd.Categorical([],
