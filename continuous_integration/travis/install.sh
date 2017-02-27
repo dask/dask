@@ -8,19 +8,19 @@ conda config --set always_yes yes --set changeps1 no
 conda create -n test-environment python=$PYTHON
 source activate test-environment
 
-# Install dependencies
+# Install dependencies.
+# XXX: Due to a weird conda dependency resolution issue, we need to install
+# dependencies in two separate calls, otherwise we sometimes get version
+# incompatible with the installed version of numpy leading to crashes. This
+# seems to have to do with differences between conda-forge and defaults.
 conda install -c conda-forge \
     numpy=$NUMPY \
-    pandas=$PANDAS \
     bcolz \
     blosc \
-    bokeh \
     chest \
-    cloudpickle \
     coverage \
     cython \
     cytoolz \
-    distributed \
     h5py \
     ipython \
     numba \
@@ -28,14 +28,16 @@ conda install -c conda-forge \
     psutil \
     pytables \
     pytest \
+    scikit-learn \
     scipy \
-    sortedcollections \
     toolz
 
-# Due to a weird conda dependency resolution issue, we need to install
-# scikit-learn in a separate call, otherwise we get a version incompatible with
-# the installed version of numpy leading to crashes
-conda install -c conda-forge scikit-learn
+conda install -c conda-forge \
+    pandas=$PANDAS \
+    distributed \
+    cloudpickle \
+    bokeh \
+    sortedcollections
 
 pip install git+https://github.com/dask/zict --upgrade --no-deps
 pip install git+https://github.com/dask/distributed --upgrade --no-deps
