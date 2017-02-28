@@ -34,7 +34,7 @@ class Nanny(Server):
     """
     def __init__(self, scheduler_ip, scheduler_port=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, memory_limit=TOTAL_MEMORY, reconnect=True,
+                 name=None, memory_limit='auto', reconnect=True,
                  validate=False, quiet=False, resources=None, silence_logs=None,
                  **kwargs):
         if scheduler_port is None:
