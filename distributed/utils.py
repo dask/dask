@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 
 def _initialize_mp_context():
     if PY3 and not sys.platform.startswith('win'):
-        ctx = multiprocessing.get_context('forkserver')
+        method = config.get('multiprocessing-method', 'forkserver')
+        ctx = multiprocessing.get_context(method)
         # Makes the test suite much faster
         preload = ['distributed']
         if 'pkg_resources' in sys.modules:
