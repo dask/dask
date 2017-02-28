@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
+from functools import wraps
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -28,10 +29,12 @@ from ..utils import (random_state_data,
 from ..base import Base, compute, tokenize, normalize_token
 from ..async import get_sync
 from . import methods
+from .accessor import DatetimeAccessor, StringAccessor
+from .categorical import CategoricalAccessor, categorize
+from .hashing import hash_pandas_object
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
                     is_categorical_dtype, has_known_categories)
-from .hashing import hash_pandas_object
 
 no_default = '__no_default__'
 
@@ -1562,17 +1565,14 @@ class Series(_Frame):
 
     @cache_readonly
     def dt(self):
-        from .accessor import DatetimeAccessor
         return DatetimeAccessor(self)
 
     @cache_readonly
     def cat(self):
-        from .categorical import CategoricalAccessor
         return CategoricalAccessor(self)
 
     @cache_readonly
     def str(self):
-        from .accessor import StringAccessor
         return StringAccessor(self)
 
     def __dir__(self):
@@ -2249,28 +2249,10 @@ class DataFrame(_Frame):
         from dask.dataframe.groupby import DataFrameGroupBy
         return DataFrameGroupBy(self, by=by, **kwargs)
 
-    def categorize(self, columns=None, index=None, **kwargs):
-        """Convert columns of the DataFrame to category dtype.
-
-        Parameters
-        ----------
-        columns : list, optional
-            A list of column names to convert to categoricals. By default any
-            column with an object dtype is converted to a categorical, and any
-            unknown categoricals are made known.
-        index : bool, optional
-            Whether to categorize the index. By default, object indices are
-            converted to categorical, and unknown categorical indices are made
-            known. Set True to always categorize the index, False to never.
-        kwargs
-            Keyword arguments are passed on to compute.
-
-        See also
-        --------
-        dask.dataframes.categorical.categorize
-        """
-        from .categorical import categorize
-        return categorize(self, columns=columns, index=index, **kwargs)
+    @wraps(categorize)
+    def categorize(self, columns=None, index=None, split_every=None, **kwargs):
+        return categorize(self, columns=columns, index=index,
+                          split_every=split_every, **kwargs)
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):

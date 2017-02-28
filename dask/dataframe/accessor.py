@@ -4,8 +4,6 @@ import numpy as np
 import pandas as pd
 from toolz import partial
 
-from .core import Series
-
 
 def maybe_wrap_pandas(obj, x):
     if isinstance(x, np.ndarray):
@@ -27,6 +25,7 @@ class Accessor(object):
     * _accessor_name
     """
     def __init__(self, series):
+        from .core import Series
         if not isinstance(series, Series):
             raise ValueError('Accessor cannot be initialized')
         self._validate(series)

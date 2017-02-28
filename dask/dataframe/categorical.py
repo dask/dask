@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import defaultdict
 import pandas as pd
+from toolz import partition_all
 
-from ..base import compute
-
+from ..base import tokenize
 from .accessor import Accessor
 from .utils import (has_known_categories, clear_known_categories, is_scalar,
                     is_categorical_dtype)
@@ -31,21 +32,36 @@ def _categorize_block(df, categories, index):
     return df
 
 
-def _get_categories(x):
-    return x.cat.categories if isinstance(x, pd.Series) else x.categories
+def _get_categories(df, columns, index):
+    res = {}
+    for col in columns:
+        x = df[col]
+        if is_categorical_dtype(x):
+            res[col] = pd.Series(x.cat.categories)
+        else:
+            res[col] = x.dropna().drop_duplicates()
+    if index:
+        if is_categorical_dtype(df.index):
+            return res, df.index.categories
+        return res, df.index.dropna().drop_duplicates()
+    return res, None
 
 
-def get_categories(x, object_only=False):
-    """Return a dask object to compute the categoricals for `x`. Returns None
-    if already a known categorical"""
-    if is_categorical_dtype(x):
-        return (None if has_known_categories(x) else
-                x.map_partitions(_get_categories).unique().values)
-    return (x.dropna().drop_duplicates()
-            if not object_only or x.dtype == object else None)
+def _get_categories_agg(parts):
+    res = defaultdict(list)
+    res_ind = []
+    for p in parts:
+        for k, v in p[0].items():
+            res[k].append(v)
+        res_ind.append(p[1])
+    res = {k: pd.concat(v, ignore_index=True).drop_duplicates()
+           for k, v in res.items()}
+    if res_ind[0] is None:
+        return res, None
+    return res, res_ind[0].append(res_ind[1:]).drop_duplicates()
 
 
-def categorize(df, columns=None, index=None, **kwargs):
+def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     """Convert columns of the DataFrame to category dtype.
 
     Parameters
@@ -58,30 +74,65 @@ def categorize(df, columns=None, index=None, **kwargs):
         Whether to categorize the index. By default, object indices are
         converted to categorical, and unknown categorical indices are made
         known. Set True to always categorize the index, False to never.
+    split_every : int, optional
+        Group partitions into groups of this size while performing a
+        tree-reduction. If set to False, no tree-reduction will be used.
+        Default is 16.
     kwargs
         Keyword arguments are passed on to compute.
     """
+    meta = df._meta
     if columns is None:
-        columns = list(df.select_dtypes(['object', 'category']).columns)
+        columns = list(meta.select_dtypes(['object', 'category']).columns)
     elif is_scalar(columns):
         columns = [columns]
 
-    categories = [get_categories(df[col]) for col in columns]
-    if index is False:
-        index = None
-    else:
-        index = get_categories(df.index, index is None)
+    # Filter out known categorical columns
+    columns = [c for c in columns if not (is_categorical_dtype(meta[c]) and
+                                          has_known_categories(meta[c]))]
 
-    # Compute the categories
-    values = compute(index, *categories, **kwargs)
-    categories = {c: v for (c, v) in zip(columns, values[1:]) if v is not None}
+    if index is not False:
+        if is_categorical_dtype(meta.index):
+            index = not has_known_categories(meta.index)
+        elif index is None:
+            index = meta.index.dtype == object
 
     # Nothing to do
-    if not len(categories) and index is None:
+    if not len(columns) and index is False:
         return df
 
+    if split_every is None:
+        split_every = 16
+    elif split_every is False:
+        split_every = df.npartitions
+    elif not isinstance(split_every, int) or split_every < 2:
+        raise ValueError("split_every must be an integer >= 2")
+
+    token = tokenize(df, columns, index, split_every)
+    a = 'get-categories-chunk-' + token
+    dsk = {(a, i): (_get_categories, key, columns, index)
+           for (i, key) in enumerate(df._keys())}
+
+    prefix = 'get-categories-agg-' + token
+    k = df.npartitions
+    b = a
+    depth = 0
+    while k > split_every:
+        b = prefix + str(depth)
+        for part_i, inds in enumerate(partition_all(split_every, range(k))):
+            dsk[(b, part_i)] = (_get_categories_agg, [(a, i) for i in inds])
+        k = part_i + 1
+        a = b
+        depth += 1
+
+    dsk[(prefix, 0)] = (_get_categories_agg, [(a, i) for i in range(k)])
+    dsk.update(df.dask)
+
+    # Compute the categories
+    categories, index = df._get(dsk, (prefix, 0), **kwargs)
+
     # Categorize each partition
-    return df.map_partitions(_categorize_block, categories, values[0])
+    return df.map_partitions(_categorize_block, categories, index)
 
 
 class CategoricalAccessor(Accessor):

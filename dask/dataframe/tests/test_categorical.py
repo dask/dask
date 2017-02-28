@@ -130,6 +130,13 @@ def test_categorize():
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
+        # Specifying split_every works
+        ddf2 = ddf.categorize(index=index, split_every=2)
+        assert ddf2.y.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
+
         # Specifying one column doesn't affect others
         ddf2 = ddf.categorize('v', index=index)
         assert not ddf2.y.cat.known
@@ -152,6 +159,13 @@ def test_categorize():
     assert ddf.categorize([], index=False) is ddf
     assert ddf_known_index.categorize(['w']) is ddf_known_index
     assert ddf_known_index.categorize([]) is ddf_known_index
+
+    # Bad split_every fails
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every=1)
+
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every='foo')
 
 
 def test_categorize_index():
