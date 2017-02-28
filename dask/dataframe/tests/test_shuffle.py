@@ -287,3 +287,22 @@ def test_set_index_with_explicit_divisions():
 
     df2 = df.set_index('x')
     assert_eq(ddf2, df2)
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_reduces_partitions_small(shuffle):
+    df = pd.DataFrame({'x': range(100)})
+    ddf = dd.from_pandas(df, npartitions=50)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    assert ddf2.npartitions < 10
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_reduces_partitions_large(shuffle):
+    n = 2**23
+    df = pd.DataFrame({'x': range(n), 'y': range(n), 'z': range(n)})
+    ddf = dd.from_pandas(df, npartitions=50, name='x', sort=False)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    assert 1 < ddf2.npartitions < 20
