@@ -265,7 +265,7 @@ with ignoring(AttributeError):
 
 def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
-    n = numel(A, **kwargs).astype(np.int64)
+    n = numel(A, **kwargs).astype(np.int64, copy=False)
     u = total / n
     M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
