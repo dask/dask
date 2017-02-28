@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import pytest
+pytest.importorskip('bokeh')
 
 from bokeh.models import ColumnDataSource, Model
 

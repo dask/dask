@@ -148,6 +148,7 @@ def test_http(loop):
 
 
 def test_bokeh(loop):
+    pytest.importorskip('bokeh')
     from distributed.http import HTTPScheduler
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
@@ -170,6 +171,7 @@ def test_bokeh(loop):
 
 
 def test_start_diagnostics(loop):
+    pytest.importorskip('bokeh')
     from distributed.http import HTTPScheduler
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,

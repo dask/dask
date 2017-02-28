@@ -3,6 +3,7 @@ from time import sleep
 import sys
 
 import pytest
+pytest.importorskip('bokeh')
 
 from distributed.bokeh.application import BokehWebInterface
 from distributed import LocalCluster

@@ -3,12 +3,13 @@ from __future__ import print_function, division, absolute_import
 from time import sleep
 
 import pytest
+pytest.importorskip('bokeh')
 from tornado import gen
 
 from dask import do
 from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
-        nbytes_bar, progress_stream, task_stream_append)
+        nbytes_bar, progress_stream)
 from distributed.metrics import time
 from distributed.utils_test import inc, div, dec, gen_cluster
 from distributed.worker import dumps_task

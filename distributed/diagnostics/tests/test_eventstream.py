@@ -9,7 +9,6 @@ from tornado import gen
 from distributed import Client, Scheduler, Worker
 from distributed.client import _wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
-from distributed.diagnostics.progress_stream import task_stream_append
 from distributed.metrics import time
 from distributed.utils_test import inc, div, dec, gen_cluster
 from distributed.worker import dumps_task
@@ -17,6 +16,8 @@ from distributed.worker import dumps_task
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_eventstream(c, s, *workers):
+    pytest.importorskip('bokeh')
+
     es = EventStream()
     s.add_plugin(es)
     assert es.buffer == []
@@ -29,6 +30,7 @@ def test_eventstream(c, s, *workers):
     assert len(es.buffer) == 11
 
     from distributed.bokeh import messages
+    from distributed.diagnostics.progress_stream import task_stream_append
     lists = deepcopy(messages['task-events']['rectangles'])
     workers = dict()
     for msg in es.buffer:

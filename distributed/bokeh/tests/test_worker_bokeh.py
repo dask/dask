@@ -4,6 +4,7 @@ from operator import add, sub
 from time import sleep
 
 import pytest
+pytest.importorskip('bokeh')
 import sys
 from toolz import first
 from tornado import gen
