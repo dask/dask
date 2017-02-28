@@ -1384,7 +1384,7 @@ class Scheduler(Server):
         who_has = {key: self.who_has.get(key, ()) for key in keys}
 
         data, missing_keys, missing_workers = yield gather_from_workers(
-                who_has, rpc=self.rpc, close=False, permissive=True)
+                who_has, rpc=self.rpc, close=False)
         if not missing_keys:
             result = {'status': 'OK', 'data': data}
         else:

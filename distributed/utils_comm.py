@@ -22,7 +22,7 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
+def gather_from_workers(who_has, rpc=rpc, close=True):
     """ Gather data directly from peers
 
     Parameters
@@ -58,10 +58,7 @@ def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
             except IndexError:
                 bad_keys.add(key)
         if bad_keys:
-            if permissive:
-                all_bad_keys |= bad_keys
-            else:
-                raise KeyError(*bad_keys)
+            all_bad_keys |= bad_keys
 
         rpcs = {addr: rpc(addr) for addr in d}
         try:
@@ -82,11 +79,8 @@ def gather_from_workers(who_has, rpc=rpc, close=True, permissive=False):
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(response)
 
-    if permissive:
-        bad_keys = {k: list(original_who_has[k]) for k in all_bad_keys}
-        raise Return((results, bad_keys, list(missing_workers)))
-    else:
-        raise Return(results)
+    bad_keys = {k: list(original_who_has[k]) for k in all_bad_keys}
+    raise Return((results, bad_keys, list(missing_workers)))
 
 
 class WrappedKey(object):

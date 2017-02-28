@@ -2489,6 +2489,14 @@ def test_rebalance_sync(loop):
 
 
 @gen_cluster(client=True)
+def test_rebalance_unprepared(c, s, a, b):
+    futures = c.map(slowinc, range(10), delay=0.05, workers=a.address)
+    yield gen.sleep(0.1)
+    yield c._rebalance(futures)
+    s.validate_state()
+
+
+@gen_cluster(client=True)
 def test_receive_lost_key(c, s, a, b):
     x = c.submit(inc, 1, workers=[a.address])
     result = yield x._result()
