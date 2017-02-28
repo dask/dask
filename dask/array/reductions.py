@@ -521,7 +521,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
                in zip(keys, offset_info))
     # The dtype of `tmp` doesn't actually matter, just need to provide something
     tmp = Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=x.dtype)
-    return _tree_reduce(tmp, agg, axis, False, np.int, split_every, combine)
+    dtype = np.argmin([1]).dtype
+    return _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
 
 
 def make_arg_reduction(func, argfunc, is_nan_func=False):
