@@ -1,8 +1,15 @@
 Shared Futures With Channels
 ============================
 
-A channel is a changing stream of futures shared between any number of clients
-connected to the same scheduler.
+A channel is a changing stream of data or futures shared between any number of
+clients connected to the same scheduler.
+
+Any client can push msgpack-encodable data (numbers, strings, lists, dicts) or
+Future objects into a channel.  All other clients listening to the channel will
+receive that data or future as a linear sequence.  Communication happens
+through the scheduler, which linearizes everything.  Channels should only be
+used to move small amounts of administrative data.  For larger data, create
+futures and send the futures instead.
 
 
 Examples
@@ -10,6 +17,7 @@ Examples
 
 Basic Usage
 ~~~~~~~~~~~
+
 Create channels from your Client:
 
 .. code-block:: python
@@ -17,39 +25,40 @@ Create channels from your Client:
     >>> client = Client('scheduler-address:8786')
     >>> chan = client.channel('my-channel')
 
-Append futures onto a channel
+Append futures or data onto a channel
 
 .. code-block:: python
 
     >>> future = client.submit(add, 1, 2)
     >>> chan.append(future)
+    >>> chan.append({'x': 123})
 
 A channel maintains a collection of current futures added by both your
 client, and others.
 
 .. code-block:: python
 
-    >>> chan.futures
+    >>> chan.data
     deque([<Future: status: pending, key: add-12345>,
-           <Future: status: pending, key: sub-56789>])
+           {'x': 123}])
 
 If you wish to persist the current status of tasks outside of the distributed
 cluster (e.g. to take a snapshot in case of shutdown) you can copy a channel full
-of futures as it is a python deque_.
+of data as it is a python deque_.
 
 .. _deque: https://docs.python.org/3.5/library/collections.html#collections.deque`
 
 .. code-block:: python
 
-    channelcopy = list(chan.futures)
+    channelcopy = list(chan.data)
 
-You can iterate over a channel to get back futures.
+You can iterate over a channel to get back data.
 
 .. code-block:: python
 
     >>> anotherclient = Client('scheduler-address:8786')
     >>> chan = anotherclient.channel('my-channel')
-    >>> for future in chan:
+    >>> for element in chan:
     ...     pass
 
 When done writing, call flush to wait until your appends have been
@@ -59,7 +68,7 @@ fully registered with the scheduler.
 
     >>> client = Client('scheduler-address:8786')
     >>> chan = client.channel('my-channel')
-    >>> future2 = client.submit(time.sleep,2)
+    >>> future2 = client.submit(time.sleep, 2)
     >>> chan.append(future2)
     >>> chan.flush()
 
@@ -67,7 +76,7 @@ fully registered with the scheduler.
 Example with worker_client
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Using channels with `worker client`_ allows for a more decoupled version
+Using channels with `worker_client`_ allows for a more decoupled version
 of what is possible with :doc:`Data Streams with Queues<queues>`
 in that independent worker clients can build up a set of results
 which can be read later by a different client.
@@ -120,28 +129,21 @@ All iterations on a channel by different clients can be stopped using the ``stop
     chan.stop()
 
 
-Very short-lived clients
-~~~~~~~~~~~~~~~~~~~~~~~~
+Additional Applications
+-----------------------
 
-If you wish to submit work to your cluster from a short lived client such as a
-web application view, an AWS Lambda function or some other fire and forget script,
-channels give a way to do this.
+Channels can serve as a coordination point or semaphore.  They can signal
+stopping criteria for iterative processes.
 
-Further Details
----------------
+Short lived clients, such as occur when firing off controlling tasks from a web
+application, AWS Lambda, or other fire and forget script, often need a place to
+store their futures so that in-flight work doesn't get garbage collected.
+Because channels act as clients for the purpose of garbage collection (all
+futures within a Channel are considered desired) they can serve as this
+repository after short-lived clients die off.
 
-Often it is desirable to respond to events from outside the distributed cluster
-or to instantiate a new client in order to check on the progress of a set of tasks.
-The channels feature makes these and many other workflows possible.
-
-This functionality is similar to queues but
-additionally means that multiple clients can send data to a long running function
-rather than one client holding a queue instance.
-
-Several clients connected to the same scheduler can communicate a sequence
-of futures between each other through shared channels. All clients can
-append to the channel at any time. All clients will be updated when a
-channel updates. The central scheduler maintains consistency and ordering
-of events. It also allows the Dask Scheduler to be extended in a clean way
-using the normal Distributed task submission.
-
+Worker clients can communicate large amounts of data to each other using
+channels by first scattering local data to themselves, creating futures, and
+then pushing those futures down a shared channel.  When subscribers to the
+channel gather these futures they will engage the normal high-bandwidth
+inter-worker communication mechanism.
