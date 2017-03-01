@@ -9,7 +9,7 @@ Changelog
 - Allow stolen tasks to return from either worker (:pr:`853`), (:pr:`875`)
 - Add worker resource constraints during execution (:pr:`857`)
 - Send small data through Channels (:pr:`858`)
-- Better estimates for SciPy sparsse matrix memory costs (:pr:`863`)
+- Better estimates for SciPy sparse matrix memory costs (:pr:`863`)
 - Avoid stealing long running tasks (:pr:`873`)
 - Maintain fortran ordering of NumPy arrays (:pr:`876`)
 - Add ``--scheduler-file`` keyword to dask-scheduler (:pr:`877`)
