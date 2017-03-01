@@ -306,3 +306,12 @@ def test_set_index_reduces_partitions_large(shuffle):
 
     ddf2 = ddf.set_index('x', shuffle=shuffle)
     assert 1 < ddf2.npartitions < 20
+
+
+def test_set_index_doesnt_increase_partitions(shuffle):
+    n = 2**23
+    df = pd.DataFrame({'x': range(n), 'y': range(n), 'z': range(n)})
+    ddf = dd.from_pandas(df, npartitions=2, name='x', sort=False)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    assert ddf2.npartitions == ddf.npartitions
