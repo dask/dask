@@ -265,7 +265,7 @@ with ignoring(AttributeError):
 
 def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
-    n = numel(A, **kwargs)
+    n = numel(A, **kwargs).astype(np.int64, copy=False)
     u = total / n
     M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
@@ -521,7 +521,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
                in zip(keys, offset_info))
     # The dtype of `tmp` doesn't actually matter, just need to provide something
     tmp = Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=x.dtype)
-    return _tree_reduce(tmp, agg, axis, False, np.int64, split_every, combine)
+    dtype = np.argmin([1]).dtype
+    return _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
 
 
 def make_arg_reduction(func, argfunc, is_nan_func=False):
