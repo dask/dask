@@ -37,7 +37,7 @@ from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import connect, rpc, clean_exception, CommClosedError
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
-from .worker import dumps_function, dumps_task
+from .worker import dumps_function, dumps_task, Worker
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph)
 from .versions import get_versions
@@ -382,6 +382,8 @@ class Client(object):
 
         from distributed.channels import ChannelClient
         ChannelClient(self)  # registers itself on construction
+        from distributed.recreate_exceptions import ReplayExceptionClient
+        ReplayExceptionClient(self)
 
     def __str__(self):
         if hasattr(self, '_loop_thread'):
@@ -913,7 +915,7 @@ class Client(object):
             bad_keys = set()
             for key in keys:
                 if (key not in self.futures or
-                    self.futures[key].status in failed):
+                        self.futures[key].status in failed):
                     exceptions.add(key)
                     if errors == 'raise':
                         try:
@@ -2392,7 +2394,6 @@ class Client(object):
             dsk = merge(c.dask for c in collections)
 
         return dsk
-
 
 Executor = Client
 

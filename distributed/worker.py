@@ -293,22 +293,6 @@ class WorkerBase(Server):
         yield self._closed.wait()
         assert self.status == 'closed'
 
-    def _deserialize(self, function=None, args=None, kwargs=None, task=None):
-        """ Deserialize task inputs and regularize to func, args, kwargs """
-        if function is not None:
-            function = loads(function)
-        if args:
-            args = loads(args)
-        if kwargs:
-            kwargs = loads(kwargs)
-
-        if task is not None:
-            assert not function and not args and not kwargs
-            function = execute_task
-            args = (task,)
-
-        return function, args or (), kwargs or {}
-
     @gen.coroutine
     def executor_submit(self, key, function, *args, **kwargs):
         """ Safely run function in thread pool executor
@@ -545,6 +529,23 @@ class WorkerBase(Server):
 
 
 job_counter = [0]
+
+
+def _deserialize(function=None, args=None, kwargs=None, task=None):
+    """ Deserialize task inputs and regularize to func, args, kwargs """
+    if function is not None:
+        function = loads(function)
+    if args:
+        args = loads(args)
+    if kwargs:
+        kwargs = loads(kwargs)
+
+    if task is not None:
+        assert not function and not args and not kwargs
+        function = execute_task
+        args = (task,)
+
+    return function, args or (), kwargs or {}
 
 
 def execute_task(task):
@@ -1083,7 +1084,7 @@ class Worker(WorkerBase):
             self.log.append((key, 'new'))
             try:
                 start = time()
-                self.tasks[key] = self._deserialize(function, args, kwargs, task)
+                self.tasks[key] = _deserialize(function, args, kwargs, task)
                 stop = time()
 
                 if stop - start > 0.010:

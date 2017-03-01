@@ -26,7 +26,7 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import Worker, Nanny
+from distributed import Worker, Nanny, recreate_exceptions
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, CompatibleExecutor, _wait,
@@ -3758,6 +3758,127 @@ def test_dont_clear_waiting_data(c, s, a, b):
     for i in range(5):
         assert s.waiting_data[x.key]
         yield gen.moment
+
+@gen_cluster(client=True)
+def test_get_future_error_simple(c, s, a, b):
+    f = c.submit(div, 1, 0)
+    yield _wait(f)
+    assert f.status == 'error'
+
+    function, args, kwargs, deps = yield c._get_futures_error(f)
+    # args contains only solid values, not keys
+    assert function.__name__ == 'div'
+    with pytest.raises(ZeroDivisionError):
+        function(*args, **kwargs)
+
+
+@gen_cluster(client=True)
+def test_get_futures_error(c, s, a, b):
+    x0 = delayed(dec)(2)
+    y0 = delayed(dec)(1)
+    x = delayed(div)(1, x0)
+    y = delayed(div)(1, y0)
+    tot = delayed(sum)(x, y)
+
+    f = c.compute(tot)
+    yield _wait(f)
+    assert f.status == 'error'
+
+    function, args, kwargs, deps = yield c._get_futures_error(f)
+    assert function.__name__ == 'div'
+    assert args == (1, y0.key)
+
+
+@gen_cluster(client=True)
+def test_recreate_error_delayed(c, s, a, b):
+    x0 = delayed(dec)(2)
+    y0 = delayed(dec)(1)
+    x = delayed(div)(1, x0)
+    y = delayed(div)(1, y0)
+    tot = delayed(sum)(x, y)
+
+    f = c.compute(tot)
+
+    assert f.status == 'pending'
+
+    function, args, kwargs = yield c._recreate_error_locally(f)
+    assert f.status == 'error'
+    assert function.__name__ == 'div'
+    assert args ==  (1, 0)
+    with pytest.raises(ZeroDivisionError):
+        function(*args, **kwargs)
+
+
+@gen_cluster(client=True)
+def test_recreate_error_futures(c, s, a, b):
+    x0 = c.submit(dec, 2)
+    y0 = c.submit(dec, 1)
+    x = c.submit(div, 1, x0)
+    y = c.submit(div, 1, y0)
+    tot = c.submit(sum, x, y)
+    f = c.compute(tot)
+
+    assert f.status == 'pending'
+
+    function, args, kwargs = yield c._recreate_error_locally(f)
+    assert f.status == 'error'
+    assert function.__name__ == 'div'
+    assert args ==  (1, 0)
+    with pytest.raises(ZeroDivisionError):
+        function(*args, **kwargs)
+
+
+@gen_cluster(client=True)
+def test_recreate_error_collection(c, s, a, b):
+    import dask.bag as db
+    b = db.range(10, npartitions=4)
+    b = b.map(lambda x: 1 / x)
+    b = b.persist()
+    f = c.compute(b)
+
+    function, args, kwargs = yield c._recreate_error_locally(f)
+    with pytest.raises(ZeroDivisionError):
+        function(*args, **kwargs)
+
+    dd = pytest.importorskip('dask.dataframe')
+    import pandas as pd
+    df = dd.from_pandas(pd.DataFrame({'a': [0, 1,2,3,4]}), chunksize=2)
+    def make_err(x):
+        # because pandas would happily work with NaN
+        if x == 0 :
+            raise ValueError
+        return x
+    df2 = df.a.map(make_err)
+    f = c.compute(df2)
+    function, args, kwargs = yield c._recreate_error_locally(f)
+    with pytest.raises(ValueError):
+        function(*args, **kwargs)
+
+
+def test_recreate_error_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x0 = c.submit(dec, 2)
+            y0 = c.submit(dec, 1)
+            x = c.submit(div, 1, x0)
+            y = c.submit(div, 1, y0)
+            tot = c.submit(sum, x, y)
+            f = c.compute(tot)
+
+
+            with pytest.raises(ZeroDivisionError) as e:
+                c.recreate_error_locally(f)
+            assert f.status == 'error'
+
+
+def test_recreate_error_not_error(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            f = c.submit(dec, 2)
+            with pytest.raises(ValueError) as e:
+                c.recreate_error_locally(f)
+            assert "No errored futures passed" in str(e)
+
 
 
 @gen_cluster(client=True)

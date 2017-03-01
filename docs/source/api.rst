@@ -34,6 +34,15 @@ API
    Client.upload_file
    Client.who_has
 
+.. currentmodule:: distributed.recreate_exceptions
+
+.. autosummary::
+   ReplayExceptionClient.get_futures_error
+   ReplayExceptionClient.recreate_error_locally
+
+.. currentmodule:: distributed.client
+
+
 **Future**
 
 .. autosummary::
@@ -72,6 +81,9 @@ Client
 --------
 
 .. autoclass:: Client
+   :members:
+
+.. autoclass:: distributed.recreate_exceptions.ReplayExceptionClient
    :members:
 
 CompatibleExecutor
