@@ -219,7 +219,8 @@ def test_set_partition_tasks_3(shuffle):
     df = pd.DataFrame(np.random.random((10, 2)), columns=['x', 'y'])
     ddf = dd.from_pandas(df, npartitions=5)
 
-    ddf2 = ddf.set_index('x', shuffle=shuffle, max_branch=2)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, max_branch=2,
+                         npartitions=ddf.npartitions)
     df2 = df.set_index('x')
     assert_eq(df2, ddf2)
     assert ddf2.npartitions == ddf.npartitions
@@ -308,6 +309,7 @@ def test_set_index_reduces_partitions_large(shuffle):
     assert 1 < ddf2.npartitions < 20
 
 
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_doesnt_increase_partitions(shuffle):
     n = 2**23
     df = pd.DataFrame({'x': range(n), 'y': range(n), 'z': range(n)})

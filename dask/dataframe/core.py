@@ -2153,7 +2153,7 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def set_index(self, other, drop=True, sorted=False, **kwargs):
+    def set_index(self, other, drop=True, sorted=False, npartitions='auto', **kwargs):
         """
         Set the DataFrame index (row labels) using an existing column
 
@@ -2183,8 +2183,9 @@ class DataFrame(_Frame):
         ----------
         df: Dask DataFrame
         index: string or Dask Series
-        npartitions: int
-            The ideal number of output partitions
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions.   If None use the same as
+            the input.  If 'auto' then decide by size.
         shuffle: string, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -2217,7 +2218,8 @@ class DataFrame(_Frame):
             return set_sorted_index(self, other, drop=drop, **kwargs)
         else:
             from .shuffle import set_index
-            return set_index(self, other, drop=drop, **kwargs)
+            return set_index(self, other, drop=drop, npartitions=npartitions,
+                    **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index

@@ -21,7 +21,7 @@ from ..utils import digit, insert, M
 from distributed.sizeof import sizeof
 
 
-def set_index(df, index, npartitions=None, shuffle=None, compute=False,
+def set_index(df, index, npartitions='auto', shuffle=None, compute=False,
               drop=True, upsample=1.0, divisions=None, **kwargs):
     """ See _Frame.set_index for docstring """
     if (isinstance(index, Series) and index._name == df.index._name):
@@ -32,10 +32,12 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             "You tried to index with this index: %s\n"
             "Indexes must be single columns only." % str(index))
 
-    if npartitions is None:
+    if npartitions == 'auto':
         repartition = True
         npartitions = min(100, df.npartitions)
     else:
+        if npartitions is None:
+            npartitions = df.npartitions
         repartition = False
 
     if not isinstance(index, Series):
@@ -56,10 +58,15 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         if repartition:
             total = sum(sizes)
             npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = min(npartitions, df.npartitions)
             n = len(divisions)
-            divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
-                                  xp=np.arange(0, len(divisions)),
-                                  fp=divisions).tolist()
+            try:
+                divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
+                                      xp=np.arange(0, len(divisions)),
+                                      fp=divisions).tolist()
+            except TypeError:  # str type
+                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+                divisions = [divisions[i] for i in indexes]
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
