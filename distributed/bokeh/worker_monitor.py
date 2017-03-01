@@ -1,12 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
-from itertools import chain
 import logging
 
 from toolz import pluck
 
-from ..utils import ignoring, log_errors
+from ..utils import ignoring
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +12,6 @@ with ignoring(ImportError):
     from bokeh.models import (
         ColumnDataSource, DataRange1d, Range1d, NumeralTickFormatter, ToolbarBox,
     )
-    from bokeh.palettes import Spectral9, Viridis4
-    from bokeh.models import HoverTool, Paragraph
-    from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import figure
 
 

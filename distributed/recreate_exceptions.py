@@ -82,7 +82,7 @@ class ReplayExceptionClient(object):
             raise ValueError("No errored futures passed")
         out = yield self.scheduler.cause_of_failure(
             keys=[f.key for f in futures])
-        deps, cause, task = out['deps'], out['cause'], out['task']
+        deps, task = out['deps'], out['task']
         if isinstance(task, dict):
             function, args, kwargs = _deserialize(**task)
             raise gen.Return((function, args, kwargs, deps))

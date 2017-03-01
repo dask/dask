@@ -6,16 +6,17 @@ from math import log
 import os
 from time import time
 
-from toolz import topk
 from tornado.ioloop import PeriodicCallback
 
 from .config import config
 from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
-from .utils import key_split, log_errors, ignoring
+from .utils import key_split, log_errors
 
-with ignoring(ImportError):
+try:
     from cytoolz import topk
+except ImportError:
+    from toolz import topk
 
 BANDWIDTH = 100e6
 LATENCY = 10e-3
@@ -196,7 +197,6 @@ class WorkStealing(SchedulerPlugin):
             log = list()
             start = time()
 
-            broken = False
             seen = False
             acted = False
 

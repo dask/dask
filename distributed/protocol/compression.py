@@ -30,6 +30,7 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     import snappy
+
     def _fixed_snappy_decompress(data):
         # snappy.decompress() doesn't accept memoryviews
         if isinstance(data, memoryview):
@@ -42,6 +43,7 @@ with ignoring(ImportError):
 
 with ignoring(ImportError):
     import lz4
+
     def _fixed_lz4_decompress(data):
         # lz4.LZ4_uncompress() doesn't accept memoryviews
         if isinstance(data, memoryview):

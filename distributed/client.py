@@ -37,7 +37,7 @@ from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import connect, rpc, clean_exception, CommClosedError
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
-from .worker import dumps_function, dumps_task, Worker
+from .worker import dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph)
 from .versions import get_versions
@@ -497,7 +497,7 @@ class Client(object):
         comm = yield connect(self.scheduler.address,
                              timeout=timeout)
 
-        ident = yield self.scheduler.identity()
+        yield self.scheduler.identity()
 
         yield comm.write({'op': 'register-client',
                           'client': self.id, 'reply': False})
@@ -778,7 +778,6 @@ class Client(object):
             f = self.submit(func, *args, **kwargs)
             q_out.put(f)
 
-
     def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
 
@@ -864,7 +863,7 @@ class Client(object):
                     " for a sequence of length %d" % (len(workers), len(keys)))
                 restrictions = dict(zip(keys, workers))
             else:
-                restrictions = {key: workers for key in keys}
+                restrictions = {k: workers for k in keys}
         elif workers is None:
             restrictions = {}
         else:
@@ -879,7 +878,7 @@ class Client(object):
         priority = dict(zip(keys, range(len(keys))))
 
         if resources:
-            resources = {key: resources for key in keys}
+            resources = {k: resources for k in keys}
         else:
             resources = None
 
@@ -887,7 +886,7 @@ class Client(object):
                 loose_restrictions, priority=priority, resources=resources)
         logger.debug("map(%s, ...)", funcname(func))
 
-        return [futures[tokey(key)] for key in keys]
+        return [futures[tokey(k)] for k in keys]
 
     @gen.coroutine
     def _gather(self, futures, errors='raise'):
@@ -1158,6 +1157,7 @@ class Client(object):
         else:
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
+
     @gen.coroutine
     def _cancel(self, futures):
         keys = {tokey(f.key) for f in futures_of(futures)}
@@ -1190,7 +1190,7 @@ class Client(object):
                 coroutines.append(self.scheduler.publish_put(keys=keys,
                     name=tokey(name), data=dumps(data), client=self.id))
 
-            outs = yield coroutines
+            yield coroutines
 
     def publish_dataset(self, **kwargs):
         """
@@ -1752,7 +1752,7 @@ class Client(object):
                 assert os.path.exists(os.path.join(c, name[:-4]))
                 return c
 
-        responses = yield self._run(unzip, nanny=True)
+        yield self._run(unzip, nanny=True)
         raise gen.Return(name[:-4])
 
     def upload_environment(self, name, zipfile):
@@ -2394,6 +2394,7 @@ class Client(object):
             dsk = merge(c.dask for c in collections)
 
         return dsk
+
 
 Executor = Client
 

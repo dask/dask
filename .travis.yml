@@ -45,7 +45,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click $PACKAGES -c conda-forge
+  - conda install -q pytest pytest-timeout coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
@@ -85,6 +85,7 @@ script:
       else
         py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS;
       fi;
+    - flake8 distributed/*.py distributed/{bokeh,protocol,deploy}/*.py # no tests yet
 
 after_success:
     - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi

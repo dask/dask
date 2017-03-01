@@ -1,8 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
-from time import sleep
-from tornado import gen
 from toolz import keymap, valmap, merge, assoc
 import uuid
 
@@ -43,7 +41,6 @@ def worker_client(timeout=3):
     address = thread_state.execution_state['scheduler']
     worker = thread_state.execution_state['worker']
     secede()  # have this thread secede from the thread pool
-              # so that it doesn't take up a fixed resource while waiting
     worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
 
     with WorkerClient(address, loop=worker.loop) as wc:
@@ -54,6 +51,7 @@ def worker_client(timeout=3):
 
 
 local_client = worker_client
+
 
 def get_worker():
     return thread_state.execution_state['worker']

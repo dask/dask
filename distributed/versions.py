@@ -19,6 +19,7 @@ required_packages = [('dask', lambda p: p.__version__),
 optional_packages = [('numpy', lambda p: p.__version__),
                      ('pandas', lambda p: p.__version__)]
 
+
 def get_versions():
     """ Return basic information on our software installation,
     and out installed versions of packages. """

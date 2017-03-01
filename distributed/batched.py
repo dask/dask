@@ -1,16 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import timedelta
-from functools import partial
 import logging
-from timeit import default_timer
 
 from tornado import gen, locks
-from tornado.queues import Queue
-from tornado.ioloop import PeriodicCallback, IOLoop
+from tornado.ioloop import IOLoop
 
 from .core import CommClosedError
-from .utils import ignoring, log_errors
+from .utils import ignoring
 
 
 logger = logging.getLogger(__name__)
@@ -130,4 +126,3 @@ class BatchedSend(object):
         self.waker.set()
         if not self.comm.closed():
             self.comm.abort()
-

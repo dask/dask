@@ -1,38 +1,26 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-from datetime import timedelta
 from functools import partial
 import logging
 import six
-import socket
-import struct
-import sys
 import traceback
 import uuid
 
 from six import string_types
 
-from toolz import assoc, first
+from toolz import assoc
 
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
-import cloudpickle
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
 from .comm import (connect, listen, CommClosedError,
-                   parse_address, normalize_address,
+                   normalize_address,
                    unparse_host_port, get_address_host_port)
-from .comm.core import Comm
-from .compatibility import PY3, unicode, WINDOWS
-from .config import config
 from .metrics import time
 from .system_monitor import SystemMonitor
-from .utils import get_ip, get_traceback, truncate_exception, ignoring, shutting_down
+from .utils import get_traceback, truncate_exception, ignoring, shutting_down
 from . import protocol
 
 

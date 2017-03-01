@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
 import logging
 
 try:
@@ -15,10 +14,8 @@ except ImportError:
 
 from .compression import compressions, maybe_compress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
-        to_serialize, extract_serialize)
+        extract_serialize)
 from .utils import frame_split_size, merge_frames
-
-from ..utils import ignoring
 
 _deserialize = deserialize
 
@@ -28,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 def dumps(msg):
     """ Transform Python message to bytestream suitable for communication """
-    original = msg
     try:
         data = {}
         # Only lists and dicts can contain serialized values
@@ -78,7 +74,7 @@ def dumps(msg):
 
         return [small_header, small_payload,
                 msgpack.dumps(header, use_bin_type=True)] + out_frames
-    except Exception as e:
+    except Exception:
         logger.critical("Failed to Serialize", exc_info=True)
         raise
 
@@ -103,7 +99,6 @@ def loads(frames, deserialize=True):
 
         for key in keys:
             head = headers[key]
-            lengths = head['lengths']
             count = head['count']
             if count:
                 fs = frames[-count::][::-1]
@@ -122,7 +117,7 @@ def loads(frames, deserialize=True):
             get_in(key[:-1], msg)[key[-1]] = value
 
         return msg
-    except Exception as e:
+    except Exception:
         logger.critical("Failed to deserialize", exc_info=True)
         raise
 

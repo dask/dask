@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import deque, defaultdict
-from functools import partial
+from collections import deque
 import logging
 from time import sleep
 import threading
@@ -83,7 +82,7 @@ class ChannelScheduler(object):
         self.counts[channel] += 1
         self.report(channel, type, value)
 
-        client='streaming-%s' % channel
+        client = 'streaming-%s' % channel
         if type == 'Future':
             self.scheduler.client_desires_keys(keys=[value], client=client)
 
@@ -291,7 +290,6 @@ class Channel(object):
                     last = self.count
                 for f in L:
                     yield f
-
 
     def __len__(self):
         return len(self.data)

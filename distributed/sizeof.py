@@ -4,8 +4,6 @@ import sys
 
 from dask.utils import Dispatch
 
-from .utils import ignoring
-
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
@@ -32,6 +30,7 @@ def sizeof_python_collection(seq):
 @sizeof.register_lazy("numpy")
 def register_numpy():
     import numpy as np
+
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
         return int(x.nbytes)
@@ -40,6 +39,7 @@ def register_numpy():
 @sizeof.register_lazy("pandas")
 def register_pandas():
     import pandas as pd
+
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
         p = int(df.memory_usage(index=True).sum())
@@ -67,6 +67,7 @@ def register_pandas():
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
     from scipy import sparse
+
     @sizeof.register(sparse.dok_matrix)
     def sizeof_spmatrix_dok(s):
         return s.__sizeof__()
@@ -76,4 +77,3 @@ def register_spmatrix():
         return sum(
             sizeof(v) for v in s.__dict__.values()
         )
-

@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
 import logging
 import math
 from threading import Thread
@@ -157,7 +156,7 @@ class LocalCluster(object):
             w = W(self.scheduler.address, loop=self.loop,
                   silence_logs=self.silence_logs, **kwargs)
             yield w._start(port)
-        except Exception as e:
+        except Exception:
             raise
 
         self.workers.append(w)

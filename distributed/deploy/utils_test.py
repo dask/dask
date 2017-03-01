@@ -1,5 +1,6 @@
 from ..client import Client
 
+
 class ClusterTest(object):
     Cluster = None
 
@@ -37,5 +38,5 @@ class ClusterTest(object):
                 assert e.ncores()
 
     def test_no_workers(self):
-        with self.Cluster(0, scheduler_port=0) as c:
+        with self.Cluster(0, scheduler_port=0):
             pass

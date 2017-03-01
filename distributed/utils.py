@@ -197,7 +197,7 @@ def sync(loop, func, *args, **kwargs):
         finally:
             e.set()
 
-    a = loop.add_callback(f)
+    loop.add_callback(f)
     while not e.is_set():
         e.wait(1000000)
     if error[0]:
@@ -342,6 +342,7 @@ def ensure_ip(hostname):
 
 tblib.pickling_support.install()
 
+
 def get_traceback():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     bad = [os.path.join('distributed', 'worker'),
@@ -375,9 +376,11 @@ def queue_to_iterator(q):
             raise result
         yield result
 
+
 def _dump_to_queue(seq, q):
     for item in seq:
         q.put(item)
+
 
 def iterator_to_queue(seq, maxsize=0):
     q = Queue(maxsize=maxsize)
@@ -520,7 +523,6 @@ def read_block(f, offset, length, delimiter=None):
         f.seek(start + length)
         seek_delimiter(f, delimiter, 2**16)
         end = f.tell()
-        eof = not f.read(1)
 
         offset = start
         length = end - start
@@ -561,7 +563,7 @@ def ensure_bytes(s):
         return s
     if isinstance(s, memoryview):
         return s.tobytes()
-    if isinstance(s, bytearray) or PY2 and isinstance(s, buffer):
+    if isinstance(s, bytearray) or PY2 and isinstance(s, buffer):  # flake8: noqa
         return bytes(s)
     if hasattr(s, 'encode'):
         return s.encode()

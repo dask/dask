@@ -12,7 +12,7 @@ doc = curdoc()
 doc.title = "Dask Task Stream"
 
 task_stream = TaskStream(100000, sizing_mode='stretch_both',
-                         clear_interval=60*1000)
+                         clear_interval=60 * 1000)
 task_stream.update(messages)
 
 doc.add_periodic_callback(lambda: task_stream.update(messages), 2000)

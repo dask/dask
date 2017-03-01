@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .serialize import register_serialization, serialize, deserialize
 
-from ..utils import log_errors, ensure_bytes
-
 
 def serialize_keras_model(model):
     import keras

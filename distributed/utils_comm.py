@@ -3,19 +3,17 @@ from __future__ import print_function, division, absolute_import
 from collections import Iterable, defaultdict
 from itertools import cycle
 import random
-import socket
 import uuid
 
 from tornado import gen
 from tornado.gen import Return
-from tornado.ioloop import IOLoop
 
 from dask.base import tokenize
-from toolz import merge, concat, groupby, drop, valmap
+from toolz import merge, concat, groupby, drop
 
 from .core import rpc, coerce_to_address
-from .utils import ignore_exceptions, All, log_errors, tokey, sync
-from .protocol.pickle import dumps, loads
+from .utils import All, tokey
+from .protocol.pickle import dumps
 
 
 no_default = '__no_default__'
@@ -229,7 +227,7 @@ def pack_data(o, d, key_types=object):
     """
     typ = type(o)
     try:
-        if isinstance(o, key_types) and  o in d:
+        if isinstance(o, key_types) and o in d:
             return d[o]
     except TypeError:
         pass

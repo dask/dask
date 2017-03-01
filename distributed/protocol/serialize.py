@@ -311,7 +311,6 @@ def nested_deserialize(x):
     return replace_inner(x)
 
 
-
 @partial(normalize_token.register, Serialized)
 def normalize_Serialized(o):
     return [o.header] + o.frames  # for dask.base.tokenize

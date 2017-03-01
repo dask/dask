@@ -1,12 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import datetime, timedelta
-import json
 import logging
 from multiprocessing.queues import Empty
 import os
 import shutil
-import sys
 import tempfile
 from time import sleep
 import weakref
@@ -15,12 +13,10 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from .comm import get_address_host_port
-from .compatibility import JSONDecodeError
 from .core import Server, rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import disk_io_counters, net_io_counters, time
-from .protocol import to_serialize
-from .utils import get_ip, ignoring, log_errors, mp_context, tmpfile
-from .worker import _ncores, Worker, run, TOTAL_MEMORY
+from .utils import get_ip, ignoring, mp_context
+from .worker import _ncores, run
 
 
 logger = logging.getLogger(__name__)
@@ -50,10 +46,11 @@ class Nanny(Server):
         if not local_dir:
             local_dir = tempfile.mkdtemp(prefix='nanny-')
             self._should_cleanup_local_dir = True
+
+            @atexit.register
             def _cleanup_local_dir():
                 if os.path.exists(local_dir):
                     shutil.rmtree(local_dir)
-            atexit.register(_cleanup_local_dir)
         else:
             self._should_cleanup_local_dir = False
         self.local_dir = local_dir
@@ -94,7 +91,7 @@ class Nanny(Server):
             # Default ip is the required one to reach the scheduler
             self.ip = get_ip(
                 get_address_host_port(self.scheduler.address)[0]
-                )
+            )
             self.listen((self.ip, addr_or_port))
         else:
             self.listen(addr_or_port)
@@ -131,7 +128,7 @@ class Nanny(Server):
                     result = yield gen.with_timeout(
                                 timedelta(seconds=min(1, timeout)),
                                 worker.terminate(report=False),
-                                )
+                    )
 
             except gen.TimeoutError:
                 logger.info("Worker non-responsive.  Terminating.")
@@ -344,6 +341,7 @@ def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
         loop.stop()
         loop.close(all_fds=True)
 
+
 def isalive(proc):
     return proc is not None and proc.is_alive()
 
@@ -359,6 +357,8 @@ closing = [False]
 
 processes_to_close = weakref.WeakSet()
 
+
+@atexit.register
 def _closing():
     for proc in processes_to_close:
         try:
@@ -367,5 +367,3 @@ def _closing():
             pass
 
     closing[0] = True
-
-atexit.register(_closing)

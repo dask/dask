@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .serialize import register_serialization, serialize, deserialize
 
-from ..utils import log_errors, ensure_bytes
-
 try:
     import netCDF4
     HAS_NETCDF4 = True

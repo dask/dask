@@ -1,5 +1,6 @@
 from distributed.utils import log_errors
 
+
 class PublishExtension(object):
     """ An extension for the scheduler to manage collections
 

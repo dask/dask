@@ -14,11 +14,14 @@ from .utils import sync
 def index_min(df):
     return df.index.min()
 
+
 def index_max(df):
     return df.index.max()
 
+
 def get_empty(df):
     return df.iloc[0:0]
+
 
 @gen.coroutine
 def _futures_to_dask_dataframe(futures, divisions=None, client=None):
@@ -67,11 +70,14 @@ def futures_to_dask_dataframe(futures, divisions=None, client=None):
 def get_shape(x):
     return x.shape
 
+
 def get_dim(x, i):
     return x.shape[i]
 
+
 def get_dtype(x):
     return x.dtype
+
 
 @gen.coroutine
 def _futures_to_dask_array(futures, client=None):
@@ -152,6 +158,7 @@ def futures_to_dask_bag(futures, client=None):
     client = default_client(client)
     return sync(client.loop, _futures_to_dask_bag, futures,
                 client=client)
+
 
 @gen.coroutine
 def _futures_to_collection(futures, client=None, **kwargs):

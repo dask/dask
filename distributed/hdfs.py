@@ -2,18 +2,11 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-from math import log
-import os
-from warnings import warn
 
-import dask.bytes.core
-from dask.delayed import delayed
 from dask.base import tokenize
 from dask.bytes import core
-from toolz import merge
 from hdfs3 import HDFileSystem
 
-from .client import default_client, ensure_default_get
 from .utils import PY3
 
 

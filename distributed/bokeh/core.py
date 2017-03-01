@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import bokeh
 from bokeh.server.server import Server
-from bokeh.application.handlers.function import FunctionHandler
-from bokeh.application import Application
 
 
 class BokehServer(object):

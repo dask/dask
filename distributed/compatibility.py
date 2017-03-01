@@ -7,8 +7,8 @@ if sys.version_info[0] == 2:
     from Queue import Queue, Empty
     from io import BytesIO
     from thread import get_ident as get_thread_identity
-    reload = reload
-    unicode = unicode
+    reload = reload  # flake8: noqa
+    unicode = unicode  # flake8: noqa
     PY2 = True
     PY3 = False
     ConnectionRefusedError = OSError
@@ -37,21 +37,21 @@ if sys.version_info[0] == 2:
 
     def invalidate_caches():
         pass
-    
+
     def cache_from_source(path):
         import os
         name, ext = os.path.splitext(path)
         return name + '.pyc'
-    
+
     logging_names = logging._levelNames
 
 if sys.version_info[0] == 3:
-    from queue import Queue, Empty
+    from queue import Queue, Empty  # flake8: noqa
     from importlib import reload
     from threading import get_ident as get_thread_identity
     from importlib import invalidate_caches
     from importlib.util import cache_from_source
-    
+
     PY2 = False
     PY3 = True
     unicode = str

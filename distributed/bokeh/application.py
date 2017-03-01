@@ -1,13 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-import json
 import logging
 import os
 import socket
 import sys
 
-import bokeh
 import distributed.bokeh
 from toolz import get_in, concat
 
@@ -83,12 +81,13 @@ class BokehWebInterface(object):
         import subprocess
         process = subprocess.Popen(args)
         self.process = process
+
+        @atexit.register
         def cleanup_process():
             try:
                 process.terminate()
             except OSError:
                 pass
-        atexit.register(cleanup_process)
 
         if not quiet:
             logger.info("Web UI: http://%s:%d/status/"

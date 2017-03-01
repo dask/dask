@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 thread_state = local()
 
+
 def _worker(executor, work_queue):
     thread_state.proceed = True
     thread_state.executor = executor
@@ -70,6 +71,7 @@ def secede():
         if t.ident == ident:
             thread_state.executor._threads.remove(t)
             break
+
 
 """
 PSF LICENSE AGREEMENT FOR PYTHON 3.5.2

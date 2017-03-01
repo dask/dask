@@ -10,13 +10,10 @@ if sys.version_info.major == 2:
 else:
     import pickle
 
-from ..utils import ignoring
-
 logger = logging.getLogger(__name__)
 
 
 def _always_use_pickle_for(x):
-    pickle_types = (str, bytes)
     mod, _, _ = x.__class__.__module__.partition('.')
     if mod == 'numpy':
         import numpy as np

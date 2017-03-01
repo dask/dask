@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 from __future__ import print_function, division, absolute_import
 
-from collections import deque
 import json
 import logging
-import os
 import sys
 
 from tornado import gen
@@ -51,6 +49,8 @@ def http_get(route):
 
 
 last_index = [0]
+
+
 @gen.coroutine
 def workers():
     """ Get data from JSON route, store in messages deques """

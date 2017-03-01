@@ -22,13 +22,14 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .core import connect, rpc, coerce_to_address, CommClosedError
+from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
 import pytest
 
 
 logger = logging.getLogger(__name__)
+
 
 @pytest.fixture(scope='session')
 def valid_python_script(tmpdir_factory):
@@ -141,39 +142,33 @@ def double(x):
 
 
 def slowinc(x, delay=0.02):
-    from time import sleep
     sleep(delay)
     return x + 1
 
 
 def slowdec(x, delay=0.02):
-    from time import sleep
     sleep(delay)
     return x - 1
 
 
 def randominc(x, scale=1):
-    from time import sleep
     from random import random
     sleep(random() * scale)
     return x + 1
 
 
 def slowadd(x, y, delay=0.02):
-    from time import sleep
     sleep(delay)
     return x + y
 
 
 def slowsum(seq, delay=0.02):
-    from time import sleep
     sleep(delay)
     return sum(seq)
 
 
 def slowidentity(*args, **kwargs):
     delay = kwargs.get('delay', 0.02)
-    from time import sleep
     sleep(delay)
     return args
 
@@ -198,12 +193,13 @@ if sys.version_info >= (3, 5):
             await gen.sleep(delay)
             return x + 1
         """)
-    assert asyncinc
+    assert asyncinc  # flake8: noqa
 else:
     asyncinc = None
 
 
 _readone_queues = {}
+
 
 @gen.coroutine
 def readone(comm):

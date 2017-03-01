@@ -6,31 +6,25 @@ from math import sqrt
 
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
-from bokeh.layouts import row, column, widgetbox
-from bokeh.models import (
-    ColumnDataSource, Plot, Datetime, DataRange1d, Rect, LinearAxis,
-    DatetimeAxis, Grid, BasicTicker, HoverTool, BoxZoomTool, ResetTool,
-    PanTool, WheelZoomTool, Title, Range1d, Quad, Text, value, Line,
-    NumeralTickFormatter, ToolbarBox, Legend, LegendItem, BoxSelectTool,
-    Circle, CategoricalAxis, Select, TapTool, OpenURL
-)
-from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
+from bokeh.layouts import column
+from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
+        PanTool, WheelZoomTool, TapTool, OpenURL)
+from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
-from toolz import frequencies
-from toolz.curried import map, concat, groupby, pipe
+from toolz import pipe
 
 from .components import DashboardComponent
 from .core import BokehServer
 from .worker import SystemMonitor, format_time, counters_doc
 from .utils import transpose
-from ..compatibility import WINDOWS
-from ..diagnostics.progress_stream import color_of
 from ..metrics import time
-from ..utils import log_errors, key_split, ignoring
+from ..utils import log_errors
 
-with ignoring(ImportError):
+try:
     from cytoolz.curried import map, concat, groupby
+except ImportError:
+    from toolz.curried import map, concat, groupby
 
 logger = logging.getLogger(__name__)
 

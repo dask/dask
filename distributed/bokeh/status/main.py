@@ -7,7 +7,7 @@ from bokeh.layouts import column, row
 
 from distributed.bokeh.components import (
     TaskStream, TaskProgress, MemoryUsage, ResourceProfiles
-    )
+)
 import distributed.bokeh
 
 SIZING_MODE = 'scale_width'

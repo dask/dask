@@ -16,6 +16,7 @@ def _psutil_caller(method_name, default=_empty_namedtuple):
         return default
 
     meth = getattr(psutil, method_name)
+
     @wraps(meth)
     def wrapper():
         try:

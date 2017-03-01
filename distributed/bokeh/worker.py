@@ -5,17 +5,14 @@ import logging
 import math
 
 from bokeh.layouts import row, column, widgetbox
-from bokeh.models import (
-    ColumnDataSource, Plot, Datetime, DataRange1d, Rect, LinearAxis,
-    DatetimeAxis, Grid, BasicTicker, HoverTool, BoxZoomTool, ResetTool,
-    PanTool, WheelZoomTool, Title, Range1d, Quad, Text, value, Line,
-    NumeralTickFormatter, ToolbarBox, Legend, LegendItem, BoxSelectTool,
-    Circle, CategoricalAxis, Select
-)
-from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
+from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool,
+        BoxZoomTool, ResetTool, PanTool, WheelZoomTool, NumeralTickFormatter,
+        Select)
+
+from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
-from bokeh.palettes import viridis, RdBu
-from toolz import frequencies, merge, partition_all
+from bokeh.palettes import RdBu
+from toolz import merge, partition_all
 
 from .components import DashboardComponent
 from .core import BokehServer, format_bytes, format_time
@@ -71,7 +68,7 @@ class CommunicatingStream(DashboardComponent):
             x_range = DataRange1d(range_padding=0)
             y_range = DataRange1d(range_padding=0)
 
-            fig= figure(title='Peer Communications',
+            fig = figure(title='Peer Communications',
                     x_axis_type='datetime', x_range=x_range, y_range=y_range,
                     height=height, tools='', **kwargs)
 
@@ -204,9 +201,6 @@ class CrossFilter(DashboardComponent):
         with log_errors():
             self.worker = worker
 
-            names = ['nbytes', 'duration', 'bandwidth', 'count', 'type',
-                     'inout-color', 'type-color', 'key', 'key-color', 'start',
-                     'stop']
             quantities = ['nbytes', 'duration', 'bandwidth', 'count',
                           'start', 'stop']
             colors = ['inout-color', 'type-color', 'key-color']
@@ -223,7 +217,7 @@ class CrossFilter(DashboardComponent):
                 'key': ['add', 'inc'],
                 'start': [1, 2],
                 'stop': [1, 2]
-                })
+            })
 
             self.x = Select(title='X-Axis', value='nbytes', options=quantities)
             self.x.on_change('value', self.update_figure)
@@ -507,7 +501,7 @@ class Counters(DashboardComponent):
 
     def update(self):
         with log_errors():
-            for name, figure in self.digest_figures.items():
+            for name, fig in self.digest_figures.items():
                 digest = self.server.digests[name]
                 d = {}
                 for i, d in enumerate(digest.components):
@@ -516,9 +510,9 @@ class Counters(DashboardComponent):
                         if name.endswith('duration'):
                             xs *= 1000
                         self.digest_sources[name][i].data.update({'x': xs, 'y': ys})
-                figure.title.text = '%s: %d' % (name, digest.size())
+                fig.title.text = '%s: %d' % (name, digest.size())
 
-            for name, figure in self.counter_figures.items():
+            for name, fig in self.counter_figures.items():
                 counter = self.server.counters[name]
                 d = {}
                 for i, d in enumerate(counter.components):
@@ -532,11 +526,10 @@ class Counters(DashboardComponent):
                         self.counter_sources[name][i].data.update(
                                 {'x': xs, 'y': ys, 'y-center': y_centers,
                                  'counts': counts})
-                    figure.title.text = '%s: %d' % (name, counter.size())
-                    figure.x_range.factors = list(map(str, xs))
+                    fig.title.text = '%s: %d' % (name, counter.size())
+                    fig.x_range.factors = list(map(str, xs))
 
 
-from bokeh.server.server import Server
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.application import Application
 
@@ -596,7 +589,6 @@ def counters_doc(server, doc):
         doc.add_root(counter.root)
 
 
-
 class BokehWorker(BokehServer):
     def __init__(self, worker, io_loop=None):
         self.worker = worker
@@ -612,43 +604,3 @@ class BokehWorker(BokehServer):
 
         self.loop = io_loop or worker.loop
         self.server = None
-
-
-def format_bytes(n):
-    """ Format bytes as text
-
-    >>> format_bytes(1)
-    '1 B'
-    >>> format_bytes(1234)
-    '1.23 kB'
-    >>> format_bytes(12345678)
-    '12.35 MB'
-    >>> format_bytes(1234567890)
-    '1.23 GB'
-    """
-    if n > 1e9:
-        return '%0.2f GB' % (n / 1e9)
-    if n > 1e6:
-        return '%0.2f MB' % (n / 1e6)
-    if n > 1e3:
-        return '%0.2f kB' % (n / 1000)
-    return '%d B' % n
-
-
-def format_time(n):
-    """ format integers as time
-
-    >>> format_time(1)
-    '1.00 s'
-    >>> format_time(0.001234)
-    '1.23 ms'
-    >>> format_time(0.00012345)
-    '123.45 us'
-    >>> format_time(123.456)
-    '123.46 s'
-    """
-    if n >= 1:
-        return '%.2f s' % n
-    if n >= 1e-3:
-        return '%.2f ms' % (n * 1e3)
-    return '%.2f us' % (n * 1e6)

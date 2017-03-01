@@ -84,12 +84,14 @@ def register_worker_magic(connection_info, magic_name='worker'):
     kc = BlockingKernelClient(**connection_info)
     kc.session.key = key
     kc.start_channels()
+
     def remote(line, cell=None):
         """Run the current cell on a remote IPython kernel"""
         if cell is None:
             # both line and cell magic
             cell = line
         run_cell_remote(ip, kc, cell)
+
     remote.client = kc # preserve reference on kc, largely for mocking
     ip.register_magic_function(remote, magic_kind='line', magic_name=magic_name)
     ip.register_magic_function(remote, magic_kind='cell', magic_name=magic_name)
@@ -137,6 +139,7 @@ def remote_magic(line, cell=None):
     # actually run the code
     run_cell_remote(ip, kc, cell)
 
+
 # cache clients for re-use in remote magic
 remote_magic._clients = {}
 
@@ -170,13 +173,14 @@ def connect_qtconsole(connection_info, name=None, extra_args=None):
     if extra_args:
         cmd.extend(extra_args)
     Popen(cmd)
+
+    @atexit.register
     def _cleanup_connection_file():
         """Cleanup our connection file when we exit."""
         try:
             os.remove(path)
         except OSError:
             pass
-    atexit.register(_cleanup_connection_file)
 
 
 def start_ipython(ip=None, ns=None, log=None):
@@ -221,6 +225,7 @@ def start_ipython(ip=None, ns=None, log=None):
     # initialization happens in the thread to avoid threading problems
     # with the sqlite history
     evt = Event()
+
     def _start():
         app.initialize([])
         app.kernel.pre_handler_hook = noop
@@ -243,4 +248,3 @@ def start_ipython(ip=None, ns=None, log=None):
     IOLoop.clear_instance()
     save_inst.install()
     return app
-

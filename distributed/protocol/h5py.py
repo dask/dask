@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .serialize import register_serialization
 
-from ..utils import log_errors, ensure_bytes
-
 
 def serialize_h5py_file(f):
     if f.mode != 'r':
@@ -20,7 +18,6 @@ register_serialization('h5py._hl.files.File', serialize_h5py_file,
                        deserialize_h5py_file)
 
 
-
 def serialize_h5py_dataset(x):
     header, _ = serialize_h5py_file(x.file)
     header['name'] = x.name
@@ -28,7 +25,6 @@ def serialize_h5py_dataset(x):
 
 
 def deserialize_h5py_dataset(header, frames):
-    import h5py
     file = deserialize_h5py_file(header, frames)
     return file[header['name']]
 
