@@ -362,6 +362,23 @@ def test_submit_errors(loop):
 
 
 @gen_cluster(client=True)
+def test_gather_errors(c, s, a, b):
+    def f(a, b):
+        raise TypeError
+    def g(a, b):
+        raise AttributeError
+
+    future_f = c.submit(f, 1, 2)
+    future_g = c.submit(g, 1, 2)
+    with pytest.raises(TypeError):
+        yield c._gather(future_f)
+    with pytest.raises(AttributeError):
+        yield c._gather(future_g)
+
+    yield a._close()
+
+
+@gen_cluster(client=True)
 def test_wait(c, s, a, b):
     x = c.submit(inc, 1)
     y = c.submit(inc, 1)
