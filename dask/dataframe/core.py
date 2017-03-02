@@ -27,7 +27,6 @@ from ..utils import (random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M, key_split)
 from ..base import Base, compute, tokenize, normalize_token
-from ..async import get_sync
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -2335,20 +2334,6 @@ class DataFrame(_Frame):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
-
-    def to_castra(self, fn=None, categories=None, sorted_index_column=None,
-                  compute=True, get=get_sync):
-        """ Write DataFrame to Castra on-disk store
-
-        See https://github.com/blosc/castra for details
-
-        See Also
-        --------
-        Castra.to_dask
-        """
-        from .io import to_castra
-        return to_castra(self, fn, categories, sorted_index_column,
-                         compute=compute, get=get)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.

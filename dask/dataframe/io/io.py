@@ -4,7 +4,6 @@ from math import ceil
 from operator import getitem
 import os
 from threading import Lock
-import uuid
 from warnings import warn
 
 import pandas as pd
@@ -14,8 +13,7 @@ from toolz import merge
 from ...base import tokenize
 from ...compatibility import unicode, PY3
 from ... import array as da
-from ...async import get_sync
-from ...delayed import Delayed, delayed
+from ...delayed import delayed
 
 from ..core import DataFrame, Series, new_dd_object
 from ..shuffle import set_partition
@@ -404,25 +402,6 @@ def from_dask_array(x, columns=None):
     return new_dd_object(merge(x.dask, dsk), name, meta, divisions)
 
 
-def from_castra(x, columns=None):
-    """
-    Load a dask DataFrame from a Castra.
-
-    The Castra project has been deprecated.  We recommend using Parquet
-    instead.
-
-    Parameters
-    ----------
-    x : filename or Castra
-    columns: list or string, optional
-        The columns to load. Default is all columns.
-    """
-    from castra import Castra
-    if not isinstance(x, Castra):
-        x = Castra(x, readonly=True)
-    return x.to_dask(columns)
-
-
 def _link(token, result):
     """ A dummy function to link results together in a graph
 
@@ -430,39 +409,6 @@ def _link(token, result):
     don't explicitly pass around a shared resource
     """
     return None
-
-
-def to_castra(df, fn=None, categories=None, sorted_index_column=None,
-              compute=True, get=get_sync):
-    """ Write DataFrame to Castra on-disk store
-
-    The Castra project has been deprecated.  We recommend using Parquet instead.
-
-    See Also
-    --------
-    Castra.to_dask
-    """
-    from castra import Castra
-
-    name = 'to-castra-' + uuid.uuid1().hex
-
-    if sorted_index_column:
-        func = lambda part: (M.set_index, part, sorted_index_column)
-    else:
-        func = lambda part: part
-
-    dsk = dict()
-    dsk[(name, -1)] = (Castra, fn, func((df._name, 0)), categories)
-    for i in range(0, df.npartitions):
-        dsk[(name, i)] = (_link, (name, i - 1),
-                          (Castra.extend, (name, -1), func((df._name, i))))
-
-    dsk = merge(dsk, df.dask)
-    keys = [(name, -1), (name, df.npartitions - 1)]
-    if compute:
-        return DataFrame._get(dsk, keys, get=get)[0]
-    else:
-        return delayed([Delayed(key, dsk) for key in keys])[0]
 
 
 def _df_to_bag(df, index=False):

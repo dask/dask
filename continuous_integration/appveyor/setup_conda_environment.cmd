@@ -29,7 +29,6 @@ call activate %CONDA_ENV%
 %PIP_INSTALL% blosc --upgrade
 %PIP_INSTALL% moto
 
-if %PYTHON% LSS 3.0 (%PIP_INSTALL% git+https://github.com/Blosc/castra)
 if %PYTHON% LSS 3.0 (%PIP_INSTALL% backports.lzma mock)
 
 @rem Display final environment (for reproducing)

@@ -6,7 +6,6 @@ import math
 import os
 import sys
 from collections import Iterator
-from distutils.version import LooseVersion
 
 import partd
 from toolz import merge, join, filter, identity, valmap, groupby, pluck
@@ -473,31 +472,6 @@ def test_map_is_lazy():
 
 def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
-
-
-def test_from_castra():
-    pytest.importorskip('castra')
-    pd = pytest.importorskip('pandas')
-    dd = pytest.importorskip('dask.dataframe')
-    blosc = pytest.importorskip('blosc')
-    if LooseVersion(blosc.__version__) == '1.3.0':
-        pytest.skip()
-    df = pd.DataFrame({'x': list(range(100)),
-                       'y': [str(i) for i in range(100)]})
-    a = dd.from_pandas(df, 10)
-
-    with tmpfile('.castra') as fn:
-        c = a.to_castra(fn)
-        default = db.from_castra(c)
-        with_columns = db.from_castra(c, 'x')
-        with_index = db.from_castra(c, 'x', index=True)
-        assert (list(default) == [{'x': i, 'y': str(i)}
-                                  for i in range(100)] or
-                list(default) == [(i, str(i)) for i in range(100)])
-        assert list(with_columns) == list(range(100))
-        assert list(with_index) == list(zip(range(100), range(100)))
-        assert default.name != with_columns.name != with_index.name
-        assert with_index.name == db.from_castra(c, 'x', index=True).name
 
 
 @pytest.mark.slow
