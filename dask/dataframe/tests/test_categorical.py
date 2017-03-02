@@ -210,7 +210,7 @@ def test_categorical_set_index(shuffle):
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
         b = a.set_index('y', divisions=['a', 'b', 'c'],
-                        npartitions=a.nparititons)
+                        npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
