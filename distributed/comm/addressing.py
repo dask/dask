@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import six
 
 from ..config import config
-from ..utils import ensure_ip
+from . import registry
 
 
 DEFAULT_SCHEME = config.get('default-scheme', 'tcp')
@@ -12,6 +12,9 @@ DEFAULT_SCHEME = config.get('default-scheme', 'tcp')
 def parse_address(addr):
     """
     Split address into its scheme and scheme-dependent location string.
+
+    >>> parse_address('tcp://127.0.0.1')
+    ('tcp', '127.0.0.1')
     """
     if not isinstance(addr, six.string_types):
         raise TypeError("expected str, got %r" % addr.__class__.__name__)
@@ -24,6 +27,9 @@ def parse_address(addr):
 def unparse_address(scheme, loc):
     """
     Undo parse_address().
+
+    >>> unparse_address('tcp', '127.0.0.1')
+    'tcp://127.0.0.1'
     """
     return '%s://%s' % (scheme, loc)
 
@@ -31,6 +37,11 @@ def unparse_address(scheme, loc):
 def normalize_address(addr):
     """
     Canonicalize address, adding a default scheme if necessary.
+
+    >>> normalize_address('zmq://[::1]')
+    'zmq://[::1]'
+    >>> normalize_address('[::1]')
+    'tcp://[::1]'
     """
     return unparse_address(*parse_address(addr))
 
@@ -41,8 +52,6 @@ def parse_host_port(address, default_port=None):
     """
     if isinstance(address, tuple):
         return address
-    if address.startswith('tcp:'):
-        address = address[4:]
 
     def _fail():
         raise ValueError("invalid address %r" % (address,))
@@ -53,6 +62,8 @@ def parse_host_port(address, default_port=None):
         return default_port
 
     if address.startswith('['):
+        # IPv6 notation: '[addr]:port' or '[addr]'.
+        # The address may contain multiple colons.
         host, sep, tail = address[1:].partition(']')
         if not sep:
             _fail()
@@ -63,6 +74,7 @@ def parse_host_port(address, default_port=None):
                 _fail()
             port = tail[1:]
     else:
+        # Generic notation: 'addr:port' or 'addr'.
         host, sep, port = address.partition(':')
         if not sep:
             port = _default()
@@ -87,29 +99,45 @@ def unparse_host_port(host, port=None):
 def get_address_host_port(addr):
     """
     Get a (host, port) tuple out of the given address.
+
+    ValueError is raised if the address scheme doesn't allow extracting
+    the requested information.
     """
     scheme, loc = parse_address(addr)
-    if scheme not in ('tcp', 'zmq'):
+    backend = registry.get_backend(scheme)
+    try:
+        return backend.get_address_host_port(loc)
+    except NotImplementedError:
         raise ValueError("don't know how to extract host and port "
                          "for address %r" % (addr,))
-    return parse_host_port(loc)
+
+
+def get_address_host(addr):
+    """
+    Return a hostname / IP address identifying the machine this address
+    is located on.
+
+    In contrast to get_address_host_port(), this function should always
+    succeed for well-formed addresses.
+
+    >>> get_address_host('tcp://192.168.10.50:8687')
+    '192.168.10.50'
+    """
+    scheme, loc = parse_address(addr)
+    backend = registry.get_backend(scheme)
+    return backend.get_address_host(loc)
 
 
 def resolve_address(addr):
     """
-    Apply scheme-specific address resolution to *addr*, ensuring
-    all symbolic references are replaced with concrete location
-    specifiers.
+    Apply scheme-specific address resolution to *addr*, replacing
+    all symbolic references with concrete location specifiers.
 
-    In practice, this means hostnames are resolved to IP addresses.
+    In practice, this can mean hostnames are resolved to IP addresses.
+
+    >>> resolve_address('tcp://localhost:8786')
+    'tcp://127.0.0.1:8786'
     """
-    # XXX circular import; reorganize APIs into a distributed.comms.addressing module?
-    #from ..utils import ensure_ip
     scheme, loc = parse_address(addr)
-    if scheme not in ('tcp', 'zmq'):
-        return addr
-
-    host, port = parse_host_port(loc)
-    loc = unparse_host_port(ensure_ip(host), port)
-    addr = unparse_address(scheme, loc)
-    return addr
+    backend = registry.get_backend(scheme)
+    return unparse_address(scheme, backend.resolve_address(loc))

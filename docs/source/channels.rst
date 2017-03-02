@@ -74,7 +74,7 @@ fully registered with the scheduler.
 
 
 Example with worker_client
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Using channels with `worker_client`_ allows for a more decoupled version
 of what is possible with :doc:`Data Streams with Queues<queues>`
@@ -83,7 +83,7 @@ which can be read later by a different client.
 This opens up Dask/Distributed to being integrated in a wider application
 environment similar to other python task queues such as Celery_.
 
-.. _worker client: http://distributed.readthedocs.io/en/latest/task-launch.html#submit-tasks-from-worker
+.. _worker_client: http://distributed.readthedocs.io/en/latest/task-launch.html#submit-tasks-from-worker
 .. _Celery: http://www.celeryproject.org/
 
 .. code-block:: python

@@ -85,7 +85,7 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
         try:                         # before we successfully pass it to Bokeh
             from distributed.bokeh.application import BokehWebInterface
             bokeh_proc = BokehWebInterface(http_port=http_port,
-                    tcp_port=scheduler.port, bokeh_port=bokeh_port,
+                    scheduler_address=scheduler.address, bokeh_port=bokeh_port,
                     bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
                     use_xheaders=use_xheaders, quiet=False)
         except ImportError:

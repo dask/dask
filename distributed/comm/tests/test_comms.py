@@ -21,7 +21,8 @@ from distributed.protocol import (loads, dumps,
 
 from distributed.comm import (tcp, inproc, connect, listen, CommClosedError,
                               is_zmq_enabled, parse_address, parse_host_port,
-                              unparse_host_port, resolve_address)
+                              unparse_host_port, resolve_address,
+                              get_address_host)
 
 if is_zmq_enabled():
     from distributed.comm import zmq
@@ -94,18 +95,26 @@ def test_unparse_host_port():
     assert f('::1', '*') == '[::1]:*'
 
 
+def test_get_address_host():
+    f = get_address_host
+
+    assert f('tcp://127.0.0.1:123') == '127.0.0.1'
+    assert f('inproc://%s/%d/123' % (get_ip(), os.getpid())) == get_ip()
+
+    if is_zmq_enabled():
+        assert f('zmq://192.168.2.3:456') == '192.168.2.3'
+
+
 def test_resolve_address():
     f = resolve_address
 
     assert f('tcp://127.0.0.1:123') == 'tcp://127.0.0.1:123'
-    assert f('zmq://127.0.0.1:456') == 'zmq://127.0.0.1:456'
     assert f('127.0.0.2:789') == 'tcp://127.0.0.2:789'
     assert f('tcp://0.0.0.0:456') == 'tcp://0.0.0.0:456'
     assert f('tcp://0.0.0.0:456') == 'tcp://0.0.0.0:456'
 
     if has_ipv6():
         assert f('tcp://[::1]:123') == 'tcp://[::1]:123'
-        assert f('zmq://[::1]:456') == 'zmq://[::1]:456'
         # OS X returns '::0.0.0.2' as canonical representation
         assert f('[::2]:789') in ('tcp://[::2]:789',
                                   'tcp://[::0.0.0.2]:789')
@@ -113,7 +122,12 @@ def test_resolve_address():
 
     assert f('localhost:123') == 'tcp://127.0.0.1:123'
     assert f('tcp://localhost:456') == 'tcp://127.0.0.1:456'
-    assert f('zmq://localhost:789') == 'zmq://127.0.0.1:789'
+
+    if is_zmq_enabled():
+        assert f('zmq://127.0.0.1:456') == 'zmq://127.0.0.1:456'
+        assert f('zmq://localhost:789') == 'zmq://127.0.0.1:789'
+        if has_ipv6():
+            assert f('zmq://[::1]:456') == 'zmq://[::1]:456'
 
 
 #

@@ -971,8 +971,8 @@ class Client(object):
         Accepts a future, nested container of futures, iterator, or queue.
         The return type will match the input type.
 
-        Parametrs
-        ---------
+        Parameters
+        ----------
         futures: Collection of futures
             This can be a possibly nested collection of Future objects.
             Collections can be lists, sets, iterators, queues or dictionaries

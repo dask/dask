@@ -24,7 +24,7 @@ from dask.order import order
 
 from .batched import BatchedSend
 from .comm import (normalize_address, resolve_address,
-                   get_address_host_port, unparse_host_port)
+                   get_address_host, unparse_host_port)
 from .compatibility import finalize
 from .config import config
 from .core import (rpc, connect, Server, send_recv,
@@ -405,17 +405,13 @@ class Scheduler(Server):
 
         if self.status != 'running':
             if isinstance(addr_or_port, int):
-                self.ip = get_ip()
-                # Listen on all interfaces.  `self.ip` is not suitable
-                # as its default value would prevent connecting via 127.0.0.1.
+                # Listen on all interfaces.  `get_ip()` is not suitable
+                # as it would prevent connecting via 127.0.0.1.
                 self.listen(('', addr_or_port))
+                self.ip = get_ip()
             else:
                 self.listen(addr_or_port)
-                try:
-                    self.ip, _ = get_address_host_port(self.listen_address)
-                except ValueError:
-                    # Address scheme does not have a notion of host and port
-                    self.ip = get_ip()
+                self.ip = get_address_host(self.listen_address)
 
             # Services listen on all addresses
             self.start_services()
@@ -525,7 +521,7 @@ class Scheduler(Server):
             host_info = host_info or {}
 
             address = self.coerce_address(address, resolve_address)
-            host, port = get_address_host_port(address)
+            host = get_address_host(address)
             self.host_info[host]['last-seen'] = local_now
 
             address = normalize_address(address)
@@ -814,7 +810,7 @@ class Scheduler(Server):
                 return 'already-removed'
 
             address = self.coerce_address(address)
-            host, port = get_address_host_port(address)
+            host = get_address_host(address)
 
             logger.info("Remove worker %s", address)
             with ignoring(AttributeError, CommClosedError):

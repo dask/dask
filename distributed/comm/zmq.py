@@ -12,11 +12,13 @@ from zmq.eventloop import ioloop as zmqioloop
 from zmq.eventloop.future import Context
 
 from .. import config
-from ..utils import PY3
-from .addressing import parse_host_port, unparse_host_port
-from .core import connectors, listeners, Comm, CommClosedError, Listener
-from .utils import to_frames, from_frames, ensure_concrete_host
+from ..utils import PY3, ensure_ip
+
 from . import zmqimpl
+from .registry import Backend, backends
+from .addressing import parse_host_port, unparse_host_port
+from .core import Comm, CommClosedError, Connector, Listener
+from .utils import to_frames, from_frames, ensure_concrete_host
 
 
 logger = logging.getLogger(__name__)
@@ -156,7 +158,7 @@ class ZMQ(Comm):
         return self.sock is None
 
 
-class ZMQConnector(object):
+class ZMQConnector(Connector):
 
     @gen.coroutine
     def _do_connect(self, sock, address, listener_url, deserialize=True):
@@ -264,5 +266,27 @@ class ZMQListener(Listener):
         return 'zmq://' + unparse_host_port(host, port)
 
 
-connectors['zmq'] = ZMQConnector()
-listeners['zmq'] = ZMQListener
+class ZMQBackend(Backend):
+
+    # I/O
+
+    def get_connector(self):
+        return ZMQConnector()
+
+    def get_listener(self, loc, handle_comm, deserialize):
+        return ZMQListener(loc, handle_comm, deserialize)
+
+    # Address handling
+
+    def get_address_host(self, loc):
+        return parse_host_port(loc)[0]
+
+    def get_address_host_port(self, loc):
+        return parse_host_port(loc)
+
+    def resolve_address(self, loc):
+        host, port = parse_host_port(loc)
+        return unparse_host_port(ensure_ip(host), port)
+
+
+backends['zmq'] = ZMQBackend()

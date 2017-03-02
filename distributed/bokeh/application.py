@@ -31,8 +31,12 @@ logging_level = logging_names[logging_level.upper()]
 
 
 class BokehWebInterface(object):
-    def __init__(self, host='127.0.0.1', http_port=9786, tcp_port=8786,
-                 bokeh_port=8787, bokeh_whitelist=[], log_level=logging_level,
+
+    process = None
+
+    def __init__(self, host='127.0.0.1', http_port=9786, bokeh_port=8787,
+                 scheduler_address='tcp://127.0.0.1:8786',
+                 bokeh_whitelist=[], log_level=logging_level,
                  show=False, prefix=None, use_xheaders=False, quiet=True):
         self.port = bokeh_port
         ip = socket.gethostbyname(host)
@@ -73,7 +77,7 @@ class BokehWebInterface(object):
 
         bokeh_options = {'host': host,
                          'http-port': http_port,
-                         'tcp-port': tcp_port,
+                         'scheduler-address': scheduler_address,
                          'bokeh-port': bokeh_port}
 
         args.extend(['--args'] + list(map(str, concat(bokeh_options.items()))))
@@ -94,7 +98,7 @@ class BokehWebInterface(object):
                          % (ip, bokeh_port))
 
     def close(self, join=True, timeout=None):
-        if self.process.poll() is None:
+        if self.process is not None and self.process.poll() is None:
             self.process.terminate()
 
     def __del__(self):

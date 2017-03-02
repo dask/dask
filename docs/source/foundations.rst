@@ -34,55 +34,15 @@ chosen to use Tornado for the following reasons:
 .. _`Tornado's documentation`: https://tornado.readthedocs.io/en/latest/coroutine.html
 
 
-Network Communication
-=====================
+Endpoint-to-endpoint Communication
+==================================
 
-Workers, the Scheduler, and Clients communicate with each other over the
-network.  By default they use TCP connections as mediated by the abstract
-communications layer.  The basic unit for dealing with established
-communications is the ``Comm`` object:
+The various distributed endpoints (Client, Scheduler, Worker) communicate
+by sending each other arbitrary Python objects.  Encoding, sending and then
+decoding those objects is the job of the :ref:`communication layer <communications>`.
 
-.. autoclass:: distributed.comm.Comm
-   :members:
-
-You don't create ``Comm`` objects directly: you either ``listen`` for
-incoming communications, or ``connect`` to a peer listening for connections:
-
-.. autofunction:: distributed.comm.connect
-
-.. autofunction:: distributed.comm.listen
-
-Listener objects expose the following interface:
-
-.. autoclass:: distributed.comm.core.Listener
-   :members:
-
-
-Addresses
----------
-
-Communication addresses are canonically represented as URIs, such as
-``tcp://127.0.0.1:1234``.  For compatibility with existing code, if the
-URI scheme is omitted, a default scheme of ``tcp`` is assumed (so
-``127.0.0.1:456`` is really the same as ``tcp://127.0.0.1:456``).
-The default scheme may change in the future.
-
-The following schemes are currently implemented in the ``distributed``
-source tree:
-
-* ``tcp`` is the main transport; it uses TCP sockets and allows for IPv4
-  and IPv6 addresses.
-
-* ``zmq`` is an experimental transport using ZeroMQ sockets; it is not
-  recommended for production use.
-
-Note that some URIs may be valid for listening but not for connecting.
-For example, the URI ``tcp://`` will listen on all IPv4 and IPv6 addresses
-and on an arbitrary port, but you cannot connect to that address.
-
-Higher-level APIs in ``distributed`` may accept other address formats for
-convenience or compatibility, for example a ``(host, port)`` pair.  However,
-the abstract communications layer always deals with URIs.
+Ancillary services such as a Bokeh-based Web interface, however, have their
+own implementation and semantics.
 
 
 Protocol Handling

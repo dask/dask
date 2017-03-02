@@ -12,7 +12,7 @@ import weakref
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from .comm import get_address_host_port
+from .comm import get_address_host
 from .core import Server, rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import disk_io_counters, net_io_counters, time
 from .utils import get_ip, ignoring, mp_context
@@ -90,12 +90,12 @@ class Nanny(Server):
         if isinstance(addr_or_port, int):
             # Default ip is the required one to reach the scheduler
             self.ip = get_ip(
-                get_address_host_port(self.scheduler.address)[0]
+                get_address_host(self.scheduler.address)
             )
             self.listen((self.ip, addr_or_port))
         else:
             self.listen(addr_or_port)
-            self.ip = get_address_host_port(self.address)[0]
+            self.ip = get_address_host(self.address)
 
         logger.info('        Start Nanny at: %r', self.address)
         yield self.instantiate()

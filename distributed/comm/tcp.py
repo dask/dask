@@ -14,9 +14,11 @@ from tornado.tcpserver import TCPServer
 
 from .. import config
 from ..compatibility import finalize
-from ..utils import ensure_bytes
+from ..utils import ensure_bytes, ensure_ip
+
+from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
-from .core import connectors, listeners, Comm, Listener, CommClosedError
+from .core import Comm, Connector, Listener, CommClosedError
 from .utils import (to_frames, from_frames,
                     get_tcp_server_address, ensure_concrete_host)
 
@@ -294,5 +296,27 @@ class TCPListener(Listener):
         self.comm_handler(comm)
 
 
-connectors['tcp'] = TCPConnector()
-listeners['tcp'] = TCPListener
+class TCPBackend(Backend):
+
+    # I/O
+
+    def get_connector(self):
+        return TCPConnector()
+
+    def get_listener(self, loc, handle_comm, deserialize):
+        return TCPListener(loc, handle_comm, deserialize)
+
+    # Address handling
+
+    def get_address_host(self, loc):
+        return parse_host_port(loc)[0]
+
+    def get_address_host_port(self, loc):
+        return parse_host_port(loc)
+
+    def resolve_address(self, loc):
+        host, port = parse_host_port(loc)
+        return unparse_host_port(ensure_ip(host), port)
+
+
+backends['tcp'] = TCPBackend()

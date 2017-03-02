@@ -15,8 +15,9 @@ from tornado.ioloop import IOLoop
 from ..compatibility import finalize
 from ..protocol import nested_deserialize, Serialize, Serialized
 from ..utils import get_ip
-from .core import (connectors, listeners, Comm, Listener, CommClosedError,
-                   )
+
+from .registry import Backend, backends
+from .core import Comm, Connector, Listener, CommClosedError
 
 
 logger = logging.getLogger(__name__)
@@ -267,7 +268,7 @@ class InProcListener(Listener):
         return 'inproc://' + self.address
 
 
-class InProcConnector(object):
+class InProcConnector(Connector):
 
     def __init__(self, manager):
         self.manager = manager
@@ -281,7 +282,7 @@ class InProcConnector(object):
         conn_req = ConnectionRequest(c2s_q=Queue(),
                                      s2c_q=Queue(),
                                      c_loop=IOLoop.current(),
-                                     c_addr=global_manager.new_address(),
+                                     c_addr=self.manager.new_address(),
                                      conn_event=locks.Event(),
                                      )
         listener.connect_threadsafe(conn_req)
@@ -298,5 +299,25 @@ class InProcConnector(object):
         raise gen.Return(comm)
 
 
-connectors['inproc'] = InProcConnector(global_manager)
-listeners['inproc'] = InProcListener
+class InProcBackend(Backend):
+    manager = global_manager
+
+    # I/O
+
+    def get_connector(self):
+        return InProcConnector(self.manager)
+
+    def get_listener(self, loc, handle_comm, deserialize):
+        return InProcListener(loc, handle_comm, deserialize)
+
+    # Address handling
+
+    def get_address_host(self, loc):
+        self.manager.validate_address(loc)
+        return self.manager.ip
+
+    def resolve_address(self, loc):
+        return loc
+
+
+backends['inproc'] = InProcBackend()

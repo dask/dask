@@ -19,7 +19,7 @@ def test_BokehWebInterface(loop):
         with pytest.raises(Exception):
             response = requests.get('http://127.0.0.1:8787/status/')
         with BokehWebInterface(
-                tcp_port=c.scheduler.port,
+                scheduler_address=c.scheduler.address,
                 http_port=c.scheduler.services['http'].port,
                 bokeh_port=8787) as w:
             start = time()

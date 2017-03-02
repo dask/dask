@@ -11,25 +11,11 @@ from tornado.ioloop import IOLoop
 
 from ..config import config
 from ..metrics import time
+from . import registry
 from .addressing import parse_address
 
 
 logger = logging.getLogger(__name__)
-
-# Connector instances
-
-connectors = {
-    #'tcp': ...,
-    #'zmq': ...,
-    }
-
-
-# Listener classes
-
-listeners = {
-    #'tcp': ...,
-    # 'zmq': ...,
-    }
 
 
 class CommClosedError(IOError):
@@ -132,6 +118,18 @@ class Listener(with_metaclass(ABCMeta)):
         self.stop()
 
 
+class Connector(with_metaclass(ABCMeta)):
+
+    @abstractmethod
+    def connect(self, address, deserialize=True):
+        """
+        Connect to the given address and return a Comm object.
+        This function is a coroutine.   It may raise EnvironmentError
+        if the other endpoint is unreachable or unavailable.  It
+        may raise ValueError if the address is malformed.
+        """
+
+
 @gen.coroutine
 def connect(addr, timeout=3, deserialize=True):
     """
@@ -140,9 +138,8 @@ def connect(addr, timeout=3, deserialize=True):
     retried until the *timeout* is expired.
     """
     scheme, loc = parse_address(addr)
-    connector = connectors.get(scheme)
-    if connector is None:
-        raise ValueError("unknown scheme %r in address %r" % (scheme, addr))
+    backend = registry.get_backend(scheme)
+    connector = backend.get_connector()
 
     start = time()
     deadline = start + timeout
@@ -185,8 +182,6 @@ def listen(addr, handle_comm, deserialize=True):
     *handle_comm* can be a regular function or a coroutine.
     """
     scheme, loc = parse_address(addr)
-    listener_class = listeners.get(scheme)
-    if listener_class is None:
-        raise ValueError("unknown scheme %r in address %r" % (scheme, addr))
+    backend = registry.get_backend(scheme)
 
-    return listener_class(loc, handle_comm, deserialize)
+    return backend.get_listener(loc, handle_comm, deserialize)

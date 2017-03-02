@@ -2,8 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from .addressing import (parse_address, unparse_address,
                          normalize_address, parse_host_port,
-                         unparse_host_port, get_address_host_port,
-                         resolve_address)
+                         unparse_host_port, resolve_address,
+                         get_address_host_port, get_address_host,
+                         )
 from .core import connect, listen, Comm, CommClosedError
 
 

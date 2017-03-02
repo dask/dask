@@ -123,5 +123,7 @@ Contents
    foundations
    journey
    protocol
+   serialization
+   communications
    plugins
    changelog
