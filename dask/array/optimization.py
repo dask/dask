@@ -7,6 +7,7 @@ import numpy as np
 from .core import getarray, getarray_nofancy
 from ..core import flatten
 from ..optimize import cull, fuse, inline_functions
+from ..utils import ensure_dict
 
 
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
@@ -18,6 +19,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions

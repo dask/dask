@@ -19,7 +19,7 @@ from ..core import DataFrame, Series, new_dd_object
 from ..shuffle import set_partition
 from ..utils import insert_meta_param_description
 
-from ...utils import M
+from ...utils import M, ensure_dict
 
 lock = Lock()
 
@@ -399,7 +399,7 @@ def from_dask_array(x, columns=None):
         else:
             dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return new_dd_object(merge(x.dask, dsk), name, meta, divisions)
+    return new_dd_object(merge(ensure_dict(x.dask), dsk), name, meta, divisions)
 
 
 def _link(token, result):

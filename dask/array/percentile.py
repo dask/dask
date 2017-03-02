@@ -9,6 +9,7 @@ from toolz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
+from .. import sharedict
 
 
 @wraps(np.percentile)
@@ -55,8 +56,9 @@ def percentile(a, q, interpolation='linear'):
     if np.issubdtype(dtype, np.integer):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
-    return Array(merge(a.dask, dsk, dsk2), name2, chunks=((len(q),),),
-                 dtype=dtype)
+    dsk = merge(dsk, dsk2)
+    dsk = sharedict.merge(a.dask, (name2, dsk))
+    return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
 
 
 def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):

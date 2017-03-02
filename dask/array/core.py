@@ -29,7 +29,7 @@ from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock)
+                     SerializableLock, ensure_dict)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -400,16 +400,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     if not kwargs:  # will not be used in an apply, should be a tuple
         valtups = [tuple(vt) for vt in valtups]
 
-    dsk = {}
-
     # Add heads to tuples
     keys = [(output,) + kt for kt in keytups]
 
+    dsk = {}
     # Unpack delayed objects in kwargs
     if kwargs:
         task, dsk2 = to_task_dask(kwargs)
         if dsk2:
-            dsk.update(dsk2)
+            dsk.update(ensure_dict(dsk2))
             kwargs2 = task
         else:
             kwargs2 = kwargs
@@ -418,6 +417,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         vals = [(func,) + vt for vt in valtups]
 
     dsk.update(dict(zip(keys, vals)))
+
     return dsk
 
 
@@ -867,7 +867,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
     else:
         from ..delayed import Delayed
         dsk.update({name: keys})
-        return Delayed(name, dict(dsk))
+        return Delayed(name, dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -2961,7 +2961,7 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    dsk.update(x.dask)
+    dsk = sharedict.merge((name, dsk), x.dask)
     if weights is not None:
         dsk.update(weights.dask)
 
@@ -3212,8 +3212,8 @@ def triu(m, k=0):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
-    dsk.update(m.dask)
-    return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(sharedict.merge((name, dsk), m.dask), name,
+                 shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def tril(m, k=0):
@@ -3262,7 +3262,7 @@ def tril(m, k=0):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
-    dsk.update(m.dask)
+    dsk = sharedict.merge(m.dask, (name, dsk))
     return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
