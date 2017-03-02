@@ -44,8 +44,6 @@ pip install git+https://github.com/dask/distributed --upgrade --no-deps
 
 if [[ $PYTHON == '2.7' ]]; then
     pip install backports.lzma mock
-    conda install -c conda-forge bloscpack
-    pip install git+https://github.com/Blosc/castra --upgrade --no-deps
 fi
 
 if [[ $PYTHON == '3.5' ]]; then

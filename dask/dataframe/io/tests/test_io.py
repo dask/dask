@@ -3,7 +3,6 @@ import pandas as pd
 import pandas.util.testing as tm
 
 import pytest
-from distutils.version import LooseVersion
 from threading import Lock
 
 import threading
@@ -461,100 +460,6 @@ def test_from_dask_array_unknown_chunks():
     dx = da.Array(dsk, 'x', ((np.nan, np.nan,), (np.nan,)), np.float64)
     with pytest.raises(ValueError):
         df = dd.from_dask_array(dx)
-
-
-def test_to_castra():
-    castra = pytest.importorskip('castra')
-    blosc = pytest.importorskip('blosc')
-    if (LooseVersion(blosc.__version__) == '1.3.0' or
-            LooseVersion(castra.__version__) < '0.1.8'):
-        pytest.skip()
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [2, 3, 4, 5]},
-                      index=pd.Index([1., 2., 3., 4.], name='ind'))
-    a = dd.from_pandas(df, 2)
-
-    c = a.to_castra()
-    b = c.to_dask()
-    try:
-        tm.assert_frame_equal(df, c[:])
-        tm.assert_frame_equal(b.compute(), df)
-    finally:
-        c.drop()
-
-    c = a.to_castra(categories=['x'])
-    try:
-        assert c[:].dtypes['x'] == 'category'
-    finally:
-        c.drop()
-
-    c = a.to_castra(sorted_index_column='y')
-    try:
-        tm.assert_frame_equal(c[:], df.set_index('y'))
-    finally:
-        c.drop()
-
-    delayed = a.to_castra(compute=False)
-    assert isinstance(delayed, Delayed)
-    c = delayed.compute()
-    try:
-        tm.assert_frame_equal(c[:], df)
-    finally:
-        c.drop()
-
-    # make sure compute=False preserves the same interface
-    c1 = a.to_castra(compute=True)
-    c2 = a.to_castra(compute=False).compute()
-    try:
-        tm.assert_frame_equal(c1[:], c2[:])
-    finally:
-        c1.drop()
-        c2.drop()
-
-
-def test_from_castra():
-    castra = pytest.importorskip('castra')
-    blosc = pytest.importorskip('blosc')
-    if (LooseVersion(blosc.__version__) == '1.3.0' or
-            LooseVersion(castra.__version__) < '0.1.8'):
-        pytest.skip()
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [2, 3, 4, 5]},
-                      index=pd.Index([1., 2., 3., 4.], name='ind'))
-    a = dd.from_pandas(df, 2)
-
-    c = a.to_castra()
-    with_castra = dd.from_castra(c)
-    with_fn = dd.from_castra(c.path)
-    with_columns = dd.from_castra(c, 'x')
-    try:
-        tm.assert_frame_equal(df, with_castra.compute())
-        tm.assert_frame_equal(df, with_fn.compute())
-        tm.assert_series_equal(df.x, with_columns.compute())
-    finally:
-        # Calling c.drop() is a race condition on drop from `with_fn.__del__`
-        # and c.drop. Manually `del`ing gets around this.
-        del with_fn, c
-
-
-def test_from_castra_with_selection():
-    """ Optimizations fuse getitems with load_partitions
-
-    We used to use getitem for both column access and selections
-    """
-    castra = pytest.importorskip('castra')
-    blosc = pytest.importorskip('blosc')
-    if (LooseVersion(blosc.__version__) == '1.3.0' or
-            LooseVersion(castra.__version__) < '0.1.8'):
-        pytest.skip()
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [2, 3, 4, 5]},
-                      index=pd.Index([1., 2., 3., 4.], name='ind'))
-    a = dd.from_pandas(df, 2)
-
-    b = dd.from_castra(a.to_castra())
-
-    assert_eq(b[b.y > 3].x, df[df.y > 3].x)
 
 
 def test_to_bag():
