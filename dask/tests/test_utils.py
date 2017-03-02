@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 
 from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
+from dask.sharedict import ShareDict
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
                         methodcaller, M, skip_doctest, SerializableLock,
-                        funcname, ndeepmap)
-
+                        funcname, ndeepmap, ensure_dict)
 from dask.utils_test import inc
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -324,3 +324,20 @@ def test_ndeepmap():
 
     L = [[[1, 2], [3, 4, 5]], [[6], []]]
     assert ndeepmap(3, inc, L) == [[[2, 3], [4, 5, 6]], [[7], []]]
+
+
+def test_ensure_dict():
+    d = {'x': 1}
+    assert ensure_dict(d) is d
+    sd = ShareDict()
+    sd.update(d)
+    assert type(ensure_dict(sd)) is dict
+    assert ensure_dict(sd) == d
+
+    class mydict(dict):
+        pass
+
+    md = mydict()
+    md['x'] = 1
+    assert type(ensure_dict(md)) is dict
+    assert ensure_dict(md) == d
