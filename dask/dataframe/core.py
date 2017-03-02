@@ -2219,7 +2219,7 @@ class DataFrame(_Frame):
         else:
             from .shuffle import set_index
             return set_index(self, other, drop=drop, npartitions=npartitions,
-                    **kwargs)
+                             **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index

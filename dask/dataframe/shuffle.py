@@ -20,7 +20,6 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
 
-
 def set_index(df, index, npartitions='auto', shuffle=None, compute=False,
               drop=True, upsample=1.0, divisions=None, **kwargs):
     """ See _Frame.set_index for docstring """
