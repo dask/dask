@@ -3891,3 +3891,63 @@ def test_retire_workers(c, s, a, b):
     while a.status != 'closed':
         yield gen.sleep(0.01)
         assert time() < start + 5
+
+
+class MyException(Exception):
+    pass
+
+
+@gen_cluster(client=True)
+def test_robust_unserializable(c, s, a, b):
+    class Foo(object):
+        def __getstate__(self):
+            raise MyException()
+
+    with pytest.raises(MyException):
+        future = c.submit(identity, Foo())
+
+    futures = c.map(inc, range(10))
+    results = yield c._gather(futures)
+
+    assert results == list(map(inc, range(10)))
+    assert a.data and b.data
+
+
+@gen_cluster(client=True)
+def test_robust_undeserializable(c, s, a, b):
+    class Foo(object):
+        def __getstate__(self):
+            return 1
+        def __setstate__(self, state):
+            raise MyException('hello')
+
+    future = c.submit(identity, Foo())
+    with pytest.raises(MyException):
+        yield future._result()
+
+    futures = c.map(inc, range(10))
+    results = yield c._gather(futures)
+
+    assert results == list(map(inc, range(10)))
+    assert a.data and b.data
+
+
+@gen_cluster(client=True)
+def test_robust_undeserializable_function(c, s, a, b):
+    class Foo(object):
+        def __getstate__(self):
+            return 1
+        def __setstate__(self, state):
+            raise MyException('hello')
+        def __call__(self, *args):
+            return 1
+
+    future = c.submit(Foo(), 1)
+    with pytest.raises(MyException) as e:
+        yield future._result()
+
+    futures = c.map(inc, range(10))
+    results = yield c._gather(futures)
+
+    assert results == list(map(inc, range(10)))
+    assert a.data and b.data
