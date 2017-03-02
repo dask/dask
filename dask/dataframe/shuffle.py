@@ -14,11 +14,11 @@ from .hashing import hash_pandas_object
 
 from .. import base
 from ..base import tokenize
-from ..delayed import delayed
 from ..context import _globals
+from ..delayed import delayed
+from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
-from distributed.sizeof import sizeof
 
 
 def set_index(df, index, npartitions='auto', shuffle=None, compute=False,
