@@ -5,10 +5,15 @@ import sys
 import pytest
 
 from dask.sizeof import sizeof, getsizeof
+from dask.utils import funcname
 
 
 def test_base():
     assert sizeof(1) == getsizeof(1)
+
+
+def test_name():
+    assert funcname(sizeof) == 'sizeof'
 
 
 def test_containers():

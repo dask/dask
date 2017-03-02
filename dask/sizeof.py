@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 
-from dask.utils import Dispatch
+from .utils import Dispatch
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
@@ -11,7 +11,7 @@ except (AttributeError, TypeError):  # Monkey patch
     getsizeof = lambda x: 100
 
 
-sizeof = Dispatch()
+sizeof = Dispatch(name='sizeof')
 
 
 @sizeof.register(object)
