@@ -6,11 +6,12 @@ from itertools import product
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
+from . import chunk, wrap
+from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
+from .. import sharedict
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
-from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from . import chunk, wrap
 
 
 def fractional_slice(task, axes):
@@ -125,8 +126,10 @@ def ghost_internal(x, axes):
                 mid.append(bd + axes.get(i, 0) * 2)
             chunks.append(left + mid + right)
 
-    return Array(merge(interior_slices, ghost_blocks, x.dask),
-                 name, chunks, dtype=x.dtype)
+    dsk = merge(interior_slices, ghost_blocks)
+    dsk = sharedict.merge(x.dask, (name, dsk))
+
+    return Array(dsk, name, chunks, dtype=x.dtype)
 
 
 def trim_internal(x, axes):

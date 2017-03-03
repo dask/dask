@@ -11,7 +11,7 @@ from toolz import unique, curry, first
 from . import base, threaded
 from .compatibility import apply
 from .core import quote
-from .utils import concrete, funcname, methodcaller
+from .utils import concrete, funcname, methodcaller, ensure_dict
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
@@ -69,7 +69,7 @@ def to_task_dask(expr):
     if isinstance(expr, base.Base):
         name = 'finalize-' + tokenize(expr, pure=True)
         keys = expr._keys()
-        dsk = expr._optimize(dict(expr.dask), keys)
+        dsk = expr._optimize(ensure_dict(expr.dask), keys)
         dsk[name] = (expr._finalize, (concrete, keys))
         return name, dsk
     if isinstance(expr, tuple) and type(expr) != tuple:

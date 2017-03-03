@@ -11,10 +11,11 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
+from . import sharedict
 from .compatibility import bind_method, unicode, PY3
 from .context import _globals
 from .core import flatten
-from .utils import Dispatch
+from .utils import Dispatch, ensure_dict
 from .sharedict import ShareDict
 
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
@@ -97,7 +98,7 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = cls._optimize(dict(dsk), keys, **kwargs)
+        dsk2 = cls._optimize(ensure_dict(dsk), keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -251,7 +252,7 @@ def visualize(*args, **kwargs):
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks.extend([arg._optimize(dict(arg.dask), arg._keys())
+        dsks.extend([arg._optimize(ensure_dict(arg.dask), arg._keys())
                      for arg in args])
     else:
         dsks.extend([arg.dask for arg in args])
@@ -408,12 +409,12 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:
-            groups = {k: [opt(dict(dsk), keys), keys]
+            groups = {k: [opt(ensure_dict(dsk), keys), keys]
                       for k, (dsk, keys) in groups.items()}
         dsk = merge([opt(dsk, keys, **kwargs)
                      for opt, (dsk, keys) in groups.items()])
     else:
-        dsk = merge(dict(c.dask) for c in collections)
+        dsk = ensure_dict(sharedict.merge(*[c.dask for c in collections]))
 
     return dsk
 

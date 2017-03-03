@@ -7,6 +7,7 @@ import numpy as np
 
 from .core import (normalize_chunks, Array, slices_from_chunks,
                    broadcast_shapes, broadcast_to)
+from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring, random_state_data
 
@@ -81,13 +82,14 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
+        dsks = []
         lookup = {}
         small_args = []
         for i, ar in enumerate(args):
             if isinstance(ar, (np.ndarray, Array)):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
-                    dsk.update(res.dask)
+                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
                     name = 'array-{}'.format(tokenize(res))
@@ -102,7 +104,7 @@ class RandomState(object):
             if isinstance(ar, (np.ndarray, Array)):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
-                    dsk.update(res.dask)
+                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
                     name = 'array-{}'.format(tokenize(res))
@@ -147,6 +149,7 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, func.__name__, state, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
+        dsk = sharedict.merge((name, dsk), *dsks)
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)

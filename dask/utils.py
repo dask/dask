@@ -1038,3 +1038,14 @@ def get_scheduler_lock(get=None, collection=None):
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
     return SerializableLock()
+
+
+def ensure_dict(d):
+    if type(d) is dict:
+        return d
+    elif hasattr(d, 'dicts'):
+        result = {}
+        for dd in d.dicts.values():
+            result.update(dd)
+        return result
+    return dict(d)

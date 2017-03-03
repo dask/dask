@@ -4,9 +4,8 @@ from operator import getitem
 
 import numpy as np
 
-from toolz.curried import merge
 from .core import Array, elemwise
-from .. import core
+from .. import core, sharedict
 from ..utils import skip_doctest
 
 
@@ -128,8 +127,8 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
+    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
+    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
@@ -151,8 +150,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks, dtype=rdt)
+    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
+    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
