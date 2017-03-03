@@ -351,10 +351,10 @@ def shuffle_group_get(g_head, i):
 
 def shuffle_group(df, col, stage, k, npartitions):
     if col == '_partitions':
-        ind = df[col].values % npartitions
+        ind = df[col]
     else:
-        ind = partitioning_index(df[col], npartitions)
-    c = ind // k ** stage % k
+        ind = hash_pandas_object(df, index=False)
+    c = ((ind % npartitions) // k ** stage % k).astype('category')
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
 
