@@ -8,7 +8,7 @@ import inspect
 from itertools import product
 from numbers import Number
 import operator
-from operator import add, getitem, mul, eq
+from operator import add, getitem, mul
 import os
 import sys
 import traceback
