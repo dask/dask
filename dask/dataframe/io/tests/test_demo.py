@@ -25,7 +25,13 @@ def test_make_timeseries():
                                 freq='2D', partition_freq='6M', seed=123)
     b = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
                                 freq='2D', partition_freq='6M', seed=123)
+    c = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
+                                freq='2D', partition_freq='6M', seed=456)
     tm.assert_frame_equal(a.head(), b.head())
+    with pytest.raises(Exception):
+        tm.assert_frame_equal(a.head(), c.head())
+    assert a._name == b._name
+    assert a._name != c._name
 
 
 def test_no_overlaps():
