@@ -135,7 +135,9 @@ class Nanny(Server):
             except CommClosedError:
                 pass
             except BaseException as e:
-                logger.exception(e)
+                if (not self.loop._closing and self.loop._running and not
+                        self.loop._stopped):
+                    logger.exception(e)
 
             allowed_errors = (gen.TimeoutError, CommClosedError, EnvironmentError, RPCClosed)
             try:
