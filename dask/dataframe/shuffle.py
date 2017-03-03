@@ -366,6 +366,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
     c = c.astype(np.min_scalar_type(k), copy=False)
+    c = pd.Categorical(c)
     g = df.groupby(c)
     return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
 
