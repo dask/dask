@@ -50,9 +50,11 @@ no_value = '--no-value-sentinel--'
 try:
     import psutil
     TOTAL_MEMORY = psutil.virtual_memory().total
+    proc = psutil.Process()
 except ImportError:
     logger.warn("Please install psutil to estimate worker memory use")
     TOTAL_MEMORY = 8e9
+    proc = None
 
 
 IN_PLAY = ('waiting', 'ready', 'executing', 'long-running')
@@ -156,12 +158,20 @@ class WorkerBase(Server):
             self.heartbeat_active = True
             logger.debug("Heartbeat: %s" % self.address)
             try:
-                yield self.scheduler.register(address=self.address, name=self.name,
-                                        ncores=self.ncores,
-                                        now=time(),
-                                        host_info=self.host_health(),
-                                        services=self.service_ports,
-                                        memory_limit=self.memory_limit)
+                yield self.scheduler.register(
+                        address=self.address,
+                        name=self.name,
+                        ncores=self.ncores,
+                        now=time(),
+                        host_info=self.host_health(),
+                        services=self.service_ports,
+                        memory_limit=self.memory_limit,
+                        memory=proc.memory_info().vms if proc else None,
+                        executing=len(self.executing),
+                        in_memory=len(self.data),
+                        ready=len(self.ready),
+                        in_flight=len(self.in_flight_tasks)
+                )
             finally:
                 self.heartbeat_active = False
         else:

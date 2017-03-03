@@ -11,9 +11,9 @@ import six
 
 from sortedcontainers import SortedSet
 try:
-    from cytoolz import frequencies
+    from cytoolz import frequencies, merge, pluck
 except ImportError:
-    from toolz import frequencies
+    from toolz import frequencies, merge, pluck
 from toolz import memoize, valmap, first, second, concat
 from tornado import gen
 from tornado.gen import Return
@@ -480,6 +480,7 @@ class Scheduler(Server):
         """
         logger.info("Closing worker %s", worker)
         with log_errors():
+            self.log_event(worker, {'action': 'close-worker'})
             nanny_addr = self.get_worker_service_addr(worker, 'nanny')
             address = nanny_addr or worker
 
@@ -545,6 +546,7 @@ class Scheduler(Server):
                 self.worker_info[address]['resources'] = resources
 
             if address in self.workers:
+                self.log_event(address, merge({'action': 'heartbeat'}, info))
                 return 'OK'
 
             name = name or address
@@ -603,6 +605,9 @@ class Scheduler(Server):
             if recommendations:
                 self.transitions(recommendations)
 
+            self.log_event(address, {'action': 'add-worker'})
+            self.log_event('all', {'action': 'add-worker',
+                                   'worker': address})
             logger.info("Register %s", str(address))
             return 'OK'
 
@@ -617,6 +622,9 @@ class Scheduler(Server):
         start = time()
         keys = set(keys)
         self.client_desires_keys(keys=keys, client=client)
+        if len(tasks) > 1:
+            self.log_event(['all', client], {'action': 'update_graph',
+                                             'count': len(tasks)})
 
         for k in list(tasks):
             if tasks[k] is k:
@@ -812,6 +820,8 @@ class Scheduler(Server):
             address = self.coerce_address(address)
             host = get_address_host(address)
 
+            self.log_event(['all', address], {'action': 'remove-worker',
+                                              'worker': address})
             logger.info("Remove worker %s", address)
             with ignoring(AttributeError, CommClosedError):
                 self.worker_comms[address].send({'op': 'close'})
@@ -880,6 +890,8 @@ class Scheduler(Server):
     def stimulus_cancel(self, comm, keys=None, client=None):
         """ Stop execution on a list of keys """
         logger.info("Client %s requests to cancel %d keys", client, len(keys))
+        if client:
+            self.log_event(client, {'action': 'cancel', 'count': len(keys)})
         for key in keys:
             self.cancel_key(key, client)
 
@@ -1087,6 +1099,8 @@ class Scheduler(Server):
         We listen to all future messages from this Comm.
         """
         logger.info("Receive client connection: %s", client)
+        self.log_event(['all', client], {'action': 'add-client',
+                                         'client': client})
         try:
             yield self.handle_client(comm, client=client)
         finally:
@@ -1099,6 +1113,8 @@ class Scheduler(Server):
     def remove_client(self, client=None):
         """ Remove client from network """
         logger.info("Remove client %s", client)
+        self.log_event(['all', client], {'action': 'remove-client',
+                                         'client': client})
         self.client_releases_keys(self.wants_what.get(client, ()), client)
         with ignoring(KeyError):
             del self.wants_what[client]
@@ -1366,6 +1382,9 @@ class Scheduler(Server):
                 n = broadcast
             yield self.replicate(keys=keys, workers=workers, n=n)
 
+        self.log_event([client, 'all'], {'action': 'scatter',
+                                         'client': client,
+                                         'count': len(data)})
         raise gen.Return(keys)
 
     @gen.coroutine
@@ -1397,6 +1416,8 @@ class Scheduler(Server):
                             self.worker_bytes[worker] -= self.nbytes.get(key, DEFAULT_DATA_SIZE)
                             self.transitions({key: 'released'})
 
+        self.log_event('all', {'action': 'gather',
+                               'count': len(keys)})
         raise gen.Return(result)
 
     @gen.coroutine
@@ -1431,6 +1452,8 @@ class Scheduler(Server):
 
             logger.debug("All workers reporting in")
 
+            self.log_event([client, 'all'], {'action': 'restart',
+                                             'client': client})
             self.report({'op': 'restart'})
             for plugin in self.plugins[:]:
                 try:
@@ -1532,6 +1555,15 @@ class Scheduler(Server):
 
             result = yield {r: self.rpc(addr=r).gather(who_has=v)
                             for r, v in to_recipients.items()}
+            for r, v in to_recipients.items():
+                self.log_event(r, {'action': 'rebalance',
+                                   'who_has': v})
+
+            self.log_event('all', {'action': 'rebalance',
+                                   'total-keys': len(keys),
+                                   'senders': valmap(len, to_senders),
+                                   'recipients': valmap(len, to_recipients),
+                                   'moved_keys': len(msgs)})
 
             if not all(r['status'] == 'OK' for r in result.values()):
                 raise Return({'status': 'missing-data',
@@ -1543,6 +1575,10 @@ class Scheduler(Server):
                 self.has_what[recipient].add(key)
                 self.worker_bytes[recipient] += self.nbytes.get(key,
                                                         DEFAULT_DATA_SIZE)
+                self.transition_log.append((key, 'memory', 'memory', {},
+                                            self._transition_counter, sender,
+                                            recipient))
+            self._transition_counter += 1
 
             result = yield {r: self.rpc(addr=r).delete_data(keys=v, report=False)
                             for r, v in to_senders.items()}
@@ -1606,6 +1642,8 @@ class Scheduler(Server):
                     self.who_has[key].remove(worker)
                     self.worker_bytes[worker] -= self.nbytes.get(key,
                                                             DEFAULT_DATA_SIZE)
+                self.log_event(worker, {'action': 'replicate-remove',
+                                        'keys': keys})
 
         keys = {k for k in keys if len(self.who_has[k] & workers) < n}
         # Copy not-yet-filled data
@@ -1627,6 +1665,17 @@ class Scheduler(Server):
             for w, v in results.items():
                 if v['status'] == 'OK':
                     self.add_keys(worker=w, keys=list(gathers[w]))
+                else:
+                    logger.warn("Communication failed during replication: %s",
+                                v)
+
+                self.log_event(w, {'action': 'replicate-add',
+                                   'keys': gathers[w]})
+
+        self.log_event('all', {'action': 'replicate',
+                               'workers': list(workers),
+                               'key-count': len(keys),
+                               'branching-factor': branching_factor})
 
     def workers_to_close(self, memory_ratio=2):
         """
@@ -1702,7 +1751,7 @@ class Scheduler(Server):
             if keys:
                 if other_workers:
                     yield self.replicate(keys=keys, workers=other_workers, n=1,
-                                        delete=False)
+                                         delete=False)
                 else:
                     raise gen.Return([])
 
@@ -1711,6 +1760,11 @@ class Scheduler(Server):
             if remove:
                 for w in workers:
                     self.remove_worker(address=w, safe=True)
+
+            self.log_event('all', {'action': 'retire-workers',
+                                   'workers': workers,
+                                   'moved-keys': len(keys)})
+            self.log_event(list(workers), {'action': 'retired'})
 
             raise gen.Return(list(workers))
 
@@ -1870,6 +1924,7 @@ class Scheduler(Server):
         Client.run_on_scheduler:
         """
         from .worker import run
+        self.log_event('all', {'action': 'run-function', 'function': function})
         return run(self, stream, function=function, args=args, kwargs=kwargs)
 
     #####################

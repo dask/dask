@@ -20,6 +20,7 @@ from .worker import SystemMonitor, format_time, counters_doc
 from .utils import transpose
 from ..metrics import time
 from ..utils import log_errors
+from ..diagnostics.progress_stream import color_of
 
 try:
     from cytoolz.curried import map, concat, groupby
@@ -228,6 +229,72 @@ class StealingEvents(DashboardComponent):
                 self.source.stream(new, 10000)
 
 
+class Events(DashboardComponent):
+    def __init__(self, scheduler, name, height=150, **kwargs):
+        self.scheduler = scheduler
+        self.action_ys = dict()
+        self.last = 0
+        self.name = name
+        self.source = ColumnDataSource({'time': [], 'action': [], 'hover': [],
+                                        'y': [], 'color': []})
+
+        x_range = DataRange1d(follow='end', follow_interval=200000)
+
+        fig = figure(title=name, x_axis_type='datetime',
+                     height=height, tools='', x_range=x_range, **kwargs)
+
+        fig.circle(source=self.source, x='time', y='y', color='color',
+                   size=50, alpha=0.5, legend='action')
+        fig.yaxis.axis_label = "Action"
+        fig.legend.location = 'top_left'
+
+        hover = HoverTool()
+        hover.tooltips = "@action<br>@hover"
+        hover.point_policy = 'follow_mouse'
+
+        fig.add_tools(
+            hover,
+            ResetTool(reset_size=False),
+            PanTool(dimensions="width"),
+            WheelZoomTool(dimensions="width")
+        )
+
+        self.root = fig
+
+    def update(self):
+        with log_errors():
+            log = self.scheduler.events[self.name]
+            n = self.scheduler.event_counts[self.name] - self.last
+            log = [log[-i] for i in range(1, n + 1)]
+            self.last = self.scheduler.event_counts[self.name]
+
+            if log:
+                actions = []
+                times = []
+                hovers = []
+                ys = []
+                colors = []
+                for msg in log:
+                    times.append(msg['time'] * 1000)
+                    action = msg['action']
+                    actions.append(action)
+                    try:
+                        ys.append(self.action_ys[action])
+                    except KeyError:
+                        self.action_ys[action] = len(self.action_ys)
+                        ys.append(self.action_ys[action])
+                    colors.append(color_of(action))
+                    hovers.append('TODO')
+
+                new = {'time': times,
+                       'action': actions,
+                       'hover': hovers,
+                       'y': ys,
+                       'color': colors}
+
+                self.source.stream(new, 10000)
+
+
 def systemmonitor_doc(scheduler, doc):
     with log_errors():
         table = StateTable(scheduler)
@@ -258,6 +325,15 @@ def workers_doc(scheduler, doc):
                             sizing_mode='scale_width'))
 
 
+def events_doc(scheduler, doc):
+    with log_errors():
+        events = Events(scheduler, 'all', height=250)
+        events.update()
+        doc.add_periodic_callback(events.update, 500)
+        doc.title = "Dask Scheduler Events"
+        doc.add_root(column(events.root, sizing_mode='scale_width'))
+
+
 class BokehScheduler(BokehServer):
     def __init__(self, scheduler, io_loop=None):
         self.scheduler = scheduler
@@ -265,9 +341,11 @@ class BokehScheduler(BokehServer):
                                                             scheduler)))
         workers = Application(FunctionHandler(partial(workers_doc, scheduler)))
         counters = Application(FunctionHandler(partial(counters_doc, scheduler)))
+        events = Application(FunctionHandler(partial(events_doc, scheduler)))
 
         self.apps = {'/system': systemmonitor,
                      '/workers': workers,
+                     '/events': events,
                      '/counters': counters}
 
         self.loop = io_loop or scheduler.loop

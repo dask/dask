@@ -15,7 +15,7 @@ from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc
 from distributed.bokeh.worker import Counters, BokehWorker
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
-        SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents)
+        SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents, Events)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -78,3 +78,18 @@ def test_stealing_events(c, s, a, b):
     se.update()
 
     assert len(first(se.source.data.values()))
+
+
+@gen_cluster(client=True)
+def test_events(c, s, a, b):
+    e = Events(s, 'all')
+
+    futures = c.map(slowinc, range(100), delay=0.1, workers=a.address,
+                    allow_other_workers=True)
+
+    while not b.task_state:
+        yield gen.sleep(0.01)
+
+    e.update()
+    d = dict(e.source.data)
+    assert sum(a == 'add-worker' for a in d['action']) == 2
