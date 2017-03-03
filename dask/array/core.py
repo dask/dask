@@ -8,7 +8,7 @@ import inspect
 from itertools import product
 from numbers import Number
 import operator
-from operator import add, getitem, mul
+from operator import add, getitem, mul, eq
 import os
 import sys
 import traceback
@@ -2208,6 +2208,9 @@ def stack(seq, axis=0):
         raise ValueError("Axis must not be greater than number of dimensions"
                          "\nData has %d dimensions, but got axis=%d" %
                          (ndim, axis))
+    if not all(x.shape == seq[0].shape for x in seq):
+        raise ValueError("Stacked arrays must have the same shape. Got %s",
+                         [x.shape for x in seq])
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
@@ -2273,6 +2276,9 @@ def concatenate(seq, axis=0):
         msg = ("Axis must be less than than number of dimensions"
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
+    if not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
+               for i in range(ndim)):
+        raise ValueError("Shapes do not align: %s", [x.shape for x in seq])
 
     inds = [list(range(ndim)) for i in range(n)]
     for i, ind in enumerate(inds):
