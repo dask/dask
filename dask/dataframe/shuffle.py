@@ -337,8 +337,16 @@ def set_partitions_pre(s, divisions):
 
 
 def shuffle_group_2(df, col):
-    g = df.groupby(col)
-    return {i: g.get_group(i) for i in g.groups}, df.head(0)
+    if not len(df):
+        return {}, df
+    ind = df[col]._values.astype(np.int64)
+    n = ind.max() + 1
+    indexer, locations = pd.algos.groupsort_indexer(ind.view(np.int64), n)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    result2 = dict(zip(range(n), parts))
+    return result2, df.iloc[:0]
 
 
 def shuffle_group_get(g_head, i):
