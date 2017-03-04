@@ -2733,3 +2733,24 @@ def test_random_from_array():
 
     y2 = da.from_array(x, chunks=x.shape[0] / 10, name=False)
     assert y.name != y2.name
+
+
+def test_concatenate_errs():
+    with pytest.raises(ValueError) as e:
+        da.concatenate([da.zeros((2, 1), chunks=(2, 1)),
+                        da.zeros((2, 3), chunks=(2, 3))])
+
+    assert 'shape' in str(e).lower()
+    assert '(2, 1)' in str(e)
+
+    with pytest.raises(ValueError):
+        da.concatenate([da.zeros((1, 2), chunks=(1, 2)),
+                        da.zeros((3, 2), chunks=(3, 2))], axis=1)
+
+
+def test_stack_errs():
+    with pytest.raises(ValueError) as e:
+        da.stack([da.zeros((2), chunks=(2)),
+                  da.zeros((3), chunks=(3))])
+    assert 'shape' in str(e).lower()
+    assert '(2,)' in str(e)
