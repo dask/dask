@@ -20,7 +20,7 @@ import six
 import socket
 
 import dask
-from dask.base import tokenize, normalize_token, Base
+from dask.base import tokenize, normalize_token, Base, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.compatibility import apply, unicode
 from dask.context import _globals
@@ -2379,24 +2379,7 @@ class Client(object):
 
     @staticmethod
     def collections_to_dsk(collections, optimize_graph=True, **kwargs):
-        """
-        Convert many collections into a single dask graph, after optimization
-        """
-        optimizations = _globals.get('optimizations', [])
-        if optimize_graph:
-            groups = groupby(lambda x: x._optimize, collections)
-            groups = {opt: [merge([v.dask for v in val]),
-                           [v._keys() for v in val]]
-                      for opt, val in groups.items()}
-            for opt in optimizations:
-                groups = {k: [opt(dsk, keys), keys]
-                          for k, (dsk, keys) in groups.items()}
-            dsk = merge([opt(dsk, keys, **kwargs)
-                         for opt, (dsk, keys) in groups.items()])
-        else:
-            dsk = merge(c.dask for c in collections)
-
-        return dsk
+        return collections_to_dsk(collections, optimize_graph=True, **kwargs)
 
 
 Executor = Client
