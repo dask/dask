@@ -353,7 +353,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == '_partitions':
         ind = df[col]
     else:
-        ind = hash_pandas_object(df, index=False)
+        ind = hash_pandas_object(df[col], index=False)
 
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
@@ -365,10 +365,13 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = np.mod(c, npartitions, out=c)
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
-    c = c.astype(np.min_scalar_type(k), copy=False)
-    c = pd.Categorical(c)
-    g = df.groupby(c)
-    return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
+
+    indexer, locations = pd.algos.groupsort_indexer(c.astype(np.int64), k)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+
+    return dict(zip(range(k), parts))
 
 
 def shuffle_group_3(df, col, npartitions, p):
