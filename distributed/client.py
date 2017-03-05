@@ -2378,8 +2378,8 @@ class Client(object):
         return restrictions, loose_restrictions
 
     @staticmethod
-    def collections_to_dsk(collections, optimize_graph=True, **kwargs):
-        return collections_to_dsk(collections, optimize_graph=True, **kwargs)
+    def collections_to_dsk(collections, *args, **kwargs):
+        return collections_to_dsk(collections, *args, **kwargs)
 
 
 Executor = Client
