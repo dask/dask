@@ -19,7 +19,7 @@ def test_local():
         data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                              'i64': np.arange(1000, dtype=np.int64),
                              'f': np.arange(1000, dtype=np.float64),
-                             'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
+                             'bhello': np.random.choice([u'hello', u'you', u'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
 
         df.to_parquet(tmp, write_index=False, object_encoding='utf8')
@@ -125,14 +125,14 @@ def test_roundtrip_from_pandas():
 
 def test_categorical():
     with tmpdir() as tmp:
-        df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100},
+        df = pd.DataFrame({'x': [u'a', u'b', u'c'] * 100},
                           dtype='category')
         ddf = dd.from_pandas(df, npartitions=3)
         to_parquet(tmp, ddf)
 
         ddf2 = read_parquet(tmp, categories=['x'])
 
-        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+        assert ddf2.compute().x.cat.categories.tolist() == [u'a', u'b', u'c']
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
@@ -144,7 +144,7 @@ def test_append():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice([u'hello', u'you', u'people'],
                                                       size=1000).astype("O")})
         df.index.name = 'index'
 
@@ -164,7 +164,7 @@ def test_append_wo_index():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice([u'hello', u'you', u'people'],
                                                       size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -190,7 +190,7 @@ def test_append_overlapping_divisions():
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
                            'bhello': np.random.choice(
-                               ['hello', 'you', 'people'],
+                               [u'hello', u'you', u'people'],
                                size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -262,10 +262,10 @@ def test_read_parquet_custom_columns():
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
     (pd.DataFrame({'x': [3, 2, 1]}), {}, {}),
-    (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),
-    (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {'object_encoding': 'utf8'}, {}),
+    (pd.DataFrame({'x': [u'c', u'a', u'b']}), {'object_encoding': 'utf8'}, {}),
+    (pd.DataFrame({'x': [u'cc', u'a', u'bbb']}), {'object_encoding': 'utf8'}, {}),
     (pd.DataFrame({'x': [b'a', b'b', b'c']}), {'object_encoding': 'bytes'}, {}),
-    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}), {'object_encoding': 'utf8'},
+    (pd.DataFrame({'x': pd.Categorical([u'a', u'b', u'a'])}), {'object_encoding': 'utf8'},
                                                            {'categories': ['x']}),
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
@@ -302,7 +302,7 @@ def test_roundtrip(df, write_kwargs, read_kwargs):
 
 def test_categories(fn):
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
-                       'y': list('caaab')})
+                       'y': list(u'caaab')})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf['y'] = ddf.y.astype('category')
     ddf.to_parquet(fn)

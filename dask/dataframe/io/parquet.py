@@ -251,10 +251,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
                              .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes.items()) != set(df.dtypes.items()):
+        elif set(pf.dtypes.items()) != set(df.dtypes.iteritems()):
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
-                                     set(df.dtypes.items())))
+                                     set(df.dtypes.iteritems())))
         # elif fmd.schema != pf.fmd.schema:
         #    raise ValueError('Appended schema differs.')
         else:
