@@ -50,7 +50,7 @@ def test_default_partitions():
     assert shuffle(d, d.b).npartitions == d.npartitions
 
 
-def test_shuffle_npatitions_task():
+def test_shuffle_npartitions_task():
     df = pd.DataFrame({'x': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle='tasks', npartitions=17, max_branch=4)

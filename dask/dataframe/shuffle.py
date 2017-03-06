@@ -337,8 +337,16 @@ def set_partitions_pre(s, divisions):
 
 
 def shuffle_group_2(df, col):
-    g = df.groupby(col)
-    return {i: g.get_group(i) for i in g.groups}, df.head(0)
+    if not len(df):
+        return {}, df
+    ind = df[col]._values.astype(np.int64)
+    n = ind.max() + 1
+    indexer, locations = pd.algos.groupsort_indexer(ind.view(np.int64), n)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    result2 = dict(zip(range(n), parts))
+    return result2, df.iloc[:0]
 
 
 def shuffle_group_get(g_head, i):
@@ -351,12 +359,27 @@ def shuffle_group_get(g_head, i):
 
 def shuffle_group(df, col, stage, k, npartitions):
     if col == '_partitions':
-        ind = df[col].values % npartitions
+        ind = df[col]
     else:
-        ind = partitioning_index(df[col], npartitions)
-    c = ind // k ** stage % k
-    g = df.groupby(c)
-    return {i: g.get_group(i) if i in g.groups else df.head(0) for i in range(k)}
+        ind = hash_pandas_object(df[col], index=False)
+
+    c = ind._values
+    typ = np.min_scalar_type(npartitions * 2)
+    c = c.astype(typ)
+
+    npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
+                             for x in [npartitions, k, stage]]
+
+    c = np.mod(c, npartitions, out=c)
+    c = np.floor_divide(c, k ** stage, out=c)
+    c = np.mod(c, k, out=c)
+
+    indexer, locations = pd.algos.groupsort_indexer(c.astype(np.int64), k)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+
+    return dict(zip(range(k), parts))
 
 
 def shuffle_group_3(df, col, npartitions, p):
