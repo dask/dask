@@ -46,10 +46,8 @@ if [[ $PYTHON == '2.7' ]]; then
     pip install backports.lzma mock
 fi
 
-if [[ $PYTHON == '3.5' ]]; then
-    conda install -c conda-forge numba cython
-    pip install git+https://github.com/dask/fastparquet
-fi
+conda install -c conda-forge numba cython
+pip install git+https://github.com/dask/fastparquet
 
 pip install \
     cachey \
