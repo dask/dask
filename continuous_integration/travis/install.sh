@@ -41,13 +41,12 @@ conda install -c conda-forge \
 
 pip install git+https://github.com/dask/zict --upgrade --no-deps
 pip install git+https://github.com/dask/distributed --upgrade --no-deps
+conda install -c conda-forge numba cython
+pip install git+https://github.com/dask/fastparquet
 
 if [[ $PYTHON == '2.7' ]]; then
     pip install backports.lzma mock
 fi
-
-conda install -c conda-forge numba cython
-pip install git+https://github.com/dask/fastparquet
 
 pip install \
     cachey \
