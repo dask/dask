@@ -85,7 +85,8 @@ def make_timeseries(start, end, dtypes, freq, partition_freq, seed=None):
     divisions = list(pd.DatetimeIndex(start=start, end=end,
                                       freq=partition_freq))
     state_data = random_state_data(len(divisions) - 1, seed)
-    name = 'make-timeseries-' + tokenize(start, end, dtypes, freq, partition_freq)
+    name = 'make-timeseries-' + tokenize(start, end, dtypes, freq,
+                                         partition_freq, state_data)
     dsk = {(name, i): (make_timeseries_part, divisions[i], divisions[i + 1],
                        dtypes, freq, state_data[i])
            for i in range(len(divisions) - 1)}
