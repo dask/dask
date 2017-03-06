@@ -14,6 +14,8 @@ properly.
     then please consider submitting a report to their issue trackers instead.
     A full list of repositories can be found here:
     [https://github.com/dask](https://github.com/dask)
+5.  Please include the versions of Python, dask, and other relevant libraries
+    if they are applicable, (pandas, dask.distributed, etc..)
 
 Thank you again for your efforts.
 
