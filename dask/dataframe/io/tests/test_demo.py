@@ -10,8 +10,8 @@ def test_make_timeseries():
     df = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
                                  freq='2D', partition_freq='6M')
 
-    assert df.divisions[0] == pd.Timestamp('2000-01-31', offset='6M')
-    assert df.divisions[-1] == pd.Timestamp('2014-07-31', offset='6M')
+    assert df.divisions[0] == pd.Timestamp('2000-01-31', freq='6M')
+    assert df.divisions[-1] == pd.Timestamp('2014-07-31', freq='6M')
     tm.assert_index_equal(df.columns, pd.Index(['A', 'B', 'C']))
     assert df['A'].head().dtype == float
     assert df['B'].head().dtype == int
@@ -32,8 +32,7 @@ def test_make_timeseries():
     e = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
                                 freq='1D', partition_freq='6M', seed=123)
     tm.assert_frame_equal(a.head(), b.head())
-    with pytest.raises(Exception):
-        tm.assert_frame_equal(a.head(100), c.head(100))
+    assert not (a.head(10) == c.head(10)).all().all()
     assert a._name == b._name
     assert a._name != c._name
     assert a._name != d._name
