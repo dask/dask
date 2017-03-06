@@ -295,7 +295,7 @@ def test_set_index_reduces_partitions_small(shuffle):
     df = pd.DataFrame({'x': range(100)})
     ddf = dd.from_pandas(df, npartitions=50)
 
-    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
     assert ddf2.npartitions < 10
 
 
@@ -305,7 +305,7 @@ def test_set_index_reduces_partitions_large(shuffle):
     df = pd.DataFrame({'x': np.arange(n), 'y': np.arange(n), 'z': np.arange(n)})
     ddf = dd.from_pandas(df, npartitions=50, name='x', sort=False)
 
-    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
     assert 1 < ddf2.npartitions < 20
 
 
@@ -315,5 +315,5 @@ def test_set_index_doesnt_increase_partitions(shuffle):
     df = pd.DataFrame({'x': np.arange(n), 'y': np.arange(n), 'z': np.arange(n)})
     ddf = dd.from_pandas(df, npartitions=2, name='x', sort=False)
 
-    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
     assert ddf2.npartitions <= ddf.npartitions

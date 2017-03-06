@@ -20,7 +20,7 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
 
-def set_index(df, index, npartitions='auto', shuffle=None, compute=False,
+def set_index(df, index, npartitions=None, shuffle=None, compute=False,
               drop=True, upsample=1.0, divisions=None, **kwargs):
     """ See _Frame.set_index for docstring """
     if (isinstance(index, Series) and index._name == df.index._name):
@@ -33,7 +33,7 @@ def set_index(df, index, npartitions='auto', shuffle=None, compute=False,
 
     if npartitions == 'auto':
         repartition = True
-        npartitions = min(100, df.npartitions)
+        npartitions = max(100, df.npartitions)
     else:
         if npartitions is None:
             npartitions = df.npartitions

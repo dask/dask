@@ -2185,7 +2185,7 @@ class DataFrame(_Frame):
         index: string or Dask Series
         npartitions: int, None, or 'auto'
             The ideal number of output partitions.   If None use the same as
-            the input.  If 'auto' then decide by size.
+            the input.  If 'auto' then decide by memory use.
         shuffle: string, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
