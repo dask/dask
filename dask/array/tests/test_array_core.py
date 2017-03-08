@@ -2754,3 +2754,11 @@ def test_stack_errs():
                   da.zeros((3), chunks=(3))])
     assert 'shape' in str(e).lower()
     assert '(2,)' in str(e)
+
+
+def test_transpose_negative_axes():
+    x = np.ones((2, 3, 4, 5))
+    y = da.ones((2, 3, 4, 5), chunks=3)
+
+    assert_eq(x.transpose([-1, -2, 0, 1]),
+              y.transpose([-1, -2, 0, 1]))
