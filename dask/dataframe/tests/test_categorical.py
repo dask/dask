@@ -199,17 +199,18 @@ def test_categorical_set_index(shuffle):
     a = dd.from_pandas(df, npartitions=2)
 
     with dask.set_options(get=get_sync, shuffle=shuffle):
-        b = a.set_index('y')
+        b = a.set_index('y', npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
-        b = a.set_index(a.y)
+        b = a.set_index(a.y, npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
-        b = a.set_index('y', divisions=['a', 'b', 'c'])
+        b = a.set_index('y', divisions=['a', 'b', 'c'],
+                        npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']

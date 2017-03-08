@@ -542,9 +542,11 @@ def takes_multiple_arguments(func):
 
 class Dispatch(object):
     """Simple single dispatch."""
-    def __init__(self):
+    def __init__(self, name=None):
         self._lookup = {}
         self._lazy = {}
+        if name:
+            self.__name__ = name
 
     def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""

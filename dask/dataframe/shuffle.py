@@ -12,8 +12,11 @@ from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat
 from .hashing import hash_pandas_object
 
+from .. import base
 from ..base import tokenize
 from ..context import _globals
+from ..delayed import delayed
+from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
 
@@ -28,16 +31,41 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             "You tried to index with this index: %s\n"
             "Indexes must be single columns only." % str(index))
 
-    npartitions = npartitions or df.npartitions
+    if npartitions == 'auto':
+        repartition = True
+        npartitions = max(100, df.npartitions)
+    else:
+        if npartitions is None:
+            npartitions = df.npartitions
+        repartition = False
+
     if not isinstance(index, Series):
         index2 = df[index]
     else:
         index2 = index
 
     if divisions is None:
-        divisions = (index2
-                     ._repartition_quantiles(npartitions, upsample=upsample)
-                     .compute()).tolist()
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        if repartition:
+            parts = df.to_delayed()
+            sizes = [delayed(sizeof)(part) for part in parts]
+        else:
+            sizes = []
+        divisions, sizes = base.compute(divisions, sizes)
+        divisions = divisions.tolist()
+
+        if repartition:
+            total = sum(sizes)
+            npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = min(npartitions, df.npartitions)
+            n = len(divisions)
+            try:
+                divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
+                                      xp=np.arange(0, len(divisions)),
+                                      fp=divisions).tolist()
+            except (TypeError, ValueError):  # str type
+                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+                divisions = [divisions[i] for i in indexes]
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
@@ -154,8 +182,6 @@ def rearrange_by_column(df, col, npartitions=None, max_branch=None,
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
-        if npartitions is not None and npartitions < df.npartitions:
-            raise ValueError("Must create as many or more partitions in shuffle")
         return rearrange_by_column_tasks(df, col, max_branch, npartitions)
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
