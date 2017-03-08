@@ -182,9 +182,13 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta({'A': object, 'B': float, 'C': 'category'})
-    msg = "'columns' must have known categories"
-    with pytest.raises(ValueError) as err:
+    df = pd.DataFrame({'A': np.random.choice(list('abc'), size=10),
+                       'B': np.random.randn(10),
+                       'C': np.random.choice(list('abc'), size=10)})
+    ddf = dd.from_pandas(df, 2)
+    ddf['C'] = ddf.C.astype('category')
+    msg = "C must have known categories"
+    with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values=['B'])
     assert msg in str(err.value)
 
@@ -192,7 +196,22 @@ def test_pivot_table_errors():
                        'B': np.random.randn(10),
                        'C': np.random.choice(list('abc'), size=10)})
     ddf = dd.from_pandas(df, 2)
-    msg = "'columns' must be category dtype"
-    with pytest.raises(ValueError) as err:
+    msg = "C must be category dtype"
+    with tm.assertRaisesRegexp(ValueError, msg):
         dd.pivot_table(ddf, index='A', columns='C', values='B')
-    assert msg in str(err.value)
+
+
+@pytest.mark.parametrize('aggfunc', ['mean', 'sum', 'count'])
+def test_index_columns_types(aggfunc):
+    df=pd.DataFrame({'index': [1, 2, 3, 1, 2, 3],
+                     'field': ["A", "A", "A", "B", "B", "B"],
+                     'value': [10, 20, 30, 100, 120, 130]})
+    ddf = dd.from_pandas(df, 2)
+    ddf = ddf.categorize('field')
+
+    dpt = ddf.pivot_table(values="value", index="index", columns="field",
+            aggfunc=aggfunc)
+    pt = df.pivot_table(values="value", index="index", columns="field",
+            aggfunc=aggfunc)
+
+    assert_eq(pt, dpt)

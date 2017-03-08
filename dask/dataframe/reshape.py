@@ -118,11 +118,14 @@ def pivot_table(df, index=None, columns=None,
     if not is_scalar(columns) or columns is None:
         raise ValueError("'columns' must be the name of an existing column")
     if not is_categorical_dtype(df[columns]):
-        raise ValueError("'columns' must be category dtype")
+        raise ValueError("Columns %s must be category dtype with known "
+                         "categories.  Please consider the categorize() method"
+                         % columns)
     if not has_known_categories(df[columns]):
-        raise ValueError("'columns' must have known categories. Please use "
+        raise ValueError("Columns %s must have known categories. Please use "
                          "`df[columns].cat.as_known()` beforehand to ensure "
-                         "known categories")
+                         "known categories.  Also consider the categorize "
+                         "method" % columns)
     if not is_scalar(values) or values is None:
         raise ValueError("'values' must be the name of an existing column")
     if not is_scalar(aggfunc) or aggfunc not in ('mean', 'sum', 'count'):
@@ -131,6 +134,7 @@ def pivot_table(df, index=None, columns=None,
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
     new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+    new_columns.categories.name = columns
     meta = pd.DataFrame(columns=new_columns, dtype=np.float64)
 
     kwargs = {'index': index, 'columns': columns, 'values': values}
