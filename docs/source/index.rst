@@ -231,6 +231,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 
 **Help & reference**
 
+* :doc:`debugging`
 * :doc:`support`
 * :doc:`changelog`
 * :doc:`presentations`
@@ -247,6 +248,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    :hidden:
    :caption: Help & reference
 
+   debugging.rst
    support.rst
    changelog.rst
    presentations.rst
