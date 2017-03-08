@@ -16,10 +16,14 @@ from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from toolz import valmap
 
+from distributed.config import config
 from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
 from distributed.utils import log_errors
 
-# from .export_tool import ExportTool
+if config.get('bokeh-export-tool', False):
+    from .export_tool import ExportTool
+else:
+    ExportTool = None
 
 
 class DashboardComponent(object):
@@ -94,17 +98,17 @@ class TaskStream(DashboardComponent):
                 """
         )
 
-        # export = ExportTool()
-        # export.register_plot(self.root)
-
         self.root.add_tools(
             hover,
-            # export,
             BoxZoomTool(),
             ResetTool(reset_size=False),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
+        if ExportTool:
+            export = ExportTool()
+            export.register_plot(self.root)
+            self.root.add_tools(export)
 
         # Required for update callback
         self.task_stream_index = [0]

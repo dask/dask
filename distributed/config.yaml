@@ -15,5 +15,8 @@ transition-log-length: 100000
 multiprocessing-method: forkserver
 
 # Communication options
-tcp-timeout: 30         # delay (in s.) before considering an unresponsive connection dead
+tcp-timeout: 30         # seconds delay before calling an unresponsive connection dead
 default-scheme: tcp
+
+# Bokeh web dashboard
+bokeh-export-tool: False
