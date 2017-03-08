@@ -2153,7 +2153,7 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def set_index(self, other, drop=True, sorted=False, npartitions='auto', **kwargs):
+    def set_index(self, other, drop=True, sorted=False, npartitions=None, **kwargs):
         """
         Set the DataFrame index (row labels) using an existing column
 
