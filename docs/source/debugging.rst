@@ -58,7 +58,10 @@ This only works for single-machine schedulers.  It does not work with
 dask.distributed unless you use comfortable using the Tornado API (want to look
 at the `testing infrastructure
 <http://distributed.readthedocs.io/en/latest/develop.html#writing-tests>`_
-docs, which accomplish this).
+docs, which accomplish this).  Also, because this operates on a single machine
+it assumes that your computation can run on a single machine without exceeding
+RAM limits.  It may be wise to use this approach on smaller versions of your
+problem if possible.
 
 
 Rerun Failed Task Locally
@@ -84,7 +87,44 @@ anything that contains ``Futures`` :
    ZeroDivisionError(...)
 
    >>> %pdb
-   >>> client.recreate_error_locally(x)
+   >>> future = client.compute(x)
+   >>> client.recreate_error_locally(future)
+
+
+Remove Failed Futures Manually
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Sometimes only parts of your computations fail, for example if some rows of a
+CSV dataset are faulty in some way.  When running with the distributed
+scheduler you can remove chunks of your data that have produced bad results if
+you switch to dealing with Futures.
+
+.. code-block:: python
+
+   >>> import dask.dataframe as dd
+   >>> df = ...           # create dataframe
+   >>> df = df.persist()  # start computing on the cluster
+
+   >>> from distributed.client import futures_of
+   >>> futures = futures_of(df)  # get futures behind dataframe
+   >>> futures
+   [<Future: status: finished, type: pd.DataFrame, key: load-1>
+    <Future: status: finished, type: pd.DataFrame, key: load-2>
+    <Future: status: error, key: load-3>
+    <Future: status: pending, key: load-4>
+    <Future: status: error, key: load-5>]
+
+   >>> # wait until computation is done
+   >>> while any(f.status == 'pending' for f in futures):
+   ...     sleep(0.1)
+
+   >>> # pick out only the successful futures and reconstruct the dataframe
+   >>> good_futures = [f for f in futures if f.status == 'finished']
+   >>> df = dd.from_delayed(good_futures, meta=df._meta)
+
+This is a bit of a hack, but often practical when first exploring messy data.
+If you are using the concurrent.futures API (map, submit, gather) then this
+approach is more natural.
 
 
 Inspect Scheduling State
@@ -104,11 +144,12 @@ these issues arise more commonly.
 Web Diagnostics
 ~~~~~~~~~~~~~~~
 
-First, the distributed scheduler has a number of diagnostic web pages showing
-dozens of recorded metrics like CPU, memory, network, and disk use, a history
-of previous tasks, allocation of tasks to workers, worker memory pressure, work
-stealing, open file handle limits, etc..  *Many* problems can be correctly
-diagnosed by inspecting these pages.  By default these are available at
+First, the distributed scheduler has a number of `diagnostic web pages
+<http://distributed.readthedocs.io/en/latest/web.html>`_ showing dozens of
+recorded metrics like CPU, memory, network, and disk use, a history of previous
+tasks, allocation of tasks to workers, worker memory pressure, work stealing,
+open file handle limits, etc..  *Many* problems can be correctly diagnosed by
+inspecting these pages.  By default these are available at
 ``http://scheduler:8787/`` ``http://scheduler:8788`` and ``http://worker:8789``
 where ``scheduler`` and ``worker`` should be replaced by the addresses of the
 scheduler and each of the workers.
