@@ -27,7 +27,7 @@ from .batched import BatchedSend
 from .comm import get_address_host
 from .config import config
 from .compatibility import reload, unicode, invalidate_caches, cache_from_source
-from .core import (connect, send_recv, error_message, CommClosedError,
+from .core import (error_message, CommClosedError,
                    rpc, Server, pingpong, coerce_to_address)
 from .metrics import time
 from .protocol.pickle import dumps, loads
@@ -1539,25 +1539,17 @@ class Worker(WorkerBase):
     def gather_dep(self, worker, dep, deps, total_nbytes, cause=None):
         if self.status != 'running':
             return
-        comm = None
         with log_errors():
             response = {}
             try:
                 if self.validate:
                     self.validate_state()
 
-                start = time()
-                comm = yield connect(worker, timeout=3)
-                stop = time()
-                if self.digests is not None:
-                    self.digests['gather-connect-duration'].add(stop - start)
-
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
-
                 start = time()
-                response = yield send_recv(comm, op='get_data', keys=list(deps),
-                                           close=True, who=self.address)
+                response = yield self.rpc(worker).get_data(keys=list(deps),
+                                                           who=self.address)
                 stop = time()
 
                 if cause:
@@ -1596,8 +1588,6 @@ class Worker(WorkerBase):
                     import pdb; pdb.set_trace()
                 raise
             finally:
-                if comm:
-                    yield comm.close()
                 self.comm_nbytes -= total_nbytes
 
                 for d in self.in_flight_workers.pop(worker):
