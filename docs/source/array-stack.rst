@@ -17,7 +17,7 @@ as we go.
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
+   >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
    ...          for i in range(3)]  # A small stack of dask arrays
 
    >>> x = da.stack(data, axis=0)
@@ -43,7 +43,7 @@ existing dimension
    >>> import dask.array as da
    >>> import numpy as np
 
-   >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
+   >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
    ...          for i in range(3)]  # small stack of dask arrays
 
    >>> x = da.concatenate(data, axis=0)
