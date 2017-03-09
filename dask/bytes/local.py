@@ -41,7 +41,10 @@ class LocalFileSystem(core.FileSystem):
         """Make any intermediate directories to make path writable"""
         if path.startswith('file://'):
             path = path[len('file://'):]
-        return os.makedirs(path, exist_ok=True)
+        try:
+            os.makedirs(path)
+        except OSError:
+            assert os.path.isdir(path)
 
     def open(self, path, mode='rb', **kwargs):
         """Make a file-like object

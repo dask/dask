@@ -1,3 +1,6 @@
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
+
 import os
 import numpy as np
 import pandas as pd
@@ -19,7 +22,7 @@ def test_local():
         data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                              'i64': np.arange(1000, dtype=np.int64),
                              'f': np.arange(1000, dtype=np.float64),
-                             'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
+                             'bhello': np.random.choice(['hello', 'yo', 'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
 
         df.to_parquet(tmp, write_index=False, object_encoding='utf8')
@@ -144,7 +147,7 @@ def test_append():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice(['hello', 'yo', 'people'],
                                                       size=1000).astype("O")})
         df.index.name = 'index'
 
@@ -164,7 +167,7 @@ def test_append_wo_index():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice(['hello', 'yo', 'people'],
                                                       size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -190,7 +193,7 @@ def test_append_overlapping_divisions():
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
                            'bhello': np.random.choice(
-                               ['hello', 'you', 'people'],
+                               ['hello', 'yo', 'people'],
                                size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -265,8 +268,8 @@ def test_read_parquet_custom_columns():
     (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),
     (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {'object_encoding': 'utf8'}, {}),
     (pd.DataFrame({'x': [b'a', b'b', b'c']}), {'object_encoding': 'bytes'}, {}),
-    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}), {'object_encoding': 'utf8'},
-                                                           {'categories': ['x']}),
+    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}),
+     {'object_encoding': 'utf8'}, {'categories': ['x']}),
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
