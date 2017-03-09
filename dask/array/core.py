@@ -1990,6 +1990,9 @@ def unify_chunks(*args, **kwargs):
     """
     warn = kwargs.get('warn', True)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
+    arrays, inds = zip(*arginds)
+    if all(ind == inds[0] for ind in inds) and all(a.chunks == arrays[0].chunks for a in arrays):
+        return dict(zip(inds[0], arrays[0].chunks)), arrays
 
     nameinds = [(a.name, i) for a, i in arginds]
     blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
