@@ -48,3 +48,33 @@ def test_sparse_matrix():
     assert sizeof(sp.tocsr()) >= 260
     assert sizeof(sp.todok()) >= 260
     assert sizeof(sp.tolil()) >= 324
+
+
+def test_serires_object_dtype():
+    pd = pytest.importorskip('pandas')
+    s = pd.Series(['a'] * 1000)
+    assert sizeof('a') * 1000 < sizeof(s) < 2 * sizeof('a') * 1000
+
+    s = pd.Series(['a' * 1000] * 1000)
+    assert sizeof(s) > 1000000
+
+
+def test_dataframe_object_dtype():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': ['a'] * 1000})
+    assert sizeof('a') * 1000 < sizeof(df) < 2 * sizeof('a') * 1000
+
+    s = pd.Series(['a' * 1000] * 1000)
+    assert sizeof(s) > 1000000
+
+
+def test_empty():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a'*100, 'b'*100, 'c'*100]},
+                      index=[10, 20, 30])
+    empty = df.head(0)
+
+    assert sizeof(empty) > 0
+    assert sizeof(empty.x) > 0
+    assert sizeof(empty.y) > 0
+    assert sizeof(empty.index) > 0
