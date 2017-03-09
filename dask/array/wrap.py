@@ -4,6 +4,7 @@ from functools import partial
 from itertools import product
 
 import numpy as np
+
 try:
     from cytoolz import curry
 except ImportError:

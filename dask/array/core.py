@@ -18,9 +18,16 @@ import uuid
 import warnings
 
 import toolz
-from toolz.curried import (pipe, partition, concat, pluck, join, first, map,
-                           groupby, valmap, accumulate, reduce,
-                           interleave, sliding_window, assoc)
+try:
+    from cytoolz.curried import (partition, concat, pluck, join, first,
+                                 groupby, valmap, accumulate, interleave,
+                                 sliding_window, assoc)
+
+except ImportError:
+    from toolz.curried import (partition, concat, pluck, join, first,
+                               groupby, valmap, accumulate,
+                               interleave, sliding_window, assoc)
+from toolz import pipe, map, reduce
 import numpy as np
 
 from . import chunk
