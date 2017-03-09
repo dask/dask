@@ -824,7 +824,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     # NOTE: `iloc` is not implemented because of performance concerns.
     # see https://github.com/dask/dask/pull/507
 
-    def repartition(self, divisions=None, npartitions=None, force=False):
+    def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
         """ Repartition dataframe along new divisions
 
         Parameters
@@ -835,6 +835,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         npartitions : int, optional
             Number of partitions of output, must be less than npartitions of
             input. Only used if divisions isn't specified.
+        freq : str, pd.Timedelta
+            A period on which to partition timeseries data like ``'7D'`` or
+            ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
@@ -844,6 +847,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         --------
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
+        >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
         if npartitions is not None and divisions is not None:
             warnings.warn("When providing both npartitions and divisions to "
@@ -855,6 +859,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             return repartition_npartitions(self, npartitions)
         elif divisions is not None:
             return repartition(self, divisions, force=force)
+        elif freq is not None:
+            return repartition_freq(self, freq=freq)
         else:
             raise ValueError(
                 "Provide either divisions= or npartitions= to repartition")
@@ -3370,7 +3376,6 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Parameters
     ----------
-
     a : tuple
         old divisions
     b : tuple, list
@@ -3386,10 +3391,8 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
 
-
     Examples
     --------
-
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
@@ -3514,6 +3517,22 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             d[(out2, j - 1)] = (pd.concat, tmp)
         j += 1
     return d
+
+
+def repartition_freq(df, freq=None):
+    """ Repartition a timeseries dataframe by a new frequency """
+    freq = pd.Timedelta(freq)
+    if not isinstance(df.divisions[0], pd.Timestamp):
+        raise TypeError("Can only repartition on frequency for timeseries")
+    divisions = pd.DatetimeIndex(start=df.divisions[0],
+                                 end=df.divisions[-1],
+                                 freq=freq).tolist()
+    if divisions[-1] != df.divisions[-1]:
+        divisions.append(df.divisions[-1])
+    if divisions[0] != df.divisions[0]:
+        divisions = [df.divisions[0]] + divisions
+
+    return df.repartition(divisions=divisions)
 
 
 def repartition_npartitions(df, npartitions):
