@@ -3303,7 +3303,7 @@ def chunks_from_arrays(arrays):
             return (1,)
 
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
+        result.append(tuple([shape(deepfirst(a))[dim] for a in arrays]))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
