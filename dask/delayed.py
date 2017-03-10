@@ -6,7 +6,10 @@ import operator
 import uuid
 import warnings
 
-from toolz import unique, curry, first
+try:
+    from cytoolz import unique, curry, first
+except ImportError:
+    from toolz import unique, curry, first
 
 from . import base, threaded
 from .compatibility import apply

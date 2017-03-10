@@ -4,7 +4,11 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-from toolz import curry
+
+try:
+    from cytoolz import curry
+except ImportError:
+    from toolz import curry
 
 from ..base import tokenize
 from .core import Array, normalize_chunks
