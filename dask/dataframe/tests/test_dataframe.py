@@ -1275,6 +1275,32 @@ def test_repartition_npartitions():
             a.repartition(npartitions=5)
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize('npartitions', [1, 20, 243])
+@pytest.mark.parametrize('freq', ['1D', '7D', '28h'])
+@pytest.mark.parametrize('end', ['2000-04-15', '2000-04-15 12:37:01'])
+@pytest.mark.parametrize('start', ['2000-01-01', '2000-01-01 12:30:00'])
+def test_repartition_freq(npartitions, freq, start, end):
+    start = pd.Timestamp(start)
+    end = pd.Timestamp(end)
+    ind = pd.DatetimeIndex(start=start, end=end, freq='60s')
+    df = pd.DataFrame({'x': np.arange(len(ind))}, index=ind)
+    ddf = dd.from_pandas(df, npartitions=npartitions, name='x')
+
+    ddf2 = ddf.repartition(freq=freq)
+    assert_eq(ddf2, df)
+
+
+def test_repartition_freq_errors():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(TypeError) as info:
+        ddf.repartition(freq='1s')
+
+    assert 'only' in str(info.value)
+    assert 'timeseries' in str(info.value)
+
+
 def test_embarrassingly_parallel_operations():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
