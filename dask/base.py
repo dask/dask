@@ -269,6 +269,9 @@ def normalize_function(func):
         return function_cache[func]
     except KeyError:
         result = _normalize_function(func)
+        if len(function_cache) > 10000:  # clear half of cache if full
+            for k in list(function_cache)[::2]:
+                del function_cache[k]
         function_cache[func] = result
         return result
     except TypeError:  # not hashable
