@@ -23,10 +23,11 @@ Garreth,6,20
 
 df = pd.read_csv(io.StringIO(data), index_col='number')
 
+
 @pytest.yield_fixture
 def db():
     with tmpfile() as f:
-        uri = 'sqlite:///%s' % tmpfile
+        uri = 'sqlite:///%s' % f
         df.to_sql('test', uri, index=True, if_exists='replace')
         yield uri
 

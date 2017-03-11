@@ -38,7 +38,7 @@ def read_sql_table(table, uri, partitions, index_col, limits=None, columns=None,
     if isinstance(partitions, int):
         if limits is None:
             maxi, mini = pd.read_sql('select max({col}), min({col}) from {table}'.format(
-                    col=index_col, table=table), uri).iloc[0]
+                col=index_col, table=table), uri).iloc[0]
             partitions = np.arange(mini, maxi, (maxi - mini) / partitions).tolist() + [maxi + 1]
         else:
             mini, maxi = limits
