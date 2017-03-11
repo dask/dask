@@ -2,9 +2,11 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+
+import dask.array as da
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
-import dask.array as da
+from dask.array.utils import assert_eq
 from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 
@@ -12,11 +14,11 @@ from dask.multiprocessing import _dumps, _loads
 def test_RandomState():
     state = da.random.RandomState(5)
     x = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute() == x.compute()).all()
+    assert_eq(x, x)
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute() == y.compute()).all()
+    assert_eq(x, y)
 
 
 def test_concurrency():
@@ -38,24 +40,24 @@ def test_serializability():
 
     y = _loads(_dumps(x))
 
-    assert (x.compute() == y.compute()).all()
+    assert_eq(x, y)
 
 
 def test_determinisim_through_dask_values():
     samples_1 = da.random.RandomState(42).normal(size=1000, chunks=10)
     samples_2 = da.random.RandomState(42).normal(size=1000, chunks=10)
 
-    assert [v for k, v in sorted(samples_1.dask.items())] ==\
-           [v for k, v in sorted(samples_2.dask.items())]
+    assert set(samples_1.dask) == set(samples_2.dask)
+    assert_eq(samples_1, samples_2)
 
 
 def test_randomstate_consistent_names():
     state1 = da.random.RandomState(42)
     state2 = da.random.RandomState(42)
-    assert sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) ==\
-           sorted(state2.normal(size=(100, 100), chunks=(10, 10)).dask)
-    assert sorted(state1.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask) ==\
-           sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask)
+    assert (sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) ==
+            sorted(state2.normal(size=(100, 100), chunks=(10, 10)).dask))
+    assert (sorted(state1.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask) ==
+            sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask))
 
 
 def test_random():
@@ -104,7 +106,7 @@ def test_docs():
 
 
 def test_can_make_really_big_random_array():
-    x = normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))
+    normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))
 
 
 def test_random_seed():
@@ -116,8 +118,16 @@ def test_random_seed():
     a = da.random.normal(size=10, chunks=5)
     b = da.random.normal(size=10, chunks=5)
 
-    assert (x.compute() == a.compute()).all()
-    assert (y.compute() == b.compute()).all()
+    assert_eq(x, a)
+    assert_eq(y, b)
+
+
+def test_consistent_across_sizes():
+    x1 = da.random.RandomState(123).random(20, chunks=20)
+    x2 = da.random.RandomState(123).random(100, chunks=20)[:20]
+    x3 = da.random.RandomState(123).random(200, chunks=20)[:20]
+    assert_eq(x1, x2)
+    assert_eq(x1, x3)
 
 
 def test_random_all():
@@ -126,7 +136,7 @@ def test_random_all():
     da.random.chisquare(1, size=5, chunks=3).compute()
     da.random.exponential(1, size=5, chunks=3).compute()
     da.random.f(1, 2, size=5, chunks=3).compute()
-    da.random.gamma(5, 1, chunks=3).compute()
+    da.random.gamma(5, 1, size=5, chunks=3).compute()
     da.random.geometric(1, size=5, chunks=3).compute()
     da.random.gumbel(1, size=5, chunks=3).compute()
     da.random.hypergeometric(1, 2, 3, size=5, chunks=3).compute()
@@ -134,7 +144,7 @@ def test_random_all():
     da.random.logistic(size=5, chunks=3).compute()
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
-    da.random.multinomial(20, [1/6.]*6, size=5, chunks=3).compute()
+    da.random.multinomial(20, [1 / 6.] * 6, size=5, chunks=3).compute()
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 
@@ -162,9 +172,47 @@ def test_random_all():
     da.random.standard_t(2, size=5, chunks=3).compute()
 
 
+@pytest.mark.skipif(not hasattr(np,'broadcast_to'),
+                    reason='requires numpy 1.10 method "broadcast_to"')
+def test_array_broadcasting():
+    arr = np.arange(6).reshape((2, 3))
+    daones = da.ones((2, 3, 4), chunks=3)
+    assert da.random.poisson(arr, chunks=3).compute().shape == (2, 3)
+
+    for x in (arr, daones):
+        y = da.random.normal(x, 2, chunks=3)
+        assert y.shape == x.shape
+        assert y.compute().shape == x.shape
+
+    y = da.random.normal(daones, 2, chunks=3)
+    assert set(daones.dask).issubset(set(y.dask))
+
+    assert da.random.normal(np.ones((1, 4)),
+                            da.ones((2, 3, 4), chunks=(2, 3, 4)),
+                            chunks=(2, 3, 4)).compute().shape == (2, 3, 4)
+    assert da.random.normal(scale=np.ones((1, 4)),
+                            loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
+                            size=(2, 2, 3, 4),
+                            chunks=(2, 2, 3, 4)).compute().shape == (2, 2, 3, 4)
+
+    with pytest.raises(ValueError):
+        da.random.normal(arr, np.ones((3, 1)), size=(2, 3, 4), chunks=3)
+
+    for o in (np.ones(100), da.ones(100, chunks=(50,)), 1):
+        a = da.random.normal(1000 * o, 0.01, chunks=(50,))
+        assert 800 < a.mean().compute() < 1200
+
+    # ensure that mis-matched chunks align well
+    x = np.arange(10)**3
+    y = da.from_array(x, chunks=(1,))
+    z = da.random.normal(y, 0.01, chunks=(10,))
+
+    assert 0.8 < z.mean().compute() / x.mean() < 1.2
+
+
 def test_multinomial():
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
-        x = da.random.multinomial(20, [1/6.]*6, size=size, chunks=chunks)
-        y = np.random.multinomial(20, [1/6.]*6, size=size)
+        x = da.random.multinomial(20, [1 / 6.] * 6, size=size, chunks=chunks)
+        y = np.random.multinomial(20, [1 / 6.] * 6, size=size)
 
         assert x.shape == y.shape == x.compute().shape

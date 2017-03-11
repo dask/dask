@@ -62,42 +62,33 @@ Using ``dask.delayed``
 ----------------------
 
 You can create a plan to arrange many numpy arrays into a grid with normal for
-loops using :doc:`dask.delayed<delayed-overview>` and then convert these
-into a dask array later.  See :doc:`documentation on using dask.delayed with
-collections<delayed-collections>`.
+loops using :doc:`dask.delayed<delayed-overview>` and then convert each of these
+Dask.delayed objects into a single-chunk Dask array with ``da.from_delayed``.
+You can then arrange these single-chunk Dask arrays into a larger
+multiple-chunk Dask array using :doc:`concatenation and stacking <array-stack>`,
+as described above.
 
-Raw dask graphs
----------------
+See :doc:`documentation on using dask.delayed with collections<delayed-collections>`.
 
-If your format does not provide a convenient slicing solution you can dive down
-one layer to interact with dask dictionaries.  Your goal is to create a
-dictionary with tasks that create NumPy arrays, see docs on :doc:`array design
-<array-design>` before continuing with this subsection.
 
-To construct a dask array manually you need a dict with tasks that form numpy
-arrays
+From Dask.dataframe
+-------------------
 
-.. code-block:: Python
+You can create dask arrays from dask dataframes using the ``.values`` attribute
+or the ``.to_records()`` method.
 
-   dsk = {('x', 0): (f, ...),
-          ('x', 1), (f, ...),
-          ('x', 2): (f, ...)}
+.. code-block:: python
 
-And a chunks tuple that defines the shapes of your blocks along each
-dimension
+   >>> x = df.values
+   >>> x = df.to_records()
 
-.. code-block:: Python
-
-   chunks = [(1000, 1000, 1000)]
-
-For the tasks ``(f, ...)`` your choice of function ``f`` and arguments ``...``
-is up to you.  You have the full freedom of the Python language here as long as
-your function, when run with those arguments, produces the appropriate NumPy
-array.
+However these arrays do not have known chunk sizes (dask.dataframe does not
+track the number of rows in each partition) and so some operations like slicing
+will not operate correctly.
 
 
 Chunks
-~~~~~~
+------
 
 We always specify a ``chunks`` argument to tell dask.array how to break up the
 underlying array into chunks.  This strongly impacts performance.  We can
@@ -111,7 +102,7 @@ specify ``chunks`` in one of three ways
 Your chunks input will be normalized and stored in the third and most explicit
 form.
 
-A good choice of ``chunks`` follows the following rules:
+For performance, a good choice of ``chunks`` follows the following rules:
 
 1.  A chunk should be small enough to fit comfortably in memory.  We'll
     have many chunks in memory at once.
@@ -125,29 +116,109 @@ A good choice of ``chunks`` follows the following rules:
     have matching chunks patterns.
 
 
-Example
-~~~~~~~
+Unknown Chunks
+~~~~~~~~~~~~~~
 
-As an example, we might load a grid of pickle files known to contain 1000 by
-1000 NumPy arrays.
+Some arrays have unknown chunk sizes.  These are designated using ``np.nan``
+rather than an integer.  These arrays support many but not all operations.  In
+particular, opeations like slicing are not possible and will result in an
+error.
 
 .. code-block:: python
 
-   def load(fn):
-       with open(fn) as f:
-           result = pickle.load(f)
-        return result
+   >>> x.shape
+   (np.nan, np.nan)
 
-   dsk = {('x', 0, 0): (load, 'block-0-0.pkl'),
-          ('x', 0, 1): (load, 'block-0-1.pkl'),
-          ('x', 0, 2): (load, 'block-0-2.pkl'),
-          ('x', 1, 0): (load, 'block-1-0.pkl'),
-          ('x', 1, 1): (load, 'block-1-1.pkl'),
-          ('x', 1, 2): (load, 'block-1-2.pkl')}
+   >>> x[0]
+   ValueError: Array chunk sizes unknown
 
-    chunks = ((1000, 1000), (1000, 1000, 1000))
 
-    x = da.Array(dsk, 'x', chunks)
+Chunks Examples
+~~~~~~~~~~~~~~~
+
+We show of how different inputs for ``chunks=`` cut up the following array::
+
+   1 2 3 4 5 6
+   7 8 9 0 1 2
+   3 4 5 6 7 8
+   9 0 1 2 3 4
+   5 6 7 8 9 0
+   1 2 3 4 5 6
+
+We show how different ``chunks=`` arguments split the array into different blocks
+
+**chunks=3**: Symmetric blocks of size 3::
+
+   1 2 3  4 5 6
+   7 8 9  0 1 2
+   3 4 5  6 7 8
+
+   9 0 1  2 3 4
+   5 6 7  8 9 0
+   1 2 3  4 5 6
+
+**chunks=2**: Symmetric blocks of size 2::
+
+   1 2  3 4  5 6
+   7 8  9 0  1 2
+
+   3 4  5 6  7 8
+   9 0  1 2  3 4
+
+   5 6  7 8  9 0
+   1 2  3 4  5 6
+
+**chunks=(3, 2)**: Asymmetric but repeated blocks of size ``(3, 2)``::
+
+   1 2  3 4  5 6
+   7 8  9 0  1 2
+   3 4  5 6  7 8
+
+   9 0  1 2  3 4
+   5 6  7 8  9 0
+   1 2  3 4  5 6
+
+**chunks=(1, 6)**: Asymmetric but repeated blocks of size ``(1, 6)``::
+
+   1 2 3 4 5 6
+
+   7 8 9 0 1 2
+
+   3 4 5 6 7 8
+
+   9 0 1 2 3 4
+
+   5 6 7 8 9 0
+
+   1 2 3 4 5 6
+
+**chunks=((2, 4), (3, 3))**: Asymmetric and non-repeated blocks::
+
+   1 2 3  4 5 6
+   7 8 9  0 1 2
+
+   3 4 5  6 7 8
+   9 0 1  2 3 4
+   5 6 7  8 9 0
+   1 2 3  4 5 6
+
+**chunks=((2, 2, 1, 1), (3, 2, 1))**: Asymmetric and non-repeated blocks::
+
+   1 2 3  4 5  6
+   7 8 9  0 1  2
+
+   3 4 5  6 7  8
+   9 0 1  2 3  4
+
+   5 6 7  8 9  0
+
+   1 2 3  4 5  6
+
+**Discussion**
+
+The latter examples are rarely provided by users on original data but arise from complex slicing and broadcasting operations.  Generally people use the simplest form until they need more complex forms.  The choice of chunks should align with the computations you want to do.
+
+For example, if you plan to take out thin slices along the first dimension then you might want to make that dimension skinnier than the others.  If you plan to do linear algebra then you might want more symmetric blocks.
 
 
 Store Dask Arrays
@@ -156,14 +227,17 @@ Store Dask Arrays
 In Memory
 ---------
 
-If you have a small amount of data, you can call ``np.array`` on your dask
-array to turn in to a normal NumPy array:
+If you have a small amount of data, you can call ``np.array`` or ``.compute()``
+on your Dask array to turn in to a normal NumPy array:
 
 .. code-block:: Python
 
    >>> x = da.arange(6, chunks=3)
    >>> y = x**2
    >>> np.array(y)
+   array([0, 1, 4, 9, 16, 25])
+
+   >>> y.compute()
    array([0, 1, 4, 9, 16, 25])
 
 
@@ -183,6 +257,7 @@ Store several arrays in one computation with the function
 
    >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
 
+
 Other On-Disk Storage
 ---------------------
 
@@ -198,24 +273,6 @@ slice assignment like ``h5py.Dataset``, or ``bcolz.carray``:
 You can store several arrays in one computation by passing lists of sources and
 destinations:
 
-   >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
-
-
-On-Disk Storage
----------------
-
-In the example above we used ``h5py``, but ``dask.array`` works equally well
-with ``pytables``, ``bcolz``, or any library that provides an array object from
-which we can slice out numpy arrays:
-
 .. code-block:: Python
 
-   >>> x = dataset[1000:2000, :2000]  # pull out numpy array from on-disk object
-
-This API has become a standard in the numeric Python ecosystem.  Dask works
-with any object that supports this operation and the equivalent assignment
-syntax:
-
-.. code-block:: Python
-
-   >>> dataset[1000:2000, :2000] = x  # Store numpy array in on-disk object
+   >>> da.store([array1, array2], [output1, output2])  # doctest: +SKIP

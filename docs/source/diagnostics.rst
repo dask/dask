@@ -10,7 +10,7 @@ Scheduler Callbacks
 
 Schedulers based on ``dask.async.get_async`` (currently
 ``dask.async.get_sync``, ``dask.threaded.get``, and
-``dask.multiprocessing.get``) accept four callbacks, allowing for inspection of
+``dask.multiprocessing.get``) accept five callbacks, allowing for inspection of
 scheduler execution.
 
 The callbacks are:
@@ -42,7 +42,7 @@ The callbacks are:
    the dask graph, the scheduler state, and a boolean indicating whether or not
    the exit was due to an error.
 
-These are internally represented as tuples of length 4, stored in the order
+These are internally represented as tuples of length 5, stored in the order
 presented above. Callbacks for common use cases are provided in
 ``dask.diagnostics``.
 
@@ -166,7 +166,7 @@ just context managers, multiple profilers can be used in a with block:
     >>> a2 = q.dot(r)
 
     >>> with Profiler() as prof, ResourceProfiler(dt=0.25) as rprof,
-    ...         CacheProfiler(metric=nbytes) as cprof:
+    ...         CacheProfiler() as cprof:
     ...     out = a2.compute()
 
 
@@ -204,7 +204,7 @@ These can be analyzed separately, or viewed in a bokeh plot using the provided
 
     <iframe src="_static/profile.html"
             marginwidth="0" marginheight="0" scrolling="no"
-            width="650" height="330" style="border:none"></iframe>
+            width="650" height="300" style="border:none"></iframe>
 
 To view multiple profilers at the same time, the ``dask.diagnostics.visualize``
 function can be used. This takes a list of profilers, and creates a vertical
@@ -220,7 +220,7 @@ stack of plots aligned along the x-axis:
 
     <iframe src="_static/stacked_profile.html"
             marginwidth="0" marginheight="0" scrolling="no"
-            width="650" height="730" style="border:none"></iframe>
+            width="650" height="700" style="border:none"></iframe>
 
 
 Looking at the above figure, from top to bottom:
@@ -252,7 +252,7 @@ the cache, and increase in memory usage. Immediately after this task ends, the
 number of elements in the cache decreases, showing that they were only needed
 for this step. Finally, there's an interleaved set of calls to ``dot`` and
 ``sum``. Looking at the CPU plot shows that these run both concurrently and in
-parallel, as the CPU percentage spikes up to around 250\%.
+parallel, as the CPU percentage spikes up to around 350\%.
 
 
 Custom Callbacks

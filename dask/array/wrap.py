@@ -4,7 +4,11 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-from toolz import curry
+
+try:
+    from cytoolz import curry
+except ImportError:
+    from toolz import curry
 
 from ..base import tokenize
 from .core import Array, normalize_chunks
@@ -53,19 +57,21 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
 
+
 @curry
 def wrap(wrap_func, func, **kwargs):
     f = partial(wrap_func, func, **kwargs)
-    f.__doc__ = """
+    template = """
     Blocked variant of %(name)s
 
     Follows the signature of %(name)s exactly except that it also requires a
     keyword argument chunks=(...)
 
     Original signature follows below.
-    """ % {'name': func.__name__} + func.__doc__
-
-    f.__name__ = 'blocked_' + func.__name__
+    """
+    if func.__doc__ is not None:
+        f.__doc__ = template % {'name': func.__name__} + func.__doc__
+        f.__name__ = 'blocked_' + func.__name__
     return f
 
 

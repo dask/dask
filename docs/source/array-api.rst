@@ -40,6 +40,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   digitize
    dot
    dstack
    empty
@@ -114,8 +115,10 @@ Top level user functions:
    ravel
    real
    rechunk
+   repeat
    reshape
    rint
+   round
    sign
    signbit
    sin
@@ -217,9 +220,21 @@ Create and Store Arrays
    to_hdf5
    to_npy_stack
 
+Internal functions
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.core
+
+.. autosummary::
+   map_blocks
+   atop
+   top
+
 
 Other functions
 ~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array
 
 .. autofunction:: from_array
 .. autofunction:: from_delayed
@@ -263,6 +278,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: digitize
 .. autofunction:: dot
 .. autofunction:: dstack
 .. autofunction:: empty
@@ -327,7 +343,6 @@ Other functions
 .. autofunction:: prod
 .. autofunction:: rad2deg
 .. autofunction:: radians
-.. autofunction:: random
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk
@@ -417,7 +432,6 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
-.. autofunction:: product
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh
@@ -432,6 +446,12 @@ Other functions
 .. autofunction:: wald
 .. autofunction:: weibull
 .. autofunction:: zipf
+
+.. currentmodule:: dask.array.core
+
+.. autofunction:: map_blocks
+.. autofunction:: atop
+.. autofunction:: top
 
 .. currentmodule:: dask.array
 

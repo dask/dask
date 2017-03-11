@@ -3,14 +3,15 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 
-from toolz import merge, pipe, concat, partition, partial
+from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
+from . import chunk, wrap
+from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
+from .. import sharedict
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
-from .core import Array, map_blocks, concatenate, concatenate3
-from . import chunk, wrap
 
 
 def fractional_slice(task, axes):
@@ -25,7 +26,7 @@ def fractional_slice(task, axes):
     >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
     (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
     """
-    rounded = (task[0],) + tuple(map(round, task[1:]))
+    rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
 
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
@@ -79,20 +80,7 @@ def expand_key(k, dims):
 
     seq = list(product([k[0]], *[inds(i, ind)
                                  for i, ind in enumerate(k[1:])]))
-    return reshape(shape, seq)
-
-
-def reshape(shape, seq):
-    """ Reshape iterator to nested shape
-
-    >>> reshape((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshape(shape[1:], part) for part in partition(n, seq)]
+    return reshapelist(shape, seq)
 
 
 def ghost_internal(x, axes):
@@ -106,7 +94,7 @@ def ghost_internal(x, axes):
     axes: dict
         The size of the shared boundary per axis
 
-    The axes dict informs how many cells to overlap between neighboring blocks
+    The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
     dims = list(map(len, x.chunks))
@@ -124,7 +112,7 @@ def ghost_internal(x, axes):
             interior_slices[k] = frac_slice
 
         ghost_blocks[(name,) + k[1:]] = (concatenate3,
-                                          (concrete, expand_key2(k)))
+                                         (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
@@ -138,8 +126,10 @@ def ghost_internal(x, axes):
                 mid.append(bd + axes.get(i, 0) * 2)
             chunks.append(left + mid + right)
 
-    return Array(merge(interior_slices, ghost_blocks, x.dask),
-                 name, chunks)
+    dsk = merge(interior_slices, ghost_blocks)
+    dsk = sharedict.merge(x.dask, (name, dsk))
+
+    return Array(dsk, name, chunks, dtype=x.dtype)
 
 
 def trim_internal(x, axes):
@@ -149,8 +139,9 @@ def trim_internal(x, axes):
     each block
 
     See also
-        chunk.trim
-        map_blocks
+    --------
+    dask.array.chunk.trim
+    dask.array.map_blocks
     """
     olist = []
     for i, bd in enumerate(x.chunks):
@@ -161,7 +152,8 @@ def trim_internal(x, axes):
 
     chunks = tuple(olist)
 
-    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks)
+    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks,
+                      dtype=x.dtype)
 
 
 def periodic(x, axis, depth):
@@ -198,7 +190,7 @@ def reflect(x, axis, depth):
                 (slice(depth - 1, None, -1),) +
                 (slice(None, None, None),) * (x.ndim - axis - 1))
     right = ((slice(None, None, None),) * axis +
-             (slice(-1, -depth-1, -1),) +
+             (slice(-1, -depth - 1, -1),) +
              (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
@@ -235,7 +227,7 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     c = wrap.full(tuple(map(sum, chunks)), value,
-                  chunks=tuple(chunks), dtype=x._dtype)
+                  chunks=tuple(chunks), dtype=x.dtype)
 
     return concatenate([c, x, c], axis=axis)
 
@@ -256,7 +248,6 @@ def boundaries(x, depth=None, kind=None):
 
     See Also
     --------
-
     periodic
     constant
     """
@@ -297,14 +288,15 @@ def ghost(x, depth, boundary):
         The size of the shared boundary per axis
     boundary: dict
         The boundary condition on each axis. Options are 'reflect', 'periodic',
-        'nearest', 'none', an integer will fill the boundary with that integer.
+        'nearest', 'none', or an array value.  Such a value will fill the
+        boundary with that value.
 
-    The axes dict informs how many cells to overlap between neighboring blocks
-    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
+    The depth input informs how many cells to overlap between neighboring
+    blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
+    Axes missing from this input will not be overlapped.
 
     Examples
     --------
-
     >>> import numpy as np
     >>> import dask.array as da
 
@@ -350,7 +342,7 @@ def ghost(x, depth, boundary):
                              (d, min(c)))
     x2 = boundaries(x, depth2, boundary2)
     x3 = ghost_internal(x2, depth2)
-    trim = dict((k, v*2 if boundary2.get(k, 'none') != 'none' else 0)
+    trim = dict((k, v * 2 if boundary2.get(k, 'none') != 'none' else 0)
                 for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4

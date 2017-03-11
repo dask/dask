@@ -1,18 +1,19 @@
 Overview
 ========
 
-Dask Bag implements a operations like ``map, filter, fold, frequencies`` and
-``groupby`` on lists of Python objects.  It does this in parallel using
-multiple processes and in small memory using Python iterators building off of
-libraries like PyToolz_.
+Dask.Bag implements a operations like ``map``, ``filter``, ``fold``, and
+``groupby`` on collections of Python objects.  It does this in parallel and in
+small memory using Python iterators.  It is similar to a parallel version of
+PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 
-.. _PyToolz: http://toolz.readthedocs.io/en/latest/
+.. _PyToolz: https://toolz.readthedocs.io/en/latest/
+.. _`PySpark RDD`: http://spark.apache.org/docs/latest/api/python/pyspark.html
 
 Design
 ------
 
 Dask bags coordinate many Python lists or Iterators, each of which forms a
-partition of a larger linear collection.
+partition of a larger collection.
 
 Common Uses
 -----------
@@ -26,35 +27,37 @@ Execution
 
 Execution on bags provide two benefits:
 
-1.  Streaming: data processes lazily, allowing smooth execution of
-    larger-than-memory data
-2.  Parallel: data is split up, allowing multiple cores to execute in parallel.
+1.  Parallel: data is split up, allowing multiple cores or machines to execute
+    in parallel.
+2.  Iterating: data processes lazily, allowing smooth execution of
+    larger-than-memory data, even on a single machine within a single partition
 
 
 Default scheduler
 ~~~~~~~~~~~~~~~~~
 
 By default ``dask.bag`` uses ``dask.multiprocessing`` for computation.  As a
-benefit dask bypasses the GIL and uses multiple cores on Pure Python objects.
-As a drawback dask.bag doesn't perform well on computations that include a
-great deal of inter-worker communication.  For common operations this is
-rarely an issue as most ``dask.bag`` workflows are embarrassingly parallel or
-result in reductions with little data moving between workers.
+benefit Dask bypasses the GIL_ and uses multiple cores on Pure Python objects.
+As a drawback Dask.bag doesn't perform well on computations that include a
+great deal of inter-worker communication.  For common operations this is rarely
+an issue as most Dask.bag workflows are embarrassingly parallel or result in
+reductions with little data moving between workers.
+
+.. _GIL: https://docs.python.org/3/glossary.html#term-gil
+
 
 Shuffle
 ~~~~~~~
 
-Some operations, like full ``groupby`` and bag-to-bag ``join`` do require
-substantial inter-worker communication.  These are handled specially by shuffle
-operations that use disk and a central memory server as a central point of
-communication.
+Some operations, like ``groupby``, require substantial inter-worker
+communication. On a single machine, dask uses partd_ to perform efficient,
+parallel, spill-to-disk shuffles. When working in a cluster, dask uses a task
+based shuffle.
 
-Shuffle operations are expensive and better handled by projects like
-``dask.dataframe``.  It is best to use ``dask.bag`` to clean and process data,
+These shuffle operations are expensive and better handled by projects like
+``dask.dataframe``. It is best to use ``dask.bag`` to clean and process data,
 then transform it into an array or dataframe before embarking on the more
 complex operations that require shuffle steps.
-
-Dask uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
 
 .. _partd: https://github.com/mrocklin/partd
 
@@ -67,11 +70,12 @@ comes at cost.  Bags have the following known limitations:
 
 1.  By default they rely on the multiprocessing scheduler, which has its own
     set of known limitations (see :doc:`shared`)
-2.  Bag operations tend to be slower than array/dataframe computations in the
-    same way that Python tends to be slower than NumPy/pandas
-3.  ``Bag.groupby`` is slow.  You should try to use ``Bag.foldby`` if possible.
+2.  Bags are immutable and so you can not change individual elements
+3.  Bag operations tend to be slower than array/dataframe computations in the
+    same way that standard Python containers tend to be slower than NumPy
+    arrays and Pandas dataframes.
+4.  ``Bag.groupby`` is slow.  You should try to use ``Bag.foldby`` if possible.
     Using ``Bag.foldby`` requires more thought.
-4.  The implementation backing ``Bag.groupby`` is under heavy churn.
 
 
 Name

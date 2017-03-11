@@ -3,8 +3,11 @@ from __future__ import absolute_import, division, print_function
 import operator
 
 import numpy as np
+import toolz
 
 from ..base import tokenize
+from ..compatibility import apply
+from .. import sharedict
 from .core import top, dotmany, Array, eye
 from .random import RandomState
 
@@ -15,6 +18,10 @@ def _cumsum_blocks(it):
         total_previous = total
         total += x
         yield (total_previous, total)
+
+
+def _cumsum_part(last, new):
+    return (last[1], last[1] + new)
 
 
 def tsqr(data, name=None, compute_svd=False):
@@ -31,6 +38,9 @@ def tsqr(data, name=None, compute_svd=False):
     This algorithm is used to compute both the QR decomposition and the
     Singular Value Decomposition.  It requires that the input array have a
     single column of blocks, each of which fit in memory.
+
+    If blocks are of size ``(n, k)`` then this algorithm has memory use that
+    scales as ``n**2 * k * nthreads``.
 
     Parameters
     ----------
@@ -49,7 +59,7 @@ def tsqr(data, name=None, compute_svd=False):
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.chunks[1]) == 1):         # Only one column block
         raise ValueError(
-            "Input must have the following properites:\n"
+            "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks")
 
@@ -86,9 +96,36 @@ def tsqr(data, name=None, compute_svd=False):
     name_q_st2_aux = prefix + 'Q_st2_aux'
     dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                               (name_qr_st2, 0, 0), 0)}
-    q2_block_sizes = [min(e, n) for e in data.chunks[0]]
-    block_slices = [(slice(e[0], e[1]), slice(0, n))
-                    for e in _cumsum_blocks(q2_block_sizes)]
+    if not any(np.isnan(c) for cs in data.chunks for c in cs):
+        q2_block_sizes = [min(e, n) for e in data.chunks[0]]
+        block_slices = [(slice(e[0], e[1]), slice(0, n))
+                        for e in _cumsum_blocks(q2_block_sizes)]
+        dsk_q_blockslices = {}
+    else:
+        name_q2bs = prefix + 'q2-shape'
+        dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
+                         for i in range(numblocks[0])}
+        dsk_n = {prefix + 'n': (operator.getitem,
+                                (getattr, (data.name, 0, 0), 'shape'), 1)}
+        name_q2cs = prefix + 'q2-shape-cumsum'
+        dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
+        dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
+                                               (name_q2cs, i - 1),
+                                               (name_q2bs, i))
+                              for i in range(1, numblocks[0])})
+
+        name_blockslice = prefix + 'q2-blockslice'
+        dsk_block_slices = {(name_blockslice, i): (tuple, [
+            (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
+            for i in range(numblocks[0])}
+
+        dsk_q_blockslices = toolz.merge(dsk_n,
+                                        dsk_q2_shapes,
+                                        dsk_q2_cumsum,
+                                        dsk_block_slices)
+
+        block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
+
     name_q_st2 = prefix + 'Q_st2'
     dsk_q_st2 = dict(((name_q_st2, i, 0),
                       (operator.getitem, (name_q_st2_aux, 0, 0), b))
@@ -102,30 +139,25 @@ def tsqr(data, name=None, compute_svd=False):
                     name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                  name_q_st2: numblocks})
 
-    dsk_q = {}
-    dsk_q.update(data.dask)
-    dsk_q.update(dsk_qr_st1)
-    dsk_q.update(dsk_q_st1)
-    dsk_q.update(dsk_r_st1)
-    dsk_q.update(dsk_r_st1_stacked)
-    dsk_q.update(dsk_qr_st2)
-    dsk_q.update(dsk_q_st2_aux)
-    dsk_q.update(dsk_q_st2)
-    dsk_q.update(dsk_q_st3)
-    dsk_r = {}
-    dsk_r.update(data.dask)
-    dsk_r.update(dsk_qr_st1)
-    dsk_r.update(dsk_r_st1)
-    dsk_r.update(dsk_r_st1_stacked)
-    dsk_r.update(dsk_qr_st2)
-    dsk_r.update(dsk_r_st2)
+    dsk = sharedict.ShareDict()
+    dsk.update(data.dask)
+    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
+    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
+    dsk.update_with_key(dsk_r_st1, key=name_r_st1)
+    dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
+    dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
+    dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
+    dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+    dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+    dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
+    dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
     if not compute_svd:
         qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
-        q = Array(dsk_q, name_q_st3, shape=data.shape, chunks=data.chunks,
-                  dtype=qq.dtype)
-        r = Array(dsk_r, name_r_st2, shape=(n, n), chunks=(n, n),
-                  dtype=rr.dtype)
+        q = Array(dsk, name_q_st3,
+                  shape=data.shape, chunks=data.chunks, dtype=qq.dtype)
+        r = Array(dsk, name_r_st2,
+                  shape=(n, n), chunks=(n, n), dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
@@ -150,27 +182,18 @@ def tsqr(data, name=None, compute_svd=False):
                         name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
                                                      name_u_st2: (1, 1)})
 
-        dsk_u = {}
-        dsk_u.update(dsk_q)
-        dsk_u.update(dsk_r)
-        dsk_u.update(dsk_svd_st2)
-        dsk_u.update(dsk_u_st2)
-        dsk_u.update(dsk_u_st4)
-        dsk_s = {}
-        dsk_s.update(dsk_r)
-        dsk_s.update(dsk_svd_st2)
-        dsk_s.update(dsk_s_st2)
-        dsk_v = {}
-        dsk_v.update(dsk_r)
-        dsk_v.update(dsk_svd_st2)
-        dsk_v.update(dsk_v_st2)
+        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2)
+        dsk.update_with_key(dsk_u_st2, key=name_u_st2)
+        dsk.update_with_key(dsk_u_st4, key=name_u_st4)
+        dsk.update_with_key(dsk_s_st2, key=name_s_st2)
+        dsk.update_with_key(dsk_v_st2, key=name_v_st2)
 
         uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks,
+        u = Array(dsk, name_u_st4, shape=data.shape, chunks=data.chunks,
                   dtype=uu.dtype)
-        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n), dtype=ss.dtype)
-        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n),
+        s = Array(dsk, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
+        v = Array(dsk, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
                   dtype=vv.dtype)
         return u, s, v
 
@@ -203,7 +226,6 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
 
     Parameters
     ----------
-
     data: Array
     q: int
         Size of the desired subspace (the actual size will be bigger,
@@ -212,16 +234,14 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
 
-    Algorithm Citation
-    ------------------
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
-
+    References
+    ----------
+    N. Halko, P. G. Martinsson, and J. A. Tropp.
+    Finding structure with randomness: Probabilistic algorithms for
+    constructing approximate matrix decompositions.
+    SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+    pp. 217-288, June 2011
+    http://arxiv.org/abs/0909.4061
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
@@ -245,7 +265,6 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
 
     Parameters
     ----------
-
     a: Array
         Input array
     k: int
@@ -255,16 +274,6 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
 
-    Algorithm Citation
-    ------------------
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
-
     Examples
     --------
 
@@ -272,10 +281,18 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
 
     Returns
     -------
-
     u:  Array, unitary / orthogonal
     s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
+
+    References
+    ----------
+    N. Halko, P. G. Martinsson, and J. A. Tropp.
+    Finding structure with randomness: Probabilistic algorithms for
+    constructing approximate matrix decompositions.
+    SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+    pp. 217-288, June 2011
+    http://arxiv.org/abs/0909.4061
     """
     comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
     a_compressed = comp.dot(a)
@@ -457,7 +474,7 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk.update(a.dask)
+    dsk = sharedict.merge(a.dask, ('lu-' + token, dsk))
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
     l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
@@ -547,8 +564,7 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    dsk.update(a.dask)
-    dsk.update(b.dask)
+    dsk = sharedict.merge(a.dask, b.dask, (name, dsk))
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
@@ -697,7 +713,7 @@ def _cholesky(a):
                 dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk.update(a.dask)
+    dsk = sharedict.merge(a.dask, (name, dsk))
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
@@ -747,7 +763,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.dot(b))
     residuals = b - a.dot(x)
-    residuals = (residuals ** 2).sum()
+    residuals = (residuals ** 2).sum(keepdims=True)
 
     token = tokenize(a, b)
 
@@ -756,7 +772,7 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk.update(r.dask)
+    rdsk = sharedict.merge(r.dask, (rname, rdsk))
     # rank must be an integer
     rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
 
@@ -767,11 +783,10 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk.update(rt.dask)
+    sdsk = sharedict.merge(rt.dask, (sname, sdsk))
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                           np.array([0, 1], dtype=b.dtype))
+                                  np.array([0, 1], dtype=b.dtype))
     s = Array(sdsk, sname, shape=(r.shape[0], ),
               chunks=r.shape[0], dtype=ss.dtype)
 
     return x, residuals, rank, s
-

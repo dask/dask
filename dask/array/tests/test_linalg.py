@@ -2,13 +2,13 @@ from __future__ import absolute_import
 
 import pytest
 pytest.importorskip('numpy')
+pytest.importorskip('scipy')
 
 import numpy as np
 import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
-from dask.utils import raises
 from dask.array.utils import assert_eq
 
 
@@ -159,12 +159,12 @@ def test_lu_1():
     A1 = np.array([[7, 3, -1, 2], [3, 8, 1, -4],
                   [-1, 1, 4, -1], [2, -4, -1, 6] ])
 
-    A2 = np.array([[ 7,  0,  0,  0,  0,  0],
-                   [ 0,  8,  0,  0,  0,  0],
-                   [ 0,  0,  4,  0,  0,  0],
-                   [ 0,  0,  0,  6,  0,  0],
-                   [ 0,  0,  0,  0,  3,  0],
-                   [ 0,  0,  0,  0,  0,  5]])
+    A2 = np.array([[7,  0,  0,  0,  0,  0],
+                   [0,  8,  0,  0,  0,  0],
+                   [0,  0,  4,  0,  0,  0],
+                   [0,  0,  0,  6,  0,  0],
+                   [0,  0,  0,  0,  3,  0],
+                   [0,  0,  0,  0,  0,  5]])
     # without shuffle
     for A, chunk in zip([A1, A2], [2, 2]):
         dA = da.from_array(A, chunks=(chunk, chunk))
@@ -213,15 +213,15 @@ def test_lu_3(size):
 def test_lu_errors():
     A = np.random.random_integers(0, 10, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
     A = np.random.random_integers(0, 10, (10, 8))
     dA = da.from_array(A, chunks=(5, 4))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
     A = np.random.random_integers(0, 10, (20, 20))
     dA = da.from_array(A, chunks=(5, 4))
-    assert raises(ValueError, lambda: da.linalg.lu(dA))
+    pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10), (70, 20)])
@@ -301,13 +301,13 @@ def test_solve_triangular_errors():
     b = np.random.random_integers(1, 10, 10)
     dA = da.from_array(A, chunks=(5, 5, 5))
     db = da.from_array(b, chunks=5)
-    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+    pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
     A = np.random.random_integers(0, 10, (10, 10))
     b = np.random.random_integers(1, 10, 10)
     dA = da.from_array(A, chunks=(3, 3))
     db = da.from_array(b, chunks=5)
-    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+    pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])
@@ -319,7 +319,7 @@ def test_solve(shape, chunk):
 
     # vector
     b = np.random.random_integers(1, 10, shape)
-    db = da.from_array(b, (chunk, chunk))
+    db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
     assert_eq(res, scipy.linalg.solve(A, b))
@@ -370,7 +370,7 @@ def test_solve_sym_pos(shape, chunk):
 
     # vector
     b = np.random.random_integers(1, 10, shape)
-    db = da.from_array(b, (chunk, chunk))
+    db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
     assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
@@ -402,7 +402,6 @@ def test_cholesky(shape, chunk):
     assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
 
 
-
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"),
                          [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk):
@@ -430,3 +429,25 @@ def test_lstsq(nrow, ncol, chunk):
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
 
+
+def test_no_chunks_svd():
+    x = np.random.random((100, 10))
+    u, s, v = np.linalg.svd(x, full_matrices=0)
+
+    for chunks in [((np.nan,) * 10, (10,)),
+                   ((np.nan,) * 10, (np.nan,))]:
+        dx = da.from_array(x, chunks=(10, 10))
+        dx._chunks = chunks
+
+        du, ds, dv = da.linalg.svd(dx)
+
+        assert_eq(s, ds)
+        assert_eq(u.dot(np.diag(s)).dot(v),
+                  du.dot(da.diag(ds)).dot(dv))
+        assert_eq(du.T.dot(du), np.eye(10))
+        assert_eq(dv.T.dot(dv), np.eye(10))
+
+        dx = da.from_array(x, chunks=(10, 10))
+        dx._chunks = ((np.nan,) * 10, (np.nan,))
+        assert_eq(abs(v), abs(dv))
+        assert_eq(abs(u), abs(du))

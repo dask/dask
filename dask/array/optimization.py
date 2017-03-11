@@ -3,29 +3,38 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 
 import numpy as np
-from toolz import valmap, partial
 
-from .core import getarray
+from .core import getarray, getarray_nofancy
 from ..core import flatten
-from ..optimize import cull, fuse, dealias, inline_functions
-from ..rewrite import RuleSet, RewriteRule
+from ..optimize import cull, fuse, inline_functions
+from ..utils import ensure_dict
 
 
-def optimize(dsk, keys, **kwargs):
+def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
+             inline_functions_fast_functions=None, rename_fused_keys=True,
+             **kwargs):
     """ Optimize dask for array computation
 
     1.  Cull tasks not necessary to evaluate keys
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
-    fast_functions = kwargs.get('fast_functions',
-                             set([getarray, np.transpose]))
+    if fast_functions is not None:
+        inline_functions_fast_functions = fast_functions
+
+    if inline_functions_fast_functions is None:
+        inline_functions_fast_functions = {getarray, getarray_nofancy,
+                                           np.transpose}
+
     dsk2, dependencies = cull(dsk, keys)
-    dsk4, dependencies = fuse(dsk2, keys, dependencies)
+    dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
+                              rename_keys=rename_fused_keys)
     dsk5 = optimize_slices(dsk4)
-    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions,
-            dependencies=dependencies)
+    dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
+                            fast_functions=inline_functions_fast_functions)
+
     return dsk6
 
 
@@ -38,43 +47,53 @@ def optimize_slices(dsk):
     See also:
         fuse_slice_dict
     """
+    fancy_ind_types = (list, np.ndarray)
+    getters = (getarray_nofancy, getarray, getitem)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple:
-            if v[0] is getitem or v[0] is getarray:
+        if type(v) is tuple and v[0] in getters and len(v) == 3:
+            f, a, a_index = v
+            getter = f
+            while type(a) is tuple and a[0] in getters and len(a) == 3:
+                f2, b, b_index = a
+                if (type(a_index) is tuple) != (type(b_index) is tuple):
+                    break
+                if type(a_index) is tuple:
+                    indices = b_index + a_index
+                    if (len(a_index) != len(b_index) and
+                            any(i is None for i in indices)):
+                        break
+                    if (f2 is getarray_nofancy and
+                            any(isinstance(i, fancy_ind_types) for i in indices)):
+                        break
+                elif (f2 is getarray_nofancy and
+                        (type(a_index) in fancy_ind_types or
+                         type(b_index) in fancy_ind_types)):
+                    break
                 try:
-                    func, a, a_index = v
-                except ValueError:  # has four elements, includes a lock
-                    continue
-                while type(a) is tuple and (a[0] is getitem or a[0] is getarray):
-                    try:
-                        _, b, b_index = a
-                    except ValueError:  # has four elements, includes a lock
-                        break
-                    if (type(a_index) is tuple) != (type(b_index) is tuple):
-                        break
-                    if ((type(a_index) is tuple) and
-                        (len(a_index) != len(b_index)) and
-                        any(i is None for i in b_index + a_index)):
-                        break
-                    try:
-                        c_index = fuse_slice(b_index, a_index)
-                    except NotImplementedError:
-                        break
-                    (a, a_index) = (b, c_index)
-                if (type(a_index) is slice and
+                    c_index = fuse_slice(b_index, a_index)
+                    # rely on fact that nested gets never decrease in
+                    # strictness e.g. `(getarray, (getitem, ...))` never
+                    # happens
+                    getter = f2
+                except NotImplementedError:
+                    break
+                a, a_index = b, c_index
+            if getter is not getitem:
+                dsk[k] = (getter, a, a_index)
+            elif (type(a_index) is slice and
                     not a_index.start and
                     a_index.stop is None and
                     a_index.step is None):
-                    dsk[k] = a
-                elif type(a_index) is tuple and all(type(s) is slice and
-                                                    not s.start and
-                                                    s.stop is None and
-                                                    s.step is None
-                                                    for s in a_index):
-                    dsk[k] = a
-                else:
-                    dsk[k] = (func, a, a_index)
+                dsk[k] = a
+            elif type(a_index) is tuple and all(type(s) is slice and
+                                                not s.start and
+                                                s.stop is None and
+                                                s.step is None
+                                                for s in a_index):
+                dsk[k] = a
+            else:
+                dsk[k] = (getitem, a, a_index)
     return dsk
 
 
@@ -135,7 +154,7 @@ def fuse_slice(a, b):
     if isinstance(a, slice) and isinstance(b, int):
         if b < 0:
             raise NotImplementedError()
-        return a.start + b*a.step
+        return a.start + b * a.step
 
     if isinstance(a, slice) and isinstance(b, slice):
         start = a.start + a.step * b.start
@@ -167,7 +186,7 @@ def fuse_slice(a, b):
     if isinstance(a, tuple) and isinstance(b, tuple):
 
         if (any(isinstance(item, list) for item in a) and
-            any(isinstance(item, list) for item in b)):
+                any(isinstance(item, list) for item in b)):
             raise NotImplementedError("Can't handle multiple list indexing")
 
         j = 0

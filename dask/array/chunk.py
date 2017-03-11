@@ -96,7 +96,6 @@ def coarsen(reduction, x, axes, trim_excess=False):
 
     Parameters
     ----------
-
     reduction: function
         Function like np.sum, np.mean, etc...
     x: np.ndarray
@@ -106,7 +105,6 @@ def coarsen(reduction, x, axes, trim_excess=False):
 
     Examples
     --------
-
     >>> x = np.array([1, 2, 3, 4, 5, 6])
     >>> coarsen(np.sum, x, {0: 2})
     array([ 3,  7, 11])
@@ -127,6 +125,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
            [12, 15]])
 
     You must avoid excess elements explicitly
+
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
     >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
     array([1, 4])
@@ -143,11 +142,10 @@ def coarsen(reduction, x, axes, trim_excess=False):
         x = x[ind]
 
     # (10, 10) -> (5, 2, 5, 2)
-    newshape = tuple(concat([(x.shape[i] / axes[i], axes[i])
-                                for i in range(x.ndim)]))
+    newshape = tuple(concat([(x.shape[i] // axes[i], axes[i])
+                             for i in range(x.ndim)]))
 
-
-    return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim*2, 2)))
+    return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim * 2, 2)))
 
 
 def trim(x, axes=None):
@@ -188,3 +186,8 @@ def topk(k, x):
     k = np.minimum(k, len(x))
     ind = np.argpartition(x, -k)[-k:]
     return np.sort(x[ind])[::-1]
+
+
+def arange(start, stop, step, length, dtype):
+    res = np.arange(start, stop, step, dtype)
+    return res[:-1] if len(res) > length else res

@@ -1,8 +1,11 @@
 from operator import add, mul
+
 import pytest
+
+from dask.async import get_sync
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
-from dask.threaded import get
+from dask.threaded import get as get_threaded
 from dask.context import _globals
 
 
@@ -16,32 +19,33 @@ dsk = {'a': 1,
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == '[' + '#'*width + ']'
+    assert bar == '[' + '#' * width + ']'
     assert percent == '100% Completed'
 
 
 def test_progressbar(capsys):
     with ProgressBar():
-        out = get(dsk, 'e')
+        out = get_threaded(dsk, 'e')
     assert out == 6
     check_bar_completed(capsys)
     with ProgressBar(width=20):
-        out = get(dsk, 'e')
+        out = get_threaded(dsk, 'e')
     check_bar_completed(capsys, 20)
 
 
 def test_minimum_time(capsys):
     with ProgressBar(1.0):
-        out = get(dsk, 'e')
+        out = get_threaded(dsk, 'e')
     out, err = capsys.readouterr()
     assert out == '' and err == ''
 
 
-def test_clean_exit():
-    dsk = {'a': (lambda: 1/0,)}
+@pytest.mark.parametrize('get', [get_threaded, get_sync])
+def test_clean_exit(get):
+    dsk = {'a': (lambda: 1 / 0, )}
     try:
         with ProgressBar() as pbar:
-            get(dsk, 'a')
+            get_threaded(dsk, 'a')
     except ZeroDivisionError:
         pass
     assert not pbar._running
@@ -63,7 +67,7 @@ def test_register(capsys):
 
         assert _globals['callbacks']
 
-        get(dsk, 'e')
+        get_threaded(dsk, 'e')
         check_bar_completed(capsys)
 
         p.unregister()
@@ -75,7 +79,7 @@ def test_register(capsys):
 
 def test_no_tasks(capsys):
     with ProgressBar():
-        get({'x': 1}, 'x')
+        get_threaded({'x': 1}, 'x')
     check_bar_completed(capsys)
 
 
@@ -87,13 +91,13 @@ def test_with_cache(capsys):
 
     with cc:
         with ProgressBar():
-            assert get({'x': (mul, 1, 2)}, 'x') == 2
+            assert get_threaded({'x': (mul, 1, 2)}, 'x') == 2
     check_bar_completed(capsys)
     assert c.data['x'] == 2
 
     with cc:
         with ProgressBar():
-            assert get({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
+            assert get_threaded({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
     check_bar_completed(capsys)
 
 
@@ -105,13 +109,13 @@ def test_with_alias(capsys):
            'e': 'd',
            'f': (mul, 'e', 'c')}
     with ProgressBar():
-        get(dsk, 'f')
+        get_threaded(dsk, 'f')
     check_bar_completed(capsys)
 
 
 def test_store_time():
     p = ProgressBar()
     with p:
-        get({'x': 1}, 'x')
+        get_threaded({'x': 1}, 'x')
 
     assert isinstance(p.last_duration, float)

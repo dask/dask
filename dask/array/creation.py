@@ -5,6 +5,7 @@ from functools import partial
 import numpy as np
 
 from .core import Array, normalize_chunks
+from . import chunk
 from ..base import tokenize
 
 
@@ -21,17 +22,20 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
         The starting value of the sequence.
     stop : scalar
         The last value of the sequence.
+    num : int, optional
+        Number of samples to include in the returned dask array, including the
+        endpoints.
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
-    num : int, optional
-        Number of samples to in the returned dask array, including the
-        endpoints.
 
     Returns
     -------
     samples : dask array
 
+    See Also
+    --------
+    dask.array.arange
     """
     num = int(num)
 
@@ -43,6 +47,9 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
     range_ = stop - start
 
     space = float(range_) / (num - 1)
+
+    if dtype is None:
+        dtype = np.linspace(0, 1, 1).dtype
 
     name = 'linspace-' + tokenize((start, stop, num, chunks, dtype))
 
@@ -80,15 +87,15 @@ def arange(*args, **kwargs):
         The last value of the sequence.
     chunks :  int
         The number of samples on each block. Note that the last block will have
-        fewer samples if `num % chunks != 0`.
-    num : int, optional
-        Number of samples to in the returned dask array, including the
-        endpoints.
+        fewer samples if ``len(array) % chunks != 0``.
 
     Returns
     -------
     samples : dask array
 
+    See Also
+    --------
+    dask.array.linspace
     """
     if len(args) == 1:
         start = 0
@@ -113,11 +120,7 @@ def arange(*args, **kwargs):
     if dtype is None:
         dtype = np.arange(0, 1, step).dtype
 
-    range_ = stop - start
-    num = int(abs(range_ // step))
-    if (range_ % step) != 0:
-        num += 1
-
+    num = max(np.ceil((stop - start) / step), 0)
     chunks = normalize_chunks(chunks, (num,))
 
     name = 'arange-' + tokenize((start, stop, step, chunks, num))
@@ -127,7 +130,7 @@ def arange(*args, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (np.arange, blockstart, blockstop, step, dtype)
+        task = (chunk.arange, blockstart, blockstop, step, bs, dtype)
         dsk[(name, i)] = task
         elem_count += bs
 

@@ -1,17 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
+import random
+from bisect import bisect_left
 from itertools import cycle
 from operator import itemgetter, add
 
-from toolz import unique, groupby, accumulate, pluck
-import bokeh.plotting as bp
-from bokeh.io import _state
-from bokeh.palettes import brewer
-from bokeh.models import HoverTool, LinearAxis, Range1d
-
-from ..utils import funcname
+from ..utils import funcname, import_required
 from ..core import istask
 from ..compatibility import apply
+
+
+_BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
+_TOOLZ_MISSING_MSG = "Diagnostics plots require `toolz` to be installed"
 
 
 def unquote(expr):
@@ -69,7 +69,7 @@ def pprint_task(task, keys, label_size=60):
         else:
             if hasattr(func, 'funcs'):
                 head = '('.join(funcname(f) for f in func.funcs)
-                tail = ')'*len(func.funcs)
+                tail = ')' * len(func.funcs)
             else:
                 head = funcname(task[0])
                 tail = ')'
@@ -102,7 +102,7 @@ def pprint_task(task, keys, label_size=60):
             result = pprint_task(task[:3], keys, label_size)
             return result[:-1] + ', ...]'
         else:
-            label_size2 = int((label_size - 2 - 2*len(task)) // len(task))
+            label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
             args = ', '.join(pprint_task(t, keys, label_size2) for t in task)
             return '[{0}]'.format(args)
     else:
@@ -121,22 +121,26 @@ def get_colors(palette, funcs):
     Parameters
     ----------
     palette : string
-        Name of the palette. Must be a key in bokeh.palettes.brewer
+        Name of the bokeh palette to use, must be a member of
+        bokeh.palettes.all_palettes.
     funcs : iterable
         Iterable of function names
     """
-    unique_funcs = list(sorted(unique(funcs)))
+    palettes = import_required('bokeh.palettes', _BOKEH_MISSING_MSG)
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
+
+    unique_funcs = list(sorted(tz.unique(funcs)))
     n_funcs = len(unique_funcs)
-    palette_lookup = brewer[palette]
-    keys = list(palette_lookup.keys())
-    low, high = min(keys), max(keys)
-    if n_funcs > high:
-        colors = cycle(palette_lookup[high])
-    elif n_funcs < low:
-        colors = palette_lookup[low]
-    else:
-        colors = palette_lookup[n_funcs]
-    color_lookup = dict(zip(unique_funcs, colors))
+    palette_lookup = palettes.all_palettes[palette]
+    keys = list(sorted(palette_lookup.keys()))
+    index = keys[min(bisect_left(keys, n_funcs), len(keys) - 1)]
+    palette = palette_lookup[index]
+    # Some bokeh palettes repeat colors, we want just the unique set
+    palette = list(tz.unique(palette))
+    if len(palette) > n_funcs:
+        # Consistently shuffle palette - prevents just using low-range
+        random.Random(42).shuffle(palette)
+    color_lookup = dict(zip(unique_funcs, cycle(palette)))
     return [color_lookup[n] for n in funcs]
 
 
@@ -163,6 +167,9 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.io import _state
+
     if not _state._notebook:
         file_path = file_path or "profile.html"
         bp.output_file(file_path)
@@ -178,11 +185,11 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         for f in figs[1:]:
             f.x_range = top.x_range
             f.title = None
-            f.min_border_top -= 30
+            f.min_border_top = 20
             f.plot_height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
-            f.min_border_bottom -= 30
+            f.min_border_bottom = 20
             f.plot_height -= 30
         for f in figs:
             f.min_border_left = 75
@@ -195,7 +202,14 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
+def _get_figure_keywords():
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    o = bp.Figure.properties()
+    o.add('tools')
+    return o
+
+
+def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -205,7 +219,8 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     dsk : dict
         The dask graph being profiled.
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be a member of
+        bokeh.palettes.all_palettes.
     label_size: int (optional)
         Maximum size of output labels in plot, defaults to 60
     **kwargs
@@ -216,31 +231,34 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.models import HoverTool
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _get_figure_keywords())
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
 
-        id_group = groupby(itemgetter(4), results)
+        id_group = tz.groupby(itemgetter(4), results)
         timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                    id_group.items())
+                       id_group.items())
         id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                    key=itemgetter(1), reverse=True)))
+                     key=itemgetter(1), reverse=True)))
 
         left = min(starts)
         right = max(ends)
 
         p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                    x_range=[0, right - left], **defaults)
+                      x_range=[0, right - left], **defaults)
 
         data = {}
         data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
-        data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
+        data['x'] = [w / 2 + s - left for (w, s) in zip(width, starts)]
         data['y'] = [id_lk[i] + 1 for i in ids]
         data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
         data['color'] = get_colors(palette, funcs)
@@ -249,7 +267,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
         source = bp.ColumnDataSource(data=data)
 
         p.rect(source=source, x='x', y='y', height=1, width='width',
-            color='color', line_color='gray')
+               color='color', line_color='gray')
     else:
         p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
                       **defaults)
@@ -275,7 +293,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     return p
 
 
-def plot_resources(results, palette='YlGnBu', **kwargs):
+def plot_resources(results, palette='Viridis', **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
@@ -283,7 +301,8 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     results : sequence
         Output of ResourceProfiler.results
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be a member of
+        bokeh.palettes.all_palettes.
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by plot_resources.
@@ -292,11 +311,15 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh import palettes
+    from bokeh.models import LinearAxis, Range1d
+
     defaults = dict(title="Profile Results",
                     tools="save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
@@ -305,7 +328,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     else:
         t = mem = cpu = []
         p = bp.figure(y_range=(0, 100), x_range=(0, 10), **defaults)
-    colors = brewer[palette][6]
+    colors = palettes.all_palettes[palette][6]
     p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {'memory': Range1d(start=(min(mem) if mem else 0),
@@ -318,7 +341,7 @@ def plot_resources(results, palette='YlGnBu', **kwargs):
     return p
 
 
-def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
+def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
                label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -333,7 +356,8 @@ def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
     metric_name : string
         Metric used to measure cache size
     palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+        Name of the bokeh palette to use, must be a member of
+        bokeh.palettes.all_palettes.
     label_size: int (optional)
         Maximum size of output labels in plot, defaults to 60
     **kwargs
@@ -344,24 +368,27 @@ def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
     -------
     The completed bokeh plot object.
     """
+    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    from bokeh.models import HoverTool
+    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,wheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+                    _get_figure_keywords())
 
     if results:
         starts, ends = list(zip(*results))[3:]
-        tics = list(sorted(unique(starts + ends)))
-        groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
+        tics = list(sorted(tz.unique(starts + ends)))
+        groups = tz.groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
         data = {}
         for k, vals in groups.items():
             cnts = dict.fromkeys(tics, 0)
             for v in vals:
                 cnts[v.cache_time] += v.metric
                 cnts[v.free_time] -= v.metric
-            data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
+            data[k] = [0] + list(tz.accumulate(add, tz.pluck(1, sorted(cnts.items()))))
 
         tics = [0] + [i - start_time for i in tics]
         p = bp.figure(x_range=[0, max(tics)], **defaults)

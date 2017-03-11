@@ -1,59 +1,78 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
+import math
+from operator import getitem
 import uuid
 
 import numpy as np
 import pandas as pd
-from pandas.core.categorical import is_categorical_dtype
 from toolz import merge
 
-from ..optimize import cull
+from .methods import drop_columns
+from .core import DataFrame, Series, _Frame, _concat
+from .hashing import hash_pandas_object
+
+from .. import base
 from ..base import tokenize
-from .core import DataFrame, Series, _Frame
-from dask.dataframe.categorical import (strip_categories, _categorize,
-                                        get_categories)
-from .utils import shard_df_on_index
+from ..context import _globals
+from ..delayed import delayed
+from ..sizeof import sizeof
+from ..utils import digit, insert, M
 
 
-def set_index(df, index, npartitions=None, compute=True,
-              drop=True, **kwargs):
-    """ Set DataFrame index to new column
-
-    Sorts index and realigns Dataframe to new sorted order.
-
-    This shuffles and repartitions your data. If done in parallel the
-    resulting order is non-deterministic.
-    """
+def set_index(df, index, npartitions=None, shuffle=None, compute=False,
+              drop=True, upsample=1.0, divisions=None, **kwargs):
+    """ See _Frame.set_index for docstring """
+    if (isinstance(index, Series) and index._name == df.index._name):
+        return df
     if isinstance(index, (DataFrame, tuple, list)):
         raise NotImplementedError(
             "Dask dataframe does not yet support multi-indexes.\n"
             "You tried to index with this index: %s\n"
             "Indexes must be single columns only." % str(index))
 
-    npartitions = npartitions or df.npartitions
+    if npartitions == 'auto':
+        repartition = True
+        npartitions = max(100, df.npartitions)
+    else:
+        if npartitions is None:
+            npartitions = df.npartitions
+        repartition = False
+
     if not isinstance(index, Series):
         index2 = df[index]
     else:
         index2 = index
 
-    divisions = (index2
-                  .quantile(np.linspace(0, 1, npartitions + 1))
-                  .compute()).tolist()
+    if divisions is None:
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        if repartition:
+            parts = df.to_delayed()
+            sizes = [delayed(sizeof)(part) for part in parts]
+        else:
+            sizes = []
+        divisions, sizes = base.compute(divisions, sizes)
+        divisions = divisions.tolist()
 
-    return set_partition(df, index, divisions, compute=compute,
-                         drop=drop, **kwargs)
+        if repartition:
+            total = sum(sizes)
+            npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = min(npartitions, df.npartitions)
+            n = len(divisions)
+            try:
+                divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
+                                      xp=np.arange(0, len(divisions)),
+                                      fp=divisions).tolist()
+            except (TypeError, ValueError):  # str type
+                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+                divisions = [divisions[i] for i in indexes]
+
+    return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
+                         compute=compute, **kwargs)
 
 
-def new_categories(categories, index):
-    """ Flop around index for '.index' """
-    if index in categories:
-        categories = categories.copy()
-        categories['.index'] = categories.pop(index)
-    return categories
-
-
-def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
+def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
+                  compute=None):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -70,6 +89,14 @@ def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
         Values to form new divisions between partitions
     drop: bool, default True
         Whether to delete columns to be used as the new index
+    shuffle: str (optional)
+        Either 'disk' for an on-disk shuffle or 'tasks' to use the task
+        scheduling framework.  Use 'disk' if you are on a single machine
+        and 'tasks' if you are on a distributed cluster.
+    max_branch: int (optional)
+        If using the task-based shuffle, the amount of splitting each
+        partition undergoes.  Increase this for fewer copies but more
+        scheduler overhead.
 
     See Also
     --------
@@ -77,103 +104,35 @@ def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
     shuffle
     partd
     """
-    if isinstance(index, Series):
-        assert df.divisions == index.divisions
-        metadata = df._pd.set_index(index._pd, drop=drop)
-    elif np.isscalar(index):
-        metadata = df._pd.set_index(index, drop=drop)
+    if np.isscalar(index):
+        partitions = df[index].map_partitions(set_partitions_pre,
+                                              divisions=divisions,
+                                              meta=pd.Series([0]))
+        df2 = df.assign(_partitions=partitions)
     else:
-         raise ValueError('index must be Series or scalar, {0} given'.format(type(index)))
+        partitions = index.map_partitions(set_partitions_pre,
+                                          divisions=divisions,
+                                          meta=pd.Series([0]))
+        df2 = df.assign(_partitions=partitions, _index=index)
 
-    token = tokenize(df, index, divisions)
-    always_new_token = uuid.uuid1().hex
-    import partd
+    df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
+                              npartitions=len(divisions) - 1, shuffle=shuffle,
+                              compute=compute)
 
-    p = ('zpartd-' + always_new_token,)
-
-    # Get Categories
-    catname = 'set-partition--get-categories-old-' + always_new_token
-    catname2 = 'set-partition--get-categories-new-' + always_new_token
-
-    dsk1 = {catname: (get_categories, df._keys()[0]),
-            p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,))),
-            catname2: (new_categories, catname,
-                       index.name if isinstance(index, Series) else index)}
-
-    # Partition data on disk
-    name = 'set-partition--partition-' + always_new_token
-    if isinstance(index, _Frame):
-        dsk2 = dict(((name, i),
-                     (_set_partition, part, ind, divisions, p, drop))
-                     for i, (part, ind)
-                     in enumerate(zip(df._keys(), index._keys())))
+    if np.isscalar(index):
+        df4 = df3.map_partitions(set_index_post_scalar, index_name=index,
+                                 drop=drop, column_dtype=df.columns.dtype)
     else:
-        dsk2 = dict(((name, i),
-                     (_set_partition, part, index, divisions, p, drop))
-                     for i, part
-                     in enumerate(df._keys()))
+        df4 = df3.map_partitions(set_index_post_series, index_name=index.name,
+                                 drop=drop, column_dtype=df.columns.dtype)
 
-    # Barrier
-    barrier_token = 'barrier-' + always_new_token
-    dsk3 = {barrier_token: (barrier, list(dsk2))}
+    df4.divisions = divisions
 
-    if compute:
-        dsk = merge(df.dask, dsk1, dsk2, dsk3)
-        if isinstance(index, _Frame):
-            dsk.update(index.dask)
-        p, barrier_token, categories = df._get(dsk, [p, barrier_token, catname], **kwargs)
-        dsk4 = {catname2: categories}
-    else:
-        dsk4 = {}
-
-    # Collect groups
-    name = 'set-partition--collect-' + token
-    if compute and not categories:
-        dsk4.update(dict(((name, i),
-                     (_set_collect, i, p, barrier_token, df.columns))
-                     for i in range(len(divisions) - 1)))
-    else:
-        dsk4.update(dict(((name, i),
-                     (_categorize, catname2,
-                        (_set_collect, i, p, barrier_token, df.columns)))
-                    for i in range(len(divisions) - 1)))
-
-    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
-
-    if isinstance(index, Series):
-        dsk.update(index.dask)
-
-    if compute:
-        dsk, _ = cull(dsk, list(dsk4.keys()))
-
-    return DataFrame(dsk, name, metadata, divisions)
+    return df4.map_partitions(M.sort_index)
 
 
-def barrier(args):
-    list(args)
-    return 0
-
-def _set_partition(df, index, divisions, p, drop=True):
-    """ Shard partition and dump into partd """
-    df = df.set_index(index, drop=drop)
-    df = strip_categories(df)
-    divisions = list(divisions)
-    shards = shard_df_on_index(df, divisions[1:-1])
-    p.append(dict(enumerate(shards)))
-
-
-def _set_collect(group, p, barrier_token, columns):
-    """ Get new partition dataframe from partd """
-    try:
-        return p.get(group)
-    except ValueError:
-        assert columns is not None, columns
-        # when unable to get group, create dummy DataFrame
-        # which has the same columns as original
-        return pd.DataFrame(columns=columns)
-
-
-def shuffle(df, index, npartitions=None):
+def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
+            compute=None):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -188,33 +147,85 @@ def shuffle(df, index, npartitions=None):
     --------
     set_index
     set_partition
-    partd
+    shuffle_disk
+    shuffle_tasks
     """
-    if isinstance(index, _Frame):
-        assert df.divisions == index.divisions
+    if not isinstance(index, _Frame):
+        index = df[index]
+    partitions = index.map_partitions(partitioning_index,
+                                      npartitions=npartitions or df.npartitions,
+                                      meta=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
+                              max_branch=max_branch, shuffle=shuffle,
+                              compute=compute)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
+    return df4
+
+
+def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
+    """ Shuffle dataframe so that column separates along divisions """
+    partitions = df[column].map_partitions(set_partitions_pre,
+                                           divisions=divisions,
+                                           meta=pd.Series([0]))
+    df2 = df.assign(_partitions=partitions)
+    df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
+                              npartitions=len(divisions) - 1, shuffle=shuffle)
+    df4 = df3.drop('_partitions', axis=1)
+    df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
+    return df4
+
+
+def rearrange_by_column(df, col, npartitions=None, max_branch=None,
+                        shuffle=None, compute=None):
+    shuffle = shuffle or _globals.get('shuffle', 'disk')
+    if shuffle == 'disk':
+        return rearrange_by_column_disk(df, col, npartitions, compute=compute)
+    elif shuffle == 'tasks':
+        return rearrange_by_column_tasks(df, col, max_branch, npartitions)
+    else:
+        raise NotImplementedError("Unknown shuffle method %s" % shuffle)
+
+
+class maybe_buffered_partd(object):
+    """If serialized, will return non-buffered partd. Otherwise returns a
+    buffered partd"""
+    def __init__(self, buffer=True):
+        self.buffer = buffer
+
+    def __reduce__(self):
+        return (maybe_buffered_partd, (False,))
+
+    def __call__(self, *args, **kwargs):
+        import partd
+        if self.buffer:
+            return partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+        else:
+            return partd.PandasBlocks(partd.File())
+
+
+def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
+    """ Shuffle using local disk """
     if npartitions is None:
         npartitions = df.npartitions
 
-    token = tokenize(df, index, npartitions)
+    token = tokenize(df, column, npartitions)
     always_new_token = uuid.uuid1().hex
 
-    import partd
     p = ('zpartd-' + always_new_token,)
-    dsk1 = {p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,),
-                                                   (partd.File,)))}
+    dsk1 = {p: (maybe_buffered_partd(),)}
 
     # Partition data on disk
     name = 'shuffle-partition-' + always_new_token
-    if isinstance(index, _Frame):
-        dsk2 = dict(((name, i),
-                     (partition, part, ind, npartitions, p))
-                     for i, (part, ind)
-                     in enumerate(zip(df._keys(), index._keys())))
-    else:
-        dsk2 = dict(((name, i),
-                     (partition, part, index, npartitions, p))
-                     for i, part
-                     in enumerate(df._keys()))
+    dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
+            for i, key in enumerate(df._keys())}
+
+    dsk = merge(df.dask, dsk1, dsk2)
+    if compute:
+        keys = [p, sorted(dsk2)]
+        pp, values = (_globals.get('get') or DataFrame._get)(dsk, keys)
+        dsk1 = {p: pp}
+        dsk = dict(zip(sorted(dsk2), values))
 
     # Barrier
     barrier_token = 'barrier-' + always_new_token
@@ -222,22 +233,101 @@ def shuffle(df, index, npartitions=None):
 
     # Collect groups
     name = 'shuffle-collect-' + token
-    meta = df._pd
-    dsk4 = dict(((name, i),
-                 (collect, i, p, meta, barrier_token))
-                for i in range(npartitions))
+    dsk4 = {(name, i): (collect, p, i, df._meta, barrier_token)
+            for i in range(npartitions)}
 
-    divisions = [None] * (npartitions + 1)
+    divisions = (None,) * (npartitions + 1)
 
-    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
-    if isinstance(index, _Frame):
-        dsk.update(index.dask)
+    dsk = merge(dsk, dsk1, dsk3, dsk4)
 
-    return DataFrame(dsk, name, df.columns, divisions)
+    return DataFrame(dsk, name, df._meta, divisions)
+
+
+def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
+    """ Order divisions of DataFrame so that all values within column align
+
+    This enacts a task-based shuffle
+
+    See also:
+        rearrange_by_column_disk
+        set_partitions_tasks
+        shuffle_tasks
+    """
+    max_branch = max_branch or 32
+    n = df.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    groups = []
+    splits = []
+    joins = []
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages))
+              for i in range(k**stages)]
+
+    token = tokenize(df, column, max_branch)
+
+    start = dict((('shuffle-join-' + token, 0, inp),
+                  (df._name, i) if i < df.npartitions else df._meta)
+                 for i, inp in enumerate(inputs))
+
+    for stage in range(1, stages + 1):
+        group = dict((('shuffle-group-' + token, stage, inp),
+                      (shuffle_group, ('shuffle-join-' + token, stage - 1, inp),
+                       column, stage - 1, k, n))
+                     for inp in inputs)
+
+        split = dict((('shuffle-split-' + token, stage, i, inp),
+                      (getitem, ('shuffle-group-' + token, stage, inp), i))
+                     for i in range(k)
+                     for inp in inputs)
+
+        join = dict((('shuffle-join-' + token, stage, inp),
+                     (_concat,
+                      [('shuffle-split-' + token, stage, inp[stage - 1],
+                       insert(inp, stage - 1, j)) for j in range(k)]))
+                    for inp in inputs)
+        groups.append(group)
+        splits.append(split)
+        joins.append(join)
+
+    end = dict((('shuffle-' + token, i),
+                ('shuffle-join-' + token, stages, inp))
+               for i, inp in enumerate(inputs))
+
+    dsk = merge(df.dask, start, end, *(groups + splits + joins))
+    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
+
+    if npartitions is not None and npartitions != df.npartitions:
+        parts = [i % df.npartitions for i in range(npartitions)]
+        token = tokenize(df2, npartitions)
+        dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
+               for i, k in enumerate(df2._keys())}
+        for p in range(npartitions):
+            dsk[('repartition-get-' + token, p)] = \
+                (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
+
+        df3 = DataFrame(merge(df2.dask, dsk), 'repartition-get-' + token, df2,
+                        [None] * (npartitions + 1))
+    else:
+        df3 = df2
+        df3.divisions = (None,) * (df.npartitions + 1)
+
+    return df3
+
+
+########################################################
+# Various convenience functions to be run by the above #
+########################################################
 
 
 def partitioning_index(df, npartitions):
-    """Computes a deterministic index mapping each record to a partition.
+    """
+    Computes a deterministic index mapping each record to a partition.
 
     Identical rows are mapped to the same partition.
 
@@ -252,51 +342,86 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    if isinstance(df, (pd.Series, pd.Index)):
-        h = hash_series(df).astype('int64')
-    elif isinstance(df, pd.DataFrame):
-        cols = df.iteritems()
-        h = hash_series(next(cols)[1]).astype('int64')
-        for _, col in cols:
-            h = np.multiply(h, 3, h)
-            h = np.add(h, hash_series(col), h)
-    else:
-        raise TypeError("Unexpected type %s" % type(df))
-    return h % int(npartitions)
+    return hash_pandas_object(df, index=False) % int(npartitions)
 
 
-def hash_series(s):
-    """Given a series, return a numpy array of deterministic integers."""
-    vals = s.values
-    dt = vals.dtype
-    if is_categorical_dtype(dt):
-        return vals.codes
-    elif np.issubdtype(dt, np.integer):
-        return vals
-    elif np.issubdtype(dt, np.floating):
-        return np.nan_to_num(vals).astype('int64')
-    elif dt == np.bool:
-        return vals.view('int8')
-    elif np.issubdtype(dt, np.datetime64) or np.issubdtype(dt, np.timedelta64):
-        return vals.view('int64')
-    else:
-        return s.apply(hash).values
+def barrier(args):
+    list(args)
+    return 0
 
 
-def partition(df, index, npartitions, p):
-    """ Partition a dataframe along a grouper, store partitions to partd """
-    rng = pd.Series(np.arange(len(df)))
-    if isinstance(index, Iterator):
-        index = list(index)
-    if not isinstance(index, (pd.Index, pd.Series, pd.DataFrame)):
-        index = df[index]
-    groups = rng.groupby(partitioning_index(index, npartitions))
-    d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
-                                            if i in groups.groups)
-    p.append(d)
-
-
-def collect(group, p, meta, barrier_token):
+def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    res = p.get(group)
+    res = p.get(part)
     return res if len(res) > 0 else meta
+
+
+def set_partitions_pre(s, divisions):
+    partitions = pd.Series(divisions).searchsorted(s, side='right') - 1
+    partitions[(s >= divisions[-1]).values] = len(divisions) - 2
+    return partitions
+
+
+def shuffle_group_2(df, col):
+    if not len(df):
+        return {}, df
+    ind = df[col]._values.astype(np.int64)
+    n = ind.max() + 1
+    indexer, locations = pd.algos.groupsort_indexer(ind.view(np.int64), n)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    result2 = dict(zip(range(n), parts))
+    return result2, df.iloc[:0]
+
+
+def shuffle_group_get(g_head, i):
+    g, head = g_head
+    if i in g:
+        return g[i]
+    else:
+        return head
+
+
+def shuffle_group(df, col, stage, k, npartitions):
+    if col == '_partitions':
+        ind = df[col]
+    else:
+        ind = hash_pandas_object(df[col], index=False)
+
+    c = ind._values
+    typ = np.min_scalar_type(npartitions * 2)
+    c = c.astype(typ)
+
+    npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
+                             for x in [npartitions, k, stage]]
+
+    c = np.mod(c, npartitions, out=c)
+    c = np.floor_divide(c, k ** stage, out=c)
+    c = np.mod(c, k, out=c)
+
+    indexer, locations = pd.algos.groupsort_indexer(c.astype(np.int64), k)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+
+    return dict(zip(range(k), parts))
+
+
+def shuffle_group_3(df, col, npartitions, p):
+    g = df.groupby(col)
+    d = {i: g.get_group(i) for i in g.groups}
+    p.append(d, fsync=True)
+
+
+def set_index_post_scalar(df, index_name, drop, column_dtype):
+    df2 = df.drop('_partitions', axis=1).set_index(index_name, drop=drop)
+    df2.columns = df2.columns.astype(column_dtype)
+    return df2
+
+
+def set_index_post_series(df, index_name, drop, column_dtype):
+    df2 = df.drop('_partitions', axis=1).set_index('_index', drop=True)
+    df2.index.name = index_name
+    df2.columns = df2.columns.astype(column_dtype)
+    return df2

@@ -10,7 +10,6 @@ blocked algorithms and task scheduling.
    array-overview.rst
    array-creation.rst
    array-api.rst
-   array-examples.rst
 
 Other topics
 
@@ -21,5 +20,4 @@ Other topics
    array-stack.rst
    array-ghost.rst
    array-design.rst
-   array-extend.rst
    array-linear-operator.rst

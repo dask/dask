@@ -1,11 +1,13 @@
 language: python
 sudo: false
-python:
-    - "2.6"
-    - "2.7"
-    - "3.3"
-    - "3.4"
-    - "3.5"
+
+env:
+  matrix:
+    - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.19.0 COVERAGE='true' PARALLEL='false' TEST_IMPORTS='false' XTRATESTARGS=
+    - PYTHON=2.7 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' XTRATESTARGS=
+    - PYTHON=3.6 NUMPY=1.11.2 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
 
 addons:
     apt:
@@ -13,36 +15,12 @@ addons:
         - graphviz
         - liblzma-dev
 
-install:
-  # Install conda
-  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update conda
-
-  # Install dependencies
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
-  - source activate test-environment
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then conda install numpy=1.9.2 scipy pandas=0.16.2 pytables=3.2.0 h5py=2.5.0 bcolz=0.10.0 pytest coverage toolz scikit-learn cytoolz cloudpickle chest blosc cython psutil ipython; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.4' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then conda install numpy scipy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz cloudpickle chest blosc cython psutil ipython distributed; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
-  - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install backports.lzma; fi
-  - pip install git+https://github.com/mrocklin/partd --upgrade
-  - pip install git+https://github.com/mrocklin/cachey --upgrade
-  - pip install blosc --upgrade
-  - pip install graphviz moto
-  - if [[ $TRAVIS_PYTHON_VERSION < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi
-
-  # Install dask
-  - python setup.py install
-
+install: source continuous_integration/travis/install.sh
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
-
-after_success:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
+  - source continuous_integration/travis/run_tests.sh
+  - flake8 dask
+  - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
+after_success: source continuous_integration/travis/after_success.sh
 
 notifications:
   email: false

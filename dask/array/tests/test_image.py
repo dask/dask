@@ -1,7 +1,5 @@
 from contextlib import contextmanager
 import os
-import shutil
-from tempfile import mkdtemp
 
 import pytest
 pytest.importorskip('skimage')
@@ -9,19 +7,18 @@ from dask.array.image import imread as da_imread
 import numpy as np
 from skimage.io import imsave
 
+from dask.utils import tmpdir
+
 
 @contextmanager
 def random_images(n, shape):
-    dirname = mkdtemp()
-    for i in range(n):
-        fn = os.path.join(dirname, 'image.%d.png' % i)
-        x = np.random.randint(0, 255, size=shape).astype('i1')
-        imsave(fn, x)
+    with tmpdir() as dirname:
+        for i in range(n):
+            fn = os.path.join(dirname, 'image.%d.png' % i)
+            x = np.random.randint(0, 255, size=shape).astype('i1')
+            imsave(fn, x)
 
-    try:
         yield os.path.join(dirname, '*.png')
-    finally:
-        shutil.rmtree(dirname)
 
 
 def test_imread():

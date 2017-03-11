@@ -1,11 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
-
 from itertools import chain
 
-def inc(x):
-    return x + 1
+from .utils_test import add, inc  # noqa: F401
+
 
 def ishashable(x):
     """ Is x hashable?
@@ -42,6 +40,28 @@ def istask(x):
     return type(x) is tuple and x and callable(x[0])
 
 
+def has_tasks(dsk, x):
+    """Whether ``x`` has anything to compute.
+
+    Returns True if:
+    - ``x`` is a task
+    - ``x`` is a key in ``dsk``
+    - ``x`` is a list that contains any tasks or keys
+    """
+    if istask(x):
+        return True
+    try:
+        if x in dsk:
+            return True
+    except:
+        pass
+    if isinstance(x, list):
+        for i in x:
+            if has_tasks(dsk, i):
+                return True
+    return False
+
+
 def preorder_traversal(task):
     """A generator to preorder-traverse a task."""
 
@@ -57,11 +77,11 @@ def preorder_traversal(task):
             yield item
 
 
-def _get_task(d, task, maxdepth=1000):
-    # non-recursive.  DAG property is checked upon reaching maxdepth.
-    _iter = lambda *args: iter(args)
+def _get_nonrecursive(d, x, maxdepth=1000):
+    # Non-recursive. DAG property is checked upon reaching maxdepth.
+    _list = lambda *args: list(args)
 
-    # We construct a nested heirarchy of tuples to mimic the execution stack
+    # We construct a nested hierarchy of tuples to mimic the execution stack
     # of frames that Python would maintain for a recursive implementation.
     # A frame is associated with a single task from a Dask.
     # A frame tuple has three elements:
@@ -70,7 +90,7 @@ def _get_task(d, task, maxdepth=1000):
     #       Arguments are stored in reverse order, and elements are popped
     #       as they are evaluated.
     #    3) The calculated results of the arguments from (2).
-    stack = [(task[0], list(task[:0:-1]), [])]
+    stack = [(lambda x: x, [x], [])]
     while True:
         func, args, results = stack[-1]
         if not args:
@@ -81,7 +101,7 @@ def _get_task(d, task, maxdepth=1000):
             stack[-1][2].append(val)
             continue
         elif maxdepth and len(stack) > maxdepth:
-            cycle = getcycle(d, list(task[1:]))
+            cycle = getcycle(d, x)
             if cycle:
                 cycle = '->'.join(cycle)
                 raise RuntimeError('Cycle detected in Dask: %s' % cycle)
@@ -89,22 +109,32 @@ def _get_task(d, task, maxdepth=1000):
 
         key = args.pop()
         if isinstance(key, list):
-            # v = (get(d, k, concrete=False) for k in key)  # recursive
-            # Fake being lazy
-            stack.append((_iter, key[::-1], []))
+            stack.append((_list, list(key[::-1]), []))
             continue
         elif ishashable(key) and key in d:
-            v = d[key]
+            args.append(d[key])
+            continue
+        elif istask(key):
+            stack.append((key[0], list(key[:0:-1]), []))
         else:
-            v = key
-
-        if istask(v):
-            stack.append((v[0], list(v[:0:-1]), []))
-        else:
-            results.append(v)
+            results.append(key)
 
 
-def get(d, key, get=None, **kwargs):
+def _get_recursive(d, x):
+    # recursive, no cycle detection
+    if isinstance(x, list):
+        return [_get_recursive(d, k) for k in x]
+    elif ishashable(x) and x in d:
+        return _get_recursive(d, d[x])
+    elif istask(x):
+        func, args = x[0], x[1:]
+        args2 = [_get_recursive(d, k) for k in args]
+        return func(*args2)
+    else:
+        return x
+
+
+def get(d, x, recursive=False):
     """ Get value from Dask
 
     Examples
@@ -117,79 +147,20 @@ def get(d, key, get=None, **kwargs):
     1
     >>> get(d, 'y')
     2
-
-    See Also
-    --------
-    set
     """
-    get = get or _get
-    if isinstance(key, list):
-        v = tuple(get(d, k, get=get) for k in key)
-    elif istask(key):
-        v = key
-    elif ishashable(key):
-        v = d[key]
-    else:
-        message = '%s is neither a task or a dask key'
-        raise KeyError(message % key)
-
-    if istask(v):
-        if get is _get:
-            # use non-recursive method by default
-            return _get_task(d, v)
-        func, args = v[0], v[1:]
-
-        args2 = []
-        for arg in args:
-            if not istask(arg) and arg not in d:
-                args2.append(arg)
-            else:
-                args2.append(get(d, arg, get=get))
-        return func(*args2)
-    else:
-        return v
-
-_get = get
+    _get = _get_recursive if recursive else _get_nonrecursive
+    if isinstance(x, list):
+        return tuple(get(d, k) for k in x)
+    elif x in d:
+        return _get(d, x)
+    raise KeyError("{0} is not a key in the graph".format(x))
 
 
-def _deps(dsk, arg):
-    """ Get dependencies from keys or tasks
-
-    Helper function for get_dependencies.
-
-    >>> dsk = {'x': 1, 'y': 2}
-
-    >>> _deps(dsk, 'x')
-    ['x']
-    >>> _deps(dsk, (add, 'x', 1))
-    ['x']
-    >>> _deps(dsk, ['x', 'y'])
-    ['x', 'y']
-    >>> _deps(dsk, {'a': 'x'})
-    ['x']
-    >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
-    ['x', 'y']
-    """
-    if istask(arg):
-        result = []
-        for a in arg[1:]:
-            result.extend(_deps(dsk, a))
-        return result
-    if type(arg) is list:
-        return sum([_deps(dsk, a) for a in arg], [])
-    if type(arg) is dict:
-        return sum([_deps(dsk, v) for v in arg.values()], [])
-    try:
-        if arg not in dsk:
-            return []
-    except TypeError:  # not hashable
-            return []
-    return [arg]
-
-
-def get_dependencies(dsk, task, as_list=False):
+def get_dependencies(dsk, key=None, task=None, as_list=False):
     """ Get the immediate tasks on which this task depends
 
+    Examples
+    --------
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -210,23 +181,39 @@ def get_dependencies(dsk, task, as_list=False):
 
     >>> get_dependencies(dsk, 'a')  # Ignore non-keys
     set(['x'])
+
+    >>> get_dependencies(dsk, task=(inc, 'x'))  # provide tasks directly
+    set(['x'])
     """
-    args = [dsk[task]]
+    if key is not None:
+        arg = dsk[key]
+    elif task is not None:
+        arg = task
+    else:
+        raise ValueError("Provide either key or task")
+
     result = []
-    while args:
-        arg = args.pop()
-        if istask(arg):
-            args.extend(arg[1:])
-        elif type(arg) is list:
-            args.extend(arg)
-        else:
-            result.append(arg)
-    if not result:
-        return [] if as_list else set()
-    rv = []
-    for x in result:
-        rv.extend(_deps(dsk, x))
-    return rv if as_list else set(rv)
+    work = [arg]
+
+    while work:
+        new_work = []
+        for w in work:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                new_work += w[1:]
+            elif typ is list:
+                new_work += w
+            elif typ is dict:
+                new_work += w.values()
+            else:
+                try:
+                    if w in dsk:
+                        result.append(w)
+                except TypeError:  # not hashable
+                    pass
+        work = new_work
+
+    return result if as_list else set(result)
 
 
 def get_deps(dsk):
@@ -239,7 +226,8 @@ def get_deps(dsk):
     >>> dependents
     {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
     """
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependencies = {k: get_dependencies(dsk, task=v)
+                    for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
     return dependencies, dependents
 
@@ -300,7 +288,7 @@ def subs(task, key, val):
     """
     if not istask(task):
         try:
-            if task == key:
+            if type(task) is type(key) and task == key:
                 return val
         except Exception:
             pass
@@ -435,23 +423,32 @@ def isdag(d, keys):
     return not getcycle(d, keys)
 
 
-def list2(L):
-    return list(L)
+class literal(object):
+    """A small serializable object to wrap literal values without copying"""
+    __slots__ = ('data',)
+
+    def __init__(self, data):
+        self.data = data
+
+    def __repr__(self):
+        return 'literal<type=%s>' % type(self.data).__name__
+
+    def __reduce__(self):
+        return (literal, (self.data,))
+
+    def __call__(self):
+        return self.data
 
 
 def quote(x):
     """ Ensure that this value remains this value in a dask graph
 
-    Some values in dask graph take on special meaning.  Lists become iterators,
-    tasks get executed.  Sometimes we want to ensure that our data is not
-    interpreted but remains literal.
-
-    >>> quote([1, 2, 3])
-    [1, 2, 3]
+    Some values in dask graph take on special meaning. Sometimes we want to
+    ensure that our data is not interpreted but remains literal.
 
     >>> quote((add, 1, 2))  # doctest: +SKIP
-    (tuple, [add, 1, 2])
+    (literal<type=tuple>,)
     """
-    if istask(x):
-        return (tuple, list(map(quote, x)))
+    if istask(x) or type(x) is list:
+        return (literal(x),)
     return x

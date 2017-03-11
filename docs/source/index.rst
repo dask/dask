@@ -2,16 +2,28 @@
 Dask
 ====
 
-Dask is a flexible parallel computing library for analytics.  Dask emphasizes
-the following virtues:
+*Dask is a flexible parallel computing library for analytic computing.*
+
+Dask is composed of two components:
+
+1.  **Dynamic task scheduling** optimized for computation.  This is similar to
+    *Airflow, Luigi, Celery, or Make*, but optimized for interactive
+    computational workloads.
+2.  **"Big Data" collections** like parallel arrays, dataframes, and lists that
+    extend common interfaces like *NumPy, Pandas, or Python iterators* to
+    larger-than-memory or distributed environments.  These parallel collections
+    run on top of the dynamic task schedulers.
+
+Dask emphasizes the following virtues:
 
 *  **Familiar**: Provides parallelized NumPy array and Pandas DataFrame objects
+*  **Flexible**: Provides a task scheduling interface for more custom workloads
+   and integration with other projects.
 *  **Native**: Enables distributed computing in Pure Python with access to
    the PyData stack.
 *  **Fast**: Operates with low overhead, low latency, and minimal serialization
    necessary for fast numerical algorithms
-*  **Flexible**: Supports complex and messy workloads
-*  **Scales up**: Runs resiliently on clusters with 100s of nodes
+*  **Scales up**: Runs resiliently on clusters with 1000s of cores
 *  **Scales down**: Trivial to set up and run on a laptop in a single process
 *  **Responsive**: Designed with interactive computing in mind it provides rapid
    feedback and diagnostics to aid humans
@@ -22,6 +34,9 @@ the following virtues:
    :width: 80%
    :align: center
 
+See the `dask.distributed documentation (separate website)
+<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
+on Dask's distributed scheduler,
 
 Familiar user interface
 -----------------------
@@ -44,7 +59,7 @@ Familiar user interface
                                                               chunks=(1000, 1000))
    x - x.mean(axis=1)                       x - x.mean(axis=1).compute()
 
-**Dask Bag** mimics iterators, Toolz, PySpark
+**Dask Bag** mimics iterators, Toolz, and PySpark
 
 .. code-block:: python
 
@@ -64,6 +79,22 @@ Familiar user interface
 
    result = delayed(summarize)(L)
    result.compute()
+
+The **concurrent.futures** interface provides general submission of custom
+tasks:
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   client = Client('scheduler:port')
+
+   futures = []
+   for fn in filenames:
+       future = client.submit(load, fn)
+       futures.append(future)
+
+   summary = client.submit(summarize, futures)
+   summary.result()
 
 
 Scales from laptops to clusters
@@ -101,6 +132,7 @@ Index
 **Getting Started**
 
 * :doc:`install`
+* :doc:`use-cases`
 * :doc:`examples-tutorials`
 * :doc:`cheatsheet`
 
@@ -110,6 +142,7 @@ Index
    :caption: Getting Started
 
    install.rst
+   use-cases.rst
    examples-tutorials.rst
    cheatsheet.rst
 
@@ -134,39 +167,16 @@ then you should start here.
    dataframe.rst
    delayed.rst
 
-**Graphs**
-
-Dask graphs encode algorithms in a simple format involving Python dicts,
-tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  Working directly with dask graphs is an excellent way to
-implement and test new algorithms in fields such as linear algebra,
-optimization, and machine learning.  If you are a *developer*, you should start
-here.
-
-* :doc:`graphs`
-* :doc:`spec`
-* :doc:`custom-graphs`
-* :doc:`optimize`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Graphs
-
-   graphs.rst
-   spec.rst
-   custom-graphs.rst
-   optimize.rst
-
 **Scheduling**
 
 Schedulers execute task graphs.  Dask currently has two main schedulers, one
 for single machine processing using threads or processes, and one for
 distributed memory clusters.
 
+* :doc:`distributed`
 * :doc:`scheduler-overview`
+* :doc:`scheduler-choice`
 * :doc:`Single machine scheduler<shared>`
-* `Distributed scheduler`_  (separate webpage)
 * :doc:`scheduling-policy`
 
 .. toctree::
@@ -174,7 +184,9 @@ distributed memory clusters.
    :hidden:
    :caption: Scheduling
 
+   distributed.rst
    scheduler-overview.rst
+   scheduler-choice.rst
    shared.rst
    scheduling-policy.rst
 
@@ -194,14 +206,41 @@ help make debugging and profiling graph execution easier.
    inspect.rst
    diagnostics.rst
 
+**Graphs**
+
+Internally Dask encodes algorithms in a simple format involving Python dicts,
+tuples, and functions.  This graph format can be used in isolation from the
+dask collections.  Working directly with dask graphs is rare unless you intend
+to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
+often a better choice.  If you are a *core developer*, then you should start here.
+
+* :doc:`graphs`
+* :doc:`spec`
+* :doc:`custom-graphs`
+* :doc:`optimize`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Graphs
+
+   graphs.rst
+   spec.rst
+   custom-graphs.rst
+   optimize.rst
+
 **Help & reference**
 
 * :doc:`support`
+* :doc:`changelog`
+* :doc:`presentations`
+* :doc:`develop`
 * :doc:`faq`
 * :doc:`spark`
 * :doc:`caching`
+* :doc:`bytes`
+* :doc:`remote-data-services`
 * :doc:`cite`
-* :doc:`glossary`
 
 .. toctree::
    :maxdepth: 1
@@ -209,22 +248,19 @@ help make debugging and profiling graph execution easier.
    :caption: Help & reference
 
    support.rst
+   changelog.rst
+   presentations.rst
+   develop.rst
    faq.rst
    spark.rst
    caching.rst
+   bytes.rst
+   remote-data-services.rst
    cite.rst
-   glossary.rst
-
-**Contact**
-
-* For user questions please tag StackOverflow questions with the `#dask tag`_.
-* For bug reports and feature requests please use the `GitHub issue tracker`_
-* For community discussion please use `blaze-dev@continuum.io`_
-* For chat, see `gitter chat room`_
+   funding.rst
 
 Dask is part of the Blaze_ project supported and offered by
-`Continuum Analytics`_ and contributors under a `3-clause BSD
-license`_.
+`Continuum Analytics`_ and contributors under a `3-clause BSD license`_.
 
 .. _Blaze: http://continuum.io/open-source/blaze
 .. _`Continuum Analytics`: http://continuum.io
@@ -234,9 +270,8 @@ license`_.
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/dask/dask
-.. _`xarray`: http://xray.readthedocs.org/en/stable/
+.. _`xarray`: https://xray.readthedocs.io/en/stable/
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
-.. _`distributed scheduler`: http://distributed.readthedocs.org/en/latest/
-.. _`Distributed scheduler`: http://distributed.readthedocs.org/en/latest/
+.. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/

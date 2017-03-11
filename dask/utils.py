@@ -1,33 +1,35 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
-from contextlib import contextmanager
-from errno import ENOENT
+import codecs
 import functools
+import inspect
 import io
+import math
 import os
-import sys
+import re
 import shutil
 import struct
+import sys
 import tempfile
-import inspect
-import codecs
-from sys import getdefaultencoding
+from errno import ENOENT
+from collections import Iterator
+from contextlib import contextmanager
+from importlib import import_module
+from threading import Lock
+import multiprocessing as mp
+import uuid
+from weakref import WeakValueDictionary
 
-from .compatibility import long, getargspec, BZ2File, GzipFile, LZMAFile
+from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
+                            urlsplit, unicode)
+from .core import get_deps
+from .context import _globals
+from .optimize import key_split    # noqa: F401
 
 
-system_encoding = getdefaultencoding()
+system_encoding = sys.getdefaultencoding()
 if system_encoding == 'ascii':
     system_encoding = 'utf-8'
-
-
-def raises(err, lamda):
-    try:
-        lamda()
-        return False
-    except err:
-        return True
 
 
 def deepmap(func, *seqs):
@@ -47,12 +49,52 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+def homogeneous_deepmap(func, seq):
+    if not seq:
+        return seq
+    n = 0
+    tmp = seq
+    while isinstance(tmp, list):
+        n += 1
+        tmp = tmp[0]
+
+    return ndeepmap(n, func, seq)
+
+
+def ndeepmap(n, func, seq):
+    """ Call a function on every element within a nested container
+
+    >>> def inc(x):
+    ...     return x + 1
+    >>> L = [[1, 2], [3, 4, 5]]
+    >>> ndeepmap(2, inc, L)
+    [[2, 3], [4, 5, 6]]
+    """
+    if n == 1:
+        return [func(item) for item in seq]
+    elif n > 1:
+        return [ndeepmap(n - 1, func, item) for item in seq]
+    else:
+        return func(seq)
+
+
 @contextmanager
 def ignoring(*exceptions):
     try:
         yield
     except exceptions:
         pass
+
+
+def import_required(mod_name, error_msg):
+    """Attempt to import a required dependency.
+
+    Raises a RuntimeError if the requested module is not available.
+    """
+    try:
+        return import_module(mod_name)
+    except ImportError:
+        raise RuntimeError(error_msg)
 
 
 @contextmanager
@@ -74,6 +116,22 @@ def tmpfile(extension='', dir=None):
 
 
 @contextmanager
+def tmpdir(dir=None):
+    dirname = tempfile.mkdtemp(dir=dir)
+
+    try:
+        yield dirname
+    finally:
+        if os.path.exists(dirname):
+            if os.path.isdir(dirname):
+                with ignoring(OSError):
+                    shutil.rmtree(dirname)
+            else:
+                with ignoring(OSError):
+                    os.remove(dirname)
+
+
+@contextmanager
 def filetext(text, extension='', open=open, mode='w'):
     with tmpfile(extension=extension) as filename:
         f = open(filename, mode=mode)
@@ -86,6 +144,28 @@ def filetext(text, extension='', open=open, mode='w'):
                 pass
 
         yield filename
+
+
+@contextmanager
+def changed_cwd(new_cwd):
+    old_cwd = os.getcwd()
+    os.chdir(new_cwd)
+    try:
+        yield
+    finally:
+        os.chdir(old_cwd)
+
+
+@contextmanager
+def tmp_cwd(dir=None):
+    with tmpdir(dir) as dirname:
+        with changed_cwd(dirname):
+            yield dirname
+
+
+@contextmanager
+def noop_context():
+    yield
 
 
 def repr_long_list(seq):
@@ -111,6 +191,7 @@ class IndexCallable(object):
     4
     """
     __slots__ = 'fn',
+
     def __init__(self, fn):
         self.fn = fn
 
@@ -119,27 +200,33 @@ class IndexCallable(object):
 
 
 @contextmanager
-def filetexts(d, open=open, mode='t'):
+def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """ Dumps a number of textfiles to disk
 
     d - dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
+
+    Since this is meant for use in tests, this context manager will
+    automatically switch to a temporary current directory, to avoid
+    race conditions when running tests in parallel.
     """
-    for filename, text in d.items():
-        f = open(filename, 'w' + mode)
-        try:
-            f.write(text)
-        finally:
+    with (tmp_cwd() if use_tmpdir else noop_context()):
+        for filename, text in d.items():
+            f = open(filename, 'w' + mode)
             try:
-                f.close()
-            except AttributeError:
-                pass
+                f.write(text)
+            finally:
+                try:
+                    f.close()
+                except AttributeError:
+                    pass
 
-    yield list(d)
+        yield list(d)
 
-    for filename in d:
-        if os.path.exists(filename):
-            os.remove(filename)
+        for filename in d:
+            if os.path.exists(filename):
+                with ignoring(OSError):
+                    os.remove(filename)
 
 
 compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
@@ -333,30 +420,25 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def different_seeds(n, random_state=None):
-    """ A list of different 32 bit integer seeds
+def random_state_data(n, random_state=None):
+    """Return a list of arrays that can initialize
+    ``np.random.RandomState``.
 
     Parameters
     ----------
-    n: int
-        Number of distinct seeds to return
-    random_state: int or np.random.RandomState
-        If int create a new RandomState with this as the seed
-    Otherwise draw from the passed RandomState
+    n : int
+        Number of tuples to return.
+    random_state : int or np.random.RandomState, optional
+        If an int, is used to seed a new ``RandomState``.
     """
     import numpy as np
 
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
-    big_n = np.iinfo(np.int32).max
-
-    seeds = set(random_state.randint(big_n, size=n))
-    while len(seeds) < n:
-        seeds.add(random_state.randint(big_n))
-
-    # Sorting makes it easier to know what seeds are for what chunk
-    return sorted(seeds)
+    maxuint32 = np.iinfo(np.uint32).max
+    return [(random_state.rand(624) * maxuint32).astype('uint32')
+            for i in range(n)]
 
 
 def is_integer(i):
@@ -398,16 +480,17 @@ def file_size(fn, compression=None):
 
 
 ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
-    classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset,
-    hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range,
-    repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple,
-    type, vars, zip])
-if sys.version_info[0] == 3: # Python 3
-    ONE_ARITY_BUILTINS |= set([ascii])
-if sys.version_info[:2] != (2, 6):
-    ONE_ARITY_BUILTINS |= set([memoryview])
+                          classmethod, complex, dict, dir, enumerate, eval,
+                          float, format, frozenset, hash, hex, id, int, iter,
+                          len, list, max, min, next, oct, open, ord, range,
+                          repr, reversed, round, set, slice, sorted,
+                          staticmethod, str, sum, tuple,
+                          type, vars, zip, memoryview])
+if PY3:
+    ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
 MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
-    isinstance, issubclass, map, pow, setattr])
+                            isinstance, issubclass, map, pow, setattr])
+
 
 def takes_multiple_arguments(func):
     """ Does this function take multiple arguments?
@@ -459,27 +542,58 @@ def takes_multiple_arguments(func):
 
 class Dispatch(object):
     """Simple single dispatch."""
-    def __init__(self):
+    def __init__(self, name=None):
         self._lookup = {}
+        self._lazy = {}
+        if name:
+            self.__name__ = name
 
-    def register(self, type, func):
+    def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
-        if isinstance(type, tuple):
-            for t in type:
-                self.register(t, func)
-        else:
-            self._lookup[type] = func
+        def wrapper(func):
+            if isinstance(type, tuple):
+                for t in type:
+                    self.register(t, func)
+            else:
+                self._lookup[type] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
+
+    def register_lazy(self, toplevel, func=None):
+        """
+        Register a registration function which will be called if the
+        *toplevel* module (e.g. 'pandas') is ever loaded.
+        """
+        def wrapper(func):
+            self._lazy[toplevel] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
 
     def __call__(self, arg):
-        # We dispatch first on type(arg), and fall back to iterating through
-        # the mro. This is significantly faster in the common case where
-        # type(arg) is in the lookup, with only a small penalty on fall back.
+        # Fast path with direct lookup on type
         lk = self._lookup
         typ = type(arg)
-        if typ in lk:
-            return lk[typ](arg)
+        try:
+            impl = lk[typ]
+        except KeyError:
+            pass
+        else:
+            return impl(arg)
+        # Is a lazy registration function present?
+        toplevel, _, _ = typ.__module__.partition('.')
+        try:
+            register = self._lazy.pop(toplevel)
+        except KeyError:
+            pass
+        else:
+            register()
+            return self(arg)  # recurse
+        # Walk the MRO and cache the lookup result
         for cls in inspect.getmro(typ)[1:]:
             if cls in lk:
+                lk[typ] = lk[cls]
                 return lk[cls](arg)
         raise TypeError("No dispatch for {0} type".format(typ))
 
@@ -496,10 +610,20 @@ def ensure_not_exists(filename):
 
 
 def _skip_doctest(line):
-    if '>>>' in line:
+    # NumPy docstring contains cursor and comment only example
+    stripped = line.strip()
+    if stripped == '>>>' or stripped.startswith('>>> #'):
+        return stripped
+    elif '>>>' in stripped:
         return line + '    # doctest: +SKIP'
     else:
         return line
+
+
+def skip_doctest(doc):
+    if doc is None:
+        return ''
+    return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
 
 
 def derived_from(original_klass, version=None, ua_args=[]):
@@ -526,10 +650,13 @@ def derived_from(original_klass, version=None, ua_args=[]):
             if doc is None:
                 doc = ''
 
-            method_args = getargspec(method).args
-            original_args = getargspec(original_method).args
+            try:
+                method_args = getargspec(method).args
+                original_args = getargspec(original_method).args
+                not_supported = [m for m in original_args if m not in method_args]
+            except TypeError:
+                not_supported = []
 
-            not_supported = [m for m in original_args if m not in method_args]
             if len(ua_args) > 0:
                 not_supported.extend(ua_args)
 
@@ -538,12 +665,13 @@ def derived_from(original_klass, version=None, ua_args=[]):
                         "        Dask doesn't supports following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
-            doc = '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+            doc = skip_doctest(doc)
             method.__doc__ = doc
             return method
 
         except AttributeError:
             module_name = original_klass.__module__.split('.')[0]
+
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
                 msg = "Base package doesn't support '{0}'.".format(method_name)
@@ -555,15 +683,31 @@ def derived_from(original_klass, version=None, ua_args=[]):
     return wrapper
 
 
-def funcname(func, full=False):
+def funcname(func):
     """Get the name of a function."""
-    while hasattr(func, 'func'):
-        func = func.func
+    # functools.partial
+    if isinstance(func, functools.partial):
+        return funcname(func.func)
+    # methodcaller
+    if isinstance(func, methodcaller):
+        return func.method
+
+    module_name = getattr(func, '__module__', None) or ''
+    type_name = getattr(type(func), '__name__', None) or ''
+
+    # toolz.curry
+    if 'toolz' in module_name and 'curry' == type_name:
+        return func.func_name
+    # multipledispatch objects
+    if 'multipledispatch' in module_name and 'Dispatcher' == type_name:
+        return func.name
+
+    # All other callables
     try:
-        if full:
-            return func.__qualname__
-        else:
-            return func.__name__
+        name = func.__name__
+        if name == '<lambda>':
+            return 'lambda'
+        return name
     except:
         return str(func)
 
@@ -582,5 +726,328 @@ def ensure_bytes(s):
         return s
     if hasattr(s, 'encode'):
         return s.encode()
-    raise TypeError(
-            "Object %s is neither a bytes object nor has an encode method" % s)
+    msg = "Object %s is neither a bytes object nor has an encode method"
+    raise TypeError(msg % s)
+
+
+def ensure_unicode(s):
+    """ Turn string or bytes to bytes
+
+    >>> ensure_unicode(u'123')
+    u'123'
+    >>> ensure_unicode('123')
+    u'123'
+    >>> ensure_unicode(b'123')
+    u'123'
+    """
+    if isinstance(s, unicode):
+        return s
+    if hasattr(s, 'decode'):
+        return s.decode()
+    msg = "Object %s is neither a bytes object nor has an encode method"
+    raise TypeError(msg % s)
+
+
+def digit(n, k, base):
+    """
+
+    >>> digit(1234, 0, 10)
+    4
+    >>> digit(1234, 1, 10)
+    3
+    >>> digit(1234, 2, 10)
+    2
+    >>> digit(1234, 3, 10)
+    1
+    """
+    return n // base**k % base
+
+
+def insert(tup, loc, val):
+    """
+
+    >>> insert(('a', 'b', 'c'), 0, 'x')
+    ('x', 'b', 'c')
+    """
+    L = list(tup)
+    L[loc] = val
+    return tuple(L)
+
+
+def build_name_function(max_int):
+    """ Returns a function that receives a single integer
+    and returns it as a string padded by enough zero characters
+    to align with maximum possible integer
+
+    >>> name_f = build_name_function(57)
+
+    >>> name_f(7)
+    '07'
+    >>> name_f(31)
+    '31'
+    >>> build_name_function(1000)(42)
+    '0042'
+    >>> build_name_function(999)(42)
+    '042'
+    >>> build_name_function(0)(0)
+    '0'
+    """
+    # handle corner cases max_int is 0 or exact power of 10
+    max_int += 1e-8
+
+    pad_length = int(math.ceil(math.log10(max_int)))
+
+    def name_function(i):
+        return str(i).zfill(pad_length)
+
+    return name_function
+
+
+def infer_storage_options(urlpath, inherit_storage_options=None):
+    """ Infer storage options from URL path and merge it with existing storage
+    options.
+
+    Parameters
+    ----------
+    urlpath: str or unicode
+        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
+    storage_options: dict (optional)
+        Its contents will get merged with the inferred information from the
+        given path
+
+    Returns
+    -------
+    Storage options dict.
+
+    Examples
+    --------
+    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
+    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
+    >>> infer_storage_options(
+    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    {"protocol": "hdfs", "username": "username", "password": "pwd",
+    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
+    "url_query": "q=1", "extra": "value"}
+    """
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
+        return {'protocol': 'file',
+                'path': urlpath}
+
+    parsed_path = urlsplit(urlpath)
+    protocol = parsed_path.scheme or 'file'
+    path = parsed_path.path
+    if protocol == 'file':
+        # Special case parsing file protocol URL on Windows according to:
+        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        if windows_path:
+            path = '%s:%s' % windows_path.groups()
+
+    inferred_storage_options = {
+        'protocol': protocol,
+        'path': path,
+    }
+
+    if parsed_path.netloc:
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        if parsed_path.port:
+            inferred_storage_options['port'] = parsed_path.port
+        if parsed_path.username:
+            inferred_storage_options['username'] = parsed_path.username
+        if parsed_path.password:
+            inferred_storage_options['password'] = parsed_path.password
+
+    if parsed_path.query:
+        inferred_storage_options['url_query'] = parsed_path.query
+    if parsed_path.fragment:
+        inferred_storage_options['url_fragment'] = parsed_path.fragment
+
+    if inherit_storage_options:
+        if set(inherit_storage_options) & set(inferred_storage_options):
+            raise KeyError("storage options (%r) and path url options (%r) "
+                           "collision is detected"
+                           % (inherit_storage_options, inferred_storage_options))
+        inferred_storage_options.update(inherit_storage_options)
+
+    return inferred_storage_options
+
+
+def dependency_depth(dsk):
+    import toolz
+
+    deps, _ = get_deps(dsk)
+
+    @toolz.memoize
+    def max_depth_by_deps(key):
+        if not deps[key]:
+            return 1
+
+        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
+        return d
+
+    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
+
+
+def eq_strict(a, b):
+    """Returns True if both values have the same type and are equal."""
+    if type(a) is type(b):
+        return a == b
+    return False
+
+
+def memory_repr(num):
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+
+def put_lines(buf, lines):
+    if any(not isinstance(x, unicode) for x in lines):
+        lines = [unicode(x) for x in lines]
+    buf.write('\n'.join(lines))
+
+
+_method_cache = {}
+
+
+class methodcaller(object):
+    """Return a callable object that calls the given method on its operand.
+
+    Unlike the builtin `methodcaller`, this class is serializable"""
+
+    __slots__ = ('method',)
+    func = property(lambda self: self.method)  # For `funcname` to work
+
+    def __new__(cls, method):
+        if method in _method_cache:
+            return _method_cache[method]
+        self = object.__new__(cls)
+        self.method = method
+        _method_cache[method] = self
+        return self
+
+    def __call__(self, obj, *args, **kwargs):
+        return getattr(obj, self.method)(*args, **kwargs)
+
+    def __reduce__(self):
+        return (methodcaller, (self.method,))
+
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.method)
+
+    __repr__ = __str__
+
+
+class MethodCache(object):
+    """Attribute access on this object returns a methodcaller for that
+    attribute.
+
+    Examples
+    --------
+    >>> a = [1, 3, 3]
+    >>> M.count(a, 3) == a.count(3)
+    True
+    """
+    __getattr__ = staticmethod(methodcaller)
+    __dir__ = lambda self: list(_method_cache)
+
+
+M = MethodCache()
+
+
+class SerializableLock(object):
+    _locks = WeakValueDictionary()
+    """ A Serializable per-process Lock
+
+    This wraps a normal ``threading.Lock`` object and satisfies the same
+    interface.  However, this lock can also be serialized and sent to different
+    processes.  It will not block concurrent operations between processes (for
+    this you should look at ``multiprocessing.Lock`` or ``locket.lock_file``
+    but will consistently deserialize into the same lock.
+
+    So if we make a lock in one process::
+
+        lock = SerializableLock()
+
+    And then send it over to another process multiple times::
+
+        bytes = pickle.dumps(lock)
+        a = pickle.loads(bytes)
+        b = pickle.loads(bytes)
+
+    Then the deserialized objects will operate as though they were the same
+    lock, and collide as appropriate.
+
+    This is useful for consistently protecting resources on a per-process
+    level.
+
+    The creation of locks is itself not threadsafe.
+    """
+    def __init__(self, token=None):
+        self.token = token or str(uuid.uuid4())
+        if self.token in SerializableLock._locks:
+            self.lock = SerializableLock._locks[self.token]
+        else:
+            self.lock = Lock()
+            SerializableLock._locks[self.token] = self.lock
+
+    def acquire(self, *args):
+        return self.lock.acquire(*args)
+
+    def release(self, *args):
+        return self.lock.release(*args)
+
+    def __enter__(self):
+        self.lock.__enter__()
+
+    def __exit__(self, *args):
+        self.lock.__exit__(*args)
+
+    @property
+    def locked(self):
+        return self.locked
+
+    def __getstate__(self):
+        return self.token
+
+    def __setstate__(self, token):
+        self.__init__(token)
+
+    def __str__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.token)
+
+    __repr__ = __str__
+
+
+def effective_get(get=None, collection=None):
+    """Get the effective get method used in a given situation"""
+    collection_get = collection._default_get if collection else None
+    return get or _globals.get('get') or collection_get
+
+
+def get_scheduler_lock(get=None, collection=None):
+    """Get an instance of the appropriate lock for a certain situation based on
+       scheduler used."""
+    from . import multiprocessing
+    actual_get = effective_get(get, collection)
+
+    if actual_get == multiprocessing.get:
+        return mp.Manager().Lock()
+    return SerializableLock()
+
+
+def ensure_dict(d):
+    if type(d) is dict:
+        return d
+    elif hasattr(d, 'dicts'):
+        result = {}
+        for dd in d.dicts.values():
+            result.update(dd)
+        return result
+    return dict(d)

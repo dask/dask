@@ -1,6 +1,9 @@
 Internal Design
 ===============
 
+Overview
+--------
+
 .. image:: images/array.png
    :width: 40 %
    :align: right
@@ -8,21 +11,47 @@ Internal Design
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be concrete, or functions that produce arrays.  We define a
-dask array with the following components
+Dask array with the following components
 
-*  A dask with a special set of keys designating blocks
-   such as ``('x', 0, 0), ('x', 0, 1), ...``
+*  A Dask graph with a special set of keys designating blocks
+   such as ``('x', 0, 0), ('x', 0, 1), ...`` (See :doc:`Dask graph
+   documentation <graphs>` for more details.)
 *  A sequence of chunk sizes along each dimension called ``chunks``,
    for example ``((5, 5, 5, 5), (8, 8, 8))``
-*  A name to identify which keys in the dask refer to this array, like ``'x'``
+*  A name to identify which keys in the dask graph refer to this array, like
+   ``'x'``
+*  A NumPy dtype
 
-Keys of the dask graph
+Example
+~~~~~~~
+
+.. code-block:: python
+
+   >>> import dask.array as da
+   >>> x = da.arange(0, 15, chunks=(5,))
+
+   >>> x.name
+   'arange-539766a'
+
+   >>> x.dask  # somewhat simplified
+   {('arange-539766a', 0): (np.arange, 0, 5),
+    ('arange-539766a', 1): (np.arange, 5, 10),
+    ('arange-539766a', 2): (np.arange, 10, 15)}
+
+   >>> x.chunks
+   ((5, 5, 5),)
+
+   >>> x.dtype
+   dtype('int64')
+
+
+Keys of the Dask graph
 ----------------------
 
 By special convention we refer to each block of the array with a tuple of the
 form ``(name, i, j, k)`` for ``i, j, k`` being the indices of the block,
-ranging from ``0`` to the number of blocks in that dimension.  The dask must
-hold key-value pairs referring to these keys.  It likely also holds other
+ranging from ``0`` to the number of blocks in that dimension.  The dask graph
+must hold key-value pairs referring to these keys.  It likely also holds other
 key-value pairs required to eventually compute the desired values, for example
 
 .. code-block:: python
@@ -90,7 +119,7 @@ Then one can construct an array::
 
     x = da.Array(dsk, name, chunks)
 
-So ``dask.array`` operations update dask dictionaries and track chunks
+So ``dask.array`` operations update dask graphs, update dtypes, and track chunk
 shapes.
 
 

@@ -2,17 +2,25 @@ import os
 from functools import partial
 import re
 from operator import add, neg
-
+import sys
 import pytest
 
-pytest.importorskip("graphviz")
+optimize2 = (sys.flags.optimize == 2)
+if not optimize2:
+    pytest.importorskip("graphviz")
+    from dask.dot import dot_graph, task_label, label, to_graphviz
+else:
+    pytestmark = pytest.mark.skipif(True,
+                                    reason="graphviz exception with Python -OO flag")
 
-from dask.dot import dot_graph, task_label, label, to_graphviz
 from dask.utils import ensure_not_exists
 from IPython.display import Image, SVG
 
+
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
+
+
 def get_label(line):
     m = label_re.match(line)
     if m:
@@ -65,9 +73,12 @@ def test_to_graphviz():
     assert set(labels).difference(dsk) == funcs
     assert set(labels).difference(funcs) == set(dsk)
 
+
 def test_to_graphviz_attributes():
     assert to_graphviz(dsk).graph_attr['rankdir'] == 'BT'
     assert to_graphviz(dsk, rankdir='LR').graph_attr['rankdir'] == 'LR'
+    assert to_graphviz(dsk, node_attr={'color': 'white'}).node_attr['color'] == 'white'
+    assert to_graphviz(dsk, edge_attr={'color': 'white'}).edge_attr['color'] == 'white'
 
 
 def test_aliases():
@@ -138,9 +149,9 @@ def test_dot_graph_defaults():
 
 def test_filenames_and_formats():
     # Test with a variety of user provided args
-    filenames = ['mydaskpdf', 'mydask.pdf', 'mydask.pdf', 'mydaskpdf']
-    formats = ['svg', None, 'svg', None]
-    targets = ['mydaskpdf.svg', 'mydask.pdf', 'mydask.pdf.svg', 'mydaskpdf.png']
+    filenames = ['mydaskpdf', 'mydask.pdf', 'mydask.pdf', 'mydaskpdf', 'mydask.pdf.svg']
+    formats = ['svg', None, 'svg', None, None]
+    targets = ['mydaskpdf.svg', 'mydask.pdf', 'mydask.pdf.svg', 'mydaskpdf.png', 'mydask.pdf.svg']
 
     result_types = {
         'png': Image,

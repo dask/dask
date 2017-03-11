@@ -1,6 +1,7 @@
 from operator import add, mul
 import os
 from time import sleep
+from distutils.version import LooseVersion
 
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
@@ -49,7 +50,7 @@ def test_profiler_works_under_error():
 
     with ignoring(ZeroDivisionError):
         with prof:
-            out = get(dsk, 'z')
+            get(dsk, 'z')
 
     assert all(len(v) == 5 for v in prof.results)
     assert len(prof.results) == 2
@@ -77,7 +78,7 @@ def test_two_gets():
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
     results = rprof.results
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
@@ -117,7 +118,7 @@ def test_resource_profiler_multiple_gets():
 
 def test_cache_profiler():
     with CacheProfiler() as cprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
     results = cprof.results
     assert all(isinstance(i, tuple) and len(i) == 5 for i in results)
 
@@ -125,12 +126,14 @@ def test_cache_profiler():
     assert cprof.results == []
 
     tics = [0]
+
     def nbytes(res):
         tics[0] += 1
         return tics[0]
 
     with CacheProfiler(nbytes) as cprof:
-        out = get(dsk2, 'c')
+        get(dsk2, 'c')
+
     results = cprof.results
     assert tics[-1] == len(results)
     assert tics[-1] == results[-1].metric
@@ -141,8 +144,8 @@ def test_cache_profiler():
 @pytest.mark.skipif("not bokeh")
 def test_unquote():
     from dask.diagnostics.profile_visualize import unquote
-    from dask.delayed import to_task_dasks
-    f = lambda x: to_task_dasks(x)[0]
+    from dask.delayed import to_task_dask
+    f = lambda x: to_task_dask(x)[0]
     t = {'a': 1, 'b': 2, 'c': 3}
     assert unquote(f(t)) == t
     t = {'a': [1, 2, 3], 'b': 2, 'c': 3}
@@ -163,19 +166,26 @@ def test_pprint_task():
 
     assert len(pprint_task((sum, list(keys) * 100), keys)) < 100
     assert pprint_task((sum, list(keys) * 100), keys) == 'sum([_, _, _, ...])'
-    assert pprint_task((sum, [1, 2, (sum, ['a', 4]), 5, 6] * 100), keys) == \
-            'sum([*, *, sum([_, *]), ...])'
+    assert (pprint_task((sum, [1, 2, (sum, ['a', 4]), 5, 6] * 100), keys) ==
+            'sum([*, *, sum([_, *]), ...])')
     assert pprint_task((sum, [1, 2, (sum, ['a', (sum, [1, 2, 3])]), 5, 6]),
                        keys) == 'sum([*, *, sum([_, sum(...)]), ...])'
+
     # With kwargs
     def foo(w, x, y=(), z=3):
         return w + x + sum(y) + z
+
     task = (apply, foo, (tuple, ['a', 'b']),
             (dict, [['y', ['a', 'b']], ['z', 'c']]))
     assert pprint_task(task, keys) == 'foo(_, _, y=[_, _], z=_)'
     task = (apply, foo, (tuple, ['a', 'b']),
             (dict, [['y', ['a', 1]], ['z', 1]]))
     assert pprint_task(task, keys) == 'foo(_, _, y=[_, *], z=*)'
+
+
+def check_title(p, title):
+    # bokeh 0.12 changed the title attribute to not a string
+    return getattr(p.title, 'text', p.title) == title
 
 
 @pytest.mark.skipif("not bokeh")
@@ -191,7 +201,7 @@ def test_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert p.title == "Not the default"
+    assert check_title(p, "Not the default")
     # Test empty, checking for errors
     prof.clear()
     prof.visualize(show=False, save=False)
@@ -211,7 +221,7 @@ def test_resource_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert p.title == "Not the default"
+    assert check_title(p, "Not the default")
     # Test empty, checking for errors
     rprof.clear()
     rprof.visualize(show=False, save=False)
@@ -230,7 +240,7 @@ def test_cache_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert p.title == "Not the default"
+    assert check_title(p, "Not the default")
     assert p.axis[1].axis_label == 'Cache Size (non-standard)'
     # Test empty, checking for errors
     cprof.clear()
@@ -241,18 +251,20 @@ def test_cache_profiler_plot():
 @pytest.mark.skipif("not psutil")
 def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
-    from bokeh.models import GridPlot
     with ResourceProfiler(dt=0.01) as rprof:
         with prof:
             get(dsk2, 'c')
     p = visualize([prof, rprof], label_size=50,
                   title="Not the default", show=False, save=False)
-    assert isinstance(p, GridPlot)
-    assert len(p.children) == 2
-    assert p.children[0][0].title == "Not the default"
-    assert p.children[0][0].xaxis[0].axis_label is None
-    assert p.children[1][0].title is None
-    assert p.children[1][0].xaxis[0].axis_label == 'Time (s)'
+    if LooseVersion(bokeh.__version__) >= '0.12.0':
+        figures = [r.children[0] for r in p.children[1].children]
+    else:
+        figures = [r[0] for r in p.children]
+    assert len(figures) == 2
+    assert check_title(figures[0], "Not the default")
+    assert figures[0].xaxis[0].axis_label is None
+    assert figures[1].title is None
+    assert figures[1].xaxis[0].axis_label == 'Time (s)'
     # Test empty, checking for errors
     prof.clear()
     rprof.clear()
@@ -275,17 +287,26 @@ def test_saves_file():
 @pytest.mark.skipif("not bokeh")
 def test_get_colors():
     from dask.diagnostics.profile_visualize import get_colors
-    from bokeh.palettes import Blues9, Blues5, BrBG3
+    from bokeh.palettes import Blues9, Blues5, Viridis
     from itertools import cycle
     funcs = list(range(11))
     cmap = get_colors('Blues', funcs)
     lk = dict(zip(funcs, cycle(Blues9)))
     assert cmap == [lk[i] for i in funcs]
+
     funcs = list(range(5))
     cmap = get_colors('Blues', funcs)
     lk = dict(zip(funcs, Blues5))
     assert cmap == [lk[i] for i in funcs]
+
     funcs = [0, 1, 0, 1, 0, 1]
     cmap = get_colors('BrBG', funcs)
-    lk = dict(zip([0, 1], BrBG3))
-    assert cmap == [lk[i] for i in funcs]
+    assert len(set(cmap)) == 2
+
+    funcs = list(range(100))
+    cmap = get_colors('Viridis', funcs)
+    assert len(set(cmap)) == 100
+
+    funcs = list(range(300))
+    cmap = get_colors('Viridis', funcs)
+    assert len(set(cmap)) == len(set(Viridis[256]))

@@ -83,13 +83,13 @@ Copy the text data from Amazon S3 into HDFS on the cluster:
 where ``AWS_SECRET_ID`` and ``AWS_SECRET_KEY`` are valid AWS credentials.
 
 We can now start a ``distributed`` scheduler and workers on the cluster,
-replacing ``EXECUTOR_IP`` and ``EXECUTOR_PORT`` with the IP address and port of
+replacing ``SCHEDULER_IP`` and ``SCHEDULER_PORT`` with the IP address and port of
 the ``distributed`` scheduler:
 
 .. code-block:: bash
 
-   $ dscheduler  # On the head node
-   $ dworker EXECUTOR_IP:EXECUTOR_PORT --nprocs 4 --nthreads 1  # On the compute nodes
+   $ dask-scheduler  # On the head node
+   $ dask-worker SCHEDULER_IP:SCHEDULER_PORT --nprocs 4 --nthreads 1  # On the compute nodes
 
 Because our computations use pure Python rather than numeric libraries (e.g.,
 NumPy, pandas), we started the workers with multiple processes rather than
@@ -101,32 +101,21 @@ example:
 
 .. code-block:: python
 
-   >>> import hdfs3
-   >>> from distributed import Executor, progress
-   >>> from distributed.hdfs import read_text
+   >>> from dask.distributed import Client, progress
 
-Initalize a connection to HDFS, replacing ``NAMENODE_HOSTNAME`` and
-``NAMENODE_PORT`` with the hostname and port (default: 8020) of the HDFS
-namenode:
+Initialize a connection to the ``distributed`` executor:
 
 .. code-block:: python
 
-   >>> hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
-
-Initalize a connection to the ``distributed`` executor:
-
-.. code-block:: python
-
-   >>> e = Executor('EXECUTOR_IP:EXECUTOR_PORT')
+   >>> client = Client('SCHEDULER_IP:SCHEDULER_PORT')
 
 Create a ``bag`` from the text files stored in HDFS. This expression will not
 read data from HDFS until the computation is triggered:
 
 .. code-block:: python
 
-   >>> b = read_text('/tmp/enron/*/*', hdfs=hdfs)
-
-   Setting global dask scheduler to use distributed
+   >>> import dask.bag as db
+   >>> b = db.read_text('hdfs:///tmp/enron/*/*')
 
 We can write a word count expression using the same ``bag`` methods as the
 local ``dask`` example:
@@ -141,7 +130,7 @@ that triggers the computation on the cluster.
 
 .. code-block:: python
 
-   >>> future = e.compute(wordcount)
+   >>> future = clinet.compute(wordcount)
 
 Note that the ``compute`` operation is non-blocking, and you can continue to
 work in the Python shell/notebook while the computations are running.
@@ -152,11 +141,9 @@ processed:
 .. code-block:: python
 
    >>> print(future)
-
    <Future: status: pending, key: finalize-0f2f51e2350a886223f11e5a1a7bc948>
 
    >>> progress(future)
-
    [########################################] | 100% Completed |  8min  15.2s
 
 This computation required about 8 minutes to run on a cluster with three worker
@@ -166,19 +153,18 @@ with the same specs.
 
 When the ``future`` finishes reading in all of the text files and counting
 words, the results will exist on each worker. To sum the word counts for all of
-the text files, we need to gather the results from the ``distributed``
+the text files, we need to gather the results from the ``dask.distributed``
 workers:
 
 .. code-block:: python
 
-   >>> results = e.gather(future)
+   >>> results = client.gather(future)
 
 Finally, we print the top 10 words from all of the text files:
 
 .. code-block:: python
 
    >>> print(results)
-
    [('0', 67218227),
     ('the', 19588747),
     ('-', 14126955),
@@ -206,22 +192,19 @@ The complete Python script for this example is shown below:
 
    # Cluster computation with HDFS
 
-   import hdfs3
-   from distributed import Executor, progress
-   from distributed.hdfs import read_text
+   from dask.distributed import Client, progress
 
-   hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
-   e = Executor('EXECUTOR_IP:EXECUTOR_PORT')
+   client = Client('SCHEDULER_IP:SCHEDULER_PORT')
 
-   b = read_text('/tmp/enron/*/*', hdfs=hdfs)
+   b = db.read_text('hdfs:///tmp/enron/*/*')
    wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
 
-   future = e.compute(wordcount)
+   future = client.compute(wordcount)
    print(future)
    progress(future)
 
-   results = e.gather(future)
+   results = client.gather(future)
    print(results)
 
-.. _distributed: http://distributed.readthedocs.io/en/latest/
-.. _hdfs3: http://hdfs3.readthedocs.io/en/latest/
+.. _distributed: https://distributed.readthedocs.io/en/latest/
+.. _hdfs3: https://hdfs3.readthedocs.io/en/latest/

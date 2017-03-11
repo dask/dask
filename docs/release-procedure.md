@@ -4,8 +4,6 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
-*   Update version number in __init__.py, setup.py. Commit.
-
 *   Tag commit
 
         git tag -a x.x.x -m 'Version x.x.x'
@@ -16,10 +14,11 @@ Release per project:
 
 *  Upload to PyPI
 
-        python setup.py register sdist bdist upload
-
-*   Update anaconda recipe.
-
-    This should happen automatically within a day or two.
+        git clean -xfd
+        python setup.py sdist bdist_wheel --universal
+        twine upload dist/*
 
 *   Update conda recipe feedstock on `conda-forge <https://conda-forge.github.io/>`_.
+    *  Update conda-smithy and run conda-smithy rerender
+    *  Get sha256 hash from pypi.org
+    *  Update version number and hash in recipe

@@ -58,8 +58,8 @@ Changing state
     Real-time equivalent of dependents
 
 
-Example
--------
+Examples
+--------
 
 >>> import pprint
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
@@ -114,20 +114,17 @@ See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
-from operator import add
 import sys
 import traceback
 
+from .compatibility import Queue
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-                   _deps)
+                   has_tasks)
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
 from .optimize import cull
-
-
-def inc(x):
-    return x + 1
+from .utils_test import add, inc  # noqa: F401
 
 
 DEBUG = False
@@ -168,16 +165,17 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
         cache = dict()
     data_keys = set()
     for k, v in dsk.items():
-        if not (istask(v) or _deps(dsk, v)):
+        if not has_tasks(dsk, v):
             cache[k] = v
             data_keys.add(k)
 
     dsk2 = dsk.copy()
     dsk2.update(cache)
 
-    dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk)
-    waiting = dict((k, v.copy()) for k, v in dependencies.items()
-                                 if k not in data_keys)
+    dependencies = {k: get_dependencies(dsk2, k) for k in dsk}
+    waiting = {k: v.copy()
+               for k, v in dependencies.items()
+               if k not in data_keys}
 
     dependents = reverse_dict(dependencies)
     for a in cache:
@@ -255,7 +253,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
+def execute_task(key, task_info, dumps, loads, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -264,23 +262,24 @@ def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
     _execute_task - actually execute task
     """
     try:
+        task, data = loads(task_info)
         result = _execute_task(task, data)
         id = get_id()
-        result = key, result, None, id
-    except Exception as e:
+        result = dumps((result, None, id))
+    except BaseException as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        result = key, e, tb, None
-    try:
-        queue.put(result)
-    except Exception as e:
-        if raise_on_exception:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = ''.join(traceback.format_tb(exc_traceback))
-        queue.put((key, e, tb, None))
+        try:
+            result = dumps((e, tb, None))
+        except BaseException as e:
+            if raise_on_exception:
+                raise
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb = ''.join(traceback.format_tb(exc_traceback))
+            result = dumps((e, tb, None))
+    return key, result
 
 
 def release_data(key, state, delete=True):
@@ -356,6 +355,15 @@ def default_get_id():
     return None
 
 
+def identity(x):
+    """ Identity function. Returns x.
+
+    >>> identity(3)
+    3
+    """
+    return x
+
+
 '''
 Task Selection
 --------------
@@ -376,8 +384,10 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              queue=None, get_id=default_get_id, raise_on_exception=False,
-              rerun_exceptions_locally=None, callbacks=None, **kwargs):
+              get_id=default_get_id, raise_on_exception=False,
+              rerun_exceptions_locally=None, callbacks=None,
+              dumps=identity, loads=identity,
+              **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -404,8 +414,13 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
+    dumps: callable, optional
+        Function to serialize task data and results to communicate between
+        worker and parent.  Defaults to identity.
+    loads: callable, optional
+        Inverse function of `dumps`.  Defaults to identity.
     callbacks : tuple or list of tuples, optional
-        Callbacks are passed in as tuples of length 4. Multiple sets of
+        Callbacks are passed in as tuples of length 5. Multiple sets of
         callbacks may be passed in as a list of tuples. For more information,
         see the dask.diagnostics documentation.
 
@@ -414,11 +429,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     threaded.get
     """
-    assert queue
+    queue = Queue()
 
     if callbacks is None:
         callbacks = _globals['callbacks']
-    start_cbs, start_state_cbs, pretask_cbs, posttask_cbs, finish_cbs = unpack_callbacks(callbacks)
+    _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -426,75 +441,80 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
-    dsk = dsk.copy()
-    for f in start_cbs:
-        f(dsk)
+    dsk = dict(dsk)
+    started_cbs = []
+    try:
+        for cb in callbacks:
+            if cb[0]:
+                cb[0](dsk)
+            started_cbs.append(cb)
 
-    dsk, dependencies = cull(dsk, list(results))
+        dsk, dependencies = cull(dsk, list(results))
 
-    keyorder = order(dsk)
+        keyorder = order(dsk)
 
-    state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+        state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
-    for f in start_state_cbs:
-        f(dsk, state)
+        for _, start_state, _, _, _ in callbacks:
+            if start_state:
+                start_state(dsk, state)
 
-    if rerun_exceptions_locally is None:
-        rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
+        if rerun_exceptions_locally is None:
+            rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
 
-    if state['waiting'] and not state['ready']:
-        raise ValueError("Found no accessible jobs in dask")
+        if state['waiting'] and not state['ready']:
+            raise ValueError("Found no accessible jobs in dask")
 
-    def fire_task():
-        """ Fire off a task to the thread pool """
-        # Choose a good task to compute
-        key = state['ready'].pop()
-        state['running'].add(key)
-        for f in pretask_cbs:
-            f(key, dsk, state)
+        def fire_task():
+            """ Fire off a task to the thread pool """
+            # Choose a good task to compute
+            key = state['ready'].pop()
+            state['running'].add(key)
+            for f in pretask_cbs:
+                f(key, dsk, state)
 
-        # Prep data to send
-        data = dict((dep, state['cache'][dep])
-                    for dep in get_dependencies(dsk, key))
-        # Submit
-        apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                        get_id, raise_on_exception])
+            # Prep data to send
+            data = dict((dep, state['cache'][dep])
+                        for dep in get_dependencies(dsk, key))
+            # Submit
+            apply_async(execute_task,
+                        args=(key, dumps((dsk[key], data)),
+                              dumps, loads, get_id, raise_on_exception),
+                        callback=queue.put)
 
-    # Seed initial tasks into the thread pool
-    while state['ready'] and len(state['running']) < num_workers:
-        fire_task()
-
-    # Main loop, wait on tasks to finish, insert new ones
-    while state['waiting'] or state['ready'] or state['running']:
-        try:
-            key, res, tb, worker_id = queue.get()
-        except KeyboardInterrupt:
-            for f in finish_cbs:
-                f(dsk, state, True)
-            raise
-        if isinstance(res, Exception):
-            for f in finish_cbs:
-                f(dsk, state, True)
-            if rerun_exceptions_locally:
-                data = dict((dep, state['cache'][dep])
-                            for dep in get_dependencies(dsk, key))
-                task = dsk[key]
-                _execute_task(task, data)  # Re-execute locally
-            else:
-                raise(remote_exception(res, tb))
-        state['cache'][key] = res
-        finish_task(dsk, key, state, results, keyorder.get)
-        for f in posttask_cbs:
-            f(key, res, dsk, state, worker_id)
+        # Seed initial tasks into the thread pool
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
-    # Final reporting
-    while state['running'] or not queue.empty():
-        key, res, tb, worker_id = queue.get()
+        # Main loop, wait on tasks to finish, insert new ones
+        while state['waiting'] or state['ready'] or state['running']:
+            key, res_info = queue.get()
+            res, tb, worker_id = loads(res_info)
+            if isinstance(res, BaseException):
+                if rerun_exceptions_locally:
+                    data = dict((dep, state['cache'][dep])
+                                for dep in get_dependencies(dsk, key))
+                    task = dsk[key]
+                    _execute_task(task, data)  # Re-execute locally
+                else:
+                    raise(remote_exception(res, tb))
+            state['cache'][key] = res
+            finish_task(dsk, key, state, results, keyorder.get)
+            for f in posttask_cbs:
+                f(key, res, dsk, state, worker_id)
 
-    for f in finish_cbs:
-        f(dsk, state, False)
+            while state['ready'] and len(state['running']) < num_workers:
+                fire_task()
+
+    except BaseException:
+        for _, _, _, _, finish in started_cbs:
+            if finish:
+                finish(dsk, state, True)
+        raise
+
+    for _, _, _, _, finish in started_cbs:
+        if finish:
+            finish(dsk, state, False)
 
     return nested_get(result, state['cache'])
 
@@ -506,16 +526,21 @@ sequential one.  This is useful for debugging and for code dominated by the
 GIL
 """
 
-def apply_sync(func, args=(), kwds={}):
+
+def apply_sync(func, args=(), kwds={}, callback=None):
     """ A naive synchronous version of apply_async """
-    return func(*args, **kwds)
+    res = func(*args, **kwds)
+    if callback is not None:
+        callback(res)
 
 
 def get_sync(dsk, keys, **kwargs):
-    from .compatibility import Queue
+    """A naive synchronous version of get_async
+
+    Can be useful for debugging.
+    """
     kwargs.pop('num_workers', None)    # if num_workers present, remove it
-    queue = Queue()
-    return get_async(apply_sync, 1, dsk, keys, queue=queue,
+    return get_async(apply_sync, 1, dsk, keys,
                      raise_on_exception=True, **kwargs)
 
 

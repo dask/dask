@@ -15,7 +15,6 @@ Top level user functions:
     DataFrame.astype
     DataFrame.cache
     DataFrame.categorize
-    DataFrame.column_info
     DataFrame.columns
     DataFrame.compute
     DataFrame.corr
@@ -33,10 +32,9 @@ Top level user functions:
     DataFrame.dtypes
     DataFrame.fillna
     DataFrame.floordiv
-    DataFrame.get_division
+    DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
-    DataFrame.iloc
     DataFrame.index
     DataFrame.iterrows
     DataFrame.itertuples
@@ -77,11 +75,12 @@ Top level user functions:
     DataFrame.sum
     DataFrame.tail
     DataFrame.to_bag
-    DataFrame.to_castra
     DataFrame.to_csv
-    DataFrame.to_hdf
     DataFrame.to_delayed
+    DataFrame.to_hdf
+    DataFrame.to_records
     DataFrame.truediv
+    DataFrame.values
     DataFrame.var
     DataFrame.visualize
     DataFrame.where
@@ -90,8 +89,8 @@ Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
+   rolling.map_overlap
    rolling.rolling_apply
-   rolling.rolling_chunk
    rolling.rolling_count
    rolling.rolling_kurt
    rolling.rolling_max
@@ -111,13 +110,28 @@ Create DataFrames
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   read_csv
+   read_table
+   read_parquet
+   read_hdf
    from_array
    from_bcolz
-   from_castra
-   read_csv
    from_dask_array
    from_delayed
    from_pandas
+   dask.bag.core.Bag.to_dataframe
+
+Store DataFrames
+~~~~~~~~~~~~~~~~
+
+.. autosummary::
+
+    to_csv
+    to_parquet
+    to_hdf
+    to_records
+    to_bag
+    to_delayed
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -135,37 +149,73 @@ Series Methods
    :members:
    :inherited-members:
 
+.. currentmodule:: dask.dataframe.groupby
+
+DataFrameGroupBy
+~~~~~~~~~~~~~~~~
+
+.. autoclass:: DataFrameGroupBy
+   :members:
+   :inherited-members:
+
+SeriesGroupBy
+~~~~~~~~~~~~~
+
+.. autoclass:: SeriesGroupBy
+   :members:
+   :inherited-members:
+
+Storage and Conversion
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: read_csv
+.. autofunction:: read_table
+.. autofunction:: read_parquet
+.. autofunction:: read_hdf
+.. autofunction:: from_array
+.. autofunction:: from_pandas
+.. autofunction:: from_bcolz
+.. autofunction:: from_dask_array
+.. autofunction:: from_delayed
+.. autofunction:: to_delayed
+.. autofunction:: to_records
+.. autofunction:: to_csv
+.. autofunction:: to_bag
+.. autofunction:: to_hdf
+.. autofunction:: to_parquet
+
+Rolling
+~~~~~~~
+
+.. currentmodule:: dask.dataframe.rolling
+
+.. autofunction:: rolling_apply
+.. autofunction:: map_overlap
+.. autofunction:: rolling_count
+.. autofunction:: rolling_kurt
+.. autofunction:: rolling_max
+.. autofunction:: rolling_mean
+.. autofunction:: rolling_median
+.. autofunction:: rolling_min
+.. autofunction:: rolling_quantile
+.. autofunction:: rolling_skew
+.. autofunction:: rolling_std
+.. autofunction:: rolling_sum
+.. autofunction:: rolling_var
+.. autofunction:: rolling_window
+
+
 Other functions
 ~~~~~~~~~~~~~~~
 
+.. currentmodule:: dask.dataframe
+
 .. autofunction:: compute
 .. autofunction:: map_partitions
-.. autofunction:: quantile
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
-
-.. currentmodule:: dask.dataframe
-
-.. autofunction:: read_csv
-.. autofunction:: from_array
-.. autofunction:: from_pandas
-.. autofunction:: from_bcolz
-
-
-.. autofunction:: rolling.rolling_apply
-.. autofunction:: rolling.rolling_chunk
-.. autofunction:: rolling.rolling_count
-.. autofunction:: rolling.rolling_kurt
-.. autofunction:: rolling.rolling_max
-.. autofunction:: rolling.rolling_mean
-.. autofunction:: rolling.rolling_median
-.. autofunction:: rolling.rolling_min
-.. autofunction:: rolling.rolling_quantile
-.. autofunction:: rolling.rolling_skew
-.. autofunction:: rolling.rolling_std
-.. autofunction:: rolling.rolling_sum
-.. autofunction:: rolling.rolling_var
-.. autofunction:: rolling.rolling_window

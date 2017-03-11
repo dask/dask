@@ -2,20 +2,22 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from itertools import chain
-from warnings import warn
 import operator
 import uuid
+import warnings
 
-from toolz import merge, unique, curry, first
+try:
+    from cytoolz import unique, curry, first
+except ImportError:
+    from toolz import unique, curry, first
 
-from .utils import concrete, funcname
-from . import base
+from . import base, threaded
 from .compatibility import apply
-from . import threaded
-from .optimize import inline_functions
-from .core import flatten
+from .core import quote
+from .utils import concrete, funcname, methodcaller, ensure_dict
+from . import sharedict
 
-__all__ = ['compute', 'do', 'Delayed', 'delayed']
+__all__ = ['Delayed', 'delayed']
 
 
 def flat_unique(ls):
@@ -31,12 +33,12 @@ def unzip(ls, nout):
     return out
 
 
-def to_task_dasks(expr):
-    """Normalize a python object and extract all sub-dasks.
+def to_task_dask(expr):
+    """Normalize a python object and merge all sub-graphs.
 
     - Replace ``Delayed`` with their keys
     - Convert literals to things the schedulers can handle
-    - Extract dasks from all enclosed values
+    - Extract dask graphs from all enclosed values
 
     Parameters
     ----------
@@ -47,48 +49,47 @@ def to_task_dasks(expr):
     Returns
     -------
     task : normalized task to be run
-    dasks : list of dasks that form the dag for this task
+    dask : a merged dask graph that forms the dag for this task
 
     Examples
     --------
-
-    >>> a = value(1, 'a')
-    >>> b = value(2, 'b')
-    >>> task, dasks = to_task_dasks([a, b, 3])
-    >>> task # doctest: +SKIP
+    >>> a = delayed(1, 'a')
+    >>> b = delayed(2, 'b')
+    >>> task, dask = to_task_dask([a, b, 3])
+    >>> task  # doctest: +SKIP
     ['a', 'b', 3]
-    >>> dasks # doctest: +SKIP
-    [{'a': 1}, {'b': 2}]
+    >>> dict(dask)  # doctest: +SKIP
+    {'a': 1, 'b': 2}
 
-    >>> task, dasks = to_task_dasks({a: 1, b: 2})
-    >>> task # doctest: +SKIP
+    >>> task, dasks = to_task_dask({a: 1, b: 2})
+    >>> task  # doctest: +SKIP
     (dict, [['a', 1], ['b', 2]])
-    >>> dasks # doctest: +SKIP
-    [{'a': 1}, {'b': 2}]
+    >>> dict(dask)  # doctest: +SKIP
+    {'a': 1, 'b': 2}
     """
     if isinstance(expr, Delayed):
-        return expr.key, expr._dasks
+        return expr.key, expr.dask
     if isinstance(expr, base.Base):
-        name = tokenize(expr, pure=True)
+        name = 'finalize-' + tokenize(expr, pure=True)
         keys = expr._keys()
-        dsk = expr._optimize(expr.dask, keys)
+        dsk = expr._optimize(ensure_dict(expr.dask), keys)
         dsk[name] = (expr._finalize, (concrete, keys))
-        return name, [dsk]
+        return name, dsk
     if isinstance(expr, tuple) and type(expr) != tuple:
-        return expr, []
+        return expr, {}
     if isinstance(expr, (Iterator, list, tuple, set)):
-        args, dasks = unzip(map(to_task_dasks, expr), 2)
+        args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
-        dasks = flat_unique(dasks)
+        dsk = sharedict.merge(*dasks)
         # Ensure output type matches input type
         if isinstance(expr, (tuple, set)):
-            return (type(expr), args), dasks
+            return (type(expr), args), dsk
         else:
-            return args, dasks
+            return args, dsk
     if isinstance(expr, dict):
-        args, dasks = to_task_dasks([[k, v] for k, v in expr.items()])
-        return (dict, args), dasks
-    return expr, []
+        args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
+        return (dict, args), dsk
+    return expr, {}
 
 
 def tokenize(*args, **kwargs):
@@ -104,13 +105,13 @@ def tokenize(*args, **kwargs):
         unique identifier is always used.
     """
     if kwargs.pop('pure', False):
-        return base.tokenize(*args)
+        return base.tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
 
 
 @curry
-def delayed(obj, name=None, pure=False):
+def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -121,11 +122,24 @@ def delayed(obj, name=None, pure=False):
     obj : object
         The function or object to wrap
     name : string or hashable, optional
-        The key to use in the underlying graph. Defaults to hashing content.
+        The key to use in the underlying graph for the wrapped object. Defaults
+        to hashing content.
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
         deterministic keys. Default is False.
+    nout : int, optional
+        The number of outputs returned from calling the resulting ``Delayed``
+        object. If provided, the ``Delayed`` output of the call can be iterated
+        into ``nout`` objects, allowing for unpacking of results. By default
+        iteration over ``Delayed`` objects will error. Note, that ``nout=1``
+        expects ``obj``, to return a tuple of length 1, and consequently for
+        `nout=0``, ``obj`` should return an empty tuple.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``delayed``. For large collections this can be
+        expensive. If ``obj`` doesn't contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
 
     Examples
     --------
@@ -174,13 +188,38 @@ def delayed(obj, name=None, pure=False):
     >>> out1.key == out2.key
     True
 
+    The key name of the result of calling a delayed object is determined by
+    hashing the arguments by default. To explicitly set the name, you can use
+    the ``dask_key_name`` keyword when calling the function:
+
+    >>> add(1, 2)    # doctest: +SKIP
+    Delayed('add-3dce7c56edd1ac2614add714086e950f')
+    >>> add(1, 2, dask_key_name='three')
+    Delayed('three')
+
+    Note that objects with the same key name are assumed to have the same
+    result. If you set the names explicitly you should make sure your key names
+    are different for different results.
+
+    >>> add(1, 2, dask_key_name='three')
+    >>> add(2, 1, dask_key_name='three')
+    >>> add(2, 2, dask_key_name='four')
+
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
     >>> a = delayed([1, 2, 3])
-    >>> type(a) == Delayed
+    >>> isinstance(a, Delayed)
     True
     >>> a.compute()
     [1, 2, 3]
+
+    The key name of a delayed object is hashed by default if ``pure=True`` or
+    is generated randomly if ``pure=False`` (default).  To explicitly set the
+    name, you can use the ``name`` keyword:
+
+    >>> a = delayed([1, 2, 3], name='mylist')
+    >>> a
+    Delayed('mylist')
 
     Delayed results act as a proxy to the underlying object. Many operators
     are supported:
@@ -207,41 +246,53 @@ def delayed(obj, name=None, pure=False):
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True
+
+    As with function calls, method calls also support the ``dask_key_name``
+    keyword:
+
+    >>> a.count(2, dask_key_name="count_2")
+    Delayed("count_2")
+
     """
     if isinstance(obj, Delayed):
         return obj
 
-    task, dasks = to_task_dasks(obj)
-
-    if not dasks:
-        return DelayedLeaf(obj, pure=pure, name=name)
+    if isinstance(obj, base.Base) or traverse:
+        task, dsk = to_task_dask(obj)
     else:
-        name = name or '%s-%s' % (type(obj).__name__, tokenize(task))
-        dasks.append({name: task})
-        return Delayed(name, dasks)
+        task = quote(obj)
+        dsk = {}
+
+    if task is obj:
+        if not (nout is None or (type(nout) is int and nout >= 0)):
+            raise ValueError("nout must be None or a positive integer,"
+                             " got %s" % nout)
+        if not name:
+            try:
+                prefix = obj.__name__
+            except AttributeError:
+                prefix = type(obj).__name__
+            token = tokenize(obj, nout, pure=pure)
+            name = '%s-%s' % (prefix, token)
+        return DelayedLeaf(obj, name, pure=pure, nout=nout)
+    else:
+        if not name:
+            name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
+        dsk = sharedict.merge(dsk, (name, {name: task}))
+        return Delayed(name, dsk)
 
 
-do = delayed
+def do(*args, **kwargs):
+    """deprecated, please use ``dask.delayed.delayed``"""
+    warnings.warn("`dask.delayed.do` is deprecated, please use "
+                  "`dask.delayed.delayed` instead")
+    return delayed(*args, **kwargs)
 
 
 def compute(*args, **kwargs):
-    """Evaluate more than one ``Delayed`` at once.
-
-    Note that the only difference between this function and
-    ``dask.base.compute`` is that this implicitly wraps python objects in
-    ``Delayed``, allowing for collections of dask objects to be computed.
-
-    Examples
-    --------
-    >>> a = value(1)
-    >>> b = a + 2
-    >>> c = a + 3
-    >>> compute(b, c)  # Compute both simultaneously
-    (3, 4)
-    >>> compute(a, [b, c])  # Works for lists of Delayed
-    (1, [3, 4])
-    """
-    args = [delayed(a) for a in args]
+    """deprecated, please use ``dask.compute``"""
+    warnings.warn("`dask.delayed.compute` is deprecated, please use "
+                  "`dask.compute` instead")
     return base.compute(*args, **kwargs)
 
 
@@ -257,28 +308,24 @@ class Delayed(base.Base):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_key', '_dasks')
+    __slots__ = ('_key', 'dask', '_length')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
+    _optimize = staticmethod(lambda d, k, **kwds: d)
 
-    @staticmethod
-    def _optimize(dsk, keys, **kwargs):
-        return inline_functions(dsk, list(flatten(keys)), [getattr])
-
-    def __init__(self, name, dasks):
-        object.__setattr__(self, '_key', name)
-        object.__setattr__(self, '_dasks', dasks)
-
-    def __setstate__(self, state):
-        self.__init__(*state)
-        return self
+    def __init__(self, key, dsk, length=None):
+        self._key = key
+        if type(dsk) is list:  # compatibility with older versions
+            dsk = sharedict.merge(*dsk)
+        self.dask = dsk
+        self._length = length
 
     def __getstate__(self):
-        return (self._key, self._dasks)
+        return tuple(getattr(self, i) for i in self.__slots__)
 
-    @property
-    def dask(self):
-        return merge(*self._dasks)
+    def __setstate__(self, state):
+        for k, v in zip(self.__slots__, state):
+            setattr(self, k, v)
 
     @property
     def key(self):
@@ -297,23 +344,39 @@ class Delayed(base.Base):
         return dir(type(self))
 
     def __getattr__(self, attr):
-        if not attr.startswith('_'):
-            return delayed(getattr, pure=True)(self, attr)
-        else:
+        if attr.startswith('_'):
             raise AttributeError("Attribute {0} not found".format(attr))
+        return DelayedAttr(self, attr, 'getattr-%s' % tokenize(self, attr))
 
     def __setattr__(self, attr, val):
-        raise TypeError("Delayed objects are immutable")
+        if attr in self.__slots__:
+            object.__setattr__(self, attr, val)
+        else:
+            raise TypeError("Delayed objects are immutable")
 
     def __setitem__(self, index, val):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        raise TypeError("Delayed objects are not iterable")
+        if getattr(self, '_length', None) is None:
+            raise TypeError("Delayed objects of unspecified length are "
+                            "not iterable")
+        for i in range(self._length):
+            yield self[i]
+
+    def __len__(self):
+        if getattr(self, '_length', None) is None:
+            raise TypeError("Delayed objects of unspecified length have "
+                            "no len()")
+        return self._length
 
     def __call__(self, *args, **kwargs):
         pure = kwargs.pop('pure', False)
-        return delayed(apply, pure=pure)(self, args, kwargs)
+        name = kwargs.pop('dask_key_name', None)
+        func = delayed(apply, pure=pure)
+        if name is not None:
+            return func(self, args, kwargs, dask_key_name=name)
+        return func(self, args, kwargs)
 
     def __bool__(self):
         raise TypeError("Truth of Delayed objects is not supported")
@@ -328,52 +391,63 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
+def call_function(func, func_token, args, kwargs, pure=False, nout=None):
+    dask_key_name = kwargs.pop('dask_key_name', None)
+    pure = kwargs.pop('pure', pure)
+
+    if dask_key_name is None:
+        name = '%s-%s' % (funcname(func),
+                          tokenize(func_token, *args, pure=pure, **kwargs))
+    else:
+        name = dask_key_name
+
+    args, dasks = unzip(map(to_task_dask, args), 2)
+    dsk = sharedict.merge(*dasks)
+    if kwargs:
+        dask_kwargs, dsk2 = to_task_dask(kwargs)
+        dsk.update(dsk2)
+        task = (apply, func, list(args), dask_kwargs)
+    else:
+        task = (func,) + args
+
+    dsk.update_with_key({name: task}, key=name)
+    nout = nout if nout is not None else None
+    return Delayed(name, dsk, length=nout)
+
+
 class DelayedLeaf(Delayed):
-    def __init__(self, obj, name=None, pure=False):
-        if name is None:
-            try:
-                name = obj.__name__ + tokenize(obj, pure=pure)
-            except AttributeError:
-                name = '%s-%s' % (type(obj).__name__, tokenize(obj, pure=pure))
-        object.__setattr__(self, '_dasks', [{name: obj}])
-        object.__setattr__(self, 'pure', pure)
+    __slots__ = ('_obj', '_key', '_pure', '_nout')
 
-    def __setstate__(self, state):
-        self.__init__(*state)
-        return self
-
-    def __getstate__(self):
-        return (self._data, self._key, self.pure)
+    def __init__(self, obj, key, pure=False, nout=None):
+        self._obj = obj
+        self._key = key
+        self._pure = pure
+        self._nout = nout
 
     @property
-    def _key(self):
-        return first(self._dasks[0])
-
-    @property
-    def _data(self):
-        return first(self._dasks[0].values())
+    def dask(self):
+        return {self._key: self._obj}
 
     def __call__(self, *args, **kwargs):
-        dask_key_name = kwargs.pop('dask_key_name', None)
-        pure = kwargs.pop('pure', self.pure)
+        return call_function(self._obj, self._key, args, kwargs,
+                             pure=self._pure, nout=self._nout)
 
-        if dask_key_name is None:
-            name = (funcname(self._data) + '-' +
-                    tokenize(self._key, *args, pure=pure, **kwargs))
-        else:
-            name = dask_key_name
 
-        args, dasks = unzip(map(to_task_dasks, args), 2)
-        if kwargs:
-            dask_kwargs, dasks2 = to_task_dasks(kwargs)
-            dasks = dasks + (dasks2,)
-            task = (apply, self._data, list(args), dask_kwargs)
-        else:
-            task = (self._data,) + args
+class DelayedAttr(Delayed):
+    __slots__ = ('_obj', '_attr', '_key')
 
-        dasks = flat_unique(dasks)
-        dasks.append({name: task})
-        return Delayed(name, dasks)
+    def __init__(self, obj, attr, key):
+        self._obj = obj
+        self._attr = attr
+        self._key = key
+
+    @property
+    def dask(self):
+        dsk = {self._key: (getattr, self._obj._key, self._attr)}
+        return sharedict.merge(self._obj.dask, (self._key, dsk))
+
+    def __call__(self, *args, **kwargs):
+        return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
@@ -386,10 +460,3 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
 
 
 base.normalize_token.register(Delayed, lambda a: a.key)
-
-Value = Delayed
-
-
-def value(val, name=None):
-    warn("``dask.imperative.value`` is renamed to ``delayed``")
-    return delayed(val, name=name)

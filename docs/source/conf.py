@@ -25,8 +25,8 @@ import sys, os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.pngmath', 'sphinx.ext.mathjax',
-              'sphinx.ext.autosummary', 'numpydoc']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax',
+              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
 
 numpydoc_show_class_members = False
 
@@ -194,7 +194,7 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'dask.tex', u'dask Documentation',
-   u'Matthew Rocklin', 'manual'),
+   u'Dask Development Team', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -224,7 +224,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'dask', u'dask Documentation',
-     [u'Matthew Rocklin'], 1)
+     [u'Dask Development Team'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -238,7 +238,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'dask', u'dask Documentation',
-   u'Matthew Rocklin', 'dask', 'One line description of project.',
+   u'Dask Development Team', 'dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -256,7 +256,7 @@ texinfo_documents = [
 
 # Bibliographic Dublin Core info.
 epub_title = u'dask'
-epub_author = u'Matthew Rocklin'
+epub_author = u'Dask Development Team'
 epub_publisher = u'Continuum Analytics'
 epub_copyright = u'2015, Continuum Analytics'
 
@@ -281,7 +281,7 @@ epub_copyright = u'2015, Continuum Analytics'
 # The format is a list of tuples containing the path and title.
 #epub_pre_files = []
 
-# HTML files shat should be inserted after the pages created by sphinx.
+# HTML files that should be inserted after the pages created by sphinx.
 # The format is a list of tuples containing the path and title.
 #epub_post_files = []
 
@@ -293,3 +293,8 @@ epub_copyright = u'2015, Continuum Analytics'
 
 # Allow duplicate toc entries.
 #epub_tocdup = True
+
+extlinks = {
+    'issue': ('https://github.com/dask/dask/issues/%s', 'GH#'),
+    'pr': ('https://github.com/dask/dask/pull/%s', 'GH#')
+}

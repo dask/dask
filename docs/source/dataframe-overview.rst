@@ -1,10 +1,12 @@
 Overview
 ========
 
-Dask Dataframe implements a subset of the Pandas Dataframe interface using blocked
-algorithms, cutting up the large DataFrame into many small Pandas DataFrames.
-This lets us compute on dataframes that are larger than memory using all of our
-cores. We coordinate these blocked algorithms using dask graphs.
+Dask Dataframe implements a subset of the Pandas Dataframe interface using
+blocked algorithms, cutting up the large DataFrame into many small Pandas
+DataFrames.  This lets us compute on dataframes that are larger than memory
+using all of our cores or on many dataframes spread across a cluster.  One
+operation on a dask.dataframe triggers many operations on the constituent
+Pandas dataframes.
 
 Design
 ------
@@ -12,19 +14,42 @@ Design
 .. image:: images/dask-dataframe.svg
    :alt: Dask DataFrames coordinate many Pandas DataFrames
    :align: right
-   :width: 50%
+   :width: 40%
 
-Dask dataframes coordinate many Pandas arrays arranged along an index.  These
-Pandas dataframes may live on disk or on other machines.
+Dask dataframes coordinate many Pandas DataFrames/Series arranged along the
+index.  Dask.dataframe is partitioned *row-wise*, grouping rows by index value
+for efficiency.  These Pandas objects may live on disk or on other machines.
 
 
-Common Uses
------------
+Common Uses and Anti-Uses
+-------------------------
 
-Dask dataframes are commonly used to quickly inspect and analyze large volumes
-of tabular data stored in CSV, HDF5, or other tabular formats.  This includes
-experimental data, financial data, or any other case where you have many
-heterogeneously typed columns that don't fit into memory.
+Dask.dataframe is particularly useful in the following situations:
+
+*  Manipulating large datasets on a single machine, even when those datasets
+   don't fit comfortably into memory.
+*  Fast computation on large workstation machines by parallelizing many Pandas
+   calls across many cores.
+*  Distributed computing of very large tables stored in the Hadoop File System
+   (HDFS), S3, or other parallel file systems.
+*  Parallel groupby, join, or time series computations
+
+However in the following situations Dask.dataframe may not be the best choice:
+
+*  If your dataset fits comfortably into RAM on your laptop then you may be
+   better off just using Pandas_.  There may be simpler ways to improve
+   performance than through parallelism.
+*  If your dataset doesn't fit neatly into the Pandas tabular model then you
+   might find more use in :doc:`dask.bag <bag>` or :doc:`dask.array <array>`
+*  If you need functions that are not implemented in dask.dataframe then you
+   might want to look at :doc:`dask.delayed <delayed>` which offers more
+   flexibility.
+*  If you need a proper database with all that databases offer you might prefer
+   something like Postgres_
+
+.. _Pandas: https://pandas.pydata.org/
+.. _Postgres: https://www.postgresql.org/
+
 
 Dask.dataframe copies the pandas API
 ------------------------------------

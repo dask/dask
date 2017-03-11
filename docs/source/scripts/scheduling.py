@@ -13,7 +13,7 @@ def noop(x):
 nrepetitions = 1
 
 def trivial(width, height):
-    """ Embarassingly parallel dask """
+    """ Embarrassingly parallel dask """
     d = {('x', 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update({('x', j, i): (noop, ('x', j - 1, i))

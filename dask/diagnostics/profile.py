@@ -7,6 +7,7 @@ from time import sleep
 from multiprocessing import Process, Pipe, current_process
 
 from ..callbacks import Callback
+from ..utils import import_required
 
 
 # Stores execution data for each task
@@ -194,7 +195,8 @@ class ResourceProfiler(Callback):
 class _Tracker(Process):
     """Background process for tracking resource usage"""
     def __init__(self, dt=1):
-        import psutil
+        psutil = import_required("psutil", "Tracking resource usage requires "
+                                           "`psutil` to be installed")
         Process.__init__(self)
         self.daemon = True
         self.dt = dt
@@ -226,7 +228,7 @@ class _Tracker(Process):
                 ps = self._update_pids(pid)
                 while not self.child_conn.poll():
                     tic = default_timer()
-                    mem = sum(p.memory_info().rss for p in ps)/1e6
+                    mem = sum(p.memory_info().rss for p in ps) / 1e6
                     cpu = sum(p.cpu_percent() for p in ps)
                     data.append((tic, mem, cpu))
                     sleep(self.dt)

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 from toolz import merge, partial
 
 from ..base import tokenize
@@ -36,7 +37,7 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     --------
     >>> import dask.array as da
     >>> X = da.random.random((10, 3), chunks=(5, 3))
-    >>> y = da.random.random(10, chunks=(5,))
+    >>> y = da.random.randint(0, 2, 10, chunks=(5,))
 
     >>> from sklearn.linear_model import SGDClassifier
     >>> sgd = SGDClassifier()
@@ -73,9 +74,8 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     name = 'fit-' + tokenize(model, x, y, kwargs)
     dsk = {(name, -1): model}
     dsk.update(dict(((name, i), (_partial_fit, (name, i - 1),
-                                          (x.name, i, 0),
-                                          (y.name, i),
-                                          kwargs))
+                                               (x.name, i, 0),
+                                               (y.name, i), kwargs))
                     for i in range(nblocks)))
 
     return get(merge(x.dask, y.dask, dsk), (name, nblocks - 1))
@@ -90,9 +90,8 @@ def predict(model, x):
 
     Parameters
     ----------
-
-    model: scikit learn classifier
-    x: dask Array
+    model : scikit learn classifier
+    x : dask Array
 
     See docstring for ``da.learn.fit``
     """
@@ -100,4 +99,6 @@ def predict(model, x):
     if len(x.chunks[1]) > 1:
         x = x.reblock(chunks=(x.chunks[0], sum(x.chunks[1])))
     func = partial(_predict, model)
-    return x.map_blocks(func, chunks=(x.chunks[0], (1,))).squeeze()
+    xx = np.zeros((1, x.shape[1]), dtype=x.dtype)
+    dt = model.predict(xx).dtype
+    return x.map_blocks(func, chunks=(x.chunks[0], (1,)), dtype=dt).squeeze()

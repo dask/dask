@@ -35,7 +35,8 @@ def _fft_wrap(fft_func, dtype, out_chunk_fn):
                           chunks=chunks)
 
     np_name = fft_func.__name__
-    func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+    if fft_func.__doc__ is not None:
+        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
     func.__name__ = np_name
     return func
 
@@ -53,7 +54,7 @@ def _rfft_out_chunks(a, n, axis):
     if n is None:
         n = a.chunks[axis][0]
     chunks = list(a.chunks)
-    chunks[axis] = (n//2 + 1,)
+    chunks[axis] = (n // 2 + 1,)
     return chunks
 
 
@@ -78,9 +79,9 @@ def _ihfft_out_chunks(a, n, axis):
         n = a.chunks[axis][0]
     chunks = list(a.chunks)
     if n % 2 == 0:
-        m = (n//2) + 1
+        m = (n // 2) + 1
     else:
-        m = (n + 1)//2
+        m = (n + 1) // 2
     chunks[axis] = (m,)
     return chunks
 

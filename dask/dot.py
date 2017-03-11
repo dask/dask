@@ -1,12 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
 import re
+import os
 from functools import partial
 
-from graphviz import Digraph
-
 from .core import istask, get_dependencies, ishashable
-from .utils import funcname
+from .utils import funcname, import_required
+
+
+graphviz = import_required("graphviz", "Drawing dask graphs requires the "
+                                       "`graphviz` python library and the "
+                                       "`graphviz` system library to be "
+                                       "installed.")
 
 
 def task_label(task):
@@ -96,15 +101,19 @@ def label(x, cache=None):
     return s
 
 
-def to_graphviz(dsk, data_attributes=None, function_attributes=None, **kwargs):
+def to_graphviz(dsk, data_attributes=None, function_attributes=None,
+                rankdir='BT', graph_attr={}, node_attr=None, edge_attr=None, **kwargs):
     if data_attributes is None:
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
 
-    attributes = {'rankdir': 'BT'}
-    attributes.update(kwargs)
-    g = Digraph(graph_attr=attributes)
+    graph_attr = graph_attr or {}
+    graph_attr['rankdir'] = rankdir
+    graph_attr.update(kwargs)
+    g = graphviz.Digraph(graph_attr=graph_attr,
+                         node_attr=node_attr,
+                         edge_attr=edge_attr)
 
     seen = set()
     cache = {}
@@ -211,8 +220,8 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
 
     fmts = ['.png', '.pdf', '.dot', '.svg', '.jpeg', '.jpg']
     if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
-        format = filename.lower().split('.')[-1]
-        filename = filename.rsplit('.')[0]
+        filename, format = os.path.splitext(filename)
+        format = format[1:].lower()
 
     if format is None:
         format = 'png'

@@ -1,12 +1,5 @@
 from dask.rewrite import RewriteRule, RuleSet, head, args, VAR, Traverser
-
-
-def inc(x):
-    return x + 1
-
-
-def add(x, y):
-    return x + y
+from dask.utils_test import inc, add
 
 
 def double(x):
@@ -55,12 +48,16 @@ rule4 = RewriteRule((add, (inc, "b"), (inc, "a")), (add, (add, "a", "b"), 2), va
 # sum([c, b, a]) -> add(add(a, b), c)
 rule5 = RewriteRule((sum, ["c", "b", "a"]), (add, (add, "a", "b"), "c"), vars)
 # list(x) -> x if x is a list
+
+
 def repl_list(sd):
     x = sd['x']
     if isinstance(x, list):
         return x
     else:
         return (list, x)
+
+
 rule6 = RewriteRule((list, 'x'), repl_list, ('x',))
 
 
@@ -90,9 +87,9 @@ rs = RuleSet(*rules)
 
 def test_RuleSet():
     net = ({add: ({VAR: ({VAR: ({}, [1]), 1: ({}, [0])}, []),
-          inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, [])}, []),
-          list: ({VAR: ({}, [5])}, []), sum: ({list: ({VAR: ({VAR: ({VAR:
-          ({}, [4])}, [])}, [])}, [])}, [])}, [])
+            inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, [])}, []),
+            list: ({VAR: ({}, [5])}, []),
+            sum: ({list: ({VAR: ({VAR: ({VAR: ({}, [4])}, [])}, [])}, [])}, [])}, [])
     assert rs._net == net
     assert rs.rules == rules
 

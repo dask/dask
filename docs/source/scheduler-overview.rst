@@ -7,10 +7,10 @@ implements a few different schedulers:
 - ``dask.threaded.get``: a scheduler backed by a thread pool
 - ``dask.multiprocessing.get``: a scheduler backed by a process pool
 - ``dask.async.get_sync``: a synchronous scheduler, good for debugging
-- ``distributed.Executor.get``: a distributed scheduler for executing graphs
+- ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
-.. _distributed: http://distributed.readthedocs.io/en/latest/
+.. _distributed: https://distributed.readthedocs.io/en/latest/
 
 
 The ``get`` function
@@ -20,6 +20,8 @@ The entry point for all schedulers is a ``get`` function. This takes a dask
 graph, and a key or list of keys to compute:
 
 .. code-block:: python
+
+   >>> from operator import add
 
    >>> dsk = {'a': 1,
    ...        'b': 2,
@@ -109,17 +111,17 @@ may want to use a different scheduler. There are two ways to do this.
 
         >>> x.sum().compute(get=dask.multiprocessing.get)
 
-2. Using ``set_options``. This can be used either as a context manager, or to
+2. Using ``dask.set_options``. This can be used either as a context manager, or to
    set the scheduler globally:
 
     .. code-block:: python
 
         # As a context manager
-        >>> with set_options(get=dask.multiprocessing.get):
+        >>> with dask.set_options(get=dask.multiprocessing.get):
         ...     x.sum().compute()
 
         # Set globally
-        >>> set_options(get=dask.multiprocessing.get)
+        >>> dask.set_options(get=dask.multiprocessing.get)
         >>> x.sum().compute()
 
 
@@ -135,12 +137,12 @@ calling ``compute``:
     >>> x.compute(num_workers=4)
 
 Alternatively, the multiprocessing and threaded schedulers will check for a
-global pool set with ``set_options``:
+global pool set with ``dask.set_options``:
 
 .. code-block:: python
 
     >>> from multiprocessing.pool import ThreadPool
-    >>> with set_options(pool=ThreadPool(4)):
+    >>> with dask.set_options(pool=ThreadPool(4)):
     ...     x.compute()
 
 For more information on the individual options for each scheduler, see the
@@ -158,7 +160,7 @@ well with ``pdb``:
 
 .. code-block:: python
 
-    >>> set_options(get=dask.async.get_sync)
+    >>> dask.set_options(get=dask.async.get_sync)
     >>> x.sum().compute()    # This computation runs serially instead of in parallel
 
 

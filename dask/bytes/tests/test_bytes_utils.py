@@ -1,5 +1,7 @@
 import io
 
+import pytest
+
 from dask.bytes.utils import read_block, seek_delimiter
 
 
@@ -50,3 +52,17 @@ def test_seek_delimiter_endline():
     f.seek(5)
     seek_delimiter(f, b'\n', 5)
     assert f.tell() == 7
+
+
+def test_ensure_protocol():
+    try:
+        import hdfs3  # noqa: F401
+        pytest.skip()
+    except ImportError:
+        pass
+
+    dd = pytest.importorskip('dask.dataframe')
+    try:
+        dd.read_csv('hdfs://data/*.csv')
+    except RuntimeError as e:
+        assert "hdfs3" in str(e)

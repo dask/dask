@@ -1,6 +1,8 @@
 import pytest
 from operator import getitem
 from toolz import merge
+
+import dask
 from dask.dataframe.optimize import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
@@ -15,47 +17,35 @@ dfs = list(dsk.values())
 
 
 def test_column_optimizations_with_bcolz_and_rewrite():
-    try:
-        import bcolz
-    except ImportError:
-        return
+    bcolz = pytest.importorskip('bcolz')
+
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
-    func = lambda x: x
     for cols in [None, 'abc', ['abc']]:
         dsk2 = merge(dict((('x', i),
                           (dataframe_from_ctable, bc, slice(0, 2), cols, {}))
                           for i in [1, 2, 3]),
                      dict((('y', i),
-                          (getitem, ('x', i), (list, ['a', 'b'])))
+                          (getitem, ('x', i), ['a', 'b']))
                           for i in [1, 2, 3]))
 
         expected = dict((('y', i), (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {}))
-                          for i in [1, 2, 3])
+                                    bc, slice(0, 2), ['a', 'b'], {}))
+                        for i in [1, 2, 3])
 
         result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
 
 
-@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
-def test_castra_column_store():
-    try:
-        from castra import Castra
-    except ImportError:
-        return
-    df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+def test_fuse_ave_width():
+    df = pd.DataFrame({'x': range(10)})
+    df = dd.from_pandas(df, npartitions=5)
 
-    with Castra(template=df) as c:
-        c.extend(df)
+    s = ((df.x + 1) + (df.x + 2))
 
-        df = c.to_dask()
+    with dask.set_options(fuse_ave_width=4):
+        a = s._optimize(s.dask, s._keys())
 
-        df2 = df[['x']]
+    b = s._optimize(s.dask, s._keys())
 
-        dsk = dd.optimize(df2.dask, df2._keys())
-
-        assert dsk == {(df2._name, 0): (Castra.load_partition, c, '0--2',
-                                            (list, ['x']))}
-        df3 = df.index
-        dsk = dd.optimize(df3.dask, df3._keys())
-        assert dsk == {(df3._name, 0): (Castra.load_index, c, '0--2')}
+    assert len(a) < len(b)
+    assert len(a) <= 10

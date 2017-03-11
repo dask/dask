@@ -3,6 +3,7 @@ from io import BytesIO
 import pytest
 from dask.bytes.compression import compress, decompress, files
 
+
 def test_compression():
     assert set(compress) == set(decompress)
 
@@ -21,7 +22,7 @@ def test_compression():
 def test_files(fmt,File):
     if fmt is None:
         return
-    data = b'1234'*1000
+    data = b'1234' * 1000
     out = BytesIO()
     f = File(out, mode='wb')
     f.write(data)

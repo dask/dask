@@ -3,41 +3,46 @@ from operator import add, setitem
 import pickle
 from random import random
 
-from toolz import identity, partial
+from toolz import identity, partial, merge
 import pytest
 
 from dask.compatibility import PY2, PY3
-from dask.delayed import delayed, to_task_dasks, compute, Delayed
-from dask.utils import raises
+from dask.delayed import delayed, to_task_dask, compute, Delayed
 
 
-def test_value():
-    v = delayed(1)
-    assert v.compute() == 1
-    assert 1 in v.dask.values()
-
-
-def test_to_task_dasks():
+def test_to_task_dask():
     a = delayed(1, name='a')
     b = delayed(2, name='b')
-    task, dasks = to_task_dasks([a, b, 3])
+    task, dask = to_task_dask([a, b, 3])
     assert task == ['a', 'b', 3]
-    assert len(dasks) == 2
-    assert a.dask in dasks
-    assert b.dask in dasks
 
-    task, dasks = to_task_dasks({a: 1, b: 2})
+    task, dask = to_task_dask((a, b, 3))
+    assert task == (tuple, ['a', 'b', 3])
+    assert dict(dask) == merge(a.dask, b.dask)
+
+    task, dask = to_task_dask({a: 1, b: 2})
     assert (task == (dict, [['b', 2], ['a', 1]]) or
             task == (dict, [['a', 1], ['b', 2]]))
-    assert len(dasks) == 2
-    assert a.dask in dasks
-    assert b.dask in dasks
+    assert dict(dask) == merge(a.dask, b.dask)
 
     f = namedtuple('f', ['x', 'y'])
     x = f(1, 2)
-    task, dasks = to_task_dasks(x)
+    task, dask = to_task_dask(x)
     assert task == x
-    assert dasks == []
+    assert dict(dask) == {}
+
+
+def test_delayed():
+    add2 = delayed(add)
+    assert add2(1, 2).compute() == 3
+    assert (add2(1, 2) + 3).compute() == 6
+    assert add2(add2(1, 2), 3).compute() == 6
+
+    a = delayed(1)
+    assert a.compute() == 1
+    assert 1 in a.dask.values()
+    b = add2(add2(a, 2), 3)
+    assert a.key in b.dask
 
 
 def test_operators():
@@ -58,58 +63,37 @@ def test_methods():
     assert a.split(' ').compute() == ['a', 'b', 'c', 'd', 'e']
     assert a.upper().replace('B', 'A').split().count('A').compute() == 2
     assert a.split(' ', pure=True).key == a.split(' ', pure=True).key
+    o = a.split(' ', dask_key_name='test')
+    assert o.key == 'test'
 
 
 def test_attributes():
     a = delayed(2 + 1j)
     assert a.real.compute() == 2
     assert a.imag.compute() == 1
+    assert (a.real + a.imag).compute() == 3
 
 
-def test_attr_optimize():
-    # Check that attribute access is inlined
+def test_method_getattr_optimize():
     a = delayed([1, 2, 3])
     o = a.index(1)
     dsk = o._optimize(o.dask, o._keys())
+    # Don't getattr the method, then call in separate task
     assert getattr not in set(v[0] for v in dsk.values())
 
 
-def test_value_errors():
+def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
-    assert raises(TypeError, lambda: setattr(a, 'foo', 1))
-    assert raises(TypeError, lambda: setattr(a, '_key', 'test'))
-    assert raises(TypeError, lambda: setitem(a, 1, 0))
+    pytest.raises(TypeError, lambda: setattr(a, 'foo', 1))
+    pytest.raises(TypeError, lambda: setitem(a, 1, 0))
     # Can't iterate, or check if contains
-    assert raises(TypeError, lambda: 1 in a)
-    assert raises(TypeError, lambda: list(a))
-    # No dynamic generation of magic methods
-    assert raises(AttributeError, lambda: a.__len__())
-    # Truth of values forbidden
-    assert raises(TypeError, lambda: bool(a))
-
-
-def test_delayed():
-    add2 = delayed(add)
-    assert add2(1, 2).compute() == 3
-    assert (add2(1, 2) + 3).compute() == 6
-    assert add2(add2(1, 2), 3).compute() == 6
-    a = delayed(1)
-    b = add2(add2(a, 2), 3)
-    assert a.key in b.dask
-
-
-def test_compute():
-    a = delayed(1) + 5
-    b = a + 1
-    c = a + 2
-    assert compute(b, c) == (7, 8)
-    assert compute(b) == (7,)
-    assert compute([a, b], c) == ([6, 7], 8)
-
-
-def test_named_value():
-    assert 'X' in delayed(1, name='X').dask
+    pytest.raises(TypeError, lambda: 1 in a)
+    pytest.raises(TypeError, lambda: list(a))
+    # No dynamic generation of magic/hidden methods
+    pytest.raises(AttributeError, lambda: a._hidden())
+    # Truth of delayed forbidden
+    pytest.raises(TypeError, lambda: bool(a))
 
 
 def test_common_subexpressions():
@@ -132,6 +116,8 @@ def test_literates():
     b = a + 1
     lit = (a, b, 3)
     assert delayed(lit).compute() == (1, 2, 3)
+    lit = [a, b, 3]
+    assert delayed(lit).compute() == [1, 2, 3]
     lit = set((a, b, 3))
     assert delayed(lit).compute() == set((1, 2, 3))
     lit = {a: 'a', b: 'b', 3: 'c'}
@@ -140,6 +126,14 @@ def test_literates():
     lit = {'a': a, 'b': b, 'c': 3}
     assert delayed(lit).compute() == {'a': 1, 'b': 2, 'c': 3}
     assert delayed(lit)['a'].compute() == 1
+
+
+def test_literates_keys():
+    a = delayed(1)
+    b = a + 1
+    lit = (a, b, 3)
+    assert delayed(lit).key != delayed(lit).key
+    assert delayed(lit, pure=True).key == delayed(lit, pure=True).key
 
 
 def test_lists_are_concrete():
@@ -166,6 +160,41 @@ def test_iterators():
     assert c.compute() == 3
 
 
+def test_traverse_false():
+    # Create a list with a dask value, and test that it's not computed
+    def fail(*args):
+        raise ValueError("shouldn't have computed")
+
+    a = delayed(fail)()
+
+    # list
+    x = [a, 1, 2, 3]
+    res = delayed(x, traverse=False).compute()
+    assert len(res) == 4
+    assert res[0] is a
+    assert res[1:] == x[1:]
+
+    # tuple that looks like a task
+    x = (fail, a, (fail, a))
+    res = delayed(x, traverse=False).compute()
+    assert isinstance(res, tuple)
+    assert res[0] == fail
+    assert res[1] is a
+
+    # list containing task-like-things
+    x = [1, (fail, a), a]
+    res = delayed(x, traverse=False).compute()
+    assert isinstance(res, list)
+    assert res[0] == 1
+    assert res[1][0] == fail and res[1][1] is a
+    assert res[2] is a
+
+    # traverse=False still hits top level
+    b = delayed(1)
+    x = delayed(b, traverse=False)
+    assert x.compute() == 1
+
+
 def test_pure():
     v1 = delayed(add, pure=True)(1, 2)
     v2 = delayed(add, pure=True)(1, 2)
@@ -175,6 +204,40 @@ def test_pure():
     assert myrand().key != myrand().key
 
 
+def test_nout():
+    func = delayed(lambda x: (x, -x), nout=2, pure=True)
+    x = func(1)
+    assert len(x) == 2
+    a, b = x
+    assert compute(a, b) == (1, -1)
+    assert a._length is None
+    assert b._length is None
+    pytest.raises(TypeError, lambda: len(a))
+    pytest.raises(TypeError, lambda: list(a))
+
+    pytest.raises(ValueError, lambda: delayed(add, nout=-1))
+    pytest.raises(ValueError, lambda: delayed(add, nout=True))
+
+    func = delayed(add, nout=None)
+    a = func(1)
+    assert a._length is None
+    pytest.raises(TypeError, lambda: list(a))
+    pytest.raises(TypeError, lambda: len(a))
+
+    func = delayed(lambda x: (x,), nout=1, pure=True)
+    x = func(1)
+    assert len(x) == 1
+    a, = x
+    assert a.compute() == 1
+    assert a._length is None
+    pytest.raises(TypeError, lambda: len(a))
+
+    func = delayed(lambda x: tuple(), nout=0, pure=True)
+    x = func(1)
+    assert len(x) == 0
+    assert x.compute() == tuple()
+
+
 def test_kwargs():
     def mysum(a, b, c=(), **kwargs):
         return a + b + sum(c) + sum(kwargs.values())
@@ -182,8 +245,13 @@ def test_kwargs():
     ten = dmysum(1, 2, c=[delayed(3), 0], four=dmysum(2, 2))
     assert ten.compute() == 10
     dmysum = delayed(mysum, pure=True)
-    ten = dmysum(1, 2, c=[delayed(3), 0], four=dmysum(2, 2))
+    c = [delayed(3), 0]
+    ten = dmysum(1, 2, c=c, four=dmysum(2, 2))
     assert ten.compute() == 10
+    assert dmysum(1, 2, c=c, four=dmysum(2, 2)).key == ten.key
+    assert dmysum(1, 2, c=c, four=dmysum(2, 3)).key != ten.key
+    assert dmysum(1, 2, c=c, four=4).key != ten.key
+    assert dmysum(1, 2, c=c, four=4).key != dmysum(2, 2, c=c, four=4).key
 
 
 def test_array_delayed():
@@ -198,13 +266,15 @@ def test_array_delayed():
     assert val.sum().compute() == (arr + arr + 1).sum()
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
-    task, dasks = to_task_dasks(darr)
-    assert len(dasks) == 1
+    task, dsk = to_task_dask(darr)
     orig = set(darr.dask)
-    final = set(dasks[0])
+    final = set(dsk)
     assert orig.issubset(final)
     diff = final.difference(orig)
     assert len(diff) == 1
+
+    delayed_arr = delayed(darr)
+    assert (delayed_arr.compute() == arr).all()
 
 
 def test_array_bag_delayed():
@@ -219,23 +289,29 @@ def test_array_bag_delayed():
     b = db.from_sequence([1, 2, 3])
     seq = [arr1, arr2, darr1, darr2, b]
     out = delayed(sum)([i.sum() for i in seq])
-    assert out.compute() == 2*arr1.sum() + 2*arr2.sum() + sum([1, 2, 3])
+    assert out.compute() == 2 * arr1.sum() + 2 * arr2.sum() + sum([1, 2, 3])
 
 
-def test_key_names_include_function_names():
-    def myfunc(x):
-        return x + 1
-    assert delayed(myfunc)(1).key.startswith('myfunc')
-
-
-def test_key_names_include_type_names():
-    assert delayed(1).key.startswith('int')
-
-
-def test_value_picklable():
-    x = delayed(1)
+def test_delayed_picklable():
+    # Delayed
+    x = delayed(divmod, nout=2, pure=True)(1, 2)
     y = pickle.loads(pickle.dumps(x))
     assert x.dask == y.dask
+    assert x._key == y._key
+    assert x._length == y._length
+    # DelayedLeaf
+    x = delayed(1j + 2)
+    y = pickle.loads(pickle.dumps(x))
+    assert x.dask == y.dask
+    assert x._key == y._key
+    assert x._nout == y._nout
+    assert x._pure == y._pure
+    # DelayedAttr
+    x = x.real
+    y = pickle.loads(pickle.dumps(x))
+    assert x._obj._key == y._obj._key
+    assert x._obj.dask == y._obj.dask
+    assert x._attr == y._attr
     assert x._key == y._key
 
 
@@ -244,7 +320,7 @@ def test_delayed_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-def test_do_method_descriptor():
+def test_delayed_method_descriptor():
     delayed(bytes.decode)(b'')  # does not err
 
 
@@ -282,17 +358,17 @@ def test_name_consitent_across_instances():
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
     if PY2:
-        assert func(data)._key == 'identity-69e6d664a9054dce0e4dcaf48b919b8b'
+        assert func(data)._key == 'identity-6700b857eea9a7d3079762c9a253ffbd'
     if PY3:
-        assert func(data)._key == 'identity-6611a0dc9183f09b04a35db23d14fb7d'
+        assert func(data)._key == 'identity-84c5e2194036c17d1d97c4e3a2b90482'
 
     data = {'x': 1, 1: 'x'}
     assert func(data)._key == func(data)._key
 
     if PY2:
-        assert func(1)._key == 'identity-9ed591b193ff79d4909cc7ae58786091'
+        assert func(1)._key == 'identity-91f02358e13dca18cde218a63fee436a'
     if PY3:
-        assert func(1)._key == 'identity-1b6bde2fbd96b2278a4d2e7514366606'
+        assert func(1)._key == 'identity-7126728842461bf3d2caecf7b954fa3b'
 
 
 def test_sensitive_to_partials():
@@ -300,6 +376,26 @@ def test_sensitive_to_partials():
             delayed(partial(add, 20), pure=True)(2)._key)
 
 
-def test_value_name():
+def test_delayed_name():
     assert delayed(1)._key.startswith('int-')
     assert delayed(1, pure=True)._key.startswith('int-')
+    assert delayed(1, name='X')._key == 'X'
+
+    def myfunc(x):
+        return x + 1
+
+    assert delayed(myfunc)(1).key.startswith('myfunc')
+
+
+def test_finalize_name():
+    import dask.array as da
+    x = da.ones(10, chunks=5)
+    v = delayed([x])
+    assert set(x.dask).issubset(v.dask)
+
+    def key(s):
+        if isinstance(s, tuple):
+            s = s[0]
+        return s.split('-')[0]
+
+    assert all(key(k).isalpha() for k in v.dask)

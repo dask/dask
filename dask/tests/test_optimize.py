@@ -1,14 +1,12 @@
-from itertools import count
-from operator import add, mul, getitem
+from operator import getitem
 from functools import partial
-from dask.utils import raises
+
+import pytest
+
+from dask.utils_test import add, inc
+from dask.core import get_dependencies
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias, equivalent, sync_keys, merge_sync, fuse_getitem,
-        fuse_selections, identity)
-
-
-def inc(x):
-    return x + 1
+                           fuse_getitem, fuse_selections, fuse_linear)
 
 
 def double(x):
@@ -25,21 +23,46 @@ def test_cull():
     assert cull(d, 'out') == cull(d, ['out'])
     assert cull(d, ['out', 'z'])[0] == d
     assert cull(d, [['out'], ['z']]) == cull(d, ['out', 'z'])
-    assert raises(KeyError, lambda: cull(d, 'badkey'))
+    pytest.raises(KeyError, lambda: cull(d, 'badkey'))
+
+
+def fuse2(*args, **kwargs):
+    """Run both ``fuse`` and ``fuse_linear`` and compare results"""
+    rv1 = fuse_linear(*args, **kwargs)
+    if kwargs.get('rename_keys') is not False:
+        return rv1
+    rv2 = fuse(*args, **kwargs)
+    assert rv1 == rv2
+    return rv1
+
+
+def with_deps(dsk):
+    return dsk, {k: get_dependencies(dsk, k) for k in dsk}
 
 
 def test_fuse():
-    dsk, dependencies = fuse({'w': (inc, 'x'),
-                              'x': (inc, 'y'),
-                              'y': (inc, 'z'),
-                              'z': (add, 'a', 'b'),
-                              'a': 1,
-                              'b': 2})
-    assert dsk == {'w': (inc, (inc, (inc, (add, 'a', 'b')))),
-                   'a': 1,
-                   'b': 2}
-    assert dependencies == {'a': set(), 'b': set(), 'w': set(['a', 'b'])}
-    assert fuse({
+    fuse = fuse2  # tests both `fuse` and `fuse_linear`
+    d = {
+        'w': (inc, 'x'),
+        'x': (inc, 'y'),
+        'y': (inc, 'z'),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2,
+    }
+    assert fuse(d, rename_keys=False) == with_deps({
+        'w': (inc, (inc, (inc, (add, 'a', 'b')))),
+        'a': 1,
+        'b': 2,
+    })
+    assert fuse(d, rename_keys=True) == with_deps({
+        'z-y-x-w': (inc, (inc, (inc, (add, 'a', 'b')))),
+        'a': 1,
+        'b': 2,
+        'w': 'z-y-x-w',
+    })
+
+    d = {
         'NEW': (inc, 'y'),
         'w': (inc, 'x'),
         'x': (inc, 'y'),
@@ -47,17 +70,25 @@ def test_fuse():
         'z': (add, 'a', 'b'),
         'a': 1,
         'b': 2,
-    }) == ({
+    }
+    assert fuse(d, rename_keys=False) == with_deps({
         'NEW': (inc, 'y'),
         'w': (inc, (inc, 'y')),
         'y': (inc, (add, 'a', 'b')),
         'a': 1,
         'b': 2,
-    },
-    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
-     'w': set(['y']), 'NEW': set(['y'])})
+    })
+    assert fuse(d, rename_keys=True) == with_deps({
+        'NEW': (inc, 'z-y'),
+        'x-w': (inc, (inc, 'z-y')),
+        'z-y': (inc, (add, 'a', 'b')),
+        'a': 1,
+        'b': 2,
+        'w': 'x-w',
+        'y': 'z-y',
+    })
 
-    assert fuse({
+    d = {
         'v': (inc, 'y'),
         'u': (inc, 'w'),
         'w': (inc, 'x'),
@@ -68,71 +99,152 @@ def test_fuse():
         'b': (inc, 'd'),
         'c': 1,
         'd': 2,
-    }) == ({
+    }
+    assert fuse(d, rename_keys=False) == with_deps({
         'u': (inc, (inc, (inc, 'y'))),
         'v': (inc, 'y'),
         'y': (inc, (add, 'a', 'b')),
         'a': (inc, 1),
         'b': (inc, 2),
-    },
-    {'a': set(), 'b': set(), 'y': set(['a', 'b']),
-     'v': set(['y']), 'u': set(['y'])})
-    assert fuse({
+    })
+    assert fuse(d, rename_keys=True) == with_deps({
+        'x-w-u': (inc, (inc, (inc, 'z-y'))),
+        'v': (inc, 'z-y'),
+        'z-y': (inc, (add, 'c-a', 'd-b')),
+        'c-a': (inc, 1),
+        'd-b': (inc, 2),
+        'a': 'c-a',
+        'b': 'd-b',
+        'u': 'x-w-u',
+        'y': 'z-y',
+    })
+
+    d = {
         'a': (inc, 'x'),
         'b': (inc, 'x'),
         'c': (inc, 'x'),
         'd': (inc, 'c'),
         'x': (inc, 'y'),
         'y': 0,
-    }) == ({
+    }
+    assert fuse(d, rename_keys=False) == with_deps({
         'a': (inc, 'x'),
         'b': (inc, 'x'),
         'd': (inc, (inc, 'x')),
-        'x': (inc, 0),
-    },
-    {'x': set(), 'd': set(['x']), 'a': set(['x']), 'b': set(['x'])})
-    assert fuse({
+        'x': (inc, 0)
+    })
+    assert fuse(d, rename_keys=True) == with_deps({
+        'a': (inc, 'y-x'),
+        'b': (inc, 'y-x'),
+        'c-d': (inc, (inc, 'y-x')),
+        'y-x': (inc, 0),
+        'd': 'c-d',
+        'x': 'y-x',
+    })
+
+    d = {
         'a': 1,
         'b': (inc, 'a'),
-        'c': (add, 'b', 'b')
-    }) == ({
+        'c': (add, 'b', 'b'),
+    }
+    assert fuse(d, rename_keys=False) == with_deps({
         'b': (inc, 1),
-        'c': (add, 'b', 'b')
-        }, {'b': set(), 'c': set(['b'])})
+        'c': (add, 'b', 'b'),
+    })
+    assert fuse(d, rename_keys=True) == with_deps({
+        'a-b': (inc, 1),
+        'c': (add, 'a-b', 'a-b'),
+        'b': 'a-b',
+    })
 
 
 def test_fuse_keys():
-    assert (fuse({'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}, keys=['b'])
-            == ({'b': (inc, 1), 'c': (inc, 'b')},
-                {'b': set(), 'c': set(['b'])}))
-    dsk, dependencies = fuse({
+    fuse = fuse2  # tests both `fuse` and `fuse_linear`
+    d = {
+        'a': 1,
+        'b': (inc, 'a'),
+        'c': (inc, 'b'),
+    }
+    keys = ['b']
+    assert fuse(d, keys, rename_keys=False) == with_deps({
+        'b': (inc, 1),
+        'c': (inc, 'b'),
+    })
+    assert fuse(d, keys, rename_keys=True) == with_deps({
+        'a-b': (inc, 1),
+        'c': (inc, 'a-b'),
+        'b': 'a-b',
+    })
+
+    d = {
         'w': (inc, 'x'),
         'x': (inc, 'y'),
         'y': (inc, 'z'),
         'z': (add, 'a', 'b'),
         'a': 1,
         'b': 2,
-    }, keys=['x', 'z'])
-
-    assert dsk == {'w': (inc, 'x'),
-                   'x': (inc, (inc, 'z')),
-                   'z': (add, 'a', 'b'),
-                   'a': 1,
-                   'b': 2 }
-    assert dependencies == {'a': set(), 'b': set(), 'z': set(['a', 'b']),
-                            'x': set(['z']), 'w': set(['x'])}
+    }
+    keys = ['x', 'z']
+    assert fuse(d, keys, rename_keys=False) == with_deps({
+        'w': (inc, 'x'),
+        'x': (inc, (inc, 'z')),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2 ,
+    })
+    assert fuse(d, keys, rename_keys=True) == with_deps({
+        'w': (inc, 'y-x'),
+        'y-x': (inc, (inc, 'z')),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2 ,
+        'x': 'y-x',
+    })
 
 
 def test_inline():
-    d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'), 'd': (add, 'a', 'c')}
-    assert inline(d) == {'b': (inc, 1), 'c': (inc, 'b'), 'd': (add, 1, 'c')}
-    assert inline(d, ['a', 'b', 'c']) == {'d': (add, 1, (inc, (inc, 1)))}
+    d = {'a': 1,
+         'b': (inc, 'a'),
+         'c': (inc, 'b'),
+         'd': (add, 'a', 'c')}
+    assert inline(d) == {'a': 1,
+                         'b': (inc, 1),
+                         'c': (inc, 'b'),
+                         'd': (add, 1, 'c')}
+    assert inline(d, ['a', 'b', 'c']) == {'a': 1,
+                                          'b': (inc, 1),
+                                          'c': (inc, (inc, 1)),
+                                          'd': (add, 1, (inc, (inc, 1)))}
+    d = {'x': 1,
+         'y': (inc, 'x'),
+         'z': (add, 'x', 'y')}
+    assert inline(d) == {'x': 1,
+                         'y': (inc, 1),
+                         'z': (add, 1, 'y')}
+    assert inline(d, keys='y') == {'x': 1,
+                                   'y': (inc, 1),
+                                   'z': (add, 1, (inc, 1))}
+    assert inline(d, keys='y',
+                  inline_constants=False) == {'x': 1,
+                                              'y': (inc, 'x'),
+                                              'z': (add, 'x', (inc, 'x'))}
 
-    d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    assert inline(d) == {'y': (inc, 1), 'z': (add, 1, 'y')}
-    assert inline(d, keys='y') == {'z': (add, 1, (inc, 1))}
-    assert inline(d, keys='y', inline_constants=False) == {
-        'x': 1, 'z': (add, 'x', (inc, 'x'))}
+    d = {'a': 1,
+         'b': 'a',
+         'c': 'b',
+         'd': ['a', 'b', 'c'],
+         'e': (add, (len, 'd'), 'a')}
+    assert inline(d, 'd') == {'a': 1,
+                              'b': 1,
+                              'c': 1,
+                              'd': [1, 1, 1],
+                              'e': (add, (len, [1, 1, 1]), 1)}
+    assert inline(d, 'a',
+                  inline_constants=False) == {'a': 1,
+                                              'b': 1,
+                                              'c': 'b',
+                                              'd': [1, 'b', 'c'],
+                                              'e': (add, (len, 'd'), 1)}
 
 
 def test_inline_functions():
@@ -155,7 +267,8 @@ def test_inline_ignores_curries_and_partials():
            'b': (inc, 'a')}
 
     result = inline_functions(dsk, [], fast_functions=set([add]))
-    assert 'a' not in set(result.keys())
+    assert result['b'] == (inc, dsk['a'])
+    assert 'a' not in result
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
@@ -177,7 +290,7 @@ def test_inline_traverses_lists():
     assert result == expected
 
 
-def test_inline_protects_output_keys():
+def test_inline_functions_protects_output_keys():
     dsk = {'x': (inc, 1), 'y': (double, 'x')}
     assert inline_functions(dsk, [], [inc]) == {'y': (double, (inc, 1))}
     assert inline_functions(dsk, ['x'], [inc]) == {'y': (double, 'x'),
@@ -187,7 +300,6 @@ def test_inline_protects_output_keys():
 def test_functions_of():
     a = lambda x: x
     b = lambda x: x
-    c = lambda x: x
     assert functions_of((a, 1)) == set([a])
     assert functions_of((a, (b, 1))) == set([a, b])
     assert functions_of((a, [(b, 1)])) == set([a, b])
@@ -195,153 +307,6 @@ def test_functions_of():
     assert functions_of(1) == set()
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
-
-
-def test_dealias():
-    dsk = {'a': (range, 5),
-           'b': 'a',
-           'c': 'b',
-           'd': (sum, 'c'),
-           'e': 'd',
-           'g': 'e',
-           'f': (inc, 'd')}
-
-    expected = {'a': (range, 5),
-                'd': (sum, 'a'),
-                'g': (identity, 'd'),
-                'f': (inc, 'd')}
-
-    assert dealias(dsk)  == expected
-
-
-    dsk = {'a': (range, 5),
-           'b': 'a',
-           'c': 'a'}
-
-    expected = {'a': (range, 5),
-                'b': (identity, 'a'),
-                'c': (identity, 'a')}
-
-    assert dealias(dsk)  == expected
-
-
-def test_dealias_keys():
-    dsk = {'a': (inc, 1),
-           'b': 'a',
-           'c': (inc, 2),
-           'd': 'c'}
-
-    assert dealias(dsk) == {'b': (inc, 1), 'd': (inc, 2)}
-
-    assert dealias(dsk, keys=['a', 'b', 'd']) == {'a': (inc, 1),
-                                                  'b': (identity, 'a'),
-                                                  'd': (inc, 2)}
-
-
-def test_equivalent():
-    t1 = (add, 'a', 'b')
-    t2 = (add, 'x', 'y')
-
-    assert equivalent(t1, t1)
-    assert not equivalent(t1, t2)
-    assert equivalent(t1, t2, {'x': 'a', 'y': 'b'})
-    assert not equivalent(t1, t2, {'a': 'x'})
-
-    t1 = (add, (double, 'a'), (double, 'a'))
-    t2 = (add, (double, 'b'), (double, 'c'))
-
-    assert equivalent(t1, t1)
-    assert not equivalent(t1, t2)
-    assert equivalent(t1, t2, {'b': 'a', 'c': 'a'})
-    assert not equivalent(t1, t2, {'b': 'a', 'c': 'd'})
-    assert not equivalent(t2, t1, {'a': 'b'})
-
-    # Test literal comparisons
-    assert equivalent(1, 1)
-    assert not equivalent(1, 2)
-    assert equivalent((1, 2, 3), (1, 2, 3))
-
-
-class Uncomparable(object):
-    def __eq__(self, other):
-        raise TypeError("Uncomparable type")
-
-
-def test_equivalence_uncomparable():
-    t1 = Uncomparable()
-    t2 = Uncomparable()
-    assert raises(TypeError, lambda: t1 == t2)
-    assert equivalent(t1, t1)
-    assert not equivalent(t1, t2)
-    assert equivalent((add, t1, 0), (add, t1, 0))
-    assert not equivalent((add, t1, 0), (add, t2, 0))
-
-
-def test_sync_keys():
-    dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
-    dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    assert sync_keys(dsk1, dsk2) == {'x': 'a', 'y': 'b'}
-    assert sync_keys(dsk2, dsk1) == {'a': 'x', 'b': 'y'}
-
-    dsk1 = {'a': 1, 'b': 2, 'c': (add, 'a', 'b'), 'd': (inc, (add, 'a', 'b'))}
-    dsk2 = {'x': 1, 'y': 5, 'z': (add, 'x', 'y'), 'w': (inc, (add, 'x', 'y'))}
-    assert sync_keys(dsk1, dsk2) == {'x': 'a'}
-    assert sync_keys(dsk2, dsk1) == {'a': 'x'}
-
-
-def test_sync_uncomparable():
-    t1 = Uncomparable()
-    t2 = Uncomparable()
-    dsk1 = {'a': 1, 'b': t1, 'c': (add, 'a', 'b')}
-    dsk2 = {'x': 1, 'y': t2, 'z': (add, 'y', 'x')}
-    assert sync_keys(dsk1, dsk2) == {'x': 'a'}
-
-    dsk2 = {'x': 1, 'y': t1, 'z': (add, 'y', 'x')}
-    assert sync_keys(dsk1, dsk2) == {'x': 'a', 'y': 'b'}
-
-
-def test_merge_sync():
-    dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
-    dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    new_dsk, key_map = merge_sync(dsk1, dsk2)
-    assert new_dsk == {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5),
-            'z': (mul, 'b', 2)}
-    assert key_map == {'x': 'a', 'y': 'b', 'z': 'z'}
-
-    dsk1 = {'g1': 1,
-            'g2': 2,
-            'g3': (add, 'g1', 1),
-            'g4': (add, 'g2', 1),
-            'g5': (mul, (inc, 'g3'), (inc, 'g4'))}
-    dsk2 = {'h1': 1,
-            'h2': 5,
-            'h3': (add, 'h1', 1),
-            'h4': (add, 'h2', 1),
-            'h5': (mul, (inc, 'h3'), (inc, 'h4'))}
-    new_dsk, key_map = merge_sync(dsk1, dsk2)
-    assert new_dsk == {'g1': 1,
-                       'g2': 2,
-                       'g3': (add, 'g1', 1),
-                       'g4': (add, 'g2', 1),
-                       'g5': (mul, (inc, 'g3'), (inc, 'g4')),
-                       'h2': 5,
-                       'h4': (add, 'h2', 1),
-                       'h5': (mul, (inc, 'g3'), (inc, 'h4'))}
-    assert key_map == {'h1': 'g1', 'h2': 'h2', 'h3': 'g3',
-            'h4': 'h4', 'h5': 'h5'}
-
-    # Test merging with name conflict
-    # Reset name count to ensure same numbers
-    merge_sync.names = ("merge_%d" % i for i in count(1))
-    dsk1 = {'g1': 1, 'conflict': (add, 'g1', 2), 'g2': (add, 'conflict', 3)}
-    dsk2 = {'h1': 1, 'conflict': (add, 'h1', 4), 'h2': (add, 'conflict', 3)}
-    new_dsk, key_map = merge_sync(dsk1, dsk2)
-    assert new_dsk == {'g1': 1,
-                       'conflict': (add, 'g1', 2),
-                       'merge_1': (add, 'g1', 4),
-                       'g2': (add, 'conflict', 3),
-                       'h2': (add, 'merge_1', 3)}
-    assert key_map == {'h1': 'g1', 'conflict': 'merge_1', 'h2': 'h2'}
 
 
 def test_fuse_getitem():
@@ -363,3 +328,736 @@ def test_fuse_selections():
     dsk2 = fuse_selections(dsk, getitem, load, merge)
     dsk2, dependencies = cull(dsk2, 'y')
     assert dsk2 == {'y': (load, 'store', 'part', 'a')}
+
+
+def test_inline_cull_dependencies():
+    d = {'a': 1,
+         'b': 'a',
+         'c': 'b',
+         'd': ['a', 'b', 'c'],
+         'e': (add, (len, 'd'), 'a')}
+
+    d2, dependencies = cull(d, ['d', 'e'])
+    inline(d2, {'b'}, dependencies=dependencies)
+
+
+def test_fuse_reductions_single_input():
+    def f(*args):
+        return args
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a', 'a'),
+        'c': (f, 'b1', 'b2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a', 'a')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-c': (f, (f, 'a'), (f, 'a', 'a')),
+        'c': 'b1-b2-c',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a', 'a'),
+        'b3': (f, 'a', 'a', 'a'),
+        'c': (f, 'b1', 'b2', 'b3'),
+    }
+    assert fuse(d, ave_width=2.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=2.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=3, rename_keys=False) == with_deps({
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a', 'a'), (f, 'a', 'a', 'a')),
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-b3-c': (f, (f, 'a'), (f, 'a', 'a'), (f, 'a', 'a', 'a')),
+        'c': 'b1-b2-b3-c',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c': (f, 'a', 'b1', 'b2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a': 1,
+        'c': (f, 'a', (f, 'a'), (f, 'a')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-c': (f, 'a', (f, 'a'), (f, 'a')),
+        'c': 'b1-b2-c',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c': (f, 'b1', 'b2'),
+        'd1': (f, 'c'),
+        'd2': (f, 'c'),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a': 1,
+        'c': (f, (f, 'a'), (f, 'a')),
+        'e': (f, (f, 'c'), (f, 'c')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-c': (f, (f, 'a'), (f, 'a')),
+        'd1-d2-e': (f, (f, 'b1-b2-c'), (f, 'b1-b2-c')),
+        'c': 'b1-b2-c',
+        'e': 'd1-d2-e',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'd': (f, 'c1', 'c2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    expected = with_deps({
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'd': (f, 'c1', 'c2'),
+    })
+    assert fuse(d, ave_width=2, rename_keys=False) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-c1': (f, (f, 'a'), (f, 'a')),
+        'b3-b4-c2': (f, (f, 'a'), (f, 'a')),
+        'd': (f, 'b1-b2-c1', 'b3-b4-c2'),
+        'c1': 'b1-b2-c1',
+        'c2': 'b3-b4-c2',
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=True) == expected
+    assert fuse(d, ave_width=3, rename_keys=False) == with_deps({
+        'a': 1,
+        'd': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-b3-b4-c1-c2-d': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd': 'b1-b2-b3-b4-c1-c2-d',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'b5': (f, 'a'),
+        'b6': (f, 'a'),
+        'b7': (f, 'a'),
+        'b8': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'c3': (f, 'b5', 'b6'),
+        'c4': (f, 'b7', 'b8'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'e': (f, 'd1', 'd2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    expected = with_deps({
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'c3': (f, (f, 'a'), (f, 'a')),
+        'c4': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'e': (f, 'd1', 'd2'),
+    })
+    assert fuse(d, ave_width=2, rename_keys=False) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-c1': (f, (f, 'a'), (f, 'a')),
+        'b3-b4-c2': (f, (f, 'a'), (f, 'a')),
+        'b5-b6-c3': (f, (f, 'a'), (f, 'a')),
+        'b7-b8-c4': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'b1-b2-c1', 'b3-b4-c2'),
+        'd2': (f, 'b5-b6-c3', 'b7-b8-c4'),
+        'e': (f, 'd1', 'd2'),
+        'c1': 'b1-b2-c1',
+        'c2': 'b3-b4-c2',
+        'c3': 'b5-b6-c3',
+        'c4': 'b7-b8-c4',
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=True) == expected
+    expected = with_deps({
+        'a': 1,
+        'd1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e': (f, 'd1', 'd2'),
+    })
+    assert fuse(d, ave_width=3, rename_keys=False) == expected
+    assert fuse(d, ave_width=4.6, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-b3-b4-c1-c2-d1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'b5-b6-b7-b8-c3-c4-d2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e': (f, 'b1-b2-b3-b4-c1-c2-d1', 'b5-b6-b7-b8-c3-c4-d2'),
+        'd1': 'b1-b2-b3-b4-c1-c2-d1',
+        'd2': 'b5-b6-b7-b8-c3-c4-d2',
+
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == expected
+    assert fuse(d, ave_width=4.6, rename_keys=True) == expected
+    assert fuse(d, ave_width=4.7, rename_keys=False) == with_deps({
+        'a': 1,
+        'e': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+              (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))
+    })
+    assert fuse(d, ave_width=4.7, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e': (
+            f,
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))
+        ),
+        'e': 'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'b4': (f, 'a'),
+        'b5': (f, 'a'),
+        'b6': (f, 'a'),
+        'b7': (f, 'a'),
+        'b8': (f, 'a'),
+        'b9': (f, 'a'),
+        'b10': (f, 'a'),
+        'b11': (f, 'a'),
+        'b12': (f, 'a'),
+        'b13': (f, 'a'),
+        'b14': (f, 'a'),
+        'b15': (f, 'a'),
+        'b16': (f, 'a'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b3', 'b4'),
+        'c3': (f, 'b5', 'b6'),
+        'c4': (f, 'b7', 'b8'),
+        'c5': (f, 'b9', 'b10'),
+        'c6': (f, 'b11', 'b12'),
+        'c7': (f, 'b13', 'b14'),
+        'c8': (f, 'b15', 'b16'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'd3': (f, 'c5', 'c6'),
+        'd4': (f, 'c7', 'c8'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    }
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    expected = with_deps({
+        'a': 1,
+        'c1': (f, (f, 'a'), (f, 'a')),
+        'c2': (f, (f, 'a'), (f, 'a')),
+        'c3': (f, (f, 'a'), (f, 'a')),
+        'c4': (f, (f, 'a'), (f, 'a')),
+        'c5': (f, (f, 'a'), (f, 'a')),
+        'c6': (f, (f, 'a'), (f, 'a')),
+        'c7': (f, (f, 'a'), (f, 'a')),
+        'c8': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'd3': (f, 'c5', 'c6'),
+        'd4': (f, 'c7', 'c8'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    })
+    assert fuse(d, ave_width=2, rename_keys=False) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-c1': (f, (f, 'a'), (f, 'a')),
+        'b3-b4-c2': (f, (f, 'a'), (f, 'a')),
+        'b5-b6-c3': (f, (f, 'a'), (f, 'a')),
+        'b7-b8-c4': (f, (f, 'a'), (f, 'a')),
+        'b10-b9-c5': (f, (f, 'a'), (f, 'a')),
+        'b11-b12-c6': (f, (f, 'a'), (f, 'a')),
+        'b13-b14-c7': (f, (f, 'a'), (f, 'a')),
+        'b15-b16-c8': (f, (f, 'a'), (f, 'a')),
+        'd1': (f, 'b1-b2-c1', 'b3-b4-c2'),
+        'd2': (f, 'b5-b6-c3', 'b7-b8-c4'),
+        'd3': (f, 'b10-b9-c5', 'b11-b12-c6'),
+        'd4': (f, 'b13-b14-c7', 'b15-b16-c8'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+        'c1': 'b1-b2-c1',
+        'c2': 'b3-b4-c2',
+        'c3': 'b5-b6-c3',
+        'c4': 'b7-b8-c4',
+        'c5': 'b10-b9-c5',
+        'c6': 'b11-b12-c6',
+        'c7': 'b13-b14-c7',
+        'c8': 'b15-b16-c8',
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=True) == expected
+    expected = with_deps({
+        'a': 1,
+        'd1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd3': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'd4': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
+        'f': (f, 'e1', 'e2'),
+    })
+    assert fuse(d, ave_width=3, rename_keys=False) == expected
+    assert fuse(d, ave_width=4.6, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-b3-b4-c1-c2-d1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'b5-b6-b7-b8-c3-c4-d2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'b10-b11-b12-b9-c5-c6-d3': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'b13-b14-b15-b16-c7-c8-d4': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+        'e1': (f, 'b1-b2-b3-b4-c1-c2-d1', 'b5-b6-b7-b8-c3-c4-d2'),
+        'e2': (f, 'b10-b11-b12-b9-c5-c6-d3', 'b13-b14-b15-b16-c7-c8-d4'),
+        'f': (f, 'e1', 'e2'),
+        'd1': 'b1-b2-b3-b4-c1-c2-d1',
+        'd2': 'b5-b6-b7-b8-c3-c4-d2',
+        'd3': 'b10-b11-b12-b9-c5-c6-d3',
+        'd4': 'b13-b14-b15-b16-c7-c8-d4',
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == expected
+    assert fuse(d, ave_width=4.6, rename_keys=True) == expected
+    expected = with_deps({
+        'a': 1,
+        'e1': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+        'e2': (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+        'f': (f, 'e1', 'e2'),
+    })
+    assert fuse(d, ave_width=4.7, rename_keys=False) == expected
+    assert fuse(d, ave_width=7.4, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1': (
+            f,
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))
+        ),
+        'b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2': (
+            f,
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+            (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))
+        ),
+        'f': (f, 'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1', 'b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2'),
+        'e1': 'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1',
+        'e2': 'b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2',
+
+    })
+    assert fuse(d, ave_width=4.7, rename_keys=True) == expected
+    assert fuse(d, ave_width=7.4, rename_keys=True) == expected
+    assert fuse(d, ave_width=7.5, rename_keys=False) == with_deps({
+        'a': 1,
+        'f': (f, (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+                  (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+              (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+               (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))),
+    })
+    assert fuse(d, ave_width=7.5, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f': (
+            f,
+            (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+             (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))),
+            (f, (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
+             (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))))
+        ),
+        'f': 'b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f',
+
+    })
+
+    d = {
+        'a': 1,
+        'b': (f, 'a'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'b': (f, 1)
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a-b': (f, 1),
+        'b': 'a-b',
+    })
+
+    d = {
+        'a': 1,
+        'b': (f, 'a'),
+        'c': (f, 'b'),
+        'd': (f, 'c'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'd': (f, (f, (f, 1)))
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a-b-c-d': (f, (f, (f, 1))),
+        'd': 'a-b-c-d',
+    })
+
+    d = {
+        'a': 1,
+        'b': (f, 'a'),
+        'c': (f, 'a', 'b'),
+        'd': (f, 'a', 'c'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'a': 1,
+        'd': (f, 'a', (f, 'a', (f, 'a'))),
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a': 1,
+        'b-c-d': (f, 'a', (f, 'a', (f, 'a'))),
+        'd': 'b-c-d',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c1': (f, 'b1'),
+        'd1': (f, 'c1'),
+        'e1': (f, 'd1'),
+        'f': (f, 'e1', 'b2'),
+    }
+    expected = with_deps({
+        'a': 1,
+        'b2': (f, 'a'),
+        'e1': (f, (f, (f, (f, 'a')))),
+        'f': (f, 'e1', 'b2'),
+
+    })
+    assert fuse(d, ave_width=1, rename_keys=False) == expected
+    assert fuse(d, ave_width=1.9, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b2': (f, 'a'),
+        'b1-c1-d1-e1': (f, (f, (f, (f, 'a')))),
+        'f': (f, 'b1-c1-d1-e1', 'b2'),
+        'e1': 'b1-c1-d1-e1',
+
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == expected
+    assert fuse(d, ave_width=1.9, rename_keys=True) == expected
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a': 1,
+        'f': (f, (f, (f, (f, (f, 'a')))), (f, 'a')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-c1-d1-e1-f': (f, (f, (f, (f, (f, 'a')))), (f, 'a')),
+        'f': 'b1-b2-c1-d1-e1-f',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'c1': (f, 'a', 'b1'),
+        'd1': (f, 'a', 'c1'),
+        'e1': (f, 'a', 'd1'),
+        'f': (f, 'a', 'e1', 'b2'),
+    }
+    expected = with_deps({
+        'a': 1,
+        'b2': (f, 'a'),
+        'e1': (f, 'a', (f, 'a', (f, 'a', (f, 'a')))),
+        'f': (f, 'a', 'e1', 'b2'),
+
+    })
+    assert fuse(d, ave_width=1, rename_keys=False) == expected
+    assert fuse(d, ave_width=1.9, rename_keys=False) == expected
+    expected = with_deps({
+        'a': 1,
+        'b2': (f, 'a'),
+        'b1-c1-d1-e1': (f, 'a', (f, 'a', (f, 'a', (f, 'a')))),
+        'f': (f, 'a', 'b1-c1-d1-e1', 'b2'),
+        'e1': 'b1-c1-d1-e1',
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == expected
+    assert fuse(d, ave_width=1.9, rename_keys=True) == expected
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a': 1,
+        'f': (f, 'a', (f, 'a', (f, 'a', (f, 'a', (f, 'a')))), (f, 'a')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-b2-c1-d1-e1-f': (f, 'a', (f, 'a', (f, 'a', (f, 'a', (f, 'a')))), (f, 'a')),
+        'f': 'b1-b2-c1-d1-e1-f',
+    })
+
+    d = {
+        'a': 1,
+        'b1': (f, 'a'),
+        'b2': (f, 'a'),
+        'b3': (f, 'a'),
+        'c1': (f, 'b1'),
+        'c2': (f, 'b2'),
+        'c3': (f, 'b3'),
+        'd1': (f, 'c1'),
+        'd2': (f, 'c2'),
+        'd3': (f, 'c3'),
+        'e': (f, 'd1', 'd2', 'd3'),
+        'f': (f, 'e'),
+        'g': (f, 'f'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'a': 1,
+        'd1': (f, (f, (f, 'a'))),
+        'd2': (f, (f, (f, 'a'))),
+        'd3': (f, (f, (f, 'a'))),
+        'g': (f, (f, (f, 'd1', 'd2', 'd3'))),
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a': 1,
+        'b1-c1-d1': (f, (f, (f, 'a'))),
+        'b2-c2-d2': (f, (f, (f, 'a'))),
+        'b3-c3-d3': (f, (f, (f, 'a'))),
+        'e-f-g': (f, (f, (f, 'b1-c1-d1', 'b2-c2-d2', 'b3-c3-d3'))),
+        'd1': 'b1-c1-d1',
+        'd2': 'b2-c2-d2',
+        'd3': 'b3-c3-d3',
+        'g': 'e-f-g',
+    })
+
+    d = {
+        'a': 1,
+        'b': (f, 'a'),
+        'c': (f, 'b'),
+        'd': (f, 'b', 'c'),
+        'e': (f, 'd'),
+        'f': (f, 'e'),
+        'g': (f, 'd', 'f'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'b': (f, 1),
+        'd': (f, 'b', (f, 'b')),
+        'g': (f, 'd', (f, (f, 'd'))),
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a-b': (f, 1),
+        'c-d': (f, 'a-b', (f, 'a-b')),
+        'e-f-g': (f, 'c-d', (f, (f, 'c-d'))),
+        'b': 'a-b',
+        'd': 'c-d',
+        'g': 'e-f-g',
+    })
+
+
+def test_fuse_stressed():
+    def f(*args):
+        return args
+
+    d = {
+        'array-original-27b9f9d257a80fa6adae06a98faf71eb': 1,
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 0): (
+            f,
+            ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 0),
+        ),
+        ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0): (
+            f,
+            ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1),
+        ),
+        ('array-27b9f9d257a80fa6adae06a98faf71eb', 0, 0): (
+            f,
+            'array-original-27b9f9d257a80fa6adae06a98faf71eb',
+            (slice(0, 10, None), slice(0, 10, None)),
+        ),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0): ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1),
+        ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1): (
+            f,
+            (f,
+             ('array-27b9f9d257a80fa6adae06a98faf71eb', 1, 1),
+             (f, [('cholesky-lt-dot-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0, 1, 0)]))
+        ),
+        ('cholesky-lt-dot-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0, 1, 0): (
+            f,
+            ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0),
+            ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1),
+        ),
+        ('array-27b9f9d257a80fa6adae06a98faf71eb', 0, 1): (
+            f,
+            'array-original-27b9f9d257a80fa6adae06a98faf71eb',
+            (slice(0, 10, None), slice(10, 20, None)),
+        ),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1): (
+            f,
+            ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1)
+        ),
+        ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1): (
+            f,
+            (10, 10)
+        ),
+        ('array-27b9f9d257a80fa6adae06a98faf71eb', 1, 1): (
+            f,
+            'array-original-27b9f9d257a80fa6adae06a98faf71eb',
+            (slice(10, 20, None), slice(10, 20, None)),
+        ),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1): (
+            f,
+            ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 0),
+            ('array-27b9f9d257a80fa6adae06a98faf71eb', 0, 1),
+        ),
+        ('cholesky-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 0): (
+            f,
+            ('array-27b9f9d257a80fa6adae06a98faf71eb', 0, 0),
+        ),
+    }
+    keys = {
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 0),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 0, 1),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 0),
+        ('cholesky-upper-26a6b670a8aabb7e2f8936db7ccb6a88', 1, 1),
+    }
+    rv = fuse(d, keys=keys, ave_width=2, rename_keys=True)
+    assert rv == with_deps(rv[0])
+
+
+def test_fuse_reductions_multiple_input():
+    def f(*args):
+        return args
+
+    d = {
+        'a1': 1,
+        'a2': 2,
+        'b': (f, 'a1', 'a2'),
+        'c': (f, 'b'),
+    }
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'c': (f, (f, 1, 2)),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a1-a2-b-c': (f, (f, 1, 2)),
+        'c': 'a1-a2-b-c',
+    })
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'c': (f, (f, 'a1', 'a2')),
+    })
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b-c': (f, (f, 'a1', 'a2')),
+        'c': 'b-c',
+    })
+
+    d = {
+        'a1': 1,
+        'a2': 2,
+        'b1': (f, 'a1'),
+        'b2': (f, 'a1', 'a2'),
+        'b3': (f, 'a2'),
+        'c': (f, 'b1', 'b2', 'b3'),
+    }
+    expected = with_deps(d)
+    assert fuse(d, ave_width=1, rename_keys=False) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=False) == expected
+    assert fuse(d, ave_width=1, rename_keys=True) == expected
+    assert fuse(d, ave_width=2.9, rename_keys=True) == expected
+    assert fuse(d, ave_width=3, rename_keys=False) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'c': (f, (f, 'a1'), (f, 'a1', 'a2'), (f, 'a2')),
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b1-b2-b3-c': (f, (f, 'a1'), (f, 'a1', 'a2'), (f, 'a2')),
+        'c': 'b1-b2-b3-c',
+    })
+
+    d = {
+        'a1': 1,
+        'a2': 2,
+        'b1': (f, 'a1'),
+        'b2': (f, 'a1', 'a2'),
+        'b3': (f, 'a2'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b2', 'b3'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b2': (f, 'a1', 'a2'),
+        'c1': (f, (f, 'a1'), 'b2'),
+        'c2': (f, 'b2', (f, 'a2')),
+    })
+    assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b2': (f, 'a1', 'a2'),
+        'b1-c1': (f, (f, 'a1'), 'b2'),
+        'b3-c2': (f, 'b2', (f, 'a2')),
+        'c1': 'b1-c1',
+        'c2': 'b3-c2',
+    })
+
+    d = {
+        'a1': 1,
+        'a2': 2,
+        'b1': (f, 'a1'),
+        'b2': (f, 'a1', 'a2'),
+        'b3': (f, 'a2'),
+        'c1': (f, 'b1', 'b2'),
+        'c2': (f, 'b2', 'b3'),
+        'd': (f, 'c1', 'c2'),
+    }
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(d)
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(d)
+
+    # A more aggressive heuristic could do this at `ave_width=2`.  Perhaps
+    # we can improve this.  Nevertheless, this is behaving as intended.
+    assert fuse(d, ave_width=3, rename_keys=False) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b2': (f, 'a1', 'a2'),
+        'd': (f, (f, (f, 'a1'), 'b2'), (f, 'b2', (f, 'a2'))),
+    })
+    assert fuse(d, ave_width=3, rename_keys=True) == with_deps({
+        'a1': 1,
+        'a2': 2,
+        'b2': (f, 'a1', 'a2'),
+        'b1-b3-c1-c2-d': (f, (f, (f, 'a1'), 'b2'), (f, 'b2', (f, 'a2'))),
+        'd': 'b1-b3-c1-c2-d',
+    })

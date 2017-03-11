@@ -1,16 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-from itertools import count
+import math
+import re
 from operator import getitem
 
-from .compatibility import zip_longest
+from .compatibility import unicode
+
+from .context import _globals
+from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
-                   reverse_dict, add, inc, ishashable, preorder_traversal)
-from .rewrite import END
-
-
-def identity(x):
-    return x
+                   reverse_dict, ishashable)
 
 
 def cull(dsk, keys):
@@ -36,27 +35,53 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out = dict()
+    out_keys = []
     seen = set()
     dependencies = dict()
-    stack = list(set(flatten(keys)))
-    while stack:
-        key = stack.pop()
-        out[key] = dsk[key]
-        deps = get_dependencies(dsk, key, as_list=True)  # fuse needs lists
-        dependencies[key] = deps
-        unseen = [d for d in deps if d not in seen]
-        stack.extend(unseen)
-        seen.update(unseen)
+
+    work = list(set(flatten(keys)))
+    while work:
+        new_work = []
+        out_keys += work
+        deps = [(k, get_dependencies(dsk, k, as_list=True))  # fuse needs lists
+                for k in work]
+        dependencies.update(deps)
+        for _, deplist in deps:
+            for d in deplist:
+                if d not in seen:
+                    seen.add(d)
+                    new_work.append(d)
+        work = new_work
+
+    out = {k: dsk[k] for k in out_keys}
+
     return out, dependencies
 
 
-def fuse(dsk, keys=None, dependencies=None):
+def default_fused_linear_keys_renamer(keys):
+    """Create new keys for fused tasks"""
+    typ = type(keys[0])
+    if typ is str or typ is unicode:
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0])
+        return '-'.join(names)
+    elif (typ is tuple and len(keys[0]) > 0 and
+          isinstance(keys[0][0], (str, unicode))):
+        names = [key_split(x) for x in keys[:0:-1]]
+        names.append(keys[0][0])
+        return ('-'.join(names),) + keys[0][1:]
+    else:
+        return None
+
+
+def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
     """ Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
     Supply ``dependencies`` from output of ``cull`` if available to avoid
     recomputing dependencies.
+
+    **This function is mostly superseded by ``fuse``**
 
     Parameters
     ----------
@@ -65,14 +90,23 @@ def fuse(dsk, keys=None, dependencies=None):
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
+    rename_keys: bool or func, optional
+        Whether to rename fused keys with ``default_fused_linear_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        func is also accepted, ``new_key = rename_keys(fused_key_list)``.
 
     Examples
     --------
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
+    {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
+    >>> dsk, dependencies = fuse(d, rename_keys=False)
+    >>> dsk # doctest: +SKIP
     {'c': (inc, (inc, 1))}
-    >>> dsk, dependencies = fuse(d, keys=['b'])
+    >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
     >>> dsk  # doctest: +SKIP
     {'b': (inc, 1), 'c': (inc, 'b')}
 
@@ -88,8 +122,8 @@ def fuse(dsk, keys=None, dependencies=None):
         keys = set(flatten(keys))
 
     if dependencies is None:
-        dependencies = dict((key, get_dependencies(dsk, key, as_list=True))
-                            for key in dsk)
+        dependencies = {k: get_dependencies(dsk, k, as_list=True)
+                        for k in dsk}
 
     # locate all members of linear chains
     child2parent = {}
@@ -125,12 +159,25 @@ def fuse(dsk, keys=None, dependencies=None):
             chain.append(child)
         chains.append(chain)
 
-    dependencies = dict((k, set(v)) for k, v in dependencies.items())
+    dependencies = {k: set(v) for k, v in dependencies.items()}
+
+    if rename_keys is True:
+        key_renamer = default_fused_linear_keys_renamer
+    elif rename_keys is False:
+        key_renamer = None
+    else:
+        key_renamer = rename_keys
 
     # create a new dask with fused chains
     rv = {}
     fused = set()
+    aliases = set()
+    is_renamed = False
     for chain in chains:
+        if key_renamer is not None:
+            new_key = key_renamer(chain)
+            is_renamed = (new_key is not None and new_key not in dsk and
+                          new_key not in rv)
         child = chain.pop()
         val = dsk[child]
         while chain:
@@ -141,42 +188,73 @@ def fuse(dsk, keys=None, dependencies=None):
             fused.add(child)
             child = parent
         fused.add(child)
-        rv[child] = val
-
+        if is_renamed:
+            rv[new_key] = val
+            rv[child] = new_key
+            dependencies[new_key] = dependencies[child]
+            dependencies[child] = {new_key}
+            aliases.add(child)
+        else:
+            rv[child] = val
     for key, val in dsk.items():
         if key not in fused:
             rv[key] = val
+    if aliases:
+        for key, deps in dependencies.items():
+            for old_key in deps & aliases:
+                new_key = rv[old_key]
+                deps.remove(old_key)
+                deps.add(new_key)
+                rv[key] = subs(rv[key], old_key, new_key)
+        if keys is not None:
+            for key in aliases - keys:
+                del rv[key]
+                del dependencies[key]
     return rv, dependencies
+
+
+def _flat_set(x):
+    if x is None:
+        return set()
+    elif isinstance(x, set):
+        return x
+    elif not isinstance(x, (list, set)):
+        x = [x]
+    return set(x)
 
 
 def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     """ Return new dask with the given keys inlined with their values.
 
-    Inlines all constants if ``inline_constants`` keyword is True.
+    Inlines all constants if ``inline_constants`` keyword is True. Note that
+    the constant keys will remain in the graph, to remove them follow
+    ``inline`` with ``cull``.
 
     Examples
     --------
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)  # doctest: +SKIP
-    {'y': (inc, 1), 'z': (add, 1, 'y')}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
     >>> inline(d, keys='y')  # doctest: +SKIP
-    {'z': (add, 1, (inc, 1))}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
     >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
-    {'x': 1, 'z': (add, 'x', (inc, 'x'))}
+    {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
-    if keys is None:
-        keys = []
-    elif not isinstance(keys, (list, set)):
-        keys = [keys]
-    keys = set(flatten(keys))
+    if dependencies and isinstance(next(iter(dependencies.values())), list):
+        dependencies = {k: set(v) for k, v in dependencies.items()}
 
-    if inline_constants:
-        keys.update(k for k, v in dsk.items() if not istask(v))
+    keys = _flat_set(keys)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k)
+                        for k in dsk}
+
+    if inline_constants:
+        keys.update(k for k, v in dsk.items() if
+                    (ishashable(v) and v in dsk) or
+                    (not dependencies[k] and not istask(v)))
 
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
@@ -194,18 +272,17 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
         keysubs[key] = val
 
     # Make new dask with substitutions
-    rv = {}
+    dsk2 = keysubs.copy()
     for key, val in dsk.items():
-        if key in keys:
-            continue
-        for item in keys & dependencies[key]:
-            val = subs(val, item, keysubs[item])
-        rv[key] = val
-    return rv
+        if key not in dsk2:
+            for item in keys & dependencies[key]:
+                val = subs(val, item, keysubs[item])
+            dsk2[key] = val
+    return dsk2
 
 
 def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
-        dependencies=None):
+                     dependencies=None):
     """ Inline cheap functions into larger operations
 
     Examples
@@ -235,19 +312,27 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
     fast_functions = set(fast_functions)
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k)
+                        for k in dsk}
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
-              if istask(v)
-              and functions_of(v).issubset(fast_functions)
-              and dependents[k]
-              and k not in output]
+            if istask(v) and functions_of(v).issubset(fast_functions) and
+            dependents[k] and k not in output
+            ]
+
     if keys:
-        return inline(dsk, keys, inline_constants=inline_constants,
-                dependencies=dependencies)
-    else:
-        return dsk
+        dsk = inline(dsk, keys, inline_constants=inline_constants,
+                     dependencies=dependencies)
+        for k in keys:
+            del dsk[k]
+    return dsk
+
+
+def unwrap_partial(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    return func
 
 
 def functions_of(task):
@@ -259,278 +344,23 @@ def functions_of(task):
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
     """
-    if istask(task):
-        args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
-        return set([unwrap_partial(task[0])]) | args
-    if isinstance(task, (list, tuple)):
-        if not task:
-            return set()
-        return set.union(*map(functions_of, task))
-    return set()
+    funcs = set()
 
+    work = [task]
+    sequence_types = {list, tuple}
 
-def unwrap_partial(func):
-    while hasattr(func, 'func'):
-        func = func.func
-    return func
+    while work:
+        new_work = []
+        for task in work:
+            if type(task) in sequence_types:
+                if istask(task):
+                    funcs.add(unwrap_partial(task[0]))
+                    new_work += task[1:]
+                else:
+                    new_work += task
+        work = new_work
 
-
-def dealias(dsk, keys=None):
-    """ Remove aliases from dask
-
-    Removes and renames aliases using ``inline``.  Keeps aliases at the top of
-    the DAG to ensure entry points stay the same.
-
-    Aliases are not expected by schedulers.  It's unclear that this is a legal
-    state.
-
-    Optional ``keys`` keyword argument allows us to protect keys from being
-    deleted.  This is useful to protect keys that would be expected by a
-    scheduler.
-
-    Examples
-    --------
-    >>> dsk = {'a': (range, 5),
-    ...        'b': 'a',
-    ...        'c': 'b',
-    ...        'd': (sum, 'c'),
-    ...        'e': 'd',
-    ...        'f': (inc, 'd')}
-
-    >>> dealias(dsk)  # doctest: +SKIP
-    {'a': (range, 5),
-     'd': (sum, 'a'),
-     'e': (identity, 'd'),
-     'f': (inc, 'd')}
-
-    >>> dsk = {'a': (range, 5),
-    ...        'b': 'a'}
-    >>> dealias(dsk)  # doctest: +SKIP
-    {'b': (range, 5)}
-
-    >>> dealias(dsk, keys=['a', 'b'])  # doctest: +SKIP
-    {'a': (range, 5),
-     'b': (identity, 5)}
-    """
-    keys = keys or set()
-    if not isinstance(keys, set):
-        keys = set(keys)
-
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
-    dependents = reverse_dict(dependencies)
-
-    aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
-    roots = set((k for k, v in dependents.items() if not v))
-
-    dsk2 = inline(dsk, aliases - roots - keys, inline_constants=False)
-    dsk3 = dsk2.copy()
-
-    dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
-    dependents = reverse_dict(dependencies)
-
-    for k in roots & aliases:
-        k2 = dsk3[k]
-        if len(dependents[k2]) == 1 and k2 not in keys:
-            dsk3[k] = dsk3[k2]
-            del dsk3[k2]
-        else:
-            dsk3[k] = (identity, k2)
-    return dsk3
-
-
-def equivalent(term1, term2, subs=None):
-    """Determine if two terms are equivalent, modulo variable substitution.
-
-    Equivalent to applying substitutions in `subs` to `term2`, then checking if
-    `term1 == term2`.
-
-    If a subterm doesn't support comparison (i.e. `term1 == term2` errors),
-    returns `False`.
-
-    Parameters
-    ----------
-    term1, term2 : terms
-    subs : dict, optional
-        Mapping of substitutions from `term2` to `term1`
-
-    Examples
-    --------
-    >>> from operator import add
-    >>> term1 = (add, 'a', 'b')
-    >>> term2 = (add, 'x', 'y')
-    >>> subs = {'x': 'a', 'y': 'b'}
-    >>> equivalent(term1, term2, subs)
-    True
-    >>> subs = {'x': 'a'}
-    >>> equivalent(term1, term2, subs)
-    False
-    """
-
-    # Quick escape for special cases
-    head_type = type(term1)
-    if type(term2) != head_type:
-        # If terms aren't same type, fail
-        return False
-    elif head_type not in (tuple, list):
-        # For literals, just compare
-        try:
-            # `is` is tried first, to allow objects that don't implement `==`
-            # to work for cases where term1 is term2. If `is` returns False,
-            # and `==` errors, then the only thing we can do is return False.
-            return term1 is term2 or term1 == term2
-        except:
-            return False
-
-    pot1 = preorder_traversal(term1)
-    pot2 = preorder_traversal(term2)
-    subs = {} if subs is None else subs
-
-    for t1, t2 in zip_longest(pot1, pot2, fillvalue=END):
-        if t1 is END or t2 is END:
-            # If terms aren't same length: fail
-            return False
-        elif ishashable(t2) and t2 in subs:
-            val = subs[t2]
-        else:
-            val = t2
-        try:
-            if t1 is not t2 and t1 != val:
-                return False
-        except:
-            return False
-    return True
-
-
-def dependency_dict(dsk):
-    """Create a dict matching ordered dependencies to keys.
-
-    Examples
-    --------
-    >>> from operator import add
-    >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'a'), 'd': (add, 'b', 'a')}
-    >>> dependency_dict(dsk)    # doctest: +SKIP
-    {(): ['a', 'b'], ('a', 'a'): ['c'], ('b', 'a'): ['d']}
-    """
-
-    dep_dict = {}
-    for key in dsk:
-        deps = tuple(get_dependencies(dsk, key, True))
-        dep_dict.setdefault(deps, []).append(key)
-    return dep_dict
-
-
-def _possible_matches(dep_dict, deps, subs):
-    deps2 = []
-    for d in deps:
-        v = subs.get(d, None)
-        if v is not None:
-            deps2.append(v)
-        else:
-            return []
-    deps2 = tuple(deps2)
-    return dep_dict.get(deps2, [])
-
-
-def _sync_keys(dsk1, dsk2, dsk2_topo):
-    dep_dict1 = dependency_dict(dsk1)
-    subs = {}
-
-    for key2 in toposort(dsk2):
-        deps = tuple(get_dependencies(dsk2, key2, True))
-        # List of keys in dsk1 that have terms that *may* match key2
-        possible_matches = _possible_matches(dep_dict1, deps, subs)
-        if possible_matches:
-            val2 = dsk2[key2]
-            for key1 in possible_matches:
-                val1 = dsk1[key1]
-                if equivalent(val1, val2, subs):
-                    subs[key2] = key1
-                    break
-    return subs
-
-
-def sync_keys(dsk1, dsk2):
-    """Return a dict matching keys in `dsk2` to equivalent keys in `dsk1`.
-
-    Parameters
-    ----------
-    dsk1, dsk2 : dict
-
-    Examples
-    --------
-    >>> from operator import add, mul
-    >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
-    >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> sync_keys(dsk1, dsk2)   # doctest: +SKIP
-    {'x': 'a', 'y': 'b'}
-    """
-
-    return _sync_keys(dsk1, dsk2, toposort(dsk2))
-
-
-def merge_sync(dsk1, dsk2):
-    """Merge two dasks together, combining equivalent tasks.
-
-    If a task in `dsk2` exists in `dsk1`, the task and key from `dsk1` is used.
-    If a task in `dsk2` has the same key as a task in `dsk1` (and they aren't
-    equivalent tasks), then a new key is created for the task in `dsk2`. This
-    prevents name conflicts.
-
-    Parameters
-    ----------
-    dsk1, dsk2 : dict
-        Variable names in `dsk2` are replaced with equivalent ones in `dsk1`
-        before merging.
-
-    Returns
-    -------
-    new_dsk : dict
-        The merged dask.
-    key_map : dict
-        A mapping between the keys from `dsk2` to their new names in `new_dsk`.
-
-    Examples
-    --------
-    >>> from operator import add, mul
-    >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
-    >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> new_dsk, key_map = merge_sync(dsk1, dsk2)
-    >>> new_dsk     # doctest: +SKIP
-    {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5), 'z': (mul, 'b', 2)}
-    >>> key_map     # doctest: +SKIP
-    {'x': 'a', 'y': 'b', 'z': 'z'}
-
-    Conflicting names are replaced with auto-generated names upon merging.
-
-    >>> dsk1 = {'a': 1, 'res': (add, 'a', 1)}
-    >>> dsk2 = {'x': 1, 'res': (add, 'x', 2)}
-    >>> new_dsk, key_map = merge_sync(dsk1, dsk2)
-    >>> new_dsk     # doctest: +SKIP
-    {'a': 1, 'res': (add, 'a', 1), 'merge_1': (add, 'a', 2)}
-    >>> key_map     # doctest: +SKIP
-    {'x': 'a', 'res': 'merge_1'}
-    """
-
-    dsk2_topo = toposort(dsk2)
-    sd = _sync_keys(dsk1, dsk2, dsk2_topo)
-    new_dsk = dsk1.copy()
-    for key in dsk2_topo:
-        if key in sd:
-            new_key = sd[key]
-        else:
-            if key in dsk1:
-                new_key = next(merge_sync.names)
-            else:
-                new_key = key
-            sd[key] = new_key
-        task = dsk2[key]
-        for a, b in sd.items():
-            task = subs(task, a, b)
-        new_dsk[new_key] = task
-    return new_dsk, sd
-
-# store the name iterator in the function
-merge_sync.names = ('merge_%d' % i for i in count(1))
+    return funcs
 
 
 def fuse_selections(dsk, head1, head2, merge):
@@ -551,6 +381,8 @@ def fuse_selections(dsk, head1, head2, merge):
         Takes ``task1`` and ``task2`` and returns a merged task to
         replace ``task1``.
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
@@ -585,6 +417,8 @@ def fuse_getitem(dsk, func, place):
     place: int
         Location in task to insert the getitem key
 
+    Examples
+    --------
     >>> def load(store, partition, columns):
     ...     pass
     >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
@@ -594,4 +428,387 @@ def fuse_getitem(dsk, func, place):
     {'y': (<function load at ...>, 'store', 'part', 'a')}
     """
     return fuse_selections(dsk, getitem, func,
-            lambda a, b: tuple(b[:place]) + (a[2],) + tuple(b[place + 1:]))
+                           lambda a, b: tuple(b[:place]) + (a[2], ) + tuple(b[place + 1:]))
+
+
+def default_fused_keys_renamer(keys):
+    """Create new keys for ``fuse`` tasks"""
+    it = reversed(keys)
+    first_key = next(it)
+    typ = type(first_key)
+    if typ is str or typ is unicode:
+        first_name = key_split(first_key)
+        names = {key_split(k) for k in it}
+        names.discard(first_name)
+        names = sorted(names)
+        names.append(first_key)
+        return '-'.join(names)
+    elif (typ is tuple and len(first_key) > 0 and
+          isinstance(first_key[0], (str, unicode))):
+        first_name = key_split(first_key)
+        names = {key_split(k) for k in it}
+        names.discard(first_name)
+        names = sorted(names)
+        names.append(first_key[0])
+        return ('-'.join(names),) + first_key[1:]
+
+
+def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
+         max_height=None, max_depth_new_edges=None, rename_keys=None):
+    """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
+
+    This trades parallelism opportunities for faster scheduling by making tasks
+    less granular.  It can replace ``fuse_linear`` in optimization passes.
+
+    This optimization applies to all reductions--tasks that have at most one
+    dependent--so it may be viewed as fusing "multiple input, single output"
+    groups of tasks into a single task.  There are many parameters to fine
+    tune the behavior, which are described below.  ``ave_width`` is the
+    natural parameter with which to compare parallelism to granularity, so
+    it should always be specified.  Reasonable values for other parameters
+    with be determined using ``ave_width`` if necessary.
+
+    Parameters
+    ----------
+    dsk: dict
+        dask graph
+    keys: list or set, optional
+        Keys that must remain in the returned dask graph
+    dependencies: dict, optional
+        {key: [list-of-keys]}.  Must be a list to provide count of each key
+        This optional input often comes from ``cull``
+    ave_width: float (default 2)
+        Upper limit for ``width = num_nodes / height``, a good measure of
+        parallelizability
+    max_width: int
+        Don't fuse if total width is greater than this
+    max_height: int
+        Don't fuse more than this many levels
+    max_depth_new_edges: int
+        Don't fuse if new dependencies are added after this many levels
+    rename_keys: bool or func, optional
+        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        function to create the new name is also accepted.
+
+    Returns
+    -------
+    dsk: output graph with keys fused
+    dependencies: dict mapping dependencies after fusion.  Useful side effect
+        to accelerate other downstream optimizations.
+    """
+    if keys is not None and not isinstance(keys, set):
+        if not isinstance(keys, list):
+            keys = [keys]
+        keys = set(flatten(keys))
+
+    # Assign reasonable, not too restrictive defaults
+    ave_width = ave_width or _globals.get('fuse_ave_width') or 1
+    max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
+    max_depth_new_edges = (
+        max_depth_new_edges or
+        _globals.get('fuse_max_depth_new_edges') or
+        ave_width + 1.5
+    )
+    max_width = (
+        max_width or
+        _globals.get('fuse_max_width') or
+        1.5 + ave_width * math.log(ave_width + 1)
+    )
+    if rename_keys is None:
+        rename_keys = _globals.get('fuse_rename_keys', True)
+    if rename_keys is True:
+        key_renamer = default_fused_keys_renamer
+    elif rename_keys is False:
+        key_renamer = None
+    else:
+        key_renamer = rename_keys
+
+    if dependencies is None:
+        deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
+    else:
+        deps = dict(dependencies)
+
+    rdeps = {}
+    for k, vals in deps.items():
+        for v in vals:
+            if v not in rdeps:
+                rdeps[v] = [k]
+            else:
+                rdeps[v].append(k)
+        deps[k] = set(vals)
+
+    reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
+    if keys:
+        reducible -= keys
+    if not reducible:
+        return dsk, deps
+
+    rv = dsk.copy()
+    fused_trees = {}
+    # These are the stacks we use to store data as we traverse the graph
+    info_stack = []
+    children_stack = []
+    # For speed
+    deps_pop = deps.pop
+    reducible_remove = reducible.remove
+    fused_trees_pop = fused_trees.pop
+    info_stack_append = info_stack.append
+    info_stack_pop = info_stack.pop
+    children_stack_append = children_stack.append
+    children_stack_extend = children_stack.extend
+    children_stack_pop = children_stack.pop
+    while reducible:
+        parent = next(iter(reducible))
+        while parent in reducible:
+            # Go to the top
+            parent = rdeps[parent][0]
+        children_stack_append(parent)
+        children_stack_extend(reducible & deps[parent])
+        while True:
+            child = children_stack[-1]
+            if child != parent:
+                children = reducible & deps[child]
+                while children:
+                    # Depth-first search
+                    children_stack_extend(children)
+                    parent = child
+                    child = children_stack[-1]
+                    children = reducible & deps[child]
+                else:
+                    children_stack_pop()
+                    # This is a leaf node in the reduction region
+                    # key, task, fused_keys, height, width, number of nodes, fudge, set of edges
+                    info_stack_append((child, rv[child], None if key_renamer is None else [child],
+                                       1, 1, 1, 0, deps[child] - reducible))
+            else:
+                children_stack_pop()
+                # Calculate metrics and fuse as appropriate
+                deps_parent = deps[parent]
+                edges = deps_parent - reducible
+                children = deps_parent - edges
+                num_children = len(children)
+
+                if num_children == 1:
+                    (child_key, child_task, child_keys, height, width, num_nodes, fudge,
+                     children_edges) = info_stack_pop()
+                    num_children_edges = len(children_edges)
+
+                    if fudge > num_children_edges - 1 >= 0:
+                        fudge = num_children_edges - 1
+                    edges |= children_edges
+                    no_new_edges = len(edges) == num_children_edges
+                    if not no_new_edges:
+                        fudge += 1
+                    if (
+                        (num_nodes + fudge) / height <= ave_width and
+                        # Sanity check; don't go too deep if new levels introduce new edge dependencies
+                        (no_new_edges or height < max_depth_new_edges)
+                    ):
+                        # Perform substitutions as we go
+                        val = subs(dsk[parent], child_key, child_task)
+                        deps_parent.remove(child_key)
+                        deps_parent |= deps_pop(child_key)
+                        del rv[child_key]
+                        reducible_remove(child_key)
+                        if key_renamer is not None:
+                            child_keys.append(parent)
+                            fused_trees[parent] = child_keys
+                            fused_trees_pop(child_key, None)
+
+                        if children_stack:
+                            if no_new_edges:
+                                # Linear fuse
+                                info_stack_append((parent, val, child_keys, height, width, num_nodes, fudge, edges))
+                            else:
+                                info_stack_append((parent, val, child_keys, height + 1, width, num_nodes + 1, fudge,
+                                                   edges))
+                        else:
+                            rv[parent] = val
+                            break
+                    else:
+                        rv[child_key] = child_task
+                        reducible_remove(child_key)
+                        if children_stack:
+                            # Allow the parent to be fused, but only under strict circumstances.
+                            # Ensure that linear chains may still be fused.
+                            if fudge > int(ave_width - 1):
+                                fudge = int(ave_width - 1)
+                            # This task *implicitly* depends on `edges`
+                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                                               1, width, 1, fudge, edges))
+                        else:
+                            break
+                else:
+                    child_keys = []
+                    height = 1
+                    width = 0
+                    num_single_nodes = 0
+                    num_nodes = 0
+                    fudge = 0
+                    children_edges = set()
+                    max_num_edges = 0
+                    children_info = info_stack[-num_children:]
+                    del info_stack[-num_children:]
+                    for cur_key, cur_task, cur_keys, cur_height, cur_width, cur_num_nodes, cur_fudge, \
+                            cur_edges in children_info:
+                        if cur_height == 1:
+                            num_single_nodes += 1
+                        elif cur_height > height:
+                            height = cur_height
+                        width += cur_width
+                        num_nodes += cur_num_nodes
+                        fudge += cur_fudge
+                        if len(cur_edges) > max_num_edges:
+                            max_num_edges = len(cur_edges)
+                        children_edges |= cur_edges
+                    # Fudge factor to account for possible parallelism with the boundaries
+                    num_children_edges = len(children_edges)
+                    fudge += min(num_children - 1, max(0, num_children_edges - max_num_edges))
+
+                    if fudge > num_children_edges - 1 >= 0:
+                        fudge = num_children_edges - 1
+                    edges |= children_edges
+                    no_new_edges = len(edges) == num_children_edges
+                    if not no_new_edges:
+                        fudge += 1
+                    if (
+                        (num_nodes + fudge) / height <= ave_width and
+                        num_single_nodes <= ave_width and
+                        width <= max_width and
+                        height <= max_height and
+                        # Sanity check; don't go too deep if new levels introduce new edge dependencies
+                        (no_new_edges or height < max_depth_new_edges)
+                    ):
+                        # Perform substitutions as we go
+                        val = dsk[parent]
+                        children_deps = set()
+                        for child_info in children_info:
+                            cur_child = child_info[0]
+                            val = subs(val, cur_child, child_info[1])
+                            del rv[cur_child]
+                            children_deps |= deps_pop(cur_child)
+                            reducible_remove(cur_child)
+                            if key_renamer is not None:
+                                fused_trees_pop(cur_child, None)
+                                child_keys.extend(child_info[2])
+                        deps_parent -= children
+                        deps_parent |= children_deps
+
+                        if key_renamer is not None:
+                            child_keys.append(parent)
+                            fused_trees[parent] = child_keys
+
+                        if children_stack:
+                            info_stack_append((parent, val, child_keys, height + 1, width, num_nodes + 1, fudge, edges))
+                        else:
+                            rv[parent] = val
+                            break
+                    else:
+                        for child_info in children_info:
+                            rv[child_info[0]] = child_info[1]
+                            reducible_remove(child_info[0])
+                        if children_stack:
+                            # Allow the parent to be fused, but only under strict circumstances.
+                            # Ensure that linear chains may still be fused.
+                            if width > max_width:
+                                width = max_width
+                            if fudge > int(ave_width - 1):
+                                fudge = int(ave_width - 1)
+                            # key, task, height, width, number of nodes, fudge, set of edges
+                            # This task *implicitly* depends on `edges`
+                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                                               1, width, 1, fudge, edges))
+                        else:
+                            break
+                # Traverse upwards
+                parent = rdeps[parent][0]
+
+    if key_renamer is not None:
+        alias_names = {}
+        for root_key, fused_keys in fused_trees.items():
+            alias = key_renamer(fused_keys)
+            if alias is not None and alias not in rv:
+                alias_names[root_key] = alias
+                rv[alias] = rv[root_key]
+                rv[root_key] = alias
+                deps[alias] = deps[root_key]
+                deps[root_key] = {alias}
+        aliases_set = set(alias_names)
+        for root_key, alias in alias_names.items():
+            if root_key in rdeps:
+                for key in set(rdeps[root_key]) - aliases_set:
+                    if key in rv and root_key in deps[key]:
+                        rv[key] = subs(rv[key], root_key, alias)
+                        deps[key].remove(root_key)
+                        deps[key].add(alias)
+        for root_key in fused_trees:
+            alias = alias_names[root_key] if root_key in alias_names else root_key
+            for key in deps[alias] & aliases_set:
+                key_alias = alias_names[key]
+                rv[alias] = subs(rv[alias], key, key_alias)
+                deps[alias].remove(key)
+                deps[alias].add(key_alias)
+        if keys is not None:
+            for key in aliases_set - keys:
+                del rv[key]
+                del deps[key]
+    return rv, deps
+
+
+# Defining `key_split` (used by key renamers in `fuse`) in utils.py
+# results in messy circular imports, so define it here instead.
+hex_pattern = re.compile('[a-f]+')
+
+
+def key_split(s):
+    """
+    >>> key_split('x')
+    u'x'
+    >>> key_split('x-1')
+    u'x'
+    >>> key_split('x-1-2-3')
+    u'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split("('x-2', 1)")
+    u'x'
+    >>> key_split('hello-world-1')
+    u'hello-world'
+    >>> key_split(b'hello-world-1')
+    u'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    u'myclass'
+    >>> key_split(None)
+    'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    u'x'
+    """
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
+    try:
+        words = s.split('-')
+        if not words[0][0].isalpha():
+            result = words[0].lstrip("'(\"")
+        else:
+            result = words[0]
+        for word in words[1:]:
+            if word.isalpha() and not (len(word) == 8 and
+                                       hex_pattern.match(word) is not None):
+                result += '-' + word
+            else:
+                break
+        if len(result) == 32 and re.match(r'[a-f0-9]{32}', result):
+            return 'data'
+        else:
+            if result[0] == '<':
+                result = result.strip('<>').split()[0].split('.')[-1]
+            return result
+    except Exception:
+        return 'Other'

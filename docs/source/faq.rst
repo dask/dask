@@ -1,6 +1,11 @@
 Frequently Asked Questions
 ==========================
 
+We maintain most Q&A on `Stack Overflow under the #Dask tag`_.  You may find
+the questions there useful to you.
+
+.. _`Stack Overflow under the #Dask tag`: http://stackoverflow.com/questions/tagged/dask
+
 1.  **Q: How do I debug my program when using dask?**
 
     If you want to inspect the dask graph itself see

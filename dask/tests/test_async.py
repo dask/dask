@@ -1,13 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
-from copy import deepcopy
-
 import dask
-import pytest
 
-from dask.async import *
-from dask.utils_test import GetFunctionTestCase
+from dask.async import (start_state_from_dask, get_sync, finish_task, sortkey,
+                        remote_exception)
+from dask.order import order
+from dask.utils_test import GetFunctionTestMixin, inc, add
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -17,23 +15,24 @@ def test_start_state():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     result = start_state_from_dask(dsk)
 
-    expeted = {'cache': {'x': 1, 'y': 2},
-               'dependencies': {'w': set(['y', 'z']),
-                                'x': set([]),
-                                'y': set([]),
-                                'z': set(['x'])},
-               'dependents': {'w': set([]),
-                              'x': set(['z']),
-                              'y': set(['w']),
-                              'z': set(['w'])},
-               'finished': set([]),
-               'released': set([]),
-               'running': set([]),
-               'ready': ['z'],
-               'waiting': {'w': set(['z'])},
-               'waiting_data': {'x': set(['z']),
-                                'y': set(['w']),
-                                'z': set(['w'])}}
+    expected = {'cache': {'x': 1, 'y': 2},
+                'dependencies': {'w': set(['y', 'z']),
+                                 'x': set([]),
+                                 'y': set([]),
+                                 'z': set(['x'])},
+                'dependents': {'w': set([]),
+                               'x': set(['z']),
+                               'y': set(['w']),
+                               'z': set(['w'])},
+                'finished': set([]),
+                'released': set([]),
+                'running': set([]),
+                'ready': ['z'],
+                'waiting': {'w': set(['z'])},
+                'waiting_data': {'x': set(['z']),
+                                 'y': set(['w']),
+                                 'z': set(['w'])}}
+    assert result == expected
 
 
 def test_start_state_looks_at_cache():
@@ -54,6 +53,18 @@ def test_start_state_with_independent_but_runnable_tasks():
     assert start_state_from_dask({'x': (inc, 1)})['ready'] == ['x']
 
 
+def test_start_state_with_tasks_no_deps():
+    dsk = {'a': [1, (inc, 2)],
+           'b': [1, 2, 3, 4],
+           'c': (inc, 3)}
+    state = start_state_from_dask(dsk)
+    assert list(state['cache'].keys()) == ['b']
+    assert 'a' in state['ready'] and 'c' in state['ready']
+    deps = dict((k, set()) for k in 'abc')
+    assert state['dependencies'] == deps
+    assert state['dependents'] == deps
+
+
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     sortkey = order(dsk).get
@@ -63,29 +74,28 @@ def test_finish_task():
     task = 'z'
     result = 2
 
-    oldstate = deepcopy(state)
     state['cache']['z'] = result
     finish_task(dsk, task, state, set(), sortkey)
 
-    assert state == {
-          'cache': {'y': 2, 'z': 2},
-          'dependencies': {'w': set(['y', 'z']),
-                           'x': set([]),
-                           'y': set([]),
-                           'z': set(['x'])},
-          'finished': set(['z']),
-          'released': set(['x']),
-          'running': set(['other-task']),
-          'dependents': {'w': set([]),
-                         'x': set(['z']),
-                         'y': set(['w']),
-                         'z': set(['w'])},
-          'ready': ['w'],
-          'waiting': {},
-          'waiting_data': {'y': set(['w']),
-                           'z': set(['w'])}}
+    assert state == {'cache': {'y': 2, 'z': 2},
+                     'dependencies': {'w': set(['y', 'z']),
+                                      'x': set([]),
+                                      'y': set([]),
+                                      'z': set(['x'])},
+                     'finished': set(['z']),
+                     'released': set(['x']),
+                     'running': set(['other-task']),
+                     'dependents': {'w': set([]),
+                                    'x': set(['z']),
+                                    'y': set(['w']),
+                                    'z': set(['w'])},
+                     'ready': ['w'],
+                     'waiting': {},
+                     'waiting_data': {'y': set(['w']),
+                                      'z': set(['w'])}}
 
-class TestGetAsync(GetFunctionTestCase):
+
+class TestGetAsync(GetFunctionTestMixin):
     get = staticmethod(get_sync)
 
     def test_get_sync_num_workers(self):
@@ -98,6 +108,7 @@ def test_cache_options():
     except ImportError:
         return
     cache = Chest()
+
     def inc2(x):
         assert 'y' in cache
         return x + 1
@@ -144,7 +155,7 @@ def test_order_of_startstate():
     assert result['ready'] == ['b', 'y']
 
 
-def test_nonstandard_exceptions_propagate():
+def test_exceptions_propagate():
     class MyException(Exception):
         def __init__(self, a, b):
             self.a = a
@@ -179,3 +190,18 @@ def test_remote_exception():
     assert isinstance(a, TypeError)
     assert 'hello' in str(a)
     assert 'traceback' in str(a)
+
+
+def test_ordering():
+    L = []
+
+    def append(i):
+        L.append(i)
+
+    dsk = {('x', i): (append, i) for i in range(10)}
+    x_keys = sorted(dsk)
+    dsk['y'] = (lambda *args: None, list(x_keys))
+
+    get_sync(dsk, 'y')
+
+    assert L == sorted(L)

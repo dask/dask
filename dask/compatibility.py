@@ -1,3 +1,4 @@
+# flake8: noqa
 from __future__ import absolute_import, division, print_function
 
 import functools
@@ -9,7 +10,11 @@ import types
 PY3 = sys.version_info[0] == 3
 PY2 = sys.version_info[0] == 2
 
-LZMA_AVAILABLE = True
+class LZMAFile:
+    def __init__(self, *args, **kwargs):
+        raise ValueError("xz files requires the lzma module. "
+                            "To use, install lzmaffi or backports.lzma.")
+LZMA_AVAILABLE = False
 
 if PY3:
     import builtins
@@ -20,17 +25,23 @@ if PY3:
     from gzip import (GzipFile, compress as gzip_compress,
             decompress as gzip_decompress)
     try:
-        from lzmaffi import (LZMAFile, compress as lzma_compress,
-                             decompress as lzma_decompress)
+        try:
+            from lzmaffi import (LZMAFile, compress as lzma_compress,
+                                 decompress as lzma_decompress)
+        except ImportError:
+            from lzma import (LZMAFile, compress as lzma_compress,
+                              decompress as lzma_decompress)
+        LZMA_AVAILABLE = True
     except ImportError:
-        from lzma import (LZMAFile, compress as lzma_compress,
-                          decompress as lzma_decompress)
+        # Fallback to top-level definition
+        pass
+
     from urllib.request import urlopen
-    from urllib.parse import urlparse
-    from urllib.parse import quote, unquote
+    from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
     unicode = str
     long = int
+    zip = zip
     def apply(func, args, kwargs=None):
         if kwargs:
             return func(*args, **kwargs)
@@ -46,13 +57,13 @@ if PY3:
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
-    from itertools import izip_longest as zip_longest
+    from itertools import izip_longest as zip_longest, izip as zip
     from StringIO import StringIO
     from io import BytesIO, BufferedIOBase
     import bz2
     import gzip
     from urllib2 import urlopen
-    from urlparse import urlparse
+    from urlparse import urlparse, urlsplit
     from urllib import quote, unquote
     unicode = unicode
     long = long
@@ -137,63 +148,60 @@ else:
     else:
         BZ2File = bz2.BZ2File
 
-    if sys.version_info[1] <= 6:
-        class GzipFile(BufferedIOBase):
-            def __init__(self, *args, **kwargs):
-                self.__obj = gzip.GzipFile(*args, **kwargs)
+    class GzipFile(BufferedIOBase):
+        def __init__(self, *args, **kwargs):
+            self.__obj = gzip.GzipFile(*args, **kwargs)
 
-            def close(self):
-                return self.__obj.close()
+        def close(self):
+            return self.__obj.close()
 
-            @property
-            def closed(self):
-                return self.__obj.fileobj is None
+        @property
+        def closed(self):
+            return self.__obj.fileobj is None
 
-            def flush(self, *args, **kwargs):
-                return self.__obj.flush(*args, **kwargs)
+        def flush(self, *args, **kwargs):
+            return self.__obj.flush(*args, **kwargs)
 
-            def isatty(self):
-                return self.__obj.isatty()
+        def isatty(self):
+            return self.__obj.isatty()
 
-            def read(self, *args, **kwargs):
-                return self.__obj.read(*args, **kwargs)
+        def read(self, *args, **kwargs):
+            return self.__obj.read(*args, **kwargs)
 
-            def read1(self, *args, **kwargs):
-                return self.__obj.read(*args, **kwargs)
+        def read1(self, *args, **kwargs):
+            return self.__obj.read(*args, **kwargs)
 
-            def readable(self):
-                return self.__obj.mode == gzip.READ
+        def readable(self):
+            return self.__obj.mode == gzip.READ
 
-            def readline(self, *args, **kwargs):
-                return self.__obj.readline(*args, **kwargs)
+        def readline(self, *args, **kwargs):
+            return self.__obj.readline(*args, **kwargs)
 
-            def readlines(self, *args, **kwargs):
-                return self.__obj.readlines(*args, **kwargs)
+        def readlines(self, *args, **kwargs):
+            return self.__obj.readlines(*args, **kwargs)
 
-            def seek(self, *args, **kwargs):
-                self.__obj.seek(*args, **kwargs)
-                return self.tell()
+        def seek(self, *args, **kwargs):
+            self.__obj.seek(*args, **kwargs)
+            return self.tell()
 
-            def seekable(self):
-                # See https://hg.python.org/cpython/file/2.7/Lib/gzip.py#l421
-                return True
+        def seekable(self):
+            # See https://hg.python.org/cpython/file/2.7/Lib/gzip.py#l421
+            return True
 
-            def tell(self):
-                return self.__obj.tell()
+        def tell(self):
+            return self.__obj.tell()
 
-            def truncate(self, *args, **kwargs):
-                return self.__obj.truncate(*args, **kwargs)
+        def truncate(self, *args, **kwargs):
+            return self.__obj.truncate(*args, **kwargs)
 
-            def writable(self):
-                return self.__obj.mode == gzip.WRITE
+        def writable(self):
+            return self.__obj.mode == gzip.WRITE
 
-            def write(self, *args, **kwargs):
-                return self.__obj.write(*args, **kwargs)
+        def write(self, *args, **kwargs):
+            return self.__obj.write(*args, **kwargs)
 
-            def writelines(self, *args, **kwargs):
-                return self.__obj.writelines(*args, **kwargs)
-    else:
-        GzipFile = gzip.GzipFile
+        def writelines(self, *args, **kwargs):
+            return self.__obj.writelines(*args, **kwargs)
 
     try:
         try:
@@ -203,12 +211,10 @@ else:
             from backports.lzma import LZMAFile
             from backports.lzma import (LZMAFile, compress as lzma_compress,
                                         decompress as lzma_decompress)
+        LZMA_AVAILABLE = True
     except ImportError:
-        class LZMAFile:
-            def __init__(self, *args, **kwargs):
-                raise ValueError("xz files requires the lzma module. "
-                                 "To use, install lzmaffi or backports.lzma.")
-        LZMA_AVAILABLE = False
+        # Fallback to top-level definition
+        pass
 
 
 def getargspec(func):

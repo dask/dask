@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict, MutableMapping
-from operator import getitem, add
+from operator import getitem
 from datetime import datetime
 from time import time
 
 from ..core import istask, ishashable
+from ..utils_test import add  # noqa: F401
 
 
 class Store(MutableMapping):
@@ -62,7 +63,7 @@ class Store(MutableMapping):
         if key in self.dsk:
             if (self.dsk[key] == value or
                 self.dsk[key] == (getitem, self.cache, key) and
-                self.cache[key] == value):
+               self.cache[key] == value):
                 return
             else:
                 raise KeyError("Can not overwrite data")
