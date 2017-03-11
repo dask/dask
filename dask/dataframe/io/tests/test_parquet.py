@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import os
 import numpy as np
 import pandas as pd
+import pandas.util.testing as tm
 import pytest
 
 import dask
@@ -340,3 +341,13 @@ def test_empty_partition(fn):
     ddf2 = ddf[ddf.a <= -5]
     with pytest.raises(ValueError):
         ddf2.to_parquet(fn)
+
+
+def test_timestamp_index():
+    with tmpfile() as fn:
+        df = tm.makeTimeDataFrame()
+        df.index.name = 'foo'
+        ddf = dd.from_pandas(df, npartitions=5)
+        ddf.to_parquet(fn)
+        ddf2 = dd.read_parquet(fn)
+        assert_eq(ddf, ddf2)
