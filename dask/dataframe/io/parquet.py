@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from toolz import first, partial
 
@@ -140,6 +141,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
     else:
         divisions = (None,) * (len(rgs) + 1)
+
+    if isinstance(divisions[0], np.datetime64):
+        divisions = [pd.Timestamp(d) for d in divisions]
 
     return out_type(dsk, name, meta, divisions)
 

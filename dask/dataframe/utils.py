@@ -496,8 +496,10 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
-    if hasattr(a, 'divisions') and hasattr(b, 'divisions'):
-        assert type(a.divisions[0]) == type(b.divisions[0])
+        if hasattr(a, 'divisions') and hasattr(b, 'divisions'):
+            at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
+            bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
+            assert at == bt, (at, bt)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)

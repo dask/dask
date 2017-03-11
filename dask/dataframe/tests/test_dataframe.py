@@ -2188,7 +2188,7 @@ def test_compute_divisions():
     b = copy(a)
     b.divisions = divisions
 
-    assert_eq(a, b)
+    assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
 
 
