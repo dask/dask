@@ -4,6 +4,7 @@ import re
 import os
 from functools import partial
 
+from .compatibility import apply
 from .core import istask, get_dependencies, ishashable
 from .utils import funcname, import_required
 
@@ -26,13 +27,15 @@ def task_label(task):
     'add(...)'
     """
     func = task[0]
+    if func is apply:
+        func = task[1]
     if hasattr(func, 'funcs'):
         if len(func.funcs) > 1:
             return '{0}(...)'.format(funcname(func.funcs[0]))
         else:
             head = funcname(func.funcs[0])
     else:
-        head = funcname(task[0])
+        head = funcname(func)
     if any(has_sub_tasks(i) for i in task[1:]):
         return '{0}(...)'.format(head)
     else:
