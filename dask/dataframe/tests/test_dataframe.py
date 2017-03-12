@@ -2656,5 +2656,5 @@ def test_memory_usage(index, deep):
 
     assert_eq(df.memory_usage(index=index, deep=deep),
               ddf.memory_usage(index=index, deep=deep))
-    assert_eq(df.x.memory_usage(index=index, deep=deep),
-              ddf.x.memory_usage(index=index, deep=deep).compute())
+    assert (df.x.memory_usage(index=index, deep=deep) ==
+            ddf.x.memory_usage(index=index, deep=deep).compute())
