@@ -13,6 +13,7 @@ else:
     pytestmark = pytest.mark.skipif(True,
                                     reason="graphviz exception with Python -OO flag")
 
+from dask import delayed
 from dask.utils import ensure_not_exists
 from IPython.display import Image, SVG
 
@@ -167,3 +168,13 @@ def test_filenames_and_formats():
         assert os.path.isfile(target)
         assert isinstance(result, expected_result_type)
         ensure_not_exists(target)
+
+
+def test_delayed_kwargs_apply():
+    def f(x, y=True):
+        return x + y
+
+    x = delayed(f)(1, y=2)
+    label = task_label(x.dask[x.key])
+    assert 'f' in label
+    assert 'apply' not in label
