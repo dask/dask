@@ -123,9 +123,10 @@ def test_multi_progressbar_widget(s, a, b):
 
     assert p.bars['x'].bar_style == 'success'
     assert p.bars['y'].bar_style == 'success'
-    # assert p.bars['e'].bar_style == 'danger'
+    assert p.bars['e'].bar_style == 'danger'
 
     assert p.status == 'error'
+    assert 'Exception' in p.elapsed_time.value
 
     capacities = [int(re.search(r'\d+ / \d+', row.children[0].value)
                     .group().split(' / ')[1])
@@ -182,6 +183,7 @@ def test_progressbar_done(loop):
             assert p.status == 'finished'
             assert p.bar.value == 1.0
             assert p.bar.bar_style == 'success'
+            assert 'Finished' in p.elapsed_time.value
 
             f = c.submit(throws, L)
             wait([f])
@@ -191,6 +193,7 @@ def test_progressbar_done(loop):
             assert p.status == 'error'
             assert p.bar.value == 0.0
             assert p.bar.bar_style == 'danger'
+            assert 'Exception' in p.elapsed_time.value
 
 
 def test_progressbar_cancel(loop):
