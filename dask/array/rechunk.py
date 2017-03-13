@@ -520,7 +520,10 @@ def _compute_rechunk(x, chunks):
 
         assert rec_cat_index == rec_cat_arg.size - 1
         # New block is formed by concatenation of sliced old blocks
-        x2[key] = (concatenate3, rec_cat_arg.tolist())
+        if all(d == 1 for d in rec_cat_arg.shape):
+            x2[key] = rec_cat_arg.flat[0]
+        else:
+            x2[key] = (concatenate3, rec_cat_arg.tolist())
 
     assert new_idx == tuple(len(c) - 1 for c in chunks)
     del old_blocks, new_index
