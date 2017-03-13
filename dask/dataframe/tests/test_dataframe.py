@@ -2644,3 +2644,17 @@ def test_del():
 
     del df['x']
     assert_eq(a, df)
+
+
+@pytest.mark.parametrize('index', [True, False])
+@pytest.mark.parametrize('deep', [True, False])
+def test_memory_usage(index, deep):
+    df = pd.DataFrame({'x': [1, 2, 3],
+                       'y': [1.0, 2.0, 3.0],
+                       'z': ['a', 'b', 'c']})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.memory_usage(index=index, deep=deep),
+              ddf.memory_usage(index=index, deep=deep))
+    assert (df.x.memory_usage(index=index, deep=deep) ==
+            ddf.x.memory_usage(index=index, deep=deep).compute())

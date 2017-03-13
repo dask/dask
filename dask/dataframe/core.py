@@ -1925,6 +1925,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.corr(self if lag == 0 else self.shift(lag),
                          split_every=split_every)
 
+    @derived_from(pd.Series)
+    def memory_usage(self, index=True, deep=False):
+        from ..delayed import delayed
+        result = self.map_partitions(M.memory_usage, index=index, deep=deep)
+        return delayed(sum)(result.to_delayed())
+
 
 class Index(Series):
 
@@ -2648,6 +2654,12 @@ class DataFrame(_Frame):
             lines.append('memory usage: {}\n'.format(memory_repr(memory_int)))
 
         put_lines(buf, lines)
+
+    @derived_from(pd.DataFrame)
+    def memory_usage(self, index=True, deep=False):
+        result = self.map_partitions(M.memory_usage, index=index, deep=deep)
+        result = result.groupby(result.index).sum()
+        return result
 
     def pivot_table(self, index=None, columns=None,
                     values=None, aggfunc='mean'):
