@@ -155,16 +155,29 @@ else:
 
 def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 lineterminator=None, compression=None, sample=256000,
-                enforce=False, storage_options=None, **kwargs):
+                enforce=False, storage_options=None, sorted_index_col = None, 
+                divisions = None,**kwargs):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
-    if 'index' in kwargs or 'index_col' in kwargs:
+    if 'index' in kwargs or 'index_col' in kwargs: 
         raise ValueError("Keyword 'index' not supported "
                          "dd.{0}(...).set_index('my-index') "
-                         "instead".format(reader_name))
+                         "instead. If you can assure, that your "
+                         "index column is already sorted, you can "
+                         "use dd.{0}(..., sorted_index = 'my-index') "
+                         "instead.".format(reader_name))
+    if sorted_index_col is not None:
+        warn("Setting an index by providing an index column is experimental. "
+             "It is your responsibility to make sure, that the specified "
+             "index column is sorted. "
+             "The recomendet way of use is dd.{0}(...).set_index_col('my-index')")
+        kwargs['index_col'] = sorted_index_col
+    if divisions is not None and blocksize is not None:
+        raise ValueError("If you want to provide divisions, please set the "
+                         "blocksize attribute to None.")
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
             raise ValueError("{0} not supported for "
@@ -208,9 +221,16 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     head = reader(BytesIO(sample), **kwargs)
 
-    return text_blocks_to_pandas(reader, values, header, head, kwargs,
+    ddf = text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce)
-
+     
+    
+    #set divisions if they are provided by the user
+    if divisions is not None:
+        assert(blocksize == None)
+        ddf.divisions = divisions
+    
+    return ddf  
 
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
