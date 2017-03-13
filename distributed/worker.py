@@ -1496,7 +1496,11 @@ class Worker(WorkerBase):
         if key in self.data:
             return
 
+        start = time()
         self.data[key] = value
+        stop = time()
+        if stop - start > 0.020:
+            self.startstops[key].append(('disk-write', start, stop))
 
         if key not in self.nbytes:
             self.nbytes[key] = sizeof(value)
@@ -1837,7 +1841,7 @@ class Worker(WorkerBase):
             kwargs2 = pack_data(kwargs, self.data, key_types=str)
             stop = time()
             if stop - start > 0.005:
-                self.startstops[key].append(('disk', start, stop))
+                self.startstops[key].append(('disk-read', start, stop))
                 if self.digests is not None:
                     self.digests['disk-load-duration'].add(stop - start)
 

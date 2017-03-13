@@ -175,7 +175,8 @@ def color_of_message(msg):
 
 
 colors = {'transfer': 'red',
-          'disk': 'orange',
+          'disk-write': 'orange',
+          'disk-read': 'orange',
           'deserialize': 'gray',
           'compute': color_of_message}
 
@@ -183,11 +184,13 @@ colors = {'transfer': 'red',
 alphas = {'transfer': 0.4,
           'compute': 1,
           'deserialize': 0.4,
-          'disk': 0.4}
+          'disk-write': 0.4,
+          'disk-read': 0.4}
 
 
 prefix = {'transfer': 'transfer-',
-          'disk': 'load-',
+          'disk-write': 'disk-write-',
+          'disk-read': 'disk-read-',
           'deserialize': 'deserialize-',
           'compute': ''}
 
