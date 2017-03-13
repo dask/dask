@@ -144,7 +144,7 @@ class LocalCluster(object):
         yield [self._start_worker(**kwargs) for i in range(n_workers)]
 
     @gen.coroutine
-    def _start_worker(self, port=0, nanny=None, **kwargs):
+    def _start_worker(self, port=0, nanny=None, death_timeout=60, **kwargs):
         if nanny is None:
             nanny = self.nanny
         if nanny:
@@ -154,7 +154,8 @@ class LocalCluster(object):
             W = Worker
         try:
             w = W(self.scheduler.address, loop=self.loop,
-                  silence_logs=self.silence_logs, **kwargs)
+                  silence_logs=self.silence_logs, death_timeout=death_timeout,
+                  **kwargs)
             yield w._start(port)
         except Exception:
             raise

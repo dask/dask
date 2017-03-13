@@ -651,3 +651,13 @@ def test_hold_onto_dependents(c, s, a, b):
     yield gen.sleep(0.1)
 
     assert x.key in b.data
+
+
+@slow
+@gen_test()
+def test_worker_death_timeout():
+    w = Worker('127.0.0.1', 38848, death_timeout=1)
+    yield w._start()
+
+    yield gen.sleep(3)
+    assert w.status == 'closed'

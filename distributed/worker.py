@@ -69,7 +69,7 @@ class WorkerBase(Server):
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
-                 silence_logs=None, **kwargs):
+                 silence_logs=None, death_timeout=None, **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -79,6 +79,7 @@ class WorkerBase(Server):
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
+        self.death_timeout = death_timeout
         if silence_logs:
             logger.setLevel(silence_logs)
         if not os.path.exists(self.local_dir):
@@ -180,11 +181,15 @@ class WorkerBase(Server):
     @gen.coroutine
     def _register_with_scheduler(self):
         self.heartbeat_callback.stop()
+        start = time()
         while True:
+            if self.death_timeout and time() > start + self.death_timeout:
+                yield self._close(timeout=1)
+                return
             if self.status in ('closed', 'closing'):
                 raise gen.Return
             try:
-                resp = yield self.scheduler.register(
+                future = self.scheduler.register(
                         ncores=self.ncores, address=self.address,
                         keys=list(self.data),
                         name=self.name,
@@ -195,10 +200,18 @@ class WorkerBase(Server):
                         memory_limit=self.memory_limit,
                         local_directory=self.local_dir,
                         resources=self.total_resources)
+                if self.death_timeout:
+                    diff = self.death_timeout - (time() - start)
+                    future = gen.with_timeout(timedelta(seconds=diff), future,
+                                              io_loop=self.loop)
+                resp = yield future
+                self.status = 'running'
                 break
             except EnvironmentError:
                 logger.debug("Unable to register with scheduler.  Waiting")
                 yield gen.sleep(0.1)
+            except gen.TimeoutError:
+                pass
         if resp != 'OK':
             raise ValueError(resp)
         self.heartbeat_callback.start()
@@ -250,9 +263,9 @@ class WorkerBase(Server):
 
         yield self._register_with_scheduler()
 
-        logger.info('        Registered to: %32s', self.scheduler.address)
-        logger.info('-' * 49)
-        self.status = 'running'
+        if self.status == 'running':
+            logger.info('        Registered to: %32s', self.scheduler.address)
+            logger.info('-' * 49)
 
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
@@ -265,14 +278,14 @@ class WorkerBase(Server):
                 'memory_limit': self.memory_limit}
 
     @gen.coroutine
-    def _close(self, report=True, timeout=10):
+    def _close(self, report=True, timeout=10, nanny=True):
         if self.status in ('closed', 'closing'):
             return
         logger.info("Stopping worker at %s", self.address)
         self.status = 'closing'
         self.stop()
         self.heartbeat_callback.stop()
-        with ignoring(EnvironmentError):
+        with ignoring(EnvironmentError, gen.TimeoutError):
             if report:
                 yield gen.with_timeout(timedelta(seconds=timeout),
                         self.scheduler.unregister(address=self.address),
@@ -284,8 +297,14 @@ class WorkerBase(Server):
 
         for k, v in self.services.items():
             v.stop()
-        self.rpc.close()
+
         self.status = 'closed'
+
+        if nanny and 'nanny' in self.services:
+            with self.rpc(self.services['nanny']) as r:
+                yield r.terminate()
+
+        self.rpc.close()
         self._closed.set()
 
     @gen.coroutine
