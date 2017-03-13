@@ -2644,3 +2644,35 @@ def test_del():
 
     del df['x']
     assert_eq(a, df)
+
+
+def test_setitem_series_mutation():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df.copy(), 2)
+
+    ddf.x[ddf.y % 2 == 0] = 'x'
+    df.x[df.y % 2 == 0] = 'x'
+
+    assert_eq(df, ddf)
+
+    ddf.x[ddf.y % 2 == 1] = ddf.x * 2
+    df.x[df.y % 2 == 0] = df.x * 2
+
+    assert_eq(df, ddf)
+
+    with pytest.raises(NotImplementedError):
+        ddf.y[0] = 1
+
+    with pytest.raises(NotImplementedError):
+        ddf.index[ddf.y < 1] = 10
+
+
+@pytest.mark.xfail(reason="indexes don't compare well")
+def test_index_comparisons():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd']},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    assert_eq(ddf.index > 3, df.index > 3)
