@@ -154,3 +154,13 @@ def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
 
     dsk = {'a': (getitem, (getarray_nofancy, 'x', [1, 2, 3]), 0)}
     assert optimize_slices(dsk) == dsk
+
+
+def test_fuse_getarray_with_from_array():
+    x = np.ones(10)
+    x = da.from_array(x, chunks=(5,))
+    y = x.rechunk((4,))
+    dsk = y._optimize(y.dask, y._keys())
+    for v in dsk.values():
+        s = str(v)
+        assert s.count('getitem') + s.count('getarray') <= 1
