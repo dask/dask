@@ -2658,3 +2658,13 @@ def test_memory_usage(index, deep):
               ddf.memory_usage(index=index, deep=deep))
     assert (df.x.memory_usage(index=index, deep=deep) ==
             ddf.x.memory_usage(index=index, deep=deep).compute())
+
+
+def test_datetime_loc_open_slicing():
+    dtRange = pd.date_range('01.01.2015','05.05.2015')
+    df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert_eq(df.loc[:'02.02.2015'], ddf.loc[:'02.02.2015'])
+    assert_eq(df.loc['02.02.2015':], ddf.loc['02.02.2015':])
+    assert_eq(df[0].loc[:'02.02.2015'], ddf[0].loc[:'02.02.2015'])
+    assert_eq(df[0].loc['02.02.2015':], ddf[0].loc['02.02.2015':])

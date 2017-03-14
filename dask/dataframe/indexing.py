@@ -148,8 +148,14 @@ class _LocIndexer(object):
         else:
             stop = self.obj.npartitions - 1
 
-        istart = self._coerce_loc_index(iindexer.start)
-        istop = self._coerce_loc_index(iindexer.stop)
+        if iindexer.start is None and self.obj.known_divisions:
+            istart = self.obj.divisions[0]
+        else:
+            istart = self._coerce_loc_index(iindexer.start)
+        if iindexer.stop is None and self.obj.known_divisions:
+            istop = self.obj.divisions[-1]
+        else:
+            istop = self._coerce_loc_index(iindexer.stop)
 
         if stop == start:
             dsk = {(name, 0): (methods.loc, (self._name, start),
