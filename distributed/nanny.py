@@ -210,6 +210,7 @@ class Nanny(Server):
                         'silence_logs': self.silence_logs,
                         'death_timeout': self.death_timeout})
             self.process.daemon = True
+            processes_to_close.add(self.process)
             self.process.start()
             start = time()
             while True:
