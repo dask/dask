@@ -93,7 +93,9 @@ def align_partitions(*dfs):
         A list of lists of keys that show which data exist on which
         divisions
     """
-    dfs1 = [df for df in dfs if isinstance(df, _Frame)]
+    dfs1 = [df for df in dfs
+            if isinstance(df, _Frame) and
+            df.divisions != (0, 1)]  # single row
     if len(dfs) == 0:
         raise ValueError("dfs contains no DataFrame and Series")
     if not all(df.known_divisions for df in dfs1):
@@ -130,7 +132,9 @@ def _maybe_align_partitions(args):
     Note that if all divisions are unknown, but have equal npartitions, then
     they will be passed through unchanged. This is different than
     `align_partitions`, which will fail if divisions aren't all known"""
-    dfs = [df for df in args if isinstance(df, _Frame)]
+    dfs = [df for df in args
+           if isinstance(df, _Frame) and
+           df.divisions != (0, 1)]  # single row
     if not dfs:
         return args
 

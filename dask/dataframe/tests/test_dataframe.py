@@ -2658,3 +2658,15 @@ def test_memory_usage(index, deep):
               ddf.memory_usage(index=index, deep=deep))
     assert (df.x.memory_usage(index=index, deep=deep) ==
             ddf.x.memory_usage(index=index, deep=deep).compute())
+
+
+@pytest.mark.parametrize('reduction', ['sum', 'mean', 'std', 'var', 'count',
+                                       'min', 'max', 'idxmin', 'idxmax',
+                                       'prod', 'all', 'sem'])
+def test_dataframe_reductions_arithmetic(reduction):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [1.1, 2.2, 3.3, 4.4, 5.5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf - (getattr(ddf, reduction)() + 1),
+              df - (getattr(df, reduction)() + 1))
