@@ -1,6 +1,8 @@
 import pytest
 pytest.importorskip('numpy')
 
+import numpy as np
+import dask.array as da
 from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
@@ -114,6 +116,15 @@ def test_hard_fuse_slice_cases():
     dsk = {'x': (getarray, (getarray, 'x', (None, slice(None, None))),
                  (slice(None, None), 5))}
     assert optimize_slices(dsk) == {'x': (getarray, 'x', (None, 5))}
+
+
+def test_dont_fuse_numpy_arrays():
+    x = np.ones(10)
+    for chunks in [(5,), (10,)]:
+        y = da.from_array(x, chunks=(10,))
+
+        dsk = y._optimize(y.dask, y._keys())
+        assert sum(isinstance(v, np.ndarray) for v in dsk) == 1
 
 
 def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
