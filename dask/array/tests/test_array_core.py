@@ -2672,6 +2672,13 @@ def test_setitem_mixed_d():
     assert_eq(x, dx)
 
 
+def test_setitem_errs():
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    with pytest.raises(ValueError):
+        x[x > 1] = x
+
+
 def test_zero_slice_dtypes():
     x = da.arange(5, chunks=1)
     y = x[[]]
