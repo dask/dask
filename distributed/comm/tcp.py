@@ -14,7 +14,7 @@ from tornado.tcpserver import TCPServer
 
 from .. import config
 from ..compatibility import finalize
-from ..utils import ensure_bytes, ensure_ip
+from ..utils import ensure_bytes, ensure_ip, get_ip, get_ipv6
 
 from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
@@ -317,6 +317,15 @@ class TCPBackend(Backend):
     def resolve_address(self, loc):
         host, port = parse_host_port(loc)
         return unparse_host_port(ensure_ip(host), port)
+
+    def get_local_address_for(self, loc):
+        host, port = parse_host_port(loc)
+        host = ensure_ip(host)
+        if ':' in host:
+            local_host = get_ipv6(host)
+        else:
+            local_host = get_ip(host)
+        return unparse_host_port(local_host, None)
 
 
 backends['tcp'] = TCPBackend()

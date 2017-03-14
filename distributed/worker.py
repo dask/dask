@@ -6,6 +6,7 @@ from importlib import import_module
 import heapq
 import logging
 import os
+import pickle
 import random
 import tempfile
 from threading import current_thread, local
@@ -24,7 +25,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
 from .batched import BatchedSend
-from .comm import get_address_host
+from .comm import get_address_host, get_local_address_for
 from .config import config
 from .compatibility import reload, unicode, invalidate_caches, cache_from_source
 from .core import (error_message, CommClosedError,
@@ -232,9 +233,12 @@ class WorkerBase(Server):
         assert self.status is None
 
         # XXX Factor this out
-        if isinstance(addr_or_port, int):
-            # Default ip is the required one to reach the scheduler
-            # XXX get local listening address
+        if not addr_or_port:
+            # Default address is the required one to reach the scheduler
+            self.listen(get_local_address_for(self.scheduler.address))
+            self.ip = get_address_host(self.address)
+        elif isinstance(addr_or_port, int):
+            # addr_or_port is an integer => assume TCP
             self.ip = get_ip(
                 get_address_host(self.scheduler.address)
             )
@@ -1488,12 +1492,18 @@ class Worker(WorkerBase):
         if key in self.data:
             nbytes = self.nbytes[key] or sizeof(self.data[key])
             typ = self.types.get(key) or type(self.data[key])
+            try:
+                typ = dumps_function(typ)
+            except pickle.PicklingError:
+                # Some types fail pickling (example: _thread.lock objects),
+                # send their name as a best effort.
+                typ = dumps(typ.__name__)
             d = {'op': 'task-finished',
                  'status': 'OK',
                  'key': key,
                  'nbytes': nbytes,
                  'thread': self.threads.get(key),
-                 'type': dumps_function(typ)}
+                 'type': typ}
         elif key in self.exceptions:
             d = {'op': 'task-erred',
                  'status': 'error',
@@ -1502,7 +1512,6 @@ class Worker(WorkerBase):
                  'exception': self.exceptions[key],
                  'traceback': self.tracebacks[key]}
         else:
-            import pdb; pdb.set_trace()
             logger.error("Key not ready to send to worker, %s: %s",
                          key, self.task_state[key])
             return

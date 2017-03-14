@@ -49,8 +49,8 @@ def dumps(x):
     except:
         try:
             return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception:
-            logger.info("Failed to serialize %s", x, exc_info=True)
+        except Exception as e:
+            logger.info("Failed to serialize %s. Exception: %s", x, e)
             raise
 
 

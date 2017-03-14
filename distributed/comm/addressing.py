@@ -102,6 +102,9 @@ def get_address_host_port(addr):
 
     ValueError is raised if the address scheme doesn't allow extracting
     the requested information.
+
+    >>> get_address_host_port('tcp://1.2.3.4:80')
+    ('1.2.3.4', 80)
     """
     scheme, loc = parse_address(addr)
     backend = registry.get_backend(scheme)
@@ -120,12 +123,29 @@ def get_address_host(addr):
     In contrast to get_address_host_port(), this function should always
     succeed for well-formed addresses.
 
-    >>> get_address_host('tcp://192.168.10.50:8687')
-    '192.168.10.50'
+    >>> get_address_host('tcp://1.2.3.4:80')
+    '1.2.3.4'
     """
     scheme, loc = parse_address(addr)
     backend = registry.get_backend(scheme)
     return backend.get_address_host(loc)
+
+
+def get_local_address_for(addr):
+    """
+    Get a local listening address suitable for reaching *addr*.
+
+    For instance, trying to reach an external TCP address will return
+    a local TCP address that's routable to that external address.
+
+    >>> get_local_address_for('tcp://8.8.8.8:1234')
+    'tcp://192.168.1.68'
+    >>> get_local_address_for('tcp://127.0.0.1:1234')
+    'tcp://127.0.0.1'
+    """
+    scheme, loc = parse_address(addr)
+    backend = registry.get_backend(scheme)
+    return unparse_address(scheme, backend.get_local_address_for(loc))
 
 
 def resolve_address(addr):

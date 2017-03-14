@@ -50,6 +50,12 @@ class Backend(with_metaclass(ABCMeta)):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def get_local_address_for(self, loc):
+        """
+        Get the local listening address suitable for reaching *loc*.
+        """
+
 
 # The {scheme: Backend} mapping
 backends = {}

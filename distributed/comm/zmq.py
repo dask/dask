@@ -12,7 +12,7 @@ from zmq.eventloop import ioloop as zmqioloop
 from zmq.eventloop.future import Context
 
 from .. import config
-from ..utils import PY3, ensure_ip
+from ..utils import PY3, ensure_ip, get_ip, get_ipv6
 
 from . import zmqimpl
 from .registry import Backend, backends
@@ -287,6 +287,15 @@ class ZMQBackend(Backend):
     def resolve_address(self, loc):
         host, port = parse_host_port(loc)
         return unparse_host_port(ensure_ip(host), port)
+
+    def get_local_address_for(self, loc):
+        host, port = parse_host_port(loc)
+        host = ensure_ip(host)
+        if ':' in host:
+            local_host = get_ipv6(host)
+        else:
+            local_host = get_ip(host)
+        return unparse_host_port(local_host, None)
 
 
 backends['zmq'] = ZMQBackend()

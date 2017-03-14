@@ -60,7 +60,7 @@ class LocalCluster(object):
     >>> c.start_diagnostics_server(show=True)  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, nanny=True,
-                 loop=None, start=True, ip='127.0.0.1', scheduler_port=8786,
+                 loop=None, start=True, ip=None, scheduler_port=0,
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
                  services={}, worker_services={}, **worker_kwargs):
         self.status = None
@@ -118,7 +118,7 @@ class LocalCluster(object):
     __repr__ = __str__
 
     @gen.coroutine
-    def _start(self, ip='127.0.0.1'):
+    def _start(self, ip=None):
         """
         Start all cluster services.
         Wait on this if you passed `start=False` to the LocalCluster
@@ -126,12 +126,18 @@ class LocalCluster(object):
         """
         if self.status == 'running':
             return
-        self.scheduler.start((ip, self.scheduler_port))
+        if ip is None and not self.scheduler_port and not self.nanny:
+            # Use inproc transport for optimization
+            scheduler_address = 'inproc://'
+        else:
+            if ip is None:
+                ip = '127.0.0.1'
+            scheduler_address = (ip, self.scheduler_port)
+        self.scheduler.start(scheduler_address)
 
         yield self._start_all_workers(
             self.n_workers, ncores=self.threads_per_worker,
-            nanny=self.nanny, services=self.worker_services,
-            **self.worker_kwargs)
+            services=self.worker_services, **self.worker_kwargs)
 
         if self.diagnostics_port is not None:
             self.start_diagnostics_server(self.diagnostics_port,
@@ -145,20 +151,21 @@ class LocalCluster(object):
 
     @gen.coroutine
     def _start_worker(self, port=0, nanny=None, death_timeout=60, **kwargs):
-        if nanny is None:
-            nanny = self.nanny
-        if nanny:
+        if nanny is not None:
+            raise ValueError("overriding `nanny` for individual workers "
+                             "in a LocalCluster is not supported anymore")
+        if port:
+            raise ValueError("overriding `port` for individual workers "
+                             "in a LocalCluster is not supported anymore")
+        if self.nanny:
             W = Nanny
             kwargs['quiet'] = True
         else:
             W = Worker
-        try:
-            w = W(self.scheduler.address, loop=self.loop,
-                  silence_logs=self.silence_logs, death_timeout=death_timeout,
-                  **kwargs)
-            yield w._start(port)
-        except Exception:
-            raise
+        w = W(self.scheduler.address, loop=self.loop,
+              death_timeout=death_timeout,
+              silence_logs=self.silence_logs, **kwargs)
+        yield w._start()
 
         self.workers.append(w)
 
@@ -167,7 +174,7 @@ class LocalCluster(object):
 
         raise gen.Return(w)
 
-    def start_worker(self, port=0, ncores=0, **kwargs):
+    def start_worker(self, ncores=0, **kwargs):
         """ Add a new worker to the running cluster
 
         Parameters
@@ -176,8 +183,6 @@ class LocalCluster(object):
             Port on which to serve the worker, defaults to 0 or random
         ncores: int (optional)
             Number of threads to use.  Defaults to number of logical cores
-        nanny: boolean
-            If true start worker in separate process managed by a nanny
 
         Examples
         --------
@@ -188,7 +193,7 @@ class LocalCluster(object):
         -------
         The created Worker or Nanny object.  Can be discarded.
         """
-        return sync(self.loop, self._start_worker, port, ncores=ncores, **kwargs)
+        return sync(self.loop, self._start_worker, ncores=ncores, **kwargs)
 
     @gen.coroutine
     def _stop_worker(self, w):
@@ -266,7 +271,7 @@ class LocalCluster(object):
         This can be implemented either as a function or as a Tornado coroutine.
         """
         yield [self._start_worker(**kwargs)
-                for i in range(n - len(self.workers))]
+               for i in range(n - len(self.workers))]
 
     @gen.coroutine
     def scale_down(self, workers):

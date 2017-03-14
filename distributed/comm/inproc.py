@@ -319,5 +319,9 @@ class InProcBackend(Backend):
     def resolve_address(self, loc):
         return loc
 
+    def get_local_address_for(self, loc):
+        self.manager.validate_address(loc)
+        return self.manager.new_address()
+
 
 backends['inproc'] = InProcBackend()
