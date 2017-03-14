@@ -55,7 +55,7 @@ We proceed with hash joins in the following stages:
 """
 from __future__ import absolute_import, division, print_function
 
-from functools import wraps
+from functools import wraps, partial
 from warnings import warn
 
 from toolz import merge_sorted, unique, first
@@ -65,7 +65,7 @@ import pandas as pd
 from ..base import tokenize
 from ..compatibility import apply
 from .core import (_Frame, DataFrame, map_partitions, Index,
-                   _maybe_from_pandas, new_dd_object)
+                   _maybe_from_pandas, new_dd_object, is_broadcastable)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
@@ -93,9 +93,10 @@ def align_partitions(*dfs):
         A list of lists of keys that show which data exist on which
         divisions
     """
+    _is_broadcastable = partial(is_broadcastable, dfs)
     dfs1 = [df for df in dfs
             if isinstance(df, _Frame) and
-            df.divisions != (0, 1)]  # single row
+            not _is_broadcastable(df)]
     if len(dfs) == 0:
         raise ValueError("dfs contains no DataFrame and Series")
     if not all(df.known_divisions for df in dfs1):
@@ -132,9 +133,10 @@ def _maybe_align_partitions(args):
     Note that if all divisions are unknown, but have equal npartitions, then
     they will be passed through unchanged. This is different than
     `align_partitions`, which will fail if divisions aren't all known"""
+    _is_broadcastable = partial(is_broadcastable, args)
     dfs = [df for df in args
            if isinstance(df, _Frame) and
-           df.divisions != (0, 1)]  # single row
+           not _is_broadcastable(df)]
     if not dfs:
         return args
 

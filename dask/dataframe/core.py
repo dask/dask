@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from functools import wraps
+from functools import wraps, partial
 import operator
 from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, first, unique, partition_all
+from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -1065,7 +1065,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             result = self.reduction(method, meta=meta, token=token,
                                     skipna=skipna, axis=axis,
                                     split_every=split_every)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1119,7 +1120,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                          aggregate_kwargs={'scalar': scalar},
                          token=self._token_prefix + fn, split_every=split_every,
                          skipna=skipna, fn=fn)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1138,7 +1140,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                          aggregate_kwargs={'scalar': scalar},
                          token=self._token_prefix + fn, split_every=split_every,
                          skipna=skipna, fn=fn)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1153,7 +1156,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             meta = self._meta_nonempty.count()
             result = self.reduction(M.count, aggregate=M.sum, meta=meta,
                                     token=token, split_every=split_every)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1171,7 +1175,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name = self._token_prefix + 'mean-%s' % tokenize(self, axis, skipna)
             result = map_partitions(methods.mean_aggregate, s, n,
                                     token=name, meta=meta)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1190,7 +1195,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name = self._token_prefix + 'var'
             result = map_partitions(methods.var_aggregate, x2, x, n,
                                     token=name, meta=meta, ddof=ddof)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
@@ -1220,7 +1226,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
-            result.divisions = (0, 1)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
             return result
 
     def quantile(self, q=0.5, axis=0):
@@ -2757,6 +2764,17 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
     Series._bind_comparison_method(name, meth)
 
 
+def is_broadcastable(dfs, s):
+    """
+    This Series is broadcastable against another dataframe in the sequence
+    """
+    return (isinstance(s, Series) and
+            s.npartitions == 1 and
+            s.known_divisions and
+            any(s.divisions == (min(df.columns), max(df.columns))
+                for df in dfs if isinstance(df, DataFrame)))
+
+
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
     meta = kwargs.pop('meta', no_default)
@@ -2770,14 +2788,15 @@ def elemwise(op, *args, **kwargs):
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
     divisions = dfs[0].divisions
-    dfs = [df for df in dfs if df.divisions != (0, 1)]
+    _is_broadcastable = partial(is_broadcastable, dfs)
+    dfs = list(remove(_is_broadcastable, dfs))
     n = len(divisions) - 1
 
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
     # adjust the key length of Scalar
-    keys = [d._keys() * n if isinstance(d, Scalar) or d.divisions == (0, 1)
+    keys = [d._keys() * n if isinstance(d, Scalar) or _is_broadcastable(d)
             else d._keys() for d in dasks]
 
     if other:
@@ -2997,7 +3016,9 @@ def _extract_meta(x, nonempty=False):
     if isinstance(x, Scalar):
         return x._meta_nonempty if nonempty else x._meta
     elif isinstance(x, _Frame):
-        if x.divisions == (0, 1):
+        if (isinstance(x, Series) and
+                x.npartitions == 1 and
+                x.known_divisions):  # may be broadcastable
             return x._meta
         else:
             return x._meta_nonempty if nonempty else x._meta
