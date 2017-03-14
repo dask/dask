@@ -2514,7 +2514,7 @@ def asarray(array):
     """
     if not isinstance(array, Array):
         name = 'asarray-' + tokenize(array)
-        if isinstance(getattr(array, 'shape', None), Iterable):
+        if not isinstance(getattr(array, 'shape', None), Iterable):
             array = np.asarray(array)
         array = from_array(array, chunks=array.shape, name=name)
     return array
