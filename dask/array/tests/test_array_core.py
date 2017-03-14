@@ -1470,6 +1470,24 @@ def test_from_array_slicing_results_in_ndarray():
     assert type(s3.compute()) == np.ndarray
 
 
+def test_asarray():
+    assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
+
+    x = da.asarray([1, 2, 3])
+    assert da.asarray(x) is x
+
+
+def test_asarray_h5py():
+    h5py = pytest.importorskip('h5py')
+
+    with tmpfile('.hdf5') as fn:
+        with h5py.File(fn) as f:
+            d = f.create_dataset('/x', shape=(2, 2), dtype=float)
+            x = da.asarray(d)
+            assert d in x.dask.values()
+            assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+
+
 def test_from_func():
     x = np.arange(10)
     f = lambda n: n * x
