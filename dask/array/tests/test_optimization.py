@@ -2,6 +2,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+import dask
 import dask.array as da
 from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
@@ -124,7 +125,25 @@ def test_dont_fuse_numpy_arrays():
         y = da.from_array(x, chunks=(10,))
 
         dsk = y._optimize(y.dask, y._keys())
-        assert sum(isinstance(v, np.ndarray) for v in dsk) == 1
+        assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
+
+
+def test_minimize_data_transfer():
+    x = np.ones(100)
+    y = da.from_array(x, chunks=25)
+    z = y + 1
+    dsk = z._optimize(z.dask, z._keys())
+
+    keys = list(dsk)
+    results = dask.get(dsk, keys)
+    big_key = [k for k, r in zip(keys, results) if r is x][0]
+    dependencies, dependents = dask.core.get_deps(dsk)
+    deps = dependents[big_key]
+
+    assert len(deps) == 4
+    for dep in deps:
+        assert dsk[dep][0] in (getitem, getarray)
+        assert dsk[dep][1] == big_key
 
 
 def test_dont_fuse_fancy_indexing_in_getarray_nofancy():

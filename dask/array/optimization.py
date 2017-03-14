@@ -24,16 +24,27 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
-    if inline_functions_fast_functions is None:
-        inline_functions_fast_functions = {getarray, getarray_nofancy,
-                                           np.transpose}
-
     dsk2, dependencies = cull(dsk, keys)
-    dsk4, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
+
+    hold_keys = []
+    for k, v in dsk2.items():
+        if type(v) is not tuple:
+            hold_keys.append(k)
+        else:
+            try:
+                if v[0] is getarray:
+                    hold_keys.append(k)
+            except (TypeError, IndexError):
+                pass
+
+    dsk4, dependencies = fuse(dsk2, hold_keys + keys + (fuse_keys or []), dependencies,
                               rename_keys=rename_fused_keys)
     dsk5 = optimize_slices(dsk4)
-    dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
-                            fast_functions=inline_functions_fast_functions)
+    if inline_functions_fast_functions:
+        dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
+                                fast_functions=inline_functions_fast_functions)
+    else:
+        dsk6 = dsk5
 
     return dsk6
 
