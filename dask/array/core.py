@@ -1995,6 +1995,7 @@ def unify_chunks(*args, **kwargs):
     --------
     common_blockdim
     """
+    args = [asarray(a) if i % 2 == 0 else a for i, a in enumerate(args)]
     warn = kwargs.get('warn', True)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     arrays, inds = zip(*arginds)
@@ -2442,16 +2443,6 @@ def tensordot(lhs, rhs, axes=2):
         raise NotImplementedError("Simultaneous Contractions of multiple "
                                   "indices not yet supported")
 
-    if isinstance(lhs, np.ndarray):
-        chunks = [(d,) for d in lhs.shape]
-        chunks[left_axes[0]] = rhs.chunks[right_axes[0]]
-        lhs = from_array(lhs, chunks=chunks)
-
-    if isinstance(rhs, np.ndarray):
-        chunks = [(d,) for d in rhs.shape]
-        chunks[right_axes[0]] = lhs.chunks[left_axes[0]]
-        rhs = from_array(rhs, chunks=chunks)
-
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
     left_index = list(alphabet[:lhs.ndim])
@@ -2613,7 +2604,7 @@ def elemwise(op, *args, **kwargs):
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    arrays = [asarray(a) for a in args if not is_scalar_for_elemwise(a)]
+    arrays = [a for a in args if not is_scalar_for_elemwise(a)]
     other = [(i, a) for i, a in enumerate(args) if is_scalar_for_elemwise(a)]
 
     if 'dtype' in kwargs:
