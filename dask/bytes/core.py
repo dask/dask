@@ -98,7 +98,7 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+               sample=True, compression=None, samples_per_block = False, **kwargs):
     """ Convert path to a list of delayed values
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -197,15 +197,34 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                                            'loose_restrictions': list(restrictions),
                                            'client': client.id})
 
-    if sample is not True:
-        nbytes = sample
-    else:
+    if samples_per_block is False:
+        if sample is not True:
+            nbytes = sample
+        else:
+            nbytes = 10000
+        if sample:
+            # myopen = OpenFileCreator(urlpath, compression)
+            with myopen(paths[0], 'rb') as f:
+                sample = read_block(f, 0, nbytes, delimiter)
+        return sample, out
+    
+    # Return sample of each block containing two rows
+    # i.e. either header and one data row or two data rows.
+    # Returning data is important to enable reading in divisions  
+    elif samples_per_block is True:
         nbytes = 10000
-    if sample:
-        # myopen = OpenFileCreator(urlpath, compression)
-        with myopen(paths[0], 'rb') as f:
-            sample = read_block(f, 0, nbytes, delimiter)
-    return sample, out
+        samples = []
+        for path, offset, length, machine in zip(paths, offsets, lengths, machines):
+            with myopen(path, 'rb') as f:
+                header = read_block(f, offset[0], nbytes, delimiter, number_of_delimiters=1)
+                #beginning of file: read two lines (head + first data row)            
+                samples.append(read_block(f, offset[0], nbytes, delimiter, number_of_delimiters=2))
+                #block within file: append one data row to known header
+                samples_dummy = [header + read_block(f, o, nbytes, delimiter, number_of_delimiters=1)
+                     for o in offset[1:]]
+                samples.extend(samples_dummy)
+        return samples, out
+                       
 
 
 def read_block_from_file(lazy_file, off, bs, delimiter):

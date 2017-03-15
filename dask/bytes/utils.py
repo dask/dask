@@ -70,7 +70,7 @@ def seek_delimiter(file, delimiter, blocksize):
         last = full[-len(delimiter):]
 
 
-def read_block(f, offset, length, delimiter=None):
+def read_block(f, offset, length, delimiter=None, number_of_delimiters=1):
     """ Read a block of bytes from a file
 
     Parameters
@@ -82,6 +82,8 @@ def read_block(f, offset, length, delimiter=None):
         Number of bytes to read
     delimiter: bytes (optional)
         Ensure reading starts and stops at delimiter bytestring
+    number_of_delimiters: int
+        read up to the n-th delimiter
 
     If using the ``delimiter=`` keyword argument we ensure that the read
     starts and stops at delimiter boundaries that follow the locations
@@ -116,7 +118,8 @@ def read_block(f, offset, length, delimiter=None):
 
         try:
             f.seek(start + length)
-            seek_delimiter(f, delimiter, 2**16)
+            for i in range(number_of_delimiters): ### i am not sure, what i did here, but it seems to work        
+                seek_delimiter(f, delimiter, 2**16)
         except ValueError:
             f.seek(0, 2)
         end = f.tell()
