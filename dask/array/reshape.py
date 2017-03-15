@@ -128,6 +128,23 @@ def contract_tuple(chunks, factor):
 
 
 def reshape(x, shape):
+    """ Reshape array to new shape
+
+    This is a parallelized version of the ``np.reshape`` function with the
+    following limitations:
+
+    1.  It assumes that the array is stored in C-order
+    2.  It only allows for reshapings that collapse or merge dimensions like
+        ``(1, 2, 3, 4) -> (1, 6, 4)`` or ``(64,) -> (4, 4, 4)``
+
+    When communication is necessary this algorithm depends on the logic within
+    rechunk.  It endeavors to keep chunk sizes roughly the same when possible.
+
+    See Also
+    --------
+    dask.array.rechunk
+    numpy.reshape
+    """
     # Sanitize inputs, look for -1 in shape
     from .slicing import sanitize_index
     shape = tuple(map(sanitize_index, shape))
