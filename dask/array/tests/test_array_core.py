@@ -740,6 +740,9 @@ def test_ravel():
     ((24,), (4, 6, 1), 6),
     ((24,), (4, 6), (6, 12, 6)),
     ((64, 4), (8, 8, 4), (16, 2)),
+    ((4, 64), (4, 8, 4, 2), (2, 16)),
+    ((4, 8, 4, 2), (2, 1, 2, 32, 2), (2, 4, 2, 2)),
+    ((4, 1, 4), (4, 4), (2, 1, 2)),
 ])
 def test_reshape(original_shape, new_shape, chunks):
     x = np.random.randint(10, size=original_shape)
