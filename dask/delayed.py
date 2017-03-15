@@ -240,9 +240,29 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
 
-    Methods are assumed to be impure by default, meaning that subsequent calls
-    may return different results. To assume purity, set `pure=True`. This
-    allows sharing of any intermediate values.
+    "Magic" methods (e.g. operators and attribute access) are assumed to be
+    pure, meaning that subsequent calls must return the same results.  This is
+    not overrideable. To invoke an impure attribute or operator, you'd need to
+    use it in a delayed function with ``pure=False``.
+
+    >>> class Incrementer(object):
+    ...     def __init__(self):
+    ...         self._n = 0
+    ...     @property
+    ...     def n(self):
+    ...         self._n += 1
+    ...         return self._n
+    ...
+    >>> x = delayed(Incrementer())
+    >>> x.n.key == x.n.key
+    True
+    >>> get_n = delayed(lambda x: x.n, pure=False)
+    >>> get_n(x).key == get_n(x).key
+    False
+
+    In contrast, methods are assumed to be impure by default, meaning that
+    subsequent calls may return different results. To assume purity, set
+    `pure=True`. This allows sharing of any intermediate values.
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True
@@ -252,7 +272,6 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed("count_2")
-
     """
     if isinstance(obj, Delayed):
         return obj
@@ -346,7 +365,7 @@ class Delayed(base.Base):
     def __getattr__(self, attr):
         if attr.startswith('_'):
             raise AttributeError("Attribute {0} not found".format(attr))
-        return DelayedAttr(self, attr, 'getattr-%s' % tokenize(self, attr))
+        return DelayedAttr(self, attr)
 
     def __setattr__(self, attr, val):
         if attr in self.__slots__:
@@ -436,10 +455,10 @@ class DelayedLeaf(Delayed):
 class DelayedAttr(Delayed):
     __slots__ = ('_obj', '_attr', '_key')
 
-    def __init__(self, obj, attr, key):
+    def __init__(self, obj, attr):
         self._obj = obj
         self._attr = attr
-        self._key = key
+        self._key = 'getattr-%s' % tokenize(obj, attr, pure=True)
 
     @property
     def dask(self):
