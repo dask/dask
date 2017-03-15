@@ -2660,6 +2660,18 @@ def test_memory_usage(index, deep):
             ddf.x.memory_usage(index=index, deep=deep).compute())
 
 
+@pytest.mark.parametrize('reduction', ['sum', 'mean', 'std', 'var', 'count',
+                                       'min', 'max', 'idxmin', 'idxmax',
+                                       'prod', 'all', 'sem'])
+def test_dataframe_reductions_arithmetic(reduction):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [1.1, 2.2, 3.3, 4.4, 5.5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf - (getattr(ddf, reduction)() + 1),
+              df - (getattr(df, reduction)() + 1))
+
+
 def test_datetime_loc_open_slicing():
     dtRange = pd.date_range('01.01.2015','05.05.2015')
     df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
