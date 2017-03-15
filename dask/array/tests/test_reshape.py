@@ -27,6 +27,7 @@ def test_reshape_rechunk(inshape, outshape, prechunks, inchunks, outchunks):
     result_in, result_out = reshape_rechunk(inshape, outshape, prechunks)
     assert result_in == inchunks
     assert result_out == outchunks
+    assert np.prod(list(map(len, result_in))) == np.prod(list(map(len, result_out)))
 
 
 def test_expand_tuple():

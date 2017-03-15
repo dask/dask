@@ -1,6 +1,13 @@
+from itertools import product
 from operator import mul
 
+import numpy as np
+
+from .core import Array
+from ..base import tokenize
+from ..core import flatten
 from ..compatibility import reduce
+from .. import sharedict
 
 def reshape_rechunk(inshape, outshape, inchunks):
     assert all(isinstance(c, tuple) for c in inchunks)
@@ -26,7 +33,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             oi -= 1
         elif din < dout:  # (4, 4, 4) -> (64,)
             ileft = ii - 1
-            while reduce(mul, inshape[ileft:ii + 1]) < dout: # 4 < 64, 4*4 < 64, 4*4*4 == 64
+            while ileft >= 0 and reduce(mul, inshape[ileft:ii + 1]) < dout: # 4 < 64, 4*4 < 64, 4*4*4 == 64
                 ileft -= 1
             if reduce(mul, inshape[ileft:ii + 1]) != dout:
                 raise ValueError("Shapes not compatible")
@@ -44,7 +51,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             ii = ileft - 1
         elif din > dout:  # (64,) -> (4, 4, 4)
             oleft = oi - 1
-            while reduce(mul, outshape[oleft:oi + 1]) < din:
+            while oleft >= 0 and reduce(mul, outshape[oleft:oi + 1]) < din:
                 oleft -= 1
             if reduce(mul, inshape[oleft:oi + 1]) != din:
                 raise ValueError("Shapes not compatible")
@@ -118,3 +125,43 @@ def contract_tuple(chunks, factor):
         if good:
             out.append(good)
     return tuple(out)
+
+
+def reshape(x, shape):
+    # Sanitize inputs, look for -1 in shape
+    from .slicing import sanitize_index
+    shape = tuple(map(sanitize_index, shape))
+    known_sizes = [s for s in shape if s != -1]
+    if len(known_sizes) < len(shape):
+        if len(known_sizes) - len(shape) > 1:
+            raise ValueError('can only specify one unknown dimension')
+        missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
+        shape = tuple(missing_size if s == -1 else s for s in shape)
+
+    if np.isnan(sum(x.shape)):
+        raise ValueError("Array chunk size or shape is unknown. shape: %s", x.shape)
+
+    if reduce(mul, shape, 1) != x.size:
+        raise ValueError('total size of new array must be unchanged')
+
+    name = 'reshape-' + tokenize(x, shape)
+
+    if x.npartitions == 1:
+        key = next(flatten(x._keys()))
+        dsk = {(name,) + (0,) * len(shape): (np.reshape, key, shape)}
+        chunks = tuple((d,) for d in shape)
+        return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
+                     dtype=x.dtype)
+
+    # Logic for how to rechunk
+    inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
+    x2 = x.rechunk(inchunks)
+
+    # Construct graph
+    in_keys = list(product([x2.name], *[range(len(c)) for c in inchunks]))
+    out_keys = list(product([name], *[range(len(c)) for c in outchunks]))
+    shapes = list(product(*outchunks))
+    dsk = {a: (np.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
+
+    return Array(sharedict.merge((name, dsk), x2.dask), name, outchunks,
+                 dtype=x.dtype)
