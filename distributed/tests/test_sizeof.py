@@ -41,13 +41,14 @@ def test_pandas():
 def test_sparse_matrix():
     sparse = pytest.importorskip('scipy.sparse')
     sp = sparse.eye(10)
-    assert sizeof(sp.todia()) >= 152  # these are the 32 bit values
+    # These are the 32-bit Python 2.7 values.
+    assert sizeof(sp.todia()) >= 152
     assert sizeof(sp.tobsr()) >= 232
-    assert sizeof(sp.tocoo()) >= 248
+    assert sizeof(sp.tocoo()) >= 240
     assert sizeof(sp.tocsc()) >= 232
-    assert sizeof(sp.tocsr()) >= 238
+    assert sizeof(sp.tocsr()) >= 232
     assert sizeof(sp.todok()) >= 192
-    assert sizeof(sp.tolil()) >= 210
+    assert sizeof(sp.tolil()) >= 204
 
 
 def test_serires_object_dtype():
