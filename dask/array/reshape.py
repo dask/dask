@@ -53,7 +53,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             oleft = oi - 1
             while oleft >= 0 and reduce(mul, outshape[oleft:oi + 1]) < din:
                 oleft -= 1
-            if reduce(mul, inshape[oleft:oi + 1]) != din:
+            if reduce(mul, outshape[oleft:oi + 1]) != din:
                 raise ValueError("Shapes not compatible")
 
             # TODO: don't coalesce shapes unnecessarily

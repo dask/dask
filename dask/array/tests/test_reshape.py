@@ -22,6 +22,7 @@ from dask.array.reshape import reshape_rechunk, expand_tuple, contract_tuple
          ((64,), (4, 4, 4), ((32, 32),), ((32, 32),), ((2, 2), (4,), (4,))),
          ((64,), (4, 4, 4), ((16, 48),), ((16, 48),), ((1, 3), (4,), (4,))),
          ((64,), (4, 4, 4), ((20, 44),), ((16, 48),), ((1, 3), (4,), (4,))),
+         ((64, 4), (8, 8, 4), ((16, 16, 16, 16), (2, 2)), ((16, 16, 16, 16), (2, 2)), ((2, 2, 2, 2), (8,), (2, 2))),
 ])
 def test_reshape_rechunk(inshape, outshape, prechunks, inchunks, outchunks):
     result_in, result_out = reshape_rechunk(inshape, outshape, prechunks)
