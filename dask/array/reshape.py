@@ -9,6 +9,7 @@ from ..core import flatten
 from ..compatibility import reduce
 from .. import sharedict
 
+
 def reshape_rechunk(inshape, outshape, inchunks):
     assert all(isinstance(c, tuple) for c in inchunks)
     ii = len(inshape) - 1
@@ -58,7 +59,6 @@ def reshape_rechunk(inshape, outshape, inchunks):
 
             # TODO: don't coalesce shapes unnecessarily
             cs = reduce(mul, outshape[oleft + 1: oi + 1])
-
 
             result_inchunks[ii] = contract_tuple(inchunks[ii], cs) # (16, 16, 16, 16)
 
