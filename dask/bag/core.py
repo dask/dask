@@ -116,7 +116,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True):
+                 encoding=system_encoding, compute=True, get=None):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -174,7 +174,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                       encoding=encoding)
     if compute:
         from dask import delayed
-        delayed(out).compute()
+        get = get or _globals.get('get', None) or Bag._default_get
+        delayed(out).compute(get=get)
     else:
         return out
 
@@ -589,8 +590,9 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True):
-        return to_textfiles(self, path, name_function, compression, encoding, compute)
+                     encoding=system_encoding, compute=True, get=None):
+        return to_textfiles(self, path, name_function, compression, encoding,
+                            compute, get=get)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction

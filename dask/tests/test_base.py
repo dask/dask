@@ -457,4 +457,4 @@ def test_normalize_function_limited_size():
     for i in range(1000):
         normalize_function(lambda x: x)
 
-    assert 50 < len(function_cache) < 500
+    assert 50 < len(function_cache) < 600
