@@ -1712,6 +1712,11 @@ class Array(Base):
         """
         return Array(self.dask, self.name, self.chunks, self.dtype)
 
+    def __deepcopy__(self, memo):
+        c = self.copy()
+        memo[id(self)] = c
+        return c
+
     def to_delayed(self):
         """ Convert Array into dask Delayed objects
 
