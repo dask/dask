@@ -2247,6 +2247,7 @@ class DataFrame(_Frame):
         >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
         if sorted:
+            from .shuffle import set_sorted_index
             return set_sorted_index(self, other, drop=drop, **kwargs)
         else:
             from .shuffle import set_index
@@ -3650,36 +3651,6 @@ def repartition(df, divisions=None, force=False):
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
         return new_dd_object(dsk, name, df, divisions)
     raise ValueError('Data must be DataFrame or Series')
-
-
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
-        meta = df._meta.set_index(index._meta, drop=drop)
-
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
-
-    if not divisions:
-        divisions = compute_divisions(result, **kwargs)
-
-    result.divisions = divisions
-    return result
-
-
-def compute_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
-
-    if (sorted(mins) != list(mins) or
-            sorted(maxes) != list(maxes) or
-            any(a > b for a, b in zip(mins, maxes))):
-        raise ValueError("Partitions must be sorted ascending with the index",
-                         mins, maxes)
-
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions
 
 
 def _reduction_chunk(x, aca_chunk=None, **kwargs):

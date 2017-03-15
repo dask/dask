@@ -194,12 +194,12 @@ def test_set_index():
 
 
 def test_set_index_interpolate():
-    df = pd.DataFrame({'x': [1, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
+    df = pd.DataFrame({'x': [4, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
     d = dd.from_pandas(df, 2)
 
     d1 = d.set_index('x', npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3])
+    assert set(d1.divisions) == set([1, 2, 3, 4])
 
     d2 = d.set_index('y', npartitions=3)
     assert d2.divisions[0] == 1.
@@ -2176,7 +2176,7 @@ def test_set_index_sorted_true():
 
 
 def test_compute_divisions():
-    from dask.dataframe.core import compute_divisions
+    from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]},

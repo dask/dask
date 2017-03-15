@@ -9,11 +9,11 @@ import pandas as pd
 from toolz import merge
 
 from .methods import drop_columns
-from .core import DataFrame, Series, _Frame, _concat
+from .core import DataFrame, Series, _Frame, _concat, map_partitions
 from .hashing import hash_pandas_object
 
 from .. import base
-from ..base import tokenize
+from ..base import tokenize, compute
 from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
@@ -51,7 +51,10 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             sizes = [delayed(sizeof)(part) for part in parts]
         else:
             sizes = []
-        divisions, sizes = base.compute(divisions, sizes)
+        iparts = index2.to_delayed()
+        mins = [ipart.min() for ipart in iparts]
+        maxes = [ipart.max() for ipart in iparts]
+        divisions, sizes, mins, maxes  = base.compute(divisions, sizes, mins, maxes)
         divisions = divisions.tolist()
 
         if repartition:
@@ -66,6 +69,11 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             except (TypeError, ValueError):  # str type
                 indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
                 divisions = [divisions[i] for i in indexes]
+
+        if (mins == sorted(mins) and maxes == sorted(maxes) and
+                all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
+            divisions = mins + [maxes[-1]]
+            return set_sorted_index(df, index, drop=drop, divisions=divisions)
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
@@ -425,3 +433,33 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     df2.index.name = index_name
     df2.columns = df2.columns.astype(column_dtype)
     return df2
+
+
+def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
+    if not isinstance(index, Series):
+        meta = df._meta.set_index(index, drop=drop)
+    else:
+        meta = df._meta.set_index(index._meta, drop=drop)
+
+    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+
+    if not divisions:
+        divisions = compute_divisions(result, **kwargs)
+
+    result.divisions = tuple(divisions)
+    return result
+
+
+def compute_divisions(df, **kwargs):
+    mins = df.index.map_partitions(M.min, meta=df.index)
+    maxes = df.index.map_partitions(M.max, meta=df.index)
+    mins, maxes = compute(mins, maxes, **kwargs)
+
+    if (sorted(mins) != list(mins) or
+            sorted(maxes) != list(maxes) or
+            any(a > b for a, b in zip(mins, maxes))):
+        raise ValueError("Partitions must be sorted ascending with the index",
+                         mins, maxes)
+
+    divisions = tuple(mins) + (list(maxes)[-1],)
+    return divisions

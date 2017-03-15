@@ -143,27 +143,27 @@ def test_groupby_dir():
 
 @pytest.mark.parametrize('get', [dask.async.get_sync, dask.threaded.get])
 def test_groupby_on_index(get):
-    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                          'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
-    d = dd.from_pandas(full, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=3)
 
-    e = d.set_index('a')
-    efull = full.set_index('a')
-    assert_eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
+    ddf2 = ddf.set_index('a')
+    pdf2 = pdf.set_index('a')
+    assert_eq(ddf.groupby('a').b.mean(), ddf2.groupby(ddf2.index).b.mean())
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
     with dask.set_options(get=get):
-        assert_eq(d.groupby('a').apply(func),
-                  full.groupby('a').apply(func))
+        assert_eq(ddf.groupby('a').apply(func),
+                  pdf.groupby('a').apply(func))
 
-        assert_eq(d.groupby('a').apply(func).set_index('a'),
-                  full.groupby('a').apply(func).set_index('a'))
+        assert_eq(ddf.groupby('a').apply(func).set_index('a'),
+                  pdf.groupby('a').apply(func).set_index('a'))
 
-        assert_eq(efull.groupby(efull.index).apply(func),
-                  e.groupby(e.index).apply(func))
+        assert_eq(pdf2.groupby(pdf2.index).apply(func),
+                  ddf2.groupby(ddf2.index).apply(func))
 
 
 def test_groupby_multilevel_getitem():
