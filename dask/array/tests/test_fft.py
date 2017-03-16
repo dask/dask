@@ -139,3 +139,15 @@ def test_wrap_numpy():
     ihfft = ihfft_wrapper(npfft.ihfft)
     assert_eq(ihfft(darr), npfft.ihfft(nparr))
     assert_eq(ihfft(darr2, axis=0), npfft.ihfft(nparr, axis=0))
+
+
+def test_wrap_scipy():
+    spfft = pytest.importorskip("scipy.fftpack")
+
+    fft = fft_wrapper(spfft.fft)
+    assert_eq(fft(darr), spfft.fft(nparr))
+    assert_eq(fft(darr2, axis=0), spfft.fft(nparr, axis=0))
+
+    ifft = ifft_wrapper(spfft.ifft)
+    assert_eq(ifft(darr), spfft.ifft(nparr))
+    assert_eq(ifft(darr2, axis=0), spfft.ifft(nparr, axis=0))
