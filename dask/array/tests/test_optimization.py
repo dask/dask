@@ -158,9 +158,10 @@ def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
 
 def test_fuse_getarray_with_from_array():
     x = np.ones(10)
-    x = da.from_array(x, chunks=(5,))
-    y = x.rechunk((4,))
-    dsk = y._optimize(y.dask, y._keys())
+    y = da.ones(10, chunks=(5,))
+    z = x + y
+    dsk = z._optimize(z.dask, z._keys())
     for v in dsk.values():
         s = str(v)
         assert s.count('getitem') + s.count('getarray') <= 1
+    assert len([v for v in dsk.values() if v[0] in (getitem, getarray)]) == 2

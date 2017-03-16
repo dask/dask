@@ -2501,6 +2501,8 @@ def insert_to_ooc(out, arr, lock=True, region=None):
 def asarray(array):
     """Coerce argument into a dask array
 
+    Examples
+    --------
     >>> x = np.arange(3)
     >>> asarray(x)
     dask.array<asarray..., shape=(3,), dtype=int64, chunksize=(3,)>
