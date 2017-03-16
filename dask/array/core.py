@@ -2518,7 +2518,7 @@ def asarray(array):
     if not isinstance(getattr(array, 'shape', None), Iterable):
         array = np.asarray(array)
     dsk = {(name,) + (0,) * len(array.shape):
-            (getarray_inline, name) + ((slice(None, None),) * len(array.shape),),
+           (getarray_inline, name) + ((slice(None, None),) * len(array.shape),),
            name: array}
     chunks = tuple((d,) for d in array.shape)
     return Array(dsk, name, chunks, dtype=array.dtype)
