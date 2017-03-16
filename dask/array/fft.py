@@ -89,19 +89,73 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-fft = _fft_wrap(np.complex_, _fft_out_chunks)(npfft.fft)
+def fft_wrapper(fft_func):
+    """ Wrapper of 1D complex FFT functions
+
+    Takes a function that behaves like ``numpy.fft.fft``.
+    """
+
+    return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
 
 
-ifft = _fft_wrap(np.complex_, _fft_out_chunks)(npfft.ifft)
+def ifft_wrapper(fft_func):
+    """ wrapper of 1D complex inverse FFT functions
+
+    takes a function that behaves like ``numpy.fft.ifft``.
+    """
+
+    return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
 
 
-rfft = _fft_wrap(np.complex_, _rfft_out_chunks)(npfft.rfft)
+def rfft_wrapper(fft_func):
+    """ wrapper of 1D real FFT functions
+
+    takes a function that behaves like ``numpy.fft.rfft``.
+    """
+
+    return _fft_wrap(np.complex_, _rfft_out_chunks)(fft_func)
 
 
-irfft = _fft_wrap(np.float_, _irfft_out_chunks)(npfft.irfft)
+def irfft_wrapper(fft_func):
+    """ wrapper of 1D real inverse FFT functions
+
+    takes a function that behaves like ``numpy.fft.irfft``.
+    """
+
+    return _fft_wrap(np.float_, _irfft_out_chunks)(fft_func)
 
 
-hfft = _fft_wrap(np.float_, _hfft_out_chunks)(npfft.hfft)
+def hfft_wrapper(fft_func):
+    """ wrapper of 1D hermitian complex FFT functions
+
+    takes a function that behaves like ``numpy.fft.hfft``.
+    """
+
+    return _fft_wrap(np.float_, _hfft_out_chunks)(fft_func)
 
 
-ihfft = _fft_wrap(np.complex_, _ihfft_out_chunks)(npfft.ihfft)
+def ihfft_wrapper(fft_func):
+    """ wrapper of 1D hermitian complex inverse FFT functions
+
+    takes a function that behaves like ``numpy.fft.ihfft``.
+    """
+
+    return _fft_wrap(np.complex_, _ihfft_out_chunks)(fft_func)
+
+
+fft = fft_wrapper(npfft.fft)
+
+
+ifft = ifft_wrapper(npfft.ifft)
+
+
+rfft = rfft_wrapper(npfft.rfft)
+
+
+irfft = irfft_wrapper(npfft.irfft)
+
+
+hfft = hfft_wrapper(npfft.hfft)
+
+
+ihfft = ihfft_wrapper(npfft.ihfft)
