@@ -77,6 +77,10 @@ def getarray_nofancy(a, b, lock=None):
     return getarray(a, b, lock=lock)
 
 
+def getarray_inline(a, b, lock=None):
+    return getarray(a, b, lock=lock)
+
+
 from .optimization import optimize, fuse_slice
 
 
@@ -2513,7 +2517,8 @@ def asarray(array):
     name = 'asarray-' + tokenize(array)
     if not isinstance(getattr(array, 'shape', None), Iterable):
         array = np.asarray(array)
-    dsk = {(name,) + (0,) * len(array.shape): (np.asarray, name),
+    dsk = {(name,) + (0,) * len(array.shape):
+            (getarray_inline, name) + ((slice(None, None),) * len(array.shape),),
            name: array}
     chunks = tuple((d,) for d in array.shape)
     return Array(dsk, name, chunks, dtype=array.dtype)

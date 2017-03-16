@@ -4,14 +4,14 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy
+from .core import getarray, getarray_nofancy, getarray_inline
 from ..core import flatten, reverse_dict
 from ..optimize import cull, fuse, inline_functions
 from ..utils import ensure_dict
 
 
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
-             inline_functions_fast_functions=(np.asarray,), rename_fused_keys=True,
+             inline_functions_fast_functions=(getarray_inline,), rename_fused_keys=True,
              **kwargs):
     """ Optimize dask for array computation
 
@@ -50,6 +50,7 @@ def hold_keys(dsk, dependencies):
     """
     dependents = reverse_dict(dependencies)
     data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
+    getters = (getitem, getarray, getarray_inline)
 
     hold_keys = list(data)
     for dat in data:
@@ -57,7 +58,7 @@ def hold_keys(dsk, dependencies):
         for dep in deps:
             task = dsk[dep]
             try:
-                if task[0] in (getitem, getarray):
+                if task[0] in getters:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
@@ -82,7 +83,7 @@ def optimize_slices(dsk):
         fuse_slice_dict
     """
     fancy_ind_types = (list, np.ndarray)
-    getters = (getarray_nofancy, getarray, getitem, np.asarray)
+    getters = (getarray_nofancy, getarray, getitem, getarray_inline)
     dsk = dsk.copy()
     for k, v in dsk.items():
         if type(v) is tuple and v[0] in getters and len(v) == 3:
@@ -110,6 +111,8 @@ def optimize_slices(dsk):
                     # strictness e.g. `(getarray, (getitem, ...))` never
                     # happens
                     getter = f2
+                    if getter is getarray_inline:
+                        getter = getarray
                 except NotImplementedError:
                     break
                 a, a_index = b, c_index
