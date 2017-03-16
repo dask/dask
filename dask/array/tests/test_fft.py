@@ -4,7 +4,12 @@ import numpy.fft as npfft
 import pytest
 
 import dask.array as da
-from dask.array.fft import fft, ifft, rfft, irfft, hfft, ihfft
+from dask.array.fft import (
+    fft, ifft, rfft, irfft, hfft, ihfft,
+    fft_wrapper, ifft_wrapper,
+    rfft_wrapper, irfft_wrapper,
+    hfft_wrapper, ihfft_wrapper
+)
 from dask.array.utils import assert_eq
 
 
@@ -108,3 +113,29 @@ def test_fft_consistent_names():
     assert same_keys(fft(darr, 5), fft(darr, 5))
     assert same_keys(fft(darr2, 5, axis=0), fft(darr2, 5, axis=0))
     assert not same_keys(fft(darr, 5), fft(darr, 13))
+
+
+def test_wrap_numpy():
+    fft = fft_wrapper(npfft.fft)
+    assert_eq(fft(darr), npfft.fft(nparr))
+    assert_eq(fft(darr2, axis=0), npfft.fft(nparr, axis=0))
+
+    ifft = ifft_wrapper(npfft.ifft)
+    assert_eq(ifft(darr), npfft.ifft(nparr))
+    assert_eq(ifft(darr2, axis=0), npfft.ifft(nparr, axis=0))
+
+    rfft = rfft_wrapper(npfft.rfft)
+    assert_eq(rfft(darr), npfft.rfft(nparr))
+    assert_eq(rfft(darr2, axis=0), npfft.rfft(nparr, axis=0))
+
+    irfft = irfft_wrapper(npfft.irfft)
+    assert_eq(irfft(darr), npfft.irfft(nparr))
+    assert_eq(irfft(darr2, axis=0), npfft.irfft(nparr, axis=0))
+
+    hfft = hfft_wrapper(npfft.hfft)
+    assert_eq(hfft(darr), npfft.hfft(nparr))
+    assert_eq(hfft(darr2, axis=0), npfft.hfft(nparr, axis=0))
+
+    ihfft = ihfft_wrapper(npfft.ihfft)
+    assert_eq(ihfft(darr), npfft.ihfft(nparr))
+    assert_eq(ihfft(darr2, axis=0), npfft.ihfft(nparr, axis=0))
