@@ -24,21 +24,24 @@ fft_preamble = """
     """
 
 
-def _fft_wrap(fft_func, dtype, out_chunk_fn):
-    def func(a, n=None, axis=-1):
-        if len(a.chunks[axis]) != 1:
-            raise ValueError(chunk_error % (axis, a.chunks[axis]))
+def _fft_wrap(dtype, out_chunk_fn):
+    def _fft_wrapper(fft_func):
+        def func(a, n=None, axis=-1):
+            if len(a.chunks[axis]) != 1:
+                raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
-        chunks = out_chunk_fn(a, n, axis)
+            chunks = out_chunk_fn(a, n, axis)
 
-        return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
-                          chunks=chunks)
+            return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
+                              chunks=chunks)
 
-    np_name = fft_func.__name__
-    if fft_func.__doc__ is not None:
-        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
-    func.__name__ = np_name
-    return func
+        np_name = fft_func.__name__
+        if fft_func.__doc__ is not None:
+            func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+        func.__name__ = np_name
+        return func
+
+    return _fft_wrapper
 
 
 def _fft_out_chunks(a, n, axis):
@@ -86,19 +89,19 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-fft = _fft_wrap(npfft.fft, np.complex_, _fft_out_chunks)
+fft = _fft_wrap(np.complex_, _fft_out_chunks)(npfft.fft)
 
 
-ifft = _fft_wrap(npfft.ifft, np.complex_, _fft_out_chunks)
+ifft = _fft_wrap(np.complex_, _fft_out_chunks)(npfft.ifft)
 
 
-rfft = _fft_wrap(npfft.rfft, np.complex_, _rfft_out_chunks)
+rfft = _fft_wrap(np.complex_, _rfft_out_chunks)(npfft.rfft)
 
 
-irfft = _fft_wrap(npfft.irfft, np.float_, _irfft_out_chunks)
+irfft = _fft_wrap(np.float_, _irfft_out_chunks)(npfft.irfft)
 
 
-hfft = _fft_wrap(npfft.hfft, np.float_, _hfft_out_chunks)
+hfft = _fft_wrap(np.float_, _hfft_out_chunks)(npfft.hfft)
 
 
-ihfft = _fft_wrap(npfft.ihfft, np.complex_, _ihfft_out_chunks)
+ihfft = _fft_wrap(np.complex_, _ihfft_out_chunks)(npfft.ihfft)
