@@ -109,6 +109,7 @@ def test_optimize_graph_false():
 def py_random():
     return tuple(random.randint(0, 1000) for i in range(5))
 
+
 def np_random():
     return tuple(np.random.randint(1000) for i in range(5))
 
@@ -127,6 +128,7 @@ def check_random_seed_in_children(func, N=10):
 
 def test_py_random_seeds():
     check_random_seed_in_children(py_random)
+
 
 def test_np_random_seeds():
     check_random_seed_in_children(np_random)
