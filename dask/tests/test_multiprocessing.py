@@ -1,8 +1,11 @@
 import multiprocessing
-import numpy as np
-import pickle
 from operator import add
+import pickle
+import random
 
+import numpy as np
+
+from dask import compute, delayed
 from dask.context import set_options
 from dask.multiprocessing import get, _dumps, _loads
 from dask.utils_test import inc
@@ -101,3 +104,29 @@ def test_optimize_graph_false():
     with Callback(pretask=lambda key, *args: keys.append(key)):
         get(d, 'z', optimize_graph=False)
     assert len(keys) == 2
+
+
+def py_random():
+    return tuple(random.randint(0, 1000) for i in range(5))
+
+def np_random():
+    return tuple(np.random.randint(1000) for i in range(5))
+
+
+def check_random_seed_in_children(func, N=10):
+    """
+    Check that delegating tasks to a process pool doesn't produce
+    the same random sequences in different children.
+    """
+    func = delayed(func, pure=False)
+    with set_options(get=get):
+        results, = compute([func() for i in range(N)])
+
+    assert len(set(results)) == N
+
+
+def test_py_random_seeds():
+    check_random_seed_in_children(py_random)
+
+def test_np_random_seeds():
+    check_random_seed_in_children(np_random)
