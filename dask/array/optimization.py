@@ -11,7 +11,7 @@ from ..utils import ensure_dict
 
 
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
-             inline_functions_fast_functions=None, rename_fused_keys=True,
+             inline_functions_fast_functions=(np.asarray,), rename_fused_keys=True,
              **kwargs):
     """ Optimize dask for array computation
 
@@ -27,16 +27,16 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     dsk2, dependencies = cull(dsk, keys)
     hold = hold_keys(dsk2, dependencies)
 
-    dsk4, dependencies = fuse(dsk2, hold + keys + (fuse_keys or []),
+    dsk3, dependencies = fuse(dsk2, hold + keys + (fuse_keys or []),
                               dependencies, rename_keys=rename_fused_keys)
-    dsk5 = optimize_slices(dsk4)
     if inline_functions_fast_functions:
-        dsk6 = inline_functions(dsk5, keys, dependencies=dependencies,
+        dsk4 = inline_functions(dsk3, keys, dependencies=dependencies,
                                 fast_functions=inline_functions_fast_functions)
     else:
-        dsk6 = dsk5
+        dsk4 = dsk3
+    dsk5 = optimize_slices(dsk4)
 
-    return dsk6
+    return dsk5
 
 
 def hold_keys(dsk, dependencies):
@@ -82,7 +82,7 @@ def optimize_slices(dsk):
         fuse_slice_dict
     """
     fancy_ind_types = (list, np.ndarray)
-    getters = (getarray_nofancy, getarray, getitem)
+    getters = (getarray_nofancy, getarray, getitem, np.asarray)
     dsk = dsk.copy()
     for k, v in dsk.items():
         if type(v) is tuple and v[0] in getters and len(v) == 3:
