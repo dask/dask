@@ -7,6 +7,7 @@ import dask.array as da
 from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
+from dask.array.utils import assert_eq
 
 from dask.array.core import getarray, getarray_nofancy
 
@@ -156,13 +157,22 @@ def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
     assert optimize_slices(dsk) == dsk
 
 
-def test_fuse_getarray_with_asarray():
-    x = np.ones(10)
-    y = da.ones(10, chunks=(5,))
+@pytest.mark.parametrize('chunks', [10, 5, 3])
+def test_fuse_getarray_with_asarray(chunks):
+    x = np.ones(10) * 1234567890
+    y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z._optimize(z.dask, z._keys())
     assert any(v is x for v in dsk.values())
     for v in dsk.values():
         s = str(v)
         assert s.count('getitem') + s.count('getarray') <= 1
-    assert len([v for v in dsk.values() if v[0] in (getitem, getarray)]) == 2
+        if v is not x:
+            assert '1234567890' not in s
+    n_getarrays = len([v for v in dsk.values() if v[0] in (getitem, getarray)])
+    if y.npartitions > 1:
+        assert n_getarrays == y.npartitions
+    else:
+        assert n_getarrays == 0
+
+    assert_eq(z, x + 1)
