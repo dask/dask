@@ -112,39 +112,23 @@ def test_fft_consistent_names():
     assert not same_keys(fft(darr, 5), fft(darr, 13))
 
 
-def test_wrap_numpy():
-    fft = fft_wrapper(npfft.fft, kind="fft")
-    assert_eq(fft(darr), npfft.fft(nparr))
-    assert_eq(fft(darr2, axis=0), npfft.fft(nparr, axis=0))
-
-    ifft = fft_wrapper(npfft.ifft, kind="ifft")
-    assert_eq(ifft(darr), npfft.ifft(nparr))
-    assert_eq(ifft(darr2, axis=0), npfft.ifft(nparr, axis=0))
-
-    rfft = fft_wrapper(npfft.rfft, kind="rfft")
-    assert_eq(rfft(darr), npfft.rfft(nparr))
-    assert_eq(rfft(darr2, axis=0), npfft.rfft(nparr, axis=0))
-
-    irfft = fft_wrapper(npfft.irfft, kind="irfft")
-    assert_eq(irfft(darr), npfft.irfft(nparr))
-    assert_eq(irfft(darr2, axis=0), npfft.irfft(nparr, axis=0))
-
-    hfft = fft_wrapper(npfft.hfft, kind="hfft")
-    assert_eq(hfft(darr), npfft.hfft(nparr))
-    assert_eq(hfft(darr2, axis=0), npfft.hfft(nparr, axis=0))
-
-    ihfft = fft_wrapper(npfft.ihfft, kind="ihfft")
-    assert_eq(ihfft(darr), npfft.ihfft(nparr))
-    assert_eq(ihfft(darr2, axis=0), npfft.ihfft(nparr, axis=0))
+@pytest.mark.parametrize("funcname", ["rfft", "irfft"])
+def test_wrap_numpy_real(funcname):
+    func = getattr(npfft, funcname)
+    wfunc = fft_wrapper(func, kind=funcname)
+    assert_eq(wfunc(darr), func(nparr))
+    assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
 
 
-def test_wrap_scipy():
-    spfft = pytest.importorskip("scipy.fftpack")
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("funcname", ["fft", "ifft", "hfft", "ihfft"])
+def test_wrap_ffts(modname, funcname):
+    fft_mod = pytest.importorskip(modname)
+    try:
+        func = getattr(fft_mod, funcname)
+    except AttributeError:
+        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
-    fft = fft_wrapper(spfft.fft, kind="fft")
-    assert_eq(fft(darr), spfft.fft(nparr))
-    assert_eq(fft(darr2, axis=0), spfft.fft(nparr, axis=0))
-
-    ifft = fft_wrapper(spfft.ifft, kind="fft")
-    assert_eq(ifft(darr), spfft.ifft(nparr))
-    assert_eq(ifft(darr2, axis=0), spfft.ifft(nparr, axis=0))
+    wfunc = fft_wrapper(func, kind=funcname)
+    assert_eq(wfunc(darr), func(nparr))
+    assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
