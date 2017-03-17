@@ -5,10 +5,7 @@ import pytest
 
 import dask.array as da
 from dask.array.fft import (
-    fft, ifft, rfft, irfft, hfft, ihfft,
-    fft_wrapper, ifft_wrapper,
-    rfft_wrapper, irfft_wrapper,
-    hfft_wrapper, ihfft_wrapper
+    fft_wrapper, fft, ifft, rfft, irfft, hfft, ihfft,
 )
 from dask.array.utils import assert_eq
 
@@ -116,27 +113,27 @@ def test_fft_consistent_names():
 
 
 def test_wrap_numpy():
-    fft = fft_wrapper(npfft.fft)
+    fft = fft_wrapper(npfft.fft, kind="fft")
     assert_eq(fft(darr), npfft.fft(nparr))
     assert_eq(fft(darr2, axis=0), npfft.fft(nparr, axis=0))
 
-    ifft = ifft_wrapper(npfft.ifft)
+    ifft = fft_wrapper(npfft.ifft, kind="ifft")
     assert_eq(ifft(darr), npfft.ifft(nparr))
     assert_eq(ifft(darr2, axis=0), npfft.ifft(nparr, axis=0))
 
-    rfft = rfft_wrapper(npfft.rfft)
+    rfft = fft_wrapper(npfft.rfft, kind="rfft")
     assert_eq(rfft(darr), npfft.rfft(nparr))
     assert_eq(rfft(darr2, axis=0), npfft.rfft(nparr, axis=0))
 
-    irfft = irfft_wrapper(npfft.irfft)
+    irfft = fft_wrapper(npfft.irfft, kind="irfft")
     assert_eq(irfft(darr), npfft.irfft(nparr))
     assert_eq(irfft(darr2, axis=0), npfft.irfft(nparr, axis=0))
 
-    hfft = hfft_wrapper(npfft.hfft)
+    hfft = fft_wrapper(npfft.hfft, kind="hfft")
     assert_eq(hfft(darr), npfft.hfft(nparr))
     assert_eq(hfft(darr2, axis=0), npfft.hfft(nparr, axis=0))
 
-    ihfft = ihfft_wrapper(npfft.ihfft)
+    ihfft = fft_wrapper(npfft.ihfft, kind="ihfft")
     assert_eq(ihfft(darr), npfft.ihfft(nparr))
     assert_eq(ihfft(darr2, axis=0), npfft.ihfft(nparr, axis=0))
 
@@ -144,10 +141,10 @@ def test_wrap_numpy():
 def test_wrap_scipy():
     spfft = pytest.importorskip("scipy.fftpack")
 
-    fft = fft_wrapper(spfft.fft)
+    fft = fft_wrapper(spfft.fft, kind="fft")
     assert_eq(fft(darr), spfft.fft(nparr))
     assert_eq(fft(darr2, axis=0), spfft.fft(nparr, axis=0))
 
-    ifft = ifft_wrapper(spfft.ifft)
+    ifft = fft_wrapper(spfft.ifft, kind="fft")
     assert_eq(ifft(darr), spfft.ifft(nparr))
     assert_eq(ifft(darr2, axis=0), spfft.ifft(nparr, axis=0))

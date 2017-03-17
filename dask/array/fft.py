@@ -89,73 +89,29 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-def fft_wrapper(fft_func):
+def fft_wrapper(fft_func, kind):
     """ Wrapper of 1D complex FFT functions
 
-    Takes a function that behaves like ``numpy.fft.fft``.
+    Takes a function that behaves like ``numpy.fft`` functions.
     """
 
-    return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
+    if kind == "fft":
+        return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
+    elif kind == "ifft":
+        return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
+    elif kind == "rfft":
+        return _fft_wrap(np.complex_, _rfft_out_chunks)(fft_func)
+    elif kind == "irfft":
+        return _fft_wrap(np.float_, _irfft_out_chunks)(fft_func)
+    elif kind == "hfft":
+        return _fft_wrap(np.float_, _hfft_out_chunks)(fft_func)
+    elif kind == "ihfft":
+        return _fft_wrap(np.complex_, _ihfft_out_chunks)(fft_func)
 
 
-def ifft_wrapper(fft_func):
-    """ wrapper of 1D complex inverse FFT functions
-
-    takes a function that behaves like ``numpy.fft.ifft``.
-    """
-
-    return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
-
-
-def rfft_wrapper(fft_func):
-    """ wrapper of 1D real FFT functions
-
-    takes a function that behaves like ``numpy.fft.rfft``.
-    """
-
-    return _fft_wrap(np.complex_, _rfft_out_chunks)(fft_func)
-
-
-def irfft_wrapper(fft_func):
-    """ wrapper of 1D real inverse FFT functions
-
-    takes a function that behaves like ``numpy.fft.irfft``.
-    """
-
-    return _fft_wrap(np.float_, _irfft_out_chunks)(fft_func)
-
-
-def hfft_wrapper(fft_func):
-    """ wrapper of 1D hermitian complex FFT functions
-
-    takes a function that behaves like ``numpy.fft.hfft``.
-    """
-
-    return _fft_wrap(np.float_, _hfft_out_chunks)(fft_func)
-
-
-def ihfft_wrapper(fft_func):
-    """ wrapper of 1D hermitian complex inverse FFT functions
-
-    takes a function that behaves like ``numpy.fft.ihfft``.
-    """
-
-    return _fft_wrap(np.complex_, _ihfft_out_chunks)(fft_func)
-
-
-fft = fft_wrapper(npfft.fft)
-
-
-ifft = ifft_wrapper(npfft.ifft)
-
-
-rfft = rfft_wrapper(npfft.rfft)
-
-
-irfft = irfft_wrapper(npfft.irfft)
-
-
-hfft = hfft_wrapper(npfft.hfft)
-
-
-ihfft = ihfft_wrapper(npfft.ihfft)
+fft = fft_wrapper(npfft.fft, kind="fft")
+ifft = fft_wrapper(npfft.ifft, kind="ifft")
+rfft = fft_wrapper(npfft.rfft, kind="rfft")
+irfft = fft_wrapper(npfft.irfft, kind="irfft")
+hfft = fft_wrapper(npfft.hfft, kind="hfft")
+ihfft = fft_wrapper(npfft.ihfft, kind="ihfft")
