@@ -107,6 +107,8 @@ def fft_wrapper(fft_func, kind):
         return _fft_wrap(np.float_, _hfft_out_chunks)(fft_func)
     elif kind == "ihfft":
         return _fft_wrap(np.complex_, _ihfft_out_chunks)(fft_func)
+    else:
+        raise ValueError("Given unknown `kind` %s." % kind)
 
 
 fft = fft_wrapper(npfft.fft, kind="fft")

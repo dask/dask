@@ -112,6 +112,11 @@ def test_fft_consistent_names():
     assert not same_keys(fft(darr, 5), fft(darr, 13))
 
 
+def test_wrap_bad_kind():
+    with pytest.raises(ValueError):
+        fft_wrapper(npfft.fft, kind="foo")
+
+
 @pytest.mark.parametrize("funcname", ["rfft", "irfft"])
 def test_wrap_numpy_real(funcname):
     func = getattr(npfft, funcname)
