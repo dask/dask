@@ -92,7 +92,20 @@ def _ihfft_out_chunks(a, n, axis):
 def fft_wrapper(fft_func, kind):
     """ Wrapper of 1D complex FFT functions
 
-    Takes a function that behaves like ``numpy.fft`` functions.
+    Takes a function that behaves like ``numpy.fft`` functions and
+    a specified kind to match it to that are named after the functions
+    in the ``numpy.fft`` API.
+
+    Supported kinds include:
+
+        * fft
+        * ifft
+        * rfft
+        * irfft
+        * hfft
+        * ihfft
+
+    >>> fft = fft_wrapper(npfft.fft, kind="fft")
     """
 
     params = {
