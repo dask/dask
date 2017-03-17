@@ -95,19 +95,36 @@ def fft_wrapper(fft_func, kind):
     Takes a function that behaves like ``numpy.fft`` functions.
     """
 
-    if kind == "fft":
-        return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
-    elif kind == "ifft":
-        return _fft_wrap(np.complex_, _fft_out_chunks)(fft_func)
-    elif kind == "rfft":
-        return _fft_wrap(np.complex_, _rfft_out_chunks)(fft_func)
-    elif kind == "irfft":
-        return _fft_wrap(np.float_, _irfft_out_chunks)(fft_func)
-    elif kind == "hfft":
-        return _fft_wrap(np.float_, _hfft_out_chunks)(fft_func)
-    elif kind == "ihfft":
-        return _fft_wrap(np.complex_, _ihfft_out_chunks)(fft_func)
-    else:
+    params = {
+        "fft": {
+            "dtype": np.complex_,
+            "out_chunk_fn" : _fft_out_chunks
+        },
+        "ifft": {
+            "dtype": np.complex_,
+            "out_chunk_fn" : _fft_out_chunks
+        },
+        "rfft": {
+            "dtype": np.complex_,
+            "out_chunk_fn" : _rfft_out_chunks
+        },
+        "irfft": {
+            "dtype": np.float_,
+            "out_chunk_fn" : _irfft_out_chunks
+        },
+        "hfft": {
+            "dtype": np.float_,
+            "out_chunk_fn" : _hfft_out_chunks
+        },
+        "ihfft": {
+            "dtype": np.complex_,
+            "out_chunk_fn" : _ihfft_out_chunks
+        },
+    }
+
+    try:
+        return _fft_wrap(**params[kind])(fft_func)
+    except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
 
