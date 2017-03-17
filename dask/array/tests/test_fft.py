@@ -117,22 +117,24 @@ def test_wrap_bad_kind():
         fft_wrapper(npfft.fft, kind="foo")
 
 
-@pytest.mark.parametrize("funcname", ["rfft", "irfft"])
-def test_wrap_numpy_real(funcname):
-    func = getattr(npfft, funcname)
-    wfunc = fft_wrapper(func, kind=funcname)
-    assert_eq(wfunc(darr), func(nparr))
-    assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
-
-
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
-@pytest.mark.parametrize("funcname", ["fft", "ifft", "hfft", "ihfft"])
+@pytest.mark.parametrize(
+    "funcname",
+    ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
+)
 def test_wrap_ffts(modname, funcname):
     fft_mod = pytest.importorskip(modname)
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+
+    if modname == "scipy.fftpack" and "rfft" in funcname:
+        pytest.skip(
+            "`%s` function `%s` doesn't support the NumPy API." % (
+                modname, funcname
+            )
+        )
 
     wfunc = fft_wrapper(func, kind=funcname)
     assert_eq(wfunc(darr), func(nparr))
