@@ -39,7 +39,7 @@ def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None
     Returns
     -------
     dask.dataframe
-    
+
     Examples
     --------
     >>> df = dd.read_sql('accounts', 'sqlite:///path/to/bank.db',

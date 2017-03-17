@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import io
 import pytest
 
-from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.sql import read_sql_table
 from dask.utils import tmpfile
 pd = pytest.importorskip('pandas')
@@ -69,7 +68,7 @@ def test_datetimes():
     import datetime
     now = datetime.datetime.now()
     d = datetime.timedelta(seconds=1)
-    df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i*d
+    df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i * d
                                                  for i in range(2, -3, -1)]})
     with tmpfile() as f:
         uri = 'sqlite:///%s' % f
