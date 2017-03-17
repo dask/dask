@@ -9,8 +9,8 @@ try:
 except ImportError:
     psutil = None
 
-import numpy as np
 import pandas as pd
+from pandas.types.common import is_integer_dtype, is_float_dtype
 
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
@@ -75,13 +75,27 @@ def coerce_dtypes(df, dtypes):
     """
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
-            if (np.issubdtype(df.dtypes[c], np.floating) and
-                    np.issubdtype(dtypes[c], np.integer)):
-                if (df[c] % 1).any():
-                    msg = ("Runtime type mismatch. "
-                           "Add {'%s': float} to dtype= keyword in "
-                           "read_csv/read_table")
-                    raise TypeError(msg % c)
+            if is_float_dtype(df.dtypes[c]) and is_integer_dtype(dtypes[c]):
+                # There is a mismatch between floating and integer columns.
+                # Determine all mismatched and error.
+                mismatched = sorted(c for c in df.columns if
+                                    is_float_dtype(df.dtypes[c]) and
+                                    is_integer_dtype(dtypes[c]))
+
+                msg = ("Mismatched dtypes found.\n"
+                       "Expected integers, but found floats for columns:\n"
+                       "%s\n\n"
+                       "To fix, specify dtypes manually by adding:\n\n"
+                       "%s\n\n"
+                       "to the call to `read_csv`/`read_table`.\n\n"
+                       "Alternatively, provide `assume_missing=True` to "
+                       "interpret all unspecified integer columns as floats.")
+
+                missing_list = '\n'.join('- %r' % c for c in mismatched)
+                dtype_list = ('%r: float' % c for c in mismatched)
+                missing_dict = 'dtype={%s}' % ',\n       '.join(dtype_list)
+                raise ValueError(msg % (missing_list, missing_dict))
+
             df[c] = df[c].astype(dtypes[c])
 
 
@@ -155,7 +169,8 @@ else:
 
 def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 lineterminator=None, compression=None, sample=256000,
-                enforce=False, storage_options=None, **kwargs):
+                enforce=False, assume_missing=False, storage_options=None,
+                **kwargs):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
@@ -208,6 +223,16 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     head = reader(BytesIO(sample), **kwargs)
 
+    specified_dtypes = kwargs.get('dtype', {})
+    if specified_dtypes is None:
+        specified_dtypes = {}
+    # If specified_dtypes is a single type, then all columns were specified
+    if assume_missing and isinstance(specified_dtypes, dict):
+        # Convert all non-specified integer columns to floats
+        for c in head.columns:
+            if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
+                head[c] = head[c].astype(float)
+
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce)
 
@@ -254,6 +279,9 @@ collection : boolean
     Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int
     Number of bytes to use when determining dtypes
+assume_missing : bool, optional
+    If True, all integer columns that aren't specified in ``dtype`` are assumed
+    to contain missing values, and are converted to floats. Default is False.
 storage_options : dict
     Extra options that make sense to a particular storage connection, e.g.
     host, port, username, password, etc.
@@ -265,12 +293,14 @@ storage_options : dict
 def make_reader(reader, reader_name, file_type):
     def read(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
              lineterminator=None, compression=None, sample=256000,
-             enforce=False, storage_options=None, **kwargs):
+             enforce=False, assume_missing=False, storage_options=None,
+             **kwargs):
         return read_pandas(reader, urlpath, blocksize=blocksize,
                            collection=collection,
                            lineterminator=lineterminator,
                            compression=compression, sample=sample,
-                           enforce=enforce, storage_options=storage_options,
+                           enforce=enforce, assume_missing=assume_missing,
+                           storage_options=storage_options,
                            **kwargs)
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name,
                                             file_type=file_type)
