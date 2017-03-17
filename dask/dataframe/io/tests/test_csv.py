@@ -584,13 +584,11 @@ def test_assume_missing():
 
         # assume_missing affects all columns
         res = dd.read_csv(fn, sample=50, assume_missing=True)
-        assert res.integers.dtype == float
         assert_eq(res, sol.astype({'integers': float}))
 
         # assume_missing doesn't override specified dtypes
         res = dd.read_csv(fn, sample=50, assume_missing=True,
-                          dtype={'integers': int})
-        assert res.integers.dtype == int
+                          dtype={'integers': 'int64'})
         assert_eq(res, sol)
 
         # assume_missing works with dtype=None
@@ -606,8 +604,8 @@ def test_assume_missing():
         sol = pd.read_csv(fn)
 
         # assume_missing ignored when all dtypes specifed
-        df = dd.read_csv(fn, sample=30, dtype=int, assume_missing=True)
-        assert df.numbers.dtype == int
+        df = dd.read_csv(fn, sample=30, dtype='int64', assume_missing=True)
+        assert df.numbers.dtype == 'int64'
 
 
 def test_index_col():
