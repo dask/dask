@@ -19,26 +19,6 @@ fft_preamble = """
     """
 
 
-def _fft_wrap(fft_func, dtype=None, out_chunk_fn=None):
-    if dtype is None:
-        dtype = fft_func(np.ones(8)).dtype
-
-    def func(a, n=None, axis=-1):
-        if len(a.chunks[axis]) != 1:
-            raise ValueError(chunk_error % (axis, a.chunks[axis]))
-
-        chunks = out_chunk_fn(a, n, axis)
-
-        return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
-                            chunks=chunks)
-
-    np_name = fft_func.__name__
-    if fft_func.__doc__ is not None:
-        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
-    func.__name__ = np_name
-    return func
-
-
 def _fft_out_chunks(a, n, axis):
     """ For computing the output chunks of fft and ifft"""
     if n is None:
@@ -116,8 +96,24 @@ def fft_wrapper(fft_func, kind=None, dtype=None):
         out_chunk_fn = out_chunk_fns[kind]
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
-    else:
-        return _fft_wrap(fft_func, out_chunk_fn=out_chunk_fn, dtype=dtype)
+
+    if dtype is None:
+        dtype = fft_func(np.ones(8)).dtype
+
+    def func(a, n=None, axis=-1):
+        if len(a.chunks[axis]) != 1:
+            raise ValueError(chunk_error % (axis, a.chunks[axis]))
+
+        chunks = out_chunk_fn(a, n, axis)
+
+        return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
+                            chunks=chunks)
+
+    np_name = fft_func.__name__
+    if fft_func.__doc__ is not None:
+        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+    func.__name__ = np_name
+    return func
 
 
 fft = fft_wrapper(np.fft.fft, dtype=np.complex_)
