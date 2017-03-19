@@ -114,7 +114,7 @@ def test_fft_consistent_names():
 
 def test_wrap_bad_kind():
     with pytest.raises(ValueError):
-        fft_wrapper(npfft.fft, kind="foo")
+        fft_wrapper(np.ones)
 
 
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
@@ -129,6 +129,6 @@ def test_wrap_ffts(modname, funcname):
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
-    wfunc = fft_wrapper(func, kind=funcname)
+    wfunc = fft_wrapper(func)
     assert_eq(wfunc(darr), func(nparr))
     assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
