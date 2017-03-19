@@ -72,8 +72,8 @@ out_chunk_fns = {'fft': _fft_out_chunks,
                  'ihfft': _ihfft_out_chunks}
 
 
-def fft_wrapper(fft_func, kind=None, dtype=None):
-    """ Wrapper of 1D complex FFT functions
+def fft_wrap(fft_func, kind=None, dtype=None):
+    """ Wrap 1D complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
     a specified kind to match it to that are named after the functions
@@ -88,7 +88,10 @@ def fft_wrapper(fft_func, kind=None, dtype=None):
         * hfft
         * ihfft
 
-    >>> fft = fft_wrapper(np.fft.fft, kind="fft")
+    Examples
+    --------
+    >>> parallel_fft = fft_wrap(np.fft.fft)
+    >>> parallel_ifft = fft_wrap(np.fft.ifft)
     """
     if kind is None:
         kind = fft_func.__name__
@@ -116,9 +119,9 @@ def fft_wrapper(fft_func, kind=None, dtype=None):
     return func
 
 
-fft = fft_wrapper(np.fft.fft, dtype=np.complex_)
-ifft = fft_wrapper(np.fft.ifft, dtype=np.complex_)
-rfft = fft_wrapper(np.fft.rfft, dtype=np.complex_)
-irfft = fft_wrapper(np.fft.irfft, dtype=np.float_)
-hfft = fft_wrapper(np.fft.hfft, dtype=np.float_)
-ihfft = fft_wrapper(np.fft.ihfft, dtype=np.complex_)
+fft = fft_wrap(np.fft.fft, dtype=np.complex_)
+ifft = fft_wrap(np.fft.ifft, dtype=np.complex_)
+rfft = fft_wrap(np.fft.rfft, dtype=np.complex_)
+irfft = fft_wrap(np.fft.irfft, dtype=np.float_)
+hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
+ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)

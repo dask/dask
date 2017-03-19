@@ -1,11 +1,10 @@
 import numpy as np
-import numpy.fft as npfft
 
 import pytest
 
 import dask.array as da
 from dask.array.fft import (
-    fft_wrapper, fft, ifft, rfft, irfft, hfft, ihfft,
+    fft_wrap, fft, ifft, rfft, irfft, hfft, ihfft,
 )
 from dask.array.utils import assert_eq
 
@@ -26,84 +25,86 @@ darr2 = da.from_array(nparr, chunks=(10, 1))
 
 def test_cant_fft_chunked_axis():
     bad_darr = da.from_array(nparr, chunks=(5, 5))
-    pytest.raises(ValueError, lambda: fft(bad_darr))
-    pytest.raises(ValueError, lambda: fft(bad_darr, axis=0))
+    with pytest.raises(ValueError):
+        fft(bad_darr)
+    with pytest.raises(ValueError):
+        fft(bad_darr, axis=0)
 
 
 def test_fft():
-    assert_eq(fft(darr), npfft.fft(nparr))
-    assert_eq(fft(darr2, axis=0), npfft.fft(nparr, axis=0))
+    assert_eq(fft(darr), np.fft.fft(nparr))
+    assert_eq(fft(darr2, axis=0), np.fft.fft(nparr, axis=0))
 
 
 def test_fft_n_kwarg():
-    assert_eq(fft(darr, 5), npfft.fft(nparr, 5))
-    assert_eq(fft(darr, 13), npfft.fft(nparr, 13))
-    assert_eq(fft(darr2, 5, axis=0), npfft.fft(nparr, 5, axis=0))
-    assert_eq(fft(darr2, 13, axis=0), npfft.fft(nparr, 13, axis=0))
+    assert_eq(fft(darr, 5), np.fft.fft(nparr, 5))
+    assert_eq(fft(darr, 13), np.fft.fft(nparr, 13))
+    assert_eq(fft(darr2, 5, axis=0), np.fft.fft(nparr, 5, axis=0))
+    assert_eq(fft(darr2, 13, axis=0), np.fft.fft(nparr, 13, axis=0))
 
 
 def test_ifft():
-    assert_eq(ifft(darr), npfft.ifft(nparr))
-    assert_eq(ifft(darr2, axis=0), npfft.ifft(nparr, axis=0))
+    assert_eq(ifft(darr), np.fft.ifft(nparr))
+    assert_eq(ifft(darr2, axis=0), np.fft.ifft(nparr, axis=0))
 
 
 def test_ifft_n_kwarg():
-    assert_eq(ifft(darr, 5), npfft.ifft(nparr, 5))
-    assert_eq(ifft(darr, 13), npfft.ifft(nparr, 13))
-    assert_eq(ifft(darr2, 5, axis=0), npfft.ifft(nparr, 5, axis=0))
-    assert_eq(ifft(darr2, 13, axis=0), npfft.ifft(nparr, 13, axis=0))
+    assert_eq(ifft(darr, 5), np.fft.ifft(nparr, 5))
+    assert_eq(ifft(darr, 13), np.fft.ifft(nparr, 13))
+    assert_eq(ifft(darr2, 5, axis=0), np.fft.ifft(nparr, 5, axis=0))
+    assert_eq(ifft(darr2, 13, axis=0), np.fft.ifft(nparr, 13, axis=0))
 
 
 def test_rfft():
-    assert_eq(rfft(darr), npfft.rfft(nparr))
-    assert_eq(rfft(darr2, axis=0), npfft.rfft(nparr, axis=0))
+    assert_eq(rfft(darr), np.fft.rfft(nparr))
+    assert_eq(rfft(darr2, axis=0), np.fft.rfft(nparr, axis=0))
 
 
 def test_rfft_n_kwarg():
-    assert_eq(rfft(darr, 5), npfft.rfft(nparr, 5))
-    assert_eq(rfft(darr, 13), npfft.rfft(nparr, 13))
-    assert_eq(rfft(darr2, 5, axis=0), npfft.rfft(nparr, 5, axis=0))
-    assert_eq(rfft(darr2, 13, axis=0), npfft.rfft(nparr, 13, axis=0))
-    assert_eq(rfft(darr2, 12, axis=0), npfft.rfft(nparr, 12, axis=0))
+    assert_eq(rfft(darr, 5), np.fft.rfft(nparr, 5))
+    assert_eq(rfft(darr, 13), np.fft.rfft(nparr, 13))
+    assert_eq(rfft(darr2, 5, axis=0), np.fft.rfft(nparr, 5, axis=0))
+    assert_eq(rfft(darr2, 13, axis=0), np.fft.rfft(nparr, 13, axis=0))
+    assert_eq(rfft(darr2, 12, axis=0), np.fft.rfft(nparr, 12, axis=0))
 
 
 def test_irfft():
-    assert_eq(irfft(darr), npfft.irfft(nparr))
-    assert_eq(irfft(darr2, axis=0), npfft.irfft(nparr, axis=0))
+    assert_eq(irfft(darr), np.fft.irfft(nparr))
+    assert_eq(irfft(darr2, axis=0), np.fft.irfft(nparr, axis=0))
 
 
 def test_irfft_n_kwarg():
-    assert_eq(irfft(darr, 5), npfft.irfft(nparr, 5))
-    assert_eq(irfft(darr, 13), npfft.irfft(nparr, 13))
-    assert_eq(irfft(darr2, 5, axis=0), npfft.irfft(nparr, 5, axis=0))
-    assert_eq(irfft(darr2, 13, axis=0), npfft.irfft(nparr, 13, axis=0))
-    assert_eq(irfft(darr2, 12, axis=0), npfft.irfft(nparr, 12, axis=0))
+    assert_eq(irfft(darr, 5), np.fft.irfft(nparr, 5))
+    assert_eq(irfft(darr, 13), np.fft.irfft(nparr, 13))
+    assert_eq(irfft(darr2, 5, axis=0), np.fft.irfft(nparr, 5, axis=0))
+    assert_eq(irfft(darr2, 13, axis=0), np.fft.irfft(nparr, 13, axis=0))
+    assert_eq(irfft(darr2, 12, axis=0), np.fft.irfft(nparr, 12, axis=0))
 
 
 def test_hfft():
-    assert_eq(hfft(darr), npfft.hfft(nparr))
-    assert_eq(hfft(darr2, axis=0), npfft.hfft(nparr, axis=0))
+    assert_eq(hfft(darr), np.fft.hfft(nparr))
+    assert_eq(hfft(darr2, axis=0), np.fft.hfft(nparr, axis=0))
 
 
 def test_hfft_nkwarg():
-    assert_eq(hfft(darr, 5), npfft.hfft(nparr, 5))
-    assert_eq(hfft(darr, 13), npfft.hfft(nparr, 13))
-    assert_eq(hfft(darr2, 5, axis=0), npfft.hfft(nparr, 5, axis=0))
-    assert_eq(hfft(darr2, 13, axis=0), npfft.hfft(nparr, 13, axis=0))
-    assert_eq(hfft(darr2, 12, axis=0), npfft.hfft(nparr, 12, axis=0))
+    assert_eq(hfft(darr, 5), np.fft.hfft(nparr, 5))
+    assert_eq(hfft(darr, 13), np.fft.hfft(nparr, 13))
+    assert_eq(hfft(darr2, 5, axis=0), np.fft.hfft(nparr, 5, axis=0))
+    assert_eq(hfft(darr2, 13, axis=0), np.fft.hfft(nparr, 13, axis=0))
+    assert_eq(hfft(darr2, 12, axis=0), np.fft.hfft(nparr, 12, axis=0))
 
 
 def test_ihfft():
-    assert_eq(ihfft(darr), npfft.ihfft(nparr))
-    assert_eq(ihfft(darr2, axis=0), npfft.ihfft(nparr, axis=0))
+    assert_eq(ihfft(darr), np.fft.ihfft(nparr))
+    assert_eq(ihfft(darr2, axis=0), np.fft.ihfft(nparr, axis=0))
 
 
 def test_ihfft_n_kwarg():
-    assert_eq(ihfft(darr, 5), npfft.ihfft(nparr, 5))
-    assert_eq(ihfft(darr, 13), npfft.ihfft(nparr, 13))
-    assert_eq(ihfft(darr2, 5, axis=0), npfft.ihfft(nparr, 5, axis=0))
-    assert_eq(ihfft(darr2, 13, axis=0), npfft.ihfft(nparr, 13, axis=0))
-    assert_eq(ihfft(darr2, 12, axis=0), npfft.ihfft(nparr, 12, axis=0))
+    assert_eq(ihfft(darr, 5), np.fft.ihfft(nparr, 5))
+    assert_eq(ihfft(darr, 13), np.fft.ihfft(nparr, 13))
+    assert_eq(ihfft(darr2, 5, axis=0), np.fft.ihfft(nparr, 5, axis=0))
+    assert_eq(ihfft(darr2, 13, axis=0), np.fft.ihfft(nparr, 13, axis=0))
+    assert_eq(ihfft(darr2, 12, axis=0), np.fft.ihfft(nparr, 12, axis=0))
 
 
 def test_fft_consistent_names():
@@ -114,7 +115,7 @@ def test_fft_consistent_names():
 
 def test_wrap_bad_kind():
     with pytest.raises(ValueError):
-        fft_wrapper(np.ones)
+        fft_wrap(np.ones)
 
 
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
@@ -129,6 +130,6 @@ def test_wrap_ffts(modname, funcname):
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
-    wfunc = fft_wrapper(func)
+    wfunc = fft_wrap(func)
     assert_eq(wfunc(darr), func(nparr))
     assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
