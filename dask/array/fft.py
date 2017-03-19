@@ -1,11 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial
-
 import numpy as np
-import numpy.fft
-
-from .core import map_blocks
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -27,14 +22,15 @@ fft_preamble = """
 def _fft_wrap(fft_func, dtype=None, out_chunk_fn=None):
     if dtype is None:
         dtype = fft_func(np.ones(8)).dtype
+
     def func(a, n=None, axis=-1):
         if len(a.chunks[axis]) != 1:
             raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
         chunks = out_chunk_fn(a, n, axis)
 
-        return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
-                          chunks=chunks)
+        return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
+                            chunks=chunks)
 
     np_name = fft_func.__name__
     if fft_func.__doc__ is not None:
