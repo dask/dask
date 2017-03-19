@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial
 
 import numpy as np
-import numpy.fft as npfft
+import numpy.fft
 
 from .core import map_blocks
 
@@ -24,24 +24,23 @@ fft_preamble = """
     """
 
 
-def _fft_wrap(dtype, out_chunk_fn):
-    def _fft_wrapper(fft_func):
-        def func(a, n=None, axis=-1):
-            if len(a.chunks[axis]) != 1:
-                raise ValueError(chunk_error % (axis, a.chunks[axis]))
+def _fft_wrap(fft_func, dtype=None, out_chunk_fn=None):
+    if dtype is None:
+        dtype = fft_func(np.ones(1)).dtype
+    def func(a, n=None, axis=-1):
+        if len(a.chunks[axis]) != 1:
+            raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
-            chunks = out_chunk_fn(a, n, axis)
+        chunks = out_chunk_fn(a, n, axis)
 
-            return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
-                              chunks=chunks)
+        return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
+                          chunks=chunks)
 
-        np_name = fft_func.__name__
-        if fft_func.__doc__ is not None:
-            func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
-        func.__name__ = np_name
-        return func
-
-    return _fft_wrapper
+    np_name = fft_func.__name__
+    if fft_func.__doc__ is not None:
+        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+    func.__name__ = np_name
+    return func
 
 
 def _fft_out_chunks(a, n, axis):
@@ -89,7 +88,22 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-def fft_wrapper(fft_func, kind):
+dtypes = {'fft': np.complex_,
+          'ifft': np.complex_,
+          'rfft': np.complex_,
+          'irfft': np.float_,
+          'hfft': np.float_,
+          'ihfft': np.complex}
+
+out_chunk_fns = {'fft': _fft_out_chunks,
+                 'ifft': _fft_out_chunks,
+                 'rfft': _rfft_out_chunks,
+                 'irfft': _irfft_out_chunks,
+                 'hfft': _hfft_out_chunks,
+                 'ihfft': _ihfft_out_chunks}
+
+
+def fft_wrapper(fft_func, kind=None):
     """ Wrapper of 1D complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
@@ -105,45 +119,22 @@ def fft_wrapper(fft_func, kind):
         * hfft
         * ihfft
 
-    >>> fft = fft_wrapper(npfft.fft, kind="fft")
+    >>> fft = fft_wrapper(np.fft.fft, kind="fft")
     """
-
-    params = {
-        "fft": {
-            "dtype": np.complex_,
-            "out_chunk_fn" : _fft_out_chunks
-        },
-        "ifft": {
-            "dtype": np.complex_,
-            "out_chunk_fn" : _fft_out_chunks
-        },
-        "rfft": {
-            "dtype": np.complex_,
-            "out_chunk_fn" : _rfft_out_chunks
-        },
-        "irfft": {
-            "dtype": np.float_,
-            "out_chunk_fn" : _irfft_out_chunks
-        },
-        "hfft": {
-            "dtype": np.float_,
-            "out_chunk_fn" : _hfft_out_chunks
-        },
-        "ihfft": {
-            "dtype": np.complex_,
-            "out_chunk_fn" : _ihfft_out_chunks
-        },
-    }
-
+    if kind is None:
+        kind = fft_func.__name__
+    dtype = dtypes.get(kind)
     try:
-        return _fft_wrap(**params[kind])(fft_func)
+        out_chunk_fn = out_chunk_fns[kind]
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
+    else:
+        return _fft_wrap(fft_func, out_chunk_fn=out_chunk_fn, dtype=dtype)
 
 
-fft = fft_wrapper(npfft.fft, kind="fft")
-ifft = fft_wrapper(npfft.ifft, kind="ifft")
-rfft = fft_wrapper(npfft.rfft, kind="rfft")
-irfft = fft_wrapper(npfft.irfft, kind="irfft")
-hfft = fft_wrapper(npfft.hfft, kind="hfft")
-ihfft = fft_wrapper(npfft.ihfft, kind="ihfft")
+fft = fft_wrapper(np.fft.fft)
+ifft = fft_wrapper(np.fft.ifft)
+rfft = fft_wrapper(np.fft.rfft)
+irfft = fft_wrapper(np.fft.irfft)
+hfft = fft_wrapper(np.fft.hfft)
+ihfft = fft_wrapper(np.fft.ihfft)
