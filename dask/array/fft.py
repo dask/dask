@@ -26,7 +26,7 @@ fft_preamble = """
 
 def _fft_wrap(fft_func, dtype=None, out_chunk_fn=None):
     if dtype is None:
-        dtype = fft_func(np.ones(1)).dtype
+        dtype = fft_func(np.ones(8)).dtype
     def func(a, n=None, axis=-1):
         if len(a.chunks[axis]) != 1:
             raise ValueError(chunk_error % (axis, a.chunks[axis]))
@@ -88,13 +88,6 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-dtypes = {'fft': np.complex_,
-          'ifft': np.complex_,
-          'rfft': np.complex_,
-          'irfft': np.float_,
-          'hfft': np.float_,
-          'ihfft': np.complex}
-
 out_chunk_fns = {'fft': _fft_out_chunks,
                  'ifft': _fft_out_chunks,
                  'rfft': _rfft_out_chunks,
@@ -103,7 +96,7 @@ out_chunk_fns = {'fft': _fft_out_chunks,
                  'ihfft': _ihfft_out_chunks}
 
 
-def fft_wrapper(fft_func, kind=None):
+def fft_wrapper(fft_func, kind=None, dtype=None):
     """ Wrapper of 1D complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
@@ -123,7 +116,6 @@ def fft_wrapper(fft_func, kind=None):
     """
     if kind is None:
         kind = fft_func.__name__
-    dtype = dtypes.get(kind)
     try:
         out_chunk_fn = out_chunk_fns[kind]
     except KeyError:
@@ -132,9 +124,9 @@ def fft_wrapper(fft_func, kind=None):
         return _fft_wrap(fft_func, out_chunk_fn=out_chunk_fn, dtype=dtype)
 
 
-fft = fft_wrapper(np.fft.fft)
-ifft = fft_wrapper(np.fft.ifft)
-rfft = fft_wrapper(np.fft.rfft)
-irfft = fft_wrapper(np.fft.irfft)
-hfft = fft_wrapper(np.fft.hfft)
-ihfft = fft_wrapper(np.fft.ihfft)
+fft = fft_wrapper(np.fft.fft, dtype=np.complex_)
+ifft = fft_wrapper(np.fft.ifft, dtype=np.complex_)
+rfft = fft_wrapper(np.fft.rfft, dtype=np.complex_)
+irfft = fft_wrapper(np.fft.irfft, dtype=np.float_)
+hfft = fft_wrapper(np.fft.hfft, dtype=np.float_)
+ihfft = fft_wrapper(np.fft.ihfft, dtype=np.complex_)

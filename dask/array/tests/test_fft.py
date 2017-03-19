@@ -128,13 +128,6 @@ def test_wrap_ffts(modname, funcname):
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
-    if modname == "scipy.fftpack" and "rfft" in funcname:
-        pytest.skip(
-            "`%s` function `%s` doesn't support the NumPy API." % (
-                modname, funcname
-            )
-        )
-
     wfunc = fft_wrapper(func, kind=funcname)
     assert_eq(wfunc(darr), func(nparr))
     assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
