@@ -3,3 +3,5 @@ toolz
 cloudpickle
 dask
 numpydoc
+sphinx
+sphinx_rtd_theme
