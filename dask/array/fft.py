@@ -100,10 +100,10 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
-    if dtype is None:
-        dtype = fft_func(np.ones(8)).dtype
-
     def func(a, n=None, axis=-1):
+        if dtype is None:
+            dtype = fft_func(np.ones(8, dtype=a.dtype)).dtype
+
         if len(a.chunks[axis]) != 1:
             raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
