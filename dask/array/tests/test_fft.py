@@ -132,4 +132,5 @@ def test_wrap_ffts(modname, funcname):
 
     wfunc = fft_wrap(func)
     assert_eq(wfunc(darr), func(nparr))
+    assert_eq(wfunc(darr, axis=1), func(nparr, axis=1))
     assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))

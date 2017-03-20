@@ -64,12 +64,12 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-out_chunk_fns = {'fft': _fft_out_chunks,
-                 'ifft': _fft_out_chunks,
-                 'rfft': _rfft_out_chunks,
-                 'irfft': _irfft_out_chunks,
-                 'hfft': _hfft_out_chunks,
-                 'ihfft': _ihfft_out_chunks}
+_out_chunk_fns = {'fft': _fft_out_chunks,
+                  'ifft': _fft_out_chunks,
+                  'rfft': _rfft_out_chunks,
+                  'irfft': _irfft_out_chunks,
+                  'hfft': _hfft_out_chunks,
+                  'ihfft': _ihfft_out_chunks}
 
 
 def fft_wrap(fft_func, kind=None, dtype=None):
@@ -96,7 +96,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if kind is None:
         kind = fft_func.__name__
     try:
-        out_chunk_fn = out_chunk_fns[kind]
+        out_chunk_fn = _out_chunk_fns[kind]
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
