@@ -53,6 +53,7 @@ def assert_eq(a, b, **kwargs):
         _check_dsk(a.dask)
         a = a.compute(get=get_sync)
         _maybe_check_dtype(a, adt)
+        assert ash == a.shape
     else:
         adt = getattr(a, 'dtype', None)
         ash = getattr(a, 'shape', None)
@@ -63,6 +64,7 @@ def assert_eq(a, b, **kwargs):
         assert bdt is not None
         b = b.compute(get=get_sync)
         _maybe_check_dtype(b, bdt)
+        assert bsh == b.shape
     else:
         bdt = getattr(b, 'dtype', None)
         bsh = getattr(b, 'shape', None)
