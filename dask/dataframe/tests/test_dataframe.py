@@ -194,12 +194,12 @@ def test_set_index():
 
 
 def test_set_index_interpolate():
-    df = pd.DataFrame({'x': [1, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
+    df = pd.DataFrame({'x': [4, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
     d = dd.from_pandas(df, 2)
 
     d1 = d.set_index('x', npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3])
+    assert set(d1.divisions) == set([1, 2, 3, 4])
 
     d2 = d.set_index('y', npartitions=3)
     assert d2.divisions[0] == 1.
@@ -224,19 +224,32 @@ def test_set_index_timezone():
     d1 = d.set_index('notz', npartitions=2)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
     assert d1.divisions[0] == s_naive[0] == s1[0]
-    assert d1.divisions[2] == s_naive[2] == s1[2]
+    assert d1.divisions[-1] == s_naive[2] == s1[2]
 
     # We currently lose "freq".  Converting data with pandas-defined dtypes
     # to numpy or pure Python can be lossy like this.
     d2 = d.set_index('tz', npartitions=2)
-    s2 = pd.DatetimeIndex(s_aware.values, dtype=s_aware.dtype)
+    s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
     assert d2.divisions[0] == s2[0]
-    assert d2.divisions[2] == s2[2]
+    assert d2.divisions[-1] == s2[2]
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
     with pytest.raises(TypeError):
         d2.divisions[0] == s2badtype[0]
+
+
+@pytest.mark.parametrize(
+    'npartitions',
+    [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
+)
+def test_timezone_freq(npartitions):
+    s_naive = pd.Series(pd.date_range('20130101', periods=10))
+    s_aware = pd.Series(pd.date_range('20130101', periods=10, tz='US/Eastern'))
+    pdf = pd.DataFrame({'tz': s_aware, 'notz': s_naive})
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+
+    assert pdf.tz[0].freq == ddf.compute().tz[0].freq == ddf.tz.compute()[0].freq
 
 
 @pytest.mark.parametrize('drop', [True, False])
@@ -2176,7 +2189,7 @@ def test_set_index_sorted_true():
 
 
 def test_compute_divisions():
-    from dask.dataframe.core import compute_divisions
+    from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]},
