@@ -123,23 +123,26 @@ def test_wrap_bad_kind():
     "funcname",
     ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
 )
-def test_wrap_ffts(modname, funcname):
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_wrap_ffts(modname, funcname, dtype):
     fft_mod = pytest.importorskip(modname)
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
+    darrc = darr.astype(dtype)
+    darr2c = darr2.astype(dtype)
+    nparrc = nparr.astype(dtype)
+
     wfunc = fft_wrap(func)
-    assert_eq(wfunc(darr).dtype, func(nparr).dtype)
-    assert_eq(wfunc(darr.astype(np.float32)).dtype,
-              func(nparr.astype(np.float32)).dtype)
-    assert_eq(wfunc(darr), func(nparr))
-    assert_eq(wfunc(darr, axis=1), func(nparr, axis=1))
-    assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
-    assert_eq(wfunc(darr, n=len(darr)-1),
-              func(nparr, n=len(darr)-1))
-    assert_eq(wfunc(darr, axis=1, n=darr.shape[1]-1),
-              func(nparr, n=darr.shape[1]-1))
-    assert_eq(wfunc(darr2, axis=0, n=darr2.shape[0]-1),
-              func(nparr, axis=0, n=darr2.shape[0]-1))
+    assert_eq(wfunc(darrc).dtype, func(nparrc).dtype)
+    assert_eq(wfunc(darrc), func(nparrc))
+    assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
+    assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
+    assert_eq(wfunc(darrc, n=len(darrc)-1),
+              func(nparrc, n=len(darrc)-1))
+    assert_eq(wfunc(darrc, axis=1, n=darrc.shape[1]-1),
+              func(nparrc, n=darrc.shape[1]-1))
+    assert_eq(wfunc(darr2c, axis=0, n=darr2c.shape[0]-1),
+              func(nparrc, axis=0, n=darr2c.shape[0]-1))
