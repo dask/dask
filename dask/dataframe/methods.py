@@ -202,6 +202,9 @@ def concat(dfs, axis=0, join='outer', uniform=False):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join)
 
+    if len(dfs) == 1:
+        return dfs[0]
+
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
