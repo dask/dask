@@ -1,8 +1,13 @@
 import multiprocessing
-import numpy as np
-import pickle
 from operator import add
+import pickle
+import random
 
+import numpy as np
+
+import pytest
+
+from dask import compute, delayed
 from dask.context import set_options
 from dask.multiprocessing import get, _dumps, _loads
 from dask.utils_test import inc
@@ -101,3 +106,15 @@ def test_optimize_graph_false():
     with Callback(pretask=lambda key, *args: keys.append(key)):
         get(d, 'z', optimize_graph=False)
     assert len(keys) == 2
+
+
+@pytest.mark.parametrize('random', [np.random, random])
+def test_random_seeds(random):
+    def f():
+        return tuple(random.randint(0, 10000) for i in range(5))
+
+    N = 10
+    with set_options(get=get):
+        results, = compute([delayed(f, pure=False)() for i in range(N)])
+
+    assert len(set(results)) == N
