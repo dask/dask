@@ -2,7 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 from datetime import datetime
 import os
+import random
 import sys
+
+import numpy as np
 
 import pytest
 from toolz import valmap
@@ -160,3 +163,18 @@ def test_nanny_death_timeout():
 
     yield gen.sleep(3)
     assert w.status == 'closed'
+
+
+@gen_cluster(client=True, Worker=Nanny)
+def test_random_seed(c, s, a, b):
+    @gen.coroutine
+    def check_func(func):
+        x = c.submit(func, 0, 2**31, pure=False, workers=a.worker_address)
+        y = c.submit(func, 0, 2**31, pure=False, workers=b.worker_address)
+        assert x.key != y.key
+        x = yield x._result()
+        y = yield y._result()
+        assert x != y
+
+    yield check_func(lambda a, b: random.randint(a, b))
+    yield check_func(lambda a, b: np.random.randint(a, b))

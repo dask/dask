@@ -326,10 +326,18 @@ class Nanny(Server):
 def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
                     worker_ip, worker_port, local_dir, **kwargs):
     """
-    Create a worker by forking.
+    Create a worker in a forked child.
     """
     from distributed import Worker  # pragma: no cover
     from tornado.ioloop import IOLoop  # pragma: no cover
+
+    try:
+        from dask.multiprocessing import initialize_worker_process
+    except ImportError:   # old Dask version
+        pass
+    else:
+        initialize_worker_process()
+
     IOLoop.clear_instance()  # pragma: no cover
     loop = IOLoop()  # pragma: no cover
     loop.make_current()  # pragma: no cover
