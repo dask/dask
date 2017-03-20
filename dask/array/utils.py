@@ -49,22 +49,31 @@ def _check_dsk(dsk):
 def assert_eq(a, b, **kwargs):
     if isinstance(a, Array):
         adt = a.dtype
+        ash = a.shape
         _check_dsk(a.dask)
         a = a.compute(get=get_sync)
         _maybe_check_dtype(a, adt)
     else:
         adt = getattr(a, 'dtype', None)
+        ash = getattr(a, 'shape', None)
     if isinstance(b, Array):
         bdt = b.dtype
+        bsh = b.shape
         _check_dsk(b.dask)
         assert bdt is not None
         b = b.compute(get=get_sync)
         _maybe_check_dtype(b, bdt)
     else:
         bdt = getattr(b, 'dtype', None)
+        bsh = getattr(b, 'shape', None)
 
     if str(adt) != str(bdt):
         diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
+        raise AssertionError('string repr are different' + os.linesep +
+                             os.linesep.join(diff))
+
+    if ash != bsh:
+        diff = difflib.ndiff(str(ash).splitlines(), str(bsh).splitlines())
         raise AssertionError('string repr are different' + os.linesep +
                              os.linesep.join(diff))
 
