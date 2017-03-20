@@ -131,6 +131,9 @@ def test_wrap_ffts(modname, funcname):
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
     wfunc = fft_wrap(func)
+    assert_eq(wfunc(darr).dtype, func(nparr).dtype)
+    assert_eq(wfunc(darr.astype(np.float32)).dtype,
+              func(nparr.astype(np.float32)).dtype)
     assert_eq(wfunc(darr), func(nparr))
     assert_eq(wfunc(darr, axis=1), func(nparr, axis=1))
     assert_eq(wfunc(darr2, axis=0), func(nparr, axis=0))
