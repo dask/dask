@@ -26,7 +26,7 @@ from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M, key_split)
-from ..base import Base, compute, tokenize, normalize_token
+from ..base import Base, tokenize, normalize_token
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize

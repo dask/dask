@@ -239,8 +239,10 @@ def test_set_index_timezone():
         d2.divisions[0] == s2badtype[0]
 
 
-@pytest.mark.parametrize('npartitions', [1,
-    pytest.mark.xfail(2, reason='pandas join removes freq')])
+@pytest.mark.parametrize(
+    'npartitions',
+    [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
+)
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range('20130101', periods=10))
     s_aware = pd.Series(pd.date_range('20130101', periods=10, tz='US/Eastern'))

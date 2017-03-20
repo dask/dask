@@ -54,7 +54,7 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         iparts = index2.to_delayed()
         mins = [ipart.min() for ipart in iparts]
         maxes = [ipart.max() for ipart in iparts]
-        divisions, sizes, mins, maxes  = base.compute(divisions, sizes, mins, maxes)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
         divisions = divisions.tolist()
 
         if repartition:

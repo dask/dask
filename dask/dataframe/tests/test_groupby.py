@@ -144,8 +144,8 @@ def test_groupby_dir():
 @pytest.mark.parametrize('get', [dask.async.get_sync, dask.threaded.get])
 def test_groupby_on_index(get):
     pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
-                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+                        'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     ddf2 = ddf.set_index('a')
