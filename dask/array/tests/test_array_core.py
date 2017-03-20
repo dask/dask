@@ -27,7 +27,7 @@ from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
                              tensordot, choose, where, coarsen, insert,
-                             broadcast_to, reshape, fromfunction,
+                             broadcast_to, fromfunction,
                              blockdims_from_blockshape, store, optimize,
                              from_func, normalize_chunks, broadcast_chunks,
                              atop, from_delayed, concatenate_axes,
@@ -711,50 +711,59 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
-def test_reshape():
-    cases = [
-        ((10,), (10,), (3, 3, 4)),
-        ((10,), (10, 1, 1), 5),
-        ((10,), (1, 10,), 5),
-        ((24,), (2, 3, 4), 12),
-        ((1, 24,), (2, 3, 4), 12),
-        ((2, 3, 4), (24,), (1, 3, 4)),
-        ((2, 3, 4), (24,), 4),
-        ((2, 3, 4), (24, 1), 4),
-        ((2, 3, 4), (1, 24), 4),
-        ((4, 4, 1), (4, 4), 2),
-        ((4, 4), (4, 4, 1), 2),
-        ((1, 4, 4), (4, 4), 2),
-        ((1, 4, 4), (4, 4, 1), 2),
-        ((1, 4, 4), (1, 1, 4, 4), 2),
-        ((4, 4), (1, 4, 4, 1), 2),
-        ((4, 4), (1, 4, 4), 2),
-        ((2, 3), (2, 3), (1, 2)),
-        ((2, 3), (3, 2), 3),
-        ((4, 2, 3), (4, 6), 4),
-        ((3, 4, 5, 6), (3, 4, 5, 6), (2, 3, 4, 5)),
-        ((), (1,), 1),
-        ((1,), (), 1),
-        ((24,), (3, 8), 24),
-        ((24,), (4, 6), 6),
-        ((24,), (4, 3, 2), 6),
-        ((24,), (4, 6, 1), 6),
-        ((24,), (4, 6), (6, 12, 6)),
-    ]
-    for original_shape, new_shape, chunks in cases:
-        x = np.random.randint(10, size=original_shape)
-        a = from_array(x, chunks=chunks)
-        assert_eq(x.reshape(new_shape), a.reshape(new_shape))
+@pytest.mark.parametrize('original_shape,new_shape,chunks', [
+    ((10,), (10,), (3, 3, 4)),
+    ((10,), (10, 1, 1), 5),
+    ((10,), (1, 10,), 5),
+    ((24,), (2, 3, 4), 12),
+    ((1, 24,), (2, 3, 4), 12),
+    ((2, 3, 4), (24,), (1, 3, 4)),
+    ((2, 3, 4), (24,), 4),
+    ((2, 3, 4), (24, 1), 4),
+    ((2, 3, 4), (1, 24), 4),
+    ((4, 4, 1), (4, 4), 2),
+    ((4, 4), (4, 4, 1), 2),
+    ((1, 4, 4), (4, 4), 2),
+    ((1, 4, 4), (4, 4, 1), 2),
+    ((1, 4, 4), (1, 1, 4, 4), 2),
+    ((4, 4), (1, 4, 4, 1), 2),
+    ((4, 4), (1, 4, 4), 2),
+    ((2, 3), (2, 3), (1, 2)),
+    ((2, 3), (3, 2), 3),
+    ((4, 2, 3), (4, 6), 4),
+    ((3, 4, 5, 6), (3, 4, 5, 6), (2, 3, 4, 5)),
+    ((), (1,), 1),
+    ((1,), (), 1),
+    ((24,), (3, 8), 24),
+    ((24,), (4, 6), 6),
+    ((24,), (4, 3, 2), 6),
+    ((24,), (4, 6, 1), 6),
+    ((24,), (4, 6), (6, 12, 6)),
+    ((64, 4), (8, 8, 4), (16, 2)),
+    ((4, 64), (4, 8, 4, 2), (2, 16)),
+    ((4, 8, 4, 2), (2, 1, 2, 32, 2), (2, 4, 2, 2)),
+    ((4, 1, 4), (4, 4), (2, 1, 2)),
+])
+def test_reshape(original_shape, new_shape, chunks):
+    x = np.random.randint(10, size=original_shape)
+    a = from_array(x, chunks=chunks)
+    assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
+
+def test_reshape_exceptions():
+    x = np.random.randint(10, size=(5,))
+    a = from_array(x, chunks=(2,))
     with pytest.raises(ValueError):
-        reshape(a, (100,))
-    assert_eq(x.reshape(*new_shape), a.reshape(*new_shape))
-    assert_eq(np.reshape(x, new_shape), reshape(a, new_shape))
+        da.reshape(a, (100,))
+
+
+def test_reshape_splat():
+    x = da.ones((5, 5), chunks=(2, 2))
+    assert_eq(x.reshape((25,)), x.reshape(25))
 
 
 def test_reshape_fails_for_dask_only():
     cases = [
-        ((10,), (2, 5), 3),
         ((3, 4), (4, 3), 2),
     ]
     for original_shape, new_shape, chunks in cases:
@@ -762,7 +771,7 @@ def test_reshape_fails_for_dask_only():
         a = from_array(x, chunks=chunks)
         assert x.reshape(new_shape).shape == new_shape
         with pytest.raises(ValueError):
-            reshape(a, new_shape)
+            da.reshape(a, new_shape)
 
 
 def test_reshape_unknown_dimensions():
@@ -772,7 +781,7 @@ def test_reshape_unknown_dimensions():
             a = from_array(x, 24)
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
-    pytest.raises(ValueError, lambda: reshape(a, (-1, -1)))
+    pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
 
 
 def test_full():
