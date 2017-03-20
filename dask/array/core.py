@@ -77,6 +77,10 @@ def getarray_nofancy(a, b, lock=None):
     return getarray(a, b, lock=lock)
 
 
+def getarray_inline(a, b, lock=None):
+    return getarray(a, b, lock=lock)
+
+
 from .optimization import optimize, fuse_slice
 
 
@@ -2502,16 +2506,23 @@ def insert_to_ooc(out, arr, lock=True, region=None):
 def asarray(array):
     """Coerce argument into a dask array
 
+    Examples
+    --------
     >>> x = np.arange(3)
     >>> asarray(x)
     dask.array<asarray..., shape=(3,), dtype=int64, chunksize=(3,)>
     """
-    if not isinstance(array, Array):
-        name = 'asarray-' + tokenize(array)
-        if not isinstance(getattr(array, 'shape', None), Iterable):
-            array = np.asarray(array)
-        array = from_array(array, chunks=array.shape, name=name)
-    return array
+    if isinstance(array, Array):
+        return array
+
+    name = 'asarray-' + tokenize(array)
+    if not isinstance(getattr(array, 'shape', None), Iterable):
+        array = np.asarray(array)
+    dsk = {(name,) + (0,) * len(array.shape):
+           (getarray_inline, name) + ((slice(None, None),) * len(array.shape),),
+           name: array}
+    chunks = tuple((d,) for d in array.shape)
+    return Array(dsk, name, chunks, dtype=array.dtype)
 
 
 def partial_by_order(*args, **kwargs):
