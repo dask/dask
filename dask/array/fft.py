@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import numpy as np
 
 
@@ -19,7 +21,7 @@ fft_preamble = """
     """
 
 
-def _fft_out_chunks(a, n, axis):
+def _fft_out_chunks(a, n, axis, rtype):
     """ For computing the output chunks of fft and ifft"""
     if n is None:
         return a.chunks
@@ -28,15 +30,29 @@ def _fft_out_chunks(a, n, axis):
     return chunks
 
 
-def _rfft_out_chunks(a, n, axis):
+def _rfft_out_chunks(a, n, axis, rtype):
     if n is None:
         n = a.chunks[axis][0]
     chunks = list(a.chunks)
-    chunks[axis] = (n // 2 + 1,)
+    if issubclass(np.dtype(rtype).type, numbers.Real):
+        chunks[axis] = (n,)
+    else:
+        chunks[axis] = (n // 2 + 1,)
     return chunks
 
 
-def _irfft_out_chunks(a, n, axis):
+def _irfft_out_chunks(a, n, axis, rtype):
+    if n is None:
+        n = a.chunks[axis][0]
+    chunks = list(a.chunks)
+    if issubclass(a.dtype.type, numbers.Real):
+        chunks[axis] = (n,)
+    else:
+        chunks[axis] = (2 * (n - 1),)
+    return chunks
+
+
+def _hfft_out_chunks(a, n, axis, rtype):
     if n is None:
         n = 2 * (a.chunks[axis][0] - 1)
     chunks = list(a.chunks)
@@ -44,15 +60,7 @@ def _irfft_out_chunks(a, n, axis):
     return chunks
 
 
-def _hfft_out_chunks(a, n, axis):
-    if n is None:
-        n = 2 * (a.chunks[axis][0] - 1)
-    chunks = list(a.chunks)
-    chunks[axis] = (n,)
-    return chunks
-
-
-def _ihfft_out_chunks(a, n, axis):
+def _ihfft_out_chunks(a, n, axis, rtype):
     if n is None:
         n = a.chunks[axis][0]
     chunks = list(a.chunks)
@@ -109,7 +117,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         if len(a.chunks[axis]) != 1:
             raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
-        chunks = out_chunk_fn(a, n, axis)
+        chunks = out_chunk_fn(a, n, axis, dtype)
 
         return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
                             chunks=chunks)
