@@ -100,7 +100,9 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
+    _dtype = dtype
     def func(a, n=None, axis=-1):
+        dtype = _dtype
         if dtype is None:
             dtype = fft_func(np.ones(8, dtype=a.dtype)).dtype
 
