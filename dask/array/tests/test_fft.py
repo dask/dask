@@ -136,7 +136,7 @@ def test_wrap_ffts(modname, funcname, dtype):
     nparrc = nparr.astype(dtype)
 
     wfunc = fft_wrap(func)
-    assert_eq(wfunc(darrc).dtype, func(nparrc).dtype)
+    assert wfunc(darrc).dtype == func(nparrc).dtype
     assert_eq(wfunc(darrc), func(nparrc))
     assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
     assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
