@@ -87,6 +87,34 @@ track the number of rows in each partition) and so some operations like slicing
 will not operate correctly.
 
 
+Interactions with NumPy arrays
+------------------------------
+
+Dask.array operations will automatically convert NumPy arrays into single-chunk
+dask arrays
+
+.. code-block:: python
+
+   >>> x = da.sum(np.ones(5))
+   >>> x.compute()
+   5
+
+When NumPy and Dask arrays interact the result will be a Dask array.  Automatic
+rechunking rules will generally slice the NumPy array into the appropriate Dask
+chunk shape
+
+.. code-block:: python
+
+   >>> x = da.ones(10, chunks=(5,))
+   >>> y = np.ones(10)
+   >>> z = x + y
+   >>> z
+   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,)>
+
+These interactions work not just for NumPy arrays, but for any object that has
+shape and dtype attributes and implements NumPy slicing syntax.
+
+
 Chunks
 ------
 
