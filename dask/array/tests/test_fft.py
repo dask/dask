@@ -131,12 +131,6 @@ def test_wrap_ffts(modname, funcname, dtype):
     except AttributeError:
         pytest.skip("`%s` missing function `%s`." % (modname, funcname))
 
-    if modname == "numpy.fft" and funcname == "irfft":
-        if dtype == "float32":
-            dtype = "complex64"
-        elif dtype == "float64":
-            dtype = "complex128"
-
     darrc = darr.astype(dtype)
     darr2c = darr2.astype(dtype)
     nparrc = nparr.astype(dtype)
