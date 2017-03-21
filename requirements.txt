@@ -2,7 +2,7 @@ tornado >= 4.2
 toolz >= 0.7.4
 msgpack-python
 cloudpickle >= 0.2.2
-dask >= 0.13.0
+dask >= 0.14.0
 click >= 6.6
 six
 tblib
