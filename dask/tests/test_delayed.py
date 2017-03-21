@@ -31,6 +31,14 @@ def test_to_task_dask():
     assert task == x
     assert dict(dask) == {}
 
+    # Issue https://github.com/dask/dask/issues/2107
+    class MyClass(dict):
+        pass
+
+    task, dask = to_task_dask(MyClass())
+    assert type(task) is MyClass
+    assert dict(dask) == {}
+
 
 def test_delayed():
     add2 = delayed(add)
