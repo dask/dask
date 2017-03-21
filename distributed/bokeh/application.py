@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 
+import bokeh
 import distributed.bokeh
 from toolz import get_in, concat
 
@@ -60,8 +61,10 @@ class BokehWebInterface(object):
         args = ([sys.executable, '-m', 'bokeh', 'serve'] + paths +
                 ['--check-unused-sessions=50',
                  '--unused-session-lifetime=1',
-                 '--port', str(bokeh_port)] +
-                 sum([['--host', h] for h in hosts], []))
+                 '--allow-websocket-origin=*',
+                 '--port', str(bokeh_port)])
+        if bokeh.__version__ <= '0.12.4':
+            args += sum([['--host', h] for h in hosts], [])
 
         if prefix:
             args.extend(['--prefix', prefix])
