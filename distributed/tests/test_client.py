@@ -14,7 +14,7 @@ import sys
 from threading import Thread, Semaphore
 from time import sleep
 import traceback
-import zipfile, sys
+import zipfile
 
 import mock
 import pytest
@@ -3968,3 +3968,7 @@ def test_robust_undeserializable_function(c, s, a, b):
 
     assert results == list(map(inc, range(10)))
     assert a.data and b.data
+
+
+if sys.version_info > (3, 5):
+    from distributed.tests.py3_test_client import *

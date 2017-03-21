@@ -27,7 +27,7 @@ from dask.context import _globals
 from toolz import first, groupby, merge, valmap, keymap
 from tornado import gen
 from tornado.gen import Return, TimeoutError
-from tornado.locks import Event
+from tornado.locks import Event, Condition
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.queues import Queue
 
@@ -245,6 +245,9 @@ class Future(WrappedKey):
             return '<Future: status: %s, key: %s>' % (self.status, self.key)
 
     __repr__ = __str__
+
+    def __await__(self):
+        return self._result().__await__()
 
 
 class FutureState(object):
@@ -2523,6 +2526,7 @@ class AsCompleted(object):
         self.queue = pyQueue()
         self.lock = Lock()
         self.loop = loop or default_client().loop
+        self.condition = Condition()
 
         if futures:
             for future in futures:
@@ -2536,6 +2540,7 @@ class AsCompleted(object):
             if not self.futures[future]:
                 del self.futures[future]
             self.queue.put_nowait(future)
+            self.condition.notify()
 
     def add(self, future):
         """ Add a future to the collection
@@ -2551,11 +2556,22 @@ class AsCompleted(object):
     def __iter__(self):
         return self
 
+    def __aiter__(self):
+        return self
+
     def __next__(self):
         with self.lock:
             if not self.futures and self.queue.empty():
                 raise StopIteration()
         return self.queue.get()
+
+    @gen.coroutine
+    def __anext__(self):
+        if not self.futures and self.queue.empty():
+            raise StopAsyncIteration  # flake8: noqa
+        while self.queue.empty():
+            yield self.condition.wait()
+        raise gen.Return(self.queue.get())
 
     next = __next__
 
