@@ -147,9 +147,9 @@ def test_wrap_ffts(modname, funcname, dtype):
     assert_eq(wfunc(darrc), func(nparrc))
     assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
     assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
-    assert_eq(wfunc(darrc, n=len(darrc)-1),
-              func(nparrc, n=len(darrc)-1))
-    assert_eq(wfunc(darrc, axis=1, n=darrc.shape[1]-1),
-              func(nparrc, n=darrc.shape[1]-1))
-    assert_eq(wfunc(darr2c, axis=0, n=darr2c.shape[0]-1),
-              func(nparrc, axis=0, n=darr2c.shape[0]-1))
+    assert_eq(wfunc(darrc, n=len(darrc) - 1),
+              func(nparrc, n=len(darrc) - 1))
+    assert_eq(wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
+              func(nparrc, n=darrc.shape[1] - 1))
+    assert_eq(wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
+              func(nparrc, axis=0, n=darr2c.shape[0] - 1))
