@@ -576,7 +576,7 @@ def map_blocks(func, *args, **kwargs):
     ...     return np.array([a.max(), b.max()])
 
     >>> da.map_blocks(func, x, y, chunks=(2,), dtype='i8')
-    dask.array<..., shape=(20,), dtype=int64, chunksize=(2,)>
+    dask.array<func, shape=(20,), dtype=int64, chunksize=(2,)>
 
     >>> _.compute()
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
@@ -1007,7 +1007,7 @@ class Array(Base):
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
         chunksize = str(tuple(c[0] if c else 0 for c in self.chunks))
-        name = self.name if len(self.name) < 10 else self.name[:7] + '...'
+        name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
 
@@ -1867,7 +1867,7 @@ def from_delayed(value, shape, dtype, name=None):
     >>> value = delayed(np.ones)(5)
     >>> array = from_delayed(value, (5,), float)
     >>> array
-    dask.array<from-va..., shape=(5,), dtype=float64, chunksize=(5,)>
+    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
     array([ 1.,  1.,  1.,  1.,  1.])
     """
@@ -2515,7 +2515,7 @@ def asarray(array):
     --------
     >>> x = np.arange(3)
     >>> asarray(x)
-    dask.array<asarray..., shape=(3,), dtype=int64, chunksize=(3,)>
+    dask.array<asarray, shape=(3,), dtype=int64, chunksize=(3,)>
     """
     if isinstance(array, Array):
         return array
