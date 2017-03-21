@@ -129,17 +129,19 @@ class LocalCluster(object):
         if ip is None and not self.scheduler_port and not self.nanny:
             # Use inproc transport for optimization
             scheduler_address = 'inproc://'
+            enable_diagnostics = False
         else:
             if ip is None:
                 ip = '127.0.0.1'
             scheduler_address = (ip, self.scheduler_port)
+            enable_diagnostics = self.diagnostics_port is not None
         self.scheduler.start(scheduler_address)
 
         yield self._start_all_workers(
             self.n_workers, ncores=self.threads_per_worker,
             services=self.worker_services, **self.worker_kwargs)
 
-        if self.diagnostics_port is not None:
+        if enable_diagnostics:
             self.start_diagnostics_server(self.diagnostics_port,
                                           silence=self.silence_logs)
 
