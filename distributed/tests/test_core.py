@@ -4,14 +4,17 @@ from contextlib import contextmanager
 from functools import partial
 import os
 import socket
+import weakref
 
 from tornado import gen, ioloop
 import pytest
 
+from distributed.compatibility import finalize
 from distributed.core import (
     pingpong, Server, rpc, connect, send_recv,
     coerce_to_address, ConnectionPool, CommClosedError)
 from distributed.metrics import time
+from distributed.protocol import to_serialize
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (
     slow, loop, gen_test, gen_cluster, has_ipv6,
@@ -24,6 +27,32 @@ from distributed.utils_test import (
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
     EXTERNAL_IP6 = get_ipv6()
+
+
+def echo(comm, x):
+    return x
+
+
+class CountedObject(object):
+    """
+    A class which counts the number of live instances.
+    """
+    n_instances = 0
+
+    # Use __new__, as __init__ can be bypassed by pickle.
+    def __new__(cls):
+        cls.n_instances += 1
+        obj = object.__new__(cls)
+        finalize(obj, cls._finalize)
+        return obj
+
+    @classmethod
+    def _finalize(cls, *args):
+        cls.n_instances -= 1
+
+
+def echo_serialize(comm, x):
+    return {'result': to_serialize(x)}
 
 
 def test_server(loop):
@@ -219,6 +248,48 @@ def test_rpc_inputs():
 
 
 @gen.coroutine
+def check_rpc_message_lifetime(*listen_args):
+    # Issue #956: rpc arguments and result shouldn't be kept alive longer
+    # than necessary
+    server = Server({'echo': echo_serialize})
+    server.listen(*listen_args)
+
+    # Sanity check
+    obj = CountedObject()
+    assert CountedObject.n_instances == 1
+    del obj
+    assert CountedObject.n_instances == 0
+
+    with rpc(server.address) as remote:
+        obj = CountedObject()
+        res = yield remote.echo(x=to_serialize(obj))
+        assert isinstance(res['result'], CountedObject)
+        # Make sure resource cleanup code in coroutines runs
+        yield gen.sleep(0.05)
+
+        w1 = weakref.ref(obj)
+        w2 = weakref.ref(res['result'])
+        del obj, res
+
+        assert w1() is None
+        assert w2() is None
+        # If additional instances were created, they were deleted as well
+        assert CountedObject.n_instances == 0
+
+@gen_test()
+def test_rpc_message_lifetime_default():
+    yield check_rpc_message_lifetime()
+
+@gen_test()
+def test_rpc_message_lifetime_tcp():
+    yield check_rpc_message_lifetime('tcp://')
+
+@gen_test()
+def test_rpc_message_lifetime_inproc():
+    yield check_rpc_message_lifetime('inproc://')
+
+
+@gen.coroutine
 def check_rpc_with_many_connections(listen_arg):
     @gen.coroutine
     def g():
@@ -244,9 +315,6 @@ def test_rpc_with_many_connections_tcp():
 def test_rpc_with_many_connections_inproc():
     yield check_rpc_with_many_connections('inproc://')
 
-
-def echo(comm, x):
-    return x
 
 @gen.coroutine
 def check_large_packets(listen_arg):

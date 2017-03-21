@@ -266,6 +266,7 @@ class Server(object):
                         logger.warn("Lost connection to %r while sending result for op %r: %s",
                                     address, op, e)
                         break
+                msg = result = None
                 if close_desired:
                     yield comm.close()
                 if comm.closed():

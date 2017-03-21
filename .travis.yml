@@ -9,7 +9,7 @@ matrix:
 
 env:
   matrix:
-    - PYTHON=2.7 PACKAGES="blosc futures"
+    - PYTHON=2.7 PACKAGES="blosc futures faulthandler"
     - PYTHON=3.4 COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
     - PYTHON=3.5 CRICK=true
     - PYTHON=3.6 PACKAGES=blosc
@@ -45,7 +45,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -q pytest pytest-timeout coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
+  - conda install -q pytest pytest-timeout pytest-faulthandler coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
