@@ -2,6 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 
+try:
+    import scipy
+    import scipy.fftpack
+except ImportError:
+    scipy = None
+
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
                "has a single chunk. An FFT operation was tried on axis %s \n"
@@ -93,6 +99,12 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     >>> parallel_fft = fft_wrap(np.fft.fft)
     >>> parallel_ifft = fft_wrap(np.fft.ifft)
     """
+    if scipy is not None:
+        if fft_func is scipy.fftpack.rfft:
+            raise ValueError("SciPy's `rfft` doesn't match the NumPy API.")
+        elif fft_func is scipy.fftpack.irfft:
+            raise ValueError("SciPy's `irfft` doesn't match the NumPy API.")
+
     if kind is None:
         kind = fft_func.__name__
     try:
