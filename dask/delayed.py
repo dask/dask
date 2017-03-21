@@ -86,7 +86,7 @@ def to_task_dask(expr):
             return (type(expr), args), dsk
         else:
             return args, dsk
-    if isinstance(expr, dict):
+    if type(expr) is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
     return expr, {}
