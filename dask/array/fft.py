@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial
-
 import numpy as np
-import numpy.fft as npfft
 
-from .core import map_blocks
+try:
+    import scipy
+    import scipy.fftpack
+except ImportError:
+    scipy = None
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -22,23 +23,6 @@ fft_preamble = """
     The numpy.fft.%s docstring follows below:
 
     """
-
-
-def _fft_wrap(fft_func, dtype, out_chunk_fn):
-    def func(a, n=None, axis=-1):
-        if len(a.chunks[axis]) != 1:
-            raise ValueError(chunk_error % (axis, a.chunks[axis]))
-
-        chunks = out_chunk_fn(a, n, axis)
-
-        return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
-                          chunks=chunks)
-
-    np_name = fft_func.__name__
-    if fft_func.__doc__ is not None:
-        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
-    func.__name__ = np_name
-    return func
 
 
 def _fft_out_chunks(a, n, axis):
@@ -86,19 +70,73 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-fft = _fft_wrap(npfft.fft, np.complex_, _fft_out_chunks)
+_out_chunk_fns = {'fft': _fft_out_chunks,
+                  'ifft': _fft_out_chunks,
+                  'rfft': _rfft_out_chunks,
+                  'irfft': _irfft_out_chunks,
+                  'hfft': _hfft_out_chunks,
+                  'ihfft': _ihfft_out_chunks}
 
 
-ifft = _fft_wrap(npfft.ifft, np.complex_, _fft_out_chunks)
+def fft_wrap(fft_func, kind=None, dtype=None):
+    """ Wrap 1D complex FFT functions
+
+    Takes a function that behaves like ``numpy.fft`` functions and
+    a specified kind to match it to that are named after the functions
+    in the ``numpy.fft`` API.
+
+    Supported kinds include:
+
+        * fft
+        * ifft
+        * rfft
+        * irfft
+        * hfft
+        * ihfft
+
+    Examples
+    --------
+    >>> parallel_fft = fft_wrap(np.fft.fft)
+    >>> parallel_ifft = fft_wrap(np.fft.ifft)
+    """
+    if scipy is not None:
+        if fft_func is scipy.fftpack.rfft:
+            raise ValueError("SciPy's `rfft` doesn't match the NumPy API.")
+        elif fft_func is scipy.fftpack.irfft:
+            raise ValueError("SciPy's `irfft` doesn't match the NumPy API.")
+
+    if kind is None:
+        kind = fft_func.__name__
+    try:
+        out_chunk_fn = _out_chunk_fns[kind]
+    except KeyError:
+        raise ValueError("Given unknown `kind` %s." % kind)
+
+    _dtype = dtype
+
+    def func(a, n=None, axis=-1):
+        dtype = _dtype
+        if dtype is None:
+            dtype = fft_func(np.ones(8, dtype=a.dtype)).dtype
+
+        if len(a.chunks[axis]) != 1:
+            raise ValueError(chunk_error % (axis, a.chunks[axis]))
+
+        chunks = out_chunk_fn(a, n, axis)
+
+        return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
+                            chunks=chunks)
+
+    np_name = fft_func.__name__
+    if fft_func.__doc__ is not None:
+        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+    func.__name__ = np_name
+    return func
 
 
-rfft = _fft_wrap(npfft.rfft, np.complex_, _rfft_out_chunks)
-
-
-irfft = _fft_wrap(npfft.irfft, np.float_, _irfft_out_chunks)
-
-
-hfft = _fft_wrap(npfft.hfft, np.float_, _hfft_out_chunks)
-
-
-ihfft = _fft_wrap(npfft.ihfft, np.complex_, _ihfft_out_chunks)
+fft = fft_wrap(np.fft.fft, dtype=np.complex_)
+ifft = fft_wrap(np.fft.ifft, dtype=np.complex_)
+rfft = fft_wrap(np.fft.rfft, dtype=np.complex_)
+irfft = fft_wrap(np.fft.irfft, dtype=np.float_)
+hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
+ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
