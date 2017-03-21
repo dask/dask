@@ -31,6 +31,14 @@ def test_to_task_dask():
     assert task == x
     assert dict(dask) == {}
 
+    # Issue https://github.com/dask/dask/issues/2107
+    class MyClass(dict):
+        pass
+
+    task, dask = to_task_dask(MyClass())
+    assert type(task) is MyClass
+    assert dict(dask) == {}
+
 
 def test_delayed():
     add2 = delayed(add)
@@ -400,18 +408,3 @@ def test_finalize_name():
         return s.split('-')[0]
 
     assert all(key(k).isalpha() for k in v.dask)
-
-def test_delayed_passthrough():
-    ''' Test that a class that inherits dict isn't improperly interpreted and
-        modified.
-        https://github.com/dask/dask/issues/2107
-    '''
-    class MyClass(dict):
-        pass
-
-    @delayed(pure=True)
-    def foo(arg):
-        assert type(arg) is MyClass
-
-    res = foo(MyClass())
-    res.compute()
