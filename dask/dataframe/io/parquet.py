@@ -44,10 +44,13 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         List of filters to apply, like ``[('x', '>' 0), ...]``
     index: string or None
         Name of index column to use if that column is sorted
-    categories: list or None
+    categories: list, dict or None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
+        If a list, assumes up to 2**16-1 labels; if a dict, specify the number
+        of labels expected; if None, will load categories automatically for
+        data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
 
@@ -77,7 +80,6 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
     check_column_names(pf.columns, categories)
-    categories = categories or []
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
@@ -115,8 +117,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    dtypes = {k: ('category' if k in categories else v) for k, v in
-              pf.dtypes.items() if k in all_columns}
+    if categories is None:
+        categories = pf.categories
+    dtypes = pf._dtypes(categories)
 
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in dtypes.items()},
