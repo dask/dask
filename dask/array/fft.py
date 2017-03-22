@@ -27,17 +27,8 @@ fft_preamble = """
     """
 
 
-def _fft_out_chunks(a, n, axis):
-    """ For computing the output chunks of fft and ifft"""
-    if n is None:
-        return a.chunks
-    chunks = list(a.chunks)
-    chunks[axis] = (n,)
-    return chunks
-
-
-def _fftn_out_chunks(a, s, axes):
-    """ For computing the output chunks of fft2, fftn, ifft2 and ifftn"""
+def _fft_out_chunks(a, s, axes):
+    """ For computing the output chunks of [i]fft*"""
     if s is None:
         return a.chunks
     chunks = list(a.chunks)
@@ -46,23 +37,8 @@ def _fftn_out_chunks(a, s, axes):
     return chunks
 
 
-def _rfft_out_chunks(a, n, axis):
-    if n is None:
-        n = a.chunks[axis][0]
-    chunks = list(a.chunks)
-    chunks[axis] = (n // 2 + 1,)
-    return chunks
-
-
-def _irfft_out_chunks(a, n, axis):
-    if n is None:
-        n = 2 * (a.chunks[axis][0] - 1)
-    chunks = list(a.chunks)
-    chunks[axis] = (n,)
-    return chunks
-
-
-def _rfftn_out_chunks(a, s, axes):
+def _rfft_out_chunks(a, s, axes):
+    """ For computing the output chunks of rfft*"""
     if s is None:
         s = [c[0] for c in a.chunks]
     chunks = list(a.chunks)
@@ -70,7 +46,8 @@ def _rfftn_out_chunks(a, s, axes):
     return chunks
 
 
-def _irfftn_out_chunks(a, s, axes):
+def _irfft_out_chunks(a, s, axes):
+    """ For computing the output chunks of irfft*"""
     if s is None:
         s = [c[0] for c in a.chunks]
         s[axes[-1]] = 2 * (s[axes[-1]] - 1)
@@ -80,17 +57,31 @@ def _irfftn_out_chunks(a, s, axes):
     return chunks
 
 
-def _hfft_out_chunks(a, n, axis):
-    if n is None:
-        n = 2 * (a.chunks[axis][0] - 1)
+def _hfft_out_chunks(a, s, axes):
+    assert len(axes) == 1
+
+    axis = axes[0]
+
+    if s is None:
+        s = [c[0] for c in a.chunks]
+        s[axis] = 2 * (a.chunks[axis][0] - 1)
+
+    n = s[axis]
+
     chunks = list(a.chunks)
     chunks[axis] = (n,)
     return chunks
 
 
-def _ihfft_out_chunks(a, n, axis):
-    if n is None:
-        n = a.chunks[axis][0]
+def _ihfft_out_chunks(a, s, axes):
+    assert len(axes) == 1
+
+    if s is None:
+        s = [c[0] for c in a.chunks]
+
+    axis = axes[0]
+    n = s[axis]
+
     chunks = list(a.chunks)
     if n % 2 == 0:
         m = (n // 2) + 1
@@ -101,17 +92,9 @@ def _ihfft_out_chunks(a, n, axis):
 
 
 _out_chunk_fns = {'fft': _fft_out_chunks,
-                  'fft2': _fftn_out_chunks,
-                  'fftn': _fftn_out_chunks,
                   'ifft': _fft_out_chunks,
-                  'ifft2': _fftn_out_chunks,
-                  'ifftn': _fftn_out_chunks,
                   'rfft': _rfft_out_chunks,
-                  'rfft2': _rfftn_out_chunks,
-                  'rfftn': _rfftn_out_chunks,
                   'irfft': _irfft_out_chunks,
-                  'irfft2': _irfftn_out_chunks,
-                  'irfftn': _irfftn_out_chunks,
                   'hfft': _hfft_out_chunks,
                   'ihfft': _ihfft_out_chunks}
 
@@ -146,7 +129,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if kind is None:
         kind = fft_func.__name__
     try:
-        out_chunk_fn = _out_chunk_fns[kind]
+        out_chunk_fn = _out_chunk_fns[kind.rstrip("2n")]
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
@@ -191,7 +174,14 @@ def fft_wrap(fft_func, kind=None, dtype=None):
             if len(a.chunks[axis]) != 1:
                 raise ValueError(chunk_error % (axis, a.chunks[axis]))
 
-            chunks = out_chunk_fn(a, n, axis)
+            s = n
+            if n is not None:
+                s = [None] * a.ndim
+                s[axis] = n
+
+            axes = (axis,)
+
+            chunks = out_chunk_fn(a, s, axes)
 
             return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
                                 chunks=chunks)
