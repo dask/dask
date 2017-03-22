@@ -22,7 +22,6 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
     if _read_parquet_row_group:
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
-    if _globals.get('fuse_ave_width'):
-        dsk, dependencies = fuse(dsk, keys, dependencies=dependencies)
+    dsk, dependencies = fuse(dsk, keys, dependencies=dependencies)
     dsk, _ = cull(dsk, keys)
     return dsk

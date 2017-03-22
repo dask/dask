@@ -270,7 +270,7 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = dict((t, set()) for t in terms)
+    result = {t: set() for t in terms}
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)
@@ -299,7 +299,7 @@ def subs(task, key, val):
     newargs = []
     for arg in task[1:]:
         type_arg = type(arg)
-        if type(arg) is tuple and arg and callable(arg[0]):  # istask(task):
+        if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
             arg = subs(arg, key, val)
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]

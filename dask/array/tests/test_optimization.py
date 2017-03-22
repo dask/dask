@@ -176,3 +176,16 @@ def test_fuse_getarray_with_asarray(chunks):
         assert n_getarrays == 0
 
     assert_eq(z, x + 1)
+
+
+def test_turn_off_fusion():
+    x = da.ones(10, chunks=(5,))
+    y = da.sum(x + 1 + 2 + 3)
+
+    a = y._optimize(y.dask, y._keys())
+
+    with dask.set_options(fuse_ave_width=0):
+        b = y._optimize(y.dask, y._keys())
+
+    assert dask.get(a, y._keys()) == dask.get(b, y._keys())
+    assert len(a) < len(b)
