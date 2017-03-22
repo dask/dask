@@ -137,7 +137,7 @@ def test_wrap_ffts(modname, funcname, dtype):
 
     if modname == "scipy.fftpack" and "rfft" in funcname:
         with pytest.raises(ValueError):
-            wfunc = fft_wrap(func)
+            fft_wrap(func)
     else:
         wfunc = fft_wrap(func)
         assert wfunc(darrc).dtype == func(nparrc).dtype
