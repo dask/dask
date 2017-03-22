@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import inspect
+
 import numpy as np
 
 try:
@@ -15,12 +17,12 @@ chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
                "dask.Array.rechunk.")
 
 fft_preamble = """
-    Wrapping of numpy.fft.%s
+    Wrapping of %s
 
     The axis along which the FFT is applied must have a one chunk. To change
     the array's chunking use dask.Array.rechunk.
 
-    The numpy.fft.%s docstring follows below:
+    The %s docstring follows below:
 
     """
 
@@ -127,10 +129,13 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
                             chunks=chunks)
 
-    np_name = fft_func.__name__
+    func_mod = inspect.getmodule(fft_func)
+    func_name = fft_func.__name__
+    func_fullname = func_mod.__name__ + "." + func_name
     if fft_func.__doc__ is not None:
-        func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
-    func.__name__ = np_name
+        func.__doc__ = (fft_preamble % (2 * (func_fullname,)))
+        func.__doc__ += fft_func.__doc__
+    func.__name__ = func_name
     return func
 
 
