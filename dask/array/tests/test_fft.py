@@ -48,8 +48,6 @@ def test_fft(funcname):
 
     assert_eq(da_fft(darr),
               np_fft(nparr))
-    assert_eq(da_fft(darr2, axis=0),
-              np_fft(nparr, axis=0))
 
 
 @pytest.mark.parametrize(
@@ -71,6 +69,8 @@ def test_fft_n_kwarg(funcname):
               np_fft(nparr, 5))
     assert_eq(da_fft(darr, 13),
               np_fft(nparr, 13))
+    assert_eq(da_fft(darr2, axis=0),
+              np_fft(nparr, axis=0))
     assert_eq(da_fft(darr2, 5, axis=0),
               np_fft(nparr, 5, axis=0))
     assert_eq(da_fft(darr2, 13, axis=0),
