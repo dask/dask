@@ -4,7 +4,7 @@ import pytest
 
 import dask.array as da
 from dask.array.fft import (
-    fft_wrap, fft, ifft, rfft, irfft, hfft, ihfft,
+    fft_wrap, fft
 )
 from dask.array.utils import assert_eq
 
