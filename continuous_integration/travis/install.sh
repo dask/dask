@@ -39,6 +39,10 @@ conda install -c conda-forge \
     cloudpickle \
     bokeh \
 
+# Install pyfftw for testing
+conda install -c conda-forge \
+    pyfftw
+
 pip install git+https://github.com/dask/zict --upgrade --no-deps
 pip install git+https://github.com/dask/distributed --upgrade --no-deps
 
