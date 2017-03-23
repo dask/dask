@@ -121,7 +121,14 @@ def test_wrap_bad_kind():
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
 @pytest.mark.parametrize(
     "funcname",
-    ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
+    [
+        "fft",
+        "ifft",
+        "rfft",
+        "irfft",
+        "hfft",
+        "ihfft",
+    ]
 )
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_ffts(modname, funcname, dtype):
