@@ -2195,6 +2195,21 @@ def test_run(c, s, a, b):
     assert results == {}
 
 
+@gen_cluster(client=True)
+def test_run_handles_picklable_data(c, s, a, b):
+    futures = c.map(inc, range(10))
+    yield _wait(futures)
+
+    def func():
+        return {}, set(), [], (), 1, 'hello', b'100'
+
+    results = yield c._run_on_scheduler(func)
+    assert results == func()
+
+    results = yield c._run(func)
+    assert results == {w.address: func() for w in [a, b]}
+
+
 def test_run_sync(loop):
     def func(x, y=10):
         return x + y

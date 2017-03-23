@@ -1482,7 +1482,8 @@ class Scheduler(Server):
         else:
             addresses = workers
 
-        results = yield All([send_recv(addr=address, close=True, **msg)
+        results = yield All([send_recv(addr=address, close=True,
+                                       deserialize=self.deserialize, **msg)
                              for address in addresses
                              if address is not None])
 
