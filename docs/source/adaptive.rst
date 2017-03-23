@@ -60,7 +60,7 @@ class will call these methods with the correct values at the correct times.
 
    class MyCluster(object):
        @gen.coroutine
-       def scale_up(n):
+       def scale_up(self, n):
            """
            Bring the total count of workers up to ``n``
 
@@ -69,7 +69,7 @@ class will call these methods with the correct values at the correct times.
 
            This can be implemented either as a function or as a Tornado coroutine.
            """
-       raise NotImplementedError()
+           raise NotImplementedError()
 
        @gen.coroutine
        def scale_down(self, workers):
@@ -88,6 +88,7 @@ class will call these methods with the correct values at the correct times.
    scheduler = Scheduler()
    cluster = MyCluster()
    adapative_cluster = Adaptive(scheduler, cluster)
+   scheduler.start()
 
 Implementing these ``scale_up`` and ``scale_down`` functions depends strongly
 on the cluster management system.  See :doc:`LocalCluster <local-cluster>` for
