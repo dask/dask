@@ -18,20 +18,6 @@ def same_keys(a, b):
     return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
-@pytest.fixture(
-    params=[
-        "fft",
-        "ifft",
-        "rfft",
-        "irfft",
-        "hfft",
-        "ihfft",
-    ]
-)
-def funcname(request):
-    return request.param
-
-
 nparr = np.arange(100).reshape(10, 10)
 darr = da.from_array(nparr, chunks=(1, 10))
 darr2 = da.from_array(nparr, chunks=(10, 1))
@@ -45,6 +31,17 @@ def test_cant_fft_chunked_axis():
         fft(bad_darr, axis=0)
 
 
+@pytest.mark.parametrize(
+    "funcname",
+    [
+        "fft",
+        "ifft",
+        "rfft",
+        "irfft",
+        "hfft",
+        "ihfft",
+    ]
+)
 def test_fft(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
@@ -53,6 +50,17 @@ def test_fft(funcname):
               np_fft(nparr))
 
 
+@pytest.mark.parametrize(
+    "funcname",
+    [
+        "fft",
+        "ifft",
+        "rfft",
+        "irfft",
+        "hfft",
+        "ihfft",
+    ]
+)
 def test_fft_n_kwarg(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
@@ -83,6 +91,17 @@ def test_wrap_bad_kind():
 
 
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize(
+    "funcname",
+    [
+        "fft",
+        "ifft",
+        "rfft",
+        "irfft",
+        "hfft",
+        "ihfft",
+    ]
+)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_ffts(modname, funcname, dtype):
     fft_mod = pytest.importorskip(modname)
