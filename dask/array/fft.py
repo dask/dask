@@ -133,58 +133,61 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
+    dim = "1"
+    if kind.endswith("n"):
+        dim = "N"
+    elif kind.endswith("2"):
+        dim = "2"
+
     _dtype = dtype
+    _dim = dim
 
-    if kind.endswith("2") or kind.endswith("n"):
-        _kind = kind
+    def func(a, s=None, axes=None):
+        dim = _dim
+        dtype = _dtype
 
-        def func(a, s=None, axes=None):
-            kind = _kind
-            dtype = _dtype
+        if axes is None:
+            if dim == "2":
+                axes = (-2, -1)
+            else:
+                assert dim == "N"
+                if s is None:
+                    axes = tuple(range(a.ndim))
+                else:
+                    axes = tuple(range(len(s)))
 
-            if axes is None:
-                if kind.endswith("2"):
-                    axes = (-2, -1)
-                elif kind.endswith("n"):
-                    if s is None:
-                        axes = tuple(range(a.ndim))
-                    else:
-                        axes = tuple(range(len(s)))
+        if dtype is None:
+            dtype = fft_func(np.ones(len(axes) * (8,),
+                                     dtype=a.dtype)).dtype
 
-            if dtype is None:
-                dtype = fft_func(np.ones(len(axes) * (8,),
-                                         dtype=a.dtype)).dtype
+        for each_axis in axes:
+            if len(a.chunks[each_axis]) != 1:
+                raise ValueError(
+                    chunk_error % (each_axis, a.chunks[each_axis]))
 
-            for each_axis in axes:
-                if len(a.chunks[each_axis]) != 1:
-                    raise ValueError(
-                        chunk_error % (each_axis, a.chunks[each_axis]))
+        chunks = out_chunk_fn(a, s, axes)
 
-            chunks = out_chunk_fn(a, s, axes)
+        args = (s, axes)
+        if dim == "1":
+            axis = None if axes is None else axes[0]
+            n = None if s is None else s[axis]
+            args = (n, axis)
 
-            return a.map_blocks(fft_func, s, axes, dtype=dtype,
-                                chunks=chunks)
-    else:
+        return a.map_blocks(fft_func, *args, dtype=dtype,
+                            chunks=chunks)
 
-        def func(a, n=None, axis=-1):
-            dtype = _dtype
-            if dtype is None:
-                dtype = fft_func(np.ones(8, dtype=a.dtype)).dtype
+    if dim == "1":
+        _func = func
 
-            if len(a.chunks[axis]) != 1:
-                raise ValueError(chunk_error % (axis, a.chunks[axis]))
+        def func(a, n=None, axis=None):
+            axes = (1,) if axis is None else (axis,)
 
-            s = n
+            s = None
             if n is not None:
                 s = [None] * a.ndim
-                s[axis] = n
+                s[axes[0]] = n
 
-            axes = (axis,)
-
-            chunks = out_chunk_fn(a, s, axes)
-
-            return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
-                                chunks=chunks)
+            return _func(a, s, axes)
 
     func_mod = inspect.getmodule(fft_func)
     func_name = fft_func.__name__
