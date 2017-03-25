@@ -79,11 +79,11 @@ class Future(WrappedKey):
 
     def __init__(self, key, client):
         self.key = key
+        self._cleared = False
         tkey = tokey(key)
         self.client = client
         self.client._inc_ref(tkey)
         self._generation = self.client.generation
-        self._cleared = False
 
         if tkey in client.futures:
             self._state = client.futures[tkey]
