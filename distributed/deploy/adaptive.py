@@ -65,7 +65,7 @@ class Adaptive(object):
     def _retire_workers(self):
         with log_errors():
             workers = yield self.scheduler.retire_workers(remove=True,
-                    close=True)
+                    close_workers=True)
 
             logger.info("Retiring workers %s", workers)
             f = self.cluster.scale_down(workers)
