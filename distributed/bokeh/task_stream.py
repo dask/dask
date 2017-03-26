@@ -1,12 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-import random
 
-from bokeh.palettes import viridis
-from toolz import memoize
-import itertools
-
+from ..diagnostics.progress_stream import color_of
 from ..diagnostics.plugin import SchedulerPlugin
 from ..utils import key_split
 
@@ -110,19 +106,3 @@ prefix = {'transfer': 'transfer-',
           'disk-read': 'disk-read-',
           'deserialize': 'deserialize-',
           'compute': ''}
-
-
-counter = itertools.count()
-
-
-@memoize
-def incrementing_index(o):
-    return next(counter)
-
-
-task_stream_palette = list(viridis(25))
-random.shuffle(task_stream_palette)
-
-
-def color_of(o, palette=task_stream_palette):
-    return palette[incrementing_index(o) % len(palette)]

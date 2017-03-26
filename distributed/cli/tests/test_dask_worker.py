@@ -88,7 +88,7 @@ def test_local_directory(loop, nanny):
         with popen(['dask-scheduler', '--no-bokeh']) as sched:
             with popen(['dask-worker', '127.0.0.1:8786', nanny,
                         '--no-bokeh', '--local-directory', fn]) as worker:
-                with Client('127.0.0.1:8786', loop=loop) as c:
+                with Client('127.0.0.1:8786', loop=loop, timeout=10) as c:
                     while not c.scheduler_info()['workers']:
                         sleep(0.1)
                     info = c.scheduler_info()
