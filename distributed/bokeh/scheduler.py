@@ -8,10 +8,10 @@ import os
 
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
-from bokeh.layouts import column
+from bokeh.layouts import column, row
 from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
         PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad, Text,
-        value, LinearAxis)
+        value, LinearAxis, NumeralTickFormatter)
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
@@ -24,7 +24,7 @@ except ImportError:
 
 from . import components
 from .components import DashboardComponent
-from .core import BokehServer
+from .core import BokehServer, format_bytes
 from .worker import SystemMonitor, format_time, counters_doc
 from .utils import transpose
 from ..metrics import time
@@ -164,40 +164,71 @@ class Occupancy(DashboardComponent):
                     self.source.data.update(result)
 
 
-class NProcessing(DashboardComponent):
+class CurrentLoad(DashboardComponent):
     """ How many tasks are on each worker """
-    def __init__(self, scheduler, **kwargs):
+    def __init__(self, scheduler, width=600, **kwargs):
         with log_errors():
+            self.last = 0
             self.scheduler = scheduler
             self.source = ColumnDataSource({'nprocessing': [1, 2],
+                                            'nprocessing-half': [0.5, 1],
+                                            'nprocessing-color': ['red', 'blue'],
+                                            'nbytes': [1, 2],
+                                            'nbytes-half': [0.5, 1],
                                             'worker': ['a', 'b'],
-                                            'x': [0.0, 0.1],
                                             'y': [1, 2],
-                                            'color': ['red', 'blue'],
+                                            'nbytes-color': ['blue', 'blue'],
                                             'bokeh_address': ['', '']})
 
-            fig = figure(title='Occupancy', tools='resize', id='bk-nprocessing-plot',
-                          **kwargs)
-            fig.rect(source=self.source, x='x', width='nprocessing', y='y', height=1,
-                     color='color')
+            processing = figure(title='Tasks Processing', tools='resize', id='bk-nprocessing-plot',
+                                width=int(width / 2), **kwargs)
+            processing.rect(source=self.source,
+                            x='nprocessing-half', y='y',
+                            width='nprocessing', height=1,
+                            color='nprocessing-color')
+            processing.x_range.start = 0
 
-            fig.xaxis.minor_tick_line_alpha = 0
-            fig.yaxis.visible = False
-            fig.ygrid.visible = False
-            fig.x_range.start = 0
+            nbytes = figure(title='Bytes stored', tools='resize',
+                            id='bk-nbytes-worker-plot', width=int(width / 2),
+                            **kwargs)
+            nbytes.rect(source=self.source,
+                        x='nbytes-half', y='y',
+                        width='nbytes', height=1,
+                        color='nbytes-color')
+            nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0 b')
+            nbytes.x_range.start = 0
 
-            tap = TapTool(callback=OpenURL(url='http://@bokeh_address/'))
+            for fig in [processing, nbytes]:
+                fig.xaxis.minor_tick_line_alpha = 0
+                fig.yaxis.visible = False
+                fig.ygrid.visible = False
+
+                tap = TapTool(callback=OpenURL(url='http://@bokeh_address/'))
+                fig.add_tools(tap)
+
+                fig.toolbar.logo = None
+                fig.toolbar_location = None
+                fig.yaxis.visible = False
 
             hover = HoverTool()
             hover.tooltips = "@worker : @nprocessing tasks.  Click for worker page"
             hover.point_policy = 'follow_mouse'
-            fig.add_tools(hover, tap)
+            processing.add_tools(hover)
 
-            self.root = fig
+            hover = HoverTool()
+            hover.tooltips = "@worker : @nbytes bytes.  Click for worker page"
+            hover.point_policy = 'follow_mouse'
+            nbytes.add_tools(hover)
+
+            self.processing_figure = processing
+            self.nbytes_figure = nbytes
+
+            processing.y_range = nbytes.y_range
+            self.root = row(nbytes, processing, sizing_mode='scale_width')
 
     def update(self):
         with log_errors():
-            p = valmap(len, self.scheduler.processing)
+            processing = valmap(len, self.scheduler.processing)
             workers = list(self.scheduler.workers)
 
             bokeh_addresses = []
@@ -206,30 +237,48 @@ class NProcessing(DashboardComponent):
                 bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
-            nprocessing = [p[w] for w in workers]
-            x = [np / 2 for np in nprocessing]
-            total = sum(nprocessing)
-            color = []
+            nprocessing = [processing[w] for w in workers]
+            processing_color = []
             for w in workers:
                 if w in self.scheduler.idle:
-                    color.append('red')
+                    processing_color.append('red')
                 elif w in self.scheduler.saturated:
-                    color.append('green')
+                    processing_color.append('green')
                 else:
-                    color.append('blue')
+                    processing_color.append('blue')
 
-            if total:
-                self.root.title.text = ('Processing Count-- total: %6d  avg: %8.2f' %
-                                        (total, total / len(workers)))
-            else:
-                self.root.title.text = 'Processing Count'
+            nbytes = [self.scheduler.worker_bytes[w] for w in workers]
+            nbytes_color = []
+            max_limit = 0
+            for w, nb in zip(workers, nbytes):
+                try:
+                    limit = self.scheduler.worker_info[w]['memory_limit']
+                except KeyError:
+                    limit = 16e9
+                if limit > max_limit:
+                    max_limit = limit
 
-            if nprocessing:
+                if nb > limit:
+                    nbytes_color.append('red')
+                elif nb > limit / 2:
+                    nbytes_color.append('orange')
+                else:
+                    nbytes_color.append('blue')
+
+            now = time()
+            if any(nprocessing) or self.last + 1 < now:
+                self.last = now
                 result = {'nprocessing': nprocessing,
-                          'worker': workers,
-                          'color': color,
+                          'nprocessing-half': [np / 2 for np in nprocessing],
+                          'nprocessing-color': processing_color,
+                          'nbytes': nbytes,
+                          'nbytes-half': [nb / 2 for nb in nbytes],
+                          'nbytes-color': nbytes_color,
                           'bokeh_address': bokeh_addresses,
-                          'x': x, 'y': y}
+                          'worker': workers,
+                          'y': y}
+
+                self.nbytes_figure.title.text = 'Bytes stored: ' + format_bytes(sum(nbytes))
 
                 if PROFILING:
                     curdoc().add_next_tick_callback(lambda: self.source.data.update(result))
@@ -675,20 +724,23 @@ def tasks_doc(scheduler, doc):
 
 def status_doc(scheduler, doc):
     with log_errors():
-        ts = TaskStream(scheduler, n_rectangles=1000, clear_interval=10000, height=350)
-        ts.update()
-        tp = TaskProgress(scheduler, height=160)
-        tp.update()
-        mu = MemoryUse(scheduler, height=60)
-        mu.update()
-        pp = NProcessing(scheduler, height=160)
-        pp.update()
-        doc.add_periodic_callback(ts.update, 100)
-        doc.add_periodic_callback(tp.update, 100)
-        doc.add_periodic_callback(mu.update, 100)
-        doc.add_periodic_callback(pp.update, 100)
+        task_stream = TaskStream(scheduler, n_rectangles=1000, clear_interval=10000, height=350)
+        task_stream.update()
+        doc.add_periodic_callback(task_stream.update, 100)
+
+        task_progress = TaskProgress(scheduler, height=160)
+        task_progress.update()
+        doc.add_periodic_callback(task_progress.update, 100)
+
+        current_load = CurrentLoad(scheduler, height=160)
+        current_load .update()
+        doc.add_periodic_callback(current_load.update, 100)
+
         doc.title = "Dask Status"
-        doc.add_root(column(pp.root, ts.root, tp.root, mu.root, sizing_mode='scale_width'))
+        doc.add_root(column(current_load.root,
+                            task_stream.root,
+                            task_progress.root,
+                            sizing_mode='scale_width'))
         doc.template = template
 
 

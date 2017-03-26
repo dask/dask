@@ -16,7 +16,7 @@ from distributed.utils_test import gen_cluster, inc, dec, slowinc
 from distributed.bokeh.worker import Counters, BokehWorker
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
         SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents, Events,
-        TaskStream, TaskProgress, MemoryUse, NProcessing)
+        TaskStream, TaskProgress, MemoryUse, CurrentLoad)
 
 from distributed.bokeh import scheduler
 
@@ -160,8 +160,14 @@ def test_MemoryUse(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_NProcessing(c, s, a, b):
-    np = NProcessing(s)
-    np.update()
-    d = dict(np.source.data)
+def test_CurrentLoad(c, s, a, b):
+    cl = CurrentLoad(s)
+
+    futures = c.map(slowinc, range(10), delay=0.001)
+    yield _wait(futures)
+
+    cl.update()
+    d = dict(cl.source.data)
+
     assert all(len(L) == 2 for L in d.values())
+    assert all(d['nbytes'])
