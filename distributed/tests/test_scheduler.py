@@ -1084,3 +1084,13 @@ def test_scheduler_file():
         c = Client(scheduler_file=fn, loop=s.loop, start=False)
         yield c._start()
     yield s.close()
+
+
+@slow
+@gen_cluster(client=True, ncores=[])
+def test_non_existent_worker(c, s):
+    s.add_worker(address='127.0.0.1:5738', ncores=2, nbytes={}, host_info={})
+    futures = c.map(inc, range(10))
+    yield gen.sleep(4)
+    assert not s.workers
+    assert all(v == 'no-worker' for v in s.task_state.values())

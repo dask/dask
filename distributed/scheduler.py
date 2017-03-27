@@ -1260,6 +1260,7 @@ class Scheduler(Server):
         except Exception as e:
             logger.error("Failed to connect to worker %r: %s",
                          worker, e)
+            self.remove_worker(address=worker)
             return
         yield comm.write({'op': 'compute-stream', 'reply': False})
         self.worker_comms[worker].start(comm)
