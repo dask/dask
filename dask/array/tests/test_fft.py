@@ -1,4 +1,4 @@
-from itertools import combinations
+from itertools import combinations_with_replacement
 
 import numpy as np
 
@@ -121,16 +121,20 @@ def test_nd_ffts(funcname, dtype):
     d = da.from_array(a, chunks=chunk_size)
 
     for num_axes in range(1, d.ndim):
-        for axes in combinations(range(d.ndim), num_axes):
+        for axes in combinations_with_replacement(range(d.ndim), num_axes):
             cs = list(chunk_size)
             for i in axes:
                 cs[i] = shape[i]
             d2 = d.rechunk(cs)
-            r = da_fft(d2, axes=axes)
-            er = np_fft(a, axes=axes)
-            assert r.dtype == er.dtype
-            assert r.shape == er.shape
-            assert_eq(r, er)
+            if len(set(axes)) < len(axes):
+                with pytest.raises(ValueError):
+                    da_fft(d2, axes=axes)
+            else:
+                r = da_fft(d2, axes=axes)
+                er = np_fft(a, axes=axes)
+                assert r.dtype == er.dtype
+                assert r.shape == er.shape
+                assert_eq(r, er)
 
 
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
