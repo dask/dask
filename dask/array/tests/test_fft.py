@@ -70,8 +70,9 @@ def test_fft_n_kwarg(funcname):
               np_fft(nparr, 12, axis=0))
 
 
-def test_fft_consistent_names():
-    da_fft = getattr(da.fft, "fft")
+@pytest.mark.parametrize("funcname", all_funcnames)
+def test_fft_consistent_names(funcname):
+    da_fft = getattr(da.fft, funcname)
 
     assert same_keys(da_fft(darr, 5), da_fft(darr, 5))
     assert same_keys(da_fft(darr2, 5, axis=0), da_fft(darr2, 5, axis=0))
