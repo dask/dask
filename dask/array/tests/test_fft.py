@@ -65,7 +65,7 @@ def test_fft(funcname):
 
 
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
-def test_fft2n(funcname):
+def test_fft2n_shapes(funcname):
     da_fft = getattr(dask.array.fft, funcname)
     np_fft = getattr(np.fft, funcname)
     assert_eq(da_fft(darr3),
@@ -111,7 +111,7 @@ def test_wrap_bad_kind():
 
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_nd_ffts(funcname, dtype):
+def test_nd_ffts_axes(funcname, dtype):
     np_fft = getattr(np.fft, funcname)
     da_fft = getattr(da.fft, funcname)
 
