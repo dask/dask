@@ -4,7 +4,7 @@ import pytest
 
 import dask.array as da
 from dask.array.fft import (
-    fft_wrap, fft
+    fft_wrap
 )
 from dask.array.utils import assert_eq
 
@@ -33,11 +33,13 @@ darr2 = da.from_array(nparr, chunks=(10, 1))
 
 
 def test_cant_fft_chunked_axis():
+    da_fft = getattr(da.fft, "fft")
+
     bad_darr = da.from_array(nparr, chunks=(5, 5))
     with pytest.raises(ValueError):
-        fft(bad_darr)
+        da_fft(bad_darr)
     with pytest.raises(ValueError):
-        fft(bad_darr, axis=0)
+        da_fft(bad_darr, axis=0)
 
 
 @pytest.mark.parametrize("funcname", all_funcnames)
@@ -68,10 +70,13 @@ def test_fft_n_kwarg(funcname):
               np_fft(nparr, 12, axis=0))
 
 
-def test_fft_consistent_names():
-    assert same_keys(fft(darr, 5), fft(darr, 5))
-    assert same_keys(fft(darr2, 5, axis=0), fft(darr2, 5, axis=0))
-    assert not same_keys(fft(darr, 5), fft(darr, 13))
+@pytest.mark.parametrize("funcname", all_funcnames)
+def test_fft_consistent_names(funcname):
+    da_fft = getattr(da.fft, funcname)
+
+    assert same_keys(da_fft(darr, 5), da_fft(darr, 5))
+    assert same_keys(da_fft(darr2, 5, axis=0), da_fft(darr2, 5, axis=0))
+    assert not same_keys(da_fft(darr, 5), da_fft(darr, 13))
 
 
 def test_wrap_bad_kind():
