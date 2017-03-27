@@ -30,14 +30,14 @@ darr = da.from_array(nparr, chunks=(1, 10))
 darr2 = da.from_array(nparr, chunks=(10, 1))
 
 
-def test_cant_fft_chunked_axis():
-    da_fft = getattr(da.fft, "fft")
+@pytest.mark.parametrize("funcname", all_funcnames)
+def test_cant_fft_chunked_axis(funcname):
+    da_fft = getattr(da.fft, funcname)
 
     bad_darr = da.from_array(nparr, chunks=(5, 5))
-    with pytest.raises(ValueError):
-        da_fft(bad_darr)
-    with pytest.raises(ValueError):
-        da_fft(bad_darr, axis=0)
+    for i in range(bad_darr.ndim):
+        with pytest.raises(ValueError):
+            da_fft(bad_darr, axis=i)
 
 
 @pytest.mark.parametrize("funcname", all_funcnames)
