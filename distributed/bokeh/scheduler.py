@@ -195,7 +195,7 @@ class CurrentLoad(DashboardComponent):
                         x='nbytes-half', y='y',
                         width='nbytes', height=1,
                         color='nbytes-color')
-            nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0 b')
+            nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
             nbytes.x_range.start = 0
 
             for fig in [processing, nbytes]:
