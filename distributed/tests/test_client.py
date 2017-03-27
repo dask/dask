@@ -3032,6 +3032,15 @@ def test_as_completed_list(loop):
             assert set(c.gather(seq2)) == {1, 2, 3, 4, 5}
 
 
+def test_as_completed_results(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            seq = c.map(inc, range(5))
+            seq2 = list(as_completed(seq, with_results=True))
+            assert set(pluck(1, seq2)) == {1, 2, 3, 4, 5}
+            assert set(pluck(0, seq2)) == set(seq)
+
+
 @gen_test()
 def test_status():
     s = Scheduler()

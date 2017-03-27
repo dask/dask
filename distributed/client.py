@@ -2518,8 +2518,17 @@ class AsCompleted(object):
     6
     12
     24
+
+    Optionally wait until the result has been gathered as well
+
+    >>> ac = as_completed([x, y, z], results=True)  # doctest: +SKIP
+    >>> for future, result in ac:  # doctest: +SKIP
+    ...     print(result)  # doctest: +SKIP
+    2
+    4
+    3
     """
-    def __init__(self, futures=None, loop=None):
+    def __init__(self, futures=None, loop=None, with_results=False):
         if futures is None:
             futures = []
         self.futures = defaultdict(lambda: 0)
@@ -2527,6 +2536,7 @@ class AsCompleted(object):
         self.lock = Lock()
         self.loop = loop or default_client().loop
         self.condition = Condition()
+        self.with_results = with_results
 
         if futures:
             for future in futures:
@@ -2535,11 +2545,16 @@ class AsCompleted(object):
     @gen.coroutine
     def track_future(self, future):
         yield _wait(future)
+        if self.with_results:
+            result = yield future._result()
         with self.lock:
             self.futures[future] -= 1
             if not self.futures[future]:
                 del self.futures[future]
-            self.queue.put_nowait(future)
+            if self.with_results:
+                self.queue.put_nowait((future, result))
+            else:
+                self.queue.put_nowait(future)
             self.condition.notify()
 
     def add(self, future):
