@@ -70,10 +70,10 @@ def test_fft2n(funcname):
     np_fft = getattr(np.fft, funcname)
     assert_eq(da_fft(darr3),
               np_fft(nparr))
-    assert_eq(da_fft(darr3, axes=(1, 0)),
-              np_fft(nparr, axes=(1, 0)))
     assert_eq(da_fft(darr3, (8, 9), axes=(1, 0)),
               np_fft(nparr, (8, 9), axes=(1, 0)))
+    assert_eq(da_fft(darr3, (12, 11), axes=(1, 0)),
+              np_fft(nparr, (12, 11), axes=(1, 0)))
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
