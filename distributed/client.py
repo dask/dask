@@ -11,6 +11,7 @@ from functools import partial
 from glob import glob
 import json
 import logging
+from numbers import Number
 import os
 import sys
 from time import sleep
@@ -2420,11 +2421,17 @@ class CompatibleExecutor(Client):
 
 @gen.coroutine
 def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    if timeout is not None and not isinstance(timeout, Number):
+        raise TypeError("timeout= keyword received a non-numeric value.\n"
+                "Beware that wait expects a list of values\n"
+                "  Bad:  wait(x, y, z)\n"
+                "  Good: wait([x, y, z])")
     fs = futures_of(fs)
-    if timeout is not None:
-        raise NotImplementedError("Timeouts not yet supported")
     if return_when == 'ALL_COMPLETED':
-        yield All({f.event.wait() for f in fs})
+        future = All({f.event.wait() for f in fs})
+        if timeout is not None:
+            future = gen.with_timeout(timedelta(seconds=timeout), future)
+        yield future
         done, not_done = set(fs), set()
         cancelled = [f.key for f in done
                      if f.status == 'cancelled']
@@ -2445,13 +2452,16 @@ def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     Parameters
     ----------
     fs: list of futures
+    timeout: number, optional
+        Time in seconds after which to raise a gen.TimeoutError
 
     Returns
     -------
     Named tuple of completed, not completed
     """
     client = default_client()
-    result = sync(client.loop, _wait, fs, timeout, return_when)
+    result = sync(client.loop, _wait, fs, timeout=timeout,
+                  return_when=return_when)
     return result
 
 
