@@ -8,7 +8,7 @@ occur in far-away machines or different processes or threads.
 Dask has a variety of mechanisms to make this process easier.  Depending on
 your situation some of these approaches may be more appropriate than others.
 
-These approaches are ordered from light weight or easy solutions to more
+These approaches are ordered from lightweight or easy solutions to more
 involved solutions.
 
 Exceptions
@@ -34,7 +34,7 @@ interactive session.  Similarly you'll see a full traceback of where this error
 occurred, which, just like in normal Python, can help you to identify the
 troublsome spot in your code.
 
-However, you can not use the ``pdb`` module or ``%debug`` IPython magics with
+However, you cannot use the ``pdb`` module or ``%debug`` IPython magics with
 these tracebacks to look at the value of variables during failure.  You can
 only inspect things visually.  Additionally, the top of the traceback may be
 filled with functions that are dask-specific and not relevant to your
@@ -55,12 +55,12 @@ all of your normal Python debugging tricks in Dask computations, as long as you
 don't need parallelism.
 
 This only works for single-machine schedulers.  It does not work with
-dask.distributed unless you use comfortable using the Tornado API (want to look
-at the `testing infrastructure
+dask.distributed unless you are comfortable using the Tornado API (look at the
+`testing infrastructure
 <http://distributed.readthedocs.io/en/latest/develop.html#writing-tests>`_
 docs, which accomplish this).  Also, because this operates on a single machine
 it assumes that your computation can run on a single machine without exceeding
-RAM limits.  It may be wise to use this approach on smaller versions of your
+memory limits.  It may be wise to use this approach on smaller versions of your
 problem if possible.
 
 
@@ -131,7 +131,7 @@ Inspect Scheduling State
 ------------------------
 
 Not all errors present themselves as Exceptions.  For example in a distributed
-systems workers may die unexpectedly or your computation may be unreasonably
+system workers may die unexpectedly or your computation may be unreasonably
 slow due to inter-worker communication or scheduler overhead or one of several
 other issues.  Getting feedback about what's going on can help to identify
 both failures and general performance bottlenecks.
@@ -150,9 +150,10 @@ recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc..  *Many* problems can be correctly diagnosed by
 inspecting these pages.  By default these are available at
-``http://scheduler:8787/`` ``http://scheduler:8788`` and ``http://worker:8789``
+``http://scheduler:8787/`` ``http://scheduler:8788/`` and ``http://worker:8789/``
 where ``scheduler`` and ``worker`` should be replaced by the addresses of the
-scheduler and each of the workers.
+scheduler and each of the workers. See `web diagnostic docs
+<http://distributed.readthedocs.io/en/latest/web.html>`_ for more information.
 
 Logs
 ~~~~
@@ -200,7 +201,7 @@ which is what runs when you just call ``Client()``
 LocalCluster is useful because the scheduler and workers are in the same
 process with you, so you can easily inspect their `state
 <http://distributed.readthedocs.io/en/latest/scheduling-state.html>`_ while
-they run (they are running in a separate thread.
+they run (they are running in a separate thread).
 
 .. code-block:: python
 
@@ -208,7 +209,7 @@ they run (they are running in a separate thread.
    {'worker-one:59858': {'inc-123', 'add-443'},
     'worker-two:48248': {'inc-456'}}
 
-You can also do this for the workers *if* you run them without nanny processes
+You can also do this for the workers *if* you run them without nanny processes.
 
 .. code-block:: python
 
