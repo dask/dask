@@ -2769,11 +2769,11 @@ def test_fast_from_array():
 
 
 def test_random_from_array():
-    x = np.zeros(10000000)
+    x = np.zeros(500000000)
     start = time.time()
     y = da.from_array(x, chunks=x.shape[0] / 10, name=False)
     end = time.time()
-    assert end - start < 0.100
+    assert end - start < 0.400
 
     y2 = da.from_array(x, chunks=x.shape[0] / 10, name=False)
     assert y.name != y2.name
