@@ -1,8 +1,11 @@
+from itertools import combinations_with_replacement
+
 import numpy as np
 
 import pytest
 
 import dask.array as da
+import dask.array.fft
 from dask.array.fft import fft_wrap
 from dask.array.utils import assert_eq
 
@@ -16,7 +19,7 @@ def same_keys(a, b):
     return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
-all_funcnames = [
+all_1d_funcnames = [
     "fft",
     "ifft",
     "rfft",
@@ -25,12 +28,24 @@ all_funcnames = [
     "ihfft",
 ]
 
+all_nd_funcnames = [
+    "fft2",
+    "ifft2",
+    "fftn",
+    "ifftn",
+    "rfft2",
+    "irfft2",
+    "rfftn",
+    "irfftn",
+]
+
 nparr = np.arange(100).reshape(10, 10)
 darr = da.from_array(nparr, chunks=(1, 10))
 darr2 = da.from_array(nparr, chunks=(10, 1))
+darr3 = da.from_array(nparr, chunks=(10, 10))
 
 
-@pytest.mark.parametrize("funcname", all_funcnames)
+@pytest.mark.parametrize("funcname", all_1d_funcnames)
 def test_cant_fft_chunked_axis(funcname):
     da_fft = getattr(da.fft, funcname)
 
@@ -40,7 +55,7 @@ def test_cant_fft_chunked_axis(funcname):
             da_fft(bad_darr, axis=i)
 
 
-@pytest.mark.parametrize("funcname", all_funcnames)
+@pytest.mark.parametrize("funcname", all_1d_funcnames)
 def test_fft(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
@@ -49,7 +64,19 @@ def test_fft(funcname):
               np_fft(nparr))
 
 
-@pytest.mark.parametrize("funcname", all_funcnames)
+@pytest.mark.parametrize("funcname", all_nd_funcnames)
+def test_fft2n_shapes(funcname):
+    da_fft = getattr(dask.array.fft, funcname)
+    np_fft = getattr(np.fft, funcname)
+    assert_eq(da_fft(darr3),
+              np_fft(nparr))
+    assert_eq(da_fft(darr3, (8, 9), axes=(1, 0)),
+              np_fft(nparr, (8, 9), axes=(1, 0)))
+    assert_eq(da_fft(darr3, (12, 11), axes=(1, 0)),
+              np_fft(nparr, (12, 11), axes=(1, 0)))
+
+
+@pytest.mark.parametrize("funcname", all_1d_funcnames)
 def test_fft_n_kwarg(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
@@ -68,7 +95,7 @@ def test_fft_n_kwarg(funcname):
               np_fft(nparr, 12, axis=0))
 
 
-@pytest.mark.parametrize("funcname", all_funcnames)
+@pytest.mark.parametrize("funcname", all_1d_funcnames)
 def test_fft_consistent_names(funcname):
     da_fft = getattr(da.fft, funcname)
 
@@ -82,8 +109,36 @@ def test_wrap_bad_kind():
         fft_wrap(np.ones)
 
 
+@pytest.mark.parametrize("funcname", all_nd_funcnames)
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_nd_ffts_axes(funcname, dtype):
+    np_fft = getattr(np.fft, funcname)
+    da_fft = getattr(da.fft, funcname)
+
+    shape = (6, 7, 8, 9)
+    chunk_size = (3, 3, 3, 3)
+    a = np.arange(np.prod(shape), dtype=dtype).reshape(shape)
+    d = da.from_array(a, chunks=chunk_size)
+
+    for num_axes in range(1, d.ndim):
+        for axes in combinations_with_replacement(range(d.ndim), num_axes):
+            cs = list(chunk_size)
+            for i in axes:
+                cs[i] = shape[i]
+            d2 = d.rechunk(cs)
+            if len(set(axes)) < len(axes):
+                with pytest.raises(ValueError):
+                    da_fft(d2, axes=axes)
+            else:
+                r = da_fft(d2, axes=axes)
+                er = np_fft(a, axes=axes)
+                assert r.dtype == er.dtype
+                assert r.shape == er.shape
+                assert_eq(r, er)
+
+
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
-@pytest.mark.parametrize("funcname", all_funcnames)
+@pytest.mark.parametrize("funcname", all_1d_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_ffts(modname, funcname, dtype):
     fft_mod = pytest.importorskip(modname)
@@ -112,3 +167,29 @@ def test_wrap_ffts(modname, funcname, dtype):
                   func(nparrc, n=darrc.shape[1] - 1))
         assert_eq(wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
                   func(nparrc, axis=0, n=darr2c.shape[0] - 1))
+
+
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("funcname", all_nd_funcnames)
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_wrap_fftns(modname, funcname, dtype):
+    fft_mod = pytest.importorskip(modname)
+    try:
+        func = getattr(fft_mod, funcname)
+    except AttributeError:
+        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+
+    darrc = darr.astype(dtype).rechunk(darr.shape)
+    darr2c = darr2.astype(dtype).rechunk(darr2.shape)
+    nparrc = nparr.astype(dtype)
+
+    wfunc = fft_wrap(func)
+    assert wfunc(darrc).dtype == func(nparrc).dtype
+    assert wfunc(darrc).shape == func(nparrc).shape
+    assert_eq(wfunc(darrc), func(nparrc))
+    assert_eq(wfunc(darrc, axes=(1, 0)), func(nparrc, axes=(1, 0)))
+    assert_eq(wfunc(darr2c, axes=(0, 1)), func(nparrc, axes=(0, 1)))
+    assert_eq(
+        wfunc(darr2c, (darr2c.shape[0] - 1, darr2c.shape[1] - 1), (0, 1)),
+        func(nparrc, (nparrc.shape[0] - 1, nparrc.shape[1] - 1), (0, 1))
+    )

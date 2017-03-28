@@ -27,42 +27,61 @@ fft_preamble = """
     """
 
 
-def _fft_out_chunks(a, n, axis):
-    """ For computing the output chunks of fft and ifft"""
-    if n is None:
+def _fft_out_chunks(a, s, axes):
+    """ For computing the output chunks of [i]fft*"""
+    if s is None:
         return a.chunks
     chunks = list(a.chunks)
+    for axis in axes:
+        chunks[axis] = (s[axis],)
+    return chunks
+
+
+def _rfft_out_chunks(a, s, axes):
+    """ For computing the output chunks of rfft*"""
+    if s is None:
+        s = [c[0] for c in a.chunks]
+    chunks = list(a.chunks)
+    chunks[axes[-1]] = (s[axes[-1]] // 2 + 1,)
+    return chunks
+
+
+def _irfft_out_chunks(a, s, axes):
+    """ For computing the output chunks of irfft*"""
+    if s is None:
+        s = [c[0] for c in a.chunks]
+        s[axes[-1]] = 2 * (s[axes[-1]] - 1)
+    chunks = list(a.chunks)
+    for axis in axes:
+        chunks[axis] = (s[axis],)
+    return chunks
+
+
+def _hfft_out_chunks(a, s, axes):
+    assert len(axes) == 1
+
+    axis = axes[0]
+
+    if s is None:
+        s = [c[0] for c in a.chunks]
+        s[axis] = 2 * (a.chunks[axis][0] - 1)
+
+    n = s[axis]
+
+    chunks = list(a.chunks)
     chunks[axis] = (n,)
     return chunks
 
 
-def _rfft_out_chunks(a, n, axis):
-    if n is None:
-        n = a.chunks[axis][0]
-    chunks = list(a.chunks)
-    chunks[axis] = (n // 2 + 1,)
-    return chunks
+def _ihfft_out_chunks(a, s, axes):
+    assert len(axes) == 1
 
+    if s is None:
+        s = [c[0] for c in a.chunks]
 
-def _irfft_out_chunks(a, n, axis):
-    if n is None:
-        n = 2 * (a.chunks[axis][0] - 1)
-    chunks = list(a.chunks)
-    chunks[axis] = (n,)
-    return chunks
+    axis = axes[0]
+    n = s[axis]
 
-
-def _hfft_out_chunks(a, n, axis):
-    if n is None:
-        n = 2 * (a.chunks[axis][0] - 1)
-    chunks = list(a.chunks)
-    chunks[axis] = (n,)
-    return chunks
-
-
-def _ihfft_out_chunks(a, n, axis):
-    if n is None:
-        n = a.chunks[axis][0]
     chunks = list(a.chunks)
     if n % 2 == 0:
         m = (n // 2) + 1
@@ -110,24 +129,57 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if kind is None:
         kind = fft_func.__name__
     try:
-        out_chunk_fn = _out_chunk_fns[kind]
+        out_chunk_fn = _out_chunk_fns[kind.rstrip("2n")]
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
-    _dtype = dtype
+    def func(a, s=None, axes=None):
+        if axes is None:
+            if kind.endswith('2'):
+                axes = (-2, -1)
+            elif kind.endswith('n'):
+                if s is None:
+                    axes = tuple(range(a.ndim))
+                else:
+                    axes = tuple(range(len(s)))
+            else:
+                raise ValueError("Expected 2d or nd fft.")
+        else:
+            if len(set(axes)) < len(axes):
+                raise ValueError("Duplicate axes not allowed.")
 
-    def func(a, n=None, axis=-1):
-        dtype = _dtype
-        if dtype is None:
-            dtype = fft_func(np.ones(8, dtype=a.dtype)).dtype
+        _dtype = dtype
+        if _dtype is None:
+            _dtype = fft_func(np.ones(len(axes) * (8,),
+                                      dtype=a.dtype)).dtype
 
-        if len(a.chunks[axis]) != 1:
-            raise ValueError(chunk_error % (axis, a.chunks[axis]))
+        for each_axis in axes:
+            if len(a.chunks[each_axis]) != 1:
+                raise ValueError(chunk_error % (each_axis, a.chunks[each_axis]))
 
-        chunks = out_chunk_fn(a, n, axis)
+        chunks = out_chunk_fn(a, s, axes)
 
-        return a.map_blocks(fft_func, n=n, axis=axis, dtype=dtype,
+        args = (s, axes)
+        if kind.endswith('fft'):
+            axis = None if axes is None else axes[0]
+            n = None if s is None else s[axis]
+            args = (n, axis)
+
+        return a.map_blocks(fft_func, *args, dtype=_dtype,
                             chunks=chunks)
+
+    if kind.endswith('fft'):
+        _func = func
+
+        def func(a, n=None, axis=None):
+            axes = (1,) if axis is None else (axis,)
+
+            s = None
+            if n is not None:
+                s = [None] * a.ndim
+                s[axes[0]] = n
+
+            return _func(a, s, axes)
 
     func_mod = inspect.getmodule(fft_func)
     func_name = fft_func.__name__
@@ -140,8 +192,16 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
 
 fft = fft_wrap(np.fft.fft, dtype=np.complex_)
+fft2 = fft_wrap(np.fft.fft2, dtype=np.complex_)
+fftn = fft_wrap(np.fft.fftn, dtype=np.complex_)
 ifft = fft_wrap(np.fft.ifft, dtype=np.complex_)
+ifft2 = fft_wrap(np.fft.ifft2, dtype=np.complex_)
+ifftn = fft_wrap(np.fft.ifftn, dtype=np.complex_)
 rfft = fft_wrap(np.fft.rfft, dtype=np.complex_)
+rfft2 = fft_wrap(np.fft.rfft2, dtype=np.complex_)
+rfftn = fft_wrap(np.fft.rfftn, dtype=np.complex_)
 irfft = fft_wrap(np.fft.irfft, dtype=np.float_)
+irfft2 = fft_wrap(np.fft.irfft2, dtype=np.float_)
+irfftn = fft_wrap(np.fft.irfftn, dtype=np.float_)
 hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
 ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
