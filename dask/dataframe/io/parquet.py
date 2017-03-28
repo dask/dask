@@ -83,7 +83,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
-           not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
+           not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     # Find an index among the partially sorted columns
@@ -139,7 +139,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.helper, pf.cats, pf.dtypes)
+                       categories, pf.schema, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -154,14 +154,14 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            helper, cs, dt, *args):
+                            schema, cs, dt, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
-    read_row_group_file(fn, rg, columns, categories, helper, cs,
+    read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views)
 
     if series:
