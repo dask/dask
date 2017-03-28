@@ -299,8 +299,7 @@ def test_read_parquet_custom_columns():
     (pd.DataFrame({'0': [3, 2, 1]}), {}, {}),
     (pd.DataFrame({'x': [3, 2, None]}), {}, {}),
     (pd.DataFrame({'-': [3., 2., None]}), {}, {}),
-    # (pd.DataFrame({'.': [3., 2., None]}), {}, {}),
-    # period is not allowed in a field name
+    (pd.DataFrame({'.': [3., 2., None]}), {}, {}),
     (pd.DataFrame({' ': [3., 2., None]}), {}, {}),
 ])
 def test_roundtrip(df, write_kwargs, read_kwargs):
