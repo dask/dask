@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 import logging
 from math import sqrt
+from numbers import Number
 from operator import add
 import os
 
@@ -34,9 +35,9 @@ from ..diagnostics.progress import AllProgress
 from .task_stream import TaskStreamPlugin
 
 try:
-    from cytoolz.curried import map, concat, groupby, valmap
+    from cytoolz.curried import map, concat, groupby, valmap, first
 except ImportError:
-    from toolz.curried import map, concat, groupby, valmap
+    from toolz.curried import map, concat, groupby, valmap, first
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,29 @@ with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
     template_source = f.read()
 
 template = jinja2.Template(template_source)
+
+
+def update(source, data):
+    """ Update source with data
+
+    This checks a few things first
+
+    1.  If the data is the same, then don't update
+    2.  If numpy is available and the data is numeric, then convert to numpy
+        arrays
+    3.  If profiling then perform the update in another callback
+    """
+    if source.data == data:
+        return
+    if np and len(data[first(data)]) > 10:
+        for k, v in data.items():
+            if type(v) is not np.ndarray and isinstance(v[0], Number):
+                data[k] = np.array(v)
+
+    if PROFILING:
+        curdoc().add_next_tick_callback(lambda: source.data.update(data))
+    else:
+        source.data.update(data)
 
 
 class StateTable(DashboardComponent):
@@ -80,10 +104,7 @@ class StateTable(DashboardComponent):
                  'Erred': [len(s.exceptions)],
                  'Released': [len(s.released)]}
 
-            if PROFILING:
-                curdoc().add_next_tick_callback(lambda: self.source.data.update(d))
-            else:
-                self.source.data.update(d)
+            update(self.source, d)
 
 
 class Occupancy(DashboardComponent):
@@ -158,10 +179,7 @@ class Occupancy(DashboardComponent):
                           'bokeh_address': bokeh_addresses,
                           'x': x, 'y': y}
 
-                if PROFILING:
-                    curdoc().add_next_tick_callback(lambda: self.source.data.update(result))
-                else:
-                    self.source.data.update(result)
+                update(self.source, result)
 
 
 class CurrentLoad(DashboardComponent):
@@ -280,10 +298,7 @@ class CurrentLoad(DashboardComponent):
 
                 self.nbytes_figure.title.text = 'Bytes stored: ' + format_bytes(sum(nbytes))
 
-                if PROFILING:
-                    curdoc().add_next_tick_callback(lambda: self.source.data.update(result))
-                else:
-                    self.source.data.update(result)
+                update(self.source, result)
 
 
 class StealingTimeSeries(DashboardComponent):
@@ -486,11 +501,7 @@ class TaskStream(components.TaskStream):
                 if m > self.last:
                     self.last, last = m, self.last
                     if m > last + self.clear_interval:
-                        if PROFILING:
-                            curdoc().add_next_tick_callback(lambda:
-                                    self.source.data.update(rectangles))
-                        else:
-                            self.source.data.update(rectangles)
+                        update(self.source, rectangles)
                         return
 
             if len(set(map(len, rectangles.values()))) != 1:
@@ -594,10 +605,7 @@ class TaskProgress(DashboardComponent):
 
             d = progress_quads(state)
 
-            if PROFILING:
-                curdoc().add_next_tick_callback(lambda: self.source.data.update(d))
-            else:
-                self.source.data.update(d)
+            update(self.source, d)
 
             totals = {k: sum(state[k].values())
                       for k in ['all', 'memory', 'erred', 'released']}
@@ -660,11 +668,7 @@ class MemoryUse(DashboardComponent):
     def update(self):
         with log_errors():
             nb = nbytes_bar(self.plugin.nbytes)
-            if PROFILING:
-                curdoc().add_next_tick_callback(lambda:
-                        self.source.data.update(nb))
-            else:
-                self.source.data.update(nb)
+            update(self.source, nb)
             self.root.title.text = \
                     "Memory Use: %0.2f MB" % (sum(self.plugin.nbytes.values()) / 1e6)
 
