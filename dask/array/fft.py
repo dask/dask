@@ -148,11 +148,10 @@ def fft_wrap(fft_func, kind=None, dtype=None):
             if len(set(axes)) < len(axes):
                 raise ValueError("Duplicate axes not allowed.")
 
-        if dtype is None:
+        _dtype = dtype
+        if _dtype is None:
             _dtype = fft_func(np.ones(len(axes) * (8,),
-                                     dtype=a.dtype)).dtype
-        else:
-            _dtype = dtype
+                                      dtype=a.dtype)).dtype
 
         for each_axis in axes:
             if len(a.chunks[each_axis]) != 1:
