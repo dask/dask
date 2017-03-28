@@ -505,8 +505,18 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    ave_width = ave_width or _globals.get('fuse_ave_width') or 1
-    max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
+    if ave_width is None:
+        if _globals.get('fuse_ave_width') is None:
+            ave_width = 1
+        else:
+            ave_width = _globals['fuse_ave_width']
+
+    if max_height is None:
+        if _globals.get('fuse_max_height') is None:
+            max_height = len(dsk)
+        else:
+            max_height = _globals['fuse_max_height']
+
     max_depth_new_edges = (
         max_depth_new_edges or
         _globals.get('fuse_max_depth_new_edges') or
@@ -517,6 +527,10 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         _globals.get('fuse_max_width') or
         1.5 + ave_width * math.log(ave_width + 1)
     )
+
+    if not ave_width or not max_height:
+        return dsk, dependencies
+
     if rename_keys is None:
         rename_keys = _globals.get('fuse_rename_keys', True)
     if rename_keys is True:
