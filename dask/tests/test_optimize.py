@@ -419,7 +419,7 @@ def test_fuse_reductions_single_input():
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps({
         'a': 1,
         'b1-b2-c': (f, (f, 'a'), (f, 'a')),
-        'd1-d2-e': (f, (f, 'b1-b2-c'), (f, 'b1-b2-c')),
+        'd1-d2-e': (f, (f, 'c'), (f, 'c')),
         'c': 'b1-b2-c',
         'e': 'd1-d2-e',
     })
@@ -448,7 +448,7 @@ def test_fuse_reductions_single_input():
         'a': 1,
         'b1-b2-c1': (f, (f, 'a'), (f, 'a')),
         'b3-b4-c2': (f, (f, 'a'), (f, 'a')),
-        'd': (f, 'b1-b2-c1', 'b3-b4-c2'),
+        'd': (f, 'c1', 'c2'),
         'c1': 'b1-b2-c1',
         'c2': 'b3-b4-c2',
     })
@@ -502,8 +502,8 @@ def test_fuse_reductions_single_input():
         'b3-b4-c2': (f, (f, 'a'), (f, 'a')),
         'b5-b6-c3': (f, (f, 'a'), (f, 'a')),
         'b7-b8-c4': (f, (f, 'a'), (f, 'a')),
-        'd1': (f, 'b1-b2-c1', 'b3-b4-c2'),
-        'd2': (f, 'b5-b6-c3', 'b7-b8-c4'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
         'e': (f, 'd1', 'd2'),
         'c1': 'b1-b2-c1',
         'c2': 'b3-b4-c2',
@@ -524,7 +524,7 @@ def test_fuse_reductions_single_input():
         'a': 1,
         'b1-b2-b3-b4-c1-c2-d1': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
         'b5-b6-b7-b8-c3-c4-d2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
-        'e': (f, 'b1-b2-b3-b4-c1-c2-d1', 'b5-b6-b7-b8-c3-c4-d2'),
+        'e': (f, 'd1', 'd2'),
         'd1': 'b1-b2-b3-b4-c1-c2-d1',
         'd2': 'b5-b6-b7-b8-c3-c4-d2',
 
@@ -612,10 +612,10 @@ def test_fuse_reductions_single_input():
         'b11-b12-c6': (f, (f, 'a'), (f, 'a')),
         'b13-b14-c7': (f, (f, 'a'), (f, 'a')),
         'b15-b16-c8': (f, (f, 'a'), (f, 'a')),
-        'd1': (f, 'b1-b2-c1', 'b3-b4-c2'),
-        'd2': (f, 'b5-b6-c3', 'b7-b8-c4'),
-        'd3': (f, 'b10-b9-c5', 'b11-b12-c6'),
-        'd4': (f, 'b13-b14-c7', 'b15-b16-c8'),
+        'd1': (f, 'c1', 'c2'),
+        'd2': (f, 'c3', 'c4'),
+        'd3': (f, 'c5', 'c6'),
+        'd4': (f, 'c7', 'c8'),
         'e1': (f, 'd1', 'd2'),
         'e2': (f, 'd3', 'd4'),
         'f': (f, 'e1', 'e2'),
@@ -648,8 +648,8 @@ def test_fuse_reductions_single_input():
         'b5-b6-b7-b8-c3-c4-d2': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
         'b10-b11-b12-b9-c5-c6-d3': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
         'b13-b14-b15-b16-c7-c8-d4': (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
-        'e1': (f, 'b1-b2-b3-b4-c1-c2-d1', 'b5-b6-b7-b8-c3-c4-d2'),
-        'e2': (f, 'b10-b11-b12-b9-c5-c6-d3', 'b13-b14-b15-b16-c7-c8-d4'),
+        'e1': (f, 'd1', 'd2'),
+        'e2': (f, 'd3', 'd4'),
         'f': (f, 'e1', 'e2'),
         'd1': 'b1-b2-b3-b4-c1-c2-d1',
         'd2': 'b5-b6-b7-b8-c3-c4-d2',
@@ -680,7 +680,7 @@ def test_fuse_reductions_single_input():
             (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a'))),
             (f, (f, (f, 'a'), (f, 'a')), (f, (f, 'a'), (f, 'a')))
         ),
-        'f': (f, 'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1', 'b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2'),
+        'f': (f, 'e1', 'e2'),
         'e1': 'b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1',
         'e2': 'b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2',
 
@@ -771,7 +771,7 @@ def test_fuse_reductions_single_input():
         'a': 1,
         'b2': (f, 'a'),
         'b1-c1-d1-e1': (f, (f, (f, (f, 'a')))),
-        'f': (f, 'b1-c1-d1-e1', 'b2'),
+        'f': (f, 'e1', 'b2'),
         'e1': 'b1-c1-d1-e1',
 
     })
@@ -809,7 +809,7 @@ def test_fuse_reductions_single_input():
         'a': 1,
         'b2': (f, 'a'),
         'b1-c1-d1-e1': (f, 'a', (f, 'a', (f, 'a', (f, 'a')))),
-        'f': (f, 'a', 'b1-c1-d1-e1', 'b2'),
+        'f': (f, 'a', 'e1', 'b2'),
         'e1': 'b1-c1-d1-e1',
     })
     assert fuse(d, ave_width=1, rename_keys=True) == expected
@@ -851,7 +851,7 @@ def test_fuse_reductions_single_input():
         'b1-c1-d1': (f, (f, (f, 'a'))),
         'b2-c2-d2': (f, (f, (f, 'a'))),
         'b3-c3-d3': (f, (f, (f, 'a'))),
-        'e-f-g': (f, (f, (f, 'b1-c1-d1', 'b2-c2-d2', 'b3-c3-d3'))),
+        'e-f-g': (f, (f, (f, 'd1', 'd2', 'd3'))),
         'd1': 'b1-c1-d1',
         'd2': 'b2-c2-d2',
         'd3': 'b3-c3-d3',
@@ -874,8 +874,8 @@ def test_fuse_reductions_single_input():
     })
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps({
         'a-b': (f, 1),
-        'c-d': (f, 'a-b', (f, 'a-b')),
-        'e-f-g': (f, 'c-d', (f, (f, 'c-d'))),
+        'c-d': (f, 'b', (f, 'b')),
+        'e-f-g': (f, 'd', (f, (f, 'd'))),
         'b': 'a-b',
         'd': 'c-d',
         'g': 'e-f-g',
