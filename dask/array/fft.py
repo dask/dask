@@ -133,53 +133,43 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
-    dim = "1"
-    if kind.endswith("n"):
-        dim = "N"
-    elif kind.endswith("2"):
-        dim = "2"
-
-    _dtype = dtype
-    _dim = dim
-
     def func(a, s=None, axes=None):
-        dim = _dim
-        dtype = _dtype
-
         if axes is None:
-            if dim == "2":
+            if kind.endswith('2'):
                 axes = (-2, -1)
-            else:
-                assert dim == "N"
+            elif kind.endswith('n'):
                 if s is None:
                     axes = tuple(range(a.ndim))
                 else:
                     axes = tuple(range(len(s)))
+            else:
+                raise ValueError("Expected 2d or nd fft.")
         else:
             if len(set(axes)) < len(axes):
                 raise ValueError("Duplicate axes not allowed.")
 
         if dtype is None:
-            dtype = fft_func(np.ones(len(axes) * (8,),
+            _dtype = fft_func(np.ones(len(axes) * (8,),
                                      dtype=a.dtype)).dtype
+        else:
+            _dtype = dtype
 
         for each_axis in axes:
             if len(a.chunks[each_axis]) != 1:
-                raise ValueError(
-                    chunk_error % (each_axis, a.chunks[each_axis]))
+                raise ValueError(chunk_error % (each_axis, a.chunks[each_axis]))
 
         chunks = out_chunk_fn(a, s, axes)
 
         args = (s, axes)
-        if dim == "1":
+        if kind.endswith('fft'):
             axis = None if axes is None else axes[0]
             n = None if s is None else s[axis]
             args = (n, axis)
 
-        return a.map_blocks(fft_func, *args, dtype=dtype,
+        return a.map_blocks(fft_func, *args, dtype=_dtype,
                             chunks=chunks)
 
-    if dim == "1":
+    if kind.endswith('fft'):
         _func = func
 
         def func(a, n=None, axis=None):
