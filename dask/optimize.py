@@ -727,34 +727,13 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 parent = rdeps[parent][0]
 
     if key_renamer is not None:
-        alias_names = {}
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:
-                alias_names[root_key] = alias
                 rv[alias] = rv[root_key]
                 rv[root_key] = alias
                 deps[alias] = deps[root_key]
                 deps[root_key] = {alias}
-        aliases_set = set(alias_names)
-        for root_key, alias in alias_names.items():
-            if root_key in rdeps:
-                for key in set(rdeps[root_key]) - aliases_set:
-                    if key in rv and root_key in deps[key]:
-                        rv[key] = subs(rv[key], root_key, alias)
-                        deps[key].remove(root_key)
-                        deps[key].add(alias)
-        for root_key in fused_trees:
-            alias = alias_names[root_key] if root_key in alias_names else root_key
-            for key in deps[alias] & aliases_set:
-                key_alias = alias_names[key]
-                rv[alias] = subs(rv[alias], key, key_alias)
-                deps[alias].remove(key)
-                deps[alias].add(key_alias)
-        if keys is not None:
-            for key in aliases_set - keys:
-                del rv[key]
-                del deps[key]
     return rv, deps
 
 
