@@ -567,6 +567,8 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     children_stack = []
     # For speed
     deps_pop = deps.pop
+    reducible_add = reducible.add
+    reducible_pop = reducible.pop
     reducible_remove = reducible.remove
     fused_trees_pop = fused_trees.pop
     info_stack_append = info_stack.append
@@ -575,7 +577,8 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     children_stack_extend = children_stack.extend
     children_stack_pop = children_stack.pop
     while reducible:
-        parent = next(iter(reducible))
+        parent = reducible_pop()
+        reducible_add(parent)
         while parent in reducible:
             # Go to the top
             parent = rdeps[parent][0]
