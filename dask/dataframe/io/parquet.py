@@ -44,10 +44,13 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         List of filters to apply, like ``[('x', '>' 0), ...]``
     index: string or None
         Name of index column to use if that column is sorted
-    categories: list or None
+    categories: list, dict or None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
+        If a list, assumes up to 2**16-1 labels; if a dict, specify the number
+        of labels expected; if None, will load categories automatically for
+        data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
 
@@ -77,11 +80,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
 
     check_column_names(pf.columns, categories)
-    categories = categories or []
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
-           not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
+           not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     # Find an index among the partially sorted columns
@@ -115,8 +117,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    dtypes = {k: ('category' if k in categories else v) for k, v in
-              pf.dtypes.items() if k in all_columns}
+    if categories is None:
+        categories = pf.categories
+    dtypes = pf._dtypes(categories)
 
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in dtypes.items()},
@@ -136,7 +139,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.helper, pf.cats, pf.dtypes)
+                       categories, pf.schema, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -151,14 +154,14 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            helper, cs, dt, *args):
+                            schema, cs, dt, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
-    read_row_group_file(fn, rg, columns, categories, helper, cs,
+    read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views)
 
     if series:

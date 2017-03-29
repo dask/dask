@@ -135,11 +135,21 @@ def test_categorical():
         to_parquet(tmp, ddf)
 
         ddf2 = read_parquet(tmp, categories=['x'])
-
         assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
+        # autocat
+        ddf2 = read_parquet(tmp)
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
+
+        # dereference cats
+        ddf2 = read_parquet(tmp, categories=[])
+
+        ddf2.loc[:1000].compute()
+        assert (df.x == ddf2.x).all()
 
 
 def test_append():
