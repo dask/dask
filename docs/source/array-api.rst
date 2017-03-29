@@ -111,6 +111,7 @@ Top level user functions:
    repeat
    reshape
    rint
+   roll
    round
    sign
    signbit
@@ -361,6 +362,7 @@ Other functions
 .. autofunction:: rechunk
 .. autofunction:: reshape
 .. autofunction:: rint
+.. autofunction:: roll
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit

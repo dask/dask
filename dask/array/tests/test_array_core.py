@@ -712,6 +712,16 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
+@pytest.mark.parametrize('chunks', [(4, 6), (2, 6)])
+@pytest.mark.parametrize('shift', [3, 7, 9])
+@pytest.mark.parametrize('axis', [None, 0, 1, -1])
+def test_roll(chunks, shift, axis):
+    x = np.random.randint(10, size=(4, 6))
+    a = from_array(x, chunks=chunks)
+
+    assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
+
+
 @pytest.mark.parametrize('original_shape,new_shape,chunks', [
     ((10,), (10,), (3, 3, 4)),
     ((10,), (10, 1, 1), 5),
