@@ -48,12 +48,6 @@ Top level user functions:
    expm1
    eye
    fabs
-   fft.fft
-   fft.ifft
-   fft.hfft
-   fft.ihfft
-   fft.rfft
-   fft.irfft
    fix
    floor
    fmax
@@ -144,6 +138,26 @@ Top level user functions:
    vstack
    where
    zeros
+
+Fast Fourier Transforms
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   fft.fft_wrap
+   fft.fft
+   fft.fft2
+   fft.fftn
+   fft.ifft
+   fft.ifft2
+   fft.ifftn
+   fft.rfft
+   fft.rfft2
+   fft.rfftn
+   fft.irfft
+   fft.irfft2
+   fft.irfftn
+   fft.hfft
+   fft.ihfft
 
 Linear Algebra
 ~~~~~~~~~~~~~~
@@ -403,12 +417,21 @@ Other functions
 
 .. currentmodule:: dask.array.fft
 
+.. autofunction:: fft_wrap
 .. autofunction:: fft
+.. autofunction:: fft2
+.. autofunction:: fftn
 .. autofunction:: ifft
+.. autofunction:: ifft2
+.. autofunction:: ifftn
+.. autofunction:: rfft
+.. autofunction:: rfft2
+.. autofunction:: rfftn
+.. autofunction:: irfft
+.. autofunction:: irfft2
+.. autofunction:: irfftn
 .. autofunction:: hfft
 .. autofunction:: ihfft
-.. autofunction:: rfft
-.. autofunction:: irfft
 
 .. currentmodule:: dask.array.random
 
