@@ -748,7 +748,14 @@ def test_ravel():
 def test_reshape(original_shape, new_shape, chunks):
     x = np.random.randint(10, size=original_shape)
     a = from_array(x, chunks=chunks)
-    assert_eq(x.reshape(new_shape), a.reshape(new_shape))
+
+    xr = x.reshape(new_shape)
+    ar = a.reshape(new_shape)
+
+    if a.shape == new_shape:
+        assert a is ar
+
+    assert_eq(xr, ar)
 
 
 def test_reshape_exceptions():
