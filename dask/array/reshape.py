@@ -163,6 +163,9 @@ def reshape(x, shape):
     if reduce(mul, shape, 1) != x.size:
         raise ValueError('total size of new array must be unchanged')
 
+    if x.shape == shape:
+        return x
+
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
