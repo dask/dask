@@ -111,7 +111,6 @@ Top level user functions:
    prod
    rad2deg
    radians
-   random
    ravel
    real
    rechunk
