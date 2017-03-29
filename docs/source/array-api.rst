@@ -348,6 +348,7 @@ Other functions
 .. autofunction:: rechunk
 .. autofunction:: reshape
 .. autofunction:: rint
+.. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
 .. autofunction:: sin
