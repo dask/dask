@@ -1,6 +1,8 @@
-from multiprocessing.pool import ThreadPool
 import threading
-from threading import Thread
+import signal
+import subprocess
+import sys
+from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
 import pytest
@@ -52,7 +54,7 @@ def test_threaded_within_thread():
     before = threading.active_count()
 
     for i in range(20):
-        t = Thread(target=f, args=(1,))
+        t = threading.Thread(target=f, args=(1,))
         t.daemon = True
         t.start()
         t.join()
@@ -91,7 +93,7 @@ def test_thread_safety():
 
     threads = []
     for i in range(20):
-        t = Thread(target=test_f)
+        t = threading.Thread(target=test_f)
         t.daemon = True
         t.start()
         threads.append(t)
@@ -100,3 +102,53 @@ def test_thread_safety():
         thread.join()
 
     assert L == [1] * 20
+
+
+code = """
+import sys
+from dask.threaded import get
+
+def signal_started():
+    sys.stdout.write('started\\n')
+    sys.stdout.flush()
+
+def long_task(x):
+    out = 0
+    N = 100000
+    for i in range(N):
+        for j in range(N):
+            out += 1
+
+dsk = {('x', i): (long_task, 'started') for i in range(100)}
+dsk['started'] = (signal_started,)
+dsk['x'] = (sum, list(dsk.keys()))
+get(dsk, 'x')
+"""
+
+
+@pytest.mark.slow
+def test_interrupt():
+    try:
+        proc = subprocess.Popen([sys.executable, '-c', code],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        # Wait for scheduler to start
+        msg = proc.stdout.readline()
+        if msg != 'started\n' and proc.poll() is not None:
+            assert False, "subprocess failed"
+        # Scheduler has started, send an interrupt
+        proc.send_signal(signal.SIGINT)
+        # Wait a bit for it to die
+        start = time()
+        while time() - start < 0.2:
+            if proc.poll() is not None:
+                break
+            sleep(0.05)
+        else:
+            assert False, "Interrupt Failed"
+        # Ensure KeyboardInterrupt in traceback
+        stderr = proc.stderr.read()
+        assert "KeyboardInterrupt" in stderr.decode()
+    except:
+        proc.terminate()
+        raise
