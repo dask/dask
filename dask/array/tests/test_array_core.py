@@ -722,6 +722,22 @@ def test_roll(chunks, shift, axis):
     assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+@pytest.mark.parametrize('chunks', [(4, 6), (2, 6)])
+@pytest.mark.parametrize('shift', [(3, 9), (7, 2)])
+@pytest.mark.parametrize('axis', [(0, 1), (1, 0)])
+def test_roll_multiple(chunks, shift, axis):
+    if LooseVersion(np.__version__) < LooseVersion("1.12.0"):
+        pytest.skip(
+            "NumPy %s doesn't support multiple axes."
+            " Need NumPy 1.12.0 or greater." % np.__version__
+        )
+
+    x = np.random.randint(10, size=(4, 6))
+    a = from_array(x, chunks=chunks)
+
+    assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
+
+
 @pytest.mark.parametrize('original_shape,new_shape,chunks', [
     ((10,), (10,), (3, 3, 4)),
     ((10,), (10, 1, 1), 5),
