@@ -127,6 +127,13 @@ from .optimize import cull
 from .utils_test import add, inc  # noqa: F401
 
 
+# Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
+# `Queue.get` can't be interrupted. A workaround is to specify an extremely
+# long timeout, which then allows it to be interrupted.
+# For more information see: https://bugs.python.org/issue1360
+ONE_YEAR = 365 * 24 * 60 * 60
+
+
 DEBUG = False
 
 
@@ -488,7 +495,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
-            key, res_info = queue.get()
+            key, res_info = queue.get(block=True, timeout=ONE_YEAR)
             res, tb, worker_id = loads(res_info)
             if isinstance(res, BaseException):
                 if rerun_exceptions_locally:
