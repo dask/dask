@@ -600,7 +600,7 @@ class TaskProgress(DashboardComponent):
                      'nbytes': self.plugin.nbytes}
             for k in ['memory', 'erred', 'released']:
                 state[k] = valmap(len, self.plugin.state[k])
-            if not state['all']:
+            if not state['all'] and not self.source.data['all']:
                 return
 
             d = progress_quads(state)

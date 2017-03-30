@@ -145,6 +145,14 @@ def test_TaskProgress(c, s, a, b):
     assert all(len(L) == 2 for L in d.values())
     assert d['name'] == ['slowinc', 'dec']
 
+    del futures, futures2
+
+    while s.task_state:
+        yield gen.sleep(0.01)
+
+    tp.update()
+    assert not tp.source.data['all']
+
 
 @gen_cluster(client=True)
 def test_MemoryUse(c, s, a, b):
