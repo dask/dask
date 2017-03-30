@@ -1,3 +1,4 @@
+import os
 import threading
 import signal
 import subprocess
@@ -137,15 +138,21 @@ def test_interrupt():
         if msg != 'started\n' and proc.poll() is not None:
             assert False, "subprocess failed"
         # Scheduler has started, send an interrupt
-        proc.send_signal(signal.SIGINT)
-        # Wait a bit for it to die
-        start = time()
-        while time() - start < 0.2:
-            if proc.poll() is not None:
-                break
-            sleep(0.05)
-        else:
-            assert False, "Interrupt Failed"
+        sigint = signal.CTRL_C_EVENT if os.name == 'nt' else signal.SIGINT
+        try:
+            proc.send_signal(sigint)
+            # Wait a bit for it to die
+            start = time()
+            while time() - start < 0.5:
+                if proc.poll() is not None:
+                    break
+                sleep(0.05)
+            else:
+                assert False, "KeyboardInterrupt Failed"
+        except KeyboardInterrupt:
+            # On windows the interrupt is also raised in this process.
+            # That's silly, ignore it.
+            pass
         # Ensure KeyboardInterrupt in traceback
         stderr = proc.stderr.read()
         assert "KeyboardInterrupt" in stderr.decode()
