@@ -2839,7 +2839,7 @@ def roll(array, shift, axis=None):
         result = ravel(result)
 
         if not isinstance(shift, Integral):
-            TypeError(
+            raise TypeError(
                 "Expect `shift` to be an instance of Integral"
                 " when `axis` is None."
             )
