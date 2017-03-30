@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
 import difflib
+import math
 import os
 
 import numpy as np
@@ -29,12 +30,6 @@ def _not_empty(x):
     return x.shape and 0 not in x.shape
 
 
-def _maybe_check_dtype(a, dtype=None):
-    # Only check dtype matches for non-empty
-    if _not_empty(a):
-        assert a.dtype == dtype
-
-
 def _check_dsk(dsk):
     """ Check that graph is well named and non-overlapping """
     if not isinstance(dsk, ShareDict):
@@ -46,36 +41,44 @@ def _check_dsk(dsk):
     assert not non_one, non_one
 
 
-def assert_eq(a, b, **kwargs):
+def assert_eq_shape(a, b, check_nan=True):
+    for aa, bb in zip(a, b):
+        if math.isnan(aa) or math.isnan(bb):
+            if check_nan:
+                assert math.isnan(aa) == math.isnan(bb)
+        else:
+            assert aa == bb
+
+
+def assert_eq(a, b, check_shape=True, **kwargs):
+    a_original = a
+    b_original = b
     if isinstance(a, Array):
+        assert a.dtype is not None
         adt = a.dtype
-        ash = a.shape
         _check_dsk(a.dask)
         a = a.compute(get=get_sync)
-        _maybe_check_dtype(a, adt)
-        assert ash == a.shape
+        if _not_empty(a):
+            assert a.dtype == a_original.dtype
+        if check_shape:
+            assert_eq_shape(a_original.shape, a.shape, check_nan=False)
     else:
         adt = getattr(a, 'dtype', None)
-        ash = getattr(a, 'shape', None)
+
     if isinstance(b, Array):
+        assert b.dtype is not None
         bdt = b.dtype
-        bsh = b.shape
         _check_dsk(b.dask)
-        assert bdt is not None
         b = b.compute(get=get_sync)
-        _maybe_check_dtype(b, bdt)
-        assert bsh == b.shape
+        if _not_empty(b):
+            assert b.dtype == b_original.dtype
+        if check_shape:
+            assert_eq_shape(b_original.shape, b.shape, check_nan=False)
     else:
         bdt = getattr(b, 'dtype', None)
-        bsh = getattr(b, 'shape', None)
 
     if str(adt) != str(bdt):
         diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
-        raise AssertionError('string repr are different' + os.linesep +
-                             os.linesep.join(diff))
-
-    if ash != bsh:
-        diff = difflib.ndiff(str(ash).splitlines(), str(bsh).splitlines())
         raise AssertionError('string repr are different' + os.linesep +
                              os.linesep.join(diff))
 

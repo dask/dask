@@ -851,8 +851,10 @@ def test_map_blocks_with_constants():
 def test_map_blocks_with_kwargs():
     d = da.arange(10, chunks=5)
 
-    assert_eq(d.map_blocks(np.max, axis=0, keepdims=True, dtype=d.dtype),
-              np.array([4, 9]))
+    result = d.map_blocks(np.max, axis=0, keepdims=True, dtype=d.dtype,
+                          chunks=(1,))
+
+    assert_eq(result, np.array([4, 9]))
 
 
 def test_map_blocks_with_chunks():
@@ -2439,7 +2441,7 @@ def test_atop_concatenate():
 
     z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
              dtype=x.dtype)
-    assert_eq(z, np.ones(10))
+    assert_eq(z, np.ones(10), check_shape=False)
 
 
 def test_common_blockdim():
