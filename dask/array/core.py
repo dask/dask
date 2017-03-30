@@ -2839,7 +2839,7 @@ def roll(array, shift, axis=None):
         result = ravel(result)
 
         if not isinstance(shift, Integral):
-            TypeError(
+            raise TypeError(
                 "Expect `shift` to be an instance of Integral"
                 " when `axis` is None."
             )
@@ -2855,6 +2855,9 @@ def roll(array, shift, axis=None):
             len(axis)
         except TypeError:
             axis = (axis,)
+
+    if len(shift) != len(axis):
+        raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
         s = -s
