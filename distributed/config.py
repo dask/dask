@@ -6,6 +6,7 @@ import sys
 
 from .compatibility import FileExistsError, logging_names
 
+logger = logging.getLogger(__name__)
 
 config = {}
 
@@ -43,8 +44,12 @@ else:
             text = f.read()
             config.update(yaml.load(text))
 
-    ensure_config_file()
-    load_config_file(config)
+    try:
+        ensure_config_file()
+        load_config_file(config)
+    except OSError as e:
+        logger.warn("Could not write default config file to %s. Received error %s",
+                    default_path, e)
 
 
 def load_env_vars(config):
