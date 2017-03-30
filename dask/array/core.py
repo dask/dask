@@ -949,6 +949,17 @@ class Array(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
+    def __new__(cls, *args, **kwargs):
+        obj = super(Array, cls).__new__(cls)
+        cls.__init__(obj, *args, **kwargs)
+
+        for plugin in _global_constructor_plugins:
+            result = plugin(obj)
+            if result is not None:
+                obj = result
+
+        return obj
+
     def __init__(self, dask, name, chunks, dtype, shape=None):
         assert isinstance(dask, Mapping)
         if not isinstance(dask, ShareDict):
@@ -3865,3 +3876,19 @@ def slice_with_dask_array(x, index):
     chunks = ((np.nan,) * y.npartitions,)
 
     return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
+
+
+_global_constructor_plugins = list()
+
+
+class constructor_plugins(object):
+    def __init__(self, *args):
+        self.added = args
+        _global_constructor_plugins.extend(args)
+
+    def __enter__(self):
+        return
+
+    def __exit__(self, *args):
+        for plugin in self.added:
+            _global_constructor_plugins.remove(plugin)

@@ -2907,3 +2907,20 @@ def test_elemwise_with_lists(chunks, other):
     d3 = d2 * other
 
     assert_eq(x3, d3)
+
+
+def test_constructor_plugin():
+    L = []
+    L2 = []
+    with da.constructor_plugins(L.append, L2.append):
+        x = da.ones(10, chunks=5)
+        y = x + 1
+
+    assert L == L2 == [x, y]
+
+    with da.constructor_plugins(lambda x: x.compute()):
+        x = da.ones(10, chunks=5)
+        y = x + 1
+
+    assert isinstance(y, np.ndarray)
+    assert len(L) == 2
