@@ -779,6 +779,17 @@ def test_aliases(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_aliases_2(c, s, a, b):
+    dsk_keys = [
+        ({'x': (inc, 1), 'y': 'x', 'z': 'x', 'w': (add, 'y', 'z')}, ['y', 'w']),
+        ({'x': 'y', 'y': 1}, ['x']),
+        ({'x': 1, 'y': 'x', 'z': 'y', 'w': (inc, 'z')}, ['w'])]
+    for dsk, keys in dsk_keys:
+        result = yield c._get(dsk, keys)
+        assert list(result) == list(dask.get(dsk, keys))
+
+
+@gen_cluster(client=True)
 def test__scatter(c, s, a, b):
     d = yield c._scatter({'y': 20})
     assert isinstance(d['y'], Future)
