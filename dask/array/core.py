@@ -949,18 +949,8 @@ class Array(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __new__(cls, *args, **kwargs):
-        obj = super(Array, cls).__new__(cls)
-        cls.__init__(obj, *args, **kwargs)
-
-        for plugin in _global_constructor_plugins:
-            result = plugin(obj)
-            if result is not None:
-                obj = result
-
-        return obj
-
-    def __init__(self, dask, name, chunks, dtype, shape=None):
+    def __new__(cls, dask, name, chunks, dtype, shape=None):
+        self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
         if not isinstance(dask, ShareDict):
             s = ShareDict()
@@ -974,6 +964,13 @@ class Array(Base):
         if dtype is None:
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
+
+        for plugin in _global_constructor_plugins:
+            result = plugin(self)
+            if result is not None:
+                self = result
+
+        return self
 
     @property
     def _args(self):
