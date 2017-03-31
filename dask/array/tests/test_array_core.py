@@ -2589,6 +2589,44 @@ def test_repeat():
         assert all(concat(d.repeat(r).chunks))
 
 
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [0, 1, 2, 3, 5])
+def test_tile(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [-1, -5])
+def test_tile_neg_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(ValueError):
+        da.tile(d, reps)
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [[1], [1, 2]])
+def test_tile_array_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(NotImplementedError):
+        da.tile(d, reps)
+
+
 def test_concatenate_stack_dont_warn():
     with warnings.catch_warnings(record=True) as record:
         da.concatenate([da.ones(2, chunks=1)] * 62)
