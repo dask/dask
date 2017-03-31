@@ -58,8 +58,8 @@ def test_divisions(db):
     data = read_sql_table('test', db, columns=['name'], divisions=[0, 2, 4],
                           index_col="number")
     assert data.divisions == (0, 2, 4)
-    assert data.index.max().compute() == 3
-    assert_eq(data, df[['name']][df.index < 4])
+    assert data.index.max().compute() == 4
+    assert_eq(data, df[['name']][df.index <= 4])
 
 
 def test_division_or_partition(db):
@@ -75,7 +75,7 @@ def test_range(db):
     data = read_sql_table('test', db, npartitions=2, index_col='number',
                           limits=[1, 4])
     assert data.index.min().compute() == 1
-    assert data.index.max().compute() == 3
+    assert data.index.max().compute() == 4
 
 
 def test_datetimes():

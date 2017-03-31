@@ -2,7 +2,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import six
-strs = ()
 
 from dask import delayed
 from dask.dataframe import from_delayed
@@ -36,7 +35,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     limits: 2-tuple or None
         Manually give upper and lower range of values for use with npartitions;
         if None, first fetches max/min from the DB. Upper limit, if
-        given, is non-inclusive.
+        given, is inclusive.
     columns : list of strings or None
         Which columns to select; if None, gets all; can include sqlalchemy
         functions, e.g.,
@@ -81,10 +80,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                 divisions = pd.date_range(
                     start=mini, end=maxi, freq='%iS' % (
                         (maxi - mini) / npartitions).total_seconds()).tolist()
-                divisions[-1] += datetime.timedelta(seconds=1)
             else:
                 divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
-                divisions[-1] += 1
         else:
             mini, maxi = limits
             divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
@@ -103,8 +100,9 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         kwargs['index_col'] = index_col.name
     parts = []
     lowers, uppers = divisions[:-1], divisions[1:]
-    for lower, upper in zip(lowers, uppers):
-        q = sql.select(columns).where(sql.and_(index >= lower, index < upper)
+    for i, (lower, upper) in enumerate(zip(lowers, uppers)):
+        cond = index <= upper if i == len(lowers) - 1 else index < upper
+        q = sql.select(columns).where(sql.and_(index >= lower, cond)
                                       ).select_from(table)
         parts.append(delayed(pd.read_sql)(q, engine, **kwargs))
     q = sql.select(columns).limit(5).select_from(table)
