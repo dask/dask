@@ -104,7 +104,13 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)
                                       ).select_from(table)
-        parts.append(delayed(pd.read_sql)(q, engine, **kwargs))
+        parts.append(delayed(read_from_uri)(q, uri, **kwargs))
     q = sql.select(columns).limit(5).select_from(table)
     head = pd.read_sql(q, engine, **kwargs)
     return from_delayed(parts, head, divisions=divisions)
+
+
+def read_from_uri(q, uri, **kwargs):
+    import sqlalchemy as sa
+    engine = sa.create_engine(uri)
+    return pd.read_sql(q, engine, **kwargs)
