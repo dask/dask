@@ -37,7 +37,7 @@ def db():
 
 def test_simple(db):
     # single chunk
-    data = read_sql_table('test', db, npartitions=2, index_col=u'number'
+    data = read_sql_table('test', db, npartitions=2, index_col='number'
                           ).compute()
     assert (data.name == df.name).all()
     assert data.index.name == 'number'
