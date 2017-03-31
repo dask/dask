@@ -69,3 +69,15 @@ class SystemMonitor(object):
                 -1 if WINDOWS else self.num_fds[-1])
 
     __repr__ = __str__
+
+    def range_query(self, start):
+        if start == self.count:
+            return {k: [] for k in self.quantities}
+
+        istart = start - (self.count - len(self.cpu))
+        istart = max(0, istart)
+
+        seq = [i for i in range(istart, len(self.cpu))]
+
+        d = {k: [v[i] for i in seq] for k, v in self.quantities.items()}
+        return d

@@ -342,10 +342,8 @@ class SystemMonitor(DashboardComponent):
     def __init__(self, worker, height=150, **kwargs):
         self.worker = worker
 
-        self.names = ['cpu', 'memory', 'read_bytes', 'write_bytes', 'time']
-        if not WINDOWS:
-            self.names.append('num_fds')
-        self.source = ColumnDataSource({name: [] for name in self.names})
+        names = worker.monitor.quantities
+        self.source = ColumnDataSource({name: [] for name in names})
 
         x_range = DataRange1d(follow='end', follow_interval=20000,
                               range_padding=0)
@@ -400,22 +398,10 @@ class SystemMonitor(DashboardComponent):
 
     def update(self):
         with log_errors():
-            monitor = self.worker.monitor
-
-            n = monitor.count - self.last
-            if not n:
-                return
-
-            seq = [-i for i in range(1, n + 1)][::-1]
-
-            d = {attr: [getattr(monitor, attr)[i] for i in seq]
-                 for attr in self.names}
-
-            d['time'] = [monitor.time[i] * 1000 for i in seq]
-
+            d = self.worker.monitor.range_query(start=self.last)
+            d['time'] = [x * 1000 for x in d['time']]
             self.source.stream(d, 1000)
-
-            self.last = monitor.count
+            self.last = self.worker.monitor.count
 
 
 class Counters(DashboardComponent):

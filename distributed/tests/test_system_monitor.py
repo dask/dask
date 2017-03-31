@@ -4,6 +4,7 @@ from time import sleep
 
 from distributed.system_monitor import SystemMonitor
 
+
 def test_SystemMonitor():
     sm = SystemMonitor()
     a = sm.update()
@@ -18,3 +19,37 @@ def test_SystemMonitor():
     assert all(len(q) == 2 for q in sm.quantities.values())
 
     assert 'cpu' in repr(sm)
+
+
+def test_count():
+    sm = SystemMonitor(n=5)
+    assert sm.count == 0
+    sm.update()
+    assert sm.count == 1
+
+    for i in range(10):
+        sm.update()
+
+    assert sm.count == 11
+    for v in sm.quantities.values():
+        assert len(v) == 5
+
+
+def test_range_query():
+    sm = SystemMonitor(n=5)
+
+    assert all(len(v) == 0 for v in sm.range_query(0).values())
+    assert all(len(v) == 0 for v in sm.range_query(123).values())
+
+    sm.update()
+    sm.update()
+    sm.update()
+
+    assert all(len(v) == 3 for v in sm.range_query(0).values())
+    assert all(len(v) == 2 for v in sm.range_query(1).values())
+
+    for i in range(10):
+        sm.update()
+
+    assert all(len(v) == 3 for v in sm.range_query(10).values())
+    assert all(len(v) == 5 for v in sm.range_query(0).values())
