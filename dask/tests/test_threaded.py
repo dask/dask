@@ -127,7 +127,6 @@ get(dsk, 'x')
 """
 
 
-@pytest.mark.slow
 def test_interrupt():
     try:
         proc = subprocess.Popen([sys.executable, '-c', code],
