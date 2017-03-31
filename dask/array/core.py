@@ -2618,6 +2618,8 @@ def elemwise(op, *args, **kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
 
+    args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
+
     shapes = [getattr(arg, 'shape', ()) for arg in args]
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
