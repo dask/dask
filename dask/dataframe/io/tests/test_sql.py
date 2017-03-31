@@ -1,17 +1,19 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import (print_function, division, absolute_import,
+                        unicode_literals)
 
 import io
 import pytest
 
 from dask.dataframe.io.sql import read_sql_table
 from dask.utils import tmpfile
+from dask.dataframe.utils import assert_eq
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 pytest.importorskip('sqlalchemy')
 pytest.importorskip('sqlite3')
 
 
-data = u"""
+data = """
 name,number,age,negish
 Alice,0,33,-5
 Bob,1,40,-3
@@ -35,11 +37,11 @@ def db():
 
 def test_simple(db):
     # single chunk
-    data = read_sql_table('test', db, npartitions=2, index_col='number'
+    data = read_sql_table(u'test', db, npartitions=2, index_col=u'number'
                           ).compute()
     assert (data.name == df.name).all()
     assert data.index.name == 'number'
-    pd.util.testing.assert_frame_equal(data, df)
+    assert_eq(data, df)
 
 
 def test_npartitions(db):
@@ -49,12 +51,21 @@ def test_npartitions(db):
     assert (data.name.compute() == df.name).all()
     data = read_sql_table('test', db, columns=['name'], npartitions=6,
                           index_col="number").compute()
-    pd.util.testing.assert_frame_equal(data, df[['name']])
+    assert_eq(data, df[['name']])
 
-    data = read_sql_table('test', db, columns=['name'], npartitions=[0, 2, 4],
+
+def test_divisions(db):
+    data = read_sql_table('test', db, columns=['name'], divisions=[0, 2, 4],
                           index_col="number")
     assert data.divisions == (0, 2, 4)
     assert data.index.max().compute() == 3
+    assert_eq(data, df[['name']][df.index < 4])
+
+
+def test_division_or_partition(db):
+    with pytest.raises(TypeError):
+        data = read_sql_table('test', db, columns=['name'], index_col="number")
+
 
 
 def test_range(db):
@@ -111,7 +122,7 @@ def test_no_nameless_index(db):
     with pytest.raises(ValueError):
         data = read_sql_table('test', db, npartitions=2, index_col=index,
                               columns=['negish', 'age', index])
-        d = data.compute()
+        data.compute()
 
     index = sql.func.abs(sql.column('negish'))
 

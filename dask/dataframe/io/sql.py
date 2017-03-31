@@ -8,8 +8,8 @@ from dask import delayed
 from dask.dataframe import from_delayed
 
 
-def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None,
-                   **kwargs):
+def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
+                   limits=None, columns=None, **kwargs):
     """
     Create dataframe from an SQL table.
 
@@ -19,9 +19,6 @@ def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None
         Table name
     uri : string
         Full sqlalchemy URI for the database connection
-    npartitions : int or list of values
-        Number of npartitions, or list of partition edges (number of npartitions
-        will be one less than length of list)
     index_col : string
         Column which becomes the index, and defines the partitioning. Should
         be a indexed column in the SQL server, and numerical.
@@ -29,9 +26,16 @@ def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         required.
+    divisions: sequence
+        Values of the index column to split the table by. One of divisions or
+        npartitions must be given.
+    npartitions : int or list of values
+        Number of partitions, if divisions is not given. Will split the values
+        of the index column linearly between limits, if given, or the column
+        max/min.
     limits: 2-tuple or None
-        Manually give upper and lower range of values; if None, first fetches
-        max/min from the DB. Upper limit, if
+        Manually give upper and lower range of values for use with npartitions;
+        if None, first fetches max/min from the DB. Upper limit, if
         given, is non-inclusive.
     columns : list of strings or None
         Which columns to select; if None, gets all; can include sqlalchemy
@@ -64,7 +68,9 @@ def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None
     if not isinstance(index_col, six.string_types + (elements.Label,)):
         raise ValueError('Use label when passing an SQLAlchemy instance'
                          ' as the index (%s)' % index)
-    if isinstance(npartitions, int):
+    if divisions is None and npartitions is None:
+        raise TypeError('Must supply either divisions or npartitions')
+    if divisions is None:
         if limits is None:
             # calculate max and min for given index
             q = sql.select([sql.func.max(index), sql.func.min(index)]
@@ -82,8 +88,6 @@ def read_sql_table(table, uri, npartitions, index_col, limits=None, columns=None
         else:
             mini, maxi = limits
             divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
-    else:
-        divisions = npartitions
     columns = ([(table.columns[c] if isinstance(c, six.string_types) else c)
                 for c in columns]
                if columns else list(table.columns))
