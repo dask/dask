@@ -127,6 +127,7 @@ Top level user functions:
    tan
    tanh
    tensordot
+   tile
    topk
    transpose
    tril
