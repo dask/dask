@@ -2861,7 +2861,7 @@ def test_elemwise_with_lists(chunks, other):
     d = da.arange(12, chunks=chunks).reshape((4, 3))
 
     x2 = np.vstack([x[:, 0], x[:, 1], x[:, 2]]).T
-    d2 = da.vstack([x[:, 0], x[:, 1], x[:, 2]]).T
+    d2 = da.vstack([d[:, 0], d[:, 1], d[:, 2]]).T
 
     assert_eq(x2, d2)
 
