@@ -475,6 +475,11 @@ def _check_dask(dsk, check_names=True, check_dtypes=True):
         else:
             msg = 'Unsupported dask instance {0} found'.format(type(dsk))
             raise AssertionError(msg)
+        if isinstance(dsk, dd.Index) and dsk.known_divisions:
+            assert result[result.values.notnull()].is_monotonic_increasing
+        elif isinstance(dsk, (dd.Series, dd.DataFrame)) and dsk.known_divisions:
+            ind = result.index
+            assert ind[ind.values.notnull()].is_monotonic_increasing
         return result
     return dsk
 
