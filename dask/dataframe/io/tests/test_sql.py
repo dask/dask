@@ -37,7 +37,7 @@ def db():
 
 def test_simple(db):
     # single chunk
-    data = read_sql_table(u'test', db, npartitions=2, index_col=u'number'
+    data = read_sql_table('test', db, npartitions=2, index_col=u'number'
                           ).compute()
     assert (data.name == df.name).all()
     assert data.index.name == 'number'
@@ -64,8 +64,11 @@ def test_divisions(db):
 
 def test_division_or_partition(db):
     with pytest.raises(TypeError):
-        data = read_sql_table('test', db, columns=['name'], index_col="number")
+        read_sql_table('test', db, columns=['name'], index_col="number")
 
+    with pytest.raises(TypeError):
+        read_sql_table('test', db, columns=['name'], index_col="number",
+                       divisions=[0, 2, 4], npartitions=3)
 
 
 def test_range(db):

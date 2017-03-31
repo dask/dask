@@ -29,7 +29,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     divisions: sequence
         Values of the index column to split the table by. One of divisions or
         npartitions must be given.
-    npartitions : int or list of values
+    npartitions : int
         Number of partitions, if divisions is not given. Will split the values
         of the index column linearly between limits, if given, or the column
         max/min.
@@ -68,7 +68,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     if not isinstance(index_col, six.string_types + (elements.Label,)):
         raise ValueError('Use label when passing an SQLAlchemy instance'
                          ' as the index (%s)' % index)
-    if divisions is None and npartitions is None:
+    if (divisions is None) + (npartitions is None) != 1:
         raise TypeError('Must supply either divisions or npartitions')
     if divisions is None:
         if limits is None:
