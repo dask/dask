@@ -379,6 +379,7 @@ Other functions
 .. autofunction:: tan
 .. autofunction:: tanh
 .. autofunction:: tensordot
+.. autofunction:: tile
 .. autofunction:: topk
 .. autofunction:: transpose
 .. autofunction:: tril
