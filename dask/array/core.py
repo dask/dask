@@ -3797,7 +3797,7 @@ def swapaxes(a, axis1, axis2):
                 dtype=a.dtype)
 
 
-@wraps(np.dot)
+@wraps(np.repeat)
 def repeat(a, repeats, axis=None):
     if axis is None:
         if a.ndim == 1:
