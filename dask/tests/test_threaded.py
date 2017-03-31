@@ -127,6 +127,11 @@ get(dsk, 'x')
 """
 
 
+# TODO: this test passes locally on windows, but fails on appveyor
+# because the ctrl-c event also tears down their infrastructure.
+# There's probably a better way to test this, but for now we'll mark
+# it slow (slow tests are skipped on appveyor).
+@pytest.mark.slow
 def test_interrupt():
     try:
         proc = subprocess.Popen([sys.executable, '-c', code],
