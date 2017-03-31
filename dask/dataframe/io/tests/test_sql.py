@@ -50,7 +50,7 @@ def test_npartitions(db):
     assert len(data.divisions) == 3
     assert (data.name.compute() == df.name).all()
     data = read_sql_table('test', db, columns=['name'], npartitions=6,
-                          index_col="number").compute()
+                          index_col="number")
     assert_eq(data, df[['name']])
 
 
@@ -90,10 +90,9 @@ def test_datetimes():
         data = read_sql_table('test', uri, npartitions=2, index_col='b')
         assert data.index.dtype.kind == "M"
         assert data.divisions[0] == df.b.min()
-        d = data.compute()
         df2 = df.set_index('b')
-        for i in df2.index:
-            assert df2.a[i] == d.a[i]
+        assert_eq(data.map_partitions(lambda x: x.sort_index()),
+                  df2.sort_index())
 
 
 def test_with_func(db):
@@ -123,12 +122,11 @@ def test_no_nameless_index(db):
     from sqlalchemy import sql
     index = (-sql.column('negish'))
     with pytest.raises(ValueError):
-        data = read_sql_table('test', db, npartitions=2, index_col=index,
-                              columns=['negish', 'age', index])
-        data.compute()
+        read_sql_table('test', db, npartitions=2, index_col=index,
+                       columns=['negish', 'age', index])
 
     index = sql.func.abs(sql.column('negish'))
 
     # function for the index, get all columns
     with pytest.raises(ValueError):
-        data = read_sql_table('test', db, npartitions=2, index_col=index)
+        read_sql_table('test', db, npartitions=2, index_col=index)
