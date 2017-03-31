@@ -13,12 +13,15 @@ logger = logging.getLogger(__name__)
 class TaskStreamPlugin(SchedulerPlugin):
     def __init__(self, scheduler):
         self.buffer = []
+        self.scheduler = scheduler
         scheduler.add_plugin(self)
         self.index = 0
         self.maxlen = 100000
 
     def transition(self, key, start, finish, *args, **kwargs):
         if start == 'processing':
+            if key not in self.scheduler.task_state:
+                return
             kwargs['key'] = key
             if finish == 'memory' or finish == 'erred':
                 self.buffer.append(kwargs)
@@ -26,7 +29,7 @@ class TaskStreamPlugin(SchedulerPlugin):
                 if len(self.buffer) > self.maxlen:
                     self.buffer = self.buffer[len(self.buffer):]
 
-    def rectangles(self, istart, istop=None, workers=None):
+    def rectangles(self, istart, istop=None, workers=None, start_boundary=0):
         L_start = []
         L_duration = []
         L_key = []
@@ -54,6 +57,8 @@ class TaskStreamPlugin(SchedulerPlugin):
                 workers[worker_thread] = len(workers) / 2
 
             for action, start, stop in startstops:
+                if start < start_boundary:
+                    continue
                 color = colors[action]
                 if type(color) is not str:
                     color = color(msg)
@@ -69,14 +74,14 @@ class TaskStreamPlugin(SchedulerPlugin):
                 L_y.append(workers[worker_thread])
 
         return {'start': L_start,
-                 'duration': L_duration,
-                 'key': L_key,
-                 'name': L_name,
-                 'color': L_color,
-                 'alpha': L_alpha,
-                 'worker': L_worker,
-                 'worker_thread': L_worker_thread,
-                 'y': L_y}
+                'duration': L_duration,
+                'key': L_key,
+                'name': L_name,
+                'color': L_color,
+                'alpha': L_alpha,
+                'worker': L_worker,
+                'worker_thread': L_worker_thread,
+                'y': L_y}
 
 
 def color_of_message(msg):

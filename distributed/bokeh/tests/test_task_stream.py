@@ -29,3 +29,8 @@ def test_TaskStreamPlugin(c, s, *workers):
 
     rects = es.rectangles(2, 5, workers)
     assert all(len(L) == 3 for L in rects.values())
+
+    starts = sorted(rects['start'])
+    rects = es.rectangles(2, 5, workers=workers,
+                          start_boundary=(starts[0] + starts[1]) / 2000)
+    assert set(rects['start']) == set(starts[1:])

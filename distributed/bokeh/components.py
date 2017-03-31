@@ -64,7 +64,7 @@ class TaskStream(DashboardComponent):
             worker=[], y=[], worker_thread=[], alpha=[])
         )
 
-        x_range = DataRange1d()
+        x_range = DataRange1d(range_padding=0)
         y_range = DataRange1d(range_padding=0)
 
         self.root = Plot(

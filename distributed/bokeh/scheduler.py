@@ -42,7 +42,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-PROFILING = True
+PROFILING = False
 
 import jinja2
 
@@ -477,6 +477,7 @@ class Events(DashboardComponent):
 class TaskStream(components.TaskStream):
     def __init__(self, scheduler, n_rectangles=1000, clear_interval=20000, **kwargs):
         self.scheduler = scheduler
+        self.offset = 0
         es = [p for p in self.scheduler.plugins if isinstance(p, TaskStreamPlugin)]
         if not es:
             self.plugin = TaskStreamPlugin(self.scheduler)
@@ -489,27 +490,41 @@ class TaskStream(components.TaskStream):
                                        clear_interval=clear_interval, **kwargs)
 
     def update(self):
+        if self.index == self.plugin.index:
+            return
         with log_errors():
+            if self.index:
+                start = min(self.source.data['start'])
+                duration = max(self.source.data['duration'])
+                boundary = (self.offset + start - duration) / 1000
+            else:
+                boundary = self.offset
             rectangles = self.plugin.rectangles(istart=self.index,
-                                                workers=self.workers)
+                                                workers=self.workers,
+                                                start_boundary=boundary)
             n = len(rectangles['name'])
-            self.index += n
+            self.index = self.plugin.index
+
+            if not rectangles['start']:
+                return
 
             # If there has been a significant delay then clear old rectangles
-            if rectangles['start']:
-                m = min(map(add, rectangles['start'], rectangles['duration']))
-                if m > self.last:
-                    self.last, last = m, self.last
-                    if m > last + self.clear_interval:
-                        update(self.source, rectangles)
-                        return
+            first_end = min(map(add, rectangles['start'], rectangles['duration']))
+            if first_end > self.last:
+                last = self.last
+                self.last = first_end
+                if first_end > last + self.clear_interval:
+                    self.offset = min(rectangles['start'])
+                    self.source.data.update({k: [] for k in rectangles})
 
-            if len(set(map(len, rectangles.values()))) != 1:
-                import pdb; pdb.set_trace()
-            if not n:
-                return
-            if n > 10 and np:
-                rectangles = valmap(np.array, rectangles)
+            rectangles['start'] = [x - self.offset for x in rectangles['start']]
+
+            # Convert to numpy for serialization speed
+            if n >= 10 and np:
+                for k, v in rectangles.items():
+                    if isinstance(v[0], Number):
+                        rectangles[k] = np.array(v)
+
             if PROFILING:
                 curdoc().add_next_tick_callback(lambda:
                         self.source.stream(rectangles, self.n_rectangles))
@@ -519,7 +534,6 @@ class TaskStream(components.TaskStream):
 
 class TaskProgress(DashboardComponent):
     """ Progress bars per task type """
-
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
         ps = [p for p in scheduler.plugins if isinstance(p, AllProgress)]

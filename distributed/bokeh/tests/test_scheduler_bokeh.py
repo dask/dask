@@ -112,6 +112,7 @@ def test_task_stream(c, s, a, b):
     d = dict(ts.source.data)
 
     assert all(len(L) == 10 for L in d.values())
+    assert min(d['start']) == 0  # zero based
 
     ts.update()
     d = dict(ts.source.data)
@@ -123,6 +124,35 @@ def test_task_stream(c, s, a, b):
     ts.update()
     d = dict(ts.source.data)
     assert len(set(map(len, d.values()))) == 1
+
+
+@gen_cluster(client=True)
+def test_task_stream_n_rectangles(c, s, a, b):
+    ts = TaskStream(s, n_rectangles=10)
+    futures = c.map(slowinc, range(10), delay=0.001)
+    yield _wait(futures)
+    ts.update()
+
+    assert len(ts.source.data['start']) == 10
+
+
+@gen_cluster(client=True)
+def test_task_stream_clear_interval(c, s, a, b):
+    ts = TaskStream(s, clear_interval=100)
+
+    yield _wait(c.map(inc, range(10)))
+    ts.update()
+    yield gen.sleep(0.010)
+    yield _wait(c.map(dec, range(10)))
+    ts.update()
+
+    assert len(ts.source.data['start']) == 20
+
+    yield gen.sleep(0.150)
+    yield _wait(c.map(inc, range(10, 20)))
+    ts.update()
+
+    assert len(ts.source.data['start']) == 10
 
 
 @gen_cluster(client=True)
