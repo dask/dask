@@ -2,13 +2,13 @@ import numpy as np
 import pandas as pd
 import six
 
-from dask import delayed
-from dask.dataframe import from_delayed
-AUTO_BYTES_PER_CHUNK = 256 * 2**20
+from ... import delayed
+from .io import from_delayed
 
 
 def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
-                   limits=None, columns=None, **kwargs):
+                   limits=None, columns=None, bytes_per_chunk=256 * 2**20,
+                   **kwargs):
     """
     Create dataframe from an SQL table.
 
@@ -19,8 +19,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     Parameters
     ----------
     table : string or sqlalchemy expression
-        Select columns from here. If an sqlalchemy expression, all the columns
-        and index
+        Select columns from here.
     uri : string
         Full sqlalchemy URI for the database connection
     index_col : string
@@ -46,6 +45,9 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         recommended.
+    bytes_per_chunk: int
+        If both divisions and npartitions is None, this is the target size of 
+        each partition, in bytes
     kwargs : dict
         Additional parameters to pass to `pd.read_sql()`
 
@@ -108,7 +110,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
             bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
-            npartitions = round(count * bytes_per_row / AUTO_BYTES_PER_CHUNK)
+            npartitions = round(count * bytes_per_row / bytes_per_chunk)
         if dtype.kind == "M":
             divisions = pd.date_range(
                 start=mini, end=maxi, freq='%iS' % (

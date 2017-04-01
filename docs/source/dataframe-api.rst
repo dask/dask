@@ -114,6 +114,7 @@ Create DataFrames
    read_table
    read_parquet
    read_hdf
+   read_sql_table
    from_array
    from_bcolz
    from_dask_array
@@ -174,6 +175,7 @@ Storage and Conversion
 .. autofunction:: read_table
 .. autofunction:: read_parquet
 .. autofunction:: read_hdf
+.. autofunction:: read_sql_table
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz

@@ -68,8 +68,7 @@ def test_division_or_partition(db):
                        divisions=[0, 2, 4], npartitions=3)
 
     import dask.dataframe.io.sql
-    dask.dataframe.io.sql.AUTO_BYTES_PER_CHUNK = 100
-    out = read_sql_table('test', db, index_col="number")
+    out = read_sql_table('test', db, index_col="number", bytes_per_chunk=100)
     m = out.map_partitions(lambda d: d.memory_usage(
         deep=True, index=True).sum()).compute()
     assert (50 < m).all() and (m < 200).all()
