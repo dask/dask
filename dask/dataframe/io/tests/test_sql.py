@@ -67,7 +67,6 @@ def test_division_or_partition(db):
         read_sql_table('test', db, columns=['name'], index_col="number",
                        divisions=[0, 2, 4], npartitions=3)
 
-    import dask.dataframe.io.sql
     out = read_sql_table('test', db, index_col="number", bytes_per_chunk=100)
     m = out.map_partitions(lambda d: d.memory_usage(
         deep=True, index=True).sum()).compute()

@@ -46,7 +46,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         Labeling columns created by functions or arithmetic operations is
         recommended.
     bytes_per_chunk: int
-        If both divisions and npartitions is None, this is the target size of 
+        If both divisions and npartitions is None, this is the target size of
         each partition, in bytes
     kwargs : dict
         Additional parameters to pass to `pd.read_sql()`
@@ -115,6 +115,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             divisions = pd.date_range(
                 start=mini, end=maxi, freq='%iS' % (
                     (maxi - mini) / npartitions).total_seconds()).tolist()
+            divisions[0] = mini
+            divisions[-1] = maxi
         else:
             divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
 
