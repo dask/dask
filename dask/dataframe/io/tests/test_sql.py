@@ -143,4 +143,3 @@ def test_select_from_select(db):
                     ).select_from(sql.table('test'))
     out = read_sql_table(s1, db, npartitions=2, index_col='number')
     assert_eq(out, df[['name']])
-

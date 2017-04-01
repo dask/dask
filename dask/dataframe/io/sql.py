@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import six
-import warnings
 
 from dask import delayed
 from dask.dataframe import from_delayed
@@ -12,7 +11,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                    limits=None, columns=None, **kwargs):
     """
     Create dataframe from an SQL table.
-    
+
     If neither divisions or npartitions is given, the memory footprint of the
     first five rows will be determined, and partitions of size ~256MB will
     be used.
@@ -21,7 +20,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     ----------
     table : string or sqlalchemy expression
         Select columns from here. If an sqlalchemy expression, all the columns
-        and index 
+        and index
     uri : string
         Full sqlalchemy URI for the database connection
     index_col : string
