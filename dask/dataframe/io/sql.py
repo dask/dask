@@ -1,20 +1,27 @@
 import numpy as np
 import pandas as pd
 import six
+import warnings
 
 from dask import delayed
 from dask.dataframe import from_delayed
+AUTO_BYTES_PER_CHUNK = 256 * 2**20
 
 
 def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                    limits=None, columns=None, **kwargs):
     """
     Create dataframe from an SQL table.
+    
+    If neither divisions or npartitions is given, the memory footprint of the
+    first five rows will be determined, and partitions of size ~256MB will
+    be used.
 
     Parameters
     ----------
-    table : string
-        Table name
+    table : string or sqlalchemy expression
+        Select columns from here. If an sqlalchemy expression, all the columns
+        and index 
     uri : string
         Full sqlalchemy URI for the database connection
     index_col : string
@@ -25,8 +32,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
-        Values of the index column to split the table by. One of divisions or
-        npartitions must be given.
+        Values of the index column to split the table by.
     npartitions : int
         Number of partitions, if divisions is not given. Will split the values
         of the index column linearly between limits, if given, or the column
@@ -60,30 +66,17 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         raise ValueError("Must specify index column to partition on")
     engine = sa.create_engine(uri)
     meta = sa.MetaData()
-    table = sa.Table(table, meta, autoload=True, autoload_with=engine)
+    if isinstance(table, six.string_types):
+        table = sa.Table(table, meta, autoload=True, autoload_with=engine)
+
     index = (table.columns[index_col] if isinstance(index_col, six.string_types)
              else index_col)
     if not isinstance(index_col, six.string_types + (elements.Label,)):
         raise ValueError('Use label when passing an SQLAlchemy instance'
                          ' as the index (%s)' % index)
-    if (divisions is None) + (npartitions is None) != 1:
-        raise TypeError('Must supply either divisions or npartitions')
-    if divisions is None:
-        if limits is None:
-            # calculate max and min for given index
-            q = sql.select([sql.func.max(index), sql.func.min(index)]
-                           ).select_from(table)
-            minmax = pd.read_sql(q, engine)
-            maxi, mini = minmax.iloc[0]
-            if minmax.dtypes['max_1'].kind == "M":
-                divisions = pd.date_range(
-                    start=mini, end=maxi, freq='%iS' % (
-                        (maxi - mini) / npartitions).total_seconds()).tolist()
-            else:
-                divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
-        else:
-            mini, maxi = limits
-            divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+    if divisions and npartitions:
+        raise TypeError('Must supply either divisions or npartitions, not both')
+
     columns = ([(table.columns[c] if isinstance(c, six.string_types) else c)
                 for c in columns]
                if columns else list(table.columns))
@@ -97,19 +90,39 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     else:
         # function names get pandas auto-named
         kwargs['index_col'] = index_col.name
+
+    q = sql.select(columns).limit(5).select_from(table)
+    head = pd.read_sql(q, engine, **kwargs)
+
+    if divisions is None:
+        if limits is None:
+            # calculate max and min for given index
+            q = sql.select([sql.func.max(index), sql.func.min(index)]
+                           ).select_from(table)
+            minmax = pd.read_sql(q, engine)
+            maxi, mini = minmax.iloc[0]
+            dtype = minmax.dtypes['max_1']
+        else:
+            mini, maxi = limits
+            dtype = pd.Series(limits).dtype
+        if npartitions is None:
+            q = sql.select([sql.func.count(index)]).select_from(table)
+            count = pd.read_sql(q, engine)['count_1'][0]
+            bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
+            npartitions = round(count * bytes_per_row / AUTO_BYTES_PER_CHUNK)
+        if dtype.kind == "M":
+            divisions = pd.date_range(
+                start=mini, end=maxi, freq='%iS' % (
+                    (maxi - mini) / npartitions).total_seconds()).tolist()
+        else:
+            divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+
     parts = []
     lowers, uppers = divisions[:-1], divisions[1:]
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)
                                       ).select_from(table)
-        parts.append(delayed(read_from_uri)(q, uri, **kwargs))
-    q = sql.select(columns).limit(5).select_from(table)
-    head = pd.read_sql(q, engine, **kwargs)
+        parts.append(delayed(pd.read_sql)(q, uri, **kwargs))
+
     return from_delayed(parts, head, divisions=divisions)
-
-
-def read_from_uri(q, uri, **kwargs):
-    import sqlalchemy as sa
-    engine = sa.create_engine(uri)
-    return pd.read_sql(q, engine, **kwargs)

@@ -64,11 +64,16 @@ def test_divisions(db):
 
 def test_division_or_partition(db):
     with pytest.raises(TypeError):
-        read_sql_table('test', db, columns=['name'], index_col="number")
-
-    with pytest.raises(TypeError):
         read_sql_table('test', db, columns=['name'], index_col="number",
                        divisions=[0, 2, 4], npartitions=3)
+
+    import dask.dataframe.io.sql
+    dask.dataframe.io.sql.AUTO_BYTES_PER_CHUNK = 100
+    out = read_sql_table('test', db, index_col="number")
+    m = out.map_partitions(lambda d: d.memory_usage(
+        deep=True, index=True).sum()).compute()
+    assert (50 < m).all() and (m < 200).all()
+    assert_eq(out, df)
 
 
 def test_range(db):
@@ -130,3 +135,12 @@ def test_no_nameless_index(db):
     # function for the index, get all columns
     with pytest.raises(ValueError):
         read_sql_table('test', db, npartitions=2, index_col=index)
+
+
+def test_select_from_select(db):
+    from sqlalchemy import sql
+    s1 = sql.select([sql.column('number'), sql.column('name')]
+                    ).select_from(sql.table('test'))
+    out = read_sql_table(s1, db, npartitions=2, index_col='number')
+    assert_eq(out, df[['name']])
+
