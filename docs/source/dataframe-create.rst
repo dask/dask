@@ -26,6 +26,7 @@ File Formats:
     read_csv
     read_parquet
     read_hdf
+    read_sql_table
     from_bcolz
     from_array
     to_csv
