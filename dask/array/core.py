@@ -34,6 +34,7 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
+from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict)
@@ -965,7 +966,7 @@ class Array(Base):
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
 
-        for plugin in _global_constructor_plugins:
+        for plugin in _globals.get('array_plugins', ()):
             result = plugin(self)
             if result is not None:
                 self = result
@@ -3873,19 +3874,3 @@ def slice_with_dask_array(x, index):
     chunks = ((np.nan,) * y.npartitions,)
 
     return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
-
-
-_global_constructor_plugins = list()
-
-
-class constructor_plugins(object):
-    def __init__(self, *args):
-        self.added = args
-        _global_constructor_plugins.extend(args)
-
-    def __enter__(self):
-        return
-
-    def __exit__(self, *args):
-        for plugin in self.added:
-            _global_constructor_plugins.remove(plugin)

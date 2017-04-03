@@ -2912,13 +2912,13 @@ def test_elemwise_with_lists(chunks, other):
 def test_constructor_plugin():
     L = []
     L2 = []
-    with da.constructor_plugins(L.append, L2.append):
+    with dask.set_options(array_plugins=[L.append, L2.append]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
     assert L == L2 == [x, y]
 
-    with da.constructor_plugins(lambda x: x.compute()):
+    with dask.set_options(array_plugins=[lambda x: x.compute()]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
