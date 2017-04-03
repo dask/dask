@@ -973,9 +973,6 @@ class Array(Base):
 
         return self
 
-    def __getnewargs__(self):
-        return (self.dask, self.name, self.chunks, self.dtype)
-
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype))
 
