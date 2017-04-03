@@ -3604,7 +3604,7 @@ def repartition_npartitions(df, npartitions):
         dsk[new_name, new_partition_index] = value
     divisions = [df.divisions[new_partition_index]
                  for new_partition_index in new_partitions_boundaries]
-    return DataFrame(merge(df.dask, dsk), new_name, df._meta, divisions)
+    return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
 
 
 def repartition(df, divisions=None, force=False):

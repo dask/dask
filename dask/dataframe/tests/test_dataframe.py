@@ -1288,6 +1288,16 @@ def test_repartition_npartitions():
             a.repartition(npartitions=5)
 
 
+def test_repartition_series_npartitions():
+    df = pd.DataFrame({'x': np.arange(1000)})
+    ddf = dd.from_pandas(df, npartitions=20)
+
+    for n in [1, 3, 10]:
+        x = ddf.x.repartition(npartitions=n)
+        assert x.npartitions == n
+        assert_eq(x, df.x)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize('npartitions', [1, 20, 243])
 @pytest.mark.parametrize('freq', ['1D', '7D', '28h'])
