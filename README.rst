@@ -26,3 +26,6 @@ New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt
    :target: https://gitter.im/dask/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
    :target: https://pypi.python.org/pypi/dask/
+
+.. Please ignore this test edit.
+
