@@ -1481,12 +1481,6 @@ def test_Array_normalizes_dtype():
     assert isinstance(x.dtype, np.dtype)
 
 
-def test_args():
-    x = da.ones((10, 2), chunks=(3, 1), dtype='i4') + 1
-    y = Array(*x._args)
-    assert_eq(x, y)
-
-
 def test_from_array_with_lock():
     x = np.arange(10)
     d = da.from_array(x, chunks=5, lock=True)

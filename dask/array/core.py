@@ -973,12 +973,11 @@ class Array(Base):
 
         return self
 
-    @property
-    def _args(self):
+    def __getnewargs__(self):
         return (self.dask, self.name, self.chunks, self.dtype)
 
     def __getstate__(self):
-        return self._args
+        return self.__getnewargs__()
 
     def __setstate__(self, state):
         self.dask, self.name, self._chunks, self.dtype = state
