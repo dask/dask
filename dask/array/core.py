@@ -976,12 +976,6 @@ class Array(Base):
     def __getnewargs__(self):
         return (self.dask, self.name, self.chunks, self.dtype)
 
-    def __getstate__(self):
-        return self.__getnewargs__()
-
-    def __setstate__(self, state):
-        self.dask, self.name, self._chunks, self.dtype = state
-
     @property
     def numblocks(self):
         return tuple(map(len, self.chunks))
