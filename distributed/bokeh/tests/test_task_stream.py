@@ -33,4 +33,4 @@ def test_TaskStreamPlugin(c, s, *workers):
     starts = sorted(rects['start'])
     rects = es.rectangles(2, 5, workers=workers,
                           start_boundary=(starts[0] + starts[1]) / 2000)
-    assert set(rects['start']) == set(starts[1:])
+    assert set(rects['start']).issubset(set(starts[1:]))

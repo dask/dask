@@ -16,7 +16,8 @@ from distributed.utils_test import gen_cluster, inc, dec, slowinc
 from distributed.bokeh.worker import Counters, BokehWorker
 from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
         SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents, Events,
-        TaskStream, TaskProgress, MemoryUse, CurrentLoad)
+        TaskStream, TaskProgress, MemoryUse, CurrentLoad, ProcessingHistogram,
+        NBytesHistogram)
 
 from distributed.bokeh import scheduler
 
@@ -209,3 +210,29 @@ def test_CurrentLoad(c, s, a, b):
 
     assert all(len(L) == 2 for L in d.values())
     assert all(d['nbytes'])
+
+
+@gen_cluster(client=True)
+def test_ProcessingHistogram(c, s, a, b):
+    ph = ProcessingHistogram(s)
+    ph.update()
+    assert (ph.source.data['top'] != 0).sum() == 1
+
+    futures = c.map(slowinc, range(10), delay=0.050)
+    yield gen.sleep(0.100)
+
+    ph.update()
+    assert ph.source.data['right'][-1] > 2
+
+
+@gen_cluster(client=True)
+def test_NBytesHistogram(c, s, a, b):
+    nh = NBytesHistogram(s)
+    nh.update()
+    assert (nh.source.data['top'] != 0).sum() == 1
+
+    futures = c.map(inc, range(10))
+    yield _wait(futures)
+
+    nh.update()
+    assert nh.source.data['right'][-1] > 5 * 20

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import logging
+import math
 from math import sqrt
 from numbers import Number
 from operator import add
@@ -62,17 +63,24 @@ def update(source, data):
         arrays
     3.  If profiling then perform the update in another callback
     """
-    if source.data == data:
-        return
+    if (not np or not any(isinstance(v, np.ndarray)
+                          for v in source.data.values())):
+        if source.data == data:
+            return
     if np and len(data[first(data)]) > 10:
+        d = {}
         for k, v in data.items():
             if type(v) is not np.ndarray and isinstance(v[0], Number):
-                data[k] = np.array(v)
+                d[k] = np.array(v)
+            else:
+                d[k] = v
+    else:
+        d = data
 
     if PROFILING:
-        curdoc().add_next_tick_callback(lambda: source.data.update(data))
+        curdoc().add_next_tick_callback(lambda: source.data.update(d))
     else:
-        source.data.update(data)
+        source.data.update(d)
 
 
 class StateTable(DashboardComponent):
@@ -182,6 +190,73 @@ class Occupancy(DashboardComponent):
                 update(self.source, result)
 
 
+class ProcessingHistogram(DashboardComponent):
+    """ How many tasks are on each worker """
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.last = 0
+            self.scheduler = scheduler
+            self.source = ColumnDataSource({'left': [1, 2],
+                                            'right': [10, 10],
+                                            'top': [0, 0]})
+
+            self.root = figure(title='Tasks Processing',
+                               id='bk-nprocessing-histogram-plot',
+                               **kwargs)
+
+            self.root.xaxis.minor_tick_line_alpha = 0
+            self.root.ygrid.visible = False
+
+            self.root.toolbar.logo = None
+            self.root.toolbar_location = None
+
+            self.root.quad(source=self.source,
+                           left='left', right='right', bottom=0, top='top',
+                           color='blue')
+
+    def update(self):
+        L = list(map(len, self.scheduler.processing.values()))
+        counts, x = np.histogram(L, bins=40)
+        self.source.data.update({'left': x[:-1],
+                                 'right': x[1:],
+                                 'top': counts})
+
+
+class NBytesHistogram(DashboardComponent):
+    """ How many tasks are on each worker """
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.last = 0
+            self.scheduler = scheduler
+            self.source = ColumnDataSource({'left': [1, 2],
+                                            'right': [10, 10],
+                                            'top': [0, 0]})
+
+            self.root = figure(title='NBytes Stored',
+                               id='bk-nbytes-histogram-plot',
+                               **kwargs)
+            self.root.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
+            self.root.xaxis.major_label_orientation = -math.pi / 12
+
+            self.root.xaxis.minor_tick_line_alpha = 0
+            self.root.ygrid.visible = False
+
+            self.root.toolbar.logo = None
+            self.root.toolbar_location = None
+
+            self.root.quad(source=self.source,
+                           left='left', right='right', bottom=0, top='top',
+                           color='blue')
+
+    def update(self):
+        nbytes = np.asarray(list(self.scheduler.worker_bytes.values()))
+        counts, x = np.histogram(nbytes, bins=40)
+        d = {'left': x[:-1], 'right': x[1:], 'top': counts}
+        self.source.data.update(d)
+
+        self.root.title.text = 'Bytes stored: ' + format_bytes(nbytes.sum())
+
+
 class CurrentLoad(DashboardComponent):
     """ How many tasks are on each worker """
     def __init__(self, scheduler, width=600, **kwargs):
@@ -214,6 +289,7 @@ class CurrentLoad(DashboardComponent):
                         width='nbytes', height=1,
                         color='nbytes-color')
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
+            nbytes.xaxis.major_label_orientation = -math.pi / 12
             nbytes.x_range.start = 0
 
             for fig in [processing, nbytes]:
@@ -750,12 +826,24 @@ def status_doc(scheduler, doc):
         task_progress.update()
         doc.add_periodic_callback(task_progress.update, 100)
 
-        current_load = CurrentLoad(scheduler, height=160)
-        current_load .update()
-        doc.add_periodic_callback(current_load.update, 100)
+        if len(scheduler.workers) < 50:
+            current_load = CurrentLoad(scheduler, height=160)
+            current_load.update()
+            doc.add_periodic_callback(current_load.update, 100)
+            current_load_fig = current_load.root
+        else:
+            nbytes_hist = NBytesHistogram(scheduler, width=300, height=160)
+            nbytes_hist.update()
+            processing_hist = ProcessingHistogram(scheduler, width=300,
+                                                  height=160)
+            processing_hist.update()
+            doc.add_periodic_callback(nbytes_hist.update, 100)
+            doc.add_periodic_callback(processing_hist.update, 100)
+            current_load_fig = row(nbytes_hist.root, processing_hist.root,
+                                   sizing_mode='scale_width')
 
         doc.title = "Dask Status"
-        doc.add_root(column(current_load.root,
+        doc.add_root(column(current_load_fig,
                             task_stream.root,
                             task_progress.root,
                             sizing_mode='scale_width'))

@@ -503,9 +503,13 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
 
+        futures = []
         for w, comm in list(self.worker_comms.items()):
             with ignoring(AttributeError):
-                yield comm.close()
+                futures.append(comm.close())
+
+        for future in futures:
+            yield future
 
     ###########
     # Stimuli #
