@@ -976,6 +976,9 @@ class Array(Base):
     def __getnewargs__(self):
         return (self.dask, self.name, self.chunks, self.dtype)
 
+    def __reduce__(self):
+        return (Array, (self.dask, self.name, self.chunks, self.dtype))
+
     @property
     def numblocks(self):
         return tuple(map(len, self.chunks))
