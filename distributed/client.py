@@ -2600,6 +2600,58 @@ class AsCompleted(object):
 
     next = __next__
 
+    def next_batch(self, block=True):
+        """ Get next batch of futures from as_completed iterator
+
+        Parameters
+        ----------
+        block: bool, optional
+            If True then wait until we have some result, otherwise return
+            immediately, even with an empty list.  Defaults to True.
+
+        Examples
+        --------
+        >>> ac = as_completed(futures)  # doctest: +SKIP
+        >>> client.gather(ac.next_batch())  # doctest: +SKIP
+        [4, 1, 3]
+
+        >>> client.gather(ac.next_batch(block=False))  # doctest: +SKIP
+        []
+
+        Returns
+        -------
+        List of futures or (future, result) tuples
+        """
+        if block:
+            batch = [next(self)]
+        else:
+            batch = []
+        while not self.queue.empty():
+            batch.append(self.queue.get())
+        return batch
+
+    def batches(self):
+        """
+        Yield all finished futures at once rather than one-by-one
+
+        This returns an iterator of lists of futures or lists of
+        (future, result) tuples rather than individual futures or individual
+        (future, result) tuples.  It will yield these as soon as possible
+        without waiting.
+
+        Examples
+        --------
+        >>> for batch in as_completed(futures).batches():  # doctest: +SKIP
+        ...     results = client.gather(batch)
+        ...     print(results)
+        [4, 2]
+        [1, 3, 7]
+        [5]
+        [6]
+        """
+        while True:
+            yield self.next_batch(block=True)
+
 
 as_completed = AsCompleted
 

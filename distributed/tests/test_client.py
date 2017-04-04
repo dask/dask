@@ -3076,6 +3076,34 @@ def test_as_completed_results(loop):
             assert set(pluck(0, seq2)) == set(seq)
 
 
+@pytest.mark.parametrize('with_results', [True, False])
+def test_as_completed_batches(loop, with_results):
+    n = 50
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            futures = c.map(slowinc, range(n), delay=0.01)
+            out = []
+            for batch in as_completed(futures, with_results=with_results).batches():
+                assert isinstance(batch, (tuple, list))
+                sleep(0.05)
+                out.extend(batch)
+
+            assert len(out) == n
+            if with_results:
+                assert set(pluck(1, out)) == set(range(1, n + 1))
+            else:
+                assert set(out) == set(futures)
+
+
+def test_as_completed_next_batch(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            futures = c.map(slowinc, range(2), delay=0.1)
+            ac = as_completed(futures)
+            assert ac.next_batch(block=False) == []
+            assert set(ac.next_batch(block=True)).issubset(futures)
+
+
 @gen_test()
 def test_status():
     s = Scheduler()

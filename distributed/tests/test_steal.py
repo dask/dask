@@ -523,7 +523,7 @@ def test_accept_old_result_if_stolen(c, s, a, b):
     while not b.executing:
         yield gen.sleep(0.01)
 
-    yield gen.sleep(0.25)
+    yield gen.sleep(0.35)
 
     assert future.key in s.who_has
 
