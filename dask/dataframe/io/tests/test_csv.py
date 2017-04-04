@@ -196,21 +196,16 @@ def test_text_blocks_to_pandas_blocked(reader, files):
               expected2.reset_index(drop=True), check_dtype=False)
 
 
-@csv_and_table
-def test_skiprows(reader, files):
-    header = files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
-    blocks = []
-    for k in sorted(files):
-        b = files[k].strip()
-        lines = b.split(b'\n')
-        file_blocks = [b'\n'.join(bs) for bs in partition_all(2, lines)]
-        file_blocks[0] = comment_header + b'\n' + file_blocks[0]
-        blocks.append(file_blocks)
-
-    df = text_blocks_to_pandas(reader, blocks, header, expected.head(),
-                               {'skiprows': len(comment_header.splitlines())})
-    assert_eq(df.compute(get=get_sync).reset_index(drop=True),
-              expected.reset_index(drop=True), check_dtype=False)
+@pytest.mark.parametrize('dd_read,pd_read,files',
+                         [(dd.read_csv, pd.read_csv, csv_files),
+                          (dd.read_table, pd.read_table, tsv_files)])
+def test_skiprows(dd_read, pd_read, files):
+    files = {name: comment_header + b'\n' + content for name, content in files.items()}
+    skip = len(comment_header.splitlines())
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 csv_blocks = [[b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40'],
