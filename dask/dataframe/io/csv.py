@@ -138,8 +138,10 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                                       dtypes, columns, write_header=False,
                                       enforce=enforce)
         dfs.append(df)
+        rest_kwargs = kwargs.copy()
+        rest_kwargs.pop('skiprows', None)
         for b in blocks[1:]:
-            dfs.append(delayed_pandas_read_text(reader, b, header, kwargs,
+            dfs.append(delayed_pandas_read_text(reader, b, header, rest_kwargs,
                                                 dtypes, columns,
                                                 enforce=enforce))
 
@@ -219,7 +221,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if kwargs.get('header', 'infer') is None:
         header = b''
     else:
-        header = sample.split(b_lineterminator)[0] + b_lineterminator
+        header_row = kwargs.get('skiprows', 0)
+        header = sample.split(b_lineterminator)[header_row] + b_lineterminator
 
     head = reader(BytesIO(sample), **kwargs)
 
