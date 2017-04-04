@@ -64,7 +64,7 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             n = len(divisions)
             try:
                 divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
-                                      xp=np.arange(0, len(divisions)),
+                                      xp=np.linspace(0, n - 1, n),
                                       fp=divisions).tolist()
             except (TypeError, ValueError):  # str type
                 indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
