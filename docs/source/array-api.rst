@@ -361,6 +361,7 @@ Other functions
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk
+.. autofunction:: repeat
 .. autofunction:: reshape
 .. autofunction:: rint
 .. autofunction:: roll
