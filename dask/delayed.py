@@ -481,8 +481,9 @@ class DelayedAttr(Delayed):
         return sharedict.merge(self._obj.dask, (self._key, dsk))
 
     def __call__(self, *args, **kwargs):
-        return call_function(methodcaller(self._attr), self._attr, (self._obj,)\
-                + args, kwargs, pure_default=self._pure_default)
+        return call_function(methodcaller(self._attr), self._attr,
+                             (self._obj, ) + args, kwargs,
+                             pure_default=self._pure_default)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
