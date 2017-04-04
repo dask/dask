@@ -111,7 +111,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=None, pure_default=False, nout=None, traverse=True):
+def delayed(obj, name=None, pure=None, pure_default=None, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -276,7 +276,10 @@ def delayed(obj, name=None, pure=None, pure_default=False, nout=None, traverse=T
     Delayed("count_2")
     """
     if pure is None:
-        pure = pure_default
+        if pure_default is None:
+            pure = False
+        else:
+            pure = pure_default
 
     if isinstance(obj, Delayed):
         return obj
@@ -337,7 +340,7 @@ class Delayed(base.Base):
     _default_get = staticmethod(threaded.get)
     _optimize = staticmethod(lambda d, k, **kwds: d)
 
-    def __init__(self, key, dsk, pure_default=False, length=None):
+    def __init__(self, key, dsk, pure_default=None, length=None):
         self._pure_default = pure_default
         self._key = key
         if type(dsk) is list:  # compatibility with older versions
@@ -420,9 +423,12 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-def call_function(func, func_token, args, kwargs, pure=None, pure_default=False, nout=None):
+def call_function(func, func_token, args, kwargs, pure=None, pure_default=None, nout=None):
     if pure is None:
-        pure = pure_default
+        if pure_default is None:
+            pure = False
+        else:
+            pure = pure_default
     dask_key_name = kwargs.pop('dask_key_name', None)
     pure = kwargs.pop('pure', pure)
 
@@ -449,7 +455,12 @@ def call_function(func, func_token, args, kwargs, pure=None, pure_default=False,
 class DelayedLeaf(Delayed):
     __slots__ = ('_obj', '_key', '_pure', '_nout', '_pure_default')
 
-    def __init__(self, obj, key, pure=None, pure_default=False, nout=None):
+    def __init__(self, obj, key, pure=None, pure_default=None, nout=None):
+        if pure is None:
+            if pure_default is None:
+                pure = False
+            else:
+                pure = pure_default
         self._obj = obj
         self._key = key
         self._pure = pure
@@ -469,7 +480,7 @@ class DelayedLeaf(Delayed):
 class DelayedAttr(Delayed):
     __slots__ = ('_obj', '_attr', '_key', '_pure_default')
 
-    def __init__(self, obj, attr, pure_default=True):
+    def __init__(self, obj, attr, pure_default=None):
         self._pure_default = pure_default
         self._obj = obj
         self._attr = attr
