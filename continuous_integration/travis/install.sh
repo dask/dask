@@ -1,5 +1,16 @@
 # Install conda
-wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+case "$(uname -s)" in
+    'Darwin')
+        MINICONDA_FILENAME="Miniconda-latest-MacOSX-x86_64.sh"
+        ;;
+    'Linux')
+        MINICONDA_FILENAME="Miniconda-latest-Linux-x86_64.sh"
+        ;;
+    *)  ;;
+esac
+
+
+wget https://repo.continuum.io/miniconda/$MINICONDA_FILENAME -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
 conda config --set always_yes yes --set changeps1 no
