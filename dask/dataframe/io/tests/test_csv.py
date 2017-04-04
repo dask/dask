@@ -94,6 +94,11 @@ tsv_files = {k: v.replace(b',', b'\t') for (k, v) in csv_files.items()}
 expected = pd.concat([pd.read_csv(BytesIO(csv_files[k]))
                       for k in sorted(csv_files)])
 
+comment_header = b"""# some header lines
+# that may be present
+# in a data file
+# before any data"""
+
 
 csv_and_table = pytest.mark.parametrize('reader,files',
                                         [(pd.read_csv, csv_files),
@@ -189,6 +194,18 @@ def test_text_blocks_to_pandas_blocked(reader, files):
                                {'usecols': ['name', 'id']})
     assert_eq(df.compute().reset_index(drop=True),
               expected2.reset_index(drop=True), check_dtype=False)
+
+
+@pytest.mark.parametrize('dd_read,pd_read,files',
+                         [(dd.read_csv, pd.read_csv, csv_files),
+                          (dd.read_table, pd.read_table, tsv_files)])
+def test_skiprows(dd_read, pd_read, files):
+    files = {name: comment_header + b'\n' + content for name, content in files.items()}
+    skip = len(comment_header.splitlines())
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 csv_blocks = [[b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40'],
