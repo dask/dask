@@ -104,7 +104,8 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    if kwargs.pop('pure', False):
+    pure = kwargs.pop('pure', False)
+    if pure:
         return base.tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
@@ -484,7 +485,11 @@ class DelayedAttr(Delayed):
         self._pure_default = pure_default
         self._obj = obj
         self._attr = attr
-        self._key = 'getattr-%s' % tokenize(obj, attr, pure=pure_default)
+        if pure_default is None:
+            pure = True
+        else:
+            pure = False
+        self._key = 'getattr-%s' % tokenize(obj, attr, pure=pure)
 
     @property
     def dask(self):
