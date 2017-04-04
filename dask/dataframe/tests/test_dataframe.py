@@ -2703,3 +2703,18 @@ def test_datetime_loc_open_slicing():
     assert_eq(df.loc['02.02.2015':], ddf.loc['02.02.2015':])
     assert_eq(df[0].loc[:'02.02.2015'], ddf[0].loc[:'02.02.2015'])
     assert_eq(df[0].loc['02.02.2015':], ddf[0].loc['02.02.2015':])
+
+
+def test_to_datetime():
+    df = pd.DataFrame({'year': [2015, 2016],
+                       'month': [2, 3],
+                       'day': [4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+
+    s = pd.Series(['3/11/2000', '3/12/2000', '3/13/2000'] * 100)
+    ds = dd.from_pandas(s, npartitions=10)
+
+    assert_eq(pd.to_datetime(s, infer_datetime_format=True),
+              dd.to_datetime(ds, infer_datetime_format=True))
