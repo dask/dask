@@ -1,9 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-from time import sleep
+import logging
 import socket
 import os
 import sys
+import time
 import traceback
 
 try:
@@ -16,6 +17,9 @@ from threading import Thread
 from toolz import merge
 
 from tornado import gen
+
+
+logger = logging.getLogger(__name__)
 
 
 # These are handy for creating colorful terminal output to enhance readability
@@ -42,9 +46,7 @@ def async_ssh(cmd_dict):
     while True:  # Be robust to transient SSH failures.
         try:
             # Set paramiko logging to WARN or higher to squelch INFO messages.
-            import logging
-            logger = logging.getLogger('paramiko')
-            logger.setLevel(logging.WARN)
+            logging.getLogger('paramiko').setLevel(logging.WARN)
 
             ssh.connect(hostname=cmd_dict['address'],
                         username=cmd_dict['ssh_username'],
@@ -88,7 +90,7 @@ def async_ssh(cmd_dict):
                   'Retrying... (attempt {n}/{total})'.format(n=retries, total=3) +
                   bcolors.ENDC)
 
-            sleep(1)
+            time.sleep(1)
 
     # Execute the command, and grab file handles for stdout and stderr. Note
     # that we run the command using the user's default shell, but force it to
@@ -101,59 +103,76 @@ def async_ssh(cmd_dict):
                                        cmd=cmd_dict['cmd']))
     stdin, stdout, stderr = ssh.exec_command('$SHELL -i -c \'' + cmd_dict['cmd'] + '\'', get_pty=True)
 
-    # Set up channel timeouts (which we rely on below to make readline()
-    # non-blocking.
-    stdout.channel.settimeout(0.1)
-    stderr.channel.settimeout(0.1)
+    # Set up channel timeout (which we rely on below to make readline() non-blocking)
+    channel = stdout.channel
+    channel.settimeout(0.1)
 
-    # Wait for a message on the input_queue. Any message received signals this
-    # thread to shut itself down.
-    while(cmd_dict['input_queue'].empty()):
-
-        # Read stdout stream, time out if necessary.
+    def read_from_stdout():
+        """
+        Read stdout stream, time out if necessary.
+        """
         try:
             line = stdout.readline()
             while len(line) > 0:    # Loops until a timeout exception occurs
+                line = line.rstrip()
+                logger.debug('stdout from ssh channel: %s', line)
                 cmd_dict['output_queue'].put('[ {label} ] : {output}'.format(label=cmd_dict['label'],
-                                                                             output=line.rstrip()))
+                                                                             output=line))
                 line = stdout.readline()
+        except (PipeTimeout, socket.timeout):
+            pass
 
-        except PipeTimeout:
-            continue
-        except socket.timeout:
-            continue
-
-        # Read stderr stream, time out if necessary
+    def read_from_stderr():
+        """
+        Read stderr stream, time out if necessary.
+        """
         try:
             line = stderr.readline()
             while len(line) > 0:
+                line = line.rstrip()
+                logger.debug('stderr from ssh channel: %s', line)
                 cmd_dict['output_queue'].put('[ {label} ] : '.format(label=cmd_dict['label']) +
-                                             bcolors.FAIL + '{output}'.format(output=line.rstrip()) + bcolors.ENDC)
+                                             bcolors.FAIL + '{output}'.format(output=line) + bcolors.ENDC)
                 line = stderr.readline()
+        except (PipeTimeout, socket.timeout):
+            pass
 
-        except PipeTimeout:
-            continue
-        except socket.timeout:
-            continue
+    def communicate():
+        """
+        Communicate a little bit, without blocking too long.
+        Return True if the command ended.
+        """
+        read_from_stdout()
+        read_from_stderr()
 
         # Check to see if the process has exited. If it has, we let this thread
         # terminate.
-        if stdout.channel.exit_status_ready():
-            exit_status = stdout.channel.recv_exit_status()
+        if channel.exit_status_ready():
+            exit_status = channel.recv_exit_status()
             cmd_dict['output_queue'].put('[ {label} ] : '.format(label=cmd_dict['label']) +
                                          bcolors.FAIL +
                                          "remote process exited with exit status " +
                                          str(exit_status) + bcolors.ENDC)
+            return True
+
+    # Wait for a message on the input_queue. Any message received signals this
+    # thread to shut itself down.
+    while cmd_dict['input_queue'].empty():
+        # Kill some time so that this thread does not hog the CPU.
+        time.sleep(1.0)
+        if communicate():
             break
 
-        # Kill some time so that this thread does not hog the CPU.
-        sleep(1.0)
-
-    # end while()
+    # Ctrl-C the executing command and wait a bit for command to end cleanly
+    start = time.time()
+    while time.time() < start + 5.0:
+        channel.send(b'\x03')  # Ctrl-C
+        if communicate():
+            break
+        time.sleep(1.0)
 
     # Shutdown the channel, and close the SSH connection
-    stdout.channel.close()
-    stderr.channel.close()
+    channel.close()
     ssh.close()
 
 
@@ -291,7 +310,7 @@ class SSHCluster(object):
 
                 # Kill some time and free up CPU before starting the next sweep
                 # through the processes.
-                sleep(0.1)
+                time.sleep(0.1)
 
             # end while true
 
