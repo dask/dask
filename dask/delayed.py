@@ -111,7 +111,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=False, nout=None, traverse=True):
+def delayed(obj, name=None, pure=None, pure_default=False, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -128,6 +128,8 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
         deterministic keys. Default is False.
+    pure_default : bool, optional
+        Indicates what the default purity of subsequent calls should be.
     nout : int, optional
         The number of outputs returned from calling the resulting ``Delayed``
         object. If provided, the ``Delayed`` output of the call can be iterated
@@ -273,6 +275,9 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     >>> a.count(2, dask_key_name="count_2")
     Delayed("count_2")
     """
+    if pure is None:
+        pure = pure_default
+
     if isinstance(obj, Delayed):
         return obj
 
@@ -293,12 +298,12 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
             name = '%s-%s' % (prefix, token)
-        return DelayedLeaf(obj, name, pure=pure, nout=nout)
+        return DelayedLeaf(obj, name, pure=pure, pure_default=pure_default, nout=nout)
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
         dsk = sharedict.merge(dsk, (name, {name: task}))
-        return Delayed(name, dsk)
+        return Delayed(name, dsk, pure_default=pure_default)
 
 
 def do(*args, **kwargs):
@@ -327,12 +332,13 @@ class Delayed(base.Base):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_key', 'dask', '_length')
+    __slots__ = ('_key', 'dask', '_length', '_pure_default')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
     _optimize = staticmethod(lambda d, k, **kwds: d)
 
-    def __init__(self, key, dsk, length=None):
+    def __init__(self, key, dsk, pure_default=False, length=None):
+        self._pure_default = pure_default
         self._key = key
         if type(dsk) is list:  # compatibility with older versions
             dsk = sharedict.merge(*dsk)
@@ -350,6 +356,10 @@ class Delayed(base.Base):
     def key(self):
         return self._key
 
+    @property
+    def pure_default(self):
+        return self._pure_default
+
     def _keys(self):
         return [self.key]
 
@@ -365,7 +375,7 @@ class Delayed(base.Base):
     def __getattr__(self, attr):
         if attr.startswith('_'):
             raise AttributeError("Attribute {0} not found".format(attr))
-        return DelayedAttr(self, attr)
+        return DelayedAttr(self, attr, pure_default=self._pure_default)
 
     def __setattr__(self, attr, val):
         if attr in self.__slots__:
@@ -410,7 +420,9 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-def call_function(func, func_token, args, kwargs, pure=False, nout=None):
+def call_function(func, func_token, args, kwargs, pure=None, pure_default=False, nout=None):
+    if pure is None:
+        pure = pure_default
     dask_key_name = kwargs.pop('dask_key_name', None)
     pure = kwargs.pop('pure', pure)
 
@@ -431,16 +443,17 @@ def call_function(func, func_token, args, kwargs, pure=False, nout=None):
 
     dsk.update_with_key({name: task}, key=name)
     nout = nout if nout is not None else None
-    return Delayed(name, dsk, length=nout)
+    return Delayed(name, dsk, pure_default=pure_default, length=nout)
 
 
 class DelayedLeaf(Delayed):
-    __slots__ = ('_obj', '_key', '_pure', '_nout')
+    __slots__ = ('_obj', '_key', '_pure', '_nout', '_pure_default')
 
-    def __init__(self, obj, key, pure=False, nout=None):
+    def __init__(self, obj, key, pure=None, pure_default=False, nout=None):
         self._obj = obj
         self._key = key
         self._pure = pure
+        self._pure_default = pure_default
         self._nout = nout
 
     @property
@@ -449,16 +462,18 @@ class DelayedLeaf(Delayed):
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,
-                             pure=self._pure, nout=self._nout)
+                             pure=self._pure, pure_default=self._pure_default,
+                             nout=self._nout)
 
 
 class DelayedAttr(Delayed):
-    __slots__ = ('_obj', '_attr', '_key')
+    __slots__ = ('_obj', '_attr', '_key', '_pure_default')
 
-    def __init__(self, obj, attr):
+    def __init__(self, obj, attr, pure_default=True):
+        self._pure_default = pure_default
         self._obj = obj
         self._attr = attr
-        self._key = 'getattr-%s' % tokenize(obj, attr, pure=True)
+        self._key = 'getattr-%s' % tokenize(obj, attr, pure=pure_default)
 
     @property
     def dask(self):
@@ -466,7 +481,8 @@ class DelayedAttr(Delayed):
         return sharedict.merge(self._obj.dask, (self._key, dsk))
 
     def __call__(self, *args, **kwargs):
-        return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)
+        return call_function(methodcaller(self._attr), self._attr, (self._obj,)\
+                + args, kwargs, pure_default=self._pure_default)
 
 
 for op in [operator.abs, operator.neg, operator.pos, operator.invert,
