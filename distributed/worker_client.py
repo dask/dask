@@ -16,7 +16,7 @@ from .worker import thread_state
 
 
 @contextmanager
-def worker_client(timeout=3):
+def worker_client(timeout=3, separate_thread=True):
     """ Get client for this thread
 
     Note: This interface is new and experimental.  It may change without
@@ -26,9 +26,16 @@ def worker_client(timeout=3):
     on workers.  When run as a context manager it delivers a client
     ``Client`` object that can submit other tasks directly from that worker.
 
+    Parameters
+    ----------
+    timeout: Number
+        Timeout after which to err
+    separate_thread: bool, optional
+        Whether to run this function outside of the normal thread pool
+        defaults to True
+
     Examples
     --------
-
     >>> def func(x):
     ...     with worker_client() as e:  # connect from worker back to scheduler
     ...         a = e.submit(inc, x)     # this task can submit more tasks
@@ -40,8 +47,9 @@ def worker_client(timeout=3):
     """
     address = thread_state.execution_state['scheduler']
     worker = thread_state.execution_state['worker']
-    secede()  # have this thread secede from the thread pool
-    worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
+    if separate_thread:
+        secede()  # have this thread secede from the thread pool
+        worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
 
     with WorkerClient(address, loop=worker.loop) as wc:
         # Make sure connection errors are bubbled to the caller
