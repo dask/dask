@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import pytest
 import pickle
@@ -330,3 +331,15 @@ def test_set_index_detects_sorted_data(shuffle):
 
     ddf2 = ddf.set_index('x', shuffle=shuffle)
     assert len(ddf2.dask) < ddf.npartitions * 4
+
+
+def test_temporary_directory():
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100),
+                       'z': np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
+
+    with dask.set_options(temporary_directory=os.getcwd()):
+        ddf2 = ddf.set_index('x', shuffle='disk')
+        ddf2.compute()
+        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))

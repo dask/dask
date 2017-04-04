@@ -1128,3 +1128,12 @@ def test_repeated_groupby():
     b = db.range(10, npartitions=4)
     c = b.groupby(lambda x: x % 3)
     assert valmap(len, dict(c)) == valmap(len, dict(c))
+
+
+def test_temporary_directory():
+    b = db.range(10, npartitions=4)
+
+    with dask.set_options(temporary_directory=os.getcwd()):
+        b2 = b.groupby(lambda x: x % 2)
+        b2.compute()
+        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))

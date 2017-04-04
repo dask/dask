@@ -206,10 +206,15 @@ class maybe_buffered_partd(object):
 
     def __call__(self, *args, **kwargs):
         import partd
-        if self.buffer:
-            return partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+        dirname = _globals.get('temporary_directory', None)
+        if dirname:
+            file = partd.File(dir=dirname)
         else:
-            return partd.PandasBlocks(partd.File())
+            file = partd.File()
+        if self.buffer:
+            return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
+        else:
+            return partd.PandasBlocks(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
