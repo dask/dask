@@ -32,6 +32,7 @@ conda install -q -c conda-forge \
     chest \
     coverage \
     cytoolz \
+    graphviz \
     h5py \
     ipython \
     partd \

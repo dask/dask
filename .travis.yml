@@ -1,12 +1,6 @@
 language: generic
 sudo: false
 
-addons:
-  apt:
-    packages:
-      - graphviz
-      - liblzma-dev
-
 env:
   matrix:
     #- PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.19.0 COVERAGE='true' PARALLEL='false' TEST_IMPORTS='false' XTRATESTARGS=
