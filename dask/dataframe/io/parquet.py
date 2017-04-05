@@ -42,8 +42,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         List of column names to load
     filters: list
         List of filters to apply, like ``[('x', '>' 0), ...]``
-    index: string or None
-        Name of index column to use if that column is sorted
+    index: string or None (default) or False
+        Name of index column to use if that column is sorted;
+        False to force dask to not use any column as the index
     categories: list, dict or None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
