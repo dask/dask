@@ -1481,12 +1481,6 @@ def test_Array_normalizes_dtype():
     assert isinstance(x.dtype, np.dtype)
 
 
-def test_args():
-    x = da.ones((10, 2), chunks=(3, 1), dtype='i4') + 1
-    y = Array(*x._args)
-    assert_eq(x, y)
-
-
 def test_from_array_with_lock():
     x = np.arange(10)
     d = da.from_array(x, chunks=5, lock=True)
@@ -2907,3 +2901,20 @@ def test_elemwise_with_lists(chunks, other):
     d3 = d2 * other
 
     assert_eq(x3, d3)
+
+
+def test_constructor_plugin():
+    L = []
+    L2 = []
+    with dask.set_options(array_plugins=[L.append, L2.append]):
+        x = da.ones(10, chunks=5)
+        y = x + 1
+
+    assert L == L2 == [x, y]
+
+    with dask.set_options(array_plugins=[lambda x: x.compute()]):
+        x = da.ones(10, chunks=5)
+        y = x + 1
+
+    assert isinstance(y, np.ndarray)
+    assert len(L) == 2

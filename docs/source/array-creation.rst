@@ -304,3 +304,74 @@ destinations:
 .. code-block:: Python
 
    >>> da.store([array1, array2], [output1, output2])  # doctest: +SKIP
+
+
+Plugins
+=======
+
+We can run arbitrary user-defined functions on dask.arrays whenever they are
+constructed. This allows us to build a variety of custom behaviors that improve
+debugging, user warning, etc..  You can register a list of functions to run on
+all dask.arrays to the global ``array_plugins=`` value:
+
+.. code-block:: python
+
+   >>> def f(x):
+   ...     print(x.nbytes)
+
+   >>> with dask.set_options(array_plugins=[f]):
+   ...     x = da.ones((10, 1), chunks=(5, 1))
+   ...     y = x.dot(x.T)
+   80
+   80
+   800
+   800
+
+If the plugin function returns None then the input Dask.array will be returned
+without change.  If the plugin function returns something else then that value
+will be the result of the constructor.
+
+Examples
+--------
+
+Automatically compute
+~~~~~~~~~~~~~~~~~~~~~
+
+We may wish to turn some Dask.array code into normal NumPy code.  This is
+useful for example to track down errors immediately that would otherwise be
+hidden by Dask's lazy semantics.
+
+.. code-block:: python
+
+   >>> with dask.set_options(array_plugins=[lambda x: x.compute()]):
+   ...     x = da.arange(5, chunks=2)
+
+   >>> x  # this was automatically converted into a numpy array
+   array([0, 1, 2, 3, 4])
+
+Warn on large chunks
+~~~~~~~~~~~~~~~~~~~~
+
+We may wish to warn users if they are creating chunks that are too large
+
+.. code-block:: python
+
+   def warn_on_large_chunks(x):
+       shapes = list(itertools.product(*x.chunks))
+       nbytes = [x.dtype.itemsize * np.prod(shape) for shape in shapes]
+       if any(nb > 1e9 for nb in nbytes):
+           warnings.warn("Array contains very large chunks")
+
+   with dask.set_options(array_plugins=[warn_on_large_chunks]):
+       ...
+
+Combine
+~~~~~~~
+
+You can also combine these plugins into a list.  They will run one after the
+other, chaining results through them.
+
+.. code-block:: python
+
+   with dask.set_options(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
+       ...

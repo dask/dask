@@ -34,6 +34,7 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
+from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict)
@@ -949,7 +950,8 @@ class Array(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __init__(self, dask, name, chunks, dtype, shape=None):
+    def __new__(cls, dask, name, chunks, dtype, shape=None):
+        self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
         if not isinstance(dask, ShareDict):
             s = ShareDict()
@@ -964,15 +966,15 @@ class Array(Base):
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
 
-    @property
-    def _args(self):
-        return (self.dask, self.name, self.chunks, self.dtype)
+        for plugin in _globals.get('array_plugins', ()):
+            result = plugin(self)
+            if result is not None:
+                self = result
 
-    def __getstate__(self):
-        return self._args
+        return self
 
-    def __setstate__(self, state):
-        self.dask, self.name, self._chunks, self.dtype = state
+    def __reduce__(self):
+        return (Array, (self.dask, self.name, self.chunks, self.dtype))
 
     @property
     def numblocks(self):
