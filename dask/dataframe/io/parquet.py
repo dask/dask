@@ -1,9 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import glob
+
 import numpy as np
 import pandas as pd
 from toolz import first, partial
 
+from .io import from_delayed
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
@@ -68,6 +71,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         return _read_fastparquet(path, columns=columns, filters=filters,
                 categories=categories, index=index,
                 storage_options=storage_options)
+    elif engine == 'arrow':
+        return _read_arrow(path, columns=columns)
     else:
         raise NotImplementedError("Engine %s not found" % engine)
 
@@ -163,6 +168,13 @@ def _read_fastparquet(path, columns=None, filters=None, categories=None,
         divisions = [pd.Timestamp(d) for d in divisions]
 
     return out_type(dsk, name, meta, divisions)
+
+
+def _read_arrow(path, columns):
+    import pyarrow.parquet as pq
+    paths = sorted(glob.glob(path))
+    dfs = [delayed(pq.read_table)(path, columns=columns).to_pandas() for path in paths]
+    return from_delayed(dfs)
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
