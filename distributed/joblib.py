@@ -1,12 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 from distutils.version import LooseVersion
-import uuid
+from uuid import uuid4
 
 from tornado import gen
 
 from .client import Client, _wait
-from .utils import ignoring
+from .utils import ignoring, funcname
 
 
 # A user could have installed joblib, sklearn, both, or neither. Further, only
@@ -34,6 +34,17 @@ else:
                        " or `sklearn` > '0.17.1'. Please install or upgrade")
 
 
+def joblib_funcname(x):
+    try:
+        # Can't do isinstance, since joblib is often bundled in packages, and
+        # separate installs will have non-equivalent types.
+        if type(x).__name__ == 'BatchedCalls':
+            x = x.items[0][0]
+    except Exception:
+        pass
+    return funcname(x)
+
+
 class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     MIN_IDEAL_BATCH_DURATION = 0.2
     MAX_IDEAL_BATCH_DURATION = 1.0
@@ -50,7 +61,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
 
     def apply_async(self, func, *args, **kwargs):
         callback = kwargs.pop('callback', None)
-        kwargs['key'] = 'joblib-' + str(uuid.uuid4())
+        kwargs['key'] = '%s-%s' % (joblib_funcname(func), uuid4().hex)
         future = self.client.submit(func, *args, **kwargs)
         self.futures.add(future)
 

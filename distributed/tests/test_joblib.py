@@ -6,8 +6,9 @@ from time import sleep
 
 from distributed.utils_test import inc, cluster, loop
 
-backend = pytest.importorskip('distributed.joblib')
-joblibs = [backend.joblib, backend.sk_joblib]
+distributed_joblib = pytest.importorskip('distributed.joblib')
+joblibs = [distributed_joblib.joblib, distributed_joblib.sk_joblib]
+joblib_funcname = distributed_joblib.joblib_funcname
 
 
 def slow_raise_value_error(condition, duration=0.05):
@@ -60,3 +61,13 @@ def test_dont_assume_function_purity(loop, joblib):
 
             ba, _ = joblib.parallel.get_active_backend()
             ba.client.shutdown()
+
+
+@pytest.mark.parametrize('joblib', joblibs)
+def test_joblib_funcname(joblib):
+    if joblib is None:
+        pytest.skip()
+    BatchedCalls = joblib.parallel.BatchedCalls
+    func = BatchedCalls([(random2,), (random2,)])
+    assert joblib_funcname(func) == 'random2'
+    assert joblib_funcname(random2) == 'random2'
