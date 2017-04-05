@@ -24,7 +24,7 @@ except:
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None):
+                 storage_options=None, engine='fastparquet'):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -63,6 +63,17 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
+    engine = engine.lower()
+    if engine == 'fastparquet':
+        return _read_fastparquet(path, columns=columns, filters=filters,
+                categories=categories, index=index,
+                storage_options=storage_options)
+    else:
+        raise NotImplementedError("Engine %s not found" % engine)
+
+
+def _read_fastparquet(path, columns=None, filters=None, categories=None,
+                      index=None, storage_options=None):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
     if filters is None:
