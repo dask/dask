@@ -1,5 +1,6 @@
-language: python
+language: generic
 sudo: false
+os: linux
 
 env:
   matrix:
@@ -11,11 +12,15 @@ env:
     - PYTHON=3.6 NUMPY=1.11.2 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
     - PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
 
-addons:
-    apt:
-        packages:
-        - graphviz
-        - liblzma-dev
+matrix:
+  fast_finish: true
+  include:
+  - os: osx
+    env: PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
+  # Together with fast_finish, allow build to be marked successful before the OS X job finishes
+  allow_failures:
+  - os: osx
+    env: PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
 
 install: source continuous_integration/travis/install.sh
 script:
