@@ -3757,6 +3757,12 @@ def to_delayed(df):
     return [Delayed(k, df.dask) for k in df._keys()]
 
 
+@wraps(pd.to_datetime)
+def to_datetime(arg, **kwargs):
+    meta = pd.Series([pd.Timestamp('2000')])
+    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
+
+
 def _repr_data_series(s, index):
     """A helper for creating the ``_repr_data`` property"""
     npartitions = len(index) - 1
