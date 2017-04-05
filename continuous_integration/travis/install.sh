@@ -57,6 +57,7 @@ conda install -q -c conda-forge \
     distributed \
     cloudpickle \
 
+pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
 
