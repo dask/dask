@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import glob
+import os
 
 import numpy as np
 import pandas as pd
@@ -172,7 +173,13 @@ def _read_fastparquet(path, columns=None, filters=None, categories=None,
 
 def _read_arrow(path, columns):
     import pyarrow.parquet as pq
-    paths = sorted(glob.glob(path))
+    if '*' in path:
+        paths = sorted(glob.glob(path))
+    elif os.path.isdir(path):
+        paths = sorted(glob.glob(os.path.join(path, '*')))
+    else:
+        paths = [path]
+    paths = [path for path in paths if not path.endswith('metadata')]
     dfs = [delayed(pq.read_table)(path, columns=columns).to_pandas() for path in paths]
     return from_delayed(dfs)
 
