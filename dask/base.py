@@ -528,6 +528,15 @@ def persist(*args, **kwargs):
         except ValueError:
             pass
         else:
+            # check that if globals['get'] is set it is the same method
+            # as the get on the client.
+            globals_get = _globals.get('get')
+            if globals_get is not None:
+                if client.get != globals_get:
+                    raise ValueError("Persist called on collection(s) where the "
+                             "globally set scheduler and specified local `get` "
+                             "differ. Please make sure the scheduler `get` "
+                             "function in use is consistent.")
             collections = client.persist(collections, **kwargs)
             if isinstance(collections, list):  # distributed is inconsistent here
                 collections = tuple(collections)

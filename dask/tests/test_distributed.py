@@ -1,13 +1,13 @@
 import pytest
 pytest.importorskip('distributed')
 
-from dask import persist, delayed
+from dask import persist, delayed, set_options, async
 from distributed.client import _wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
 
 def test_can_import_client():
-    from dask.distributed import Client # noqa: F401
+    from dask.distributed import Client  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -60,3 +60,21 @@ def test_futures_to_delayed_array(loop):
             A = da.concatenate([da.from_delayed(f, shape=x.shape, dtype=x.dtype)
                                 for f in futures], axis=0)
             assert_eq(A.compute(), np.concatenate([x, x], axis=0))
+
+
+def test_persist_with_incompatible_schedulers(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:  # flake8: noqa
+            x = delayed(inc)(1)
+            # ok, Client.get used in ctx and _globals matches
+            with set_options(get=c.get):
+                x2, = persist(x)
+
+            # bad, Client.get used in ctx and _globals set as async.get_sync
+            with set_options(get=async.get_sync):
+                with pytest.raises(ValueError) as err:
+                    x2, = persist(x)
+                assert (
+                    "Persist called on collection(s) where the globally "
+                    "set scheduler and specified local `get` differ.") \
+                    in str(err.value)
