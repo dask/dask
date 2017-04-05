@@ -854,8 +854,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                           "repartition only npartitions is used.")
 
         if npartitions is not None:
-            if npartitions > self.npartitions:
-                raise ValueError("Can only repartition to fewer partitions")
             return repartition_npartitions(self, npartitions)
         elif divisions is not None:
             return repartition(self, divisions, force=force)
@@ -2838,6 +2836,12 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
     return {i: df.iloc[h == i] for i in range(nparts)}
 
 
+def split_evenly(df, k):
+    """ Split dataframe into k roughly equal parts """
+    divisions = np.linspace(0, len(df), k + 1).astype(int)
+    return {i: df.iloc[divisions[i]: divisions[i + 1]] for i in range(k)}
+
+
 def split_out_on_index(df):
     h = df.index
     if isinstance(h, pd.MultiIndex):
@@ -3591,20 +3595,66 @@ def repartition_freq(df, freq=None):
 
 def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
-    npartitions_ratio = df.npartitions / npartitions
-    new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
-                                 for new_partition_index in range(npartitions + 1)]
     new_name = 'repartition-%d-%s' % (npartitions, tokenize(df))
-    dsk = {}
-    for new_partition_index in range(npartitions):
-        value = (pd.concat, [(df._name, old_partition_index)
-                             for old_partition_index in
-                             range(new_partitions_boundaries[new_partition_index],
-                                   new_partitions_boundaries[new_partition_index + 1])])
-        dsk[new_name, new_partition_index] = value
-    divisions = [df.divisions[new_partition_index]
-                 for new_partition_index in new_partitions_boundaries]
-    return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
+    if df.npartitions == npartitions:
+        return df
+    elif df.npartitions > npartitions:
+        npartitions_ratio = df.npartitions / npartitions
+        new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
+                                     for new_partition_index in range(npartitions + 1)]
+        dsk = {}
+        for new_partition_index in range(npartitions):
+            value = (pd.concat, [(df._name, old_partition_index)
+                                 for old_partition_index in
+                                 range(new_partitions_boundaries[new_partition_index],
+                                       new_partitions_boundaries[new_partition_index + 1])])
+            dsk[new_name, new_partition_index] = value
+        divisions = [df.divisions[new_partition_index]
+                     for new_partition_index in new_partitions_boundaries]
+        return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
+    else:
+        original_divisions = divisions = pd.Series(df.divisions)
+        if (df.known_divisions and (np.issubdtype(divisions.dtype, np.datetime64) or
+                                    np.issubdtype(divisions.dtype, np.number))):
+            if np.issubdtype(divisions.dtype, np.datetime64):
+                divisions = divisions.values.astype('float64')
+
+            if isinstance(divisions, pd.Series):
+                divisions = divisions.values
+
+            n = len(divisions)
+            divisions = np.interp(x=np.linspace(0, n, npartitions + 1),
+                                  xp=np.linspace(0, n, n),
+                                  fp=divisions)
+            if np.issubdtype(original_divisions.dtype, np.datetime64):
+                divisions = pd.Series(divisions).astype(original_divisions.dtype).tolist()
+            elif np.issubdtype(original_divisions.dtype, np.integer):
+                divisions = divisions.astype(original_divisions.dtype)
+
+            if isinstance(divisions, np.ndarray):
+                divisions = tuple(divisions.tolist())
+
+            return df.repartition(divisions=divisions)
+        else:
+            ratio = npartitions / df.npartitions
+            split_name = 'split-%s' % tokenize(df, npartitions)
+            dsk = {}
+            last = 0
+            j = 0
+            for i in range(df.npartitions):
+                new = last + ratio
+                if i == df.npartitions - 1:
+                    k = npartitions - j
+                else:
+                    k = int(new - last)
+                dsk[(split_name, i)] = (split_evenly, (df._name, i), k)
+                for jj in range(k):
+                    dsk[(new_name, j)] = (getitem, (split_name, i), jj)
+                    j += 1
+                last = new
+
+            divisions = [None] * (npartitions + 1)
+            return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
 
 
 def repartition(df, divisions=None, force=False):

@@ -1268,34 +1268,36 @@ def test_repartition_on_pandas_dataframe():
     assert_eq(ddf, df.y)
 
 
-def test_repartition_npartitions():
-    for use_index in (True, False):
-        df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
-                          index=[10, 20, 30, 40, 50, 60])
-        for n in [1, 2, 4, 5]:
-            for k in [1, 2, 4, 5]:
-                if k > n:
-                    continue
-                a = dd.from_pandas(df, npartitions=n, sort=use_index)
-                k = min(a.npartitions, k)
-
-                b = a.repartition(npartitions=k)
-                assert_eq(a, b)
-                assert b.npartitions == k
-
-        a = dd.from_pandas(df, npartitions=1)
-        with pytest.raises(ValueError):
-            a.repartition(npartitions=5)
+@pytest.mark.parametrize('use_index', [True, False])
+@pytest.mark.parametrize('n', [1, 2, 4, 5])
+@pytest.mark.parametrize('k', [1, 2, 4, 5])
+@pytest.mark.parametrize('dtype', [int, float, 'M8[ns]'])
+@pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
+def test_repartition_npartitions(use_index, n, k, dtype, transform):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
+                       'y': list('abdabd') * 10},
+                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype))
+    df = transform(df)
+    a = dd.from_pandas(df, npartitions=n, sort=use_index)
+    b = a.repartition(npartitions=k)
+    assert_eq(a, b)
+    assert b.npartitions == k
+    parts = dask.get(b.dask, b._keys())
+    assert all(map(len, parts))
 
 
-def test_repartition_series_npartitions():
-    df = pd.DataFrame({'x': np.arange(1000)})
-    ddf = dd.from_pandas(df, npartitions=20)
+def test_repartition_object_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10},
+                      index=list('abdabd') * 10)
+    a = dd.from_pandas(df, npartitions=5)
+    b = a.repartition(npartitions=2)
+    assert b.npartitions == 2
+    assert_eq(b, df)
 
-    for n in [1, 3, 10]:
-        x = ddf.x.repartition(npartitions=n)
-        assert x.npartitions == n
-        assert_eq(x, df.x)
+    b = a.repartition(npartitions=10)
+    assert b.npartitions == 10
+    assert_eq(b, df)
+    assert not b.known_divisions
 
 
 @pytest.mark.slow
