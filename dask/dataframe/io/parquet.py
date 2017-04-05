@@ -72,6 +72,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if isinstance(columns, list):
         columns = tuple(columns)
 
+    path = myopen.storage_options['path']
     try:
         pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
                                      open_with=myopen,
