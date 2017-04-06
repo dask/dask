@@ -29,7 +29,7 @@ from dask.context import _globals
 from distributed import Worker, Nanny, recreate_exceptions
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
-from distributed.client import (Client, Future, CompatibleExecutor, _wait,
+from distributed.client import (Client, Future, _wait,
         wait, _as_completed, as_completed, tokenize, _global_client,
         default_client, _first_completed, ensure_default_get, futures_of,
         temp_default_client)
@@ -130,30 +130,6 @@ def test_map_keynames(c, s, a, b):
     assert [f.key for f in futures] == keys
 
 
-@gen_cluster()
-def test_compatible_map(s, a, b):
-    e = CompatibleExecutor((s.ip, s.port), start=False)
-    yield e._start()
-
-    results = e.map(inc, range(5))
-    assert not isinstance(results, list)
-    # Since this map blocks as it waits for results,
-    # waiting here will block the current IOLoop,
-    # which happens to also be running the test Workers.
-    # So wait on the results in a background thread to avoid blocking.
-    f = gen.Future()
-    def wait_on_results():
-        f.set_result(list(results))
-    t = Thread(target=wait_on_results)
-    t.daemon = True
-    t.start()
-    result_list = yield f
-    # getting map results blocks
-    assert result_list == list(map(inc, range(5)))
-
-    yield e._shutdown()
-
-
 @gen_cluster(client=True)
 def test_future(c, s, a, b):
     x = c.submit(inc, 10)
@@ -244,6 +220,11 @@ def test_thread(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             x = c.submit(inc, 1)
+            assert x.result() == 2
+
+            x = c.submit(slowinc, 1, delay=0.3)
+            with pytest.raises(gen.TimeoutError):
+                x.result(timeout=0.01)
             assert x.result() == 2
 
 

@@ -129,6 +129,26 @@ def test_sync_inactive_loop(loop):
     assert y == 2
 
 
+def test_sync_timeout(loop):
+    e = Event()
+
+    @gen.coroutine
+    def wait_until_event():
+        yield e.wait()
+
+    thread = Thread(target=loop.run_sync, args=(wait_until_event,))
+    thread.daemon = True
+    thread.start()
+    while not loop._running:
+        sleep(0.01)
+
+    with pytest.raises(gen.TimeoutError):
+        sync(loop, gen.sleep, 0.5, callback_timeout=0.05)
+
+    loop.add_callback(e.set)
+    thread.join()
+
+
 def test_is_kernel():
     pytest.importorskip('IPython')
     assert is_kernel() is False

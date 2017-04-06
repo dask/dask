@@ -4,8 +4,8 @@ from .config import config
 from .core import connect, rpc
 from .deploy import LocalCluster
 from .diagnostics import progress
-from .client import (Client, Executor, CompatibleExecutor, wait, as_completed,
-        default_client)
+from .client import (Client, Executor, CompatibleExecutor,
+                     wait, as_completed, default_client)
 from .nanny import Nanny
 from .scheduler import Scheduler
 from .utils import sync

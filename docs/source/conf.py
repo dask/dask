@@ -36,6 +36,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
     'sphinx.ext.extlinks',
+    'sphinx.ext.intersphinx',
     'numpydoc',
 ]
 
@@ -375,3 +376,10 @@ extlinks = {
     'issue': ('https://github.com/dask/distributed/issues/%s', 'GH#'),
     'pr': ('https://github.com/dask/distributed/pull/%s', 'GH#')
 }
+
+# Configuration for intersphinx: refer to the Python standard library
+# and the Numpy documentation.
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy', None),
+    }

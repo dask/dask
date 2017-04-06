@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import atexit
 from collections import Iterable
 from contextlib import contextmanager
+from datetime import timedelta
 import inspect
 import logging
 import multiprocessing
@@ -173,9 +174,17 @@ def sync(loop, func, *args, **kwargs):
     """
     Run coroutine in loop running in separate thread.
     """
+    timeout = kwargs.pop('callback_timeout', None)
+    def make_coro():
+        coro = gen.maybe_future(func(*args, **kwargs))
+        if timeout is None:
+            return coro
+        else:
+            return gen.with_timeout(timedelta(seconds=timeout), coro)
+
     if not loop._running:
         try:
-            return loop.run_sync(lambda: func(*args, **kwargs))
+            return loop.run_sync(make_coro)
         except RuntimeError:  # loop already running
             pass
 
@@ -190,7 +199,7 @@ def sync(loop, func, *args, **kwargs):
             if main_tid == get_thread_identity():
                 raise RuntimeError("sync() called from thread of running loop")
             yield gen.moment
-            result[0] = yield gen.maybe_future(func(*args, **kwargs))
+            result[0] = yield make_coro()
         except Exception as exc:
             logger.exception(exc)
             error[0] = sys.exc_info()

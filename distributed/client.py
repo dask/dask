@@ -34,6 +34,7 @@ from tornado.queues import Queue
 
 from .batched import BatchedSend
 from .utils_comm import WrappedKey, unpack_remotedata, pack_data
+from .cfexecutor import ClientExecutor
 from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import connect, rpc, clean_exception, CommClosedError
 from .protocol import to_serialize
@@ -107,9 +108,14 @@ class Future(WrappedKey):
         """ Is the computation complete? """
         return self.event.is_set()
 
-    def result(self):
-        """ Wait until computation completes. Gather result to local process """
-        result = sync(self.client.loop, self._result, raiseit=False)
+    def result(self, timeout=None):
+        """ Wait until computation completes. Gather result to local process.
+
+        If *timeout* seconds are elapsed before returning, a TimeoutError
+        is raised.
+        """
+        result = sync(self.client.loop,
+                      self._result, raiseit=False, callback_timeout=timeout)
         if self.status == 'error':
             six.reraise(*result)
         elif self.status == 'cancelled':
@@ -145,14 +151,18 @@ class Future(WrappedKey):
         else:
             raise Return(None)
 
-    def exception(self):
+    def exception(self, timeout=None):
         """ Return the exception of a failed task
+
+        If *timeout* seconds are elapsed before returning, a TimeoutError
+        is raised.
 
         See Also
         --------
         Future.traceback
         """
-        return sync(self.client.loop, self._exception)
+        return sync(self.client.loop,
+                    self._exception, callback_timeout=timeout)
 
     def add_done_callback(self, fn):
         """ Call callback on future when callback has finished
@@ -193,12 +203,15 @@ class Future(WrappedKey):
         else:
             raise Return(None)
 
-    def traceback(self):
+    def traceback(self, timeout=None):
         """ Return the traceback of a failed task
 
         This returns a traceback object.  You can inspect this object using the
         ``traceback`` module.  Alternatively if you call ``future.result()``
         this traceback will accompany the raised exception.
+
+        If *timeout* seconds are elapsed before returning, a TimeoutError
+        is raised.
 
         Examples
         --------
@@ -211,7 +224,8 @@ class Future(WrappedKey):
         --------
         Future.exception
         """
-        return sync(self.client.loop, self._traceback)
+        return sync(self.client.loop,
+                    self._traceback, callback_timeout=timeout)
 
     @property
     def type(self):
@@ -690,6 +704,23 @@ class Client(object):
             del _globals['get']
         with ignoring(AttributeError):
             self.cluster.close()
+
+    def get_executor(self, **kwargs):
+        """ Return a concurrent.futures Executor for submitting tasks
+        on this Client.
+
+        Parameters
+        ----------
+        **kwargs:
+            Any submit()- or map()- compatible arguments, such as
+            `workers` or `resources`.
+
+        Returns
+        -------
+        An Executor object that's fully compatible with the concurrent.futures
+        API.
+        """
+        return ClientExecutor(self, **kwargs)
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler
@@ -2394,29 +2425,8 @@ class Client(object):
 Executor = Client
 
 
-class CompatibleExecutor(Client):
-    """ A concurrent.futures-compatible Client
-
-    A subclass of Client that conforms to concurrent.futures API,
-    allowing swapping in for other Clients.
-    """
-
-    def map(self, func, *iterables, **kwargs):
-        """ Map a function on a sequence of arguments
-
-        Returns
-        -------
-        iter_results: iterable
-            Iterable yielding results of the map.
-
-        See Also
-        --------
-        Client.map: for more info
-        """
-        list_of_futures = super(CompatibleExecutor, self).map(
-                                func, *iterables, **kwargs)
-        for f in list_of_futures:
-            yield f.result()
+def CompatibleExecutor(*args, **kwargs):
+    raise Exception("This has been moved to the Client.get_executor() method")
 
 
 @gen.coroutine

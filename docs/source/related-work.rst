@@ -197,20 +197,23 @@ IPython Parallel has the following advantages over ``distributed``
 concurrent.futures
 ~~~~~~~~~~~~~~~~~~
 
-The ``distributed.Client`` API is modeled after ``concurrent.futures`` and
-PEP-3184_.  It has a few notable differences:
+The :class:`distributed.Client` API is modeled after :mod:`concurrent.futures`
+and :pep:`3184`.  It has a few notable differences:
 
-*  ``distributed`` accepts ``Future`` objects within calls to ``submit/map``.
-   It is preferable to submit Future objects directly rather than wait on them
-   before submission.
-*  The ``map`` function returns ``Future`` objects, not concrete results.  The
-   ``map`` function returns immediately.
-*  It is not yet possible to cancel a ``Future`` (though this is theoretically
-   possible please raise an issue if this is of concrete importance to you.)
-*  Distributed generally does not support timeouts or callbacks
+*  ``distributed`` accepts :class:`~distributed.client.Future` objects within
+   calls to ``submit/map``. When chaining computations, it is preferable to
+   submit Future objects directly rather than wait on them before submission.
+*  The :meth:`~distributed.client.Client.map` method returns
+   :class:`~distributed.client.Future` objects, not concrete results.
+   The :meth:`~distributed.client.Client.map` method returns immediately.
+*  Despite sharing a similar API, ``distributed`` :class:`~distributed.client.Future`
+   objects cannot always be substituted for :class:`concurrent.futures.Future`
+   objects, especially when using ``wait()`` or ``as_completed()``.
+*  Distributed generally does not support callbacks.
 
-``distributed.CompatibleExecutor`` is a subclass of ``distributed.Client`` that
-does conform to the ``concurrent.futures`` API, allowing it to be used as a
-drop-in replacement for other Executors using the common API.
+If you need full compatibility with the :class:`concurrent.futures.Executor`
+API, use the object returned by the
+:meth:`~distributed.client.Client.get_executor` method.
+
 
 .. _PEP-3184: https://www.python.org/dev/peps/pep-3148/

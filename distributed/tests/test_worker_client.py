@@ -153,3 +153,15 @@ def test_separate_thread_false(c, s, a):
     futures = c.map(f, range(20))
     results = yield c._gather(futures)
     assert list(results) == list(range(20))
+
+
+@gen_cluster(client=True)
+def test_client_executor(c, s, a, b):
+    def mysum():
+        with worker_client() as c:
+            with c.get_executor() as e:
+                return sum(e.map(double, range(30)))
+
+    future = c.submit(mysum)
+    result = yield future._result()
+    assert result == 30 * 29

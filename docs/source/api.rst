@@ -12,6 +12,7 @@ API
    Client.gather
    Client.get
    Client.get_dataset
+   Client.get_executor
    Client.has_what
    Client.list_datasets
    Client.map
@@ -86,11 +87,6 @@ Client
 .. autoclass:: distributed.recreate_exceptions.ReplayExceptionClient
    :members:
 
-CompatibleExecutor
-------------------
-
-.. autoclass:: CompatibleExecutor
-    :members: map
 
 Future
 ------
