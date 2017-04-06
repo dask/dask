@@ -138,6 +138,19 @@ def test_task_stream_n_rectangles(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_task_stream_second_plugin(c, s, a, b):
+    ts = TaskStream(s, n_rectangles=10, clear_interval=10)
+    ts.update()
+    futures = c.map(inc, range(10))
+    yield _wait(futures)
+    ts.update()
+
+    ts2 = TaskStream(s, n_rectangles=5, clear_interval=10)
+    ts2.update()
+
+
+
+@gen_cluster(client=True)
 def test_task_stream_clear_interval(c, s, a, b):
     ts = TaskStream(s, clear_interval=100)
 
