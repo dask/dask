@@ -88,23 +88,23 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     # Find an index among the partially sorted columns
-    minmax = fastparquet.api.sorted_partitioned_columns(pf)
-
-    if index is False:
+    if index is None:
         index_col = None
-    elif len(minmax) == 1:
-        index_col = first(minmax)
-    elif len(minmax) > 1:
-        if index:
-            index_col = index
-        elif 'index' in minmax:
-            index_col = 'index'
-        else:
-            raise ValueError("Multiple possible indexes exist: %s.  "
-                             "Please select one with index='index-name'"
-                             % sorted(minmax))
     else:
-        index_col = None
+        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        if len(minmax) == 1:
+            index_col = first(minmax)
+        elif len(minmax) > 1:
+            if index:
+                index_col = index
+            elif 'index' in minmax:
+                index_col = 'index'
+            else:
+                raise ValueError("Multiple possible indexes exist: %s.  "
+                                 "Please select one with index='index-name'"
+                                 % sorted(minmax))
+        else:
+            index_col = None
 
     if columns is None:
         all_columns = tuple(pf.columns + list(pf.cats))
