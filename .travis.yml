@@ -7,7 +7,7 @@ env:
     - PYTHON=2.7 NUMPY=1.10.4 PANDAS=0.19.0 COVERAGE='true' PARALLEL='false' TEST_IMPORTS='false' XTRATESTARGS=
     - PYTHON=2.7 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
     - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-    - PYTHON=3.5 NUMPY=1.11.0 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' XTRATESTARGS=
+    - PYTHON=3.5 NUMPY=1.11.3 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' XTRATESTARGS=
     - PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
 
 matrix:
@@ -18,6 +18,7 @@ matrix:
   # Together with fast_finish, allow build to be marked successful before the OS X job finishes
   allow_failures:
   - os: osx
+    # This needs to be the exact same line as above
     env: PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
 
 install: source continuous_integration/travis/install.sh
