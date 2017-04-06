@@ -1,7 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
-
 import numpy as np
 from numpy.lib import stride_tricks
 
@@ -11,12 +9,11 @@ try:
 except ImportError:
     blosc = False
 
-from .compression import byte_sample
 from .utils import frame_split_size
 from .serialize import register_serialization
 from . import pickle
 
-from ..utils import log_errors, ensure_bytes
+from ..utils import log_errors
 
 
 def itemsize(dt):
@@ -35,8 +32,6 @@ def serialize_numpy_ndarray(x):
         header = {'pickle': True}
         frames = [pickle.dumps(x)]
         return header, frames
-
-    size = itemsize(x.dtype)
 
     if x.dtype.kind == 'V':
         dt = x.dtype.descr
@@ -59,25 +54,8 @@ def serialize_numpy_ndarray(x):
               'shape': x.shape,
               'strides': strides}
 
-    if blosc and x.nbytes > 1e5:
+    if x.nbytes > 1e5:
         frames = frame_split_size([data])
-        if sys.version_info.major == 2:
-            frames = [ensure_bytes(frame) for frame in frames]
-
-        out = []
-        compression = []
-        for frame in frames:
-            sample = byte_sample(frame, 10000 // size * size, 5)
-            csample = blosc.compress(sample, typesize=size, cname='lz4', clevel=3)
-            if len(csample) < 0.8 * len(sample):
-                compressed = blosc.compress(frame, typesize=size, cname='lz4', clevel=5)
-                out.append(compressed)
-                compression.append('blosc')
-            else:
-                out.append(frame)
-                compression.append(None)
-        header['compression'] = compression
-        frames = out
     else:
         frames = [data]
 

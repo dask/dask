@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 
+import dask
 import pytest
 
 from distributed.protocol import (loads, dumps, msgpack, maybe_compress,
@@ -63,20 +64,22 @@ def test_small_and_big():
 def test_maybe_compress():
     import zlib
     payload = b'123'
-    assert maybe_compress(payload, None) == (None, payload)
-    assert maybe_compress(payload, 'zlib') == (None, payload)
+    with dask.set_options(compression=None):
+        assert maybe_compress(payload) == (None, payload)
 
-    assert maybe_compress(b'111', 'zlib') == (None, b'111')
+    with dask.set_options(compression='zlib'):
+        assert maybe_compress(payload) == (None, payload)
+        assert maybe_compress(b'111') == (None, b'111')
 
-    payload = b'0' * 10000
-    assert maybe_compress(payload, 'zlib') == ('zlib', zlib.compress(payload))
+        payload = b'0' * 10000
+        assert maybe_compress(payload) == ('zlib', zlib.compress(payload))
 
 
 def test_maybe_compress_sample():
     np = pytest.importorskip('numpy')
     lz4 = pytest.importorskip('lz4')
     payload = np.random.randint(0, 255, size=10000).astype('u1').tobytes()
-    fmt, compressed = maybe_compress(payload, 'lz4')
+    fmt, compressed = maybe_compress(payload)
     assert fmt == None
     assert compressed == payload
 
@@ -191,3 +194,18 @@ def test_dumps_loads_Serialized():
 
     result3 = loads(frames2)
     assert result == result3
+
+
+def test_maybe_compress_memoryviews():
+    np = pytest.importorskip('numpy')
+    pytest.importorskip('lz4')
+    x = np.arange(1000000, dtype='int64')
+    compression, payload = maybe_compress(x.data)
+    try:
+        import blosc
+    except ImportError:
+        assert compression == 'lz4'
+        assert len(payload) < x.nbytes * 0.75
+    else:
+        assert compression == 'blosc'
+        assert len(payload) < x.nbytes / 10

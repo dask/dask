@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from distributed.protocol import (serialize, deserialize, decompress, dumps,
-        loads, to_serialize)
+        loads, to_serialize, msgpack)
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
 from distributed.utils import tmpfile
 from distributed.utils_test import slow, gen_cluster
@@ -115,10 +115,20 @@ def test_itemsize(dt, size):
 
 
 def test_compress_numpy():
+    pytest.importorskip('lz4')
     x = np.ones(10000000, dtype='i4')
-    compression, compressed = maybe_compress(x.data)
-    if compression:
-        assert len(compressed) < x.nbytes
+    frames = dumps({'x': to_serialize(x)})
+    assert sum(map(len, frames)) < x.nbytes
+
+    header = msgpack.loads(frames[2], encoding='utf8', use_list=False)
+    try:
+        import blosc
+    except ImportError:
+        pass
+    else:
+        assert all(c == 'blosc' for c in
+                   header['headers'][('x',)]['compression'])
+
 
 
 def test_compress_memoryview():
@@ -128,6 +138,7 @@ def test_compress_memoryview():
         assert len(compressed) < len(mv)
 
 
+@pytest.mark.skip
 def test_dont_compress_uncompressable_data():
     blosc = pytest.importorskip('blosc')
     x = np.random.randint(0, 255, size=100000).astype('uint8')

@@ -8,7 +8,14 @@ from __future__ import print_function, division, absolute_import
 import logging
 import random
 
+from dask.context import _globals
 from toolz import identity, partial
+
+try:
+    import blosc
+    n = blosc.set_nthreads(2)
+except ImportError:
+    blosc = False
 
 from ..config import config
 from ..utils import ignoring, ensure_bytes
@@ -92,8 +99,7 @@ def byte_sample(b, size, n):
     return b''.join(map(ensure_bytes, parts))
 
 
-def maybe_compress(payload, compression=default_compression, min_size=1e4,
-                   sample_size=1e4, nsamples=5):
+def maybe_compress(payload, min_size=1e4, sample_size=1e4, nsamples=5):
     """
     Maybe compress payload
 
@@ -104,11 +110,13 @@ def maybe_compress(payload, compression=default_compression, min_size=1e4,
         return the original
     4.  We return the compressed result
     """
+    compression = _globals.get('compression', default_compression)
+
     if not compression:
         return None, payload
     if len(payload) < min_size:
         return None, payload
-    if len(payload) > 2**31:
+    if len(payload) > 2**31:  # Too large, compression libraries often fail
         return None, payload
 
     min_size = int(min_size)
@@ -118,11 +126,22 @@ def maybe_compress(payload, compression=default_compression, min_size=1e4,
 
     # Compress a sample, return original if not very compressed
     sample = byte_sample(payload, sample_size, nsamples)
-    if len(compress(sample)) > 0.9 * len(sample):  # not very compressible
+    if len(compress(sample)) > 0.9 * len(sample):  # sample not very compressible
         return None, payload
 
-    compressed = compress(ensure_bytes(payload))
-    if len(compressed) > 0.9 * len(payload):  # not very compressible
+    if type(payload) is memoryview:
+        nbytes = payload.itemsize * len(payload)
+    else:
+        nbytes = len(payload)
+
+    if blosc and type(payload) is memoryview:
+        compressed = blosc.compress(payload, typesize=payload.itemsize,
+                                    cname='lz4', clevel=5)
+        compression = 'blosc'
+    else:
+        compressed = compress(ensure_bytes(payload))
+
+    if len(compressed) > 0.9 * nbytes:  # full data not very compressible
         return None, payload
     else:
         return compression, compressed
