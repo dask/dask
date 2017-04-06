@@ -1070,6 +1070,7 @@ class Client(object):
             d = yield self._scatter(keymap(tokey, data), workers, broadcast)
             raise gen.Return({k: d[tokey(k)] for k in data})
 
+        unpack = False
         if isinstance(data, dict):
             data2 = valmap(to_serialize, data)
             types = valmap(type, data)
@@ -1080,7 +1081,9 @@ class Client(object):
             data2 = list(map(to_serialize, data))
             types = list(map(type, data))
         else:
-            raise TypeError("Don't know how to scatter %s" % type(data))
+            data2 = [to_serialize(data)]
+            types = [type(data)]
+            unpack = True
         keys = yield self.scheduler.scatter(data=data2, workers=workers,
                                             client=self.id,
                                             broadcast=broadcast)
@@ -1091,8 +1094,7 @@ class Client(object):
         elif isinstance(data, (Iterable, Iterator)):
             out = [Future(k, self) for k in keys]
         else:
-            raise TypeError(
-                    "Input to scatter must be a list, iterator, or queue")
+            out = [Future(k, self) for k in keys]
 
         for key in keys:
             self.futures[key].finish(type=None)
@@ -1103,6 +1105,9 @@ class Client(object):
         elif isinstance(types, dict):
             for key in keys:
                 self.futures[key].type = types[key]
+
+        if unpack:
+            out = out[0]
 
         raise gen.Return(out)
 
@@ -1137,7 +1142,7 @@ class Client(object):
 
         Parameters
         ----------
-        data: list, iterator, dict, or Queue
+        data: list, iterator, dict, Queue, or object
             Data to scatter out to workers.  Output type matches input type.
         workers: list of tuples (optional)
             Optionally constrain locations of data.
@@ -1155,6 +1160,9 @@ class Client(object):
         Examples
         --------
         >>> c = Client('127.0.0.1:8787')  # doctest: +SKIP
+        >>> c.scatter(1) # doctest: +SKIP
+        <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>
+
         >>> c.scatter([1, 2, 3])  # doctest: +SKIP
         [<Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
          <Future: status: finished, key: 58e78e1b34eb49a68c65b54815d1b158>,

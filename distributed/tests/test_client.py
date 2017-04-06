@@ -818,6 +818,14 @@ def test__scatter_types(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test__scatter_non_list(c, s, a, b):
+    x = yield c._scatter(1)
+    assert isinstance(x, Future)
+    result = yield x._result()
+    assert result == 1
+
+
+@gen_cluster(client=True)
 def test_scatter_hash(c, s, a, b):
     [a] = yield c._scatter([1])
     [b] = yield c._scatter([1])
