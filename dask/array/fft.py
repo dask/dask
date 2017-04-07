@@ -32,8 +32,8 @@ def _fft_out_chunks(a, s, axes):
     if s is None:
         return a.chunks
     chunks = list(a.chunks)
-    for axis in axes:
-        chunks[axis] = (s[axis],)
+    for i, axis in enumerate(axes):
+        chunks[axis] = (s[i],)
     return chunks
 
 
