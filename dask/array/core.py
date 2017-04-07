@@ -17,7 +17,6 @@ from threading import Lock
 import uuid
 import warnings
 
-import toolz
 try:
     from cytoolz.curried import (partition, concat, pluck, join, first,
                                  groupby, valmap, accumulate, interleave,
@@ -869,7 +868,6 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
-
     updates = {}
     keys = []
     for tgt, src, reg in zip(targets, sources, regions):
@@ -886,7 +884,6 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
 
         update.update(dsk)
         updates.update(update)
-
 
     name = 'store-' + tokenize(*keys)
     dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
@@ -2520,10 +2517,9 @@ def insert_to_ooc(out, arr, lock=True, region=None):
 
     slices = slices_from_chunks(arr.chunks)
 
-
     name = 'store-%s' % arr.name
     dsk = dict(((name,) + t[1:], (store, out, t, slc, lock, region))
-                    for t, slc in zip(core.flatten(arr._keys()), slices))
+               for t, slc in zip(core.flatten(arr._keys()), slices))
 
     return dsk
 

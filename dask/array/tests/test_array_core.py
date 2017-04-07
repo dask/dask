@@ -1003,7 +1003,7 @@ def test_store_delayed_target():
     targs = {}
 
     def make_target(key):
-        a = np.empty((4,4))
+        a = np.empty((4, 4))
         targs[key] = a
         return a
 
@@ -1016,8 +1016,8 @@ def test_store_delayed_target():
     at = targs['at']
     bt = targs['bt']
 
-    assert (at == 2).all()
-    assert (bt == 3).all()
+    assert_eq(at, a)
+    assert_eq(bt, b)
 
     pytest.raises(ValueError, lambda: store([a], [at, bt]))
     pytest.raises(ValueError, lambda: store(at, at))
