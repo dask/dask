@@ -37,7 +37,7 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict)
+                     SerializableLock, ensure_dict, M)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -2470,8 +2470,8 @@ def tensordot(lhs, rhs, axes=2):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    if left_axes == (lhs.ndim - 1,) and right_axes == (0,): # x.dot(y) case
-        func = np.dot
+    if left_axes == (lhs.ndim - 1,) and right_axes in ((0,), (-1,)): # x.dot(y) case
+        func = M.dot
         kwargs = {}
     else:
         func = np.tensordot
