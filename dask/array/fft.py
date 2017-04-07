@@ -63,10 +63,9 @@ def _hfft_out_chunks(a, s, axes):
     axis = axes[0]
 
     if s is None:
-        s = [c[0] for c in a.chunks]
-        s[axis] = 2 * (a.chunks[axis][0] - 1)
+        s = [2 * (a.chunks[axis][0] - 1)]
 
-    n = s[axis]
+    n = s[0]
 
     chunks = list(a.chunks)
     chunks[axis] = (n,)
@@ -76,11 +75,14 @@ def _hfft_out_chunks(a, s, axes):
 def _ihfft_out_chunks(a, s, axes):
     assert len(axes) == 1
 
-    if s is None:
-        s = [c[0] for c in a.chunks]
-
     axis = axes[0]
-    n = s[axis]
+
+    if s is None:
+        s = [a.chunks[axis][0]]
+    else:
+        assert len(s) == 1
+
+    n = s[0]
 
     chunks = list(a.chunks)
     if n % 2 == 0:
@@ -162,7 +164,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         args = (s, axes)
         if kind.endswith('fft'):
             axis = None if axes is None else axes[0]
-            n = None if s is None else s[axis]
+            n = None if s is None else s[0]
             args = (n, axis)
 
         return a.map_blocks(fft_func, *args, dtype=_dtype,
@@ -176,8 +178,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
             s = None
             if n is not None:
-                s = [None] * a.ndim
-                s[axes[0]] = n
+                s = [n]
 
             return _func(a, s, axes)
 
