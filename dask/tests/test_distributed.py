@@ -1,7 +1,10 @@
 import pytest
 pytest.importorskip('distributed')
 
-from dask import persist, delayed, set_options, async
+from tornado import gen
+
+import dask
+from dask import persist, delayed
 from distributed.client import _wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
@@ -62,19 +65,13 @@ def test_futures_to_delayed_array(loop):
             assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
-def test_persist_with_incompatible_schedulers(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:  # flake8: noqa
-            x = delayed(inc)(1)
-            # ok, Client.get used in ctx and _globals matches
-            with set_options(get=c.get):
-                x2, = persist(x)
+@gen_cluster(client=True)
+def test_local_get_with_distributed_active(c, s, a, b):
+    with dask.set_options(get=dask.async.get_sync):
+        x = delayed(inc)(1).persist()
+    yield gen.sleep(0.01)
+    assert not s.task_state # scheduler hasn't done anything
 
-            # bad, Client.get used in ctx and _globals set as async.get_sync
-            with set_options(get=async.get_sync):
-                with pytest.raises(ValueError) as err:
-                    x2, = persist(x)
-                assert (
-                    "Persist called on collection(s) where the globally "
-                    "set scheduler and specified local `get` differ.") \
-                    in str(err.value)
+    y = delayed(inc)(2).persist(get=dask.async.get_sync)
+    yield gen.sleep(0.01)
+    assert not s.task_state # scheduler hasn't done anything
