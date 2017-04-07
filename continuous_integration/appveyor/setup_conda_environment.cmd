@@ -19,6 +19,12 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz
 
 call activate %CONDA_ENV%
 
+@rem Pin matrix items
+@rem Please see PR ( https://github.com/dask/dask/pull/2185 ) for details.
+copy NUL %CONDA_PREFIX%\conda-meta\pinned
+echo numpy %NUMPY% >> %CONDA_PREFIX%\conda-meta\pinned
+echo pandas %PANDAS% >> %CONDA_PREFIX%\conda-meta\pinned
+
 @rem Install optional dependencies for tests
 %CONDA_INSTALL% numpy=%NUMPY% pandas=%PANDAS% cloudpickle distributed
 %CONDA_INSTALL% s3fs psutil pytables bokeh bcolz scipy h5py ipython

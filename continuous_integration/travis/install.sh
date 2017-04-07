@@ -19,6 +19,12 @@ conda config --set always_yes yes --set changeps1 no
 conda create -q -n test-environment python=$PYTHON
 source activate test-environment
 
+# Pin matrix items
+# Please see PR ( https://github.com/dask/dask/pull/2185 ) for details.
+touch $CONDA_PREFIX/conda-meta/pinned
+echo "numpy $NUMPY" >> $CONDA_PREFIX/conda-meta/pinned
+echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
+
 # Install dependencies.
 # XXX: Due to a weird conda dependency resolution issue, we need to install
 # dependencies in two separate calls, otherwise we sometimes get version
