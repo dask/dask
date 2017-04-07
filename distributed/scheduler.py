@@ -1434,8 +1434,12 @@ class Scheduler(Server):
             nannies = {addr: self.get_worker_service_addr(addr, 'nanny')
                        for addr in self.worker_info}
 
-            for addr in nannies:
-                self.remove_worker(address=addr)
+            for addr in list(self.workers):
+                try:
+                    self.remove_worker(address=addr)
+                except Exception as e:
+                    logger.info("Exception while restarting.  This is normal",
+                                exc_info=True)
 
             for client, keys in self.wants_what.items():
                 self.client_releases_keys(keys=keys, client=client)
