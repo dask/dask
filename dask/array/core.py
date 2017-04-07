@@ -869,11 +869,27 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
-    updates = [insert_to_ooc(tgt, src, lock=lock, region=reg)
-               for tgt, src, reg in zip(targets, sources, regions)]
-    keys = [key for u in updates for key in u]
+
+    updates = {}
+    keys = []
+    for tgt, src, reg in zip(targets, sources, regions):
+        # if out is a delayed object update dictionary accordingly
+        try:
+            dsk = {}
+            dsk.update(tgt.dask)
+            tgt = tgt.key
+        except AttributeError:
+            dsk = {}
+
+        update = insert_to_ooc(tgt, src, lock=lock, region=reg)
+        keys.extend(update)
+
+        update.update(dsk)
+        updates.update(update)
+
+
     name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge((name, toolz.merge(updates)), *[src.dask for src in sources])
+    dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
     if compute:
         Array._get(dsk, keys, **kwargs)
     else:
@@ -2488,7 +2504,7 @@ def insert_to_ooc(out, arr, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    def store(x, index, lock, region):
+    def store(out, x, index, lock, region):
         if lock:
             lock.acquire()
         try:
@@ -2504,9 +2520,11 @@ def insert_to_ooc(out, arr, lock=True, region=None):
 
     slices = slices_from_chunks(arr.chunks)
 
+
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, t, slc, lock, region))
-               for t, slc in zip(core.flatten(arr._keys()), slices))
+    dsk = dict(((name,) + t[1:], (store, out, t, slc, lock, region))
+                    for t, slc in zip(core.flatten(arr._keys()), slices))
+
     return dsk
 
 
