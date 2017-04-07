@@ -30,8 +30,8 @@ echo "pandas $PANDAS" >> $HOME/miniconda/envs/test-environment/conda-meta/pinned
 # incompatible with the installed version of numpy leading to crashes. This
 # seems to have to do with differences between conda-forge and defaults.
 conda install -q -c conda-forge \
-    numpy=$NUMPY \
-    pandas=$PANDAS \
+    numpy \
+    pandas \
     bcolz \
     blosc \
     chest \
@@ -50,8 +50,6 @@ conda install -q -c conda-forge \
 
 # Specify numpy/pandas here to prevent upgrade/downgrade
 conda install -q -c conda-forge \
-    numpy=$NUMPY \
-    pandas=$PANDAS \
     distributed \
     cloudpickle \
     bokeh \
