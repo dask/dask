@@ -985,7 +985,7 @@ class Worker(WorkerBase):
 
         self.batched_stream = None
         self.recent_messages_log = deque(maxlen=10000)
-        self.target_message_size = 200e6  # 200 MB
+        self.target_message_size = 50e6  # 50 MB
 
         self.log = deque(maxlen=100000)
         self.validate = kwargs.pop('validate', False)
