@@ -15,8 +15,8 @@ def test_basic(sparse_type):
     a = dask.delayed(sparse_type)(a)
     a, b, c = a * 1, a * 2, a * 3
 
-    x = da.concatenate([da.from_delayed(x, shape=(5, 5), dtype=float)
-                        for x in [a, b, c]])
+    x = da.concatenate([da.from_delayed(xx, shape=(5, 5), dtype=float)
+                        for xx in [a, b, c]])
 
     y = da.expm1(x * 10)
     y = (y + y).astype('float32')
@@ -29,8 +29,8 @@ def test_basic(sparse_type):
 
     a = dask.delayed(np.eye)(5)
     a, b, c = a * 1, a * 2, a * 3
-    x = da.concatenate([da.from_delayed(x, shape=(5, 5), dtype=float)
-                        for x in [a, b, c]])
+    x = da.concatenate([da.from_delayed(xx, shape=(5, 5), dtype=float)
+                        for xx in [a, b, c]])
 
     y = da.expm1(x * 10)
     y = (y + y).astype('float32')
@@ -44,8 +44,8 @@ def test_slicing(sparse_type):
     a = dask.delayed(sparse_type)(a)
     a, b, c = a * 1, a * 2, a * 3
 
-    x = da.concatenate([da.from_delayed(x, shape=(5, 5), dtype=float)
-                        for x in [a, b, c]])
+    x = da.concatenate([da.from_delayed(xx, shape=(5, 5), dtype=float)
+                        for xx in [a, b, c]])
 
     y = x[1:-2:2].persist()
     assert all(isinstance(v, sparse.spmatrix) for v in y.dask.values())
