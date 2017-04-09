@@ -40,8 +40,10 @@ conda install -q -c conda-forge \
     psutil \
     pytables \
     pytest \
+    scikit-image \
     scikit-learn \
     scipy \
+    sqlalchemy \
     toolz
 
 # Specify numpy/pandas here to prevent upgrade/downgrade
