@@ -85,8 +85,48 @@ Top level user functions:
     DataFrame.visualize
     DataFrame.where
 
+Groupby Operations
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.groupby
+
+.. autosummary::
+   DataFrameGroupBy.aggregate
+   DataFrameGroupBy.apply
+   DataFrameGroupBy.count
+   DataFrameGroupBy.cumcount
+   DataFrameGroupBy.cumprod
+   DataFrameGroupBy.cumsum
+   DataFrameGroupBy.get_group
+   DataFrameGroupBy.max
+   DataFrameGroupBy.mean
+   DataFrameGroupBy.min
+   DataFrameGroupBy.size
+   DataFrameGroupBy.std
+   DataFrameGroupBy.sum
+   DataFrameGroupBy.var
+
+.. autosummary::
+   SeriesGroupBy.aggregate
+   SeriesGroupBy.apply
+   SeriesGroupBy.count
+   SeriesGroupBy.cumcount
+   SeriesGroupBy.cumprod
+   SeriesGroupBy.cumsum
+   SeriesGroupBy.get_group
+   SeriesGroupBy.max
+   SeriesGroupBy.mean
+   SeriesGroupBy.min
+   SeriesGroupBy.nunique
+   SeriesGroupBy.size
+   SeriesGroupBy.std
+   SeriesGroupBy.sum
+   SeriesGroupBy.var
+
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    rolling.map_overlap
