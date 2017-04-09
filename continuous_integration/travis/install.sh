@@ -29,6 +29,7 @@ conda install -q -c conda-forge \
     pandas=$PANDAS \
     bcolz \
     blosc \
+    bokeh \
     chest \
     coverage \
     cytoolz \
@@ -49,7 +50,6 @@ conda install -q -c conda-forge \
     pandas=$PANDAS \
     distributed \
     cloudpickle \
-    bokeh \
 
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
