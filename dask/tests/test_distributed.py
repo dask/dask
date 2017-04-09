@@ -1,13 +1,16 @@
 import pytest
 pytest.importorskip('distributed')
 
+from tornado import gen
+
+import dask
 from dask import persist, delayed
 from distributed.client import _wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
 
 def test_can_import_client():
-    from dask.distributed import Client # noqa: F401
+    from dask.distributed import Client  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -60,3 +63,15 @@ def test_futures_to_delayed_array(loop):
             A = da.concatenate([da.from_delayed(f, shape=x.shape, dtype=x.dtype)
                                 for f in futures], axis=0)
             assert_eq(A.compute(), np.concatenate([x, x], axis=0))
+
+
+@gen_cluster(client=True)
+def test_local_get_with_distributed_active(c, s, a, b):
+    with dask.set_options(get=dask.async.get_sync):
+        x = delayed(inc)(1).persist()
+    yield gen.sleep(0.01)
+    assert not s.task_state # scheduler hasn't done anything
+
+    y = delayed(inc)(2).persist(get=dask.async.get_sync)
+    yield gen.sleep(0.01)
+    assert not s.task_state # scheduler hasn't done anything

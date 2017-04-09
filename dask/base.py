@@ -4,6 +4,7 @@ from collections import OrderedDict, Iterator
 import copy
 from functools import partial
 from hashlib import md5
+import inspect
 import pickle
 import os
 import uuid
@@ -518,29 +519,31 @@ def persist(*args, **kwargs):
     if not collections:
         return args
 
-    try:
-        from distributed.client import default_client
-    except ImportError:
-        pass
-    else:
+    get = kwargs.pop('get', None) or _globals['get']
+
+    if inspect.ismethod(get):
         try:
-            client = default_client()
-        except ValueError:
+            from distributed.client import default_client
+        except ImportError:
             pass
         else:
-            collections = client.persist(collections, **kwargs)
-            if isinstance(collections, list):  # distributed is inconsistent here
-                collections = tuple(collections)
+            try:
+                client = default_client()
+            except ValueError:
+                pass
             else:
-                collections = (collections,)
-            results_iter = iter(collections)
-            return tuple(a if not isinstance(a, Base)
-                         else next(results_iter)
-                         for a in args)
+                if client.get == _globals['get']:
+                    collections = client.persist(collections, **kwargs)
+                    if isinstance(collections, list):  # distributed is inconsistent here
+                        collections = tuple(collections)
+                    else:
+                        collections = (collections,)
+                    results_iter = iter(collections)
+                    return tuple(a if not isinstance(a, Base)
+                                 else next(results_iter)
+                                 for a in args)
 
     optimize_graph = kwargs.pop('optimize_graph', True)
-
-    get = kwargs.pop('get', None) or _globals['get']
 
     if not get:
         get = collections[0]._default_get
