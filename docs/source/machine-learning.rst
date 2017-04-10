@@ -60,8 +60,8 @@ information.
    with joblib.parallel_backend('dask.distributed', scheduler_host='localhost:8786'):
        # normal sklearn code
 
-Convex Optimization Dask.Array
-------------------------------
+Convex Optimization Algorithms with Dask.Array
+----------------------------------------------
 
 *Extra Dependencies*: This depends on dask-glm_.
 
