@@ -6,6 +6,7 @@ from random import random
 from toolz import identity, partial, merge
 import pytest
 
+from dask import set_options
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, compute, Delayed
 
@@ -211,6 +212,46 @@ def test_pure():
 
     myrand = delayed(random)
     assert myrand().key != myrand().key
+
+
+def test_pure_global_setting():
+    # delayed functions
+    func = delayed(add)
+
+    with set_options(delayed_pure=True):
+        assert func(1, 2).key == func(1, 2).key
+
+    with set_options(delayed_pure=False):
+        assert func(1, 2).key != func(1, 2).key
+
+    func = delayed(add, pure=True)
+    with set_options(delayed_pure=False):
+        assert func(1, 2).key == func(1, 2).key
+
+    # delayed objects
+    assert delayed(1).key != delayed(1).key
+    with set_options(delayed_pure=True):
+        assert delayed(1).key == delayed(1).key
+
+    with set_options(delayed_pure=False):
+        assert delayed(1, pure=True).key == delayed(1, pure=True).key
+
+    # delayed methods
+    data = delayed([1, 2, 3])
+    assert data.index(1).key != data.index(1).key
+
+    with set_options(delayed_pure=True):
+        assert data.index(1).key == data.index(1).key
+        assert data.index(1, pure=False).key != data.index(1, pure=False).key
+
+    with set_options(delayed_pure=False):
+        assert data.index(1, pure=True).key == data.index(1, pure=True).key
+
+    # magic methods always pure
+    with set_options(delayed_pure=False):
+        assert data.index.key == data.index.key
+        element = data[0]
+        assert (element + element).key == (element + element).key
 
 
 def test_nout():
