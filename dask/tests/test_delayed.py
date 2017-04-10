@@ -247,6 +247,12 @@ def test_pure_global_setting():
     with set_options(delayed_pure=False):
         assert data.index(1, pure=True).key == data.index(1, pure=True).key
 
+    # magic methods always pure
+    with set_options(delayed_pure=False):
+        assert data.index.key == data.index.key
+        element = data[0]
+        assert (element + element).key == (element + element).key
+
 
 def test_nout():
     func = delayed(lambda x: (x, -x), nout=2, pure=True)
