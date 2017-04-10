@@ -8,6 +8,8 @@ set PIP_INSTALL=pip install -q
 
 @rem Deactivate any environment
 call deactivate
+@rem Update conda
+%CONDA% update -q -y conda
 @rem Display root environment (for debugging)
 %CONDA% list
 @rem Clean up any left-over from a previous build
@@ -29,5 +31,7 @@ call activate %CONDA_ENV%
 @rem Display final environment (for reproducing)
 %CONDA% list
 %CONDA% list --explicit
+where python
+where pip
 pip list
 python -m site
