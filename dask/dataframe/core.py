@@ -569,6 +569,24 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         2  2.0  1.0
         3  3.0  1.0
         4  4.0  1.0
+
+        If you have a ``DatetimeIndex``, you can use a `timedelta` for time-
+        based windows.
+        >>> ts = pd.Series(range(10), index=pd.date_range('2017', periods=10))
+        >>> dts = dd.from_pandas(ts, npartitions=2)
+        >>> dts.map_overlap(lambda df: df.rolling('2D').sum(),
+        ...                 pd.Timedelta('2D'), 0).compute()
+        2017-01-01     0.0
+        2017-01-02     1.0
+        2017-01-03     3.0
+        2017-01-04     5.0
+        2017-01-05     7.0
+        2017-01-06     9.0
+        2017-01-07    11.0
+        2017-01-08    13.0
+        2017-01-09    15.0
+        2017-01-10    17.0
+        dtype: float64
         """
         from .rolling import map_overlap
         return map_overlap(func, self, before, after, *args, **kwargs)
@@ -975,10 +993,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         Parameters
         ----------
-        window : int
+        window : int, str, offset
            Size of the moving window. This is the number of observations used
            for calculating the statistic. The window size must not be so large
-           as to span more than one adjacent partition.
+           as to span more than one adjacent partition. If using an offset
+           or offset alias like '5D', the data must have a ``DatetimeIndex``
+
+           .. versionchanged:: 0.15.0
+
+              Now accepts offsets and string offset aliases
+
         min_periods : int, default None
             Minimum number of observations in window required to have a value
             (otherwise result is NA).
@@ -999,10 +1023,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """
         from dask.dataframe.rolling import Rolling
 
-        if not isinstance(window, int):
-            raise ValueError('window must be an integer')
-        if window < 0:
-            raise ValueError('window must be >= 0')
+        if isinstance(window, int):
+            if window < 0:
+                raise ValueError('window must be >= 0')
 
         if min_periods is not None:
             if not isinstance(min_periods, int):
