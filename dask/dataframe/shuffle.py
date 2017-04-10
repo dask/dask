@@ -198,19 +198,16 @@ def rearrange_by_column(df, col, npartitions=None, max_branch=None,
 class maybe_buffered_partd(object):
     """If serialized, will return non-buffered partd. Otherwise returns a
     buffered partd"""
-    def __init__(self, buffer=True):
+    def __init__(self, buffer=True, tempdir=None):
+        self.tempdir = tempdir or _globals.get('temporary_directory')
         self.buffer = buffer
 
     def __reduce__(self):
-        return (maybe_buffered_partd, (False,))
+        return (maybe_buffered_partd, (False, self.tempdir))
 
     def __call__(self, *args, **kwargs):
         import partd
-        dirname = _globals.get('temporary_directory', None)
-        if dirname:
-            file = partd.File(dir=dirname)
-        else:
-            file = partd.File()
+        file = partd.File(dir=self.tempdir)
         if self.buffer:
             return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
         else:

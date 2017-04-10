@@ -339,7 +339,8 @@ def test_temporary_directory():
                        'z': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
 
-    with dask.set_options(temporary_directory=os.getcwd()):
+    with dask.set_options(temporary_directory=os.getcwd(),
+                          get=dask.multiprocessing.get):
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
