@@ -993,6 +993,36 @@ def test_coerce():
         assert complex(d)
 
 
+def test_store_delayed_target():
+    from dask.delayed import delayed
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    # empty buffers to be used as targets
+    targs = {}
+
+    def make_target(key):
+        a = np.empty((4, 4))
+        targs[key] = a
+        return a
+
+    # delayed calls to these targets
+    atd = delayed(make_target)('at')
+    btd = delayed(make_target)('bt')
+
+    store([a, b], [atd, btd])
+
+    at = targs['at']
+    bt = targs['bt']
+
+    assert_eq(at, a)
+    assert_eq(bt, b)
+
+    pytest.raises(ValueError, lambda: store([a], [at, bt]))
+    pytest.raises(ValueError, lambda: store(at, at))
+    pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+
+
 def test_store():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
