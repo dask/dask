@@ -19,14 +19,19 @@ conda config --set always_yes yes --set changeps1 no
 conda create -q -n test-environment python=$PYTHON
 source activate test-environment
 
+# Pin matrix items
+touch $HOME/miniconda/envs/test-environment/conda-meta/pinned
+echo "numpy $NUMPY" >> $HOME/miniconda/envs/test-environment/conda-meta/pinned
+echo "pandas $PANDAS" >> $HOME/miniconda/envs/test-environment/conda-meta/pinned
+
 # Install dependencies.
 # XXX: Due to a weird conda dependency resolution issue, we need to install
 # dependencies in two separate calls, otherwise we sometimes get version
 # incompatible with the installed version of numpy leading to crashes. This
 # seems to have to do with differences between conda-forge and defaults.
 conda install -q -c conda-forge \
-    numpy=$NUMPY \
-    pandas=$PANDAS \
+    numpy \
+    pandas \
     bcolz \
     blosc \
     bokeh \
@@ -48,8 +53,6 @@ conda install -q -c conda-forge \
 
 # Specify numpy/pandas here to prevent upgrade/downgrade
 conda install -q -c conda-forge \
-    numpy=$NUMPY \
-    pandas=$PANDAS \
     distributed \
     cloudpickle \
 
