@@ -36,7 +36,7 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict)
+                     SerializableLock, ensure_dict, M)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -2440,9 +2440,12 @@ def transpose(a, axes=None):
     else:
         axes = tuple(range(a.ndim))[::-1]
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
-    return atop(partial(np.transpose, axes=axes),
-                axes,
-                a, tuple(range(a.ndim)), dtype=a.dtype)
+    if axes == (1, 0) and a.ndim == 2:
+        kwargs = {}
+    else:
+        kwargs = {'axes': axes}
+    return atop(np.transpose, axes, a, tuple(range(a.ndim)), dtype=a.dtype,
+                **kwargs)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -2480,10 +2483,17 @@ def tensordot(lhs, rhs, axes=2):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    intermediate = atop(np.tensordot, out_index,
+    if left_axes == (lhs.ndim - 1,) and right_axes in ((0,), (-1,)): # x.dot(y) case
+        func = M.dot
+        kwargs = {}
+    else:
+        func = np.tensordot
+        kwargs = {'axes': (left_axes, right_axes)}
+
+    intermediate = atop(func, out_index,
                         lhs, left_index,
                         rhs, right_index, dtype=dt,
-                        axes=(left_axes, right_axes))
+                        **kwargs)
 
     int_index = list(out_index)
     for l in left_axes:
@@ -3415,6 +3425,8 @@ def concatenate3(arrays):
         if hasattr(arr, 'ndim'):
             while arr.ndim < ndim:
                 arr = arr[None, ...]
+        if not isinstance(arr, np.ndarray) and hasattr(arr, 'todense'):
+            arr = arr.todense()
         result[idx] = arr
 
     return result
