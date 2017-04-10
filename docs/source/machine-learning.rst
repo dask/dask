@@ -8,10 +8,16 @@ easier to scale single-machine libraries like Scikit-Learn where possible and
 makes using distributed libraries like XGBoost or Tensorflow more comfortable
 for average users.
 
+In all cases you will have to install extra dependencies like scikit-learn_ to
+gain full advantage.  These dependencies are listed at the beginning of each
+section and are both conda installable from conda-forge or pip installable.
+
 Dask can be helpful in the following ways:
 
 SKLearn: Model selection
 ------------------------
+
+*Extra Dependencies*: This depends on scikit-learn_ and dask-searchcv_.
 
 Dask can help to accelerate model selection and hyper parameter searches
 (GridSearchCV, RandomSearchCV) with dask-searchcv_.
@@ -37,6 +43,8 @@ Dask can help to accelerate model selection and hyper parameter searches
 SKLearn: Accelerated Joblib
 ---------------------------
 
+*Extra Dependencies*: This depends on scikit-learn_ and distributed_.
+
 Scikit-Learn parallelizes its algorithms internally with Joblib_ a simple
 parallel computing API used throughout sklearn's codebase.  While Joblib
 normally runs from a local thread or processing pool Dask can also step in and
@@ -54,6 +62,8 @@ information.
 
 Convex Optimization Dask.Array
 ------------------------------
+
+*Extra Dependencies*: This depends on dask-glm_.
 
 Just as Scikit-Learn implements machine learning algorithms like gradient
 descent with the NumPy API we can implement many of those same algorithms with
@@ -73,7 +83,9 @@ convex optimization are implemented in dask-glm_
 
 
 Other Distributed Systems
----------------------------------
+-------------------------
+
+*Extra Dependencies*: This depends on xgboost_ and dask-xgboost_ or tensorflow_ and dask-tensorflow_.
 
 Other high-quality parallel and distributed systems for machine learning
 already exist.  For example XGBoost supports gradient boosted trees and
@@ -88,9 +100,12 @@ For more information, see the following subprojects:
 -  dask-xgboost_
 -  dask-tensorflow_
 
-
 .. _dask-searchcv: https://github.com/dask/dask-searchcv
 .. _dask-glm: https://github.com/dask/dask-glm
 .. _dask-xgboost: https://github.com/dask/dask-xgboost
 .. _dask-tensorflow: https://github.com/dask/dask-tensorflow
 .. _Joblib: https://pythonhosted.org/joblib/
+.. _scikit-learn: http://scikit-learn.org/stable/
+.. _xgboost: https://github.com/dmlc/xgboost
+.. _tensorflow: https://www.tensorflow.org/
+.. _distributed: https://distributed.readthedocs.org/en/latest/
