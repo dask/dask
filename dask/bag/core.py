@@ -1578,10 +1578,15 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
+    dirname = _globals.get('temporary_directory', None)
+    if dirname:
+        file = (apply, partd.File, (), {'dir': dirname})
+    else:
+        file = (partd.File,)
     try:
-        dsk1 = {p: (partd.Python, (partd.Snappy, (partd.File,)))}
+        dsk1 = {p: (partd.Python, (partd.Snappy, file))}
     except AttributeError:
-        dsk1 = {p: (partd.Python, (partd.File,))}
+        dsk1 = {p: (partd.Python, file)}
 
     # Partition data on disk
     name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
