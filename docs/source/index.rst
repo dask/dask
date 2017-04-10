@@ -166,6 +166,7 @@ then you should start here.
    bag.rst
    dataframe.rst
    delayed.rst
+   machine-learning.rst
 
 **Scheduling**
 
