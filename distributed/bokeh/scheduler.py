@@ -13,7 +13,7 @@ from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
 from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
         PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad, Text,
-        value, LinearAxis, NumeralTickFormatter)
+        value, LinearAxis, NumeralTickFormatter, BasicTicker)
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
@@ -288,6 +288,7 @@ class CurrentLoad(DashboardComponent):
                         x='nbytes-half', y='y',
                         width='nbytes', height=1,
                         color='nbytes-color')
+            nbytes.axis[0].ticker = BasicTicker(mantissas=[1,256,512], base=1024)
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
             nbytes.xaxis.major_label_orientation = -math.pi / 12
             nbytes.x_range.start = 0
