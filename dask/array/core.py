@@ -2164,7 +2164,7 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = '%s-%s' % (token or funcname(func),
+        out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
@@ -2449,6 +2449,15 @@ alphabet = 'abcdefghijklmnopqrstuvwxyz'
 ALPHABET = alphabet.upper()
 
 
+def _tensordot(a, b, axes):
+    x = np.tensordot(a, b, axes=axes)
+    ind = [slice(None, None)] * x.ndim
+    for a in sorted(axes[0]):
+        ind.insert(a, None)
+    x = x[tuple(ind)]
+    return x
+
+
 @wraps(np.tensordot)
 def tensordot(lhs, rhs, axes=2):
     if isinstance(axes, Iterable):
@@ -2466,10 +2475,6 @@ def tensordot(lhs, rhs, axes=2):
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
 
-    if len(left_axes) > 1:
-        raise NotImplementedError("Simultaneous Contractions of multiple "
-                                  "indices not yet supported")
-
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
     left_index = list(alphabet[:lhs.ndim])
@@ -2480,16 +2485,13 @@ def tensordot(lhs, rhs, axes=2):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    intermediate = atop(np.tensordot, out_index,
+    intermediate = atop(_tensordot, out_index,
                         lhs, left_index,
                         rhs, right_index, dtype=dt,
                         axes=(left_axes, right_axes))
 
-    int_index = list(out_index)
-    for l in left_axes:
-        out_index.remove(left_index[l])
-
-    return atop(sum, out_index, intermediate, int_index, dtype=dt)
+    result = intermediate.sum(axis=left_axes)
+    return result
 
 
 @wraps(np.dot)
