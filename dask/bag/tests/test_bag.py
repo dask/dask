@@ -658,6 +658,10 @@ def test_to_dataframe():
     dd = pytest.importorskip('dask.dataframe')
     pd = pytest.importorskip('pandas')
 
+    def check_parts(df, sol):
+        assert all((p.dtypes == sol.dtypes).all() for p in
+                   dask.compute(*df.to_delayed()))
+
     dsk = {('test', 0): [(1, 2)],
            ('test', 1): [],
            ('test', 2): [(10, 20), (100, 200)]}
@@ -670,30 +674,26 @@ def test_to_dataframe():
                        check_index=False)
     df = b.to_dataframe(columns=['a', 'b'])
     dd.utils.assert_eq(df, sol, check_index=False)
-    assert all((p.dtypes == sol.dtypes).all() for p in
-               dask.compute(*df.to_delayed()))
+    check_parts(df, sol)
 
     # Elements are dictionaries
     b = b.map(lambda x: dict(zip(['a', 'b'], x)))
-    df2 = b.to_dataframe()
-    dd.utils.assert_eq(df2, sol, check_index=False)
-    assert all((p.dtypes == sol.dtypes).all() for p in
-               dask.compute(*df2.to_delayed()))
-    assert df2._name == b.to_dataframe()._name
+    df = b.to_dataframe()
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
+    assert df._name == b.to_dataframe()._name
 
     # With metadata specified
-    df3 = b.to_dataframe(columns=sol)
-    dd.utils.assert_eq(df3, sol, check_index=False)
-    assert all((p.dtypes == sol.dtypes).all() for p in
-               dask.compute(*df3.to_delayed()))
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
     # Single column
     b = b.pluck('a')
-    df4 = b.to_dataframe()
-    assert len(df4.columns) == 1
-    assert list(df4.compute()) == list(pd.DataFrame(list(b)))
-    assert all((p.dtypes == int).all() for p in
-               dask.compute(*df3.to_delayed()))
+    sol = sol[['a']]
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
 
 ext_open = [('gz', GzipFile), ('', open)]
