@@ -1099,11 +1099,13 @@ class Bag(Base):
         else:
             head = self.take(1)[0]
             meta = pd.DataFrame([head], columns=columns)
-        columns = list(meta.columns)
-        name = 'to_dataframe-' + tokenize(self, columns)
-        DataFrame = partial(pd.DataFrame, columns=columns)
-        dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
-                   for i in range(self.npartitions))
+        # Serializing the columns and dtypes is much smaller than serializing
+        # the empty frame
+        cols = list(meta.columns)
+        dtypes = meta.dtypes.to_dict()
+        name = 'to_dataframe-' + tokenize(self, cols, dtypes)
+        dsk = {(name, i): (to_dataframe, (list2, (self.name, i)), cols, dtypes)
+               for i in range(self.npartitions)}
 
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
@@ -1689,3 +1691,9 @@ def split(seq, n):
     L = [seq[int(part * i): int(part * (i + 1))] for i in range(n - 1)]
     L.append(seq[int(part * (n - 1)):])
     return L
+
+
+def to_dataframe(seq, columns, dtypes):
+    import pandas as pd
+    res = pd.DataFrame(seq, columns=columns)
+    return res.astype(dtypes, copy=False)

@@ -655,40 +655,45 @@ def test_args():
 
 
 def test_to_dataframe():
-    pytest.importorskip('dask.dataframe')
+    dd = pytest.importorskip('dask.dataframe')
     pd = pytest.importorskip('pandas')
-    b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
 
+    dsk = {('test', 0): [(1, 2)],
+           ('test', 1): [],
+           ('test', 2): [(10, 20), (100, 200)]}
+    b = Bag(dsk, 'test', 3)
+    sol = pd.DataFrame(b.compute(), columns=['a', 'b'])
+
+    # Elements are tuples
     df = b.to_dataframe()
-    assert list(df.columns) == list(pd.DataFrame(list(b)).columns)
-
+    dd.utils.assert_eq(df, sol.rename(columns={'a': 0, 'b': 1}),
+                       check_index=False)
     df = b.to_dataframe(columns=['a', 'b'])
-    assert df.npartitions == b.npartitions
-    assert list(df.columns) == ['a', 'b']
+    dd.utils.assert_eq(df, sol, check_index=False)
+    assert all((p.dtypes == sol.dtypes).all() for p in
+               dask.compute(*df.to_delayed()))
 
-    assert df.a.compute().values.tolist() == list(b.pluck(0))
-    assert df.b.compute().values.tolist() == list(b.pluck(1))
-
-    b = db.from_sequence([{'a':   1, 'b':   2},
-                          {'a':  10, 'b':  20},
-                          {'a': 100, 'b': 200}], npartitions=2)
-
+    # Elements are dictionaries
+    b = b.map(lambda x: dict(zip(['a', 'b'], x)))
     df2 = b.to_dataframe()
-
-    assert (df2.compute().values == df.compute().values).all()
-
+    dd.utils.assert_eq(df2, sol, check_index=False)
+    assert all((p.dtypes == sol.dtypes).all() for p in
+               dask.compute(*df2.to_delayed()))
     assert df2._name == b.to_dataframe()._name
-    assert df2._name != df._name
 
-    meta = pd.DataFrame({'a': [1], 'b': [2]}).iloc[0:0]
-    df3 = b.to_dataframe(columns=meta)
-    assert df2._name == df3._name
-    assert (df3.compute().values == df2.compute().values).all()
+    # With metadata specified
+    df3 = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df3, sol, check_index=False)
+    assert all((p.dtypes == sol.dtypes).all() for p in
+               dask.compute(*df3.to_delayed()))
 
-    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    # Single column
+    b = b.pluck('a')
     df4 = b.to_dataframe()
     assert len(df4.columns) == 1
     assert list(df4.compute()) == list(pd.DataFrame(list(b)))
+    assert all((p.dtypes == int).all() for p in
+               dask.compute(*df3.to_delayed()))
 
 
 ext_open = [('gz', GzipFile), ('', open)]
