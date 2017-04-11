@@ -37,7 +37,7 @@ def test_adaptive_local_cluster(loop):
 @gen_test(timeout=30)
 def test_adaptive_local_cluster_multi_workers():
     loop = IOLoop.current()
-    cluster = LocalCluster(0, scheduler_port=0, silence_logs=False, nanny=False,
+    cluster = LocalCluster(0, scheduler_port=0, silence_logs=False, processes=False,
                            diagnostics_port=None, loop=loop, start=False)
     cluster.scheduler.allowed_failures = 1000
     alc = Adaptive(cluster.scheduler, cluster, interval=100)

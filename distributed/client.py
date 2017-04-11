@@ -361,7 +361,7 @@ class Client(object):
     distributed.scheduler.Scheduler: Internal scheduler
     """
     def __init__(self, address=None, start=True, loop=None, timeout=3,
-                 set_as_default=True, scheduler_file=None):
+                 set_as_default=True, scheduler_file=None, **kwargs):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
@@ -373,6 +373,7 @@ class Client(object):
         self._pending_msg_buffer = []
         self.extensions = {}
         self.scheduler_file = scheduler_file
+        self._startup_kwargs = kwargs
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
@@ -465,14 +466,15 @@ class Client(object):
             from .deploy import LocalCluster
 
             try:
-                self.cluster = LocalCluster(loop=self.loop, start=False)
+                self.cluster = LocalCluster(loop=self.loop, start=False,
+                                            **self._startup_kwargs)
                 yield self.cluster._start()
             except (OSError, socket.error) as e:
                 if e.errno != errno.EADDRINUSE:
                     raise
                 # The default port was taken, use a random one
                 self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
-                                            start=False)
+                                            start=False, **self._startup_kwargs)
                 yield self.cluster._start()
 
             # Wait for all workers to be ready

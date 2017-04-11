@@ -32,18 +32,3 @@ def test_BokehWebInterface(loop):
                 sleep(0.01)
     with pytest.raises(Exception):
         response = requests.get('http://127.0.0.1:8787/status/')
-
-
-def test_bokeh_shutsdown_without_cluster___del__(loop):
-    c = LocalCluster(2, loop=loop, scheduler_port=0,
-                     services={('http', 0): HTTPScheduler})
-    proc = c.diagnostics.process
-    # don't run the del, as it isn't ever run in python < 3.5 due to cycles
-    c.__del__ = lambda self: None
-    del c
-    start = time()
-    while True:
-        if proc.poll() is not None:
-            break
-        assert time() < start + 5
-        sleep(0.01)

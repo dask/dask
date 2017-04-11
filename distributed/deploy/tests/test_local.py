@@ -22,7 +22,7 @@ from distributed.deploy.utils_test import ClusterTest
 
 
 def test_simple(loop):
-    with LocalCluster(4, scheduler_port=0, nanny=False, silence_logs=False,
+    with LocalCluster(4, scheduler_port=0, processes=False, silence_logs=False,
                       diagnostics_port=None, loop=loop) as c:
         with Client(c.scheduler_address, loop=loop) as e:
             x = e.submit(inc, 1)
@@ -33,7 +33,7 @@ def test_simple(loop):
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')
 def test_procs(loop):
-    with LocalCluster(2, scheduler_port=0, nanny=False, threads_per_worker=3,
+    with LocalCluster(2, scheduler_port=0, processes=False, threads_per_worker=3,
             diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
@@ -42,7 +42,7 @@ def test_procs(loop):
             assert all(isinstance(w, Worker) for w in c.workers)
         repr(c)
 
-    with LocalCluster(2, scheduler_port=0, nanny=True, threads_per_worker=3,
+    with LocalCluster(2, scheduler_port=0, processes=True, threads_per_worker=3,
             diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
@@ -59,7 +59,7 @@ def test_move_unserializable_data():
     Test that unserializable data is still fine to transfer over inproc
     transports.
     """
-    with LocalCluster(nanny=False, silence_logs=False,
+    with LocalCluster(processes=False, silence_logs=False,
                       diagnostics_port=None) as cluster:
         assert cluster.scheduler_address.startswith('inproc://')
         assert cluster.workers[0].address.startswith('inproc://')
@@ -74,7 +74,7 @@ def test_transports():
     """
     Test the transport chosen by LocalCluster depending on arguments.
     """
-    with LocalCluster(1, nanny=False, silence_logs=False,
+    with LocalCluster(1, processes=False, silence_logs=False,
             diagnostics_port=None) as c:
         assert c.scheduler_address.startswith('inproc://')
         assert c.workers[0].address.startswith('inproc://')
@@ -82,7 +82,7 @@ def test_transports():
             assert e.submit(inc, 4).result() == 5
 
     # Have nannies => need TCP
-    with LocalCluster(1, nanny=True, silence_logs=False,
+    with LocalCluster(1, processes=True, silence_logs=False,
                       diagnostics_port=None) as c:
         assert c.scheduler_address.startswith('tcp://')
         assert c.workers[0].address.startswith('tcp://')
@@ -90,7 +90,7 @@ def test_transports():
             assert e.submit(inc, 4).result() == 5
 
     # Scheduler port specified => need TCP
-    with LocalCluster(1, nanny=False, scheduler_port=8786, silence_logs=False,
+    with LocalCluster(1, processes=False, scheduler_port=8786, silence_logs=False,
                       diagnostics_port=None) as c:
 
         assert c.scheduler_address == 'tcp://127.0.0.1:8786'
@@ -118,6 +118,13 @@ def test_Client_solo(loop):
     assert c.cluster.status == 'closed'
 
 
+def test_Client_kwargs(loop):
+    with Client(loop=loop, processes=False, n_workers=2) as c:
+        assert len(c.cluster.workers) == 2
+        assert all(isinstance(w, Worker) for w in c.cluster.workers)
+    assert c.cluster.status == 'closed'
+
+
 def test_Client_twice(loop):
     with Client(loop=loop) as c:
         with Client(loop=loop) as f:
@@ -133,7 +140,7 @@ def test_defaults():
         assert all(isinstance(w, Nanny) for w in c.workers)
         assert all(w.ncores == 1 for w in c.workers)
 
-    with LocalCluster(nanny=False, scheduler_port=0, silence_logs=False,
+    with LocalCluster(processes=False, scheduler_port=0, silence_logs=False,
             diagnostics_port=None) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
         assert all(isinstance(w, Worker) for w in c.workers)
@@ -198,44 +205,21 @@ def test_http(loop):
 
 def test_bokeh(loop):
     pytest.importorskip('bokeh')
-    from distributed.http import HTTPScheduler
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-            diagnostics_port=4724, services={('http', 0): HTTPScheduler},
-            ) as c:
+                      diagnostics_port=0) as c:
+        bokeh_port = c.scheduler.services['bokeh'].port
+        url = 'http://127.0.0.1:%d/status/' % bokeh_port
         start = time()
         while True:
-            with ignoring(Exception):
-                response = requests.get('http://127.0.0.1:%d/status/' %
-                                        c.diagnostics.port)
-                if response.ok:
-                    break
+            response = requests.get(url)
+            if response.ok:
+                break
             assert time() < start + 20
             sleep(0.01)
 
-    start = time()
-    while not raises(lambda: requests.get('http://127.0.0.1:%d/status/' % 4724)):
-        assert time() < start + 10
-        sleep(0.01)
-
-
-def test_start_diagnostics(loop):
-    pytest.importorskip('bokeh')
-    from distributed.http import HTTPScheduler
-    import requests
-    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-            diagnostics_port=None) as c:
-        c.start_diagnostics_server(show=False, port=3748)
-
-        start = time()
-        while True:
-            with ignoring(Exception):
-                response = requests.get('http://127.0.0.1:%d/status/' %
-                                        c.diagnostics.port)
-                if response.ok:
-                    break
-            assert time() < start + 20
-            sleep(0.01)
+    with pytest.raises(requests.ReadTimeout):
+        requests.get(url, timeout=0.2)
 
 
 def test_blocks_until_full(loop):
@@ -246,7 +230,7 @@ def test_blocks_until_full(loop):
 @gen_test()
 def test_scale_up_and_down():
     loop = IOLoop.current()
-    cluster = LocalCluster(0, scheduler_port=0, nanny=False, silence_logs=False,
+    cluster = LocalCluster(0, scheduler_port=0, processes=False, silence_logs=False,
                            diagnostics_port=None, loop=loop, start=False)
     c = Client(cluster, start=False, loop=loop)
     yield c._start()
@@ -290,13 +274,13 @@ def test_remote_access(loop):
 
 
 def test_memory(loop):
-    with LocalCluster(scheduler_port=0, nanny=False, silence_logs=False,
+    with LocalCluster(scheduler_port=0, processes=False, silence_logs=False,
                       diagnostics_port=None, loop=loop) as cluster:
         assert sum(w.memory_limit for w in cluster.workers) < TOTAL_MEMORY * 0.8
 
 
 def test_memory_nanny(loop):
-    with LocalCluster(scheduler_port=0, nanny=True, silence_logs=False,
+    with LocalCluster(scheduler_port=0, processes=True, silence_logs=False,
                       diagnostics_port=None, loop=loop) as cluster:
         with Client(cluster.scheduler_address, loop=loop) as c:
             info = c.scheduler_info()

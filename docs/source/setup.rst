@@ -153,7 +153,7 @@ You can do the work above easily using :doc:`LocalCluster<local-cluster>`.
 .. code-block:: python
 
    from distributed import LocalCluster
-   c = LocalCluster(nanny=False)
+   c = LocalCluster(processes=False)
 
 A scheduler will be available under ``c.scheduler`` and a list of workers under
 ``c.workers``.  There is an IOLoop running in a background thread.

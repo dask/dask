@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 from datetime import datetime, timedelta
 import logging
 from multiprocessing.queues import Empty
@@ -376,8 +377,6 @@ def join(proc, timeout):
     if proc is not None:
         proc.join(timeout)
 
-
-import atexit
 
 closing = [False]
 
