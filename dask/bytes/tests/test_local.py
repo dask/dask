@@ -62,6 +62,18 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
+def test_with_urls():
+    with filetexts(files, mode='b'):
+        cwd = os.getcwd()
+        url = os.sep.join(['file:/', cwd, '.test.accounts.*'])
+        sample, values = read_bytes(url, blocksize=None)
+        assert sum(map(len, values)) == len(files)
+
+        # Network-like params are ignored
+        url = os.sep.join(['file://blah:bug@host:0', cwd, '.test.accounts.*'])
+        sample, values = read_bytes(url, blocksize=None)
+        assert sum(map(len, values)) == len(files)
+
 def test_read_bytes_block():
     with filetexts(files, mode='b'):
         for bs in [5, 15, 45, 1500]:
