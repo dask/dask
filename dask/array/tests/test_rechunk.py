@@ -6,6 +6,7 @@ np = pytest.importorskip('numpy')
 
 import dask
 from dask.utils import funcname
+from dask.array.utils import assert_eq
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
 from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
@@ -188,7 +189,7 @@ def test_rechunk_empty():
     x = da.ones((0, 10), chunks=(5, 5))
     y = x.rechunk((2, 2))
     assert y.chunks == ((0,), (2,) * 5)
-    assert (y.compute() == x.compute()).all()
+    assert_eq(x, y)
 
 
 def test_rechunk_same():
