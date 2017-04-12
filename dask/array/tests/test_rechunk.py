@@ -184,6 +184,13 @@ def test_rechunk_0d():
     assert y.compute() == a
 
 
+def test_rechunk_empty():
+    x = da.ones((0, 10), chunks=(5, 5))
+    y = x.rechunk((2, 2))
+    assert y.chunks == ((0,), (2,) * 5)
+    assert (y.compute() == x.compute()).all()
+
+
 def test_rechunk_same():
     x = da.ones((24, 24), chunks=(4, 8))
     y = x.rechunk(x.chunks)
