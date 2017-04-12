@@ -4,7 +4,6 @@ import logging
 from ..utils import infer_storage_options
 
 from s3fs import S3FileSystem
-from s3fs.core import split_path
 
 from . import core
 
