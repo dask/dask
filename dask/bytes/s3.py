@@ -1,8 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+from ..utils import infer_storage_options
 
 from s3fs import S3FileSystem
+from s3fs.core import split_path
 
 from . import core
 
@@ -36,24 +38,29 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
         # S3FileSystem.__init__(self, kwargs)  # not sure what do do here
         S3FileSystem.__init__(self, **kwargs)
 
-    def open(self, path, mode='rb', **kwargs):
-        bucket = kwargs.pop('host', '')
-        s3_path = bucket + path
-        return S3FileSystem.open(self, s3_path, mode=mode)
+    def _trim_filename(self, fn):
+        so = infer_storage_options(fn)
+        return so.get('host', '') + so['path']
 
-    def glob(self, path, **kwargs):
-        bucket = kwargs.pop('host', '')
-        s3_path = bucket + path
-        return S3FileSystem.glob(self, s3_path)
+    def open(self, path, mode='rb'):
+        s3_path = self._trim_filename(path)
+        f = S3FileSystem.open(self, s3_path, mode=mode)
+        return f
+
+    def glob(self, path):
+        s3_path = self._trim_filename(path)
+        return ['s3://%s' % s for s in S3FileSystem.glob(self, s3_path)]
 
     def mkdirs(self, path):
         pass  # no need to pre-make paths on S3
 
     def ukey(self, path):
-        return self.info(path)['ETag']
+        s3_path = self._trim_filename(path)
+        return self.info(s3_path)['ETag']
 
     def size(self, path):
-        return self.info(path)['Size']
+        s3_path = self._trim_filename(path)
+        return self.info(s3_path)['Size']
 
 
 core._filesystems['s3'] = DaskS3FileSystem
