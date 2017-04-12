@@ -788,6 +788,10 @@ def test_roll(chunks, shift, axis):
     ((4, 64), (4, 8, 4, 2), (2, 16)),
     ((4, 8, 4, 2), (2, 1, 2, 32, 2), (2, 4, 2, 2)),
     ((4, 1, 4), (4, 4), (2, 1, 2)),
+    ((0, 10), (0, 5, 2), (5, 5)),
+    ((5, 0, 2), (0, 10), (5, 2, 2)),
+    ((0,), (2, 0, 2), (4,)),
+    ((2, 0, 2), (0,), (4, 4, 4)),
 ])
 def test_reshape(original_shape, new_shape, chunks):
     x = np.random.randint(10, size=original_shape)
