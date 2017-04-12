@@ -203,11 +203,17 @@ class maybe_buffered_partd(object):
         self.buffer = buffer
 
     def __reduce__(self):
-        return (maybe_buffered_partd, (False, self.tempdir))
+        if self.tempdir:
+            return (maybe_buffered_partd, (False, self.tempdir))
+        else:
+            return (maybe_buffered_partd, (False,))
 
     def __call__(self, *args, **kwargs):
         import partd
-        file = partd.File(dir=self.tempdir)
+        if self.tempdir:
+            file = partd.File(dir=self.tempdir)
+        else:
+            file = partd.File()
         if self.buffer:
             return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
         else:
