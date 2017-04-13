@@ -3686,6 +3686,7 @@ def repartition(df, divisions=None, force=False):
 
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
+
     token = tokenize(df, divisions)
     if isinstance(df, _Frame):
         tmp = 'repartition-split-' + token

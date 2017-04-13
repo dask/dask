@@ -2722,14 +2722,16 @@ def test_to_datetime():
               dd.to_datetime(ds, infer_datetime_format=True))
 
 
-def test_slice_on_filtered_boundary():
+@pytest.mark.parametrize('drop', [0, 9])
+def test_slice_on_filtered_boundary(drop):
     # https://github.com/dask/dask/issues/2211
     x = np.arange(10)
     x[[5, 6]] -= 2
     df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
-    pdf = df.set_index("A").query("B > 0")
-    ddf = dd.from_pandas(df, 1).set_index("A").query("B > 0")
+    pdf = df.set_index("A").query("B != {}".format(drop))
+    ddf = dd.from_pandas(df, 1).set_index("A").query("B != {}".format(drop))
 
     result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
     expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
     assert_eq(result, expected)
+    assert not result.compute().index.is_monotonic  # didn't accidentally sort
