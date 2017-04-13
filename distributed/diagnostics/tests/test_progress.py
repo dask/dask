@@ -17,7 +17,7 @@ from distributed.utils_test import (gen_cluster, cluster, inc, dec, gen_test,
 from distributed.utils import All, key_split
 from distributed.worker import dumps_task
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
-        AllProgress, MultiProgress, dependent_keys)
+        AllProgress, GroupProgress, MultiProgress, dependent_keys)
 from distributed.protocol.pickle import dumps
 
 
@@ -201,3 +201,28 @@ def test_AllProgress_lost_key(c, s, a, b, timeout=None):
     while len(p.state['memory']['inc']) > 0:
         yield gen.sleep(0.1)
         assert time() < start + 2
+
+
+@gen_cluster(client=True)
+def test_GroupProgress(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    fp = GroupProgress(s)
+    x = da.ones(100, chunks=10)
+    y = x + 1
+    z = (x * y).sum().persist(optimize_graph=False)
+
+    yield _wait(z)
+    assert 3 < len(fp.groups) < 10
+    for k, g in fp.groups.items():
+        assert fp.keys[k]
+        assert len(fp.keys[k]) == sum(g.values())
+        assert all(v >= 0 for v in g.values())
+
+    assert fp.dependencies[y.name] == {x.name}
+    assert fp.dependents[x.name] == {y.name, (x * y).name}
+
+    del x, y, z
+    while s.tasks:
+        yield gen.sleep(0.01)
+
+    assert not fp.groups

@@ -13,7 +13,7 @@ from tornado.ioloop import PeriodicCallback, IOLoop
 from tornado import gen
 
 from .plugin import SchedulerPlugin
-from ..utils import sync, key_split, tokey
+from ..utils import sync, key_split, tokey, log_errors, key_split_group
 
 
 logger = logging.getLogger(__name__)
@@ -290,3 +290,78 @@ class AllProgress(SchedulerPlugin):
     def restart(self, scheduler):
         self.all.clear()
         self.state.clear()
+
+
+class GroupProgress(SchedulerPlugin):
+    """ Keep track of all keys, grouped by key_split """
+    def __init__(self, scheduler):
+        self.scheduler = scheduler
+        self.keys = dict()
+        self.groups = dict()
+        self.nbytes = dict()
+        self.durations = dict()
+        self.dependencies = dict()
+        self.dependents = dict()
+
+        for key, state in self.scheduler.task_state.items():
+            k = key_split_group(key)
+            if k not in self.groups:
+                self.create(key, k)
+            self.keys[k].add(key)
+            self.groups[k][state] += 1
+            if state == 'memory' and key in self.scheduler.nbytes:
+                self.nbytes[k] += self.scheduler.nbytes[key]
+
+        scheduler.add_plugin(self)
+
+    def create(self, key, k):
+        with log_errors(pdb=True):
+            g = {'memory': 0, 'erred': 0, 'waiting': 0,
+                 'released': 0, 'processing': 0}
+            self.keys[k] = set()
+            self.groups[k] = g
+            self.nbytes[k] = 0
+            self.durations[k] = 0
+            self.dependents[k] = {key_split_group(dep) for dep in
+                                  self.scheduler.dependents[key]}
+            self.dependencies[k] = set()
+            for dep in self.scheduler.dependencies[key]:
+                d = key_split_group(dep)
+                self.dependents[d].add(k)
+                self.dependencies[k].add(d)
+
+    def transition(self, key, start, finish, *args, **kwargs):
+        with log_errors():
+            k = key_split_group(key)
+            if k not in self.groups:
+                self.create(key, k)
+
+            g = self.groups[k]
+
+            if key not in self.keys[k]:
+                self.keys[k].add(key)
+            else:
+                g[start] -= 1
+
+            if finish != 'forgotten':
+                g[finish] += 1
+            else:
+                self.keys[k].remove(key)
+                if not self.keys[k]:
+                    del self.groups[k]
+                    del self.nbytes[k]
+                    for dep in self.dependencies.pop(k):
+                        self.dependents[key_split_group(dep)].remove(k)
+
+            if start == 'memory':
+                self.nbytes[k] -= self.scheduler.nbytes[key]
+            if finish == 'memory':
+                self.nbytes[k] += self.scheduler.nbytes[key]
+
+    def restart(self, scheduler):
+        self.keys.clear()
+        self.groups.clear()
+        self.nbytes.clear()
+        self.durations.clear()
+        self.dependencies.clear()
+        self.dependents.clear()

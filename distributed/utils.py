@@ -315,6 +315,50 @@ else:
     key_split = lru_cache(100000)(key_split)
 
 
+def key_split_group(x):
+    """A more fine-grained version of key_split
+
+    >>> key_split_group('x')
+    'x'
+    >>> key_split_group('x-1')
+    'x-1'
+    >>> key_split_group('x-1-2-3')
+    'x-1-2-3'
+    >>> key_split_group(('x-2', 1))
+    'x-2'
+    >>> key_split_group("('x-2', 1)")
+    'x-2'
+    >>> key_split_group('hello-world-1')
+    'hello-world-1'
+    >>> key_split_group(b'hello-world-1')
+    'hello-world-1'
+    >>> key_split_group('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split_group('<module.submodule.myclass object at 0xdaf372')
+    'myclass'
+    >>> key_split_group(None)
+    'Other'
+    >>> key_split_group('x-abcdefab')  # ignores hex
+    'x-abcdefab'
+    """
+    typ = type(x)
+    if typ is tuple:
+        return x[0]
+    elif typ is str:
+        if x[0] == '(':
+            return x.split(',', 1)[0].strip('()"\'')
+        elif len(x) == 32 and re.match(r'[a-f0-9]{32}', x):
+            return 'data'
+        elif x[0] == '<':
+            return x.strip('<>').split()[0].split('.')[-1]
+        else:
+            return x
+    elif typ is bytes:
+        return key_split_group(x.decode())
+    else:
+        return 'Other'
+
+
 @contextmanager
 def log_errors(pdb=False):
     from .comm import CommClosedError
