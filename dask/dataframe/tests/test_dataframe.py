@@ -2720,3 +2720,16 @@ def test_to_datetime():
 
     assert_eq(pd.to_datetime(s, infer_datetime_format=True),
               dd.to_datetime(ds, infer_datetime_format=True))
+
+
+def test_slice_on_filtered_boundary():
+    # https://github.com/dask/dask/issues/2211
+    x = np.arange(10)
+    x[[5, 6]] -= 2
+    df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
+    pdf = df.set_index("A").query("B > 0")
+    ddf = dd.from_pandas(df, 1).set_index("A").query("B > 0")
+
+    result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
+    expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
+    assert_eq(result, expected)

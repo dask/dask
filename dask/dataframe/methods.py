@@ -55,6 +55,12 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     2  20
     2  30
     """
+    # Pandas treats missing keys differently for label-slicing
+    # on monotonic vs. non-monotonic indexes
+    # If the index is monotonic, `df.loc[start:stop]` is fine.
+    # If it's not, `df.loc[start:stop]` raises when `start` is missing
+    if kind == 'loc' and not df.index.is_monotonic:
+        df = df.sort_index()
     result = getattr(df, kind)[start:stop]
     if not right_boundary:
         right_index = result.index.get_slice_bound(stop, 'left', kind)
