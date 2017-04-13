@@ -13,7 +13,8 @@ from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
 from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
         PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad, Text,
-        value, LinearAxis, NumeralTickFormatter, BasicTicker)
+        value, LinearAxis, NumeralTickFormatter, BasicTicker, NumberFormatter,
+        BoxSelectTool)
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
@@ -764,6 +765,105 @@ class MemoryUse(DashboardComponent):
                     "Memory Use: %0.2f MB" % (sum(self.plugin.nbytes.values()) / 1e6)
 
 
+class WorkerTable(DashboardComponent):
+    """ Status of the current workers
+
+    This is two plots, a text-based table for each host and a thin horizontal
+    plot laying out hosts by their current memory use.
+    """
+    def __init__(self, scheduler, **kwargs):
+        self.scheduler = scheduler
+        self.names = ['disk-read', 'cores', 'cpu', 'disk-write',
+                      'memory', 'last-seen', 'memory_percent', 'host',
+                      'network-send', 'network-recv']
+        self.source = ColumnDataSource({k: [] for k in self.names})
+
+        columns = {name: TableColumn(field=name,
+                                     title=name.replace('_percent', ' %'))
+                   for name in self.names}
+
+        cnames = ['host', 'cores', 'memory', 'cpu', 'memory_percent',
+                  'network-send', 'network-recv']
+
+        formatters = {'cpu': NumberFormatter(format='0.0 %'),
+                      'memory_percent': NumberFormatter(format='0.0 %'),
+                      'memory': NumberFormatter(format='0 b'),
+                      'latency': NumberFormatter(format='0.00000'),
+                      'last-seen': NumberFormatter(format='0.000'),
+                      'disk-read': NumberFormatter(format='0 b'),
+                      'disk-write': NumberFormatter(format='0 b'),
+                      'network-send': NumberFormatter(format='0 b'),
+                      'network-recv': NumberFormatter(format='0 b')}
+
+        table = DataTable(
+            source=self.source, columns=[columns[n] for n in cnames],
+        )
+
+        for name in cnames:
+            if name in formatters:
+                table.columns[cnames.index(name)].formatter = formatters[name]
+
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
+                </div>
+                """
+        )
+
+        mem_plot = figure(title='Memory Use (%)', toolbar_location=None,
+                          x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
+                          **kwargs)
+        mem_plot.circle(source=self.source, x='memory_percent', y=0,
+                        size=10, fill_alpha=0.5)
+        mem_plot.ygrid.visible = False
+        mem_plot.yaxis.minor_tick_line_alpha = 0
+        mem_plot.yaxis.visible = False
+        mem_plot.add_tools(hover, BoxSelectTool())
+
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@cpu</span>
+                </div>
+                """
+        )
+
+        cpu_plot = figure(title='CPU Use (%)', toolbar_location=None,
+                          x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
+                          **kwargs)
+        cpu_plot.circle(source=self.source, x='cpu', y=0,
+                        size=10, fill_alpha=0.5)
+        cpu_plot.ygrid.visible = False
+        cpu_plot.yaxis.minor_tick_line_alpha = 0
+        cpu_plot.yaxis.visible = False
+        cpu_plot.add_tools(hover, BoxSelectTool())
+
+        if 'sizing_mode' in kwargs:
+            sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
+        else:
+            sizing_mode = {}
+
+        self.root = column(cpu_plot, mem_plot, table, id='bk-worker-table', **sizing_mode)
+
+    def update(self):
+        data = {name: [] for name in self.names}
+        for host in sorted(self.scheduler.host_info):
+            info = self.scheduler.host_info[host]
+            for name in self.names:
+                data[name].append(info.get(name, None))
+            data['host'][-1] = host
+
+        for name in ['cpu', 'memory_percent']:
+            data[name] = [x / 100 for x in data[name]]
+
+        self.source.data.update(data)
+
+
 def systemmonitor_doc(scheduler, doc):
     with log_errors():
         table = StateTable(scheduler)
@@ -777,7 +877,7 @@ def systemmonitor_doc(scheduler, doc):
         doc.template = template
 
 
-def workers_doc(scheduler, doc):
+def stealing_doc(scheduler, doc):
     with log_errors():
         table = StateTable(scheduler)
         occupancy = Occupancy(scheduler, height=200, sizing_mode='scale_width')
@@ -804,6 +904,16 @@ def events_doc(scheduler, doc):
         doc.add_periodic_callback(events.update, 500)
         doc.title = "Dask Scheduler Events"
         doc.add_root(column(events.root, sizing_mode='scale_width'))
+        doc.template = template
+
+
+def workers_doc(scheduler, doc):
+    with log_errors():
+        table = WorkerTable(scheduler)
+        table.update()
+        doc.add_periodic_callback(table.update, 500)
+        doc.title = "Dask Workers"
+        doc.add_root(table.root)
         doc.template = template
 
 
@@ -858,6 +968,7 @@ class BokehScheduler(BokehServer):
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc,
                                                             scheduler)))
         workers = Application(FunctionHandler(partial(workers_doc, scheduler)))
+        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler)))
         counters = Application(FunctionHandler(partial(counters_doc, scheduler)))
         events = Application(FunctionHandler(partial(events_doc, scheduler)))
         tasks = Application(FunctionHandler(partial(tasks_doc, scheduler)))
@@ -865,6 +976,7 @@ class BokehScheduler(BokehServer):
 
         self.apps = {
                 '/system': systemmonitor,
+                '/stealing': stealing,
                 '/workers': workers,
                 '/events': events,
                 '/counters': counters,
