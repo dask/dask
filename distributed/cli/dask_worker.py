@@ -14,7 +14,7 @@ from time import sleep
 import click
 from distributed import Nanny, Worker, rpc
 from distributed.nanny import isalive
-from distributed.utils import All, ignoring
+from distributed.utils import All, ignoring, get_ip_interface
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.metrics import time
@@ -57,6 +57,8 @@ def handle_signal(sig, frame):
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the scheduler network.")
+@click.option('--interface', type=str, default=None,
+              help="Preferred network interface like 'eth0' or 'ib0'")
 @click.option('--nthreads', type=int, default=0,
               help="Number of threads per process. Defaults to number of cores")
 @click.option('--nprocs', type=int, default=1,
@@ -85,7 +87,7 @@ def handle_signal(sig, frame):
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, temp_filename, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
-         death_timeout):
+         interface, death_timeout):
     if nanny:
         port = nanny_port
     else:
@@ -161,6 +163,12 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                  local_dir=local_directory, death_timeout=death_timeout,
                  **kwargs)
                for i in range(nprocs)]
+
+    if interface:
+        if host:
+            raise ValueError("Can not specify both interface and host")
+        else:
+            host = get_ip_interface(interface)
 
     for n in nannies:
         if host:

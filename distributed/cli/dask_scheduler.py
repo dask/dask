@@ -13,7 +13,7 @@ import click
 
 import distributed
 from distributed import Scheduler
-from distributed.utils import ignoring, open_port
+from distributed.utils import ignoring, open_port, get_ip_interface
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
@@ -33,6 +33,8 @@ logger = logging.getLogger('distributed.scheduler')
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default='',
               help="IP, hostname or URI of this server")
+@click.option('--interface', type=str, default=None,
+              help="Preferred network interface like 'eth0' or 'ib0'")
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
@@ -47,7 +49,8 @@ logger = logging.getLogger('distributed.scheduler')
               "This may be a good way to share connection information if your "
               "cluster is on a shared network file system.")
 def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
-         bokeh_whitelist, prefix, use_xheaders, pid_file, scheduler_file):
+         bokeh_whitelist, prefix, use_xheaders, pid_file, scheduler_file,
+         interface):
 
     if pid_file:
         with open(pid_file, 'w') as f:
@@ -63,6 +66,12 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         limit = max(soft, hard // 2)
         resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+
+    if interface:
+        if host:
+            raise ValueError("Can not specify both interface and host")
+        else:
+            host = get_ip_interface(interface)
 
     addr = uri_from_host_port(host, port, 8786)
 

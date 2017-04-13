@@ -15,6 +15,7 @@ from time import sleep
 from tornado import gen
 
 from distributed import Scheduler, Client
+from distributed.compatibility import WINDOWS
 from distributed.utils import get_ip, ignoring, tmpfile
 from distributed.utils_test import (loop, popen,
                                     assert_can_connect_from_everywhere_4,
@@ -184,6 +185,21 @@ def test_multiple_workers(loop):
                     while len(c.ncores()) < 2:
                         sleep(0.1)
                         assert time() < start + 10
+
+
+@pytest.mark.skipif(WINDOWS, reason='--interface does not work on windows')
+def test_interface(loop):
+    with popen(['dask-scheduler', '--no-bokeh', '--interface', 'lo']) as s:
+        with popen(['dask-worker', '127.0.0.1:8786', '--no-bokeh', '--interface', 'lo']) as a:
+            with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
+                start = time()
+                while not len(c.ncores()):
+                    sleep(0.1)
+                    assert time() - start < 5
+                info = c.scheduler_info()
+                assert '127.0.0.1' in info['address']
+                assert all('127.0.0.1' == d['host']
+                           for d in info['workers'].values())
 
 
 def test_pid_file(loop):

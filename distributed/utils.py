@@ -27,7 +27,7 @@ from dask import istask
 from toolz import memoize, valmap
 from tornado import gen
 
-from .compatibility import Queue, PY3, PY2, get_thread_identity
+from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
 from .config import config
 
 
@@ -126,6 +126,12 @@ def get_ipv6(host='2001:4860:4860::8888', port=80):
     The same as get_ip(), but for IPv6.
     """
     return _get_ip(host, port, family=socket.AF_INET6, default='::1')
+
+
+def get_ip_interface(ifname):
+    import psutil
+    L = psutil.net_if_addrs()[ifname]
+    return [x.address for x in L if x.family == socket.AF_INET][0]
 
 
 @contextmanager
