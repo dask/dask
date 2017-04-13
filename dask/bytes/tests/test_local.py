@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import gzip
 import os
+import six
 from time import sleep
 
 import pytest
@@ -64,13 +65,8 @@ def test_read_bytes_blocksize_none():
 
 def test_with_urls():
     with filetexts(files, mode='b'):
-        cwd = os.getcwd()
-        url = os.sep.join(['file:/', cwd, '.test.accounts.*'])
-        sample, values = read_bytes(url, blocksize=None)
-        assert sum(map(len, values)) == len(files)
-
-        # Network-like params are ignored
-        url = os.sep.join(['file://blah:bug@host:0', cwd, '.test.accounts.*'])
+        # OS-independent file:// URI with glob *
+        url = to_uri('.test.accounts.') + '*'
         sample, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
 
@@ -321,3 +317,20 @@ def test_py2_local_bytes(tmpdir):
 
     with lazy_file as f:
         assert all(isinstance(line, unicode) for line in f)
+
+
+try:
+    # used only in test_with_urls - may be more generally useful
+    import pathlib
+
+
+    def to_uri(path):
+        return pathlib.Path(os.path.abspath(path)).as_uri()
+
+except (ImportError, NameError):
+    import urlparse, urllib
+
+
+    def to_uri(path):
+        return urlparse.urljoin(
+            'file:', urllib.pathname2url(os.path.abspath(path)))
