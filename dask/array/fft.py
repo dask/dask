@@ -148,7 +148,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
                 else:
                     axes = tuple(range(len(s)))
             else:
-                raise ValueError("Expected 2d or nd fft.")
+                axes = (-1,)
         else:
             if len(set(axes)) < len(axes):
                 raise ValueError("Duplicate axes not allowed.")
@@ -177,11 +177,13 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         _func = func
 
         def func(a, n=None, axis=None):
-            axes = (1,) if axis is None else (axis,)
-
             s = None
             if n is not None:
-                s = [n]
+                s = (n,)
+
+            axes = None
+            if axis is not None:
+                axes = (axis,)
 
             return _func(a, s, axes)
 
