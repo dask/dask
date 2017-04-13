@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import gzip
 import os
-import six
 from time import sleep
 
 import pytest
@@ -69,6 +68,7 @@ def test_with_urls():
         url = to_uri('.test.accounts.') + '*'
         sample, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
+
 
 def test_read_bytes_block():
     with filetexts(files, mode='b'):
@@ -323,13 +323,11 @@ try:
     # used only in test_with_urls - may be more generally useful
     import pathlib
 
-
     def to_uri(path):
         return pathlib.Path(os.path.abspath(path)).as_uri()
 
 except (ImportError, NameError):
     import urlparse, urllib
-
 
     def to_uri(path):
         return urlparse.urljoin(
