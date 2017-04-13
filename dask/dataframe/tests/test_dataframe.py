@@ -1316,6 +1316,19 @@ def test_repartition_freq(npartitions, freq, start, end):
     assert_eq(ddf2, df)
 
 
+def test_repartition_freq_divisions():
+    df = pd.DataFrame({'x': np.random.random(10)},
+                      index=pd.DatetimeIndex(np.random.random(10) * 100e9))
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf2 = ddf.repartition(freq='15s')
+    for div in ddf2.divisions[1:-1]:
+        assert div == div.round('15s')
+    assert ddf2.divisions[0] == df.index.min()
+    assert ddf2.divisions[-1] == df.index.max()
+    assert_eq(ddf2, ddf2)
+
+
 def test_repartition_freq_errors():
     df = pd.DataFrame({'x': [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)

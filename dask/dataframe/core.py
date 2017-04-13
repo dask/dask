@@ -3461,7 +3461,6 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
-
     if not isinstance(b, (list, tuple)):
         raise ValueError('New division must be list or tuple')
     b = list(b)
@@ -3582,7 +3581,7 @@ def repartition_freq(df, freq=None):
     freq = pd.Timedelta(freq)
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
-    divisions = pd.DatetimeIndex(start=df.divisions[0],
+    divisions = pd.DatetimeIndex(start=df.divisions[0].ceil(freq),
                                  end=df.divisions[-1],
                                  freq=freq).tolist()
     if divisions[-1] != df.divisions[-1]:
