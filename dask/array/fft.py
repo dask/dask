@@ -179,7 +179,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         def func(a, n=None, axis=None):
             s = None
             if n is not None:
-                s = [n]
+                s = (n,)
 
             axes = None
             if axis is not None:
