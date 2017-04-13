@@ -344,3 +344,17 @@ def test_temporary_directory():
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+
+
+def test_set_index_single_partition_sorts():
+    idx = np.array([1483228800084000000, 1483228800188000000, 1483228800404999936,
+                    1483228800433000192, 1483228800546999808, 1483228800636000000,
+                    1483228800670000128, 1483228800670000128, 1483228800848999936,
+                    1483228801116000000, 1483228801428000000, 1483228801568000000,
+                    1483228801851000064, 1483228801900999936, 1483228801900999936,
+                    1483228802105999872, 1483228802101999872, 1483228802516999936])
+
+    df = pd.DataFrame({"A": np.arange(len(idx)),
+                       "B": pd.to_datetime(idx, unit='ns')})
+    ddf = dd.from_pandas(df, 1).set_index("B")
+    assert ddf.index.compute().is_monotonic
