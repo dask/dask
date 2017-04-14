@@ -283,6 +283,31 @@ of the optimization.  For example to send a ``keys=`` keyword argument to the
    x.compute(fuse_keys=['x', 'y', 'z'])
 
 
+Customizing Optimization
+------------------------
+
+Dask defines a default optimization strategy for each collection type (Array,
+Bag, DataFrame, Delayed).  However different applications may have different
+needs.  To address this variability of needs, you can construct your own custom
+optimization function and use it instead of the default.  An optimization
+function takes in a task graph and list of desired keys and returns a new
+task graph.
+
+.. code-block:: python
+
+   def my_optimize_function(dsk, keys):
+       new_dsk = {...}
+       return new_dsk
+
+You can then register this optimization class against whichever collection type
+you prefer and it will be used instead of the default scheme.
+
+.. code-block:: python
+
+   with dask.set_options(array_optimize=my_optimize_function):
+       x, y = dask.compute(x, y)
+
+
 API
 ---
 
