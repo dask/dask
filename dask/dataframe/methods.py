@@ -60,9 +60,9 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
         # If it's not, `df.loc[start:stop]` raises when `start` is missing
-        if start:
+        if start is not None:
             df = df[df.index >= start]
-        if stop:
+        if stop is not None:
             df = df[df.index <= stop]
         result = df
     else:
