@@ -2733,3 +2733,62 @@ def test_to_datetime():
 
     assert_eq(pd.to_datetime(s, infer_datetime_format=True),
               dd.to_datetime(ds, infer_datetime_format=True))
+
+
+@pytest.mark.parametrize('drop', [0, 9])
+def test_slice_on_filtered_boundary(drop):
+    # https://github.com/dask/dask/issues/2211
+    x = np.arange(10)
+    x[[5, 6]] -= 2
+    df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
+    pdf = df.set_index("A").query("B != {}".format(drop))
+    ddf = dd.from_pandas(df, 1).set_index("A").query("B != {}".format(drop))
+
+    result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
+    expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
+    assert_eq(result, expected)
+    assert not result.compute().index.is_monotonic  # didn't accidentally sort
+
+
+def test_boundary_slice_nonmonotonic():
+    x = np.array([-1, -2, 2, 4, 3])
+    df = pd.DataFrame({"B": range(len(x))}, index=x)
+    result = boundary_slice(df, 0, 4)
+    expected = df.iloc[2:]
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -1, 4)
+    expected = df.drop(-2)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 3)
+    expected = df.drop(4)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 3.5)
+    expected = df.drop(4)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 4)
+    expected = df
+    tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize('index, left, right', [
+    (range(10), 0, 9),
+    (range(10), -1, None),
+    (range(10), None, 10),
+    ([-1, 0, 2, 1], None, None),
+    ([-1, 0, 2, 1], -1, None),
+    ([-1, 0, 2, 1], None, 2),
+    ([-1, 0, 2, 1], -2, 3),
+    (pd.date_range("2017", periods=10), None, None),
+    (pd.date_range("2017", periods=10), pd.Timestamp("2017"), None),
+    (pd.date_range("2017", periods=10), None, pd.Timestamp("2017-01-10")),
+    (pd.date_range("2017", periods=10), pd.Timestamp("2016"), None),
+    (pd.date_range("2017", periods=10), None, pd.Timestamp("2018")),
+])
+def test_boundary_slice_same(index, left, right):
+    df = pd.DataFrame({"A": range(len(index))}, index=index)
+    result = boundary_slice(df, left, right)
+    tm.assert_frame_equal(result, df)
