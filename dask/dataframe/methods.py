@@ -74,11 +74,9 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     else:
         result = getattr(df, kind)[start:stop]
     if not right_boundary:
-        stop = min(stop, df.index.max())
         right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
     if not left_boundary:
-        start = max(start, df.index.min())
         left_index = result.index.get_slice_bound(start, 'right', kind)
         result = result.iloc[left_index:]
     return result
