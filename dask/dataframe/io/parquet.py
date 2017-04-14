@@ -9,7 +9,7 @@ from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
 from ...compatibility import PY3
 from ...delayed import delayed
-from ...bytes.core import OpenFileCreator
+from ...bytes.core import get_fs_paths_myopen
 
 try:
     import fastparquet
@@ -36,7 +36,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     Parameters
     ----------
     path : string
-        Source directory for data.
+        Source directory for data. May be a glob string.
         Prepend with protocol like ``s3://`` or ``hdfs://`` for remote data.
     columns: list or None
         List of column names to load
@@ -67,18 +67,21 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         raise ImportError("fastparquet not installed")
     if filters is None:
         filters = []
-    myopen = OpenFileCreator(path, compression=None, text=False,
-                             **(storage_options or {}))
+    fs, paths, myopen = get_fs_paths_myopen(path, None, 'rb',
+                                            **(storage_options or {}))
 
     if isinstance(columns, list):
         columns = tuple(columns)
 
-    try:
-        pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
-                                     open_with=myopen,
-                                     sep=myopen.fs.sep)
-    except:
-        pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
+    if len(paths) > 1:
+        pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
+    else:
+        try:
+            pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
+                                         open_with=myopen,
+                                         sep=fs.sep)
+        except:
+            pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
     check_column_names(pf.columns, categories)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
@@ -230,10 +233,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
 
-    myopen = OpenFileCreator(path, compression=None, text=False,
-                             **(storage_options or {}))
-    myopen.fs.mkdirs(path)
-    sep = myopen.fs.sep
+    fs, paths, myopen = get_fs_paths_myopen(path, None, 'wb',
+                                            **(storage_options or {}))
+    fs.mkdirs(path)
+    sep = fs.sep
     metadata_fn = sep.join([path, '_metadata'])
 
     if write_index is True or write_index is None and df.known_divisions:
@@ -253,7 +256,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                                            object_encoding=object_encoding)
 
     if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=myopen)
+        pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
         if pf.file_scheme != 'hive':
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')

@@ -60,6 +60,14 @@ def test_index(fn):
     assert_eq(df, ddf)
 
 
+def test_glob(fn):
+    os.unlink(os.path.join(fn, '_metadata'))
+    files = os.listdir(fn)
+    assert '_metadata' not in files
+    ddf = read_parquet(os.path.join(fn, '*'))
+    assert_eq(df, ddf)
+
+
 def test_auto_add_index(fn):
     ddf = read_parquet(fn, columns=['x'], index='myindex')
     assert_eq(df[['x']], ddf)

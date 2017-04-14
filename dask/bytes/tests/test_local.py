@@ -62,6 +62,14 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
+def test_with_urls():
+    with filetexts(files, mode='b'):
+        # OS-independent file:// URI with glob *
+        url = to_uri('.test.accounts.') + '*'
+        sample, values = read_bytes(url, blocksize=None)
+        assert sum(map(len, values)) == len(files)
+
+
 def test_read_bytes_block():
     with filetexts(files, mode='b'):
         for bs in [5, 15, 45, 1500]:
@@ -309,3 +317,18 @@ def test_py2_local_bytes(tmpdir):
 
     with lazy_file as f:
         assert all(isinstance(line, unicode) for line in f)
+
+
+try:
+    # used only in test_with_urls - may be more generally useful
+    import pathlib
+
+    def to_uri(path):
+        return pathlib.Path(os.path.abspath(path)).as_uri()
+
+except (ImportError, NameError):
+    import urlparse, urllib
+
+    def to_uri(path):
+        return urlparse.urljoin(
+            'file:', urllib.pathname2url(os.path.abspath(path)))
