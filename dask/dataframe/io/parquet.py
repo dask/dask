@@ -73,6 +73,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if isinstance(columns, list):
         columns = tuple(columns)
 
+    path = myopen.storage_options['path']
     try:
         pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
                                      open_with=myopen,
@@ -88,6 +89,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     # Find an index among the partially sorted columns
+    # if index is None or index is False:
+    #     index_col = None
+    # else:
     minmax = fastparquet.api.sorted_partitioned_columns(pf)
 
     if index is False:
