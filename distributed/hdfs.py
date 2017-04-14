@@ -5,6 +5,7 @@ import logging
 
 from dask.base import tokenize
 from dask.bytes import core
+from dask.utils import infer_storage_options
 from hdfs3 import HDFileSystem
 
 from .utils import PY3
@@ -23,14 +24,17 @@ class DaskHDFileSystem(HDFileSystem):
                             'token', 'pars']}
         HDFileSystem.__init__(self, connect=True, **kwargs2)
 
+    @staticmethod
+    def _trim_filename(fn):
+        so = infer_storage_options(fn)
+        return so['path']
+
     def open(self, path, mode='rb', **kwargs):
-        if path.startswith('hdfs://'):
-            path = path[len('hdfs://'):]
+        path = self._trim_filename(path)
         return HDFileSystem.open(self, path, mode, **kwargs)
 
     def mkdirs(self, path):
-        if path.startswith('hdfs://'):
-            path = path[len('hdfs://'):]
+        path = self._trim_filename(path)
         part = ['']
         for parts in path.split('/'):
             part.append(parts)
@@ -40,18 +44,15 @@ class DaskHDFileSystem(HDFileSystem):
                 pass
 
     def glob(self, path):
-        if path.startswith('hdfs://'):
-            path = path[len('hdfs://'):]
-        return sorted(HDFileSystem.glob(self, path))
+        path = self._trim_filename(path)
+        return ['hdfs://%s' % s for s in sorted(HDFileSystem.glob(self, path))]
 
     def ukey(self, path):
-        if path.startswith('hdfs://'):
-            path = path[len('hdfs://'):]
+        path = self._trim_filename(path)
         return tokenize(path, self.info(path)['last_mod'])
 
     def size(self, path):
-        if path.startswith('hdfs://'):
-            path = path[len('hdfs://'):]
+        path = self._trim_filename(path)
         return self.info(path)['size']
 
     def get_block_locations(self, paths):
@@ -59,8 +60,7 @@ class DaskHDFileSystem(HDFileSystem):
         lengths = []
         machines = []
         for path in paths:
-            if path.startswith('hdfs://'):
-                path = path[len('hdfs://'):]
+            path = self._trim_filename(path)
             out = HDFileSystem.get_block_locations(self, path)
             offsets.append([o['offset'] for o in out])
             lengths.append([o['length'] for o in out])

@@ -11,6 +11,7 @@ from dask.delayed import Delayed
 import dask.bag as db
 import dask.dataframe as dd
 from dask import compute, delayed
+from dask.bytes.core import read_bytes, write_bytes
 
 from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, make_hdfs, loop
@@ -19,10 +20,8 @@ from distributed import Client
 from distributed.client import _wait, Future
 
 hdfs3 = pytest.importorskip('hdfs3')
-from dask.bytes.core import read_bytes, write_bytes
-
-
 _orig_cluster = cluster
+
 
 def cluster(*args, **kwargs):
     if sys.version_info < (3,) and not sys.platform.startswith('win'):
@@ -31,6 +30,7 @@ def cluster(*args, **kwargs):
 
 
 ip = get_ip()
+
 
 def setup_module(module):
     try:
@@ -101,8 +101,8 @@ def test_get_block_locations_nested():
                 with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
-        L =  [hdfs.get_block_locations(fn)
-              for fn in hdfs.glob('%s/*/*.csv' % basedir)]
+        L = [hdfs.get_block_locations(fn)
+             for fn in hdfs.glob('%s/*/*.csv' % basedir)]
         L = list(concat(L))
         assert len(L) == 6
 
@@ -148,6 +148,23 @@ def test_read_bytes_sync(loop, nworkers):
 
             with Client(s['address'], loop=loop) as e:
                 sample, values = read_bytes('hdfs://%s/file.*' % basedir)
+                results = delayed(values).compute()
+                assert [b''.join(r) for r in results] == 100 * [data]
+
+
+@pytest.mark.parametrize('name', [ip, 'localhost'])
+def test_read_bytes_sync_URLs(loop, name, nworkers=1):
+    with cluster(nworkers=nworkers) as (s, workers):
+        with make_hdfs() as (hdfs, basedir):
+            data = b'a' * int(1e3)
+
+            for fn in ['%s/file.%d' % (basedir, i) for i in range(100)]:
+                with hdfs.open(fn, 'wb', replication=1) as f:
+                    f.write(data)
+
+            with Client(s['address'], loop=loop) as e:
+                sample, values = read_bytes('hdfs://%s:%s/%s/file.*' %
+                                            (name, 8020, basedir))
                 results = delayed(values).compute()
                 assert [b''.join(r) for r in results] == 100 * [data]
 
