@@ -2774,6 +2774,27 @@ def test_boundary_slice_nonmonotonic():
     tm.assert_frame_equal(result, expected)
 
 
+@pytest.mark.parametrize('start, stop, right_boundary, left_boundary, drop', [
+    (-1, None, False, False, [-1, -2]),
+    (-1, None, False, True, [-2]),
+    (None, 3, False, False, [3, 4]),
+    (None, 3, True, False, [4]),
+    # Missing keys
+    (-.5, None, False, False, [-1, -2]),
+    (-.5, None, False, True, [-1, -2]),
+    (-1.5, None, False, True, [-2]),
+    (None, 3.5, False, False, [4]),
+    (None, 3.5, True, False, [4]),
+    (None, 2.5, False, False, [3, 4]),
+])
+def test_with_boundary(start, stop, right_boundary, left_boundary, drop):
+    x = np.array([-1, -2, 2, 4, 3])
+    df = pd.DataFrame({"B": range(len(x))}, index=x)
+    result = boundary_slice(df, start, stop, right_boundary, left_boundary)
+    expected = df.drop(drop)
+    tm.assert_frame_equal(result, expected)
+
+
 @pytest.mark.parametrize('index, left, right', [
     (range(10), 0, 9),
     (range(10), -1, None),
