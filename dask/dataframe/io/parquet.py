@@ -1,9 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import glob
+import os
+
 import numpy as np
 import pandas as pd
 from toolz import first, partial
 
+from .io import from_delayed
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
@@ -24,7 +28,7 @@ except:
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None):
+                 storage_options=None, engine='fastparquet'):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -63,6 +67,19 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
+    engine = engine.lower()
+    if engine == 'fastparquet':
+        return _read_fastparquet(path, columns=columns, filters=filters,
+                categories=categories, index=index,
+                storage_options=storage_options)
+    elif engine == 'arrow':
+        return _read_arrow(path, columns=columns)
+    else:
+        raise NotImplementedError("Engine %s not found" % engine)
+
+
+def _read_fastparquet(path, columns=None, filters=None, categories=None,
+                      index=None, storage_options=None):
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
     if filters is None:
@@ -152,6 +169,19 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         divisions = [pd.Timestamp(d) for d in divisions]
 
     return out_type(dsk, name, meta, divisions)
+
+
+def _read_arrow(path, columns):
+    import pyarrow.parquet as pq
+    if '*' in path:
+        paths = sorted(glob.glob(path))
+    elif os.path.isdir(path):
+        paths = sorted(glob.glob(os.path.join(path, '*')))
+    else:
+        paths = [path]
+    paths = [path for path in paths if not path.endswith('metadata')]
+    dfs = [delayed(pq.read_table)(path, columns=columns).to_pandas() for path in paths]
+    return from_delayed(dfs)
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
