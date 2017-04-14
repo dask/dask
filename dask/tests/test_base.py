@@ -489,3 +489,17 @@ def test_optimize_globals():
     with dask.set_options(array_optimize=optimize_double):
         xx, bb = dask.compute(x + 1, b.map(inc), get=dask.get)
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
+
+
+def test_optimize_None():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones(10, chunks=(5,))
+    y = x[:9][1:8][::2] + 1  # normally these slices would be fused
+
+    def my_get(dsk, keys):
+        assert dsk == dict(y.dask)  # but they aren't
+        return dask.get(dsk, keys)
+
+    with dask.set_options(array_optimize=None, get=my_get):
+        y.compute()

@@ -307,6 +307,20 @@ you prefer and it will be used instead of the default scheme.
    with dask.set_options(array_optimize=my_optimize_function):
        x, y = dask.compute(x, y)
 
+You can register separate optimization functions for different collections, or
+you can register ``None`` if you do not want particular types of collections to
+be optimized.
+
+.. code-block:: python
+
+   with dask.set_options(array_optimize=my_optimize_function,
+                         dataframe_optimize=False,
+                         delayed_optimize=my_other_optimize_function):
+       ...
+
+You need not specify all collections.  Collecitons will default to their
+standard optimization scheme (which is usually a good choice).
+
 
 API
 ---
