@@ -11,8 +11,6 @@ from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
-_REGISTERED_FASTPARQUET = False
-
 
 class GenericParquetReader(object):
 
