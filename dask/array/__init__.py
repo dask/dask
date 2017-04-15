@@ -3,12 +3,13 @@ from __future__ import absolute_import, division, print_function
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
         from_array, choose, where, coarsen, insert, broadcast_to, ravel,
-        reshape, fromfunction, unique, store, squeeze, topk, bincount,
+        roll, fromfunction, unique, store, squeeze, topk, bincount, tile,
         digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
         dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
-        from_delayed, round, swapaxes, repeat)
+        from_delayed, round, swapaxes, repeat, asarray)
 from .core import (around, isnull, notnull, isclose, eye, triu,
                    tril, diag, corrcoef)
+from .reshape import reshape
 from .ufunc import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,
         hypot, sinh, cosh, tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg,

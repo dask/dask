@@ -114,10 +114,11 @@ See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
+import os
 import sys
 import traceback
 
-from .compatibility import Queue
+from .compatibility import Queue, Empty
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from .context import _globals
@@ -125,6 +126,30 @@ from .order import order
 from .callbacks import unpack_callbacks
 from .optimize import cull
 from .utils_test import add, inc  # noqa: F401
+
+
+if sys.version_info.major < 3:
+    # Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
+    # `Queue.get` can't be interrupted. A workaround is to specify an extremely
+    # long timeout, which then allows it to be interrupted.
+    # For more information see: https://bugs.python.org/issue1360
+    def queue_get(q):
+        return q.get(block=True, timeout=(365 * 24 * 60 * 60))
+
+elif os.name == 'nt':
+    # Python 3 windows Queue.get also doesn't handle interrupts properly. To
+    # workaround this we poll at a sufficiently large interval that it
+    # shouldn't affect performance, but small enough that users trying to kill
+    # an application shouldn't care.
+    def queue_get(q):
+        while True:
+            try:
+                return q.get(block=True, timeout=0.1)
+            except Empty:
+                pass
+else:
+    def queue_get(q):
+        return q.get()
 
 
 DEBUG = False
@@ -488,7 +513,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
-            key, res_info = queue.get()
+            key, res_info = queue_get(queue)
             res, tb, worker_id = loads(res_info)
             if isinstance(res, BaseException):
                 if rerun_exceptions_locally:

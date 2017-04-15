@@ -655,40 +655,45 @@ def test_args():
 
 
 def test_to_dataframe():
-    pytest.importorskip('dask.dataframe')
+    dd = pytest.importorskip('dask.dataframe')
     pd = pytest.importorskip('pandas')
-    b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
 
+    def check_parts(df, sol):
+        assert all((p.dtypes == sol.dtypes).all() for p in
+                   dask.compute(*df.to_delayed()))
+
+    dsk = {('test', 0): [(1, 2)],
+           ('test', 1): [],
+           ('test', 2): [(10, 20), (100, 200)]}
+    b = Bag(dsk, 'test', 3)
+    sol = pd.DataFrame(b.compute(), columns=['a', 'b'])
+
+    # Elements are tuples
     df = b.to_dataframe()
-    assert list(df.columns) == list(pd.DataFrame(list(b)).columns)
-
+    dd.utils.assert_eq(df, sol.rename(columns={'a': 0, 'b': 1}),
+                       check_index=False)
     df = b.to_dataframe(columns=['a', 'b'])
-    assert df.npartitions == b.npartitions
-    assert list(df.columns) == ['a', 'b']
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
-    assert df.a.compute().values.tolist() == list(b.pluck(0))
-    assert df.b.compute().values.tolist() == list(b.pluck(1))
+    # Elements are dictionaries
+    b = b.map(lambda x: dict(zip(['a', 'b'], x)))
+    df = b.to_dataframe()
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
+    assert df._name == b.to_dataframe()._name
 
-    b = db.from_sequence([{'a':   1, 'b':   2},
-                          {'a':  10, 'b':  20},
-                          {'a': 100, 'b': 200}], npartitions=2)
+    # With metadata specified
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
-    df2 = b.to_dataframe()
-
-    assert (df2.compute().values == df.compute().values).all()
-
-    assert df2._name == b.to_dataframe()._name
-    assert df2._name != df._name
-
-    meta = pd.DataFrame({'a': [1], 'b': [2]}).iloc[0:0]
-    df3 = b.to_dataframe(columns=meta)
-    assert df2._name == df3._name
-    assert (df3.compute().values == df2.compute().values).all()
-
-    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df4 = b.to_dataframe()
-    assert len(df4.columns) == 1
-    assert list(df4.compute()) == list(pd.DataFrame(list(b)))
+    # Single column
+    b = b.pluck('a')
+    sol = sol[['a']]
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
 
 ext_open = [('gz', GzipFile), ('', open)]
@@ -1128,3 +1133,12 @@ def test_repeated_groupby():
     b = db.range(10, npartitions=4)
     c = b.groupby(lambda x: x % 3)
     assert valmap(len, dict(c)) == valmap(len, dict(c))
+
+
+def test_temporary_directory():
+    b = db.range(10, npartitions=4)
+
+    with dask.set_options(temporary_directory=os.getcwd()):
+        b2 = b.groupby(lambda x: x % 2)
+        b2.compute()
+        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))

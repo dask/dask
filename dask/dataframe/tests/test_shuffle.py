@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import pytest
 import pickle
@@ -219,7 +220,8 @@ def test_set_partition_tasks_3(shuffle):
     df = pd.DataFrame(np.random.random((10, 2)), columns=['x', 'y'])
     ddf = dd.from_pandas(df, npartitions=5)
 
-    ddf2 = ddf.set_index('x', shuffle=shuffle, max_branch=2)
+    ddf2 = ddf.set_index('x', shuffle=shuffle, max_branch=2,
+                         npartitions=ddf.npartitions)
     df2 = df.set_index('x')
     assert_eq(df2, ddf2)
     assert ddf2.npartitions == ddf.npartitions
@@ -239,7 +241,7 @@ def test_shuffle_sort(shuffle):
 @pytest.mark.parametrize('shuffle', ['tasks', 'disk'])
 @pytest.mark.parametrize('get', [threaded_get, mp_get])
 def test_rearrange(shuffle, get):
-    df = pd.DataFrame({'x': range(10)})
+    df = pd.DataFrame({'x': np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(y=ddf.x % 4)
 
@@ -287,3 +289,58 @@ def test_set_index_with_explicit_divisions():
 
     df2 = df.set_index('x')
     assert_eq(ddf2, df2)
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_reduces_partitions_small(shuffle):
+    df = pd.DataFrame({'x': np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=50)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    assert ddf2.npartitions < 10
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_reduces_partitions_large(shuffle):
+    n = 2**24
+    df = pd.DataFrame({'x': np.random.random(n),
+                       'y': np.random.random(n),
+                       'z': np.random.random(n)})
+    ddf = dd.from_pandas(df, npartitions=50, name='x', sort=False)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    assert 1 < ddf2.npartitions < 20
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_doesnt_increase_partitions(shuffle):
+    n = 2**24
+    df = pd.DataFrame({'x': np.random.random(n),
+                       'y': np.random.random(n),
+                       'z': np.random.random(n)})
+    ddf = dd.from_pandas(df, npartitions=2, name='x', sort=False)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    assert ddf2.npartitions <= ddf.npartitions
+
+
+@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+def test_set_index_detects_sorted_data(shuffle):
+    df = pd.DataFrame({'x': range(100), 'y': range(100)})
+    ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
+
+    ddf2 = ddf.set_index('x', shuffle=shuffle)
+    assert len(ddf2.dask) < ddf.npartitions * 4
+
+
+def test_temporary_directory():
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100),
+                       'z': np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
+
+    with dask.set_options(temporary_directory=os.getcwd(),
+                          get=dask.multiprocessing.get):
+        ddf2 = ddf.set_index('x', shuffle='disk')
+        ddf2.compute()
+        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))

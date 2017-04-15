@@ -2,9 +2,11 @@ from itertools import product
 import warnings
 
 import pytest
-pytest.importorskip('numpy')
+np = pytest.importorskip('numpy')
 
-import numpy as np
+import dask
+from dask.utils import funcname
+from dask.array.utils import assert_eq
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
 from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
 from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
@@ -181,6 +183,13 @@ def test_rechunk_0d():
     y = x.rechunk(())
     assert y.chunks == ()
     assert y.compute() == a
+
+
+def test_rechunk_empty():
+    x = da.ones((0, 10), chunks=(5, 5))
+    y = x.rechunk((2, 2))
+    assert y.chunks == ((0,), (2,) * 5)
+    assert_eq(x, y)
 
 
 def test_rechunk_same():
@@ -372,3 +381,15 @@ def test_rechunk_warning():
         x = x.rechunk((N, 1, 100))
 
     assert not w
+
+
+@pytest.mark.parametrize('shape,chunks', [[(4,), (2,)],
+                                          [(4, 4), (2, 2)],
+                                          [(4, 4), (4, 2)]])
+def test_dont_concatenate_single_chunks(shape, chunks):
+    x = da.ones(shape, chunks=shape)
+    y = x.rechunk(chunks)
+    dsk = dict(y.dask)
+    assert not any(funcname(task[0]).startswith('concat')
+                   for task in dsk.values()
+                   if dask.istask(task))

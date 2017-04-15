@@ -9,7 +9,7 @@ import sys
 import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
-                       visualize, persist)
+                       visualize, persist, function_cache)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -451,3 +451,10 @@ def test_persist_array_bag():
 
     assert np.allclose(x, xx)
     assert list(b) == list(bb)
+
+
+def test_normalize_function_limited_size():
+    for i in range(1000):
+        normalize_function(lambda x: x)
+
+    assert 50 < len(function_cache) < 600

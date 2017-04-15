@@ -74,6 +74,8 @@ def ndeepmap(n, func, seq):
         return [func(item) for item in seq]
     elif n > 1:
         return [ndeepmap(n - 1, func, item) for item in seq]
+    elif isinstance(seq, list):
+        return func(seq[0])
     else:
         return func(seq)
 
@@ -542,9 +544,11 @@ def takes_multiple_arguments(func):
 
 class Dispatch(object):
     """Simple single dispatch."""
-    def __init__(self):
+    def __init__(self, name=None):
         self._lookup = {}
         self._lazy = {}
+        if name:
+            self.__name__ = name
 
     def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""

@@ -18,6 +18,7 @@ from toolz import accumulate, reduce
 
 from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
+from .wrap import empty
 from .. import sharedict
 
 
@@ -484,6 +485,10 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
 def _compute_rechunk(x, chunks):
     """ Compute the rechunk of *x* to the given *chunks*.
     """
+    if x.size == 0:
+        # Special case for empty array, as the algorithm below does not behave correctly
+        return empty(x.shape, chunks=chunks, dtype=x.dtype)
+
     ndim = x.ndim
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
@@ -520,7 +525,10 @@ def _compute_rechunk(x, chunks):
 
         assert rec_cat_index == rec_cat_arg.size - 1
         # New block is formed by concatenation of sliced old blocks
-        x2[key] = (concatenate3, rec_cat_arg.tolist())
+        if all(d == 1 for d in rec_cat_arg.shape):
+            x2[key] = rec_cat_arg.flat[0]
+        else:
+            x2[key] = (concatenate3, rec_cat_arg.tolist())
 
     assert new_idx == tuple(len(c) - 1 for c in chunks)
     del old_blocks, new_index

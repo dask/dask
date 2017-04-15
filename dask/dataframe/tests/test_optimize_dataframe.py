@@ -48,4 +48,4 @@ def test_fuse_ave_width():
     b = s._optimize(s.dask, s._keys())
 
     assert len(a) < len(b)
-    assert len(a) <= 10
+    assert len(a) <= 15

@@ -55,7 +55,18 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     2  20
     2  30
     """
-    result = getattr(df, kind)[start:stop]
+    if kind == 'loc' and not df.index.is_monotonic:
+        # Pandas treats missing keys differently for label-slicing
+        # on monotonic vs. non-monotonic indexes
+        # If the index is monotonic, `df.loc[start:stop]` is fine.
+        # If it's not, `df.loc[start:stop]` raises when `start` is missing
+        if start is not None:
+            df = df[df.index >= start]
+        if stop is not None:
+            df = df[df.index <= stop]
+        result = df
+    else:
+        result = getattr(df, kind)[start:stop]
     if not right_boundary:
         right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
@@ -201,6 +212,9 @@ def concat(dfs, axis=0, join='outer', uniform=False):
     """
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join)
+
+    if len(dfs) == 1:
+        return dfs[0]
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):

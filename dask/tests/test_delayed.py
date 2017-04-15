@@ -6,6 +6,7 @@ from random import random
 from toolz import identity, partial, merge
 import pytest
 
+from dask import set_options
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, compute, Delayed
 
@@ -29,6 +30,14 @@ def test_to_task_dask():
     x = f(1, 2)
     task, dask = to_task_dask(x)
     assert task == x
+    assert dict(dask) == {}
+
+    # Issue https://github.com/dask/dask/issues/2107
+    class MyClass(dict):
+        pass
+
+    task, dask = to_task_dask(MyClass())
+    assert type(task) is MyClass
     assert dict(dask) == {}
 
 
@@ -69,6 +78,7 @@ def test_methods():
 
 def test_attributes():
     a = delayed(2 + 1j)
+    assert a.real._key == a.real._key
     assert a.real.compute() == 2
     assert a.imag.compute() == 1
     assert (a.real + a.imag).compute() == 3
@@ -202,6 +212,46 @@ def test_pure():
 
     myrand = delayed(random)
     assert myrand().key != myrand().key
+
+
+def test_pure_global_setting():
+    # delayed functions
+    func = delayed(add)
+
+    with set_options(delayed_pure=True):
+        assert func(1, 2).key == func(1, 2).key
+
+    with set_options(delayed_pure=False):
+        assert func(1, 2).key != func(1, 2).key
+
+    func = delayed(add, pure=True)
+    with set_options(delayed_pure=False):
+        assert func(1, 2).key == func(1, 2).key
+
+    # delayed objects
+    assert delayed(1).key != delayed(1).key
+    with set_options(delayed_pure=True):
+        assert delayed(1).key == delayed(1).key
+
+    with set_options(delayed_pure=False):
+        assert delayed(1, pure=True).key == delayed(1, pure=True).key
+
+    # delayed methods
+    data = delayed([1, 2, 3])
+    assert data.index(1).key != data.index(1).key
+
+    with set_options(delayed_pure=True):
+        assert data.index(1).key == data.index(1).key
+        assert data.index(1, pure=False).key != data.index(1, pure=False).key
+
+    with set_options(delayed_pure=False):
+        assert data.index(1, pure=True).key == data.index(1, pure=True).key
+
+    # magic methods always pure
+    with set_options(delayed_pure=False):
+        assert data.index.key == data.index.key
+        element = data[0]
+        assert (element + element).key == (element + element).key
 
 
 def test_nout():

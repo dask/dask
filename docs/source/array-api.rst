@@ -48,12 +48,6 @@ Top level user functions:
    expm1
    eye
    fabs
-   fft.fft
-   fft.ifft
-   fft.hfft
-   fft.ihfft
-   fft.rfft
-   fft.irfft
    fix
    floor
    fmax
@@ -111,13 +105,13 @@ Top level user functions:
    prod
    rad2deg
    radians
-   random
    ravel
    real
    rechunk
    repeat
    reshape
    rint
+   roll
    round
    sign
    signbit
@@ -133,6 +127,7 @@ Top level user functions:
    tan
    tanh
    tensordot
+   tile
    topk
    transpose
    tril
@@ -144,6 +139,26 @@ Top level user functions:
    vstack
    where
    zeros
+
+Fast Fourier Transforms
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   fft.fft_wrap
+   fft.fft
+   fft.fft2
+   fft.fftn
+   fft.ifft
+   fft.ifft2
+   fft.ifftn
+   fft.rfft
+   fft.rfft2
+   fft.rfftn
+   fft.irfft
+   fft.irfft2
+   fft.irfftn
+   fft.hfft
+   fft.ihfft
 
 Linear Algebra
 ~~~~~~~~~~~~~~
@@ -346,8 +361,11 @@ Other functions
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk
+.. autofunction:: repeat
 .. autofunction:: reshape
 .. autofunction:: rint
+.. autofunction:: roll
+.. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
 .. autofunction:: sin
@@ -362,6 +380,7 @@ Other functions
 .. autofunction:: tan
 .. autofunction:: tanh
 .. autofunction:: tensordot
+.. autofunction:: tile
 .. autofunction:: topk
 .. autofunction:: transpose
 .. autofunction:: tril
@@ -403,12 +422,21 @@ Other functions
 
 .. currentmodule:: dask.array.fft
 
+.. autofunction:: fft_wrap
 .. autofunction:: fft
+.. autofunction:: fft2
+.. autofunction:: fftn
 .. autofunction:: ifft
+.. autofunction:: ifft2
+.. autofunction:: ifftn
+.. autofunction:: rfft
+.. autofunction:: rfft2
+.. autofunction:: rfftn
+.. autofunction:: irfft
+.. autofunction:: irfft2
+.. autofunction:: irfftn
 .. autofunction:: hfft
 .. autofunction:: ihfft
-.. autofunction:: rfft
-.. autofunction:: irfft
 
 .. currentmodule:: dask.array.random
 

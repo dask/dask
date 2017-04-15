@@ -316,6 +316,12 @@ def test_funcname_multipledispatch():
 
 
 def test_ndeepmap():
+    L = 1
+    assert ndeepmap(0, inc, L) == 2
+
+    L = [1]
+    assert ndeepmap(0, inc, L) == 2
+
     L = [1, 2, 3]
     assert ndeepmap(1, inc, L) == [2, 3, 4]
 

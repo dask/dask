@@ -9,11 +9,14 @@ import pandas as pd
 from toolz import merge
 
 from .methods import drop_columns
-from .core import DataFrame, Series, _Frame, _concat
+from .core import DataFrame, Series, _Frame, _concat, map_partitions
 from .hashing import hash_pandas_object
 
-from ..base import tokenize
+from .. import base
+from ..base import tokenize, compute
 from ..context import _globals
+from ..delayed import delayed
+from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
 
@@ -28,16 +31,49 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
             "You tried to index with this index: %s\n"
             "Indexes must be single columns only." % str(index))
 
-    npartitions = npartitions or df.npartitions
+    if npartitions == 'auto':
+        repartition = True
+        npartitions = max(100, df.npartitions)
+    else:
+        if npartitions is None:
+            npartitions = df.npartitions
+        repartition = False
+
     if not isinstance(index, Series):
         index2 = df[index]
     else:
         index2 = index
 
     if divisions is None:
-        divisions = (index2
-                     ._repartition_quantiles(npartitions, upsample=upsample)
-                     .compute()).tolist()
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        if repartition:
+            parts = df.to_delayed()
+            sizes = [delayed(sizeof)(part) for part in parts]
+        else:
+            sizes = []
+        iparts = index2.to_delayed()
+        mins = [ipart.min() for ipart in iparts]
+        maxes = [ipart.max() for ipart in iparts]
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+        divisions = divisions.tolist()
+
+        if repartition:
+            total = sum(sizes)
+            npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = min(npartitions, df.npartitions)
+            n = len(divisions)
+            try:
+                divisions = np.interp(x=np.linspace(0, n - 1, npartitions + 1),
+                                      xp=np.linspace(0, n - 1, n),
+                                      fp=divisions).tolist()
+            except (TypeError, ValueError):  # str type
+                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+                divisions = [divisions[i] for i in indexes]
+
+        if (mins == sorted(mins) and maxes == sorted(maxes) and
+                all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
+            divisions = mins + [maxes[-1]]
+            return set_sorted_index(df, index, drop=drop, divisions=divisions)
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
@@ -154,8 +190,6 @@ def rearrange_by_column(df, col, npartitions=None, max_branch=None,
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
-        if npartitions is not None and npartitions < df.npartitions:
-            raise ValueError("Must create as many or more partitions in shuffle")
         return rearrange_by_column_tasks(df, col, max_branch, npartitions)
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
@@ -164,18 +198,26 @@ def rearrange_by_column(df, col, npartitions=None, max_branch=None,
 class maybe_buffered_partd(object):
     """If serialized, will return non-buffered partd. Otherwise returns a
     buffered partd"""
-    def __init__(self, buffer=True):
+    def __init__(self, buffer=True, tempdir=None):
+        self.tempdir = tempdir or _globals.get('temporary_directory')
         self.buffer = buffer
 
     def __reduce__(self):
-        return (maybe_buffered_partd, (False,))
+        if self.tempdir:
+            return (maybe_buffered_partd, (False, self.tempdir))
+        else:
+            return (maybe_buffered_partd, (False,))
 
     def __call__(self, *args, **kwargs):
         import partd
-        if self.buffer:
-            return partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+        if self.tempdir:
+            file = partd.File(dir=self.tempdir)
         else:
-            return partd.PandasBlocks(partd.File())
+            file = partd.File()
+        if self.buffer:
+            return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
+        else:
+            return partd.PandasBlocks(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
@@ -399,3 +441,33 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     df2.index.name = index_name
     df2.columns = df2.columns.astype(column_dtype)
     return df2
+
+
+def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
+    if not isinstance(index, Series):
+        meta = df._meta.set_index(index, drop=drop)
+    else:
+        meta = df._meta.set_index(index._meta, drop=drop)
+
+    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+
+    if not divisions:
+        divisions = compute_divisions(result, **kwargs)
+
+    result.divisions = tuple(divisions)
+    return result
+
+
+def compute_divisions(df, **kwargs):
+    mins = df.index.map_partitions(M.min, meta=df.index)
+    maxes = df.index.map_partitions(M.max, meta=df.index)
+    mins, maxes = compute(mins, maxes, **kwargs)
+
+    if (sorted(mins) != list(mins) or
+            sorted(maxes) != list(maxes) or
+            any(a > b for a, b in zip(mins, maxes))):
+        raise ValueError("Partitions must be sorted ascending with the index",
+                         mins, maxes)
+
+    divisions = tuple(mins) + (list(maxes)[-1],)
+    return divisions

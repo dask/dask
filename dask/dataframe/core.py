@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from functools import wraps
+from functools import wraps, partial
 import operator
 from operator import getitem, setitem
 from pprint import pformat
 import uuid
 import warnings
 
-from toolz import merge, first, unique, partition_all
+from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 from pandas.util.decorators import cache_readonly
 import numpy as np
@@ -26,7 +26,7 @@ from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (random_state_data,
                      pseudorandom, derived_from, funcname, memory_repr,
                      put_lines, M, key_split)
-from ..base import Base, compute, tokenize, normalize_token
+from ..base import Base, tokenize, normalize_token
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -824,7 +824,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     # NOTE: `iloc` is not implemented because of performance concerns.
     # see https://github.com/dask/dask/pull/507
 
-    def repartition(self, divisions=None, npartitions=None, force=False):
+    def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
         """ Repartition dataframe along new divisions
 
         Parameters
@@ -835,6 +835,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         npartitions : int, optional
             Number of partitions of output, must be less than npartitions of
             input. Only used if divisions isn't specified.
+        freq : str, pd.Timedelta
+            A period on which to partition timeseries data like ``'7D'`` or
+            ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
@@ -844,17 +847,18 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         --------
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
+        >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
         if npartitions is not None and divisions is not None:
             warnings.warn("When providing both npartitions and divisions to "
                           "repartition only npartitions is used.")
 
         if npartitions is not None:
-            if npartitions > self.npartitions:
-                raise ValueError("Can only repartition to fewer partitions")
             return repartition_npartitions(self, npartitions)
         elif divisions is not None:
             return repartition(self, divisions, force=force)
+        elif freq is not None:
+            return repartition_freq(self, freq=freq)
         else:
             raise ValueError(
                 "Provide either divisions= or npartitions= to repartition")
@@ -1056,9 +1060,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             return self.map_partitions(method, meta=meta,
                                        token=token, skipna=skipna, axis=axis)
         else:
-            return self.reduction(method, meta=meta, token=token,
-                                  skipna=skipna, axis=axis,
-                                  split_every=split_every)
+            result = self.reduction(method, meta=meta, token=token,
+                                    skipna=skipna, axis=axis,
+                                    split_every=split_every)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def abs(self):
@@ -1106,11 +1113,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                   skipna=skipna, axis=axis)
         else:
             scalar = not isinstance(meta, pd.Series)
-            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                       combine=idxmaxmin_combine, meta=meta,
-                       aggregate_kwargs={'scalar': scalar},
-                       token=self._token_prefix + fn, split_every=split_every,
-                       skipna=skipna, fn=fn)
+            result = aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                         combine=idxmaxmin_combine, meta=meta,
+                         aggregate_kwargs={'scalar': scalar},
+                         token=self._token_prefix + fn, split_every=split_every,
+                         skipna=skipna, fn=fn)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def idxmin(self, axis=None, skipna=True, split_every=False):
@@ -1123,11 +1133,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                   skipna=skipna, axis=axis)
         else:
             scalar = not isinstance(meta, pd.Series)
-            return aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
-                       combine=idxmaxmin_combine, meta=meta,
-                       aggregate_kwargs={'scalar': scalar},
-                       token=self._token_prefix + fn, split_every=split_every,
-                       skipna=skipna, fn=fn)
+            result = aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
+                         combine=idxmaxmin_combine, meta=meta,
+                         aggregate_kwargs={'scalar': scalar},
+                         token=self._token_prefix + fn, split_every=split_every,
+                         skipna=skipna, fn=fn)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None, split_every=False):
@@ -1139,8 +1152,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                        axis=axis)
         else:
             meta = self._meta_nonempty.count()
-            return self.reduction(M.count, aggregate=M.sum, meta=meta,
-                                  token=token, split_every=split_every)
+            result = self.reduction(M.count, aggregate=M.sum, meta=meta,
+                                    token=token, split_every=split_every)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False):
@@ -1155,8 +1171,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'mean-%s' % tokenize(self, axis, skipna)
-            return map_partitions(methods.mean_aggregate, s, n,
-                                  token=name, meta=meta)
+            result = map_partitions(methods.mean_aggregate, s, n,
+                                    token=name, meta=meta)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def var(self, axis=None, skipna=True, ddof=1, split_every=False):
@@ -1172,8 +1191,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'var'
-            return map_partitions(methods.var_aggregate, x2, x, n,
-                                  token=name, meta=meta, ddof=ddof)
+            result = map_partitions(methods.var_aggregate, x2, x, n,
+                                    token=name, meta=meta, ddof=ddof)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False):
@@ -1201,7 +1223,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             v = num.var(skipna=skipna, ddof=ddof, split_every=split_every)
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
-            return map_partitions(np.sqrt, v / n, meta=meta, token=name)
+            result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
+            if isinstance(self, DataFrame):
+                result.divisions = (min(self.columns), max(self.columns))
+            return result
 
     def quantile(self, q=0.5, axis=0):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
@@ -1919,6 +1944,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.corr(self if lag == 0 else self.shift(lag),
                          split_every=split_every)
 
+    @derived_from(pd.Series)
+    def memory_usage(self, index=True, deep=False):
+        from ..delayed import delayed
+        result = self.map_partitions(M.memory_usage, index=index, deep=deep)
+        return delayed(sum)(result.to_delayed())
+
 
 class Index(Series):
 
@@ -2152,7 +2183,7 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def set_index(self, other, drop=True, sorted=False, **kwargs):
+    def set_index(self, other, drop=True, sorted=False, npartitions=None, **kwargs):
         """
         Set the DataFrame index (row labels) using an existing column
 
@@ -2182,8 +2213,9 @@ class DataFrame(_Frame):
         ----------
         df: Dask DataFrame
         index: string or Dask Series
-        npartitions: int
-            The ideal number of output partitions
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions.   If None use the same as
+            the input.  If 'auto' then decide by memory use.
         shuffle: string, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -2213,10 +2245,12 @@ class DataFrame(_Frame):
         >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
         if sorted:
+            from .shuffle import set_sorted_index
             return set_sorted_index(self, other, drop=drop, **kwargs)
         else:
             from .shuffle import set_index
-            return set_index(self, other, drop=drop, **kwargs)
+            return set_index(self, other, drop=drop, npartitions=npartitions,
+                             **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index
@@ -2641,6 +2675,12 @@ class DataFrame(_Frame):
 
         put_lines(buf, lines)
 
+    @derived_from(pd.DataFrame)
+    def memory_usage(self, index=True, deep=False):
+        result = self.map_partitions(M.memory_usage, index=index, deep=deep)
+        result = result.groupby(result.index).sum()
+        return result
+
     def pivot_table(self, index=None, columns=None,
                     values=None, aggfunc='mean'):
         """
@@ -2723,6 +2763,17 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
     Series._bind_comparison_method(name, meth)
 
 
+def is_broadcastable(dfs, s):
+    """
+    This Series is broadcastable against another dataframe in the sequence
+    """
+    return (isinstance(s, Series) and
+            s.npartitions == 1 and
+            s.known_divisions and
+            any(s.divisions == (min(df.columns), max(df.columns))
+                for df in dfs if isinstance(df, DataFrame)))
+
+
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
     meta = kwargs.pop('meta', no_default)
@@ -2736,22 +2787,24 @@ def elemwise(op, *args, **kwargs):
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
     divisions = dfs[0].divisions
+    _is_broadcastable = partial(is_broadcastable, dfs)
+    dfs = list(remove(_is_broadcastable, dfs))
     n = len(divisions) - 1
 
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
     # adjust the key length of Scalar
-    keys = [d._keys() * n if isinstance(d, Scalar)
+    keys = [d._keys() * n if isinstance(d, Scalar) or _is_broadcastable(d)
             else d._keys() for d in dasks]
 
     if other:
-        dsk = dict(((_name, i),
-                   (apply, partial_by_order, list(frs),
-                   {'function': op, 'other': other}))
-                   for i, frs in enumerate(zip(*keys)))
+        dsk = {(_name, i):
+               (apply, partial_by_order, list(frs),
+                {'function': op, 'other': other})
+               for i, frs in enumerate(zip(*keys))}
     else:
-        dsk = dict(((_name, i), (op,) + frs) for i, frs in enumerate(zip(*keys)))
+        dsk = {(_name, i): (op,) + frs for i, frs in enumerate(zip(*keys))}
     dsk = merge(dsk, *[d.dask for d in dasks])
 
     if meta is no_default:
@@ -2781,6 +2834,12 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = h._values
     h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
+
+
+def split_evenly(df, k):
+    """ Split dataframe into k roughly equal parts """
+    divisions = np.linspace(0, len(df), k + 1).astype(int)
+    return {i: df.iloc[divisions[i]: divisions[i + 1]] for i in range(k)}
 
 
 def split_out_on_index(df):
@@ -2959,8 +3018,15 @@ def _extract_meta(x, nonempty=False):
     """
     Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
     """
-    if isinstance(x, (_Frame, Scalar)):
+    if isinstance(x, Scalar):
         return x._meta_nonempty if nonempty else x._meta
+    elif isinstance(x, _Frame):
+        if (isinstance(x, Series) and
+                x.npartitions == 1 and
+                x.known_divisions):  # may be broadcastable
+            return x._meta
+        else:
+            return x._meta_nonempty if nonempty else x._meta
     elif isinstance(x, list):
         return [_extract_meta(_x, nonempty) for _x in x]
     elif isinstance(x, tuple):
@@ -3368,7 +3434,6 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Parameters
     ----------
-
     a : tuple
         old divisions
     b : tuple, list
@@ -3384,10 +3449,8 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
 
-
     Examples
     --------
-
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
@@ -3398,7 +3461,6 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
-
     if not isinstance(b, (list, tuple)):
         raise ValueError('New division must be list or tuple')
     b = list(b)
@@ -3514,22 +3576,84 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     return d
 
 
+def repartition_freq(df, freq=None):
+    """ Repartition a timeseries dataframe by a new frequency """
+    freq = pd.Timedelta(freq)
+    if not isinstance(df.divisions[0], pd.Timestamp):
+        raise TypeError("Can only repartition on frequency for timeseries")
+    divisions = pd.DatetimeIndex(start=df.divisions[0].ceil(freq),
+                                 end=df.divisions[-1],
+                                 freq=freq).tolist()
+    if divisions[-1] != df.divisions[-1]:
+        divisions.append(df.divisions[-1])
+    if divisions[0] != df.divisions[0]:
+        divisions = [df.divisions[0]] + divisions
+
+    return df.repartition(divisions=divisions)
+
+
 def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
-    npartitions_ratio = df.npartitions / npartitions
-    new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
-                                 for new_partition_index in range(npartitions + 1)]
     new_name = 'repartition-%d-%s' % (npartitions, tokenize(df))
-    dsk = {}
-    for new_partition_index in range(npartitions):
-        value = (pd.concat, [(df._name, old_partition_index)
-                             for old_partition_index in
-                             range(new_partitions_boundaries[new_partition_index],
-                                   new_partitions_boundaries[new_partition_index + 1])])
-        dsk[new_name, new_partition_index] = value
-    divisions = [df.divisions[new_partition_index]
-                 for new_partition_index in new_partitions_boundaries]
-    return DataFrame(merge(df.dask, dsk), new_name, df._meta, divisions)
+    if df.npartitions == npartitions:
+        return df
+    elif df.npartitions > npartitions:
+        npartitions_ratio = df.npartitions / npartitions
+        new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
+                                     for new_partition_index in range(npartitions + 1)]
+        dsk = {}
+        for new_partition_index in range(npartitions):
+            value = (pd.concat, [(df._name, old_partition_index)
+                                 for old_partition_index in
+                                 range(new_partitions_boundaries[new_partition_index],
+                                       new_partitions_boundaries[new_partition_index + 1])])
+            dsk[new_name, new_partition_index] = value
+        divisions = [df.divisions[new_partition_index]
+                     for new_partition_index in new_partitions_boundaries]
+        return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
+    else:
+        original_divisions = divisions = pd.Series(df.divisions)
+        if (df.known_divisions and (np.issubdtype(divisions.dtype, np.datetime64) or
+                                    np.issubdtype(divisions.dtype, np.number))):
+            if np.issubdtype(divisions.dtype, np.datetime64):
+                divisions = divisions.values.astype('float64')
+
+            if isinstance(divisions, pd.Series):
+                divisions = divisions.values
+
+            n = len(divisions)
+            divisions = np.interp(x=np.linspace(0, n, npartitions + 1),
+                                  xp=np.linspace(0, n, n),
+                                  fp=divisions)
+            if np.issubdtype(original_divisions.dtype, np.datetime64):
+                divisions = pd.Series(divisions).astype(original_divisions.dtype).tolist()
+            elif np.issubdtype(original_divisions.dtype, np.integer):
+                divisions = divisions.astype(original_divisions.dtype)
+
+            if isinstance(divisions, np.ndarray):
+                divisions = tuple(divisions.tolist())
+
+            return df.repartition(divisions=divisions)
+        else:
+            ratio = npartitions / df.npartitions
+            split_name = 'split-%s' % tokenize(df, npartitions)
+            dsk = {}
+            last = 0
+            j = 0
+            for i in range(df.npartitions):
+                new = last + ratio
+                if i == df.npartitions - 1:
+                    k = npartitions - j
+                else:
+                    k = int(new - last)
+                dsk[(split_name, i)] = (split_evenly, (df._name, i), k)
+                for jj in range(k):
+                    dsk[(new_name, j)] = (getitem, (split_name, i), jj)
+                    j += 1
+                last = new
+
+            divisions = [None] * (npartitions + 1)
+            return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
 
 
 def repartition(df, divisions=None, force=False):
@@ -3561,6 +3685,7 @@ def repartition(df, divisions=None, force=False):
 
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
+
     token = tokenize(df, divisions)
     if isinstance(df, _Frame):
         tmp = 'repartition-split-' + token
@@ -3576,36 +3701,6 @@ def repartition(df, divisions=None, force=False):
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
         return new_dd_object(dsk, name, df, divisions)
     raise ValueError('Data must be DataFrame or Series')
-
-
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
-        meta = df._meta.set_index(index._meta, drop=drop)
-
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
-
-    if not divisions:
-        divisions = compute_divisions(result, **kwargs)
-
-    result.divisions = divisions
-    return result
-
-
-def compute_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
-
-    if (sorted(mins) != list(mins) or
-            sorted(maxes) != list(maxes) or
-            any(a > b for a, b in zip(mins, maxes))):
-        raise ValueError("Partitions must be sorted ascending with the index",
-                         mins, maxes)
-
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions
 
 
 def _reduction_chunk(x, aca_chunk=None, **kwargs):
@@ -3710,6 +3805,12 @@ def to_delayed(df):
     """
     from ..delayed import Delayed
     return [Delayed(k, df.dask) for k in df._keys()]
+
+
+@wraps(pd.to_datetime)
+def to_datetime(arg, **kwargs):
+    meta = pd.Series([pd.Timestamp('2000')])
+    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
 def _repr_data_series(s, index):

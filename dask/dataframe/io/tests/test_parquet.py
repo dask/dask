@@ -1,6 +1,10 @@
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
+
 import os
 import numpy as np
 import pandas as pd
+import pandas.util.testing as tm
 import pytest
 
 import dask
@@ -19,7 +23,7 @@ def test_local():
         data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                              'i64': np.arange(1000, dtype=np.int64),
                              'f': np.arange(1000, dtype=np.float64),
-                             'bhello': np.random.choice(['hello', 'you', 'people'], size=1000).astype("O")})
+                             'bhello': np.random.choice(['hello', 'yo', 'people'], size=1000).astype("O")})
         df = dd.from_pandas(data, chunksize=500)
 
         df.to_parquet(tmp, write_index=False, object_encoding='utf8')
@@ -53,6 +57,14 @@ def fn(tmpdir):
 
 def test_index(fn):
     ddf = read_parquet(fn)
+    assert_eq(df, ddf)
+
+
+def test_glob(fn):
+    os.unlink(os.path.join(fn, '_metadata'))
+    files = os.listdir(fn)
+    assert '_metadata' not in files
+    ddf = read_parquet(os.path.join(fn, '*'))
     assert_eq(df, ddf)
 
 
@@ -131,11 +143,21 @@ def test_categorical():
         to_parquet(tmp, ddf)
 
         ddf2 = read_parquet(tmp, categories=['x'])
-
         assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
+        # autocat
+        ddf2 = read_parquet(tmp)
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
+
+        # dereference cats
+        ddf2 = read_parquet(tmp, categories=[])
+
+        ddf2.loc[:1000].compute()
+        assert (df.x == ddf2.x).all()
 
 
 def test_append():
@@ -144,7 +166,7 @@ def test_append():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice(['hello', 'yo', 'people'],
                                                       size=1000).astype("O")})
         df.index.name = 'index'
 
@@ -164,7 +186,7 @@ def test_append_wo_index():
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'you', 'people'],
+                           'bhello': np.random.choice(['hello', 'yo', 'people'],
                                                       size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -190,7 +212,7 @@ def test_append_overlapping_divisions():
                            'i64': np.arange(1000, dtype=np.int64),
                            'f': np.arange(1000, dtype=np.float64),
                            'bhello': np.random.choice(
-                               ['hello', 'you', 'people'],
+                               ['hello', 'yo', 'people'],
                                size=1000).astype("O")})
         half = len(df) // 2
         ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
@@ -265,8 +287,8 @@ def test_read_parquet_custom_columns():
     (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),
     (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {'object_encoding': 'utf8'}, {}),
     (pd.DataFrame({'x': [b'a', b'b', b'c']}), {'object_encoding': 'bytes'}, {}),
-    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}), {'object_encoding': 'utf8'},
-                                                           {'categories': ['x']}),
+    (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}),
+     {'object_encoding': 'utf8'}, {'categories': ['x']}),
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
@@ -337,3 +359,13 @@ def test_empty_partition(fn):
     ddf2 = ddf[ddf.a <= -5]
     with pytest.raises(ValueError):
         ddf2.to_parquet(fn)
+
+
+def test_timestamp_index():
+    with tmpfile() as fn:
+        df = tm.makeTimeDataFrame()
+        df.index.name = 'foo'
+        ddf = dd.from_pandas(df, npartitions=5)
+        ddf.to_parquet(fn)
+        ddf2 = dd.read_parquet(fn)
+        assert_eq(ddf, ddf2)

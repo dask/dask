@@ -116,7 +116,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True):
+                 encoding=system_encoding, compute=True, get=None):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -174,7 +174,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                       encoding=encoding)
     if compute:
         from dask import delayed
-        delayed(out).compute()
+        get = get or _globals.get('get', None) or Bag._default_get
+        delayed(out).compute(get=get)
     else:
         return out
 
@@ -589,8 +590,9 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True):
-        return to_textfiles(self, path, name_function, compression, encoding, compute)
+                     encoding=system_encoding, compute=True, get=None):
+        return to_textfiles(self, path, name_function, compression, encoding,
+                            compute, get=get)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -1097,11 +1099,13 @@ class Bag(Base):
         else:
             head = self.take(1)[0]
             meta = pd.DataFrame([head], columns=columns)
-        columns = list(meta.columns)
-        name = 'to_dataframe-' + tokenize(self, columns)
-        DataFrame = partial(pd.DataFrame, columns=columns)
-        dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
-                   for i in range(self.npartitions))
+        # Serializing the columns and dtypes is much smaller than serializing
+        # the empty frame
+        cols = list(meta.columns)
+        dtypes = meta.dtypes.to_dict()
+        name = 'to_dataframe-' + tokenize(self, cols, dtypes)
+        dsk = {(name, i): (to_dataframe, (list2, (self.name, i)), cols, dtypes)
+               for i in range(self.npartitions)}
 
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
@@ -1576,10 +1580,15 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
+    dirname = _globals.get('temporary_directory', None)
+    if dirname:
+        file = (apply, partd.File, (), {'dir': dirname})
+    else:
+        file = (partd.File,)
     try:
-        dsk1 = {p: (partd.Python, (partd.Snappy, (partd.File,)))}
+        dsk1 = {p: (partd.Python, (partd.Snappy, file))}
     except AttributeError:
-        dsk1 = {p: (partd.Python, (partd.File,))}
+        dsk1 = {p: (partd.Python, file)}
 
     # Partition data on disk
     name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
@@ -1682,3 +1691,9 @@ def split(seq, n):
     L = [seq[int(part * i): int(part * (i + 1))] for i in range(n - 1)]
     L.append(seq[int(part * (n - 1)):])
     return L
+
+
+def to_dataframe(seq, columns, dtypes):
+    import pandas as pd
+    res = pd.DataFrame(seq, columns=columns)
+    return res.astype(dtypes, copy=False)

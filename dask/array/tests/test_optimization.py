@@ -1,9 +1,13 @@
 import pytest
 pytest.importorskip('numpy')
 
+import numpy as np
+import dask
+import dask.array as da
 from dask.optimize import fuse
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
+from dask.array.utils import assert_eq
 
 from dask.array.core import getarray, getarray_nofancy
 
@@ -62,8 +66,9 @@ def test_optimize_with_getitem_fusion():
            'c': (getarray, 'b', (5, slice(50, 60)))}
 
     result = optimize(dsk, ['c'])
-    expected = {'c': (getarray, 'some-array', (15, slice(150, 160)))}
-    assert result == expected
+    expected_task = (getarray, 'some-array', (15, slice(150, 160)))
+    assert any(v == expected_task for v in result.values())
+    assert len(result) < len(dsk)
 
 
 def test_optimize_slicing():
@@ -116,6 +121,33 @@ def test_hard_fuse_slice_cases():
     assert optimize_slices(dsk) == {'x': (getarray, 'x', (None, 5))}
 
 
+def test_dont_fuse_numpy_arrays():
+    x = np.ones(10)
+    for chunks in [(5,), (10,)]:
+        y = da.from_array(x, chunks=(10,))
+
+        dsk = y._optimize(y.dask, y._keys())
+        assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
+
+
+def test_minimize_data_transfer():
+    x = np.ones(100)
+    y = da.from_array(x, chunks=25)
+    z = y + 1
+    dsk = z._optimize(z.dask, z._keys())
+
+    keys = list(dsk)
+    results = dask.get(dsk, keys)
+    big_key = [k for k, r in zip(keys, results) if r is x][0]
+    dependencies, dependents = dask.core.get_deps(dsk)
+    deps = dependents[big_key]
+
+    assert len(deps) == 4
+    for dep in deps:
+        assert dsk[dep][0] in (getitem, getarray)
+        assert dsk[dep][1] == big_key
+
+
 def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
     dsk = {'a': (getitem, (getarray_nofancy, 'x', (slice(10, 20, None), slice(100, 200, None))),
                  ([1, 3], slice(50, 60, None)))}
@@ -123,3 +155,37 @@ def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
 
     dsk = {'a': (getitem, (getarray_nofancy, 'x', [1, 2, 3]), 0)}
     assert optimize_slices(dsk) == dsk
+
+
+@pytest.mark.parametrize('chunks', [10, 5, 3])
+def test_fuse_getarray_with_asarray(chunks):
+    x = np.ones(10) * 1234567890
+    y = da.ones(10, chunks=chunks)
+    z = x + y
+    dsk = z._optimize(z.dask, z._keys())
+    assert any(v is x for v in dsk.values())
+    for v in dsk.values():
+        s = str(v)
+        assert s.count('getitem') + s.count('getarray') <= 1
+        if v is not x:
+            assert '1234567890' not in s
+    n_getarrays = len([v for v in dsk.values() if v[0] in (getitem, getarray)])
+    if y.npartitions > 1:
+        assert n_getarrays == y.npartitions
+    else:
+        assert n_getarrays == 0
+
+    assert_eq(z, x + 1)
+
+
+def test_turn_off_fusion():
+    x = da.ones(10, chunks=(5,))
+    y = da.sum(x + 1 + 2 + 3)
+
+    a = y._optimize(y.dask, y._keys())
+
+    with dask.set_options(fuse_ave_width=0):
+        b = y._optimize(y.dask, y._keys())
+
+    assert dask.get(a, y._keys()) == dask.get(b, y._keys())
+    assert len(a) < len(b)

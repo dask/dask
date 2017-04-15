@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function
+
+import numpy as np
 import pandas as pd
 from toolz import first, partial
 
@@ -6,7 +9,7 @@ from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
 from ...compatibility import PY3
 from ...delayed import delayed
-from ...bytes.core import OpenFileCreator
+from ...bytes.core import get_fs_paths_myopen
 
 try:
     import fastparquet
@@ -33,18 +36,22 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     Parameters
     ----------
     path : string
-        Source directory for data.
+        Source directory for data. May be a glob string.
         Prepend with protocol like ``s3://`` or ``hdfs://`` for remote data.
     columns: list or None
         List of column names to load
     filters: list
         List of filters to apply, like ``[('x', '>' 0), ...]``
-    index: string or None
-        Name of index column to use if that column is sorted
-    categories: list or None
+    index: string or None (default) or False
+        Name of index column to use if that column is sorted;
+        False to force dask to not use any column as the index
+    categories: list, dict or None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
+        If a list, assumes up to 2**16-1 labels; if a dict, specify the number
+        of labels expected; if None, will load categories automatically for
+        data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
 
@@ -60,25 +67,27 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         raise ImportError("fastparquet not installed")
     if filters is None:
         filters = []
-    myopen = OpenFileCreator(path, compression=None, text=False,
-                             **(storage_options or {}))
+    fs, paths, myopen = get_fs_paths_myopen(path, None, 'rb',
+                                            **(storage_options or {}))
 
     if isinstance(columns, list):
         columns = tuple(columns)
 
-    try:
-        pf = fastparquet.ParquetFile(path + myopen.fs.sep + '_metadata',
-                                     open_with=myopen,
-                                     sep=myopen.fs.sep)
-    except:
-        pf = fastparquet.ParquetFile(path, open_with=myopen, sep=myopen.fs.sep)
+    if len(paths) > 1:
+        pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
+    else:
+        try:
+            pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
+                                         open_with=myopen,
+                                         sep=fs.sep)
+        except:
+            pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
     check_column_names(pf.columns, categories)
-    categories = categories or []
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
-           not(fastparquet.api.filter_out_stats(rg, filters, pf.helper)) and
+           not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
     # Find an index among the partially sorted columns
@@ -112,8 +121,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if index_col and index_col not in all_columns:
         all_columns = all_columns + (index_col,)
 
-    dtypes = {k: ('category' if k in categories else v) for k, v in
-              pf.dtypes.items() if k in all_columns}
+    if categories is None:
+        categories = pf.categories
+    dtypes = pf._dtypes(categories)
 
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in dtypes.items()},
@@ -133,7 +143,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.helper, pf.cats, pf.dtypes)
+                       categories, pf.schema, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
     if index_col:
@@ -141,18 +151,21 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     else:
         divisions = (None,) * (len(rgs) + 1)
 
+    if isinstance(divisions[0], np.datetime64):
+        divisions = [pd.Timestamp(d) for d in divisions]
+
     return out_type(dsk, name, meta, divisions)
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            helper, cs, dt, *args):
+                            schema, cs, dt, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
-    read_row_group_file(fn, rg, columns, categories, helper, cs,
+    read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views)
 
     if series:
@@ -220,10 +233,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     if fastparquet is False:
         raise ImportError("fastparquet not installed")
 
-    myopen = OpenFileCreator(path, compression=None, text=False,
-                             **(storage_options or {}))
-    myopen.fs.mkdirs(path)
-    sep = myopen.fs.sep
+    fs, paths, myopen = get_fs_paths_myopen(path, None, 'wb',
+                                            **(storage_options or {}))
+    fs.mkdirs(path)
+    sep = fs.sep
     metadata_fn = sep.join([path, '_metadata'])
 
     if write_index is True or write_index is None and df.known_divisions:
@@ -243,7 +256,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                                            object_encoding=object_encoding)
 
     if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=myopen)
+        pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
         if pf.file_scheme != 'hive':
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
@@ -251,10 +264,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
                              .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes.items()) != set(df.dtypes.items()):
+        elif set(pf.dtypes.items()) != set(df.dtypes.iteritems()):
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
-                                     set(df.dtypes.items())))
+                                     set(df.dtypes.iteritems())))
         # elif fmd.schema != pf.fmd.schema:
         #    raise ValueError('Appended schema differs.')
         else:
