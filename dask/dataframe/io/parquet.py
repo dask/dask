@@ -250,7 +250,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
 
 # ----------------------------------------------------------------------
-# pyarrow interfaceGenericParquetReader
+# PyArrow interface
 
 
 class ArrowReader(GenericParquetReader):
