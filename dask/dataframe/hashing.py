@@ -3,10 +3,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import pandas as pd
 
-from pandas.types.common import (is_categorical_dtype, is_numeric_dtype,
-                                 is_datetime64_dtype, is_timedelta64_dtype)
-from pandas.lib import is_bool_array
-
 from .utils import PANDAS_VERSION
 
 # In Pandas 0.19.2, a function to hash pandas objects was introduced. Object
@@ -31,6 +27,10 @@ from .utils import PANDAS_VERSION
 if PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+340':
     from pandas.tools.hashing import hash_pandas_object
 else:
+    from pandas.types.common import (is_categorical_dtype, is_numeric_dtype,
+                                     is_datetime64_dtype, is_timedelta64_dtype)
+    from pandas.lib import is_bool_array
+
     if PANDAS_VERSION == '0.19.2':
         from pandas._hash import hash_object_array
     else:  # 0.19.0 and 0.19.1
