@@ -176,6 +176,7 @@ instructions that may serve as useful starting points.
 Kubernetes
 ~~~~~~~~~~
 
+*  https://github.com/martindurant/dask-kubernetes
 *  https://github.com/ogrisel/docker-distributed
 *  https://github.com/hammerlab/dask-distributed-on-kubernetes/
 
@@ -187,11 +188,13 @@ Marathon
 DRMAA (SGE, SLURM, Torque, etc..)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+*  https://github.com/dask/dask-drmaa
 *  https://github.com/mfouesneau/dasksge
 
 YARN
 ~~~~
 
+*   https://github.com/dask/dask-yarn
 *   https://knit.readthedocs.io/en/latest/
 
 
