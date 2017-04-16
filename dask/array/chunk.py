@@ -17,12 +17,25 @@ def keepdims_wrapper(a_callable):
     A wrapper for functions that don't provide keepdims to ensure that they do.
     """
 
-    if "keepdims" in getargspec(a_callable).args:
-        return a_callable
-
     @wraps(a_callable)
     def keepdims_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
+        original_axis = axis
+        if set(axis) == set(range(x.ndim)):
+            axis = None
+        if isinstance(axis, tuple) and len(axis) == 1:
+            axis = axis[0]
         r = a_callable(x, axis=axis, *args, **kwargs)
+
+        if isinstance(r, np.matrix):
+            r = np.asarray(r)
+
+        if x.ndim == r.ndim:
+            if not isinstance(original_axis, tuple):
+                original_axis = (original_axis,)
+            for ax in original_axis[::-1]:
+                r = r[(slice(None, None),) * ax +
+                      (0,) +
+                      (slice(None, None),) * (x.ndim - ax - 1)]
 
         if not keepdims:
             return r

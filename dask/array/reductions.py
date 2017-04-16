@@ -206,7 +206,8 @@ def nanmax(a, axis=None, keepdims=False, split_every=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(np.ones_like(x), **kwargs)
+    ones = np.ones(shape=x.shape, dtype=x.dtype)
+    return chunk.sum(ones, **kwargs)
 
 
 def nannumel(x, **kwargs):
