@@ -277,8 +277,12 @@ def test_multiple_clients_restart(s, a, b):
 @gen_cluster(Worker=Nanny)
 def test_restart_scheduler(s, a, b):
     import gc; gc.collect()
+    addrs = (a.worker_address, b.worker_address)
     yield s.restart()
     assert len(s.ncores) == 2
+    addrs2 = (a.worker_address, b.worker_address)
+
+    assert addrs != addrs2
 
 
 @gen_cluster(Worker=Nanny, client=True)

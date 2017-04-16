@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque, OrderedDict
+from datetime import timedelta
 from functools import partial
 import json
 import logging
@@ -248,6 +249,14 @@ class Scheduler(Server):
         self.idle = SortedSet()
         self.saturated = set()
 
+        self._task_collections = [self.tasks, self.dependencies,
+                self.dependents, self.waiting, self.waiting_data,
+                self.released, self.priority, self.nbytes,
+                self.host_restrictions, self.worker_restrictions,
+                self.loose_restrictions, self.ready, self.who_wants,
+                self.wants_what, self.unknown_durations, self.rprocessing,
+                self.resource_restrictions]
+
         # Worker state
         self.ncores = dict()
         self.workers = SortedSet()
@@ -260,6 +269,14 @@ class Scheduler(Server):
         self.resources = defaultdict(dict)
         self.aliases = dict()
         self.occupancy = dict()
+
+        self._worker_collections = [self.ncores, self.workers,
+                self.worker_info, self.host_info, self.worker_resources,
+                self.worker_restrictions, self.host_restrictions,
+                self.resource_restrictions,
+                self.used_resources, self.resources, self.aliases,
+                self.occupancy, self.idle, self.saturated, self.processing,
+                self.rprocessing, self.has_what, self.who_has]
 
         self.extensions = {}
         self.plugins = []
@@ -385,12 +402,7 @@ class Scheduler(Server):
 
     def start(self, addr_or_port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
-        collections = [self.tasks, self.dependencies, self.dependents,
-                self.waiting, self.waiting_data, self.released, self.priority,
-                self.nbytes, self.host_restrictions, self.worker_restrictions,
-                self.loose_restrictions, self.ready, self.who_wants,
-                self.wants_what, self.unknown_durations]
-        for collection in collections:
+        for collection in self._task_collections:
             collection.clear()
 
         with ignoring(AttributeError):
@@ -809,7 +821,7 @@ class Scheduler(Server):
 
             return {}
 
-    def remove_worker(self, comm=None, address=None, safe=False):
+    def remove_worker(self, comm=None, address=None, safe=False, restart=False):
         """
         Remove worker from cluster
 
@@ -830,54 +842,55 @@ class Scheduler(Server):
             with ignoring(AttributeError, CommClosedError):
                 self.worker_comms[address].send({'op': 'close'})
 
-            self.host_info[host]['cores'] -= self.ncores[address]
-            self.host_info[host]['addresses'].remove(address)
-            self.total_ncores -= self.ncores[address]
+            if not restart:
+                self.host_info[host]['cores'] -= self.ncores[address]
+                self.host_info[host]['addresses'].remove(address)
+                self.total_ncores -= self.ncores[address]
 
-            if not self.host_info[host]['addresses']:
-                del self.host_info[host]
+                if not self.host_info[host]['addresses']:
+                    del self.host_info[host]
 
-            del self.worker_comms[address]
-            del self.ncores[address]
-            self.workers.remove(address)
-            del self.aliases[self.worker_info[address]['name']]
-            del self.worker_info[address]
-            if address in self.idle:
-                self.idle.remove(address)
-            if address in self.saturated:
-                self.saturated.remove(address)
+                del self.worker_comms[address]
+                del self.ncores[address]
+                self.workers.remove(address)
+                del self.aliases[self.worker_info[address]['name']]
+                del self.worker_info[address]
+                if address in self.idle:
+                    self.idle.remove(address)
+                if address in self.saturated:
+                    self.saturated.remove(address)
 
-            recommendations = OrderedDict()
+                recommendations = OrderedDict()
 
-            in_flight = set(self.processing.pop(address))
-            for k in list(in_flight):
-                # del self.rprocessing[k]
-                if not safe:
-                    self.suspicious_tasks[k] += 1
-                if not safe and self.suspicious_tasks[k] > self.allowed_failures:
-                    e = pickle.dumps(KilledWorker(k, address))
-                    r = self.transition(k, 'erred', exception=e, cause=k)
-                    recommendations.update(r)
-                    in_flight.remove(k)
-                else:
-                    recommendations[k] = 'released'
-
-            self.total_occupancy -= self.occupancy.pop(address)
-            del self.worker_bytes[address]
-            self.remove_resources(address)
-
-            for key in self.has_what.pop(address):
-                self.who_has[key].remove(address)
-                if not self.who_has[key]:
-                    if key in self.tasks:
-                        recommendations[key] = 'released'
+                in_flight = set(self.processing.pop(address))
+                for k in list(in_flight):
+                    # del self.rprocessing[k]
+                    if not safe:
+                        self.suspicious_tasks[k] += 1
+                    if not safe and self.suspicious_tasks[k] > self.allowed_failures:
+                        e = pickle.dumps(KilledWorker(k, address))
+                        r = self.transition(k, 'erred', exception=e, cause=k)
+                        recommendations.update(r)
+                        in_flight.remove(k)
                     else:
-                        recommendations[key] = 'forgotten'
+                        recommendations[k] = 'released'
 
-            self.transitions(recommendations)
+                self.total_occupancy -= self.occupancy.pop(address)
+                del self.worker_bytes[address]
+                self.remove_resources(address)
 
-            if self.validate:
-                assert all(self.who_has.values()), len(self.who_has)
+                for key in self.has_what.pop(address):
+                    self.who_has[key].remove(address)
+                    if not self.who_has[key]:
+                        if key in self.tasks:
+                            recommendations[key] = 'released'
+                        else:
+                            recommendations[key] = 'forgotten'
+
+                self.transitions(recommendations)
+
+                if self.validate:
+                    assert all(self.who_has.values()), len(self.who_has)
 
             for plugin in self.plugins[:]:
                 try:
@@ -1426,49 +1439,64 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def restart(self, client=None):
+    def restart(self, client=None, timeout=3):
         """ Restart all workers.  Reset local state. """
         with log_errors():
-            logger.debug("Send shutdown signal to workers")
+
+            n_workers = len(self.workers)
+
+            logger.info("Send lost future signal to clients")
+            for client, keys in self.wants_what.items():
+                self.client_releases_keys(keys=keys, client=client)
 
             nannies = {addr: self.get_worker_service_addr(addr, 'nanny')
                        for addr in self.worker_info}
 
             for addr in list(self.workers):
                 try:
-                    self.remove_worker(address=addr)
+                    self.remove_worker(address=addr, restart=True)
                 except Exception as e:
                     logger.info("Exception while restarting.  This is normal",
                                 exc_info=True)
 
-            for client, keys in self.wants_what.items():
-                self.client_releases_keys(keys=keys, client=client)
+            logger.info("Clear task state")
+            for collection in self._task_collections:
+                collection.clear()
+            for collection in self._worker_collections:
+                collection.clear()
+
 
             logger.debug("Send kill signal to nannies: %s", nannies)
+
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.restart(self)
+                except Exception as e:
+                    logger.exception(e)
 
             nannies = [rpc(nanny_address)
                        for nanny_address in nannies.values()
                        if nanny_address is not None]
+
             try:
-                resps = yield All([nanny.restart(close=True)
-                                   for nanny in nannies])
+                resps = All([nanny.restart(close=True) for nanny in nannies])
+                resps = yield gen.with_timeout(timedelta(seconds=timeout), resps)
                 assert all(resp == 'OK' for resp in resps)
+            except gen.TimeoutError:
+                logger.info("Nannies didn't report back restarted within timeout")
             finally:
                 for nanny in nannies:
                     nanny.close_rpc()
 
             self.start()
 
-            logger.debug("All workers reporting in")
-
             self.log_event([client, 'all'], {'action': 'restart',
                                              'client': client})
+            start = time()
+            while time() < start + 10 and len(self.workers) < n_workers:
+                yield gen.sleep(0.01)
+
             self.report({'op': 'restart'})
-            for plugin in self.plugins[:]:
-                try:
-                    plugin.restart(self)
-                except Exception as e:
-                    logger.exception(e)
 
     @gen.coroutine
     def broadcast(self, comm=None, msg=None, workers=None, hosts=None,
@@ -2349,7 +2377,8 @@ class Scheduler(Server):
                                                             DEFAULT_DATA_SIZE)
                     try:
                         self.worker_comms[w].send({'op': 'delete-data',
-                                                     'keys': [key], 'report': False})
+                                                   'keys': [key],
+                                                   'report': False})
                     except EnvironmentError:
                         self.loop.add_callback(self.remove_worker, address=w)
 
