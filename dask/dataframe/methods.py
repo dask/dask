@@ -61,10 +61,16 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
         # If the index is monotonic, `df.loc[start:stop]` is fine.
         # If it's not, `df.loc[start:stop]` raises when `start` is missing
         if start is not None:
-            df = df[df.index >= start]
+            if left_boundary:
+                df = df[df.index >= start]
+            else:
+                df = df[df.index > start]
         if stop is not None:
-            df = df[df.index <= stop]
-        result = df
+            if right_boundary:
+                df = df[df.index <= stop]
+            else:
+                df = df[df.index < stop]
+        return df
     else:
         result = getattr(df, kind)[start:stop]
     if not right_boundary:
