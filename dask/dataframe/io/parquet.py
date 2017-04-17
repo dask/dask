@@ -41,8 +41,6 @@ def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
 
 def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                       categories=None, index=None, storage_options=None):
-    if fastparquet is False:
-        raise ImportError("fastparquet not installed")
     if filters is None:
         filters = []
 
@@ -152,9 +150,6 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
 def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
-    if not pyarrow_parquet:
-        raise ImportError("pyarrow.parquet not installed")
-
     api = pyarrow_parquet
 
     if filters is not None:
@@ -166,13 +161,9 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    columns = columns
-
     dataset = api.ParquetDataset(paths)
     schema = dataset.schema.to_arrow_schema()
     task_name = 'read-parquet-' + tokenize(dataset, columns)
-
-    pieces = dataset.pieces
 
     if columns is None:
         all_columns = schema.names
@@ -197,7 +188,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                          piece, all_columns,
                          out_type == Series,
                          dataset.partitions)
-        for i, piece in enumerate(pieces)
+        for i, piece in enumerate(dataset.pieces)
     }
 
     return out_type(task_plan, task_name, meta, divisions)
@@ -230,7 +221,7 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, is_series,
 # User read API
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None, engine='fastparquet'):
+                 storage_options=None, engine='auto'):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -258,8 +249,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : {'fastparquet', 'arrow'}, default 'fastparquet'
-        Parquet reader library to use
+    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+        Parquet reader library to use. If only one library is installed, it
+        will use that one; if both, it will use 'fastparquet'
 
     Examples
     --------
@@ -272,16 +264,30 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     fs, paths, file_opener = get_fs_paths_myopen(path, None, 'rb',
                                                  **(storage_options or {}))
 
+    if engine == 'auto':
+        if fastparquet:
+            engine = 'fastparquet'
+        elif pyarrow_parquet:
+            engine = 'arrow'
+        else:
+            raise ImportError("Please install either fastparquet or pyarrow")
+    elif engine == 'fastparquet':
+        if not fastparquet:
+            raise ImportError("fastparquet not installed")
+    elif engine == 'arrow':
+        if not pyarrow_parquet:
+            raise ImportError("pyarrow not installed")
+    else:
+        raise ValueError('Unsupported engine type: {0}'.format(engine))
+
     if engine == 'fastparquet':
         return _read_fastparquet(fs, paths, file_opener, columns=columns,
                                  filters=filters,
                                  categories=categories, index=index)
-    elif engine == 'arrow':
+    else:
         return _read_pyarrow(fs, paths, file_opener, columns=columns,
                              filters=filters,
                              categories=categories, index=index)
-    else:
-        raise ValueError('Unsupported engine: {0}'.format(engine))
 
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
