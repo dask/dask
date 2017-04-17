@@ -71,14 +71,37 @@ Distributed Scheduler on a Single Machine
 -----------------------------------------
 
 It is also reasonable to use the `distributed scheduler`_ on a single machine.
-The algorithms, reporting, and diagnostics in this scheduler are more effective
-in some cases.  You can create a local "cluster" and use this scheduler by
-default by creating a ``dask.distributed.Client`` with no arguments.
+This is often recommended over the multiprocessing scheduler for the following
+reasons:
+
+1.  The multiprocessing scheduler brings intermediate values back to the main
+    process before sending them out again for new tasks.  For embarrassingly
+    parallel workloads (such as are common in dask.bag_ this is rarely a
+    problem because repeated tasks are fused together and outputs are typically
+    small (for example counts or a sum, or filenames to which we have written
+    results).  However for more complex workloads this can be troublesome.  The
+    distributed scheduler is sophisticated enough to track which data is in
+    which process and so can avoid costly interprocess communication.
+2.  The distributed scheduler supports a set of rich real-time diagnostics
+    which can help provide feedback and diagnose performance issues.
+3.  The distributed scheduler supports a larger API, including asynchronous
+    operations and computing in the background.
+
+You can create a local "cluster" and use this scheduler by default by creating
+a ``dask.distributed.Client`` with no arguments.
 
 .. code-block:: python
 
    from dask.distributed import Client
-   client = Client(set_as_default=True)
+   client = Client()
+
+You may prefer to use the multiprocessing scheduler over the distributed
+scheduler if the following hold:
+
+1.  Your computations don't involve complex graphs that share data to multiple
+    tasks
+2.  You want to avoid depending on Tornado, the technology that backs the
+    distributed scheduler
 
 .. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
 
