@@ -11,229 +11,127 @@ from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
+try:
+    import fastparquet
+    from fastparquet import parquet_thrift
+    from fastparquet.core import read_row_group_file
+    from fastparquet.api import _pre_allocate
+    from fastparquet.util import check_column_names
+    default_encoding = parquet_thrift.Encoding.PLAIN
+except:
+    fastparquet = False
+    default_encoding = None
 
-class GenericParquetReader(object):
+try:
+    import pyarrow.parquet as pyarrow_parquet
+except:
+    pa_pq = False
 
-    def _meta_from_dtypes(self, to_read_columns, file_columns, file_dtypes):
-        meta = pd.DataFrame({c: pd.Series([], dtype=d)
-                            for (c, d) in file_dtypes.items()},
-                            columns=[c for c in file_columns
-                                     if c in file_dtypes])
-        return meta[list(to_read_columns)]
 
+def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
+    meta = pd.DataFrame({c: pd.Series([], dtype=d)
+                        for (c, d) in file_dtypes.items()},
+                        columns=[c for c in file_columns
+                                 if c in file_dtypes])
+    return meta[list(to_read_columns)]
 
 # ----------------------------------------------------------------------
 # Fastparquet interface
 
 
-class FastparquetReader(GenericParquetReader):
-    """
-    Read ParquetFile into a Dask DataFrame
+def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
+                      categories=None, index=None, storage_options=None):
+    if fastparquet is False:
+        raise ImportError("fastparquet not installed")
+    if filters is None:
+        filters = []
 
-    This reads a directory of Parquet data into a Dask.dataframe, one file per
-    partition.  It selects the index among the sorted columns if any exist.
+    if isinstance(columns, list):
+        columns = tuple(columns)
 
-    This uses the fastparquet project:
+    if len(paths) > 1:
+        pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
+    else:
+        try:
+            pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
+                                         open_with=myopen,
+                                         sep=fs.sep)
+        except:
+            pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
-        http://fastparquet.readthedocs.io/en/latest
+    check_column_names(pf.columns, categories)
+    name = 'read-parquet-' + tokenize(pf, columns, categories)
 
-    Parameters
-    ----------
-    path : string
-        Source directory for data. May be a glob string.
-        Prepend with protocol like ``s3://`` or ``hdfs://`` for remote data.
-    columns: list or None
-        List of column names to load
-    filters: list
-        List of filters to apply, like ``[('x', '>' 0), ...]``
-    index: string or None (default) or False
-        Name of index column to use if that column is sorted;
-        False to force dask to not use any column as the index
-    categories: list, dict or None
-        For any fields listed here, if the parquet encoding is Dictionary,
-        the column will be created with dtype category. Use only if it is
-        guaranteed that the column is encoded as dictionary in all row-groups.
-        If a list, assumes up to 2**16-1 labels; if a dict, specify the number
-        of labels expected; if None, will load categories automatically for
-        data written by dask/fastparquet, not otherwise.
+    rgs = [rg for rg in pf.row_groups if
+           not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
+           not(fastparquet.api.filter_out_cats(rg, filters))]
 
-    Examples
-    --------
-    >>> df = read_parquet('s3://bucket/my-parquet-data')  # doctest: +SKIP
+    # Find an index among the partially sorted columns
+    minmax = fastparquet.api.sorted_partitioned_columns(pf)
 
-    See Also
-    --------
-    to_parquet
-    """
-    _REGISTERED_TOKENIZE = False
-
-    def __init__(self, fs, paths, file_opener, columns=None, filters=None,
-                 categories=None, index=None):
-        import fastparquet  # noqa
-        self._ensure_registered()
-
-        self.fs = fs
-        self.paths = paths
-        self.file_opener = file_opener
-
-        self.filters = filters or []
-
-        if isinstance(columns, list):
-            columns = tuple(columns)
-
-        self.columns = columns
-        self.categories = categories
-        self.index = index
-
-        self.dataset = self._load_paths_and_metadata()
-        self.task_name = 'read-parquet-' + tokenize(self.dataset, self.columns,
-                                                    self.categories)
-
-    def _ensure_registered(self):
-        if self._REGISTERED_TOKENIZE:
-            return
-        import fastparquet
-
-        @partial(normalize_token.register, fastparquet.ParquetFile)
-        def normalize_ParquetFile(pf):
-            return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
-
-        self._REGISTERED_TOKENIZE = True
-
-    def get_pandas_deferred(self):
-        row_groups = self._get_filtered_row_groups()
-
-        (out_type, frame_meta, index_col, all_columns,
-         categories, divisions) = self._resolve_metadata(row_groups)
-
-        task_plan = {
-            (self.task_name, i): (_read_parquet_row_group,
-                                  self.file_opener,
-                                  self.dataset.row_group_filename(rg),
-                                  index_col,
-                                  all_columns,
-                                  rg,
-                                  out_type == Series,
-                                  categories,
-                                  self.dataset.schema,
-                                  self.dataset.cats,
-                                  self.dataset.dtypes)
-            for i, rg in enumerate(row_groups)
-        }
-
-        return out_type(task_plan, self.task_name, frame_meta, divisions)
-
-    def _get_filtered_row_groups(self):
-        import fastparquet.api as fpapi
-
-        def _exclude_row_group(rg):
-            return (fpapi.filter_out_stats(rg, self.filters,
-                                           self.dataset.schema) or
-                    fpapi.filter_out_cats(rg, self.filters))
-
-        return [rg for rg in self.dataset.row_groups
-                if not _exclude_row_group(rg)]
-
-    def _load_paths_and_metadata(self):
-        from fastparquet import ParquetFile
-        from fastparquet.util import check_column_names
-
-        path_sep = self.fs.sep
-
-        if len(self.paths) > 1:
-            pf = ParquetFile(self.paths, open_with=self.file_opener,
-                             sep=path_sep)
+    if index is False:
+        index_col = None
+    elif len(minmax) == 1:
+        index_col = first(minmax)
+    elif len(minmax) > 1:
+        if index:
+            index_col = index
+        elif 'index' in minmax:
+            index_col = 'index'
         else:
-            try:
-                metadata_path = self.paths[0] + path_sep + '_metadata'
-                pf = ParquetFile(metadata_path, open_with=self.file_opener,
-                                 sep=path_sep)
-            except:
-                pf = ParquetFile(self.paths[0], open_with=self.file_opener,
-                                 sep=path_sep)
+            raise ValueError("Multiple possible indexes exist: %s.  "
+                             "Please select one with index='index-name'"
+                             % sorted(minmax))
+    else:
+        index_col = None
 
-        check_column_names(pf.columns, self.categories)
-        return pf
+    if columns is None:
+        all_columns = tuple(pf.columns + list(pf.cats))
+    else:
+        all_columns = columns
+    if not isinstance(all_columns, tuple):
+        out_type = Series
+        all_columns = (all_columns,)
+    else:
+        out_type = DataFrame
+    if index_col and index_col not in all_columns:
+        all_columns = all_columns + (index_col,)
 
-    def _resolve_metadata(self, row_groups):
-        pf = self.dataset
+    if categories is None:
+        categories = pf.categories
+    dtypes = pf._dtypes(categories)
 
-        if self.columns is None:
-            all_columns = tuple(pf.columns + list(pf.cats))
-        else:
-            all_columns = self.columns
+    meta = _meta_from_dtypes(all_columns, pf.columns, dtypes)
 
-        if not isinstance(all_columns, tuple):
-            out_type = Series
-            all_columns = (all_columns,)
-        else:
-            out_type = DataFrame
+    for cat in categories:
+        meta[cat] = pd.Series(pd.Categorical([],
+                              categories=[UNKNOWN_CATEGORIES]))
 
-        index_col, divisions = self._infer_index_and_divisions(row_groups)
+    if index_col:
+        meta = meta.set_index(index_col)
 
-        if index_col and index_col not in all_columns:
-            all_columns = all_columns + (index_col,)
+    if out_type == Series:
+        assert len(meta.columns) == 1
+        meta = meta[meta.columns[0]]
 
-        categories = self.categories
-        if categories is None:
-            categories = pf.categories
+    dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
+                       index_col, all_columns, rg, out_type == Series,
+                       categories, pf.schema, pf.cats, pf.dtypes)
+           for i, rg in enumerate(rgs)}
 
-        dtypes = pf._dtypes(categories)
+    if index_col:
+        divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
+    else:
+        divisions = (None,) * (len(rgs) + 1)
 
-        meta = self._meta_from_dtypes(all_columns, pf.columns, dtypes)
+    if isinstance(divisions[0], np.datetime64):
+        divisions = [pd.Timestamp(d) for d in divisions]
 
-        for cat in categories:
-            meta[cat] = pd.Series(pd.Categorical([],
-                                  categories=[UNKNOWN_CATEGORIES]))
-
-        if index_col:
-            meta = meta.set_index(index_col)
-
-        if out_type == Series:
-            assert len(meta.columns) == 1
-            meta = meta[meta.columns[0]]
-
-        return out_type, meta, index_col, all_columns, categories, divisions
-
-    def _infer_index_and_divisions(self, row_groups):
-        import fastparquet.api as fpapi
-
-        # Find an index among the partially sorted columns
-        minmax = fpapi.sorted_partitioned_columns(self.dataset)
-
-        if self.index is False:
-            index_col = None
-        elif len(minmax) == 1:
-            index_col = first(minmax)
-        elif len(minmax) > 1:
-            if self.index:
-                index_col = self.index
-            elif 'index' in minmax:
-                index_col = 'index'
-            else:
-                raise ValueError("Multiple possible indexes exist: %s.  "
-                                 "Please select one with index='index-name'"
-                                 % sorted(minmax))
-        else:
-            index_col = None
-
-        if index_col:
-            divisions = (list(minmax[index_col]['min']) +
-                         [minmax[index_col]['max'][-1]])
-        else:
-            divisions = (None,) * (len(row_groups) + 1)
-
-        if isinstance(divisions[0], np.datetime64):
-            divisions = [pd.Timestamp(d) for d in divisions]
-
-        return index_col, divisions
+    return out_type(dsk, name, meta, divisions)
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
                             schema, cs, dt, *args):
-    from fastparquet.core import read_row_group_file
-    from fastparquet.api import _pre_allocate
-
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
@@ -252,89 +150,67 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 # ----------------------------------------------------------------------
 # PyArrow interface
 
+def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
+                  categories=None, index=None):
+    if not pyarrow_parquet:
+        raise ImportError("pyarrow.parquet not installed")
 
-class ArrowReader(GenericParquetReader):
+    api = pyarrow_parquet
 
-    _REGISTERED_TOKENIZE = False
+    if filters is not None:
+        raise NotImplemented("Predicate pushdown not implemented")
 
-    def __init__(self, fs, paths, file_opener, columns=None, filters=None,
-                 categories=None, index=None):
-        import pyarrow.parquet as pq
-        self.api = pq
+    if categories is not None:
+        raise NotImplemented("Categorical reads not yet implemented")
 
-        self.fs = fs
-        self.paths = paths
-        self.file_opener = file_opener
+    if isinstance(columns, tuple):
+        columns = list(columns)
 
-        if filters is not None:
-            raise NotImplemented("Predicate pushdown not implemented")
+    columns = columns
 
-        if categories is not None:
-            raise NotImplemented("Categorical reads not yet implemented")
+    dataset = api.ParquetDataset(paths)
+    schema = dataset.schema.to_arrow_schema()
+    task_name = 'read-parquet-' + tokenize(dataset, columns)
 
-        if isinstance(columns, tuple):
-            columns = list(columns)
+    pieces = dataset.pieces
 
-        self.columns = columns
+    if columns is None:
+        all_columns = schema.names
+    else:
+        all_columns = columns
 
-        self.dataset = self.api.ParquetDataset(self.paths)
-        self.schema = self.dataset.schema.to_arrow_schema()
-        self.task_name = 'read-parquet-' + tokenize(self.dataset, self.columns)
+    if not isinstance(all_columns, list):
+        out_type = Series
+        all_columns = [all_columns]
+    else:
+        out_type = DataFrame
 
-    def _ensure_registered(self):
-        if self._REGISTERED_TOKENIZE:
-            return
+    divisions = (None,) * (len(dataset.pieces) + 1)
 
-        @partial(normalize_token.register, self.api.ParquetDataset)
-        def normalize_PyArrowParquetDataset(ds):
-            return (type(ds), ds.paths)
+    dtypes = _get_pyarrow_dtypes(schema)
 
-        self._REGISTERED_TOKENIZE = True
+    meta = _meta_from_dtypes(all_columns, schema.names, dtypes)
 
-    def get_pandas_deferred(self):
-        pieces = self.dataset.pieces
+    task_plan = {
+        (task_name, i): (_read_arrow_parquet_piece,
+                         file_opener,
+                         piece, all_columns,
+                         out_type == Series,
+                         dataset.partitions)
+        for i, piece in enumerate(pieces)
+    }
 
-        (out_type, frame_meta,
-         all_columns, divisions) = self._resolve_metadata()
+    return out_type(task_plan, task_name, meta, divisions)
 
-        task_plan = {
-            (self.task_name, i): (_read_arrow_parquet_piece,
-                                  self.file_opener,
-                                  piece,
-                                  all_columns,
-                                  out_type == Series,
-                                  self.dataset.partitions)
-            for i, piece in enumerate(pieces)
-        }
 
-        return out_type(task_plan, self.task_name, frame_meta, divisions)
+def _get_pyarrow_dtypes(schema):
+    dtypes = {}
+    for i in range(len(schema)):
+        field = schema[i]
+        numpy_dtype = field.type.to_pandas_dtype()
+        dtypes[field.name] = numpy_dtype
 
-    def _resolve_metadata(self):
-        if self.columns is None:
-            all_columns = self.schema.names
-        else:
-            all_columns = self.columns
-
-        if not isinstance(all_columns, list):
-            out_type = Series
-            all_columns = [all_columns]
-        else:
-            out_type = DataFrame
-
-        divisions = (None,) * (len(self.dataset.pieces) + 1)
-
-        dtypes = self._get_schema_expected_dtypes()
-        meta = self._meta_from_dtypes(all_columns, self.schema.names, dtypes)
-        return out_type, meta, all_columns, divisions
-
-    def _get_schema_expected_dtypes(self):
-        dtypes = {}
-        for i in range(len(self.schema)):
-            field = self.schema[i]
-            numpy_dtype = field.type.to_pandas_dtype()
-            dtypes[field.name] = numpy_dtype
-
-        return dtypes
+    return dtypes
 
 
 def _read_arrow_parquet_piece(open_file_func, piece, columns, is_series,
@@ -397,17 +273,15 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                                                  **(storage_options or {}))
 
     if engine == 'fastparquet':
-        klass = FastparquetReader
+        return _read_fastparquet(fs, paths, file_opener, columns=columns,
+                                 filters=filters,
+                                 categories=categories, index=index)
     elif engine == 'arrow':
-        klass = ArrowReader
+        return _read_pyarrow(fs, paths, file_opener, columns=columns,
+                             filters=filters,
+                             categories=categories, index=index)
     else:
         raise ValueError('Unsupported engine: {0}'.format(engine))
-
-    reader = klass(fs, paths, file_opener, columns=columns,
-                   filters=filters,
-                   categories=categories, index=index)
-
-    return reader.get_pandas_deferred()
 
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
@@ -550,6 +424,18 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
 
     fn = sep.join([path, '_common_metadata'])
     fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
+
+
+if fastparquet:
+    @partial(normalize_token.register, fastparquet.ParquetFile)
+    def normalize_ParquetFile(pf):
+        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+
+
+if pyarrow_parquet:
+    @partial(normalize_token.register, pyarrow_parquet.ParquetDataset)
+    def normalize_PyArrowParquetDataset(ds):
+        return (type(ds), ds.paths)
 
 
 if PY3:

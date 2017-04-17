@@ -17,7 +17,7 @@ from dask.dataframe.utils import assert_eq
 fastparquet = pytest.importorskip('fastparquet')
 
 try:
-    import pyarrow
+    import pyarrow.parquet as pyarrow  # noqa
 except ImportError:
     pyarrow = False
 
@@ -38,7 +38,7 @@ def fn(tmpdir):
 @pytest.fixture(params=[
     pytest.mark.skipif(not fastparquet, 'fastparquet',
                        reason='fastparquet not found'),
-    pytest.mark.skipif(not pyarrow , 'arrow',
+    pytest.mark.skipif(not pyarrow, 'arrow',
                        reason='pyarrow not found')
 ])
 def engine(request):
@@ -390,3 +390,17 @@ def test_timestamp_index():
         ddf.to_parquet(fn)
         ddf2 = dd.read_parquet(fn)
         assert_eq(ddf, ddf2)
+
+
+@pytest.mark.skipif(not pyarrow, reason='pyarrow not found')
+@pytest.mark.xfail(reason="to_parquet does not write nulls by default")
+def test_to_parquet_default_writes_nulls():
+    import pyarrow.parquet as pq
+
+    df = pd.DataFrame({'c1': [1., np.nan, 2, np.nan, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with tmpfile() as fn:
+        ddf.to_parquet(fn)
+        table = pq.read_table(fn)
+        assert table[0].null_count == 2
