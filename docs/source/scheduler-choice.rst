@@ -76,12 +76,13 @@ reasons:
 
 1.  The multiprocessing scheduler brings intermediate values back to the main
     process before sending them out again for new tasks.  For embarrassingly
-    parallel workloads (such as are common in dask.bag_ this is rarely a
+    parallel workloads, such as are common in dask.bag_, this is rarely a
     problem because repeated tasks are fused together and outputs are typically
-    small (for example counts or a sum, or filenames to which we have written
-    results).  However for more complex workloads this can be troublesome.  The
-    distributed scheduler is sophisticated enough to track which data is in
-    which process and so can avoid costly interprocess communication.
+    small, like counts, sums, or filenames to which we have written results.
+    However for more complex workloads like a blocked matrix multiply this can
+    be troublesome.  The distributed scheduler is sophisticated enough to track
+    which data is in which process and so can avoid costly interprocess
+    communication.
 2.  The distributed scheduler supports a set of rich real-time diagnostics
     which can help provide feedback and diagnose performance issues.
 3.  The distributed scheduler supports a larger API, including asynchronous
