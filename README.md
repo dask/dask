@@ -51,13 +51,14 @@ from dask import get
 z = get(dsk, 'z')
 ```
 
-Do You want to handle more complex structures with a variaty of schedulers?
-
 
 # Collections and Schedulers
 
+To handle more complex cases there are a variaty of abstractions and schedulers available.
 
-![Collections and schedulers](https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png "Dask collections and schedulers")
+ <br>
+
+![Collections and schedulers](https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png)
 
 
 ## Bag
