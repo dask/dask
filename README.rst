@@ -4,7 +4,9 @@ Dask
 |Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|
 
 
-*Dask is a flexible parallel computing library for analytic computing.*
+*Dask is a flexible parallel computing library for analytic computing.*  
+
+See documentation_ for more information.
 
 
 Sneak Peek
@@ -57,14 +59,17 @@ Do You want to handle more complex structures with a variaty of schedulers?
 
 
 Collections and Schedulers
---------------------------
+==========================
 
 .. image:: https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png
    :alt: Dask collections and schedulers
    :align: center
    
 
-**Bag - parallel list**
+Bag
+---
+
+Parallel python iterators, lists.
 
 .. code-block:: python
 
@@ -73,7 +78,10 @@ Collections and Schedulers
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
 
-**Delayed - parallel function**
+Delayed
+-------
+
+Parallely executed functions.
 
 .. code-block:: python
 
@@ -87,7 +95,10 @@ Collections and Schedulers
    result.compute()
 
 
-**DataFrame - parallel pandas** 
+DataFrame
+---------
+
+Parallel pandas.
 
 .. code-block:: python
 
@@ -95,7 +106,11 @@ Collections and Schedulers
     df = dd.read_csv('2015-*-*.csv')
     df.groupby(df.user_id).value.mean().compute()
 
-**Array - parallel numpy**
+
+Array
+-----
+
+Parallel numpy
 
 .. code-block:: python
 
@@ -105,7 +120,8 @@ Collections and Schedulers
    x - x.mean(axis=1).compute()
 
 
-**Distributed among machines**
+Distributed 
+-----------
 
 The **concurrent.futures** interface provides general submission of custom
 tasks:
@@ -155,12 +171,7 @@ dependencies you would like to keep up to date:
 Documentation
 -------------
 
-See documentation_ for more information.
-
-See the `dask.distributed documentation (separate website)
-<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
-on Dask's distributed scheduler,
-
+See the comprehensive documentation_.
 
 
 License
