@@ -6,34 +6,65 @@ Dask
 
 *Dask is a flexible parallel computing library for analytic computing.*
 
-See documentation_ for more information.
+
+Sneak Peek
+----------
+
+A simple computation
+
+.. code-block:: python
+
+   def inc(i):
+       return i + 1
+
+   def add(a, b):
+       return a + b
+
+   x = 1
+   y = inc(x)
+   z = add(y, 10)
+   
+
+is representable like:
 
 
-Dask can scale to a cluster of 100s of machines. It is resilient, elastic, data
-local, and low latency.
+.. code-block:: python
+
+   dsk = {'x': 1,
+          'y': (inc, 'x'),
+          'z': (add, 'y', 10)}
+        
+
+which happens to be a graph:
+
+.. image:: https://github.com/dask/dask/blob/master/docs/source/_static/dask-simple.png
+   :height: 400px
+   :alt: A simple dask dictionary
+   :align: right
 
 
-Dask is composed of two components:
+where the computation of `z` is parallelizable
 
-1.  **Dynamic task scheduling** optimized for computation.  This is similar to
-    *Airflow, Luigi, Celery, or Make*, but optimized for interactive
-    computational workloads.
-2.  **"Big Data" collections** like parallel arrays, dataframes, and lists that
-    extend common interfaces like *NumPy, Pandas, or Python iterators* to
-    larger-than-memory or distributed environments.  These parallel collections
-    run on top of the dynamic task schedulers.
 
-.. image:: images/collections-schedulers.png
+.. code-block:: python
+
+   from dask import get
+   
+   z = get(dsk, 'z')
+
+
+Do You want to handle more complex structures with a variaty of schedulers?
+
+
+Collections and Schedulers
+--------------------------
+
+.. image:: https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png
    :alt: Dask collections and schedulers
-   :width: 80%
    :align: center
+   
 
-See the `dask.distributed documentation (separate website)
-<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
-on Dask's distributed scheduler,
-
-
-**Parallelized Lists**
+**Bag - parallel list**
 
 .. code-block:: python
 
@@ -42,7 +73,7 @@ on Dask's distributed scheduler,
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
 
-**Parallelized Functions**
+**Delayed - parallel function**
 
 .. code-block:: python
 
@@ -56,7 +87,7 @@ on Dask's distributed scheduler,
    result.compute()
 
 
-**Parallelized DataFrames** 
+**DataFrame - parallel pandas** 
 
 .. code-block:: python
 
@@ -64,7 +95,7 @@ on Dask's distributed scheduler,
     df = dd.read_csv('2015-*-*.csv')
     df.groupby(df.user_id).value.mean().compute()
 
-**Parallelized Arrays**
+**Array - parallel numpy**
 
 .. code-block:: python
 
@@ -91,7 +122,7 @@ tasks:
 
    summary = client.submit(summarize, futures)
    summary.result()
-
+   
 
 Install Dask
 ============
@@ -119,6 +150,17 @@ dependencies you would like to keep up to date:
 *   ``pip install dask[dataframe]``: Install dask, numpy, and pandas
 *   ``pip install dask``: Install only dask, which depends only on the standard
     library.  This is appropriate if you only want the task schedulers.
+
+
+Documentation
+-------------
+
+See documentation_ for more information.
+
+See the `dask.distributed documentation (separate website)
+<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
+on Dask's distributed scheduler,
+
 
 
 License
