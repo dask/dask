@@ -159,4 +159,4 @@ See the comprehensive [documentation](http://dask.pydata.org/en/latest/).
 
 ## License
 
-New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
+New BSD. See [License File](<https://github.com/dask/dask/blob/master/LICENSE.txt>)
