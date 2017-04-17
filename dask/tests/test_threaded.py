@@ -107,6 +107,7 @@ def test_thread_safety():
 
 code = """
 import sys
+import time
 from dask.threaded import get
 
 def signal_started():
@@ -114,11 +115,7 @@ def signal_started():
     sys.stdout.flush()
 
 def long_task(x):
-    out = 0
-    N = 100000
-    for i in range(N):
-        for j in range(N):
-            out += 1
+    time.sleep(5)
 
 dsk = {('x', i): (long_task, 'started') for i in range(100)}
 dsk['started'] = (signal_started,)
@@ -147,7 +144,7 @@ def test_interrupt():
             proc.send_signal(sigint)
             # Wait a bit for it to die
             start = time()
-            while time() - start < 2.0:
+            while time() - start < 4.0:
                 if proc.poll() is not None:
                     break
                 sleep(0.05)
