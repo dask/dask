@@ -25,7 +25,7 @@ except:
 try:
     import pyarrow.parquet as pyarrow_parquet
 except:
-    pa_pq = False
+    pyarrow_parquet = False
 
 
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
