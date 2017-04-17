@@ -1,0 +1,36 @@
+package:
+  name: dask
+  version: "0.8.0"
+
+source:
+  path: ../..
+
+requirements:
+  build:
+    - python
+    - cloudpickle
+    - numpy
+    - pandas
+    - partd
+    - toolz
+  run:
+    - python
+    - cloudpickle
+    - numpy
+    - pandas
+    - partd
+    - toolz
+
+test:
+  imports:
+    - dask
+    - dask.array
+    - dask.bag
+    - dask.dataframe
+    - dask.diagnostics
+    - dask.store
+
+about:
+  home: http://github.com/dask/dask/
+  license: BSD
+  summary: 'Minimal task scheduling abstraction'
