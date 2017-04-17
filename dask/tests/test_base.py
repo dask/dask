@@ -233,6 +233,12 @@ def test_tokenize_object_array_with_nans():
     assert tokenize(a) == tokenize(a)
 
 
+@pytest.mark.parametrize('x', [1, True, 'a', b'a', 1.0, 1j, 1.0j,
+                               [], (), {}, None, str, int])
+def test_tokenize_base_types(x):
+    assert tokenize(x) == tokenize(x), x
+
+
 @pytest.mark.skipif('not db')
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
