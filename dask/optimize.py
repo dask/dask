@@ -808,3 +808,7 @@ def key_split(s):
             return result
     except Exception:
         return 'Other'
+
+
+def dont_optimize(dsk, keys, **kwargs):
+    return dsk

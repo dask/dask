@@ -99,7 +99,7 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+        dsk2 = cls._optimize(ensure_dict(dsk), keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -253,7 +253,7 @@ def visualize(*args, **kwargs):
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks.extend([optimization_function(arg)(ensure_dict(arg.dask), arg._keys())
+        dsks.extend([arg._optimize(ensure_dict(arg.dask), arg._keys())
                      for arg in args])
     else:
         dsks.extend([arg.dask for arg in args])
@@ -416,24 +416,6 @@ def tokenize(*args, **kwargs):
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
 
 
-def dont_optimize(dsk, keys):
-    return dsk
-
-
-def optimization_function(obj):
-    if isinstance(obj, type):
-        cls = obj
-    else:
-        cls = type(obj)
-    name = cls.__name__.lower() + '_optimize' # dask.set_options(array_optimize=foo)
-    if name in _globals:
-        return _globals[name] or dont_optimize
-    try:
-        return cls._optimize
-    except AttributeError:
-        return dont_optimize
-
-
 def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
@@ -441,7 +423,7 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     optimizations = (kwargs.pop('optimizations', None) or
                      _globals.get('optimizations', []))
     if optimize_graph:
-        groups = groupby(optimization_function, collections)
+        groups = groupby(lambda x: x._optimize, collections)
         groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:

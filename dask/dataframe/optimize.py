@@ -2,8 +2,8 @@
 from __future__ import absolute_import, division, print_function
 
 from .io import dataframe_from_ctable
-from ..optimize import cull, fuse_getitem, fuse
-from ..context import _globals
+from ..optimize import cull, fuse_getitem, fuse, dont_optimize
+from ..context import _globals, defer_to_globals
 from .. import core
 
 try:
@@ -14,6 +14,7 @@ else:
     from .io.parquet import _read_parquet_row_group
 
 
+@defer_to_globals('dataframe_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, **kwargs):
     if isinstance(keys, list):
         dsk, dependencies = cull(dsk, list(core.flatten(keys)))
