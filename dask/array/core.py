@@ -930,9 +930,9 @@ def finalize(results):
         if len(results2) > 1:
             x = unpack_singleton(results)
             mod = inspect.getmodule(x)
-            if mod and mod is not np:
+            if mod and mod is not np and hasattr(np, 'concatenate'):
                 return _concatenate2(results, axes=list(range(x.ndim)))
-            else:
+            else:  # optimized solution for np or anything without concatenate
                 return concatenate3(results)
         else:
             results2 = results2[0]
