@@ -1,0 +1,10 @@
+name: dask
+dependencies:
+- python
+- toolz
+- numpy
+- pandas
+- dill
+- partd
+- chest
+- pytest
