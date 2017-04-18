@@ -12,15 +12,12 @@ from dask.compatibility import apply
 from .sizeof import sizeof
 from .threadpoolexecutor import secede
 from .utils import All, log_errors, sync, tokey, ignoring
-from .worker import thread_state
+from .worker import thread_state, get_worker
 
 
 @contextmanager
 def worker_client(timeout=3, separate_thread=True):
     """ Get client for this thread
-
-    Note: This interface is new and experimental.  It may change without
-    notice.
 
     This context manager is intended to be called within functions that we run
     on workers.  When run as a context manager it delivers a client
@@ -37,13 +34,17 @@ def worker_client(timeout=3, separate_thread=True):
     Examples
     --------
     >>> def func(x):
-    ...     with worker_client() as e:  # connect from worker back to scheduler
-    ...         a = e.submit(inc, x)     # this task can submit more tasks
-    ...         b = e.submit(dec, x)
-    ...         result = e.gather([a, b])  # and gather results
+    ...     with worker_client() as c:  # connect from worker back to scheduler
+    ...         a = c.submit(inc, x)     # this task can submit more tasks
+    ...         b = c.submit(dec, x)
+    ...         result = c.gather([a, b])  # and gather results
     ...     return result
 
-    >>> future = e.submit(func, 1)  # submit func(1) on cluster
+    >>> future = client.submit(func, 1)  # submit func(1) on cluster
+
+    See Also
+    --------
+    get_worker
     """
     address = thread_state.execution_state['scheduler']
     worker = thread_state.execution_state['worker']
@@ -59,10 +60,6 @@ def worker_client(timeout=3, separate_thread=True):
 
 
 local_client = worker_client
-
-
-def get_worker():
-    return thread_state.execution_state['worker']
 
 
 class WorkerClient(Client):

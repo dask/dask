@@ -35,6 +35,12 @@ API
    Client.upload_file
    Client.who_has
 
+.. currentmodule:: distributed
+
+.. autosummary::
+   worker_client
+   get_worker
+
 .. currentmodule:: distributed.recreate_exceptions
 
 .. autosummary::
@@ -101,3 +107,8 @@ Other
 .. autofunction:: as_completed
 .. autofunction:: distributed.diagnostics.progress
 .. autofunction:: wait
+
+.. currentmodule:: distributed
+
+.. autofunction:: distributed.worker_client
+.. autofunction:: distributed.get_worker

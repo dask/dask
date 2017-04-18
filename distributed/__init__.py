@@ -9,7 +9,7 @@ from .client import (Client, Executor, CompatibleExecutor,
 from .nanny import Nanny
 from .scheduler import Scheduler
 from .utils import sync
-from .worker import Worker
+from .worker import Worker, get_worker
 from .worker_client import local_client, worker_client
 
 try:
