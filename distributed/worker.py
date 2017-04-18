@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
 from datetime import timedelta
-from importlib import import_module
 import heapq
 import logging
 import os
@@ -27,15 +26,16 @@ from tornado.locks import Event
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .config import config
-from .compatibility import reload, unicode, invalidate_caches, cache_from_source
+from .compatibility import unicode
 from .core import (error_message, CommClosedError,
                    rpc, Server, pingpong, coerce_to_address)
 from .metrics import time
+from .preloading import preload_modules
 from .protocol.pickle import dumps, loads
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
-                    ignoring, validate_key, mp_context)
+                    ignoring, validate_key, mp_context, import_file)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -70,7 +70,7 @@ class WorkerBase(Server):
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
-                 silence_logs=None, death_timeout=None, **kwargs):
+                 silence_logs=None, death_timeout=None, preload=(), **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -81,6 +81,7 @@ class WorkerBase(Server):
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
         self.death_timeout = death_timeout
+        self.preload = preload
         if silence_logs:
             logger.setLevel(silence_logs)
         if not os.path.exists(self.local_dir):
@@ -248,6 +249,7 @@ class WorkerBase(Server):
             self.ip = get_address_host(self.address)
 
         self.name = self.name or self.address
+        preload_modules(self.preload, parameter=self, file_dir=self.local_dir)
         # Services listen on all addresses
         # Note Nanny is not a "real" service, just some metadata
         # passed in service_ports...
@@ -468,32 +470,7 @@ class WorkerBase(Server):
 
         if load:
             try:
-                name, ext = os.path.splitext(filename)
-                names_to_import = []
-                if ext in ('.py', '.pyc'):
-                    names_to_import.append(name)
-                    # Ensures that no pyc file will be reused
-                    cache_file = cache_from_source(out_filename)
-                    if os.path.exists(cache_file):
-                        os.remove(cache_file)
-                if ext in ('.egg', '.zip'):
-                    if out_filename not in sys.path:
-                        sys.path.insert(0, out_filename)
-                    if ext == '.egg':
-                        import pkg_resources
-                        pkgs = pkg_resources.find_distributions(out_filename)
-                        for pkg in pkgs:
-                            names_to_import.append(pkg.project_name)
-                    elif ext == '.zip':
-                        names_to_import.append(name)
-
-                if not names_to_import:
-                    logger.warning("Found nothing to import from %s", filename)
-                else:
-                    invalidate_caches()
-                    for name in names_to_import:
-                        logger.info("Reload module %s from %s file", name, ext)
-                        reload(import_module(name))
+                import_file(out_filename)
             except Exception as e:
                 logger.exception(e)
                 return {'status': 'error', 'exception': dumps(e)}

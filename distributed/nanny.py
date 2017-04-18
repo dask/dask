@@ -33,7 +33,7 @@ class Nanny(Server):
                  ncores=None, loop=None, local_dir=None, services=None,
                  name=None, memory_limit='auto', reconnect=True,
                  validate=False, quiet=False, resources=None, silence_logs=None,
-                 death_timeout=None, **kwargs):
+                 death_timeout=None, preload=(), **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -45,6 +45,7 @@ class Nanny(Server):
         self.validate = validate
         self.resources = resources
         self.death_timeout = death_timeout
+        self.preload = preload
         if not local_dir:
             local_dir = tempfile.mkdtemp(prefix='nanny-')
             self._should_cleanup_local_dir = True
@@ -209,7 +210,8 @@ class Nanny(Server):
                         'resources': self.resources,
                         'validate': self.validate,
                         'silence_logs': self.silence_logs,
-                        'death_timeout': self.death_timeout})
+                        'death_timeout': self.death_timeout,
+                        'preload': self.preload})
             self.process.daemon = True
             processes_to_close.add(self.process)
             self.process.start()

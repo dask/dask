@@ -3,13 +3,12 @@ from __future__ import print_function, division, absolute_import
 import pytest
 pytest.importorskip('requests')
 
-from contextlib import contextmanager
-import itertools
 import os
 import requests
-import signal
 import socket
+import shutil
 import sys
+import tempfile
 from time import sleep
 
 from tornado import gen
@@ -255,3 +254,57 @@ def test_bokeh_port_zero(loop):
                 if b'bokeh' in line.lower() or b'web' in line.lower():
                     count += 1
                     assert b':0' not in line
+
+
+PRELOAD_TEXT = """
+_scheduler_info = {}
+
+def dask_setup(scheduler):
+    _scheduler_info['address'] = scheduler.address
+
+def get_scheduler_address():
+    return _scheduler_info['address']
+"""
+
+
+def test_preload_file(loop):
+
+    def check_scheduler():
+        import scheduler_info
+        return scheduler_info.get_scheduler_address()
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmpdir, 'scheduler_info.py')
+        with open(path, 'w') as f:
+            f.write(PRELOAD_TEXT)
+        with tmpfile() as fn:
+            with popen(['dask-scheduler', '--scheduler-file', fn,
+                        '--preload', path]):
+                with Client(scheduler_file=fn, loop=loop) as c:
+                    assert c.run_on_scheduler(check_scheduler) == \
+                           c.scheduler.address
+    finally:
+        shutil.rmtree(tmpdir)
+
+
+def test_preload_module(loop):
+
+    def check_scheduler():
+        import scheduler_info
+        return scheduler_info.get_scheduler_address()
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmpdir, 'scheduler_info.py')
+        with open(path, 'w') as f:
+            f.write(PRELOAD_TEXT)
+        with tmpfile() as fn:
+            with popen(['dask-scheduler', '--scheduler-file', fn,
+                        '--preload', 'scheduler_info'],
+                       env=dict(os.environ, PYTHONPATH=tmpdir)):
+                with Client(scheduler_file=fn, loop=loop) as c:
+                    assert c.run_on_scheduler(check_scheduler) == \
+                           c.scheduler.address
+    finally:
+        shutil.rmtree(tmpdir)
