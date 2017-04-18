@@ -314,11 +314,11 @@ be optimized.
 .. code-block:: python
 
    with dask.set_options(array_optimize=my_optimize_function,
-                         dataframe_optimize=False,
+                         dataframe_optimize=None,
                          delayed_optimize=my_other_optimize_function):
        ...
 
-You need not specify all collections.  Collecitons will default to their
+You need not specify all collections.  Collections will default to their
 standard optimization scheme (which is usually a good choice).
 
 
