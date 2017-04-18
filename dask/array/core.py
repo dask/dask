@@ -36,7 +36,7 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict)
+                     SerializableLock, ensure_dict, package_of)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -466,11 +466,7 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    module = inspect.getmodule(arrays[0]) or np
-    try:
-        module.concatenate
-    except AttributeError:
-        module = np
+    module = package_of(arrays[0]) or np
     return module.concatenate(arrays, axis=axes[0])
 
 
@@ -2476,7 +2472,7 @@ ALPHABET = alphabet.upper()
 
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
-    module = inspect.getmodule(x) or np
+    module = package_of(x) or np
     x = module.tensordot(a, b, axes=axes)
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
