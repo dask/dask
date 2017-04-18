@@ -58,6 +58,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         adt = a.dtype
         _check_dsk(a.dask)
         a = a.compute(get=get_sync)
+        if hasattr(a, 'todense'):
+            a = a.todense()
         if _not_empty(a):
             assert a.dtype == a_original.dtype
         if check_shape:
@@ -70,6 +72,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         bdt = b.dtype
         _check_dsk(b.dask)
         b = b.compute(get=get_sync)
+        if hasattr(b, 'todense'):
+            b = b.todense()
         if _not_empty(b):
             assert b.dtype == b_original.dtype
         if check_shape:

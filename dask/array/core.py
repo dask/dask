@@ -466,7 +466,12 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    return np.concatenate(arrays, axis=axes[0])
+    module = inspect.getmodule(arrays[0]) or np
+    try:
+        module.concatenate
+    except AttributeError:
+        module = np
+    return module.concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
@@ -927,7 +932,11 @@ def finalize(results):
     results2 = results
     while isinstance(results2, (tuple, list)):
         if len(results2) > 1:
-            return concatenate3(results)
+            x = unpack_singleton(results)
+            if inspect.getmodule(x):
+                return _concatenate2(results, axes=list(range(x.ndim)))
+            else:
+                return concatenate3(results)
         else:
             results2 = results2[0]
     return unpack_singleton(results)
@@ -2457,9 +2466,8 @@ def transpose(a, axes=None):
     else:
         axes = tuple(range(a.ndim))[::-1]
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
-    return atop(partial(np.transpose, axes=axes),
-                axes,
-                a, tuple(range(a.ndim)), dtype=a.dtype)
+    return atop(np.transpose, axes, a, tuple(range(a.ndim)),
+                dtype=a.dtype, axes=axes)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -2467,7 +2475,9 @@ ALPHABET = alphabet.upper()
 
 
 def _tensordot(a, b, axes):
-    x = np.tensordot(a, b, axes=axes)
+    x = max([a, b], key=lambda x: x.__array_priority__)
+    module = inspect.getmodule(x) or np
+    x = module.tensordot(a, b, axes=axes)
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
         ind.insert(a, None)
