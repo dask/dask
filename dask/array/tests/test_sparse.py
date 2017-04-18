@@ -1,10 +1,15 @@
+import sys
+
+import numpy as np
 import pytest
 import sparse
-from dask.array.utils import assert_eq
+
 import dask.array as da
-import numpy as np
+from dask.array.utils import assert_eq
 
 
+@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
+                    reason='indexing issues')
 @pytest.mark.parametrize('func', [
     lambda x: x,
     lambda x: da.expm1(x),
