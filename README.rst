@@ -8,6 +8,17 @@ Dask
 See documentation_ for more information.
 
 
+Use Cases
+---------
+
+* bigger-than-memory datasets
+* single machine parallelism
+* distributed cluster parallelism 
+* on disk arrays
+* directory of tabular files
+* computations with complex dependencies
+
+
 Sneak Peek
 ----------
 
