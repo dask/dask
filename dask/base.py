@@ -305,7 +305,7 @@ def _normalize_function(func):
 
 normalize_token = Dispatch()
 normalize_token.register((int, float, str, unicode, bytes, type(None), type,
-                          slice),
+                          slice, complex),
                          identity)
 
 
