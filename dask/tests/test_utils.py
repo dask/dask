@@ -11,7 +11,7 @@ from dask.utils import (textblock, filetext, takes_multiple_arguments,
                         Dispatch, tmpfile, random_state_data, file_size,
                         infer_storage_options, eq_strict, memory_repr,
                         methodcaller, M, skip_doctest, SerializableLock,
-                        funcname, ndeepmap, ensure_dict)
+                        funcname, ndeepmap, ensure_dict, package_of)
 from dask.utils_test import inc
 
 SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
@@ -347,3 +347,14 @@ def test_ensure_dict():
     md['x'] = 1
     assert type(ensure_dict(md)) is dict
     assert ensure_dict(md) == d
+
+
+def test_package_of():
+    import math
+    assert package_of(math.sin) is math
+    try:
+        import numpy
+    except ImportError:
+        pass
+    else:
+        assert package_of(numpy.memmap) is numpy

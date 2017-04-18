@@ -929,7 +929,8 @@ def finalize(results):
     while isinstance(results2, (tuple, list)):
         if len(results2) > 1:
             x = unpack_singleton(results)
-            if inspect.getmodule(x):
+            mod = inspect.getmodule(x)
+            if mod and mod is not np:
                 return _concatenate2(results, axes=list(range(x.ndim)))
             else:
                 return concatenate3(results)

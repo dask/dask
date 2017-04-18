@@ -1062,5 +1062,7 @@ def package_of(obj):
     """
     # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
     mod = inspect.getmodule(obj)
+    if not mod:
+        return
     base, _sep, _stem = mod.__name__.partition('.')
     return sys.modules[base]
