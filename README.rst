@@ -1,5 +1,6 @@
 |Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|
 
+
 Dask
 ====
 
@@ -7,6 +8,11 @@ Dask
 
 See documentation_ for more information.
 
+|
+
+.. image:: https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png
+   :alt: Dask collections and schedulers
+ 
 
 Use Cases
 ---------
@@ -73,11 +79,6 @@ Collections and Schedulers
 
 To handle more complex cases there are a variaty of abstractions and schedulers available.
 
-
-.. image:: https://github.com/dask/dask/blob/master/docs/source/images/collections-schedulers.png
-   :alt: Dask collections and schedulers
-   :align: center
-   
 
 Bag
 ---
