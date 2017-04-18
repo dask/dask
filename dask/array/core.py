@@ -2275,12 +2275,23 @@ def stack(seq, axis=0):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def concatenate(seq, axis=0):
+def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Concatenate arrays along an existing axis
 
     Given a sequence of dask Arrays form a new dask Array by stacking them
     along an existing dimension (axis=0 by default)
+
+    Parameters
+    ----------
+    seq: list of dask.arrays
+    axis: int
+        Dimension along which to align all of the arrays
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Examples
     --------
@@ -2314,8 +2325,14 @@ def concatenate(seq, axis=0):
         msg = ("Axis must be less than than number of dimensions"
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
-    if not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
-               for i in range(ndim)):
+    if (not allow_unknown_chunksizes and
+        not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
+                for i in range(ndim))):
+        if any(map(np.isnan, seq[0].shape)):
+            raise ValueError("Tried to concatenate arrays with unknown"
+                             " shape %s.  To force concatenation pass"
+                             " allow_unknown_chunksizes=True."
+                             % str(seq[0].shape))
         raise ValueError("Shapes do not align: %s", [x.shape for x in seq])
 
     inds = [list(range(ndim)) for i in range(n)]
