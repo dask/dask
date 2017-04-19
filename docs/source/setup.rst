@@ -37,6 +37,17 @@ from manualy SSH-ing into all of the nodes to more automated systems like
 SGE/SLURM/Torque or Yarn/Mesos. Additionally, cluster SSH tools exist to
 send the same commands to many machines. One example is `tmux-cssh`__.
 
+.. note::
+
+  - The scheduler and worker both need to accept TCP connections.  By default
+    the scheduler uses port 8786 and the worker binds to a random open port.
+    If you are behind a firewall then you may have to open particular ports or
+    tell Dask to use particular ports with the ``--port`` and ``-worker-port``
+    keywords.    Other ports like 8787, 8788, and 8789 are also useful to keep
+    open for the diagnostic web interfaces.
+  - More information about relevant ports is available by looking at the help
+    pages with ``dask-scheduler --help`` and ``dask-worker --help``
+
 __ https://github.com/dennishafemann/tmux-cssh
 
 
