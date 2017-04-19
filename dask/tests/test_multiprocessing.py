@@ -37,6 +37,35 @@ def test_errors_propagate():
         assert "12345" in str(e)
 
 
+global_lock = multiprocessing.Lock()
+def lock_func(i, l):
+    # we don't even have to use the lock to hang
+
+    return i
+
+@pytest.mark.timeout(10)
+@pytest.mark.xfail(reason="passing multiprocessing locks as dask task arguments "
+                          "hangs dask on call to _get")
+def test_lock():
+    dsk = {'x': (lock_func, 42, global_lock)}
+
+    assert get(dsk, 'x') == 42
+
+
+def global_lock_func(i):
+    # we don't even have to use the lock to hang
+
+    global_lock.acquire()
+    global_lock.release()
+
+    return i
+
+def test_global_lock():
+    dsk = {'x': (global_lock_func, 42)}
+
+    assert get(dsk, 'x') == 42
+    
+
 def make_bad_result():
     return lambda x: x + 1
 
