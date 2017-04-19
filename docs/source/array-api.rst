@@ -215,6 +215,11 @@ Random
    random.weibull
    random.zipf
 
+Image Support
+~~~~~~~~~~~~~
+
+.. autosummary::
+   image.imread
 
 Slightly Overlapping Ghost Computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -474,6 +479,10 @@ Other functions
 .. autofunction:: wald
 .. autofunction:: weibull
 .. autofunction:: zipf
+
+.. currentmodule:: dask.array.image
+
+.. autofunction:: imread
 
 .. currentmodule:: dask.array.core
 
