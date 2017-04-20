@@ -32,10 +32,10 @@ except:
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, urlopen
-from ..context import _globals
+from ..context import _globals, defer_to_globals
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
-from ..optimize import fuse, cull, inline
+from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
                      digit, insert)
 from ..bytes.core import write_bytes
@@ -105,6 +105,7 @@ def inline_singleton_lists(dsk, dependencies=None):
     return dsk
 
 
+@defer_to_globals('bag_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask.bag """
     dsk2, dependencies = cull(dsk, keys)

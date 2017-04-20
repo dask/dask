@@ -14,7 +14,8 @@ except ImportError:
 from . import base, threaded
 from .compatibility import apply
 from .core import quote
-from .context import _globals
+from .context import _globals, defer_to_globals
+from .optimize import dont_optimize
 from .utils import concrete, funcname, methodcaller, ensure_dict
 from . import sharedict
 
@@ -346,6 +347,9 @@ def right(method):
     return _inner
 
 
+optimize = defer_to_globals('delayed_optimize', falsey=dont_optimize)(dont_optimize)
+
+
 class Delayed(base.Base):
     """Represents a value to be computed by dask.
 
@@ -354,7 +358,7 @@ class Delayed(base.Base):
     __slots__ = ('_key', 'dask', '_length')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
-    _optimize = staticmethod(lambda d, k, **kwds: d)
+    _optimize = staticmethod(optimize)
 
     def __init__(self, key, dsk, length=None):
         self._key = key

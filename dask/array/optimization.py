@@ -5,11 +5,13 @@ from operator import getitem
 import numpy as np
 
 from .core import getarray, getarray_nofancy, getarray_inline
+from ..context import defer_to_globals
 from ..core import flatten, reverse_dict
-from ..optimize import cull, fuse, inline_functions
+from ..optimize import cull, fuse, inline_functions, dont_optimize
 from ..utils import ensure_dict
 
 
+@defer_to_globals('array_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
              inline_functions_fast_functions=(getarray_inline,), rename_fused_keys=True,
              **kwargs):
