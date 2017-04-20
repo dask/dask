@@ -60,6 +60,7 @@ def defer_to_globals(name, falsey=None):
     Examples
     --------
 
+    >>> import dask
     >>> @defer_to_globals('foo')
     ... def f():
     ...     return 1
@@ -67,7 +68,7 @@ def defer_to_globals(name, falsey=None):
     >>> f()
     1
 
-    >>> with dask.set_options(foo=lambda: 2)
+    >>> with dask.set_options(foo=lambda: 2):
     ...     print(f())
     2
     """
