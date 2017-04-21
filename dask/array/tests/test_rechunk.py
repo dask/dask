@@ -393,3 +393,79 @@ def test_dont_concatenate_single_chunks(shape, chunks):
     assert not any(funcname(task[0]).startswith('concat')
                    for task in dsk.values()
                    if dask.istask(task))
+
+
+def test_rechunk_unknown1():
+    dd = pytest.importorskip('dask.dataframe')
+    pd = pytest.importorskip('pandas')
+
+    x = dd.from_pandas(pd.DataFrame(np.random.randn(50, 10)), 2).values
+    # result = x.rechunk({1: 5})
+    result = x.rechunk((None, (5, 5)))
+    assert np.isnan(x.chunks[0]).all()
+    assert np.isnan(result.chunks[0]).all()
+    assert result.chunks[1] == (5, 5)
+
+
+def test_rechunk_unknown2():
+    import dask; dask.set_options(get=dask.get)  # noqa
+    dd = pytest.importorskip('dask.dataframe')
+    # pd = pytest.importorskip('pandas')
+    x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
+    # result = x.rechunk({1: 5})
+    result = x.rechunk((None, 4))
+    assert np.isnan(x.chunks[0]).all()
+    assert np.isnan(result.chunks[0]).all()
+    assert x.chunks[1] == (4,)
+
+
+def test_breakpoints_order_nan():
+    old = (('o', 0), ('o', np.nan), ('o', np.nan))
+    new = (('n', 0), ('n', np.nan), ('n', np.nan))
+
+    result = _breakpoints(old, new)
+    expected = (('o', 0), ('n', 0),
+                ('o', np.nan), ('n', np.nan),
+                ('o', np.nan), ('n', np.nan))
+    # apparently (np.nan,) == (np.nan,) even though
+    # float('nan',)  is (correctly) not equal to itself
+    assert result == expected
+
+
+@pytest.mark.parametrize('x, chunks', [
+    (da.ones(shape=(50, 10), chunks=(25, 10)), (None, 5)),
+    (da.ones(shape=(50, 10), chunks=(25, 10)), {1: 5}),
+    (da.ones(shape=(50, 10), chunks=(25, 10)), (None, (5, 5))),
+
+    (da.ones(shape=(1000, 10), chunks=(5, 10)), (None, 5)),
+    (da.ones(shape=(1000, 10), chunks=(5, 10)), {1: 5}),
+    (da.ones(shape=(1000, 10), chunks=(5, 10)), (None, (5, 5))),
+
+    # this block does fail...
+    (da.ones(shape=(10, 10), chunks=(10, 10)), (None, 5)),
+    (da.ones(shape=(10, 10), chunks=(10, 10)), {1: 5}),
+    (da.ones(shape=(10, 10), chunks=(10, 10)), (None, (5, 5))),
+])
+def test_rechunk_unknown(x, chunks):
+    dd = pytest.importorskip('dask.dataframe')
+    y = dd.from_array(x).values
+    result = y.rechunk(chunks)
+    expected = x.rechunk(chunks)
+
+    assert_chunks_match(result.chunks, expected.chunks)
+
+
+def assert_chunks_match(left, right):
+    for x, y in zip(left, right):
+        if np.isnan(x).any():
+            assert np.isnan(x).all()
+        else:
+            assert x == y
+
+
+def test_rechunk_unknown_raises():
+    dd = pytest.importorskip('dask.dataframe')
+
+    x = dd.from_array(da.ones(shape=(10, 10), chunks=(5, 5))).values
+    with pytest.raises(ValueError):
+        x.rechunk((None, (5, 5, 5)))

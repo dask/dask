@@ -14,7 +14,7 @@ from operator import getitem, add, mul, itemgetter
 
 import numpy as np
 import toolz
-from toolz import accumulate, reduce
+from toolz import accumulate, reduce, interleave
 
 from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
@@ -45,7 +45,15 @@ def _breakpoints(cumold, cumnew):
     >>> _breakpoints(new[1], old[1])
     (('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
     """
-    return tuple(sorted(cumold + cumnew, key=itemgetter(1)))
+    merged = cumold + cumnew
+    if any(v != v for _, v in merged):
+        # If you have an unknown dim, then it's always the same:
+        # 0 followed by NaNs. Later on, it's nice to interleave the
+        # 'o', 'n', 'o', 'n', so special case
+        result = tuple(interleave([cumold, cumnew]))
+    else:
+        result = tuple(sorted(cumold + cumnew, key=itemgetter(1)))
+    return result
 
 
 def _intersect_1d(breaks):
@@ -90,9 +98,21 @@ def _intersect_1d(breaks):
             start = 0
         else:
             start = last_end
-        end = br - last_br + start
+        if br != br:
+            end = None
+        else:
+            end = br - last_br + start
         last_end = end
-        if br == last_br:
+        if br == last_br or (
+            # need to special case unknown since last_br is nan
+            last_br != last_br and (
+                # Safe to continue when start != since NaN implies
+                # slice(None), the entire partition.
+                # Need to special case a when the dimension has a single
+                # block (ret == []).
+                start != 0 or (idx == len(breaks) - 1 and ret == [])
+            )
+        ):
             continue
         ret_next.append((old_idx, slice(start, end)))
         if label == 'o':
@@ -129,6 +149,9 @@ def intersect_chunks(old_chunks, new_chunks):
     cmn = cumdims_label(new_chunks, 'n')
     sums = [sum(o) for o in old_chunks]
     sums2 = [sum(n) for n in old_chunks]
+
+    sums = [x for x in sums if x == x]  # filter NaNs
+    sums2 = [x for x in sums2 if x == x]
     if not sums == sums2:
         raise ValueError('Cannot change dimensions from to %r' % sums2)
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1]))
@@ -216,8 +239,13 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     if chunks == x.chunks:
         return x
     ndim = x.ndim
-    if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
+    if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+    new_shapes = tuple(map(sum, chunks))
+
+    for new, old in zip(new_shapes, x.shape):
+        if new != old and not np.isnan(old) and not np.isnan(new):
+            raise ValueError("Provided chunks are not consistent with shape")
 
     steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize,
                          threshold, block_size_limit)
@@ -430,6 +458,8 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
         The maximum block size (in bytes) we want to produce during an
         intermediate step
     """
+    # TODO: revisit this for unknown chunks. Is this still correct?
+    # Do we have to worry about the memory sizes not being respected?
     ndim = len(new_chunks)
     steps = []
     if ndim <= 1 or not all(new_chunks):
@@ -589,7 +619,8 @@ def format_blocks(blocks):
     2*[10] | [5, 6] | 3*[2] | [7]
     """
     assert (isinstance(blocks, tuple) and
-            all(isinstance(x, int) for x in blocks))
+            all(isinstance(x, int) or np.isnan(x)
+                for x in blocks))
     return _PrettyBlocks(blocks)
 
 
