@@ -24,10 +24,10 @@ from .utils import PANDAS_VERSION
 # XXX: Pandas uses release branches > 0.19.0, which doesn't play well with
 # versioneer, since the release tags aren't ancestors of master. As such, we
 # need to use this hacky awfulness to check if we're > 0.19.2.
-if PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+460':
-    from pandas.tools.hashing import hash_pandas_object
-elif PANDAS_VERSION >= '0.20.0':
+if PANDAS_VERSION >= '0.20.0':
     from pandas.util.hashing import hash_pandas_object
+elif PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+460':
+    from pandas.tools.hashing import hash_pandas_object
 else:
     from pandas.types.common import (is_categorical_dtype, is_numeric_dtype,
                                      is_datetime64_dtype, is_timedelta64_dtype)
