@@ -27,7 +27,7 @@ from .utils import PANDAS_VERSION
 if PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+460':
     from pandas.tools.hashing import hash_pandas_object
 elif PANDAS_VERSION >= '0.20.0':
-    from pandas.utils.hashing import hash_pandas_object
+    from pandas.util.hashing import hash_pandas_object
 else:
     from pandas.types.common import (is_categorical_dtype, is_numeric_dtype,
                                      is_datetime64_dtype, is_timedelta64_dtype)
