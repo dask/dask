@@ -24,7 +24,7 @@ from .utils import PANDAS_VERSION
 # XXX: Pandas uses release branches > 0.19.0, which doesn't play well with
 # versioneer, since the release tags aren't ancestors of master. As such, we
 # need to use this hacky awfulness to check if we're > 0.19.2.
-if PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+340':
+if PANDAS_VERSION not in ('0.19.1', '0.19.2') and PANDAS_VERSION > '0.19.0+460':
     from pandas.tools.hashing import hash_pandas_object
 else:
     from pandas.types.common import (is_categorical_dtype, is_numeric_dtype,
@@ -84,9 +84,18 @@ else:
         return h
 
     def _hash_categorical(c, encoding, hash_key):
-        cat_hashed = hash_array(c.categories.values, encoding, hash_key,
-                                categorize=False).astype(np.uint64, copy=False)
-        return c.rename_categories(cat_hashed).astype(np.uint64)
+        hashed = hash_array(c.categories.values, encoding, hash_key,
+                            categorize=False)
+        mask = c.isnull()
+        if len(hashed):
+            result = hashed.take(c.codes)
+        else:
+            result = np.zeros(len(mask), dtype='uint64')
+
+        if mask.any():
+            result[mask] = np.iinfo(np.uint64).max
+
+        return result
 
     def hash_array(vals, encoding='utf8', hash_key=None, categorize=True):
         if hash_key is None:
