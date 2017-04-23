@@ -3,9 +3,13 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
-from pandas.types.concat import union_categoricals
 from toolz import partition
 
+from .utils import PANDAS_VERSION
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.api.types import union_categoricals
+else:
+    from pandas.types.concat import union_categoricals
 
 # ---------------------------------
 # indexing
