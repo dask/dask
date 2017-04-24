@@ -231,10 +231,12 @@ def test_from_pandas_dataframe():
     tm.assert_frame_equal(df, ddf.compute())
     ddf = dd.from_pandas(df, chunksize=8)
     msg = 'Exactly one of npartitions and chunksize must be specified.'
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         dd.from_pandas(df, npartitions=2, chunksize=2)
-    with tm.assertRaisesRegexp((ValueError, AssertionError), msg):
+    assert msg in str(err.value)
+    with pytest.raises((ValueError, AssertionError)) as err:
         dd.from_pandas(df)
+    assert msg in str(err.value)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))

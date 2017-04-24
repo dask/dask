@@ -4,11 +4,16 @@ import warnings
 
 import pandas as pd
 import numpy as np
-from pandas.tseries.resample import Resampler as pd_Resampler
 
 from ..core import DataFrame, Series
+from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.core.resample import Resampler as pd_Resampler
+else:
+    from pandas.tseries.resample import Resampler as pd_Resampler
 
 
 def getnanos(rule):

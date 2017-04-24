@@ -49,7 +49,7 @@ conda install -q -c pandas -c conda-forge \
     scikit-image \
     scikit-learn \
     scipy \
-    sqlalchemy \
+    "sqlalchemy>=1.1.5" \
     toolz
 
 # Specify numpy/pandas here to prevent upgrade/downgrade

@@ -11,6 +11,7 @@ from toolz import merge
 from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
 from .hashing import hash_pandas_object
+from .utils import PANDAS_VERSION
 
 from .. import base
 from ..base import tokenize, compute
@@ -18,6 +19,11 @@ from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas._libs.algos import groupsort_indexer
+else:
+    from pandas.algos import groupsort_indexer
 
 
 def set_index(df, index, npartitions=None, shuffle=None, compute=False,
@@ -383,7 +389,7 @@ def shuffle_group_2(df, col):
         return {}, df
     ind = df[col]._values.astype(np.int64)
     n = ind.max() + 1
-    indexer, locations = pd.algos.groupsort_indexer(ind.view(np.int64), n)
+    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
@@ -416,7 +422,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
 
-    indexer, locations = pd.algos.groupsort_indexer(c.astype(np.int64), k)
+    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]

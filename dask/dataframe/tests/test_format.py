@@ -2,6 +2,25 @@
 import pandas as pd
 
 import dask.dataframe as dd
+from dask.dataframe.utils import PANDAS_VERSION
+
+if PANDAS_VERSION >= '0.20.0':
+    style = """<style>
+    .dataframe thead tr:only-child th {
+        text-align: right;
+    }
+
+    .dataframe thead th {
+        text-align: left;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+</style>
+"""
+else:
+    style = ""
 
 
 def test_repr():
@@ -96,12 +115,12 @@ def test_dataframe_format():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -170,12 +189,12 @@ def test_dataframe_format_with_index():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -254,12 +273,12 @@ def test_dataframe_format_unknown_divisions():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -346,9 +365,9 @@ def test_dataframe_format_long():
     # table is boxed with div
     exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 10 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 10 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
