@@ -30,7 +30,7 @@ echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
 # dependencies in two separate calls, otherwise we sometimes get version
 # incompatible with the installed version of numpy leading to crashes. This
 # seems to have to do with differences between conda-forge and defaults.
-conda install -q -c pandas -c conda-forge \
+conda install -q -c conda-forge \
     numpy \
     pandas \
     bcolz \
@@ -49,7 +49,7 @@ conda install -q -c pandas -c conda-forge \
     scikit-image \
     scikit-learn \
     scipy \
-    "sqlalchemy>=1.1.5" \
+    sqlalchemy \
     toolz
 
 # Specify numpy/pandas here to prevent upgrade/downgrade
