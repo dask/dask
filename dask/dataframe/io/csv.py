@@ -10,7 +10,6 @@ except ImportError:
     psutil = None
 
 import pandas as pd
-from pandas.types.common import is_integer_dtype, is_float_dtype
 
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
@@ -18,9 +17,14 @@ from ...bytes.compression import seekable_files, files as cfiles
 from ...compatibility import PY2, PY3
 from ...delayed import delayed
 
-from ..utils import clear_known_categories
+from ..utils import clear_known_categories, PANDAS_VERSION
 
 from .io import from_delayed
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.api.types import is_integer_dtype, is_float_dtype
+else:
+    from pandas.types.common import is_integer_dtype, is_float_dtype
 
 
 delayed = delayed(pure=True)

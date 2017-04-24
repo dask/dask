@@ -16,7 +16,13 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe.methods import boundary_slice
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
+                                  PANDAS_VERSION)
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.io.formats import format as pandas_format
+else:
+    from pandas.formats import format as pandas_format
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -290,8 +296,9 @@ def test_set_index_raises_error_on_bad_input():
     ddf = dd.from_pandas(df, 2)
 
     msg = r"Dask dataframe does not yet support multi-indexes"
-    with tm.assertRaisesRegexp(NotImplementedError, msg):
+    with pytest.raises(NotImplementedError) as err:
         ddf.set_index(['a', 'b'])
+    assert msg in str(err.value)
 
 
 def test_rename_columns():
@@ -307,8 +314,9 @@ def test_rename_columns():
     assert_eq(ddf, df)
 
     msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         ddf.columns = [1, 2, 3, 4]
+    assert msg in str(err.value)
 
     # Multi-index columns
     df = pd.DataFrame({('A', '0') : [1, 2, 2, 3], ('B', 1) : [1, 2, 3, 4]})
@@ -485,8 +493,8 @@ def test_where_mask():
     ddf5 = dd.from_pandas(pdf5, 2)
     pdf6 = pd.DataFrame({'a': [True, False, True] * 3,
                          'b': [False, False, True] * 3,
-                         'd': [False] * 9,
-                         'e': [True] * 9},
+                         'c': [False] * 9,
+                         'd': [True] * 9},
                         index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
     ddf6 = dd.from_pandas(pdf6, 2)
 
@@ -514,11 +522,8 @@ def test_where_mask():
         assert_eq(ddf.where(ddcond, -ddf), pdf.where(pdcond, -pdf))
         assert_eq(ddf.mask(ddcond, -ddf), pdf.mask(pdcond, -pdf))
 
-        # ToDo: Should work on pandas 0.17
-        # https://github.com/pydata/pandas/pull/10283
-        # assert_eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
-        # assert_eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
-
+        assert_eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
+        assert_eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
         assert_eq(ddf.a.where(ddcond.a), pdf.a.where(pdcond.a))
         assert_eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a))
         assert_eq(ddf.a.where(ddcond.a, -ddf.a), pdf.a.where(pdcond.a, -pdf.a))
@@ -708,10 +713,10 @@ def test_get_partition():
     assert_eq(div3, pdf.a.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf.get_partition(-1)
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf.get_partition(3)
 
 
@@ -1027,10 +1032,10 @@ def test_align_axis(join):
     assert assert_eq(res2, exp2)
 
     # invalid
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf1a.align(ddf1b, join=join, axis='XXX')
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
 
 
@@ -1867,10 +1872,10 @@ def test_apply():
     assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
-    with tm.assertRaises(NotImplementedError):
+    with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis=0)
 
-    with tm.assertRaises(NotImplementedError):
+    with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis='index')
 
 
@@ -2083,9 +2088,9 @@ def test_nlargest_nsmallest():
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf, 5, ['a', 'b'])
-        res2 = f(ddf, 5, ['a', 'b'], split_every=2)
-        sol = f(df, 5, ['a', 'b'])
+        res = f(ddf, 5, ['a', 'c'])
+        res2 = f(ddf, 5, ['a', 'c'], split_every=2)
+        sol = f(df, 5, ['a', 'c'])
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
@@ -2263,8 +2268,7 @@ def _assert_info(df, ddf, memory_usage=True):
 def test_info():
     from io import StringIO
     from dask.compatibility import unicode
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     test_frames = [
         pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=pd.Int64Index(range(4))),  # No RangeIndex in dask
@@ -2293,8 +2297,7 @@ def test_groupby_multilevel_info():
     from io import StringIO
     from dask.compatibility import unicode
 
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     df = pd.DataFrame({'A': [1, 1, 2, 2],
                        'B': [1, 2, 3, 4],
@@ -2327,8 +2330,7 @@ def test_categorize_info():
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
     from dask.compatibility import unicode
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': pd.Series(list('aabc')),

@@ -33,11 +33,14 @@ from .categorical import CategoricalAccessor, categorize
 from .hashing import hash_pandas_object
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
-                    is_categorical_dtype, has_known_categories)
+                    is_categorical_dtype, has_known_categories, PANDAS_VERSION)
 
 no_default = '__no_default__'
 
-pd.computation.expressions.set_use_numexpr(False)
+if PANDAS_VERSION >= '0.20.0':
+    pd.core.computation.expressions.set_use_numexpr(False)
+else:
+    pd.computation.expressions.set_use_numexpr(False)
 
 
 def _concat(args):
@@ -2680,7 +2683,10 @@ class DataFrame(_Frame):
             lines.append(index.summary())
             lines.append('Data columns (total {} columns):'.format(len(self.columns)))
 
-            from pandas.formats.printing import pprint_thing
+            if PANDAS_VERSION >= '0.20.0':
+                from pandas.io.formats.printing import pprint_thing
+            else:
+                from pandas.formats.printing import pprint_thing
             space = max([len(pprint_thing(k)) for k in self.columns]) + 3
             column_template = '{!s:<%d} {} non-null {}' % space
             column_info = [column_template.format(pprint_thing(x[0]), x[1], x[2])

@@ -61,20 +61,22 @@ def groupby_error():
                         'y': list('abcbabbcda')})
     ddf = dd.from_pandas(pdf, 3)
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ddf.groupby('A')
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ddf.groupby(['x', 'A'])
 
     dp = ddf.groupby('y')
 
     msg = 'Column not found: '
-    with tm.assertRaisesRegexp(KeyError, msg):
+    with pytest.raises(KeyError) as err:
         dp['A']
+    assert msg in str(err.value)
 
-    with tm.assertRaisesRegexp(KeyError, msg):
+    with pytest.raises(KeyError) as err:
         dp[['x', 'A']]
+    assert msg in str(err.value)
 
 
 def groupby_internal_head():
@@ -288,17 +290,19 @@ def test_series_groupby_errors():
     ss = dd.from_pandas(s, npartitions=2)
 
     msg = "No group keys passed!"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         s.groupby([])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
+    assert msg in str(err.value)
+    with pytest.raises(ValueError) as err:
         ss.groupby([])   # dask should raise the same error
+    assert msg in str(err.value)
 
     sss = dd.from_pandas(s, npartitions=3)
     pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         s.groupby('x')    # pandas
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ss.groupby('x')   # dask should raise the same error
 
 

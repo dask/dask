@@ -252,7 +252,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [df if isinstance(df, pd.DataFrame) else
-                    df.rename(0).to_frame() for df in dfs2]
+                    df.to_frame().rename(columns={df.name: 0}) for df in dfs2]
             cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
                                   for df in dfs3], join=join).any()
 
