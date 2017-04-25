@@ -834,10 +834,17 @@ class _GroupBy(object):
             else:
                 group_columns = set()
 
-            # NOTE: this step relies on the index normalization to replace
-            #       series with their name in an index.
-            non_group_columns = [col for col in self.obj.columns
-                                 if col not in group_columns]
+            if self._slice:
+                # pandas doesn't exclude the grouping column in a SeriesGroupBy
+                # like df.groupby('a')['a'].agg(...)
+                non_group_columns = self._slice
+                if not isinstance(non_group_columns, list):
+                    non_group_columns = [non_group_columns]
+            else:
+                # NOTE: this step relies on the index normalization to replace
+                #       series with their name in an index.
+                non_group_columns = [col for col in self.obj.columns
+                                     if col not in group_columns]
 
             spec = _normalize_spec(arg, non_group_columns)
 
@@ -1069,7 +1076,10 @@ class SeriesGroupBy(_GroupBy):
             return getattr(self, arg)(split_every=split_every,
                                       split_out=split_out)
 
-        return super(SeriesGroupBy, self).aggregate(arg, split_every=split_every, split_out=split_out)
+        result = super(SeriesGroupBy, self).aggregate(arg, split_every=split_every, split_out=split_out)
+        if self._slice:
+            result = result[self._slice]
+        return result
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
