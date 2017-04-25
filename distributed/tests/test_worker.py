@@ -661,3 +661,16 @@ def test_worker_death_timeout():
 
     yield gen.sleep(3)
     assert w.status == 'closed'
+
+
+@gen_cluster(client=True)
+def test_stop_doing_unnecessary_work(c, s, a, b):
+    futures = c.map(slowinc, range(1000), delay=0.01)
+    yield gen.sleep(0.1)
+
+    del futures
+
+    start = time()
+    while a.executing:
+        yield gen.sleep(0.01)
+        assert time() - start < 0.5

@@ -2500,6 +2500,7 @@ class Scheduler(Server):
                 self.total_occupancy -= duration
                 self.check_idle_saturated(w)
                 self.release_resources(key, w)
+                self.worker_comms[w].send({'op': 'release-task', 'key': key})
 
             self.released.add(key)
             self.task_state[key] = 'released'
