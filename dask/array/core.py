@@ -928,12 +928,7 @@ def finalize(results):
     results2 = results
     while isinstance(results2, (tuple, list)):
         if len(results2) > 1:
-            x = unpack_singleton(results)
-            mod = inspect.getmodule(x)
-            if mod and mod is not np and hasattr(mod, 'concatenate'):
-                return _concatenate2(results, axes=list(range(x.ndim)))
-            else:  # optimized solution for np or anything without concatenate
-                return concatenate3(results)
+            return concatenate3(results)
         else:
             results2 = results2[0]
     return unpack_singleton(results)
@@ -3420,6 +3415,11 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    x = unpack_singleton(arrays)
+    mod = inspect.getmodule(x)
+    if mod and mod is not np and hasattr(mod, 'concatenate'):
+        return _concatenate2(arrays, axes=list(range(x.ndim)))
+
     arrays = concrete(arrays)
     ndim = ndimlist(arrays)
     if not ndim:
