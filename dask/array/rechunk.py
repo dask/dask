@@ -7,6 +7,7 @@ The rechunk module defines:
 """
 from __future__ import absolute_import, division, print_function
 
+import math
 import heapq
 
 from itertools import product, chain, count
@@ -150,8 +151,8 @@ def intersect_chunks(old_chunks, new_chunks):
     sums = [sum(o) for o in old_chunks]
     sums2 = [sum(n) for n in old_chunks]
 
-    sums = [x for x in sums if x == x]  # filter NaNs
-    sums2 = [x for x in sums2 if x == x]
+    sums = [x for x in sums if not math.isnan(x)]
+    sums2 = [x for x in sums2 if not math.isnan(x)]
     if not sums == sums2:
         raise ValueError('Cannot change dimensions from to %r' % sums2)
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1]))
@@ -244,7 +245,7 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     new_shapes = tuple(map(sum, chunks))
 
     for new, old in zip(new_shapes, x.shape):
-        if new != old and not np.isnan(old) and not np.isnan(new):
+        if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
 
     steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize,
@@ -619,7 +620,7 @@ def format_blocks(blocks):
     2*[10] | [5, 6] | 3*[2] | [7]
     """
     assert (isinstance(blocks, tuple) and
-            all(isinstance(x, int) or np.isnan(x)
+            all(isinstance(x, int) or math.isnan(x)
                 for x in blocks))
     return _PrettyBlocks(blocks)
 

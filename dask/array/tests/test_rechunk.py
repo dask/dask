@@ -395,30 +395,6 @@ def test_dont_concatenate_single_chunks(shape, chunks):
                    if dask.istask(task))
 
 
-def test_rechunk_unknown1():
-    dd = pytest.importorskip('dask.dataframe')
-    pd = pytest.importorskip('pandas')
-
-    x = dd.from_pandas(pd.DataFrame(np.random.randn(50, 10)), 2).values
-    # result = x.rechunk({1: 5})
-    result = x.rechunk((None, (5, 5)))
-    assert np.isnan(x.chunks[0]).all()
-    assert np.isnan(result.chunks[0]).all()
-    assert result.chunks[1] == (5, 5)
-
-
-def test_rechunk_unknown2():
-    import dask; dask.set_options(get=dask.get)  # noqa
-    dd = pytest.importorskip('dask.dataframe')
-    # pd = pytest.importorskip('pandas')
-    x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
-    # result = x.rechunk({1: 5})
-    result = x.rechunk((None, 4))
-    assert np.isnan(x.chunks[0]).all()
-    assert np.isnan(result.chunks[0]).all()
-    assert x.chunks[1] == (4,)
-
-
 def test_breakpoints_order_nan():
     old = (('o', 0), ('o', np.nan), ('o', np.nan))
     new = (('n', 0), ('n', np.nan), ('n', np.nan))
@@ -432,6 +408,30 @@ def test_breakpoints_order_nan():
     assert result == expected
 
 
+def test_rechunk_unknown_from_pandas():
+    dd = pytest.importorskip('dask.dataframe')
+    pd = pytest.importorskip('pandas')
+
+    x = dd.from_pandas(pd.DataFrame(np.random.randn(50, 10)), 2).values
+    # result = x.rechunk({1: 5})
+    result = x.rechunk((None, (5, 5)))
+    assert np.isnan(x.chunks[0]).all()
+    assert np.isnan(result.chunks[0]).all()
+    assert result.chunks[1] == (5, 5)
+
+
+def test_rechunk_unknown_from_array():
+    import dask; dask.set_options(get=dask.get)  # noqa
+    dd = pytest.importorskip('dask.dataframe')
+    # pd = pytest.importorskip('pandas')
+    x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
+    # result = x.rechunk({1: 5})
+    result = x.rechunk((None, 4))
+    assert np.isnan(x.chunks[0]).all()
+    assert np.isnan(result.chunks[0]).all()
+    assert x.chunks[1] == (4,)
+
+
 @pytest.mark.parametrize('x, chunks', [
     (da.ones(shape=(50, 10), chunks=(25, 10)), (None, 5)),
     (da.ones(shape=(50, 10), chunks=(25, 10)), {1: 5}),
@@ -441,10 +441,13 @@ def test_breakpoints_order_nan():
     (da.ones(shape=(1000, 10), chunks=(5, 10)), {1: 5}),
     (da.ones(shape=(1000, 10), chunks=(5, 10)), (None, (5, 5))),
 
-    # this block does fail...
     (da.ones(shape=(10, 10), chunks=(10, 10)), (None, 5)),
     (da.ones(shape=(10, 10), chunks=(10, 10)), {1: 5}),
     (da.ones(shape=(10, 10), chunks=(10, 10)), (None, (5, 5))),
+
+    (da.ones(shape=(10, 10), chunks=(10, 2)), (None, 5)),
+    (da.ones(shape=(10, 10), chunks=(10, 2)), {1: 5}),
+    (da.ones(shape=(10, 10), chunks=(10, 2)), (None, (5, 5))),
 ])
 def test_rechunk_unknown(x, chunks):
     dd = pytest.importorskip('dask.dataframe')
