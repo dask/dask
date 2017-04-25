@@ -44,6 +44,7 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
+    pyarrow \
     pytables \
     pytest \
     scikit-image \
@@ -62,7 +63,7 @@ pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
 
 if [[ $PYTHONOPTIMIZE != '2' ]]; then
-    conda install -q -c conda-forge numba cython pyarrow
+    conda install -q -c conda-forge numba cython
     pip install -q git+https://github.com/dask/fastparquet
 fi
 
