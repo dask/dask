@@ -8,7 +8,7 @@ import dask
 from dask.utils import funcname
 from dask.array.utils import assert_eq
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
-from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
+from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d, _old_to_new
 from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
 import dask.array as da
 
@@ -395,16 +395,46 @@ def test_dont_concatenate_single_chunks(shape, chunks):
                    if dask.istask(task))
 
 
-def test_breakpoints_order_nan():
-    old = (('o', 0), ('o', np.nan), ('o', np.nan))
-    new = (('n', 0), ('n', np.nan), ('n', np.nan))
+def test_intersect_nan():
+    old_chunks = ((float('nan'), float('nan')), (8,))
+    new_chunks = ((float('nan'), float('nan')), (4, 4))
 
-    result = _breakpoints(old, new)
-    expected = (('o', 0), ('n', 0),
-                ('o', np.nan), ('n', np.nan),
-                ('o', np.nan), ('n', np.nan))
-    # apparently (np.nan,) == (np.nan,) even though
-    # float('nan',)  is (correctly) not equal to itself
+    result = list(intersect_chunks(old_chunks, new_chunks))
+    expected = [(((0, slice(0, None, None)), (0, slice(0, 4, None))),
+                ((1, slice(0, None, None)), (0, slice(0, 4, None)))),
+                (((0, slice(0, None, None)), (0, slice(4, 8, None))),
+                ((1, slice(0, None, None)), (0, slice(4, 8, None)))),
+                (((1, slice(0, None, None)), (0, slice(0, 4, None))),),
+                (((1, slice(0, None, None)), (0, slice(4, 8, None))),)]
+    assert result == expected
+
+
+def test_intersect_nan_single():
+    old_chunks = ((float('nan'),), (10,))
+    new_chunks = ((float('nan'),), (5, 5))
+
+    result = list(intersect_chunks(old_chunks, new_chunks))
+    expected = [(((0, slice(0, None, None)), (0, slice(0, 5, None))),),
+                (((0, slice(0, None, None)), (0, slice(5, 10, None))),)]
+    assert result == expected
+
+
+def test_intersect_nan_long():
+
+    old_chunks = (tuple([float('nan')] * 4), (10,))
+    new_chunks = (tuple([float('nan')] * 4), (5, 5))
+    result = list(intersect_chunks(old_chunks, new_chunks))
+    expected = [
+        (((0, slice(0, None, None)), (0, slice(0, 5, None))),
+         ((1, slice(0, None, None)), (0, slice(0, 5, None)))),
+        (((0, slice(0, None, None)), (0, slice(5, 10, None))),
+         ((1, slice(0, None, None)), (0, slice(5, 10, None)))),
+        (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((1, slice(0, None, None)), (0, slice(5, 10, None))),),
+        (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((1, slice(0, None, None)), (0, slice(5, 10, None))),),
+        (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((1, slice(0, None, None)), (0, slice(5, 10, None))),)]
     assert result == expected
 
 
@@ -472,3 +502,55 @@ def test_rechunk_unknown_raises():
     x = dd.from_array(da.ones(shape=(10, 10), chunks=(5, 5))).values
     with pytest.raises(ValueError):
         x.rechunk((None, (5, 5, 5)))
+
+
+def test_old_to_new_single():
+    old = ((float('nan'), float('nan')), (8,))
+    new = ((float('nan'), float('nan')), (4, 4))
+    result = _old_to_new(old, new)
+    expected = [[[(0, slice(0, None, None)), (1, slice(0, None, None))],
+                 [(1, slice(0, None, None))]],
+                [[(0, slice(0, 4, None))], [(0, slice(4, 8, None))]]]
+    assert result == expected
+
+
+def test_old_to_new():
+    old = ((float('nan'),), (10,))
+    new = ((float('nan'),), (5, 5))
+    result = _old_to_new(old, new)
+    expected = [[[(0, slice(0, None, None))]],
+                [[(0, slice(0, 5, None))], [(0, slice(5, 10, None))]]]
+
+    assert result == expected
+
+
+def test_old_to_new_large():
+    old = (tuple([float('nan')] * 4), (10,))
+    new = (tuple([float('nan')] * 4), (5, 5))
+
+    result = _old_to_new(old, new)
+
+    expected = [[[(0, slice(0, None, None)), (1, slice(0, None, None))],
+                [(1, slice(0, None, None))],
+                [(1, slice(0, None, None))],
+                [(1, slice(0, None, None))]],
+                [[(0, slice(0, 5, None))], [(0, slice(5, 10, None))]]]
+    assert result == expected
+
+
+def test_changing_raises():
+    nan = float('nan')
+    with pytest.raises(ValueError) as record:
+        _old_to_new(((nan, nan), (4, 4)), ((nan, nan, nan), (4, 4)))
+
+    assert 'unchanging' in str(record.value)
+
+
+def test_old_to_new_known():
+    old = ((10, 10, 10, 10, 10), )
+    new = ((25, 5, 20), )
+    result = _old_to_new(old, new)
+    expected = [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
+                [(2, slice(5, 10, None))],
+                [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
+    assert result == expected

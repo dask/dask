@@ -15,7 +15,7 @@ from operator import getitem, add, mul, itemgetter
 
 import numpy as np
 import toolz
-from toolz import accumulate, reduce, interleave
+from toolz import accumulate, reduce
 
 from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
@@ -46,15 +46,7 @@ def _breakpoints(cumold, cumnew):
     >>> _breakpoints(new[1], old[1])
     (('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
     """
-    merged = cumold + cumnew
-    if any(v != v for _, v in merged):
-        # If you have an unknown dim, then it's always the same:
-        # 0 followed by NaNs. Later on, it's nice to interleave the
-        # 'o', 'n', 'o', 'n', so special case
-        result = tuple(interleave([cumold, cumnew]))
-    else:
-        result = tuple(sorted(cumold + cumnew, key=itemgetter(1)))
-    return result
+    return tuple(sorted(cumold + cumnew, key=itemgetter(1)))
 
 
 def _intersect_1d(breaks):
@@ -99,21 +91,9 @@ def _intersect_1d(breaks):
             start = 0
         else:
             start = last_end
-        if br != br:
-            end = None
-        else:
-            end = br - last_br + start
+        end = br - last_br + start
         last_end = end
-        if br == last_br or (
-            # need to special case unknown since last_br is nan
-            last_br != last_br and (
-                # Safe to continue when start != since NaN implies
-                # slice(None), the entire partition.
-                # Need to special case a when the dimension has a single
-                # block (ret == []).
-                start != 0 or (idx == len(breaks) - 1 and ret == [])
-            )
-        ):
+        if br == last_br:
             continue
         ret_next.append((old_idx, slice(start, end)))
         if label == 'o':
@@ -124,6 +104,52 @@ def _intersect_1d(breaks):
         ret.append(ret_next)
 
     return ret
+
+
+def _old_to_new(old_chunks, new_chunks):
+    """ Helper to build old_chunks to new_chunks.
+
+    Handles missing values, as long as the missing dimension
+    is unchanged.
+
+    Examples
+    --------
+    >>> old = ((10, 10, 10, 10, 10), )
+    >>> new = ((25, 5, 20), )
+    >>> _old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
+    [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
+      [(2, slice(5, 10, None))],
+      [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
+    """
+    old_known = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
+    new_known = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
+
+    n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
+    n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
+
+    cmo = cumdims_label(old_known, 'o')
+    cmn = cumdims_label(new_known, 'n')
+
+    sums = [sum(o) for o in old_known]
+    sums2 = [sum(n) for n in new_known]
+
+    if not sums == sums2:
+        raise ValueError('Cannot change dimensions from to %r' % sums2)
+    if not n_missing == n_missing2:
+        raise ValueError('Chunks must be unchanging along unknown dimensions')
+
+    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
+    for idx, missing in enumerate(n_missing):
+        if missing:
+            # inital is just len(the missing dim)
+            # TODO: why does this work? Why is this first element always at most length 3?
+            extra = [[(0, slice(0, None))] + [(1, slice(0, None)) for i in range(1, min(2, missing))]]
+
+            for _ in range(missing - 1):
+                extra.append([(1, slice(0, None))])
+            # TODO: hmm avoid an insert here ideally. Build it up and then append?
+            old_to_new.insert(idx, extra)
+    return old_to_new
 
 
 def intersect_chunks(old_chunks, new_chunks):
@@ -146,17 +172,8 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    cmo = cumdims_label(old_chunks, 'o')
-    cmn = cumdims_label(new_chunks, 'n')
-    sums = [sum(o) for o in old_chunks]
-    sums2 = [sum(n) for n in old_chunks]
+    old_to_new = _old_to_new(old_chunks, new_chunks)
 
-    sums = [x for x in sums if not math.isnan(x)]
-    sums2 = [x for x in sums2 if not math.isnan(x)]
-    if not sums == sums2:
-        raise ValueError('Cannot change dimensions from to %r' % sums2)
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1]))
-                  for cm in zip(cmo, cmn)]
     cross1 = product(*old_to_new)
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
