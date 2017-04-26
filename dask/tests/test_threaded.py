@@ -107,7 +107,7 @@ def test_thread_safety():
 # because the ctrl-c event also tears down their infrastructure.
 # There's probably a better way to test this, but for now we'll mark
 # it slow (slow tests are skipped on appveyor).
-@pytest.mark.slow
+# @pytest.mark.slow
 def test_interrupt():
 
     def long_task():
