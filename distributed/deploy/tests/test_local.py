@@ -258,7 +258,7 @@ def test_silent_startup(capsys, loop):
     out, err = capsys.readouterr()
     assert not out
     for line in err.split('\n'):
-        assert 'worker' not in line
+        assert 'worker' not in line or 'Exception ignored' in line
 
 
 def test_only_local_access(loop):

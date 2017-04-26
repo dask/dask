@@ -51,7 +51,7 @@ DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 
 # XXX avoid inheriting from Server? there is some large potential for confusion
-# between base and derived attribute namespaces...
+# between base and derived attribute namespaces ...
 
 class Scheduler(Server):
     """ Dynamic distributed task scheduler

@@ -45,7 +45,7 @@ install:
   # Install dependencies
   - conda create -q -n test-environment python=$PYTHON
   - source activate test-environment
-  - conda install -q pytest pytest-timeout pytest-faulthandler coverage tornado toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
+  - conda install -q pytest pytest-timeout pytest-faulthandler coverage tornado=4.4 toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
   - |
     if [[ $HDFS == true ]]; then
         conda install -q libxml2 krb5 boost
