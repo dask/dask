@@ -52,6 +52,11 @@ def test_npartitions(db):
     data = read_sql_table('test', db, columns=['name'], npartitions=6,
                           index_col="number")
     assert_eq(data, df[['name']])
+    data = read_sql_table('test', db, columns=list(df.columns),
+                          bytes_per_chunk=2**30,
+                          index_col='number')
+    assert data.npartitions == 1
+    assert (data.name.compute() == df.name).all()
 
 
 def test_divisions(db):
