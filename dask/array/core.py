@@ -36,7 +36,7 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, package_of)
+                     SerializableLock, ensure_dict, package_of, deepmap)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -467,7 +467,11 @@ def _concatenate2(arrays, axes=[]):
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     module = package_of(arrays[0]) or np
-    return module.concatenate(arrays, axis=axes[0])
+    try:
+        return module.concatenate(arrays, axis=axes[0])
+    except (ValueError, AttributeError):
+        arrays2 = [to_numpy_array(x) for x in arrays]
+        return np.concatenate(arrays2, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
@@ -3398,6 +3402,22 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
+def to_numpy_array(x):
+    """ Convert object to numpy array
+
+    Supports both the __array__ protocol and the todense() method often used by
+    sparse arrays
+    """
+    if type(x) is np.ndarray:
+        return x
+    elif hasattr(x, '__array__'):
+        return np.asarray(x)
+    elif hasattr(x, 'todense'):
+        return to_numpy_array(x.todense())
+    else:
+        return x  # pass through
+
+
 def concatenate3(arrays):
     """ Recursive np.concatenate
 
@@ -3421,6 +3441,7 @@ def concatenate3(arrays):
         return _concatenate2(arrays, axes=list(range(x.ndim)))
 
     arrays = concrete(arrays)
+    arrays = deepmap(to_numpy_array, arrays)
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays

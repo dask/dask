@@ -1,3 +1,4 @@
+import random
 import sys
 
 import numpy as np
@@ -8,9 +9,7 @@ import dask.array as da
 from dask.array.utils import assert_eq
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
-                    reason='indexing issues')
-@pytest.mark.parametrize('func', [
+functions = [
     lambda x: x,
     lambda x: da.expm1(x),
     lambda x: 2 * x,
@@ -33,12 +32,17 @@ from dask.array.utils import assert_eq
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
     lambda x: x.round(1),
-    lambda x: x.reshape((6, 4)),
+    lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
     lambda x: x.rechunk((2, 2, 1)),
-])
+]
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
+                    reason='indexing issues')
+@pytest.mark.parametrize('func', functions)
 def test_basic(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -51,7 +55,9 @@ def test_basic(func):
     assert_eq(xx, yy)
 
     if yy.shape:
-        assert isinstance(yy.compute(), sparse.COO)
+        zz = yy.compute()
+        if not isinstance(zz, sparse.COO):
+            assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
 def test_tensordot():
@@ -69,3 +75,37 @@ def test_tensordot():
               da.tensordot(xx, yy, axes=(1, 1)))
     assert_eq(da.tensordot(x, y, axes=((1, 2), (1, 0))),
               da.tensordot(xx, yy, axes=((1, 2), (1, 0))))
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
+                    reason='indexing issues')
+@pytest.mark.parametrize('func', functions)
+def test_mixed_concatenate(func):
+    x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
+
+    y = da.random.random((2, 3, 4), chunks=(1, 2, 2))
+    y[y < 0.8] = 0
+    yy = y.map_blocks(sparse.COO.from_numpy)
+
+    d = da.concatenate([x, y], axis=0)
+    s = da.concatenate([x, yy], axis=0)
+
+    dd = func(d)
+    ss = func(s)
+
+    assert_eq(dd, ss)
+
+
+@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
+                    reason='indexing issues')
+@pytest.mark.parametrize('func', functions)
+def test_mixed_random(func):
+    d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
+    d[d < 0.7] = 0
+    s = d.map_blocks(lambda x: sparse.COO.from_numpy(x)
+                               if random.random() < 0.5 else x)
+
+    dd = func(d)
+    ss = func(s)
+
+    assert_eq(dd, ss)
