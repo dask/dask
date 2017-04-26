@@ -319,6 +319,16 @@ def test_py2_local_bytes(tmpdir):
         assert all(isinstance(line, unicode) for line in f)
 
 
+def test_abs_paths(tmpdir):
+    tmpdir = str(tmpdir)
+    os.chdir(tmpdir)
+    with open('tmp', 'w') as f:
+        f.write('hi')
+    out = LocalFileSystem().glob('*')
+    assert len(out) == 1
+    assert os.sep in out[0]
+    assert tmpdir in out[0] and 'tmp' in out[0]
+
 try:
     # used only in test_with_urls - may be more generally useful
     import pathlib

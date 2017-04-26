@@ -34,7 +34,7 @@ class LocalFileSystem(core.FileSystem):
     @staticmethod
     def _trim_filename(fn):
         so = infer_storage_options(fn)
-        return so['path']
+        return os.path.abspath(so['path'])
 
     def glob(self, path):
         """For a template path, return matching files"""
