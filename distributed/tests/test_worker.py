@@ -26,7 +26,7 @@ from distributed.protocol.pickle import dumps, loads
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import ignoring, tmpfile
-from distributed.utils_test import (loop, inc, mul, gen_cluster, div,
+from distributed.utils_test import (loop, inc, mul, gen_cluster, div, dec,
         slow, slowinc, throws, gen_test, readone)
 
 
@@ -674,3 +674,41 @@ def test_stop_doing_unnecessary_work(c, s, a, b):
     while a.executing:
         yield gen.sleep(0.01)
         assert time() - start < 0.5
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_priorities(c, s, w):
+    a = delayed(slowinc)(1, dask_key_name='a', delay=0.05)
+    b = delayed(slowinc)(2, dask_key_name='b', delay=0.05)
+    a1 = delayed(slowinc)(a, dask_key_name='a1', delay=0.05)
+    a2 = delayed(slowinc)(a1, dask_key_name='a2', delay=0.05)
+    b1 = delayed(slowinc)(b, dask_key_name='b1', delay=0.05)
+
+    z = delayed(add)(a2, b1)
+    future = yield c.compute(z)._result()
+
+    log = [t for t in w.log if t[1] == 'executing' and t[2] == 'memory']
+    assert [t[0] for t in log[:5]] == ['a', 'b', 'a1', 'b1', 'a2']
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_priorities_2(c, s, w):
+    values = []
+    for i in range(10):
+        a = delayed(slowinc)(i, dask_key_name='a-%d' % i, delay=0.01)
+        a1 = delayed(inc)(a, dask_key_name='a1-%d' % i)
+        a2 = delayed(inc)(a1, dask_key_name='a2-%d' % i)
+        b1 = delayed(dec)(a, dask_key_name='b1-%d' % i)  # <<-- least favored
+
+        values.append(a2)
+        values.append(b1)
+
+    futures = c.compute(values)
+    yield _wait(futures)
+
+    log = [t[0] for t in w.log
+                if t[1] == 'executing'
+                and t[2] == 'memory'
+                and not t[0].startswith('finalize')]
+
+    assert any(key.startswith('b1') for key in log[:len(log) // 2])

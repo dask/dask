@@ -1052,6 +1052,8 @@ class Worker(WorkerBase):
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
 
+                self.priority_counter -= 1
+
                 self.ensure_communicating()
                 self.ensure_computing()
 
@@ -1068,6 +1070,8 @@ class Worker(WorkerBase):
     def add_task(self, key, function=None, args=None, kwargs=None, task=None,
             who_has=None, nbytes=None, priority=None, duration=None,
             resource_restrictions=None, **kwargs2):
+        if isinstance(priority, list):
+            priority.insert(1, self.priority_counter)
         try:
             if key in self.tasks:
                 state = self.task_state[key]
