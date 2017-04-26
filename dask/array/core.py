@@ -3431,18 +3431,20 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    advanced = max(core.flatten(arrays, container=(list, tuple)), key=lambda x: x.__array_priority__)
+    arrays = concrete(arrays)
+    if not arrays:
+        return np.empty(0)
+
+    advanced = max(core.flatten(arrays, container=(list, tuple)),
+                   key=lambda x: getattr(x, '__array_priority__', 0))
     module = package_of(advanced) or np
     if module is not np and hasattr(module, 'concatenate'):
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
 
-    arrays = concrete(arrays)
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays
-    if not arrays:
-        return np.empty(0)
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 
