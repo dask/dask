@@ -397,7 +397,8 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
 
     sorted_candidates = sorted(merge_candidates, key=key)
 
-    largest_block_size = reduce(mul, filter(math.isfinite, old_largest_width))
+    largest_block_size = reduce(mul, filter(lambda x: not math.isnan(x),
+                                            old_largest_width))
 
     chunks = list(old_chunks)
     memory_limit_hit = False
