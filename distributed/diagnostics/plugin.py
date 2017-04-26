@@ -49,6 +49,19 @@ class SchedulerPlugin(object):
         pass
 
     def transition(self, key, start, finish, *args, **kwargs):
+        """ Run whenever a task changes state
+
+        Parameters
+        ----------
+        key: string
+        start: string
+            Start state of the transition.
+            One of released, waiting, processing, memory, error.
+        finish: string
+            Final state of the transition.
+        *args, **kwargs: More options passed when transitioning
+            This may include worker ID, compute time, etc.
+        """
         pass
 
     def add_worker(self, scheduler=None, worker=None, **kwargs):
