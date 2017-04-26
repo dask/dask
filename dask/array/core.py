@@ -3431,13 +3431,13 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    x = unpack_singleton(arrays)
-    mod = inspect.getmodule(x)
-    if mod and mod is not np and hasattr(mod, 'concatenate'):
+    advanced = max(core.flatten(arrays, container=(list, tuple)), key=lambda x: x.__array_priority__)
+    module = package_of(advanced) or np
+    if module is not np and hasattr(module, 'concatenate'):
+        x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
 
     arrays = concrete(arrays)
-    arrays = deepmap(to_numpy_array, arrays)
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays

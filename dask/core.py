@@ -232,7 +232,7 @@ def get_deps(dsk):
     return dependencies, dependents
 
 
-def flatten(seq):
+def flatten(seq, container=list):
     """
 
     >>> list(flatten([1]))
@@ -254,8 +254,8 @@ def flatten(seq):
         yield seq
     else:
         for item in seq:
-            if isinstance(item, list):
-                for item2 in flatten(item):
+            if isinstance(item, container):
+                for item2 in flatten(item, container=container):
                     yield item2
             else:
                 yield item
