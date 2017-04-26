@@ -400,12 +400,12 @@ def test_intersect_nan():
     new_chunks = ((float('nan'), float('nan')), (4, 4))
 
     result = list(intersect_chunks(old_chunks, new_chunks))
-    expected = [(((0, slice(0, None, None)), (0, slice(0, 4, None))),
-                ((1, slice(0, None, None)), (0, slice(0, 4, None)))),
-                (((0, slice(0, None, None)), (0, slice(4, 8, None))),
-                ((1, slice(0, None, None)), (0, slice(4, 8, None)))),
-                (((1, slice(0, None, None)), (0, slice(0, 4, None))),),
-                (((1, slice(0, None, None)), (0, slice(4, 8, None))),)]
+    expected = [
+        (((0, slice(0, None, None)), (0, slice(0, 4, None))),),
+        (((0, slice(0, None, None)), (0, slice(4, 8, None))),),
+        (((1, slice(0, None, None)), (0, slice(0, 4, None))),),
+        (((1, slice(0, None, None)), (0, slice(4, 8, None))),)
+    ]
     assert result == expected
 
 
@@ -425,16 +425,15 @@ def test_intersect_nan_long():
     new_chunks = (tuple([float('nan')] * 4), (5, 5))
     result = list(intersect_chunks(old_chunks, new_chunks))
     expected = [
-        (((0, slice(0, None, None)), (0, slice(0, 5, None))),
-         ((1, slice(0, None, None)), (0, slice(0, 5, None)))),
-        (((0, slice(0, None, None)), (0, slice(5, 10, None))),
-         ((1, slice(0, None, None)), (0, slice(5, 10, None)))),
+        (((0, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((0, slice(0, None, None)), (0, slice(5, 10, None))),),
         (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
         (((1, slice(0, None, None)), (0, slice(5, 10, None))),),
-        (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
-        (((1, slice(0, None, None)), (0, slice(5, 10, None))),),
-        (((1, slice(0, None, None)), (0, slice(0, 5, None))),),
-        (((1, slice(0, None, None)), (0, slice(5, 10, None))),)]
+        (((2, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((2, slice(0, None, None)), (0, slice(5, 10, None))),),
+        (((3, slice(0, None, None)), (0, slice(0, 5, None))),),
+        (((3, slice(0, None, None)), (0, slice(5, 10, None))),)
+    ]
     assert result == expected
 
 
@@ -459,6 +458,7 @@ def test_rechunk_unknown_from_array():
     assert np.isnan(x.chunks[0]).all()
     assert np.isnan(result.chunks[0]).all()
     assert x.chunks[1] == (4,)
+    assert_eq(x, result)
 
 
 @pytest.mark.parametrize('x, chunks', [
@@ -485,6 +485,17 @@ def test_rechunk_unknown(x, chunks):
     expected = x.rechunk(chunks)
 
     assert_chunks_match(result.chunks, expected.chunks)
+    assert_eq(result, expected)
+
+
+def test_rechunk_unknown_explicit():
+    dd = pytest.importorskip('dask.dataframe')
+    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    y = dd.from_array(x).values
+    result = y.rechunk(((float('nan'), float('nan')), (5, 5)))
+    expected = x.rechunk((None, (5, 5)))
+    assert_chunks_match(result.chunks, expected.chunks)
+    assert_eq(result, expected)
 
 
 def assert_chunks_match(left, right):
@@ -507,9 +518,10 @@ def test_old_to_new_single():
     old = ((float('nan'), float('nan')), (8,))
     new = ((float('nan'), float('nan')), (4, 4))
     result = _old_to_new(old, new)
-    expected = [[[(0, slice(0, None, None)), (1, slice(0, None, None))],
-                 [(1, slice(0, None, None))]],
+
+    expected = [[[(0, slice(0, None, None))], [(1, slice(0, None, None))]],
                 [[(0, slice(0, 4, None))], [(0, slice(4, 8, None))]]]
+
     assert result == expected
 
 
@@ -528,11 +540,10 @@ def test_old_to_new_large():
     new = (tuple([float('nan')] * 4), (5, 5))
 
     result = _old_to_new(old, new)
-
-    expected = [[[(0, slice(0, None, None)), (1, slice(0, None, None))],
+    expected = [[[(0, slice(0, None, None))],
                 [(1, slice(0, None, None))],
-                [(1, slice(0, None, None))],
-                [(1, slice(0, None, None))]],
+                [(2, slice(0, None, None))],
+                [(3, slice(0, None, None))]],
                 [[(0, slice(0, 5, None))], [(0, slice(5, 10, None))]]]
     assert result == expected
 

@@ -141,12 +141,8 @@ def _old_to_new(old_chunks, new_chunks):
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
     for idx, missing in enumerate(n_missing):
         if missing:
-            # inital is just len(the missing dim)
-            # TODO: why does this work? Why is this first element always at most length 3?
-            extra = [[(0, slice(0, None))] + [(1, slice(0, None)) for i in range(1, min(2, missing))]]
-
-            for _ in range(missing - 1):
-                extra.append([(1, slice(0, None))])
+            # Missing dimensions are always unchanged, so old -> new is everything
+            extra = [[(i, slice(0, None))] for i in range(missing)]
             # TODO: hmm avoid an insert here ideally. Build it up and then append?
             old_to_new.insert(idx, extra)
     return old_to_new
