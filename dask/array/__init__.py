@@ -20,7 +20,7 @@ from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
         copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
         radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
-        i0, sinc, nan_to_num, frexp, modf)
+        i0, sinc, nan_to_num, frexp, modf, divide)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,
