@@ -466,12 +466,8 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    module = package_of(arrays[0]) or np
-    try:
-        return module.concatenate(arrays, axis=axes[0])
-    except (ValueError, AttributeError):
-        arrays2 = [to_numpy_array(x) for x in arrays]
-        return np.concatenate(arrays2, axis=axes[0])
+    module = package_of(max(arrays, key=lambda x: x.__array_priority__)) or np
+    return module.concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
