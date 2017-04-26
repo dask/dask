@@ -199,6 +199,23 @@ def test_TaskProgress(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_TaskProgress_empty(c, s, a, b):
+    tp = TaskProgress(s)
+    tp.update()
+
+    futures = [c.submit(inc, i, key='f-' + 'a' * i) for i in range(20)]
+    yield _wait(futures)
+    tp.update()
+
+    del futures
+    while s.tasks:
+        yield gen.sleep(0.01)
+    tp.update()
+
+    assert not any(len(v) for v in tp.source.data.values())
+
+
+@gen_cluster(client=True)
 def test_MemoryUse(c, s, a, b):
     mu = MemoryUse(s)
 

@@ -360,7 +360,7 @@ class Client(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address=None, start=True, loop=None, timeout=3,
+    def __init__(self, address=None, start=True, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None, **kwargs):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -444,7 +444,7 @@ class Client(object):
             raise Exception("Client not running.  Status: %s" % self.status)
 
     @gen.coroutine
-    def _start(self, timeout=3, **kwargs):
+    def _start(self, timeout=5, **kwargs):
         if self.cluster is not None:
             # Ensure the cluster is started (no-op if already running)
             yield self.cluster._start()
@@ -510,7 +510,7 @@ class Client(object):
                     yield gen.sleep(timeout)
 
     @gen.coroutine
-    def _ensure_connected(self, timeout=3):
+    def _ensure_connected(self, timeout=5):
         if self.scheduler_comm and not self.scheduler_comm.closed():
             return
 

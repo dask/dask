@@ -29,7 +29,11 @@ def counts(scheduler, allprogress):
 
 
 counter = itertools.count()
-@memoize
+
+_incrementing_index_cache = dict()
+
+
+@memoize(cache=_incrementing_index_cache)
 def incrementing_index(o):
     return next(counter)
 

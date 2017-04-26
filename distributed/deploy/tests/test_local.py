@@ -285,4 +285,4 @@ def test_memory_nanny(loop):
         with Client(cluster.scheduler_address, loop=loop) as c:
             info = c.scheduler_info()
             assert (sum(w['memory_limit'] for w in info['workers'].values())
-                    < TOTAL_MEMORY * 0.8)
+                    < TOTAL_MEMORY * 0.9)
