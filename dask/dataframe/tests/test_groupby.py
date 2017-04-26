@@ -1069,3 +1069,34 @@ def test_groupby_unaligned_index():
 
     for (res, sol) in good:
         assert_eq(res, sol)
+
+
+def test_groupby_slice_agg_reduces():
+    d = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 3, 4, 5]})
+    a = dd.from_pandas(d, npartitions=2)
+    result = a.groupby("a")["b"].agg(['min', 'max'])
+    expected = d.groupby("a")['b'].agg(['min', 'max'])
+    assert_eq(result, expected)
+
+
+def test_groupby_agg_grouper_single():
+    # https://github.com/dask/dask/issues/2255
+    d = pd.DataFrame({'a': [1, 2, 3, 4]})
+    a = dd.from_pandas(d, npartitions=2)
+
+    result = a.groupby('a')['a'].agg(['min', 'max'])
+    expected = d.groupby('a')['a'].agg(['min', 'max'])
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('slice_', [
+    'a', ['a'], ['a', 'b'], ['b'],
+])
+def test_groupby_agg_grouper_multiple(slice_):
+    # https://github.com/dask/dask/issues/2255
+    d = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [1, 2, 3, 4]})
+    a = dd.from_pandas(d, npartitions=2)
+
+    result = a.groupby('a')[slice_].agg(['min', 'max'])
+    expected = d.groupby('a')[slice_].agg(['min', 'max'])
+    assert_eq(result, expected)
