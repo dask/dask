@@ -1,8 +1,6 @@
 import os
 import threading
 import signal
-import subprocess
-import sys
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
@@ -105,58 +103,28 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-code = """
-import sys
-import time
-from dask.threaded import get
-
-def signal_started():
-    sys.stdout.write('started\\n')
-    sys.stdout.flush()
-
-def long_task(x):
-    time.sleep(5)
-
-dsk = {('x', i): (long_task, 'started') for i in range(100)}
-dsk['started'] = (signal_started,)
-dsk['x'] = (sum, list(dsk.keys()))
-get(dsk, 'x')
-"""
-
-
 # TODO: this test passes locally on windows, but fails on appveyor
 # because the ctrl-c event also tears down their infrastructure.
 # There's probably a better way to test this, but for now we'll mark
 # it slow (slow tests are skipped on appveyor).
 @pytest.mark.slow
 def test_interrupt():
+
+    def long_task():
+        sleep(5)
+
+    def interrupt():
+        sleep(0.5)
+        pid = os.getpid()
+        os.kill(pid, signal.SIGINT)
+
+    dsk = {('x', i): (long_task,) for i in range(20)}
+    dsk['x'] = (len, list(dsk.keys()))
     try:
-        proc = subprocess.Popen([sys.executable, '-c', code],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
-        # Wait for scheduler to start
-        msg = proc.stdout.readline()
-        if msg != 'started\n' and proc.poll() is not None:
-            assert False, "subprocess failed"
-        # Scheduler has started, send an interrupt
-        sigint = signal.CTRL_C_EVENT if os.name == 'nt' else signal.SIGINT
-        try:
-            proc.send_signal(sigint)
-            # Wait a bit for it to die
-            start = time()
-            while time() - start < 4.0:
-                if proc.poll() is not None:
-                    break
-                sleep(0.05)
-            else:
-                assert False, "KeyboardInterrupt Failed"
-        except KeyboardInterrupt:
-            # On windows the interrupt is also raised in this process.
-            # That's silly, ignore it.
-            pass
-        # Ensure KeyboardInterrupt in traceback
-        stderr = proc.stderr.read()
-        assert "KeyboardInterrupt" in stderr.decode()
-    except:
-        proc.terminate()
-        raise
+        interrupter = threading.Thread(target=interrupt)
+        interrupter.start()
+        get(dsk, 'x')
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        assert False, "Failed to interrupt"
