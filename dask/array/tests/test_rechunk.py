@@ -451,7 +451,6 @@ def test_rechunk_unknown_from_pandas():
 
 
 def test_rechunk_unknown_from_array():
-    import dask; dask.set_options(get=dask.get)  # noqa
     dd = pytest.importorskip('dask.dataframe')
     # pd = pytest.importorskip('pandas')
     x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
