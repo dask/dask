@@ -270,8 +270,10 @@ def _assert_steps(steps, expected):
 
 
 def test_plan_rechunk():
-    c = ((20,) * 2)   # coarse
-    f = ((2,) * 20)   # fine
+    c = ((20,) * 2)              # coarse
+    f = ((2,) * 20)              # fine
+    nc = ((float('nan'),) * 2)   # nan-coarse
+    nf = ((float('nan'),) * 20)  # nan-fine
 
     # Trivial cases
     steps = _plan((), ())
@@ -298,6 +300,16 @@ def test_plan_rechunk():
     steps = _plan((c + c, c + f), (f + f, c + c))
     _assert_steps(steps, [(c + c, c + c), (f + f, c + c)])
 
+    # Same, with unknown dim
+    steps = _plan((nc, c + c, c + f), (nc, f + f, c + c))
+    _assert_steps(steps, [(nc, c + c, c + c), (nc, f + f, c + c)])
+
+    steps = _plan((nc, f, c), (nc, c, f))
+    _assert_steps(steps, [(nc, c, c), (nc, c, f)])
+
+    steps = _plan((f, c, nf), (c, f, nf))
+    _assert_steps(steps, [(c, c, nf), (c, f, nf)])
+
     # Just at the memory limit => an intermediate is used
     steps = _plan((f, c), (c, f), block_size_limit=400)
     _assert_steps(steps, [(c, c), (c, f)])
@@ -311,13 +323,24 @@ def test_plan_rechunk():
     steps2 = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
     _assert_steps(steps2, steps)
 
+    # same with nan
+    steps = _plan((f, c, nc), (c, f, nc), block_size_limit=399)
+    _assert_steps(steps, [(m, c, nc), (c, f, nc)])
+
+    steps2 = _plan((f, c, nc), (c, f, nc), block_size_limit=3999, itemsize=10)
+    _assert_steps(steps2, steps)
+
     # Memory limit too low => no intermediate
     steps = _plan((f, c), (c, f), block_size_limit=40)
     _assert_steps(steps, [(c, f)])
 
+    # Memory limit too low => no intermediate (nan)
+    steps = _plan((f, nf, c), (c, nf, f), block_size_limit=40)
+    _assert_steps(steps, [(c, nf, f)])
+
     # Larger problem size => more intermediates
-    c = ((1000,) * 2)   # coarse
-    f = ((2,) * 1000)   # fine
+    c = ((1000,) * 2)  # coarse
+    f = ((2,) * 1000)  # fine
 
     steps = _plan((f, c), (c, f), block_size_limit=99999)
     assert len(steps) == 3
