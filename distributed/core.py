@@ -42,10 +42,6 @@ def get_total_physical_memory():
 MAX_BUFFER_SIZE = get_total_physical_memory()
 
 
-def handle_signal(sig, frame):
-    IOLoop.instance().add_callback(IOLoop.instance().stop)
-
-
 class Server(object):
     """ Distributed TCP Server
 

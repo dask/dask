@@ -36,7 +36,7 @@ def install_signal_handlers():
     import signal
 
     def handle_signal(sig, frame):
-        IOLoop.instance().add_callback(IOLoop.instance().stop)
+        IOLoop.instance().add_callback_from_signal(IOLoop.instance().stop)
 
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
