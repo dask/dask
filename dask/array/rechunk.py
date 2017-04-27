@@ -481,7 +481,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
 
     if ndim <= 1 or not all(new_chunks) or any(has_nans):
-        # Trivial array => no need for an intermediate
+        # Trivial array / unknown dim => no need / ability for an intermediate
         return steps + [new_chunks]
 
     # Make it a number ef elements
