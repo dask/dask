@@ -329,6 +329,7 @@ def test_abs_paths(tmpdir):
     assert os.sep in out[0]
     assert tmpdir in out[0] and 'tmp' in out[0]
 
+
 try:
     # used only in test_with_urls - may be more generally useful
     import pathlib
