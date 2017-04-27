@@ -3398,22 +3398,6 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
-def to_numpy_array(x):
-    """ Convert object to numpy array
-
-    Supports both the __array__ protocol and the todense() method often used by
-    sparse arrays
-    """
-    if type(x) is np.ndarray:
-        return x
-    elif hasattr(x, '__array__'):
-        return np.asarray(x)
-    elif hasattr(x, 'todense'):
-        return to_numpy_array(x.todense())
-    else:
-        return x  # pass through
-
-
 def concatenate3(arrays):
     """ Recursive np.concatenate
 
