@@ -360,7 +360,6 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     violating the *block_size_limit* (in number of elements).
     """
     ndim = len(old_chunks)
-    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
 
     old_largest_width = [max(c) for c in old_chunks]
     new_largest_width = [max(c) for c in new_chunks]
@@ -379,8 +378,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     # by merging some adjacent chunks, so consider dimensions where we can
     # reduce the # of chunks
     merge_candidates = [dim for dim in range(ndim)
-                        if graph_size_effect[dim] <= 1.0 and
-                        not has_nans[dim]]
+                        if graph_size_effect[dim] <= 1.0]
 
     # Merging along each dimension reduces the graph size by a certain factor
     # and increases memory largest block size by a certain factor.
@@ -397,8 +395,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
 
     sorted_candidates = sorted(merge_candidates, key=key)
 
-    largest_block_size = reduce(mul, filter(lambda x: not math.isnan(x),
-                                            old_largest_width))
+    largest_block_size = reduce(mul, old_largest_width)
 
     chunks = list(old_chunks)
     memory_limit_hit = False
@@ -424,9 +421,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
 
             memory_limit_hit = True
 
-    assert largest_block_size == _largest_block_size([
-        x for x in chunks if not any(math.isnan(y) for y in x)
-    ])
+    assert largest_block_size == _largest_block_size(chunks)
     assert largest_block_size <= block_size_limit
     return tuple(chunks), memory_limit_hit
 
@@ -475,10 +470,17 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     block_size_limit: int
         The maximum block size (in bytes) we want to produce during an
         intermediate step
+
+    Notes
+    -----
+    No intermediate steps will be planned if any dimension of ``old_chunks``
+    is unknown.
     """
     ndim = len(new_chunks)
     steps = []
-    if ndim <= 1 or not all(new_chunks):
+    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
+
+    if ndim <= 1 or not all(new_chunks) or any(has_nans):
         # Trivial array => no need for an intermediate
         return steps + [new_chunks]
 
@@ -486,11 +488,8 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     block_size_limit /= itemsize
 
     # Fix block_size_limit if too small for either old_chunks or new_chunks
-    known_old_chunks = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
-    known_new_chunks = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
-
-    largest_old_block = _largest_block_size(known_old_chunks)
-    largest_new_block = _largest_block_size(known_new_chunks)
+    largest_old_block = _largest_block_size(old_chunks)
+    largest_new_block = _largest_block_size(new_chunks)
     block_size_limit = max([block_size_limit,
                             largest_old_block,
                             largest_new_block,
