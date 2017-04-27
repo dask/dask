@@ -52,4 +52,18 @@ validated parameter search as follows.
    with parallel_backend('dask.distributed', scheduler_host='localhost:8786'):
        search.fit(digits.data, digits.target)
 
+
+For large arguments that are used by multiple tasks, it may be more efficient
+to pre-scatter the data to every worker, rather than serializing it once for
+every task. This can be done using the ``scatter`` keyword argument, which
+takes an iterable of objects to send to each worker.
+
+.. code-block:: python
+
+   # Serialize the training data only once to each worker
+   with parallel_backend('dask.distributed', scheduler_host='localhost:8786',
+                         scatter=[digits.data, digits.target]):
+       search.fit(digits.data, digits.target)
+
+
 .. _Joblib: https://pythonhosted.org/joblib/

@@ -743,3 +743,25 @@ def import_file(path):
             if tmp_python_path is not None:
                 sys.path.remove(tmp_python_path)
     return loaded
+
+
+class itemgetter(object):
+    """A picklable itemgetter.
+
+    Examples
+    --------
+    >>> data = [0, 1, 2]
+    >>> get_1 = itemgetter(1)
+    >>> get_1(data)
+    1
+    """
+    __slots__ = ('index',)
+
+    def __init__(self, index):
+        self.index = index
+
+    def __call__(self, x):
+        return x[self.index]
+
+    def __reduce__(self):
+        return (itemgetter, (self.index,))
