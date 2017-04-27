@@ -9,7 +9,7 @@ try:
 except ImportError:
     blosc = False
 
-from .utils import frame_split_size
+from .utils import frame_split_size, merge_frames
 from .serialize import register_serialization
 from . import pickle
 
@@ -66,7 +66,8 @@ def serialize_numpy_ndarray(x):
 
 def deserialize_numpy_ndarray(header, frames):
     with log_errors():
-        assert len(frames) == 1
+        if len(frames) > 1:
+            frames = merge_frames(header, frames)
 
         if header.get('pickle'):
             return pickle.loads(frames[0])

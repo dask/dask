@@ -23,3 +23,16 @@ def test_serialize_deserialize_sparse():
     assert_allclose(y.data, z.data)
     assert_allclose(y.coords, z.coords)
     assert_allclose(y.todense(), z.todense())
+
+
+@pytest.mark.slow
+def test_serialize_deserialize_sparse_large():
+    n = 100000000
+    x = np.arange(n)
+    data = np.ones(n, dtype=np.int16)
+
+    s = sparse.COO([x], data)
+
+    header, frames = serialize(s)
+
+    s2 = deserialize(header, frames)
