@@ -26,3 +26,7 @@ def _register_netcdf4():
 @partial(register_serialization_lazy, "keras")
 def _register_keras():
     from . import keras
+
+@partial(register_serialization_lazy, "sparse")
+def _register_sparse():
+    from . import sparse

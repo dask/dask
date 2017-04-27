@@ -1,0 +1,25 @@
+import functools
+import sys
+import traceback
+
+import numpy as np
+from numpy.testing import assert_allclose
+import pytest
+
+sparse = pytest.importorskip('sparse')
+
+from distributed.protocol import serialize, deserialize, dumps, loads, to_serialize
+
+
+def test_serialize_deserialize_sparse():
+    x = np.random.random((2, 3, 4, 5))
+    x[x < 0.8] = 0
+
+    y = sparse.COO(x)
+    header, frames = serialize(y)
+    assert 'sparse' in header['type']
+    z = deserialize(*serialize(y))
+
+    assert_allclose(y.data, z.data)
+    assert_allclose(y.coords, z.coords)
+    assert_allclose(y.todense(), z.todense())
