@@ -2106,9 +2106,9 @@ def test_map_blocks_with_changed_dimension():
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
 
-    # Can't use both drop_axis and new_axis
+    # Adding axis with a gap
     with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b, drop_axis=1, new_axis=1)
+        d.map_blocks(lambda b: b, new_axis=(3, 4))
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
@@ -2126,6 +2126,19 @@ def test_map_blocks_with_changed_dimension():
                      new_axis=[0, 3], dtype=d.dtype)
     assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
     assert_eq(e, x[None, :, :, None])
+
+    # Both new_axis and drop_axis
+    d = da.from_array(x, chunks=(8, 4))
+    e = d.map_blocks(lambda b: b.sum(axis=0)[:, None, None],
+                     drop_axis=0, new_axis=(1, 2), dtype=d.dtype)
+    assert e.chunks == ((4, 4), (1,), (1,))
+    assert_eq(e, x.sum(axis=0)[:, None, None])
+
+    d = da.from_array(x, chunks=(4, 8))
+    e = d.map_blocks(lambda b: b.sum(axis=1)[:, None, None],
+                     drop_axis=1, new_axis=(1, 2), dtype=d.dtype)
+    assert e.chunks == ((4, 4), (1,), (1,))
+    assert_eq(e, x.sum(axis=1)[:, None, None])
 
 
 def test_broadcast_chunks():
