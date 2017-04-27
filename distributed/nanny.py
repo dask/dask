@@ -366,6 +366,8 @@ def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
         loop.run_sync(run)
     except TimeoutError:
         logger.info("Worker timed out")
+    except KeyboardInterrupt:
+        pass
     finally:
         loop.stop()
         loop.close(all_fds=True)

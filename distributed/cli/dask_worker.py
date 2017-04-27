@@ -36,7 +36,7 @@ def handle_signal(sig, frame):
         except (OSError, IOError, TypeError):
             pass
     if loop._running:
-        loop.add_callback(loop.stop)
+        loop.add_callback_from_signal(loop.stop)
     else:
         exit(1)
 
