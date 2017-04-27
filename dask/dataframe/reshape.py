@@ -134,8 +134,8 @@ def pivot_table(df, index=None, columns=None,
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
     new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
-    new_columns.categories.name = columns
-    meta = pd.DataFrame(columns=new_columns, dtype=np.float64)
+    meta = pd.DataFrame(columns=new_columns, dtype=np.float64,
+                        index=pd.Index([], name=index))
 
     kwargs = {'index': index, 'columns': columns, 'values': values}
 
