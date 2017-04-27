@@ -111,6 +111,7 @@ def test_wrap_bad_kind():
         fft_wrap(np.ones)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_nd_ffts_axes(funcname, dtype):
