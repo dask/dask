@@ -9,7 +9,6 @@ import dask.array as da
 from dask.array.utils import assert_eq
 
 
-
 functions = [
     lambda x: x,
     lambda x: da.expm1(x),
