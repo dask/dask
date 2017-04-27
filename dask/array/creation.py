@@ -1,10 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial
+from functools import partial, wraps
+from itertools import chain
 
 import numpy as np
 
-from .core import Array, normalize_chunks
+from .core import Array, normalize_chunks, stack
+from .wrap import empty
 from . import chunk
 from ..base import tokenize
 
@@ -135,3 +137,42 @@ def arange(*args, **kwargs):
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype)
+
+
+@wraps(np.indices)
+def indices(dimensions, dtype=int, chunks=None):
+    if chunks is None:
+        raise ValueError("Must supply a chunks= keyword argument")
+
+    dimensions = tuple(dimensions)
+    dtype = np.dtype(dtype)
+    chunks = tuple(chunks)
+
+    if len(dimensions) == len(chunks) == 0:
+        pass
+    elif len(dimensions) != (len(chunks) - 1):
+        raise ValueError("Need one more chunk than dimensions.")
+
+    grid = []
+    if np.prod(dimensions):
+        for i in range(len(dimensions)):
+            s = len(dimensions) * [None]
+            s[i] = slice(None)
+            s = tuple(s)
+
+            r = arange(dimensions[i], dtype=dtype, chunks=chunks[i + 1])
+            r = r[s]
+
+            for j in chain(range(i), range(i + 1, len(dimensions))):
+                r = r.repeat(dimensions[j], axis=j).rechunk({j: chunks[j + 1]})
+
+            grid.append(r)
+
+    if grid:
+        grid = stack(grid).rechunk({0: chunks[0]})
+    else:
+        grid = empty(
+            (len(dimensions),) + dimensions, dtype=dtype, chunks=chunks
+        )
+
+    return grid

@@ -32,4 +32,4 @@ from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import arange, linspace
+from .creation import arange, linspace, indices
