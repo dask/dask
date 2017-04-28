@@ -205,9 +205,9 @@ def test_compression_text(fmt):
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
-    fs = LocalFileSystem()
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
+        fs = LocalFileSystem()
         assert fs.logical_size('.tmp.getsize', fmt) == 10
 
 
@@ -317,6 +317,22 @@ def test_py2_local_bytes(tmpdir):
 
     with lazy_file as f:
         assert all(isinstance(line, unicode) for line in f)
+
+
+def test_abs_paths(tmpdir):
+    tmpdir = str(tmpdir)
+    here = os.getcwd()
+    os.chdir(tmpdir)
+    with open('tmp', 'w') as f:
+        f.write('hi')
+    out = LocalFileSystem().glob('*')
+    assert len(out) == 1
+    assert os.sep in out[0]
+    assert tmpdir in out[0] and 'tmp' in out[0]
+
+    fs = LocalFileSystem()
+    os.chdir(here)
+    assert fs.open('tmp', 'r').read() == 'hi'
 
 
 try:
