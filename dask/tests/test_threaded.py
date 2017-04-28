@@ -105,24 +105,22 @@ def test_thread_safety():
 
 
 def test_interrupt():
-    if os.name == 'nt':
-        pytest.skip("Test doesn't work on windows")
+    if not PY3:
+        from thread import interrupt_main
+    elif os.name == 'nt':
+        from _thread import interrupt_main
+    else:
+        main_thread = threading.get_ident()
+
+        def interrupt_main():
+            signal.pthread_kill(main_thread, signal.SIGINT)
 
     def long_task():
         sleep(5)
 
-    if PY3:
-        main_thread = threading.get_ident()
-
-        def interrupt():
-            sleep(0.5)
-            signal.pthread_kill(main_thread, signal.SIGINT)
-    else:
-        from thread import interrupt_main
-
-        def interrupt():
-            sleep(0.5)
-            interrupt_main()
+    def interrupt():
+        sleep(0.5)
+        interrupt_main()
 
     dsk = {('x', i): (long_task,) for i in range(20)}
     dsk['x'] = (len, list(dsk.keys()))
