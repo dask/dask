@@ -1,6 +1,6 @@
 import os
-import threading
 import signal
+import threading
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
@@ -8,6 +8,7 @@ import pytest
 
 from dask.context import set_options
 from dask.threaded import get
+from dask.utils import PY3
 from dask.utils_test import inc, add
 
 
@@ -103,28 +104,37 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-# TODO: this test passes locally on windows, but fails on appveyor
-# because the ctrl-c event also tears down their infrastructure.
-# There's probably a better way to test this, but for now we'll mark
-# it slow (slow tests are skipped on appveyor).
-@pytest.mark.slow
 def test_interrupt():
+    if os.name == 'nt':
+        pytest.skip("Test doesn't work on windows")
 
     def long_task():
         sleep(5)
 
-    def interrupt():
-        sleep(0.5)
-        pid = os.getpid()
-        os.kill(pid, signal.SIGINT)
+    if PY3:
+        main_thread = threading.get_ident()
+
+        def interrupt():
+            sleep(0.5)
+            signal.pthread_kill(main_thread, signal.SIGINT)
+    else:
+        from thread import interrupt_main
+
+        def interrupt():
+            sleep(0.5)
+            interrupt_main()
 
     dsk = {('x', i): (long_task,) for i in range(20)}
     dsk['x'] = (len, list(dsk.keys()))
     try:
         interrupter = threading.Thread(target=interrupt)
         interrupter.start()
+        start = time()
         get(dsk, 'x')
     except KeyboardInterrupt:
         pass
     except Exception:
+        assert False, "Failed to interrupt"
+    stop = time()
+    if stop - start > 4:
         assert False, "Failed to interrupt"
