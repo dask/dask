@@ -492,7 +492,8 @@ def _maybe_sort(a):
 
 
 def assert_eq(a, b, check_names=True, check_dtypes=True,
-              check_divisions=True, check_index=True, **kwargs):
+              check_divisions=True, check_index=True,
+              check_columns=False, **kwargs):
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
@@ -507,6 +508,9 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
     if not check_index:
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
+    if not check_columns:
+        a = a.rename(columns={n: k for n, k in enumerate(a.columns)})
+        b = b.rename(columns={n: k for n, k in enumerate(b.columns)})
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)

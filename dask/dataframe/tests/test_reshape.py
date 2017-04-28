@@ -121,7 +121,9 @@ def test_pivot_table(aggfunc):
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
 
-    assert_eq(res, exp)
+    assert_eq(res, exp, check_columns=None)
+    assert all(res.columns == exp.columns)  # Categorical colums
+    assert res.columns.name == exp.columns.name
 
     # method
     res = ddf.pivot_table(index='A', columns='C', values='B',
@@ -214,4 +216,6 @@ def test_index_columns_types(aggfunc):
     pt = df.pivot_table(values="value", index="index", columns="field",
                         aggfunc=aggfunc)
 
-    assert_eq(pt, dpt)
+    assert_eq(pt, dpt, check_columns=False, check_dtype=False)
+    assert all(pt.columns == dpt.columns)
+    assert pt.columns.name == dpt.columns.name
