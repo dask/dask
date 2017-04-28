@@ -36,7 +36,7 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict)
+                     SerializableLock, ensure_dict, package_of)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -466,7 +466,8 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    return np.concatenate(arrays, axis=axes[0])
+    module = package_of(max(arrays, key=lambda x: x.__array_priority__)) or np
+    return module.concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
@@ -2457,9 +2458,8 @@ def transpose(a, axes=None):
     else:
         axes = tuple(range(a.ndim))[::-1]
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
-    return atop(partial(np.transpose, axes=axes),
-                axes,
-                a, tuple(range(a.ndim)), dtype=a.dtype)
+    return atop(np.transpose, axes, a, tuple(range(a.ndim)),
+                dtype=a.dtype, axes=axes)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -2467,7 +2467,9 @@ ALPHABET = alphabet.upper()
 
 
 def _tensordot(a, b, axes):
-    x = np.tensordot(a, b, axes=axes)
+    x = max([a, b], key=lambda x: x.__array_priority__)
+    module = package_of(x) or np
+    x = module.tensordot(a, b, axes=axes)
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
         ind.insert(a, None)
@@ -3414,11 +3416,19 @@ def concatenate3(arrays):
            [1, 2, 1, 2]])
     """
     arrays = concrete(arrays)
+    if not arrays:
+        return np.empty(0)
+
+    advanced = max(core.flatten(arrays, container=(list, tuple)),
+                   key=lambda x: getattr(x, '__array_priority__', 0))
+    module = package_of(advanced) or np
+    if module is not np and hasattr(module, 'concatenate'):
+        x = unpack_singleton(arrays)
+        return _concatenate2(arrays, axes=list(range(x.ndim)))
+
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays
-    if not arrays:
-        return np.empty(0)
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 

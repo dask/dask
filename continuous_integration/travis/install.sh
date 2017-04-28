@@ -61,6 +61,7 @@ conda install -q -c conda-forge \
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
+pip install -q git+https://github.com/mrocklin/sparse --upgrade --no-deps
 
 if [[ $PYTHONOPTIMIZE != '2' ]]; then
     conda install -q -c conda-forge numba cython

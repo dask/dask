@@ -21,3 +21,4 @@ Other topics
    array-ghost.rst
    array-design.rst
    array-linear-operator.rst
+   array-sparse.rst
