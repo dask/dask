@@ -514,7 +514,8 @@ def map_blocks(func, *args, **kwargs):
     drop_axis : number or iterable, optional
         Dimensions lost by the function.
     new_axis : number or iterable, optional
-        New dimensions created by the function.
+        New dimensions created by the function. Note that these are applied
+        after ``drop_axis`` (if present).
     name : string, optional
         The key name to use for the array. If not provided, will be determined
         by a hash of the arguments.
@@ -611,9 +612,6 @@ def map_blocks(func, *args, **kwargs):
     if isinstance(new_axis, Number):
         new_axis = [new_axis]
 
-    if drop_axis and new_axis:
-        raise ValueError("Can't specify drop_axis and new_axis together")
-
     arrs = [a for a in args if isinstance(a, Array)]
     other = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
@@ -666,15 +664,22 @@ def map_blocks(func, *args, **kwargs):
                           if i - 1 not in drop_axis), v)
                    for k, v in dsk.items())
         numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-    elif new_axis:
+    if new_axis:
+        new_axis = sorted(new_axis)
+        for i in new_axis:
+            if not 0 <= i <= len(numblocks):
+                ndim = len(numblocks)
+                raise ValueError("Can't add axis %d when current "
+                                 "axis are %r. Missing axis: "
+                                 "%r" % (i, list(range(ndim)),
+                                         list(range(ndim, i))))
+            numblocks.insert(i, 1)
         dsk, old_dsk = dict(), dsk
         for key in old_dsk:
             new_key = list(key)
             for i in new_axis:
                 new_key.insert(i + 1, 0)
             dsk[tuple(new_key)] = old_dsk[key]
-        for i in sorted(new_axis):
-            numblocks.insert(i, 1)
 
     if chunks:
         if len(chunks) != len(numblocks):
@@ -702,7 +707,7 @@ def map_blocks(func, *args, **kwargs):
                                  "`chunks` kwarg.")
         if drop_axis:
             chunks2 = [c for (i, c) in enumerate(chunks2) if i not in drop_axis]
-        elif new_axis:
+        if new_axis:
             for i in sorted(new_axis):
                 chunks2.insert(i, (1,))
 
