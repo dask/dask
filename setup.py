@@ -19,7 +19,7 @@ extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
 packages = ['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.bytes',
             'dask.dataframe', 'dask.dataframe.io', 'dask.dataframe.tseries',
-            'dask.diagnostics', 'dask.stats']
+            'dask.diagnostics']
 
 tests = [p + '.tests' for p in packages]
 
