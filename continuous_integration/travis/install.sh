@@ -44,6 +44,7 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
+    pyarrow \
     pytables \
     pytest \
     scikit-image \
