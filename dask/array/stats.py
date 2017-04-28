@@ -34,7 +34,10 @@ import dask.array as da
 from dask.array.random import doc_wraps
 from dask.array.ufunc import wrap_elemwise
 from dask import delayed
-import scipy.stats
+try:
+    import scipy.stats
+except ImportError:
+    raise ImportError("`dask.array.stats` requires `scipy` to be installed.")
 from scipy.stats import distributions
 from scipy import special
 from scipy.stats.stats import (Ttest_indResult, Ttest_1sampResult,

@@ -1,11 +1,11 @@
 import pytest
 
+scipy = pytest.importorskip('scipy')
 import numpy as np
 import dask.array as da
 from dask.array.utils import assert_eq
 from dask.delayed import Delayed
 import dask.array.stats
-import scipy.stats
 from dask.array.utils import allclose
 
 
