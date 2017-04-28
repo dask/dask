@@ -73,7 +73,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             raise TypeError("scatter must be a list/tuple, got "
                             "`%s`" % type(scatter).__name__)
 
-        self.client = Client(scheduler_host, loop=loop)
+        self.client = Client(scheduler_host, loop=loop, set_as_default=False)
         if scatter is not None:
             # Keep a reference to the scattered data to keep the ids the same
             self._scatter = list(scatter)
@@ -135,15 +135,11 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         future.get = future.result  # monkey patch to achieve AsyncResult API
         return future
 
-    def terminate(self):
-        self.client.shutdown()
-
     def abort_everything(self, ensure_ready=True):
         # Tell the client to cancel any task submitted via this instance
         # as joblib.Parallel will never access those results.
         self.client.cancel(self.futures)
         self.futures.clear()
-        self.terminate()
 
 
 for base in _bases:
