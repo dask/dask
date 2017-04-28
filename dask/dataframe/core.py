@@ -974,6 +974,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+        """ Export dataframe to csv file
+
+        Recommend to use glob based filename e.g. '/foo/output_*.csv' to create multiple files 
+        as parallel execution makes writing to a single csv file problematic.  
+        """
 
     def to_delayed(self):
         """ See dd.to_delayed docstring for more information """
