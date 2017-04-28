@@ -184,19 +184,40 @@ operation.
    dd.merge(a, b, left_on='id', right_on='id')  # slow
 
 
-Store Data in Parquet
----------------------
+Store Data in Apache Parquet Format
+-----------------------------------
 
-Pandas users who care about performance typically store their data in HDF5.
-We encourage Dask.dataframe users to `store and load data
+HDF5 is a popular choice for Pandas users with high performance needs.  We
+encourage Dask.dataframe users to `store and load data
 <http://dask.pydata.org/en/latest/dataframe-create.html>`_ using Parquet
-instead.  Parquet is a columnar binary format that is easy to split into
-multiple files (easier for parallel loading) and is generally much simpler to
-deal with than HDF5 (from the library's perspective).  It is also a common
-format used by other big data systems like Hadoop/Spark/Impala and so is useful
-to interchange with other systems.
+instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a columnar binary
+format that is easy to split into multiple files (easier for parallel loading)
+and is generally much simpler to deal with than HDF5 (from the library's
+perspective).  It is also a common format used by other big data systems like
+`Apache Spark <http://spark.apache.org/>`_ and `Apache Impala (incubating)
+<http://impala.apache.org/>`_ and so is useful to interchange with other
+systems.
 
 .. code-block:: python
 
    df.to_parquet('path/to/my-results/')
    df = dd.read_parquet('path/to/my-results/')
+
+Dask supports reading with multiple implementations of the Apache Parquet
+format for Python.
+
+.. code-block:: python
+
+   df1 = dd.read_parquet('path/to/my-results/', engine='fastparquet')
+   df2 = dd.read_parquet('path/to/my-results/', engine='arrow')
+
+These libraries be installed using
+
+.. code-block:: shell
+
+   conda install fastparquet pyarrow -c conda-forge
+
+Fastparquet is a Python-based implementation that uses the `Numba
+<http://numba.pydata.org/>`_ Python-to-LLVM compiler. PyArrow is part of the
+`Apache Arrow <http://arrow.apache.org/>`_ project and uses the `C++
+implementation of Apache Parquet <https://github.com/apache/parquet-cpp>`_.

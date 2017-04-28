@@ -122,15 +122,12 @@ def test_series(fn):
 
 
 def test_names(fn, engine):
-    def read(fn):
-        return read_parquet(fn, engine=engine)
+    def read(fn, **kwargs):
+        return read_parquet(fn, engine=engine, **kwargs)
 
     assert (set(read(fn).dask) == set(read(fn).dask))
 
     assert (set(read(fn).dask) !=
-            set(read(fn, columns=['x']).dask))
-
-    assert (set(read(fn, columns='x').dask) !=
             set(read(fn, columns=['x']).dask))
 
     assert (set(read(fn, columns=('x',)).dask) ==
