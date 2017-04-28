@@ -493,7 +493,7 @@ def _maybe_sort(a):
 
 def assert_eq(a, b, check_names=True, check_dtypes=True,
               check_divisions=True, check_index=True,
-              check_columns=False, **kwargs):
+              check_columns=True, **kwargs):
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
