@@ -117,8 +117,8 @@ def test_nd_ffts_axes(funcname, dtype):
     np_fft = getattr(np.fft, funcname)
     da_fft = getattr(da.fft, funcname)
 
-    shape = (6, 7, 8, 9)
-    chunk_size = (3, 3, 3, 3)
+    shape = (7, 8, 9)
+    chunk_size = (3, 3, 3)
     a = np.arange(np.prod(shape), dtype=dtype).reshape(shape)
     d = da.from_array(a, chunks=chunk_size)
 
