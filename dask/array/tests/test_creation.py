@@ -107,7 +107,7 @@ def test_indices_no_chunks():
 
 def test_indices_wrong_chunks():
     with pytest.raises(ValueError):
-        da.indices((1,), chunks=(1,))
+        da.indices((1,), chunks=tuple())
 
 
 def test_empty_indicies():
@@ -123,13 +123,13 @@ def test_empty_indicies():
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)
 
-    darr = da.indices((0,), float, chunks=(1, 1))
+    darr = da.indices((0,), float, chunks=(1,))
     nparr = np.indices((0,), float)
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)
 
-    darr = da.indices((0, 1, 2), float, chunks=(1, 1, 1, 2))
+    darr = da.indices((0, 1, 2), float, chunks=(1, 1, 2))
     nparr = np.indices((0, 1, 2), float)
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
@@ -137,18 +137,18 @@ def test_empty_indicies():
 
 
 def test_indicies():
-    darr = da.indices((1,), chunks=(1, 1))
+    darr = da.indices((1,), chunks=(1,))
     nparr = np.indices((1,))
     assert_eq(darr, nparr)
 
-    darr = da.indices((1,), float, chunks=(1, 1))
+    darr = da.indices((1,), float, chunks=(1,))
     nparr = np.indices((1,), float)
     assert_eq(darr, nparr)
 
-    darr = da.indices((2, 1), chunks=(1, 2, 1))
+    darr = da.indices((2, 1), chunks=(2, 1))
     nparr = np.indices((2, 1))
     assert_eq(darr, nparr)
 
-    darr = da.indices((2, 3), chunks=(1, 1, 2))
+    darr = da.indices((2, 3), chunks=(1, 2))
     nparr = np.indices((2, 3))
     assert_eq(darr, nparr)

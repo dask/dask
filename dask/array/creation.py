@@ -148,9 +148,7 @@ def indices(dimensions, dtype=int, chunks=None):
     dtype = np.dtype(dtype)
     chunks = tuple(chunks)
 
-    if len(dimensions) == len(chunks) == 0:
-        pass
-    elif len(dimensions) != (len(chunks) - 1):
+    if len(dimensions) != len(chunks):
         raise ValueError("Need one more chunk than dimensions.")
 
     grid = []
@@ -160,7 +158,7 @@ def indices(dimensions, dtype=int, chunks=None):
             s[i] = slice(None)
             s = tuple(s)
 
-            r = arange(dimensions[i], dtype=dtype, chunks=chunks[i + 1])
+            r = arange(dimensions[i], dtype=dtype, chunks=chunks[i])
             r = r[s]
 
             for j in itertools.chain(range(i), range(i + 1, len(dimensions))):
@@ -169,10 +167,10 @@ def indices(dimensions, dtype=int, chunks=None):
             grid.append(r)
 
     if grid:
-        grid = stack(grid).rechunk({0: chunks[0]})
+        grid = stack(grid)
     else:
         grid = empty(
-            (len(dimensions),) + dimensions, dtype=dtype, chunks=chunks
+            (len(dimensions),) + dimensions, dtype=dtype, chunks=(1,) + chunks
         )
 
     return grid
