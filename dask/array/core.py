@@ -2260,6 +2260,9 @@ def stack(seq, axis=0):
     uc_args = list(concat((x, ind) for x in seq))
     _, seq = unify_chunks(*uc_args)
 
+    dt = reduce(np.promote_types, [a.dtype for a in seq])
+    seq = [x.astype(dt) for x in seq]
+
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
 
@@ -2275,8 +2278,6 @@ def stack(seq, axis=0):
 
     dsk = dict(zip(keys, values))
     dsk2 = sharedict.merge((name, dsk), *[a.dask for a in seq])
-
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
 
     return Array(dsk2, name, chunks, dtype=dt)
 
