@@ -92,3 +92,16 @@ def test_anova():
     expected = scipy.stats.f_oneway(*np_args)
 
     assert allclose(result.compute(), expected)
+
+@pytest.mark.parametrize('func, nargs', [
+    (dask.array.stats.ttest_1samp, 2),
+    (dask.array.stats.ttest_rel, 2),
+    (dask.array.stats.skewtest, 1),
+    (dask.array.stats.kurtosistest, 1),
+    (dask.array.stats.normaltest, 1),
+    (dask.array.stats.moment, 1),
+])
+@pytest.mark.parametrize('nan_policy', ['omit', 'raise'])
+def test_nan_raises(func, nargs, nan_policy):
+    with pytest.raises(NotImplementedError):
+        func(*(None,) * nargs, nan_policy=nan_policy)

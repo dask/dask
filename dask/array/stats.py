@@ -74,7 +74,9 @@ def ttest_ind(a, b, axis=0, equal_var=True):
 
 @doc_wraps(scipy.stats.ttest_1samp)
 def ttest_1samp(a, popmean, axis=0, nan_policy='propagate'):
-    # TODO: NaN handling
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
     n = a.shape[axis]
     df = n - 1
 
@@ -90,7 +92,10 @@ def ttest_1samp(a, popmean, axis=0, nan_policy='propagate'):
 
 @doc_wraps(scipy.stats.ttest_rel)
 def ttest_rel(a, b, axis=0, nan_policy='propagate'):
-    # TODO: NaN handling
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     n = a.shape[axis]
     df = float(n - 1)
 
@@ -159,6 +164,10 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
 @doc_wraps(scipy.stats.skew)
 def skew(a, axis=0, bias=True, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     n = a.shape[axis]
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
@@ -190,6 +199,10 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
 
 @doc_wraps(scipy.stats.skewtest)
 def skewtest(a, axis=0, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     b2 = skew(a, axis)
     n = float(a.shape[axis])
     if n < 8:
@@ -210,6 +223,10 @@ def skewtest(a, axis=0, nan_policy='propagate'):
 
 @doc_wraps(scipy.stats.kurtosis)
 def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     n = a.shape[axis]
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
@@ -242,11 +259,15 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
         return vals - 3
     else:
         return vals
-        # TDOO: scalar; vals = vals.item()  # array scalar
+        # TODO: scalar; vals = vals.item()  # array scalar
 
 
 @doc_wraps(scipy.stats.kurtosistest)
 def kurtosistest(a, axis=0, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     n = float(a.shape[axis])
     b2 = kurtosis(a, axis, fisher=False)
 
@@ -273,6 +294,10 @@ def kurtosistest(a, axis=0, nan_policy='propagate'):
 
 @doc_wraps(scipy.stats.normaltest)
 def normaltest(a, axis=0, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     s, _ = skewtest(a, axis)
     k, _ = kurtosistest(a, axis)
     k2 = s * s + k * k
@@ -316,6 +341,10 @@ def f_oneway(*args):
 
 @doc_wraps(scipy.stats.moment)
 def moment(a, moment=1, axis=0, nan_policy='propagate'):
+    if nan_policy != 'propagate':
+        raise NotImplementedError("`nan_policy` other than 'propagate' "
+                                  "have not been implemented.")
+
     if a.size == 0:
         # empty array, return nan(s) with shape matching `moment`
         if np.isscalar(moment):
