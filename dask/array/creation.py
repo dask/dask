@@ -164,7 +164,7 @@ def indices(dimensions, dtype=int, chunks=None):
             r = r[s]
 
             for j in chain(range(i), range(i + 1, len(dimensions))):
-                r = r.repeat(dimensions[j], axis=j).rechunk({j: chunks[j + 1]})
+                r = r.repeat(dimensions[j], axis=j)
 
             grid.append(r)
 
