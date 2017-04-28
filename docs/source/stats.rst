@@ -10,6 +10,7 @@ You can calculate various measures of an array including skewnes, kurtosis, and 
 
 .. code-block:: python
 
+   >>> from dask import stats
    >>> x = da.random.beta(1, 1, size=(1000,), chunks=10)
    >>> k, s, m = [stats.kurtosis(x), stats.skew(x), stats.moment(x, 5)]
    >>> dask.compute(k, s, m)
@@ -20,17 +21,17 @@ Statistical Tests
 -----------------
 
 You can perform basic statistical tests on dask arrays.
+Each of these tests return a ``dask.delayed`` wrapping one of the scipy ``namedtuple``
+results.
 
 
 .. code-block:: python
 
    >>> a = da.random.uniform(size=(50,), chunks=(25,))
-   >>> b = a + da.random.uniform(high=.25, size=(50,), chunks=(25,))
+   >>> b = a + da.random.uniform(low=-0.15, high=0.15, size=(50,), chunks=(25,))
    >>> result = ttest_rel(a, b)
-   >>> dask.compute(*result)
-   (-12.951840468566829, 1.934718600173124e-17)
-
-Each test returns one of the namedtuples defined in ``scipy.stats.stats``.
+   >>> result.compute()
+   Ttest_relResult(statistic=-1.5102104380013242, pvalue=0.13741197274874514)
 
 
 .. toctree::

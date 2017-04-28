@@ -1,9 +1,9 @@
 import pytest
 
 import numpy as np
-from dask.base import Base
 import dask.array as da
 from dask.array.utils import assert_eq
+from dask.delayed import Delayed
 import dask.stats
 import scipy.stats
 from dask.array.utils import allclose
@@ -43,7 +43,9 @@ def test_one(kind):
 
     result = dask_test(a_)
     expected = scipy_test(a)
-    assert allclose(dask.compute(*result), expected)
+
+    assert isinstance(result, Delayed)
+    assert allclose(result.compute(), expected)
 
 
 @pytest.mark.parametrize('kind, kwargs', [
@@ -68,8 +70,9 @@ def test_two(kind, kwargs):
 
     result = dask_test(a_, b_, **kwargs)
     expected = scipy_test(a, b, **kwargs)
-    assert all(isinstance(x, Base) for x in result)
-    assert allclose(dask.compute(*result), expected)
+
+    assert isinstance(result, Delayed)
+    assert allclose(result.compute(), expected)
     # fails occasionally. shouldn't this be exact?
     # assert dask.compute(*result) == expected
 
@@ -91,4 +94,4 @@ def test_anova():
     result = dask.stats.f_oneway(*da_args)
     expected = scipy.stats.f_oneway(*np_args)
 
-    assert allclose(dask.compute(*result), expected)
+    assert allclose(result.compute(), expected)

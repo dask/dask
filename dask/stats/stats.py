@@ -64,7 +64,7 @@ def ttest_ind(a, b, axis=0, equal_var=True):
 
     res = _ttest_ind_from_stats(da.mean(a, axis), da.mean(b, axis), denom, df)
 
-    return Ttest_indResult(*res)
+    return delayed(Ttest_indResult, nout=2)(*res)
 
 
 @doc_wraps(scipy.stats.ttest_1samp)
@@ -80,7 +80,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy='propagate'):
     with np.errstate(divide='ignore', invalid='ignore'):
         t = da.divide(d, denom)
     t, prob = _ttest_finish(df, t)
-    return Ttest_1sampResult(t, prob)
+    return delayed(Ttest_1sampResult, nout=2)(t, prob)
 
 
 @doc_wraps(scipy.stats.ttest_rel)
@@ -98,7 +98,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate'):
         t = da.divide(dm, denom)
     t, prob = _ttest_finish(df, t)
 
-    return Ttest_relResult(t, prob)
+    return delayed(Ttest_relResult, nout=2)(t, prob)
 
 
 @doc_wraps(scipy.stats.chisquare)
@@ -149,7 +149,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
     # ddof = asarray(ddof)
     p = delayed(distributions.chi2.sf)(stat, num_obs - 1 - ddof)
 
-    return Power_divergenceResult(stat, p)
+    return delayed(Power_divergenceResult, nout=2)(stat, p)
 
 
 @doc_wraps(scipy.stats.skew)
@@ -200,8 +200,7 @@ def skewtest(a, axis=0, nan_policy='propagate'):
     y = np.where(y == 0, 1, y)
     Z = delta * np.log(y / alpha + np.sqrt((y / alpha)**2 + 1))
 
-    return SkewtestResult(Z, 2 * distributions.norm.sf(np.abs(Z)))
-    pass
+    return delayed(SkewtestResult, nout=2)(Z, 2 * distributions.norm.sf(np.abs(Z)))
 
 
 @doc_wraps(scipy.stats.kurtosis)
@@ -264,7 +263,7 @@ def kurtosistest(a, axis=0, nan_policy='propagate'):
         Z = Z[()]
 
     # zprob uses upper tail, so Z needs to be positive
-    return KurtosistestResult(Z, 2 * distributions.norm.sf(np.abs(Z)))
+    return delayed(KurtosistestResult, nout=2)(Z, 2 * distributions.norm.sf(np.abs(Z)))
 
 
 @doc_wraps(scipy.stats.normaltest)
@@ -272,7 +271,7 @@ def normaltest(a, axis=0, nan_policy='propagate'):
     s, _ = skewtest(a, axis)
     k, _ = kurtosistest(a, axis)
     k2 = s * s + k * k
-    return NormaltestResult(k2, distributions.chi2.sf(k2, 2))
+    return delayed(NormaltestResult, nout=2)(k2, delayed(distributions.chi2.sf)(k2, 2))
 
 
 @doc_wraps(scipy.stats.f_oneway)
@@ -307,7 +306,7 @@ def f_oneway(*args):
 
     prob = _fdtrc(dfbn, dfwn, f)   # equivalent to stats.f.sf
 
-    return F_onewayResult(f, prob)
+    return delayed(F_onewayResult, nout=2)(f, prob)
 
 
 @doc_wraps(scipy.stats.moment)
