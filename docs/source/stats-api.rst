@@ -1,7 +1,7 @@
 API
 ---
 
-.. currentmodule:: dask.stats
+.. currentmodule:: dask.array.stats
 
 .. autosummary::
    ttest_ind

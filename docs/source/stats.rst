@@ -10,7 +10,7 @@ You can calculate various measures of an array including skewnes, kurtosis, and 
 
 .. code-block:: python
 
-   >>> from dask import stats
+   >>> from dask.array import stats
    >>> x = da.random.beta(1, 1, size=(1000,), chunks=10)
    >>> k, s, m = [stats.kurtosis(x), stats.skew(x), stats.moment(x, 5)]
    >>> dask.compute(k, s, m)
