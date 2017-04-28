@@ -167,6 +167,7 @@ then you should start here.
    dataframe.rst
    delayed.rst
    machine-learning.rst
+   stats.rst
 
 **Scheduling**
 
