@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-from itertools import chain
+import itertools
 
 import numpy as np
 
@@ -163,7 +163,7 @@ def indices(dimensions, dtype=int, chunks=None):
             r = arange(dimensions[i], dtype=dtype, chunks=chunks[i + 1])
             r = r[s]
 
-            for j in chain(range(i), range(i + 1, len(dimensions))):
+            for j in itertools.chain(range(i), range(i + 1, len(dimensions))):
                 r = r.repeat(dimensions[j], axis=j)
 
             grid.append(r)
