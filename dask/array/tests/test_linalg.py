@@ -190,6 +190,7 @@ def test_lu_1():
         _check_lu_result(dp, dl, du, A)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('size', [10, 20, 30, 50])
 def test_lu_2(size):
     np.random.seed(10)
@@ -200,6 +201,7 @@ def test_lu_2(size):
     _check_lu_result(dp, dl, du, A)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('size', [50, 100, 200])
 def test_lu_3(size):
     np.random.seed(10)

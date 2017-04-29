@@ -524,6 +524,7 @@ def test_slicing_none_int_ellipses(a, b, c, d):
 """
 
 
+@pytest.mark.slow
 def test_slicing_none_int_ellipes():
     shape = (2,3,5,7,11)
     x = np.arange(np.prod(shape)).reshape(shape)
