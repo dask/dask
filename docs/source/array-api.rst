@@ -60,6 +60,7 @@ Top level user functions:
    hstack
    hypot
    imag
+   indices
    insert
    isclose
    iscomplex
@@ -318,6 +319,7 @@ Other functions
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag
+.. autofunction:: indices
 .. autofunction:: insert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
