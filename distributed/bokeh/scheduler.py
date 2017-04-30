@@ -12,7 +12,7 @@ from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
 from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
-        PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad, Text,
+        PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
         value, LinearAxis, NumeralTickFormatter, BasicTicker, NumberFormatter,
         BoxSelectTool)
 from bokeh.models.widgets import DataTable, TableColumn
@@ -382,7 +382,9 @@ class CurrentLoad(DashboardComponent):
 class StealingTimeSeries(DashboardComponent):
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
-        self.source = ColumnDataSource({'time': [], 'idle': [], 'saturated': []})
+        self.source = ColumnDataSource({'time': [time(), time() + 1],
+                                        'idle': [0, 0.1],
+                                        'saturated': [0, 0.1]})
 
         x_range = DataRange1d(follow='end', follow_interval=20000, range_padding=0)
 
@@ -623,45 +625,53 @@ class TaskProgress(DashboardComponent):
         data = progress_quads(dict(all={}, memory={}, erred={}, released={}))
         self.source = ColumnDataSource(data=data)
 
-        x_range = DataRange1d()
+        x_range = DataRange1d(range_padding=0)
         y_range = Range1d(-8, 0)
 
-        self.root = Plot(
+        self.root = figure(
             id='bk-task-progress-plot',
             x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
         )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='left', right='right',
-                 fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.2)
+        self.root.line(  # just to define early ranges
+            x=[0, 1], y=[-1, 0], line_color="#FFFFFF", alpha=0.0)
+        self.root.quad(
+            source=self.source,
+            top='top', bottom='bottom', left='left', right='right',
+            fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.2
         )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='left', right='released-loc',
-                 fill_color="color", line_color="color", fill_alpha=0.6)
+        self.root.quad(
+            source=self.source,
+            top='top', bottom='bottom', left='left', right='released-loc',
+            fill_color="color", line_color="color", fill_alpha=0.6
         )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='released-loc',
-                 right='memory-loc', fill_color="color", line_color="color",
-                 fill_alpha=1.0)
+        self.root.quad(
+            source=self.source,
+            top='top', bottom='bottom', left='released-loc',
+            right='memory-loc', fill_color="color", line_color="color",
+            fill_alpha=1.0
         )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='released-loc',
-                 right='erred-loc', fill_color='black', line_color='#000000',
-                 fill_alpha=0.5)
+        self.root.quad(
+            source=self.source,
+            top='top', bottom='bottom', left='released-loc',
+            right='erred-loc', fill_color='black', line_color='#000000',
+            fill_alpha=0.5
         )
-        self.root.add_glyph(
-            self.source,
-            Text(text='show-name', y='bottom', x='left', x_offset=5,
-                 text_font_size=value('10pt'))
+        self.root.text(
+            source=self.source,
+            text='show-name', y='bottom', x='left', x_offset=5,
+            text_font_size=value('10pt')
         )
-        self.root.add_glyph(
-            self.source,
-            Text(text='done', y='bottom', x='right', x_offset=-5,
-                 text_align='right', text_font_size=value('10pt'))
+        self.root.text(
+            source=self.source,
+            text='done', y='bottom', x='right', x_offset=-5,
+            text_align='right', text_font_size=value('10pt')
         )
+        self.root.ygrid.visible = False
+        self.root.yaxis.minor_tick_line_alpha = 0
+        self.root.yaxis.visible = False
+        self.root.xgrid.visible = False
+        self.root.xaxis.minor_tick_line_alpha = 0
+        self.root.xaxis.visible = False
 
         hover = HoverTool(
             point_policy="follow_mouse",

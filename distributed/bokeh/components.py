@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from bisect import bisect
 from operator import add
+from time import time
 
 from bokeh.layouts import row, column
 from bokeh.models import (
@@ -60,8 +61,9 @@ class TaskStream(DashboardComponent):
         self.last = 0
 
         self.source = ColumnDataSource(data=dict(
-            start=[], duration=[], key=[], name=[], color=[],
-            worker=[], y=[], worker_thread=[], alpha=[])
+            start=[time() - clear_interval], duration=[0.1], key=['start'],
+            name=['start'], color=['white'],
+            worker=['foo'], y=[0], worker_thread=[1], alpha=[0.0])
         )
 
         x_range = DataRange1d(range_padding=0)
