@@ -1035,10 +1035,6 @@ class SeriesGroupBy(_GroupBy):
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
-        meta = pd.Series([], dtype='int64',
-                         index=pd.Index([], dtype=self._meta.obj.dtype),
-                         name=name)
-
         levels = _determine_levels(self.index)
 
         if isinstance(self.obj, DataFrame):
@@ -1051,7 +1047,7 @@ class SeriesGroupBy(_GroupBy):
                    chunk=chunk,
                    aggregate=_nunique_df_aggregate,
                    combine=_nunique_df_combine,
-                   meta=meta, token='series-groupby-nunique',
+                   token='series-groupby-nunique',
                    chunk_kwargs={'levels': levels, 'name': name},
                    aggregate_kwargs={'levels': levels, 'name': name},
                    combine_kwargs={'levels': levels},
