@@ -93,6 +93,7 @@ def test_anova():
 
     assert allclose(result.compute(), expected)
 
+
 @pytest.mark.parametrize('func, nargs', [
     (dask.array.stats.ttest_1samp, 2),
     (dask.array.stats.ttest_rel, 2),
