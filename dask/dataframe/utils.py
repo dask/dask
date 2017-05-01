@@ -432,41 +432,42 @@ def meta_nonempty(x):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True):
+def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
-        result = dsk.compute(get=get_sync)
+        if result is None:
+            result = dsk.compute(get=get_sync)
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
-            if check_names:
-                assert dsk.name == result.name
-            # cache
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name
                 assert dsk._meta.name == result.name
+                if isinstance(result, pd.MultiIndex):
+                    assert result.names == dsk._meta.names
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series), type(result)
-            if check_names:
-                assert dsk.name == result.name, (dsk.name, result.name)
-            # cache
             assert isinstance(dsk._meta, pd.Series), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name, (dsk.name, result.name)
                 assert dsk._meta.name == result.name
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-            # cache
             assert isinstance(dsk._meta, pd.DataFrame), type(dsk._meta)
             if check_names:
+                tm.assert_index_equal(dsk.columns, result.columns)
                 tm.assert_index_equal(dsk._meta.columns, result.columns)
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))
