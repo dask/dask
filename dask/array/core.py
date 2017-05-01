@@ -102,7 +102,7 @@ def slices_from_chunks(chunks):
             for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, shape=None, out_name=None, fancy=True, lock=False):
+def getem(arr, chunks, getitem=getarray, shape=None, out_name=None, lock=False):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -122,12 +122,11 @@ def getem(arr, chunks, shape=None, out_name=None, fancy=True, lock=False):
 
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
-    getter = getarray if fancy else getarray_nofancy
 
     if lock:
-        values = [(getter, arr, x, lock) for x in slices]
+        values = [(getitem, arr, x, lock) for x in slices]
     else:
-        values = [(getter, arr, x) for x in slices]
+        values = [(getitem, arr, x) for x in slices]
 
     return dict(zip(keys, values))
 
@@ -1815,7 +1814,7 @@ def normalize_chunks(chunks, shape=None):
     return tuple(map(tuple, chunks))
 
 
-def from_array(x, chunks, name=None, lock=False, fancy=True):
+def from_array(x, chunks, name=None, lock=False, fancy=True, getitem=None):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -1869,7 +1868,13 @@ def from_array(x, chunks, name=None, lock=False, fancy=True):
         original_name = name
     if lock is True:
         lock = SerializableLock()
-    dsk = getem(original_name, chunks, out_name=name, fancy=fancy, lock=lock)
+
+    if getitem is None:
+        if fancy:
+            getitem = getarray
+        else:
+            getitem = getarray_nofancy
+    dsk = getem(original_name, chunks, getitem, out_name=name, lock=lock)
     dsk[original_name] = x
     return Array(dsk, name, chunks, dtype=x.dtype)
 

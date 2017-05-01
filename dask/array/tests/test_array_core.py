@@ -23,7 +23,7 @@ from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
-from dask.array.core import (getem, getarray, getarray_nofancy, top, dotmany,
+from dask.array.core import (getem, getarray, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
@@ -54,12 +54,11 @@ def same_keys(a, b):
 
 
 def test_getem():
-    for fancy, getter in [(True, getarray), (False, getarray_nofancy)]:
-        sol = {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-               ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-               ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-               ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
-        assert getem('X', (2, 3), shape=(4, 6), fancy=fancy) == sol
+    sol = {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
+           ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
+           ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
+           ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
+    assert getem('X', (2, 3), shape=(4, 6)) == sol
 
 
 def test_top():
@@ -1597,6 +1596,21 @@ def test_from_array_slicing_results_in_ndarray():
     assert type(s2.compute()) == np.ndarray
     s3 = s2[:, 0]
     assert type(s3.compute()) == np.ndarray
+
+
+def test_from_array_getitem():
+    x = np.arange(10)
+
+    def my_getitem(x, ind):
+        return x[ind]
+
+    y = da.from_array(x, chunks=(5,), getitem=my_getitem)
+
+    for k, v in y.dask.items():
+        if isinstance(v, tuple):
+            assert v[0] is my_getitem
+
+    assert_eq(x, y)
 
 
 def test_asarray():
