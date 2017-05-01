@@ -7,6 +7,7 @@ The rechunk module defines:
 """
 from __future__ import absolute_import, division, print_function
 
+import math
 import heapq
 
 from itertools import product, chain, count
@@ -105,6 +106,47 @@ def _intersect_1d(breaks):
     return ret
 
 
+def _old_to_new(old_chunks, new_chunks):
+    """ Helper to build old_chunks to new_chunks.
+
+    Handles missing values, as long as the missing dimension
+    is unchanged.
+
+    Examples
+    --------
+    >>> old = ((10, 10, 10, 10, 10), )
+    >>> new = ((25, 5, 20), )
+    >>> _old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
+    [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
+      [(2, slice(5, 10, None))],
+      [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
+    """
+    old_known = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
+    new_known = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
+
+    n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
+    n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
+
+    cmo = cumdims_label(old_known, 'o')
+    cmn = cumdims_label(new_known, 'n')
+
+    sums = [sum(o) for o in old_known]
+    sums2 = [sum(n) for n in new_known]
+
+    if not sums == sums2:
+        raise ValueError('Cannot change dimensions from to %r' % sums2)
+    if not n_missing == n_missing2:
+        raise ValueError('Chunks must be unchanging along unknown dimensions')
+
+    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
+    for idx, missing in enumerate(n_missing):
+        if missing:
+            # Missing dimensions are always unchanged, so old -> new is everything
+            extra = [[(i, slice(0, None))] for i in range(missing)]
+            old_to_new.insert(idx, extra)
+    return old_to_new
+
+
 def intersect_chunks(old_chunks, new_chunks):
     """
     Make dask.array slices as intersection of old and new chunks.
@@ -125,14 +167,8 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    cmo = cumdims_label(old_chunks, 'o')
-    cmn = cumdims_label(new_chunks, 'n')
-    sums = [sum(o) for o in old_chunks]
-    sums2 = [sum(n) for n in old_chunks]
-    if not sums == sums2:
-        raise ValueError('Cannot change dimensions from to %r' % sums2)
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1]))
-                  for cm in zip(cmo, cmn)]
+    old_to_new = _old_to_new(old_chunks, new_chunks)
+
     cross1 = product(*old_to_new)
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
@@ -216,8 +252,13 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     if chunks == x.chunks:
         return x
     ndim = x.ndim
-    if not len(chunks) == ndim or tuple(map(sum, chunks)) != x.shape:
+    if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+    new_shapes = tuple(map(sum, chunks))
+
+    for new, old in zip(new_shapes, x.shape):
+        if new != old and not math.isnan(old) and not math.isnan(new):
+            raise ValueError("Provided chunks are not consistent with shape")
 
     steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize,
                          threshold, block_size_limit)
@@ -429,11 +470,18 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     block_size_limit: int
         The maximum block size (in bytes) we want to produce during an
         intermediate step
+
+    Notes
+    -----
+    No intermediate steps will be planned if any dimension of ``old_chunks``
+    is unknown.
     """
     ndim = len(new_chunks)
     steps = []
-    if ndim <= 1 or not all(new_chunks):
-        # Trivial array => no need for an intermediate
+    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
+
+    if ndim <= 1 or not all(new_chunks) or any(has_nans):
+        # Trivial array / unknown dim => no need / ability for an intermediate
         return steps + [new_chunks]
 
     # Make it a number ef elements
@@ -589,7 +637,8 @@ def format_blocks(blocks):
     2*[10] | [5, 6] | 3*[2] | [7]
     """
     assert (isinstance(blocks, tuple) and
-            all(isinstance(x, int) for x in blocks))
+            all(isinstance(x, int) or math.isnan(x)
+                for x in blocks))
     return _PrettyBlocks(blocks)
 
 
