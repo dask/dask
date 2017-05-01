@@ -419,6 +419,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def map_partitions(self, func, *args, **kwargs):
         """ Apply Python function on each DataFrame partition.
 
+        Note that the index and divisions are assumed to remain unchanged.
+
         Parameters
         ----------
         func : function
@@ -482,6 +484,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         the object itself directly:
 
         >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
+
+        Also note that the index and divisions are assumed to remain unchanged.
+        If the function you're mapping changes the index/divisions, you'll need
+        to clear them afterwards:
+
+        >>> ddf.map_partitions(func).clear_divisions()  # doctest: +SKIP
         """
         return map_partitions(func, self, *args, **kwargs)
 
