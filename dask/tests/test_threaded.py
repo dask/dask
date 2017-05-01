@@ -7,8 +7,8 @@ from time import time, sleep
 import pytest
 
 from dask.context import set_options
+from dask.compatibility import PY2
 from dask.threaded import get
-from dask.utils import PY3
 from dask.utils_test import inc, add
 
 
@@ -105,7 +105,10 @@ def test_thread_safety():
 
 
 def test_interrupt():
-    if not PY3:
+    # Python 2 and windows 2 & 3 both implement `queue.get` using polling,
+    # which means we can set an exception to interrupt the call to `get`.
+    # Python 3 on other platforms requires sending SIGINT to the main thread.
+    if PY2:
         from thread import interrupt_main
     elif os.name == 'nt':
         from _thread import interrupt_main
@@ -118,14 +121,10 @@ def test_interrupt():
     def long_task():
         sleep(5)
 
-    def interrupt():
-        sleep(0.5)
-        interrupt_main()
-
     dsk = {('x', i): (long_task,) for i in range(20)}
     dsk['x'] = (len, list(dsk.keys()))
     try:
-        interrupter = threading.Thread(target=interrupt)
+        interrupter = threading.Timer(0.5, interrupt_main)
         interrupter.start()
         start = time()
         get(dsk, 'x')
