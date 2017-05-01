@@ -465,7 +465,7 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    module = package_of(max(arrays, key=lambda x: x.__array_priority__)) or np
+    module = package_of(type(max(arrays, key=lambda x: x.__array_priority__))) or np
     return module.concatenate(arrays, axis=axes[0])
 
 
@@ -1790,10 +1790,11 @@ def normalize_chunks(chunks, shape=None):
     """
     if chunks is None:
         raise ValueError(chunks_none_error_message)
-    if isinstance(chunks, list):
-        chunks = tuple(chunks)
-    if isinstance(chunks, Number):
-        chunks = (chunks,) * len(shape)
+    if type(chunks) is not tuple:
+        if type(chunks) is list:
+            chunks = tuple(chunks)
+        if isinstance(chunks, Number):
+            chunks = (chunks,) * len(shape)
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((),) * len(shape)
 
@@ -2479,7 +2480,7 @@ ALPHABET = alphabet.upper()
 
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
-    module = package_of(x) or np
+    module = package_of(type(x)) or np
     x = module.tensordot(a, b, axes=axes)
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
@@ -3432,7 +3433,7 @@ def concatenate3(arrays):
 
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
-    module = package_of(advanced) or np
+    module = package_of(type(advanced)) or np
     if module is not np and hasattr(module, 'concatenate'):
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
