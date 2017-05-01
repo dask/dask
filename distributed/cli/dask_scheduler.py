@@ -25,8 +25,10 @@ logger = logging.getLogger('distributed.scheduler')
 # XXX default port (or URI) values should be centralized somewhere
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
-@click.option('--bokeh-internal-port', type=int, default=8788,
+@click.option('--bokeh-external-port', type=int, default=None,
               help="Internal Bokeh port")
+@click.option('--bokeh-internal-port', type=int, default=None,
+             help="Deprecated.")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default='',
@@ -50,9 +52,16 @@ logger = logging.getLogger('distributed.scheduler')
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar"')
-def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
-         bokeh_whitelist, prefix, use_xheaders, pid_file, scheduler_file,
-         interface, local_directory, preload):
+def main(host, port, http_port, bokeh_port, bokeh_external_port,
+         bokeh_internal_port, show, _bokeh, bokeh_whitelist, prefix,
+         use_xheaders, pid_file, scheduler_file, interface, local_directory,
+         preload):
+
+    if bokeh_internal_port:
+        print("The --bokeh-internal-port keyword has been removed.\n"
+              "The internal bokeh server is now the default bokeh server.\n"
+              "Use --bokeh-port %d instead" % bokeh_internal_port)
+        sys.exit(1)
 
     if pid_file:
         with open(pid_file, 'w') as f:
@@ -95,20 +104,21 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
     if _bokeh:
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
-            services[('bokeh', bokeh_internal_port)] = BokehScheduler
+            services[('bokeh', bokeh_port)] = BokehScheduler
     scheduler = Scheduler(loop=loop, services=services,
                           scheduler_file=scheduler_file)
     scheduler.start(addr)
     preload_modules(preload, parameter=scheduler, file_dir=local_directory)
 
     bokeh_proc = None
-    if _bokeh:
-        if bokeh_port == 0:          # This is a hack and not robust
+    if _bokeh and bokeh_external_port is not None:
+        if bokeh_external_port == 0: # This is a hack and not robust
             bokeh_port = open_port() # This port may be taken by the OS
         try:                         # before we successfully pass it to Bokeh
             from distributed.bokeh.application import BokehWebInterface
             bokeh_proc = BokehWebInterface(http_port=http_port,
-                    scheduler_address=scheduler.address, bokeh_port=bokeh_port,
+                    scheduler_address=scheduler.address,
+                    bokeh_port=bokeh_external_port,
                     bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
                     use_xheaders=use_xheaders, quiet=False)
         except ImportError:

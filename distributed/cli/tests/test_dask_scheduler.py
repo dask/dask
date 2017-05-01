@@ -129,13 +129,12 @@ def test_bokeh_non_standard_ports(loop):
         requests.get('http://localhost:4832/status/')
 
 
-def test_bokeh_internal_port(loop):
+def test_bokeh_external_port(loop):
     pytest.importorskip('bokeh')
 
-    with popen(['dask-scheduler', '--bokeh-internal-port', '4833']) as proc:
+    with popen(['dask-scheduler', '--bokeh-external-port', '4833']) as proc:
         with Client('127.0.0.1:8786', loop=loop) as c:
             d = c.scheduler_info()
-            assert d['services']['bokeh'] == 4833
 
         start = time()
         while True:
@@ -246,10 +245,9 @@ def test_bokeh_port_zero(loop):
     pytest.importorskip('bokeh')
     with tmpfile() as fn:
         with popen(['dask-scheduler',
-                    '--bokeh-port', '0',
-                    '--bokeh-internal-port', '0']) as proc:
+                    '--bokeh-port', '0']) as proc:
             count = 0
-            while count < 2:
+            while count < 1:
                 line = proc.stderr.readline()
                 if b'bokeh' in line.lower() or b'web' in line.lower():
                     count += 1
