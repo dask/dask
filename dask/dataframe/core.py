@@ -1764,6 +1764,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def isin(self, other):
         return elemwise(M.isin, self, list(other))
 
+    @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
         if not (isinstance(arg, (pd.Series, dict)) or callable(arg)):
