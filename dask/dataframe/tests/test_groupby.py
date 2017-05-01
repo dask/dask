@@ -655,8 +655,12 @@ def test_aggregate__examples(spec, split_every, grouper):
                        columns=['c', 'b', 'a', 'd'])
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-    assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
-              ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+    sol = pdf.groupby(grouper(pdf)).agg(spec)
+    res = ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every)
+    assert_eq(sol, res)
+    assert type(sol.index) == type(res._meta.index)
+    if isinstance(sol.index, pd.MultiIndex):
+        assert sol.index.names == res._meta.index.names
 
 
 @pytest.mark.parametrize('spec', [

@@ -866,14 +866,6 @@ class _GroupBy(object):
         else:
             levels = 0
 
-        # apply the transformations to determine the meta object
-        meta_groupby = pd.Series([], dtype=bool, index=self.obj._meta.index)
-        meta_stage1 = _groupby_apply_funcs(self.obj._meta, funcs=chunk_funcs,
-                                           by=meta_groupby)
-        meta_stage2 = _groupby_apply_funcs(meta_stage1, funcs=aggregate_funcs,
-                                           level=0)
-        meta = _agg_finalize(meta_stage2, finalizers)
-
         if not isinstance(self.index, list):
             chunk_args = [self.obj, self.index]
 
@@ -887,11 +879,11 @@ class _GroupBy(object):
                   aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
                   combine=_groupby_apply_funcs,
                   combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  meta=meta, token='aggregate', split_every=split_every,
+                  token='aggregate', split_every=split_every,
                   split_out=split_out, split_out_setup=split_out_on_index)
 
-        return map_partitions(_agg_finalize, obj, meta=meta,
-                              token='aggregate-finalize', funcs=finalizers)
+        return map_partitions(_agg_finalize, obj, token='aggregate-finalize',
+                              funcs=finalizers)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, meta=no_default, columns=no_default):
