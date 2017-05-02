@@ -1059,7 +1059,7 @@ _packages = {}
 
 
 def package_of(typ):
-    """ Return package containing object's definition
+    """ Return package containing type's definition
 
     Or return None if not found
     """
