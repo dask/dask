@@ -23,12 +23,14 @@ logger = logging.getLogger('distributed.scheduler')
 @click.command()
 @click.option('--port', type=int, default=None, help="Serving port")
 # XXX default port (or URI) values should be centralized somewhere
-@click.option('--http-port', type=int, default=9786, help="HTTP port")
-@click.option('--bokeh-port', type=int, default=8787, help="Bokeh port")
+@click.option('--http-port', type=int, default=9786,
+              help="HTTP port for JSON API diagnostics")
+@click.option('--bokeh-port', type=int, default=8787,
+              help="Bokeh port for visual diagnostics")
 @click.option('--bokeh-external-port', type=int, default=None,
-              help="Internal Bokeh port")
+              help="Optional port for the external (old) Bokeh server")
 @click.option('--bokeh-internal-port', type=int, default=None,
-             help="Deprecated.")
+              help="Deprecated. Use --bokeh-port instead")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default='',
@@ -51,7 +53,7 @@ logger = logging.getLogger('distributed.scheduler')
 @click.option('--local-directory', default='', type=str,
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
-              help='Module that should be loaded by each worker process like "foo.bar"')
+              help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
 def main(host, port, http_port, bokeh_port, bokeh_external_port,
          bokeh_internal_port, show, _bokeh, bokeh_whitelist, prefix,
          use_xheaders, pid_file, scheduler_file, interface, local_directory,

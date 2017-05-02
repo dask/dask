@@ -44,29 +44,34 @@ def handle_signal(sig, frame):
 @click.command()
 @click.argument('scheduler', type=str, required=False)
 @click.option('--worker-port', type=int, default=0,
-              help="Serving worker port, defaults to randomly assigned")
+              help="Serving computation port, defaults to random")
 @click.option('--http-port', type=int, default=0,
-              help="Serving http port, defaults to randomly assigned")
+              help="Serving http port, defaults to random")
 @click.option('--nanny-port', type=int, default=0,
-              help="Serving nanny port, defaults to randomly assigned")
-@click.option('--bokeh-port', type=int, default=8789, help="Bokeh port")
+              help="Serving nanny port, defaults to random")
+@click.option('--bokeh-port', type=int, default=8789,
+              help="Bokeh port, defaults to 8789")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=None,
-              help="Serving host. Defaults to an ip address that can hopefully"
-                   " be visible from the scheduler network.")
+              help="Serving host. Should be an ip address that is"
+                   " visible to the scheduler and other workers. "
+                   "See --interface.")
 @click.option('--interface', type=str, default=None,
-              help="Preferred network interface like 'eth0' or 'ib0'")
+              help="Network interface like 'eth0' or 'ib0'")
 @click.option('--nthreads', type=int, default=0,
-              help="Number of threads per process. Defaults to number of cores")
+              help="Number of threads per process.")
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
-@click.option('--name', type=str, default='', help="Alias")
+@click.option('--name', type=str, default='',
+              help="A unique name for this worker like 'worker-1'")
 @click.option('--memory-limit', default='auto',
               help="Number of bytes before spilling data to disk. "
-              "This can be an integer (nbytes) float (fraction of total memory) or auto")
+                   "This can be an integer (nbytes) "
+                   "float (fraction of total memory) "
+                   "or 'auto'")
 @click.option('--reconnect/--no-reconnect', default=True,
-              help="Try to automatically reconnect to scheduler if disconnected")
+              help="Reconnect to scheduler if disconnected")
 @click.option('--nanny/--no-nanny', default=True,
               help="Start workers in nanny process for management")
 @click.option('--pid-file', type=str, default='',
@@ -83,7 +88,8 @@ def handle_signal(sig, frame):
 @click.option('--death-timeout', type=float, default=None,
               help="Seconds to wait for a scheduler before closing")
 @click.option('--preload', type=str, multiple=True,
-              help='Module that should be loaded by each worker process like "foo.bar"')
+              help='Module that should be loaded by each worker process '
+                   'like "foo.bar" or "/path/to/foo.py"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, temp_filename, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
