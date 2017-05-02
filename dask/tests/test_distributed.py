@@ -1,5 +1,5 @@
 import pytest
-pytest.importorskip('distributed')
+distributed = pytest.importorskip('distributed')
 
 from tornado import gen
 
@@ -33,7 +33,7 @@ def test_futures_to_delayed_dataframe(loop):
     dd = pytest.importorskip('dask.dataframe')
     df = pd.DataFrame({'x': [1, 2, 3]})
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:  # flake8: noqa
+        with Client(s['address'], loop=loop) as c:
             futures = c.scatter([df, df])
             ddf = dd.from_delayed(futures)
             dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
@@ -46,7 +46,7 @@ def test_futures_to_delayed_bag(loop):
     db = pytest.importorskip('dask.bag')
     L = [1, 2, 3]
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:  # flake8: noqa
+        with Client(s['address'], loop=loop) as c:
             futures = c.scatter([L, L])
             b = db.from_delayed(futures)
             assert list(b) == L + L
@@ -58,7 +58,7 @@ def test_futures_to_delayed_array(loop):
     np = pytest.importorskip('numpy')
     x = np.arange(5)
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:  # flake8: noqa
+        with Client(s['address'], loop=loop) as c:
             futures = c.scatter([x, x])
             A = da.concatenate([da.from_delayed(f, shape=x.shape, dtype=x.dtype)
                                 for f in futures], axis=0)
@@ -75,3 +75,20 @@ def test_local_get_with_distributed_active(c, s, a, b):
     y = delayed(inc)(2).persist(get=dask.async.get_sync)
     yield gen.sleep(0.01)
     assert not s.task_state # scheduler hasn't done anything
+
+
+
+def test_to_hdf_distributed(loop):
+    from ..dataframe.io.tests.test_hdf import test_to_hdf
+    with cluster() as (s, [a, b]):
+        with distributed.Client(s['address'], loop=loop):
+            test_to_hdf()
+
+
+@pytest.mark.xfail(reason='HDF not multi-process safe')
+@pytest.mark.parametrize('npartitions', [1, 4, 10])
+def test_to_hdf_scheduler_distributed(npartitions, loop):
+    from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+    with cluster() as (s, [a, b]):
+        with distributed.Client(s['address'], loop=loop):
+            test_to_hdf_schedulers(None, npartitions)
