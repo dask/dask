@@ -228,9 +228,18 @@ class _Tracker(Process):
                 ps = self._update_pids(pid)
                 while not self.child_conn.poll():
                     tic = default_timer()
-                    mem = sum(p.memory_info().rss for p in ps) / 1e6
-                    cpu = sum(p.cpu_percent() for p in ps)
-                    data.append((tic, mem, cpu))
+                    mem = cpu = 0
+                    for p in ps:
+                        try:
+                            mem2 = p.memory_info().rss
+                            cpu2 = p.cpu_percent()
+                        except Exception: # could be a few different exceptions
+                            pass
+                        else:
+                            # Only increment if both were successful
+                            mem += mem2
+                            cpu += cpu2
+                    data.append((tic, mem / 1e6, cpu))
                     sleep(self.dt)
             elif msg == 'send_data':
                 self.child_conn.send(data)
