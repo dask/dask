@@ -2218,9 +2218,9 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def set_index(self, other, drop=True, sorted=False, npartitions=None, **kwargs):
-        """
-        Set the DataFrame index (row labels) using an existing column
+    def set_index(self, other, drop=True, sorted=False, npartitions=None,
+                  divisions=None, **kwargs):
+        """Set the DataFrame index (row labels) using an existing column
 
         This realigns the dataset to be sorted by a new column.  This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
@@ -2260,9 +2260,12 @@ class DataFrame(_Frame):
         divisions: list, optional
             Known values on which to separate index values of the partitions.
             See http://dask.pydata.org/en/latest/dataframe-design.html#partitions
-            Defaults to computing this with a single pass over the data
+            Defaults to computing this with a single pass over the data. Note
+            that if ``sorted=True``, specified divisions are assumed to match
+            the existing partitions in the data. If this is untrue, you should
+            leave divisions empty and call ``repartition`` after ``set_index``.
         compute: bool
-            Whether or not to trigger an immediate computation. Defaults to True.
+            Whether or not to trigger an immediate computation. Defaults to False.
 
         Examples
         --------
@@ -2279,13 +2282,20 @@ class DataFrame(_Frame):
         >>> divisions = pd.date_range('2000', '2010', freq='1D')
         >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
-        if sorted:
+        pre_sorted = sorted
+        del sorted
+
+        if divisions is not None:
+            check_divisions(divisions)
+
+        if pre_sorted:
             from .shuffle import set_sorted_index
-            return set_sorted_index(self, other, drop=drop, **kwargs)
+            return set_sorted_index(self, other, drop=drop, divisions=divisions,
+                                    **kwargs)
         else:
             from .shuffle import set_index
             return set_index(self, other, drop=drop, npartitions=npartitions,
-                             **kwargs)
+                             divisions=divisions, **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index
@@ -3467,6 +3477,17 @@ def _take_last(a, skipna=True):
             return last_row.values[0]
 
 
+def check_divisions(divisions):
+    if not isinstance(divisions, (list, tuple)):
+        raise ValueError('New division must be list or tuple')
+    divisions = list(divisions)
+    if divisions != sorted(divisions):
+        raise ValueError('New division must be sorted')
+    if len(divisions[:-1]) != len(list(unique(divisions[:-1]))):
+        msg = 'New division must be unique, except for the last element'
+        raise ValueError(msg)
+
+
 def repartition_divisions(a, b, name, out1, out2, force=False):
     """ dask graph to repartition dataframe by new divisions
 
@@ -3499,19 +3520,11 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
-    if not isinstance(b, (list, tuple)):
-        raise ValueError('New division must be list or tuple')
-    b = list(b)
+    check_divisions(b)
 
     if len(b) < 2:
         # minimum division is 2 elements, like [0, 0]
         raise ValueError('New division must be longer than 2 elements')
-
-    if b != sorted(b):
-        raise ValueError('New division must be sorted')
-    if len(b[:-1]) != len(list(unique(b[:-1]))):
-        msg = 'New division must be unique, except for the last element'
-        raise ValueError(msg)
 
     if force:
         if a[0] < b[0]:

@@ -1,5 +1,4 @@
 import sys
-from copy import copy
 from operator import getitem, add
 from itertools import product
 
@@ -9,8 +8,6 @@ import numpy as np
 import pytest
 
 import dask
-from dask.async import get_sync
-from dask import delayed
 from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
 
@@ -174,77 +171,6 @@ def test_index_names():
     assert ddf.index.compute().name == 'x'
 
 
-def test_set_index():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 5, 8]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
-                                  index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
-    full = d.compute()
-
-    d2 = d.set_index('b', npartitions=3)
-    assert d2.npartitions == 3
-    assert d2.index.name == 'b'
-    assert_eq(d2, full.set_index('b'))
-
-    d3 = d.set_index(d.b, npartitions=3)
-    assert d3.npartitions == 3
-    assert d3.index.name == 'b'
-    assert_eq(d3, full.set_index(full.b))
-
-    d4 = d.set_index('b')
-    assert d4.index.name == 'b'
-    assert_eq(d4, full.set_index('b'))
-
-
-def test_set_index_interpolate():
-    df = pd.DataFrame({'x': [4, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
-    d = dd.from_pandas(df, 2)
-
-    d1 = d.set_index('x', npartitions=3)
-    assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3, 4])
-
-    d2 = d.set_index('y', npartitions=3)
-    assert d2.divisions[0] == 1.
-    assert 1. < d2.divisions[1] < d2.divisions[2] < 2.
-    assert d2.divisions[3] == 2.
-
-
-def test_set_index_interpolate_int():
-    L = sorted(list(range(0, 200, 10)) * 2)
-    df = pd.DataFrame({'x': 2 * L})
-    d = dd.from_pandas(df, 2)
-    d1 = d.set_index('x', npartitions=10)
-    assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
-
-
-def test_set_index_timezone():
-    s_naive = pd.Series(pd.date_range('20130101', periods=3))
-    s_aware = pd.Series(pd.date_range('20130101', periods=3, tz='US/Eastern'))
-    df = pd.DataFrame({'tz': s_aware, 'notz': s_naive})
-    d = dd.from_pandas(df, 2)
-
-    d1 = d.set_index('notz', npartitions=2)
-    s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
-    assert d1.divisions[0] == s_naive[0] == s1[0]
-    assert d1.divisions[-1] == s_naive[2] == s1[2]
-
-    # We currently lose "freq".  Converting data with pandas-defined dtypes
-    # to numpy or pure Python can be lossy like this.
-    d2 = d.set_index('tz', npartitions=2)
-    s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
-    assert d2.divisions[0] == s2[0]
-    assert d2.divisions[-1] == s2[2]
-    assert d2.divisions[0].tz == s2[0].tz
-    assert d2.divisions[0].tz is not None
-    s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    with pytest.raises(TypeError):
-        d2.divisions[0] == s2badtype[0]
-
-
 @pytest.mark.parametrize(
     'npartitions',
     [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
@@ -256,49 +182,6 @@ def test_timezone_freq(npartitions):
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
     assert pdf.tz[0].freq == ddf.compute().tz[0].freq == ddf.tz.compute()[0].freq
-
-
-@pytest.mark.parametrize('drop', [True, False])
-def test_set_index_drop(drop):
-
-    pdf = pd.DataFrame({'A': list('ABAABBABAA'),
-                        'B': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                        'C': [1, 2, 3, 2, 1, 3, 2, 4, 2, 3]})
-    ddf = dd.from_pandas(pdf, 3)
-
-    assert_eq(ddf.set_index('A', drop=drop),
-              pdf.set_index('A', drop=drop))
-    assert_eq(ddf.set_index('B', drop=drop),
-              pdf.set_index('B', drop=drop))
-    assert_eq(ddf.set_index('C', drop=drop),
-              pdf.set_index('C', drop=drop))
-    assert_eq(ddf.set_index(ddf.A, drop=drop),
-              pdf.set_index(pdf.A, drop=drop))
-    assert_eq(ddf.set_index(ddf.B, drop=drop),
-              pdf.set_index(pdf.B, drop=drop))
-    assert_eq(ddf.set_index(ddf.C, drop=drop),
-              pdf.set_index(pdf.C, drop=drop))
-
-    # numeric columns
-    pdf = pd.DataFrame({0: list('ABAABBABAA'),
-                        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                        2: [1, 2, 3, 2, 1, 3, 2, 4, 2, 3]})
-    ddf = dd.from_pandas(pdf, 3)
-    assert_eq(ddf.set_index(0, drop=drop),
-              pdf.set_index(0, drop=drop))
-    assert_eq(ddf.set_index(2, drop=drop),
-              pdf.set_index(2, drop=drop))
-
-
-def test_set_index_raises_error_on_bad_input():
-    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
-                       'b': [7, 6, 5, 4, 3, 2, 1]})
-    ddf = dd.from_pandas(df, 2)
-
-    msg = r"Dask dataframe does not yet support multi-indexes"
-    with pytest.raises(NotImplementedError) as err:
-        ddf.set_index(['a', 'b'])
-    assert msg in str(err.value)
 
 
 def test_rename_columns():
@@ -660,32 +543,6 @@ def test_drop_duplicates_subset():
         for ss in [['x'], 'y', ['x', 'y']]:
             assert_eq(df.drop_duplicates(subset=ss, **kwarg),
                       ddf.drop_duplicates(subset=ss, **kwarg))
-
-
-def test_set_partition():
-    d2 = d.set_index('b', divisions=[0, 2, 9])
-    assert d2.divisions == (0, 2, 9)
-    expected = full.set_index('b')
-    assert_eq(d2, expected)
-
-
-def test_set_partition_compute():
-    d2 = d.set_index('b', divisions=[0, 2, 9], compute=False)
-    d3 = d.set_index('b', divisions=[0, 2, 9], compute=True)
-
-    assert_eq(d2, d3)
-    assert_eq(d2, full.set_index('b'))
-    assert_eq(d3, full.set_index('b'))
-    assert len(d2.dask) > len(d3.dask)
-
-    d4 = d.set_index(d.b, divisions=[0, 2, 9], compute=False)
-    d5 = d.set_index(d.b, divisions=[0, 2, 9], compute=True)
-    exp = full.copy()
-    exp.index = exp.b
-    assert_eq(d4, d5)
-    assert_eq(d4, exp)
-    assert_eq(d5, exp)
-    assert len(d4.dask) > len(d5.dask)
 
 
 def test_get_partition():
@@ -1143,16 +1000,6 @@ def test_series_round():
     ps = pd.Series([1.123, 2.123, 3.123, 1.234, 2.234, 3.234], name='a')
     s = dd.from_pandas(ps, npartitions=3)
     assert_eq(s.round(), ps.round())
-
-
-def test_set_partition_2():
-    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
-    ddf = dd.from_pandas(df, 2)
-
-    result = ddf.set_index('y', divisions=['a', 'c', 'd'])
-    assert result.divisions == ('a', 'c', 'd')
-
-    assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
 
 
 @pytest.mark.slow
@@ -2195,58 +2042,11 @@ def test_groupby_callable():
               b.y.groupby(iseven).sum())
 
 
-def test_set_index_sorted_true():
-    df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
-                       'z': [4, 3, 2, 1]})
-    a = dd.from_pandas(df, 2, sort=False)
-    assert not a.known_divisions
-
-    b = a.set_index('x', sorted=True)
-    assert b.known_divisions
-    assert set(a.dask).issubset(set(b.dask))
-
-    for drop in [True, False]:
-        assert_eq(a.set_index('x', drop=drop),
-                  df.set_index('x', drop=drop))
-        assert_eq(a.set_index(a.x, sorted=True, drop=drop),
-                  df.set_index(df.x, drop=drop))
-        assert_eq(a.set_index(a.x + 1, sorted=True, drop=drop),
-                  df.set_index(df.x + 1, drop=drop))
-
-    with pytest.raises(ValueError):
-        a.set_index(a.z, sorted=True)
-
-
-def test_compute_divisions():
-    from dask.dataframe.shuffle import compute_divisions
-    df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
-                       'z': [4, 3, 2, 1]},
-                      index=[1, 3, 10, 20])
-    a = dd.from_pandas(df, 2, sort=False)
-    assert not a.known_divisions
-
-    divisions = compute_divisions(a)
-    b = copy(a)
-    b.divisions = divisions
-
-    assert_eq(a, b, check_divisions=False)
-    assert b.known_divisions
-
-
 def test_methods_tokenize_differently():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df = dd.from_pandas(df, npartitions=1)
     assert (df.x.map_partitions(lambda x: pd.Series(x.min()))._name !=
             df.x.map_partitions(lambda x: pd.Series(x.max()))._name)
-
-
-def test_sorted_index_single_partition():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
-    ddf = dd.from_pandas(df, npartitions=1)
-    assert_eq(ddf.set_index('x', sorted=True),
-              df.set_index('x'))
 
 
 def _assert_info(df, ddf, memory_usage=True):
@@ -2468,20 +2268,6 @@ def test_getitem_multilevel():
 
     assert_eq(pdf['A', '0'], ddf['A', '0'])
     assert_eq(pdf[[('A', '0'), ('B', '1')]], ddf[[('A', '0'), ('B', '1')]])
-
-
-def test_set_index_sorted_min_max_same():
-    a = pd.DataFrame({'x': [1, 2, 3], 'y': [0, 0, 0]})
-    b = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 1, 1]})
-
-    aa = delayed(a)
-    bb = delayed(b)
-
-    df = dd.from_delayed([aa, bb], meta=a)
-    assert not df.known_divisions
-
-    df2 = df.set_index('y', sorted=True)
-    assert df2.divisions == (0, 1, 1)
 
 
 def test_diff():
