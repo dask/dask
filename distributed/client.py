@@ -445,10 +445,11 @@ class Client(object):
 
     @gen.coroutine
     def _start(self, timeout=5, **kwargs):
+        address = self._start_arg
         if self.cluster is not None:
             # Ensure the cluster is started (no-op if already running)
             yield self.cluster._start()
-            self._start_arg = self.cluster.scheduler_address
+            address = self.cluster.scheduler_address
         elif self.scheduler_file is not None:
             while not os.path.exists(self.scheduler_file):
                 yield gen.sleep(0.01)
@@ -456,7 +457,7 @@ class Client(object):
                 try:
                     with open(self.scheduler_file) as f:
                         cfg = json.load(f)
-                    self._start_arg = cfg['address']
+                    address = cfg['address']
                     break
                 except (ValueError, KeyError):  # JSON file not yet flushed
                     yield gen.sleep(0.01)
@@ -482,9 +483,9 @@ class Client(object):
                    len(self.cluster.scheduler.ncores) < len(self.cluster.workers)):
                 yield gen.sleep(0.01)
 
-            self._start_arg = self.cluster.scheduler_address
+            address = self.cluster.scheduler_address
 
-        self.scheduler = rpc(self._start_arg, timeout=timeout)
+        self.scheduler = rpc(address, timeout=timeout)
         self.scheduler_comm = None
 
         yield self._ensure_connected(timeout=timeout)
@@ -691,6 +692,11 @@ class Client(object):
         # XXX handling of self.status here is not thread-safe
         if self.status == 'closed':
             return
+
+        if self._start_arg is None:
+            with ignoring(AttributeError):
+                self.cluster.close()
+
         sync(self.loop, self._shutdown, fast=True)
         assert self.status == 'closed'
 
@@ -704,8 +710,6 @@ class Client(object):
             dask.set_options(shuffle=self._previous_shuffle)
         if self.get == _globals.get('get'):
             del _globals['get']
-        with ignoring(AttributeError):
-            self.cluster.close()
 
     def get_executor(self, **kwargs):
         """ Return a concurrent.futures Executor for submitting tasks
