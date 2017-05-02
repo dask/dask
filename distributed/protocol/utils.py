@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import struct
+
 from ..utils import ensure_bytes
 
 BIG_BYTES_SHARD_SIZE = 2**28
@@ -73,3 +75,50 @@ def merge_frames(header, frames):
                 l = 0
         out.append(b''.join(map(ensure_bytes, L)))
     return out
+
+
+def pack_frames_prelude(frames):
+    lengths = [len(f) for f in frames]
+    lengths = ([struct.pack('Q', len(frames))] +
+               [struct.pack('Q', len(frame)) for frame in frames])
+    return b''.join(lengths)
+
+
+def pack_frames(frames):
+    """ Pack frames into a byte-like object
+
+    This prepends length information to the front of the bytes-like object
+
+    See Also
+    --------
+    unpack_frames
+    """
+    prelude = [pack_frames_prelude(frames)]
+
+    if not isinstance(frames, list):
+        frames = list(frames)
+
+    return b''.join(prelude + frames)
+
+
+def unpack_frames(b):
+    """ Unpack bytes into a sequence of frames
+
+    This assumes that length information is at the front of the bytestring,
+    as performed by pack_frames
+
+    See Also
+    --------
+    pack_frames
+    """
+    (n_frames,) = struct.unpack('Q', b[:8])
+
+    frames = []
+    start = 8 + n_frames * 8
+    for i in range(n_frames):
+        (length,) = struct.unpack('Q', b[(i + 1) * 8: (i + 2) * 8])
+        frame = b[start: start + length]
+        frames.append(frame)
+        start += length
+
+    return frames

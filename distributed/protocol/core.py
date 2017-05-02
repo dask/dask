@@ -12,7 +12,7 @@ try:
 except ImportError:
     from toolz import get_in
 
-from .compression import compressions, maybe_compress
+from .compression import compressions, maybe_compress, decompress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
         extract_serialize)
 from .utils import frame_split_size, merge_frames
@@ -165,9 +165,3 @@ def loads_msgpack(header, payload):
                              " installed" % str(header['compression']))
 
     return msgpack.loads(payload, encoding='utf8')
-
-
-def decompress(header, frames):
-    """ Decompress frames according to information in the header """
-    return [compressions[c]['decompress'](frame)
-            for c, frame in zip(header['compression'], frames)]

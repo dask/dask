@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from distributed.protocol.utils import merge_frames
+from distributed.protocol.utils import merge_frames, pack_frames, unpack_frames
 from distributed.utils import ensure_bytes
 
 def test_merge_frames():
@@ -14,3 +14,12 @@ def test_merge_frames():
 
     L = [b'123', b'456']
     assert merge_frames({'lengths': [3, 3]}, L) is L
+
+
+def test_pack_frames():
+    frames = [b'123', b'asdf']
+    b = pack_frames(frames)
+    assert isinstance(b, bytes)
+    frames2 = unpack_frames(b)
+
+    assert frames == frames2

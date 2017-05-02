@@ -8,7 +8,8 @@ import pytest
 from toolz import identity
 
 from distributed.protocol import (register_serialization, serialize,
-        deserialize, nested_deserialize, Serialize, Serialized, to_serialize)
+        deserialize, nested_deserialize, Serialize, Serialized,
+        to_serialize, serialize_bytes, deserialize_bytes, serialize_bytelist)
 from distributed.protocol import decompress
 
 
@@ -48,7 +49,7 @@ def test_dumps_serialize():
     assert result.data == x.data
 
 
-def test_serialize_bytes():
+def test_serialize_bytestrings():
     b = b'123'
     header, frames = serialize(b)
     assert frames[0] is b
@@ -160,3 +161,21 @@ def test_empty_loads():
     e = Empty()
     e2 = loads(dumps([to_serialize(e)]))
     assert isinstance(e2[0], Empty)
+
+
+def test_serialize_bytes():
+    for x in [1, 'abc', np.arange(5)]:
+        b = serialize_bytes(x)
+        assert isinstance(b, bytes)
+        y = deserialize_bytes(b)
+        assert str(x) == str(y)
+
+
+def test_serialize_list_compress():
+    x = np.ones(1000000)
+    L = serialize_bytelist(x)
+    assert sum(map(len, L)) < x.nbytes / 2
+
+    b = b''.join(L)
+    y = deserialize_bytes(b)
+    assert (x == y).all()

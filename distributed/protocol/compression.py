@@ -154,3 +154,9 @@ def maybe_compress(payload, min_size=1e4, sample_size=1e4, nsamples=5):
         return None, payload
     else:
         return compression, compressed
+
+
+def decompress(header, frames):
+    """ Decompress frames according to information in the header """
+    return [compressions[c]['decompress'](frame)
+            for c, frame in zip(header['compression'], frames)]

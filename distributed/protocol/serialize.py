@@ -8,7 +8,15 @@ try:
 except ImportError:
     from toolz import valmap, get_in
 
+try:
+    import msgpack
+except ImportError:
+    import pandas.msgpack as msgpack
+
 from . import pickle
+from ..compatibility import PY2
+from .compression import maybe_compress, decompress
+from .utils import unpack_frames, pack_frames_prelude, frame_split_size
 
 
 serializers = {}
@@ -317,14 +325,47 @@ def normalize_Serialized(o):
 
 
 # Teach serialize how to handle bytestrings
-def serialize_bytes(obj):
+def _serialize_bytes(obj):
     header = {}  # no special metadata
     frames = [obj]
     return header, frames
 
 
-def deserialize_bytes(header, frames):
+def _deserialize_bytes(header, frames):
     return frames[0]
 
 
-register_serialization(bytes, serialize_bytes, deserialize_bytes)
+register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
+
+
+def serialize_bytelist(x):
+    header, frames = serialize(x)
+    frames = frame_split_size(frames)
+    if frames:
+        compression, frames = zip(*map(maybe_compress, frames))
+    else:
+        compression = []
+    header['compression'] = compression
+    header['count'] = len(frames)
+
+    header = msgpack.dumps(header, use_bin_type=True)
+    frames2 = [header] + list(frames)
+    return [pack_frames_prelude(frames2)] + frames2
+
+
+def serialize_bytes(x):
+    L = serialize_bytelist(x)
+    if PY2:
+        L = [bytes(y) for y in L]
+    return b''.join(L)
+
+
+def deserialize_bytes(b):
+    frames = unpack_frames(b)
+    header, frames = frames[0], frames[1:]
+    if header:
+        header = msgpack.loads(header, encoding='utf8')
+    else:
+        header = {}
+    frames = decompress(header, frames)
+    return deserialize(header, frames)

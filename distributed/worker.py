@@ -5,7 +5,7 @@ from datetime import timedelta
 import heapq
 import logging
 import os
-import pickle
+from pickle import PicklingError
 import random
 import tempfile
 from threading import current_thread, local
@@ -31,7 +31,8 @@ from .core import (error_message, CommClosedError,
                    rpc, Server, pingpong, coerce_to_address)
 from .metrics import time
 from .preloading import preload_modules
-from .protocol.pickle import dumps, loads
+from .protocol import (pickle, to_serialize, deserialize_bytes,
+                       serialize_bytelist)
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
@@ -101,7 +102,7 @@ class WorkerBase(Server):
             except ImportError:
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
-            storage = Func(dumps_to_disk, loads_from_disk, File(path))
+            storage = Func(serialize_bytelist, deserialize_bytes, File(path))
             self.data = Buffer({}, storage, int(float(self.memory_limit)), weight)
         else:
             self.data = dict()
@@ -474,7 +475,7 @@ class WorkerBase(Server):
                 import_file(out_filename)
             except Exception as e:
                 logger.exception(e)
-                return {'status': 'error', 'exception': dumps(e)}
+                return {'status': 'error', 'exception': pickle.dumps(e)}
         return {'status': 'OK', 'nbytes': len(data)}
 
     def host_health(self, comm=None):
@@ -540,11 +541,11 @@ job_counter = [0]
 def _deserialize(function=None, args=None, kwargs=None, task=None):
     """ Deserialize task inputs and regularize to func, args, kwargs """
     if function is not None:
-        function = loads(function)
+        function = pickle.loads(function)
     if args:
-        args = loads(args)
+        args = pickle.loads(args)
     if kwargs:
-        kwargs = loads(kwargs)
+        kwargs = pickle.loads(kwargs)
 
     if task is not None:
         assert not function and not args and not kwargs
@@ -578,7 +579,7 @@ cache = dict()
 def dumps_function(func):
     """ Dump a function to bytes, cache functions """
     if func not in cache:
-        b = dumps(func)
+        b = pickle.dumps(func)
         cache[func] = b
     return cache[func]
 
@@ -606,13 +607,13 @@ def dumps_task(task):
     if istask(task):
         if task[0] is apply and not any(map(_maybe_complex, task[2:])):
             d = {'function': dumps_function(task[1]),
-                 'args': dumps(task[2])}
+                 'args': pickle.dumps(task[2])}
             if len(task) == 4:
-                d['kwargs'] = dumps(task[3])
+                d['kwargs'] = pickle.dumps(task[3])
             return d
         elif not any(map(_maybe_complex, task[1:])):
             return {'function': dumps_function(task[0]),
-                        'args': dumps(task[1:])}
+                        'args': pickle.dumps(task[1:])}
     return to_serialize(task)
 
 
@@ -705,23 +706,6 @@ def convert_kwargs_to_str(kwargs, max_len=None):
         return "{{{}}}".format(", ".join(strs))
 
 
-from .protocol import compressions, default_compression, to_serialize
-
-# TODO: use protocol.maybe_compress and proper file/memoryview objects
-
-
-def dumps_to_disk(x):
-    b = dumps(x)
-    c = compressions[default_compression]['compress'](b)
-    return c
-
-
-def loads_from_disk(c):
-    b = compressions[default_compression]['decompress'](c)
-    x = loads(b)
-    return x
-
-
 def weight(k, v):
     return sizeof(v)
 
@@ -729,11 +713,11 @@ def weight(k, v):
 @gen.coroutine
 def run(server, comm, function, args=(), kwargs={}, is_coro=False, wait=True):
     assert wait or is_coro, "Combination not supported"
-    function = loads(function)
+    function = pickle.loads(function)
     if args:
-        args = loads(args)
+        args = pickle.loads(args)
     if kwargs:
-        kwargs = loads(kwargs)
+        kwargs = pickle.loads(kwargs)
     if has_arg(function, 'dask_worker'):
         kwargs['dask_worker'] = server
     if has_arg(function, 'dask_scheduler'):
@@ -1475,10 +1459,10 @@ class Worker(WorkerBase):
             typ = self.types.get(key) or type(self.data[key])
             try:
                 typ = dumps_function(typ)
-            except pickle.PicklingError:
+            except PicklingError:
                 # Some types fail pickling (example: _thread.lock objects),
                 # send their name as a best effort.
-                typ = dumps(typ.__name__)
+                typ = pickle.dumps(typ.__name__)
             d = {'op': 'task-finished',
                  'status': 'OK',
                  'key': key,
@@ -1890,7 +1874,7 @@ class Worker(WorkerBase):
                     str(funcname(function))[:1000],
                     convert_args_to_str(args2, max_len=1000),
                     convert_kwargs_to_str(kwargs2, max_len=1000),
-                    repr(loads(result['exception'])))
+                    repr(pickle.loads(result['exception'])))
                 self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
