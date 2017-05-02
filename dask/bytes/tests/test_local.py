@@ -360,4 +360,3 @@ except (ImportError, NameError):
     def to_uri(path):
         return urlparse.urljoin(
             'file:', urllib.pathname2url(os.path.abspath(path)))
-
