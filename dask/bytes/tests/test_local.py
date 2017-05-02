@@ -147,7 +147,6 @@ def test_registered_read_bytes():
 def test_registered_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
-        print(myfiles)
         assert len(myfiles) == len(files)
         data = []
         for file in myfiles:
@@ -327,6 +326,9 @@ def test_glob_patterns():
 
         myfiles = open_files('.test.accounts.[01].json')
         assert len(myfiles) == 1
+
+        myfiles = open_files('.test.accounts.?.json')
+        assert len(myfiles) == len(files)
 
 
 def test_abs_paths(tmpdir):

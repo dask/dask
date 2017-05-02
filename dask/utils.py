@@ -843,6 +843,8 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     if protocol == 'file':
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        # urlsplit does not work with ?
+        path = urlpath if "?" in urlpath else path
         windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
         if windows_path:
             path = '%s:%s' % windows_path.groups()
