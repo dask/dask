@@ -53,8 +53,9 @@ Compression will be inferred by filename extension, or by using the
 
    >>> b = db.read_text('myfile.*.txt.gz')
 
-The resulting items in the bag are strings.  If you have encoded data like JSON
-then you may want to map a decoding or load function across the bag:
+The resulting items in the bag are strings. If you have encoded data like
+line-delimited JSON then you may want to map a decoding or load function across
+the bag:
 
 .. code-block:: python
 
