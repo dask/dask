@@ -139,6 +139,7 @@ def test_registered_read_bytes():
 def test_registered_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
+        print(myfiles)
         assert len(myfiles) == len(files)
         data = []
         for file in myfiles:
@@ -309,3 +310,15 @@ def test_py2_local_bytes(tmpdir):
 
     with lazy_file as f:
         assert all(isinstance(line, unicode) for line in f)
+
+
+def test_glob_patterns():
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*')
+        assert len(myfiles) == len(files)
+
+        myfiles = open_files('.test.accounts.?.json')
+        assert len(myfiles) == len(files)
+
+        myfiles = open_files('.test.accounts.[01].json')
+        assert len(myfiles) == 1
