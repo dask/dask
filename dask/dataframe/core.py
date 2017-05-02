@@ -2297,17 +2297,6 @@ class DataFrame(_Frame):
             return set_index(self, other, drop=drop, npartitions=npartitions,
                              divisions=divisions, **kwargs)
 
-    def set_partition(self, column, divisions, **kwargs):
-        """ Set explicit divisions for new column index
-
-        >>> df2 = df.set_partition('new-index-column', divisions=[10, 20, 50])  # doctest: +SKIP
-
-        See Also
-        --------
-        set_index
-        """
-        raise Exception("Deprecated, use set_index(..., divisions=...) instead")
-
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
         token = 'dataframe-nlargest'
