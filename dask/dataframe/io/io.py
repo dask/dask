@@ -529,7 +529,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     df = Frame(dsk3, name, meta, divs)
 
     if divisions == 'sorted':
-        from ..core import compute_divisions
+        from ..shuffle import compute_divisions
         divisions = compute_divisions(df)
         df.divisions = divisions
 

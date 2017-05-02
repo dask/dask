@@ -46,3 +46,12 @@ def test_categorical_consistency():
             h3 = hash_pandas_object(s3, categorize=categorize)
             tm.assert_series_equal(h1, h2)
             tm.assert_series_equal(h1, h3)
+
+
+def test_object_missing_values():
+    # Check that the presence of missing values doesn't change how object dtype
+    # is hashed.
+    s = pd.Series(['a', 'b', 'c', None])
+    h1 = hash_pandas_object(s).iloc[:3]
+    h2 = hash_pandas_object(s.iloc[:3])
+    tm.assert_series_equal(h1, h2)

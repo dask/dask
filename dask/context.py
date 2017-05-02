@@ -4,6 +4,7 @@ Control global computation context
 from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict
+import functools
 
 _globals = defaultdict(lambda: None)
 _globals['callbacks'] = set()
@@ -40,3 +41,47 @@ class set_options(object):
     def __exit__(self, type, value, traceback):
         _globals.clear()
         _globals.update(self.old)
+
+
+def defer_to_globals(name, falsey=None):
+    """ Allow function to be taken over by globals
+
+    This modifies a function so that occurrences of it may be taken over by
+    functions registered in the global options.  It is commonly used as a
+    decorator.
+
+    Parameters
+    ----------
+    name: str
+        name under which we register this function in the global parameters
+    falsey: callable, None, optional
+        A function to use if the option is falsey
+
+    Examples
+    --------
+
+    >>> import dask
+    >>> @defer_to_globals('foo')
+    ... def f():
+    ...     return 1
+
+    >>> f()
+    1
+
+    >>> with dask.set_options(foo=lambda: 2):
+    ...     print(f())
+    2
+    """
+    def _(func):
+        @functools.wraps(func)
+        def f(*args, **kwargs):
+            if name in _globals:
+                if _globals[name]:
+                    return _globals[name](*args, **kwargs)
+                elif falsey:
+                    return falsey(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
+
+        return f
+    return _

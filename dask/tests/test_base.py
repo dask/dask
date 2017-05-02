@@ -233,6 +233,12 @@ def test_tokenize_object_array_with_nans():
     assert tokenize(a) == tokenize(a)
 
 
+@pytest.mark.parametrize('x', [1, True, 'a', b'a', 1.0, 1j, 1.0j,
+                               [], (), {}, None, str, int])
+def test_tokenize_base_types(x):
+    assert tokenize(x) == tokenize(x), x
+
+
 @pytest.mark.skipif('not db')
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
@@ -457,4 +463,43 @@ def test_normalize_function_limited_size():
     for i in range(1000):
         normalize_function(lambda x: x)
 
-    assert 50 < len(function_cache) < 500
+    assert 50 < len(function_cache) < 600
+
+
+def test_optimize_globals():
+    da = pytest.importorskip('dask.array')
+    db = pytest.importorskip('dask.bag')
+
+    x = da.ones(10, chunks=(5,))
+
+    def optimize_double(dsk, keys):
+        return {k: (mul, 2, v) for k, v in dsk.items()}
+
+    from dask.array.utils import assert_eq
+
+    assert_eq(x + 1, np.ones(10) + 1)
+
+    with dask.set_options(array_optimize=optimize_double):
+        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
+
+    assert_eq(x + 1, np.ones(10) + 1)
+
+    b = db.range(10, npartitions=2)
+
+    with dask.set_options(array_optimize=optimize_double):
+        xx, bb = dask.compute(x + 1, b.map(inc), get=dask.get)
+        assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
+
+
+def test_optimize_None():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones(10, chunks=(5,))
+    y = x[:9][1:8][::2] + 1  # normally these slices would be fused
+
+    def my_get(dsk, keys):
+        assert dsk == dict(y.dask)  # but they aren't
+        return dask.get(dsk, keys)
+
+    with dask.set_options(array_optimize=None, get=my_get):
+        y.compute()

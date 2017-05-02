@@ -1,11 +1,13 @@
-from multiprocessing.pool import ThreadPool
+import os
+import signal
 import threading
-from threading import Thread
+from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
 import pytest
 
 from dask.context import set_options
+from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
 
@@ -52,7 +54,7 @@ def test_threaded_within_thread():
     before = threading.active_count()
 
     for i in range(20):
-        t = Thread(target=f, args=(1,))
+        t = threading.Thread(target=f, args=(1,))
         t.daemon = True
         t.start()
         t.join()
@@ -91,7 +93,7 @@ def test_thread_safety():
 
     threads = []
     for i in range(20):
-        t = Thread(target=test_f)
+        t = threading.Thread(target=test_f)
         t.daemon = True
         t.start()
         threads.append(t)
@@ -100,3 +102,36 @@ def test_thread_safety():
         thread.join()
 
     assert L == [1] * 20
+
+
+def test_interrupt():
+    # Python 2 and windows 2 & 3 both implement `queue.get` using polling,
+    # which means we can set an exception to interrupt the call to `get`.
+    # Python 3 on other platforms requires sending SIGINT to the main thread.
+    if PY2:
+        from thread import interrupt_main
+    elif os.name == 'nt':
+        from _thread import interrupt_main
+    else:
+        main_thread = threading.get_ident()
+
+        def interrupt_main():
+            signal.pthread_kill(main_thread, signal.SIGINT)
+
+    def long_task():
+        sleep(5)
+
+    dsk = {('x', i): (long_task,) for i in range(20)}
+    dsk['x'] = (len, list(dsk.keys()))
+    try:
+        interrupter = threading.Timer(0.5, interrupt_main)
+        interrupter.start()
+        start = time()
+        get(dsk, 'x')
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        assert False, "Failed to interrupt"
+    stop = time()
+    if stop - start > 4:
+        assert False, "Failed to interrupt"

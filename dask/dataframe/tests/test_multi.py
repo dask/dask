@@ -917,8 +917,9 @@ def test_concat4_interleave_partitions():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with tm.assertRaisesRegexp(ValueError, msg):
+        with pytest.raises(ValueError) as err:
             dd.concat(case)
+        assert msg in str(err.value)
 
         assert_eq(dd.concat(case, interleave_partitions=True),
                   pd.concat(pdcase))
@@ -926,8 +927,9 @@ def test_concat4_interleave_partitions():
                   pd.concat(pdcase, join='inner'))
 
     msg = "'join' must be 'inner' or 'outer'"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         dd.concat([ddf1, ddf1], join='invalid', interleave_partitions=True)
+    assert msg in str(err.value)
 
 
 def test_concat5():

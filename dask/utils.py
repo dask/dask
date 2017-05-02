@@ -74,6 +74,8 @@ def ndeepmap(n, func, seq):
         return [func(item) for item in seq]
     elif n > 1:
         return [ndeepmap(n - 1, func, item) for item in seq]
+    elif isinstance(seq, list):
+        return func(seq[0])
     else:
         return func(seq)
 
@@ -1027,7 +1029,7 @@ class SerializableLock(object):
 
 def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
-    collection_get = collection._default_get if collection else None
+    collection_get = collection._default_get if collection is not None else None
     return get or _globals.get('get') or collection_get
 
 
@@ -1051,3 +1053,16 @@ def ensure_dict(d):
             result.update(dd)
         return result
     return dict(d)
+
+
+def package_of(obj):
+    """ Return package containing object's definition
+
+    Or return None if not found
+    """
+    # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
+    mod = inspect.getmodule(obj)
+    if not mod:
+        return
+    base, _sep, _stem = mod.__name__.partition('.')
+    return sys.modules[base]

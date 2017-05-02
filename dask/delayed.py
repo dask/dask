@@ -14,6 +14,8 @@ except ImportError:
 from . import base, threaded
 from .compatibility import apply
 from .core import quote
+from .context import _globals, defer_to_globals
+from .optimize import dont_optimize
 from .utils import concrete, funcname, methodcaller, ensure_dict
 from . import sharedict
 
@@ -86,7 +88,7 @@ def to_task_dask(expr):
             return (type(expr), args), dsk
         else:
             return args, dsk
-    if isinstance(expr, dict):
+    if type(expr) is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
     return expr, {}
@@ -104,14 +106,18 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    if kwargs.pop('pure', False):
+    pure = kwargs.pop('pure', None)
+    if pure is None:
+        pure = _globals.get('delayed_pure', False)
+
+    if pure:
         return base.tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
 
 
 @curry
-def delayed(obj, name=None, pure=False, nout=None, traverse=True):
+def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -127,7 +133,8 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
-        deterministic keys. Default is False.
+        deterministic keys. If not provided, the default is to check the global
+        ``delayed_pure`` setting, and fallback to ``False`` if unset.
     nout : int, optional
         The number of outputs returned from calling the resulting ``Delayed``
         object. If provided, the ``Delayed`` output of the call can be iterated
@@ -165,8 +172,8 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     >>> add(1, 2).compute()
     3
 
-    ``delayed`` also accepts an optional keyword ``pure``. If False (default),
-    then subsequent calls will always produce a different ``Delayed``. This is
+    ``delayed`` also accepts an optional keyword ``pure``. If False, then
+    subsequent calls will always produce a different ``Delayed``. This is
     useful for non-pure functions (such as ``time`` or ``random``).
 
     >>> from random import random
@@ -188,6 +195,21 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     >>> out1.key == out2.key
     True
 
+    Instead of setting ``pure`` as a property of the callable, you can also set
+    it contextually using the ``delayed_pure`` setting. Note that this
+    influences the *call* and not the *creation* of the callable:
+
+    >>> import dask
+    >>> @delayed
+    ... def mul(a, b):
+    ...     return a * b
+    >>> with dask.set_options(delayed_pure=True):
+    ...     print(mul(1, 2).key == mul(1, 2).key)
+    True
+    >>> with dask.set_options(delayed_pure=False):
+    ...     print(mul(1, 2).key == mul(1, 2).key)
+    False
+
     The key name of the result of calling a delayed object is determined by
     hashing the arguments by default. To explicitly set the name, you can use
     the ``dask_key_name`` keyword when calling the function:
@@ -201,9 +223,9 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     result. If you set the names explicitly you should make sure your key names
     are different for different results.
 
-    >>> add(1, 2, dask_key_name='three')
-    >>> add(2, 1, dask_key_name='three')
-    >>> add(2, 2, dask_key_name='four')
+    >>> add(1, 2, dask_key_name='three')  # doctest: +SKIP
+    >>> add(2, 1, dask_key_name='three')  # doctest: +SKIP
+    >>> add(2, 2, dask_key_name='four')   # doctest: +SKIP
 
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
@@ -240,19 +262,41 @@ def delayed(obj, name=None, pure=False, nout=None, traverse=True):
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
 
-    Methods are assumed to be impure by default, meaning that subsequent calls
-    may return different results. To assume purity, set `pure=True`. This
-    allows sharing of any intermediate values.
+    "Magic" methods (e.g. operators and attribute access) are assumed to be
+    pure, meaning that subsequent calls must return the same results.  This is
+    not overrideable. To invoke an impure attribute or operator, you'd need to
+    use it in a delayed function with ``pure=False``.
+
+    >>> class Incrementer(object):
+    ...     def __init__(self):
+    ...         self._n = 0
+    ...     @property
+    ...     def n(self):
+    ...         self._n += 1
+    ...         return self._n
+    ...
+    >>> x = delayed(Incrementer())
+    >>> x.n.key == x.n.key
+    True
+    >>> get_n = delayed(lambda x: x.n, pure=False)
+    >>> get_n(x).key == get_n(x).key
+    False
+
+    In contrast, methods are assumed to be impure by default, meaning that
+    subsequent calls may return different results. To assume purity, set
+    `pure=True`. This allows sharing of any intermediate values.
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True
 
-    As with function calls, method calls also support the ``dask_key_name``
-    keyword:
+    As with function calls, method calls also respect the global
+    ``delayed_pure`` setting and support the ``dask_key_name`` keyword:
 
     >>> a.count(2, dask_key_name="count_2")
-    Delayed("count_2")
-
+    Delayed('count_2')
+    >>> with dask.set_options(delayed_pure=True):
+    ...     print(a.count(2).key == a.count(2).key)
+    True
     """
     if isinstance(obj, Delayed):
         return obj
@@ -303,6 +347,9 @@ def right(method):
     return _inner
 
 
+optimize = defer_to_globals('delayed_optimize', falsey=dont_optimize)(dont_optimize)
+
+
 class Delayed(base.Base):
     """Represents a value to be computed by dask.
 
@@ -311,7 +358,7 @@ class Delayed(base.Base):
     __slots__ = ('_key', 'dask', '_length')
     _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
-    _optimize = staticmethod(lambda d, k, **kwds: d)
+    _optimize = staticmethod(optimize)
 
     def __init__(self, key, dsk, length=None):
         self._key = key
@@ -346,7 +393,7 @@ class Delayed(base.Base):
     def __getattr__(self, attr):
         if attr.startswith('_'):
             raise AttributeError("Attribute {0} not found".format(attr))
-        return DelayedAttr(self, attr, 'getattr-%s' % tokenize(self, attr))
+        return DelayedAttr(self, attr)
 
     def __setattr__(self, attr, val):
         if attr in self.__slots__:
@@ -371,7 +418,7 @@ class Delayed(base.Base):
         return self._length
 
     def __call__(self, *args, **kwargs):
-        pure = kwargs.pop('pure', False)
+        pure = kwargs.pop('pure', None)
         name = kwargs.pop('dask_key_name', None)
         func = delayed(apply, pure=pure)
         if name is not None:
@@ -391,7 +438,7 @@ class Delayed(base.Base):
     _get_unary_operator = _get_binary_operator
 
 
-def call_function(func, func_token, args, kwargs, pure=False, nout=None):
+def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     dask_key_name = kwargs.pop('dask_key_name', None)
     pure = kwargs.pop('pure', pure)
 
@@ -418,7 +465,7 @@ def call_function(func, func_token, args, kwargs, pure=False, nout=None):
 class DelayedLeaf(Delayed):
     __slots__ = ('_obj', '_key', '_pure', '_nout')
 
-    def __init__(self, obj, key, pure=False, nout=None):
+    def __init__(self, obj, key, pure=None, nout=None):
         self._obj = obj
         self._key = key
         self._pure = pure
@@ -436,10 +483,10 @@ class DelayedLeaf(Delayed):
 class DelayedAttr(Delayed):
     __slots__ = ('_obj', '_attr', '_key')
 
-    def __init__(self, obj, attr, key):
+    def __init__(self, obj, attr):
         self._obj = obj
         self._attr = attr
-        self._key = key
+        self._key = 'getattr-%s' % tokenize(obj, attr, pure=True)
 
     @property
     def dask(self):

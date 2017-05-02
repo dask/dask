@@ -16,7 +16,13 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe.methods import boundary_slice
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
+                                  PANDAS_VERSION)
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.io.formats import format as pandas_format
+else:
+    from pandas.formats import format as pandas_format
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -194,12 +200,12 @@ def test_set_index():
 
 
 def test_set_index_interpolate():
-    df = pd.DataFrame({'x': [1, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
+    df = pd.DataFrame({'x': [4, 1, 1, 3, 3], 'y': [1., 1, 1, 1, 2]})
     d = dd.from_pandas(df, 2)
 
     d1 = d.set_index('x', npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3])
+    assert set(d1.divisions) == set([1, 2, 3, 4])
 
     d2 = d.set_index('y', npartitions=3)
     assert d2.divisions[0] == 1.
@@ -224,19 +230,32 @@ def test_set_index_timezone():
     d1 = d.set_index('notz', npartitions=2)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
     assert d1.divisions[0] == s_naive[0] == s1[0]
-    assert d1.divisions[2] == s_naive[2] == s1[2]
+    assert d1.divisions[-1] == s_naive[2] == s1[2]
 
     # We currently lose "freq".  Converting data with pandas-defined dtypes
     # to numpy or pure Python can be lossy like this.
     d2 = d.set_index('tz', npartitions=2)
-    s2 = pd.DatetimeIndex(s_aware.values, dtype=s_aware.dtype)
+    s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
     assert d2.divisions[0] == s2[0]
-    assert d2.divisions[2] == s2[2]
+    assert d2.divisions[-1] == s2[2]
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
     with pytest.raises(TypeError):
         d2.divisions[0] == s2badtype[0]
+
+
+@pytest.mark.parametrize(
+    'npartitions',
+    [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
+)
+def test_timezone_freq(npartitions):
+    s_naive = pd.Series(pd.date_range('20130101', periods=10))
+    s_aware = pd.Series(pd.date_range('20130101', periods=10, tz='US/Eastern'))
+    pdf = pd.DataFrame({'tz': s_aware, 'notz': s_naive})
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+
+    assert pdf.tz[0].freq == ddf.compute().tz[0].freq == ddf.tz.compute()[0].freq
 
 
 @pytest.mark.parametrize('drop', [True, False])
@@ -277,8 +296,9 @@ def test_set_index_raises_error_on_bad_input():
     ddf = dd.from_pandas(df, 2)
 
     msg = r"Dask dataframe does not yet support multi-indexes"
-    with tm.assertRaisesRegexp(NotImplementedError, msg):
+    with pytest.raises(NotImplementedError) as err:
         ddf.set_index(['a', 'b'])
+    assert msg in str(err.value)
 
 
 def test_rename_columns():
@@ -294,8 +314,9 @@ def test_rename_columns():
     assert_eq(ddf, df)
 
     msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         ddf.columns = [1, 2, 3, 4]
+    assert msg in str(err.value)
 
     # Multi-index columns
     df = pd.DataFrame({('A', '0') : [1, 2, 2, 3], ('B', 1) : [1, 2, 3, 4]})
@@ -472,8 +493,8 @@ def test_where_mask():
     ddf5 = dd.from_pandas(pdf5, 2)
     pdf6 = pd.DataFrame({'a': [True, False, True] * 3,
                          'b': [False, False, True] * 3,
-                         'd': [False] * 9,
-                         'e': [True] * 9},
+                         'c': [False] * 9,
+                         'd': [True] * 9},
                         index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
     ddf6 = dd.from_pandas(pdf6, 2)
 
@@ -501,11 +522,8 @@ def test_where_mask():
         assert_eq(ddf.where(ddcond, -ddf), pdf.where(pdcond, -pdf))
         assert_eq(ddf.mask(ddcond, -ddf), pdf.mask(pdcond, -pdf))
 
-        # ToDo: Should work on pandas 0.17
-        # https://github.com/pydata/pandas/pull/10283
-        # assert_eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
-        # assert_eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
-
+        assert_eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
+        assert_eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
         assert_eq(ddf.a.where(ddcond.a), pdf.a.where(pdcond.a))
         assert_eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a))
         assert_eq(ddf.a.where(ddcond.a, -ddf.a), pdf.a.where(pdcond.a, -pdf.a))
@@ -695,10 +713,10 @@ def test_get_partition():
     assert_eq(div3, pdf.a.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf.get_partition(-1)
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf.get_partition(3)
 
 
@@ -1014,10 +1032,10 @@ def test_align_axis(join):
     assert assert_eq(res2, exp2)
 
     # invalid
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf1a.align(ddf1b, join=join, axis='XXX')
 
-    with tm.assertRaises(ValueError):
+    with pytest.raises(ValueError):
         ddf1a['A'].align(ddf1b['B'], join=join, axis=1)
 
 
@@ -1255,24 +1273,36 @@ def test_repartition_on_pandas_dataframe():
     assert_eq(ddf, df.y)
 
 
-def test_repartition_npartitions():
-    for use_index in (True, False):
-        df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
-                          index=[10, 20, 30, 40, 50, 60])
-        for n in [1, 2, 4, 5]:
-            for k in [1, 2, 4, 5]:
-                if k > n:
-                    continue
-                a = dd.from_pandas(df, npartitions=n, sort=use_index)
-                k = min(a.npartitions, k)
+@pytest.mark.parametrize('use_index', [True, False])
+@pytest.mark.parametrize('n', [1, 2, 4, 5])
+@pytest.mark.parametrize('k', [1, 2, 4, 5])
+@pytest.mark.parametrize('dtype', [int, float, 'M8[ns]'])
+@pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
+def test_repartition_npartitions(use_index, n, k, dtype, transform):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
+                       'y': list('abdabd') * 10},
+                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype))
+    df = transform(df)
+    a = dd.from_pandas(df, npartitions=n, sort=use_index)
+    b = a.repartition(npartitions=k)
+    assert_eq(a, b)
+    assert b.npartitions == k
+    parts = dask.get(b.dask, b._keys())
+    assert all(map(len, parts))
 
-                b = a.repartition(npartitions=k)
-                assert_eq(a, b)
-                assert b.npartitions == k
 
-        a = dd.from_pandas(df, npartitions=1)
-        with pytest.raises(ValueError):
-            a.repartition(npartitions=5)
+def test_repartition_object_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10},
+                      index=list('abdabd') * 10)
+    a = dd.from_pandas(df, npartitions=5)
+    b = a.repartition(npartitions=2)
+    assert b.npartitions == 2
+    assert_eq(b, df)
+
+    b = a.repartition(npartitions=10)
+    assert b.npartitions == 10
+    assert_eq(b, df)
+    assert not b.known_divisions
 
 
 @pytest.mark.slow
@@ -1289,6 +1319,19 @@ def test_repartition_freq(npartitions, freq, start, end):
 
     ddf2 = ddf.repartition(freq=freq)
     assert_eq(ddf2, df)
+
+
+def test_repartition_freq_divisions():
+    df = pd.DataFrame({'x': np.random.random(10)},
+                      index=pd.DatetimeIndex(np.random.random(10) * 100e9))
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf2 = ddf.repartition(freq='15s')
+    for div in ddf2.divisions[1:-1]:
+        assert div == div.round('15s')
+    assert ddf2.divisions[0] == df.index.min()
+    assert ddf2.divisions[-1] == df.index.max()
+    assert_eq(ddf2, ddf2)
 
 
 def test_repartition_freq_errors():
@@ -1829,10 +1872,10 @@ def test_apply():
     assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
-    with tm.assertRaises(NotImplementedError):
+    with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis=0)
 
-    with tm.assertRaises(NotImplementedError):
+    with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis='index')
 
 
@@ -2045,9 +2088,9 @@ def test_nlargest_nsmallest():
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf, 5, ['a', 'b'])
-        res2 = f(ddf, 5, ['a', 'b'], split_every=2)
-        sol = f(df, 5, ['a', 'b'])
+        res = f(ddf, 5, ['a', 'c'])
+        res2 = f(ddf, 5, ['a', 'c'], split_every=2)
+        sol = f(df, 5, ['a', 'c'])
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
@@ -2176,7 +2219,7 @@ def test_set_index_sorted_true():
 
 
 def test_compute_divisions():
-    from dask.dataframe.core import compute_divisions
+    from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]},
@@ -2225,8 +2268,7 @@ def _assert_info(df, ddf, memory_usage=True):
 def test_info():
     from io import StringIO
     from dask.compatibility import unicode
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     test_frames = [
         pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]}, index=pd.Int64Index(range(4))),  # No RangeIndex in dask
@@ -2255,8 +2297,7 @@ def test_groupby_multilevel_info():
     from io import StringIO
     from dask.compatibility import unicode
 
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     df = pd.DataFrame({'A': [1, 1, 2, 2],
                        'B': [1, 2, 3, 4],
@@ -2289,8 +2330,7 @@ def test_categorize_info():
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
     from dask.compatibility import unicode
-    from pandas.formats import format
-    format._put_lines = put_lines
+    pandas_format._put_lines = put_lines
 
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': pd.Series(list('aabc')),
@@ -2658,3 +2698,120 @@ def test_memory_usage(index, deep):
               ddf.memory_usage(index=index, deep=deep))
     assert (df.x.memory_usage(index=index, deep=deep) ==
             ddf.x.memory_usage(index=index, deep=deep).compute())
+
+
+@pytest.mark.parametrize('reduction', ['sum', 'mean', 'std', 'var', 'count',
+                                       'min', 'max', 'idxmin', 'idxmax',
+                                       'prod', 'all', 'sem'])
+def test_dataframe_reductions_arithmetic(reduction):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [1.1, 2.2, 3.3, 4.4, 5.5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf - (getattr(ddf, reduction)() + 1),
+              df - (getattr(df, reduction)() + 1))
+
+
+def test_datetime_loc_open_slicing():
+    dtRange = pd.date_range('01.01.2015','05.05.2015')
+    df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert_eq(df.loc[:'02.02.2015'], ddf.loc[:'02.02.2015'])
+    assert_eq(df.loc['02.02.2015':], ddf.loc['02.02.2015':])
+    assert_eq(df[0].loc[:'02.02.2015'], ddf[0].loc[:'02.02.2015'])
+    assert_eq(df[0].loc['02.02.2015':], ddf[0].loc['02.02.2015':])
+
+
+def test_to_datetime():
+    df = pd.DataFrame({'year': [2015, 2016],
+                       'month': [2, 3],
+                       'day': [4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+
+    s = pd.Series(['3/11/2000', '3/12/2000', '3/13/2000'] * 100)
+    ds = dd.from_pandas(s, npartitions=10)
+
+    assert_eq(pd.to_datetime(s, infer_datetime_format=True),
+              dd.to_datetime(ds, infer_datetime_format=True))
+
+
+@pytest.mark.parametrize('drop', [0, 9])
+def test_slice_on_filtered_boundary(drop):
+    # https://github.com/dask/dask/issues/2211
+    x = np.arange(10)
+    x[[5, 6]] -= 2
+    df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
+    pdf = df.set_index("A").query("B != {}".format(drop))
+    ddf = dd.from_pandas(df, 1).set_index("A").query("B != {}".format(drop))
+
+    result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
+    expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
+    assert_eq(result, expected)
+    assert not result.compute().index.is_monotonic  # didn't accidentally sort
+
+
+def test_boundary_slice_nonmonotonic():
+    x = np.array([-1, -2, 2, 4, 3])
+    df = pd.DataFrame({"B": range(len(x))}, index=x)
+    result = boundary_slice(df, 0, 4)
+    expected = df.iloc[2:]
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -1, 4)
+    expected = df.drop(-2)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 3)
+    expected = df.drop(4)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 3.5)
+    expected = df.drop(4)
+    tm.assert_frame_equal(result, expected)
+
+    result = boundary_slice(df, -2, 4)
+    expected = df
+    tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize('start, stop, right_boundary, left_boundary, drop', [
+    (-1, None, False, False, [-1, -2]),
+    (-1, None, False, True, [-2]),
+    (None, 3, False, False, [3, 4]),
+    (None, 3, True, False, [4]),
+    # Missing keys
+    (-.5, None, False, False, [-1, -2]),
+    (-.5, None, False, True, [-1, -2]),
+    (-1.5, None, False, True, [-2]),
+    (None, 3.5, False, False, [4]),
+    (None, 3.5, True, False, [4]),
+    (None, 2.5, False, False, [3, 4]),
+])
+def test_with_boundary(start, stop, right_boundary, left_boundary, drop):
+    x = np.array([-1, -2, 2, 4, 3])
+    df = pd.DataFrame({"B": range(len(x))}, index=x)
+    result = boundary_slice(df, start, stop, right_boundary, left_boundary)
+    expected = df.drop(drop)
+    tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize('index, left, right', [
+    (range(10), 0, 9),
+    (range(10), -1, None),
+    (range(10), None, 10),
+    ([-1, 0, 2, 1], None, None),
+    ([-1, 0, 2, 1], -1, None),
+    ([-1, 0, 2, 1], None, 2),
+    ([-1, 0, 2, 1], -2, 3),
+    (pd.date_range("2017", periods=10), None, None),
+    (pd.date_range("2017", periods=10), pd.Timestamp("2017"), None),
+    (pd.date_range("2017", periods=10), None, pd.Timestamp("2017-01-10")),
+    (pd.date_range("2017", periods=10), pd.Timestamp("2016"), None),
+    (pd.date_range("2017", periods=10), None, pd.Timestamp("2018")),
+])
+def test_boundary_slice_same(index, left, right):
+    df = pd.DataFrame({"A": range(len(index))}, index=index)
+    result = boundary_slice(df, left, right)
+    tm.assert_frame_equal(result, df)

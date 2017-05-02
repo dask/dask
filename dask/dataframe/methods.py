@@ -3,9 +3,13 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
-from pandas.types.concat import union_categoricals
 from toolz import partition
 
+from .utils import PANDAS_VERSION
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.api.types import union_categoricals
+else:
+    from pandas.types.concat import union_categoricals
 
 # ---------------------------------
 # indexing
@@ -55,7 +59,24 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     2  20
     2  30
     """
-    result = getattr(df, kind)[start:stop]
+    if kind == 'loc' and not df.index.is_monotonic:
+        # Pandas treats missing keys differently for label-slicing
+        # on monotonic vs. non-monotonic indexes
+        # If the index is monotonic, `df.loc[start:stop]` is fine.
+        # If it's not, `df.loc[start:stop]` raises when `start` is missing
+        if start is not None:
+            if left_boundary:
+                df = df[df.index >= start]
+            else:
+                df = df[df.index > start]
+        if stop is not None:
+            if right_boundary:
+                df = df[df.index <= stop]
+            else:
+                df = df[df.index < stop]
+        return df
+    else:
+        result = getattr(df, kind)[start:stop]
     if not right_boundary:
         right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
@@ -202,6 +223,9 @@ def concat(dfs, axis=0, join='outer', uniform=False):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join)
 
+    if len(dfs) == 1:
+        return dfs[0]
+
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
@@ -228,7 +252,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [df if isinstance(df, pd.DataFrame) else
-                    df.rename(0).to_frame() for df in dfs2]
+                    df.to_frame().rename(columns={df.name: 0}) for df in dfs2]
             cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
                                   for df in dfs3], join=join).any()
 

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import textwrap
 from distutils.version import LooseVersion
 
@@ -125,12 +126,21 @@ def insert_meta_param_description(*args, **kwargs):
     if not args:
         return lambda f: insert_meta_param_description(f, **kwargs)
     f = args[0]
+    indent = " " * kwargs.get('pad', 8)
+    body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
+                         subsequent_indent=indent, width=78)
+    descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
     if f.__doc__:
-        indent = " " * kwargs.get('pad', 8)
-        body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
-                             subsequent_indent=indent, width=78)
-        descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
-        f.__doc__ = f.__doc__.replace('$META', descr)
+        if '$META' in f.__doc__:
+            f.__doc__ = f.__doc__.replace('$META', descr)
+        else:
+            # Put it at the end of the parameters section
+            parameter_header = 'Parameters\n%s----------' % indent[4:]
+            first, last = re.split('Parameters\\n[ ]*----------', f.__doc__)
+            parameters, rest = last.split('\n\n', 1)
+            f.__doc__ = '{0}{1}{2}\n{3}{4}\n\n{5}'.format(first, parameter_header,
+                                                          parameters, indent[4:],
+                                                          descr, rest)
     return f
 
 
@@ -432,41 +442,42 @@ def meta_nonempty(x):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True):
+def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
-        result = dsk.compute(get=get_sync)
+        if result is None:
+            result = dsk.compute(get=get_sync)
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
-            if check_names:
-                assert dsk.name == result.name
-            # cache
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name
                 assert dsk._meta.name == result.name
+                if isinstance(result, pd.MultiIndex):
+                    assert result.names == dsk._meta.names
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series), type(result)
-            if check_names:
-                assert dsk.name == result.name, (dsk.name, result.name)
-            # cache
             assert isinstance(dsk._meta, pd.Series), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name, (dsk.name, result.name)
                 assert dsk._meta.name == result.name
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-            # cache
             assert isinstance(dsk._meta, pd.DataFrame), type(dsk._meta)
             if check_names:
+                tm.assert_index_equal(dsk.columns, result.columns)
                 tm.assert_index_equal(dsk._meta.columns, result.columns)
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))

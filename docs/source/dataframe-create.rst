@@ -2,10 +2,10 @@ Create and Store Dask DataFrames
 ================================
 
 Dask can create dataframes from various data storage formats like CSV, HDF,
-Parquet, and others.  For most formats this data can live on various storage
-systems including local disk, network file systems (NFS), the Hadoop File
-System (HDFS), and Amazon's S3 (excepting HDF, which is only available on POSIX
-like file systems).
+Apache Parquet, and others.  For most formats this data can live on various
+storage systems including local disk, network file systems (NFS), the Hadoop
+File System (HDFS), and Amazon's S3 (excepting HDF, which is only available on
+POSIX like file systems).
 
 See the `Overview section
 <http://dask.pydata.org/en/latest/dataframe-overview.html>`_ for an in depth
@@ -26,6 +26,7 @@ File Formats:
     read_csv
     read_parquet
     read_hdf
+    read_sql_table
     from_bcolz
     from_array
     to_csv
@@ -50,9 +51,9 @@ Pandas:
 Locations
 ---------
 
-For text, CSV, and Parquet formats data can come from local disk, from the
-Hadoop File System, from S3FS, or others, by prepending the filenames with a
-protocol.
+For text, CSV, and Apache Parquet formats data can come from local disk, from
+the Hadoop File System, from S3FS, or others, by prepending the filenames with
+a protocol.
 
 .. code-block:: python
 

@@ -94,6 +94,11 @@ tsv_files = {k: v.replace(b',', b'\t') for (k, v) in csv_files.items()}
 expected = pd.concat([pd.read_csv(BytesIO(csv_files[k]))
                       for k in sorted(csv_files)])
 
+comment_header = b"""# some header lines
+# that may be present
+# in a data file
+# before any data"""
+
 
 csv_and_table = pytest.mark.parametrize('reader,files',
                                         [(pd.read_csv, csv_files),
@@ -189,6 +194,18 @@ def test_text_blocks_to_pandas_blocked(reader, files):
                                {'usecols': ['name', 'id']})
     assert_eq(df.compute().reset_index(drop=True),
               expected2.reset_index(drop=True), check_dtype=False)
+
+
+@pytest.mark.parametrize('dd_read,pd_read,files',
+                         [(dd.read_csv, pd.read_csv, csv_files),
+                          (dd.read_table, pd.read_table, tsv_files)])
+def test_skiprows(dd_read, pd_read, files):
+    files = {name: comment_header + b'\n' + content for name, content in files.items()}
+    skip = len(comment_header.splitlines())
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 csv_blocks = [[b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40'],
@@ -434,24 +451,6 @@ def test_windows_line_terminator():
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
 
 
-def test_late_dtypes():
-    text = 'a,b\n1,2\n2,3\n3,4\n4,5\n5.5,6\n6,7.5'
-    with filetext(text) as fn:
-        df = dd.read_csv(fn, blocksize=5, sample=10)
-        try:
-            df.b.sum().compute()
-            assert False
-        except TypeError as e:
-            assert ("'b': float" in str(e) or
-                    "'a': float" in str(e))
-
-        df = dd.read_csv(fn, blocksize=5, sample=10,
-                         dtype={'a': float, 'b': float})
-
-        assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5.5 + 6
-        assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7.5
-
-
 def test_header_None():
     with filetexts({'.tmp.1.csv': '1,2',
                     '.tmp.2.csv': '',
@@ -559,16 +558,71 @@ def test_read_csv_of_modified_file_has_different_name():
         assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
 
 
-@pytest.mark.xfail(reason='we might want permissive behavior here')
-def test_report_dtype_correction_on_csvs():
-    text = 'numbers,names\n'
+def test_late_dtypes():
+    text = 'numbers,names,more_numbers,integers\n'
     for i in range(1000):
-        text += '1,foo\n'
-    text += '1.5,bar\n'
+        text += '1,foo,2,3\n'
+    text += '1.5,bar,2.5,3\n'
     with filetext(text) as fn:
+        sol = pd.read_csv(fn)
         with pytest.raises(ValueError) as e:
-            dd.read_csv(fn).compute(get=get_sync)
-        assert "'numbers': 'float64'" in str(e)
+            dd.read_csv(fn, sample=50).compute(get=get_sync)
+
+        msg = ("Mismatched dtypes found.\n"
+               "Expected integers, but found floats for columns:\n"
+               "- 'more_numbers'\n"
+               "- 'numbers'\n"
+               "\n"
+               "To fix, specify dtypes manually by adding:\n"
+               "\n"
+               "dtype={'more_numbers': float,\n"
+               "       'numbers': float}\n"
+               "\n"
+               "to the call to `read_csv`/`read_table`.\n"
+               "\n"
+               "Alternatively, provide `assume_missing=True` to interpret "
+               "all unspecified integer columns as floats.")
+
+        assert str(e.value) == msg
+
+        # Specifying dtypes works
+        res = dd.read_csv(fn, sample=50,
+                          dtype={'more_numbers': float, 'numbers': float})
+        assert_eq(res, sol)
+
+
+def test_assume_missing():
+    text = 'numbers,names,more_numbers,integers\n'
+    for i in range(1000):
+        text += '1,foo,2,3\n'
+    text += '1.5,bar,2.5,3\n'
+    with filetext(text) as fn:
+        sol = pd.read_csv(fn)
+
+        # assume_missing affects all columns
+        res = dd.read_csv(fn, sample=50, assume_missing=True)
+        assert_eq(res, sol.astype({'integers': float}))
+
+        # assume_missing doesn't override specified dtypes
+        res = dd.read_csv(fn, sample=50, assume_missing=True,
+                          dtype={'integers': 'int64'})
+        assert_eq(res, sol)
+
+        # assume_missing works with dtype=None
+        res = dd.read_csv(fn, sample=50, assume_missing=True, dtype=None)
+        assert_eq(res, sol.astype({'integers': float}))
+
+    text = 'numbers,integers\n'
+    for i in range(1000):
+        text += '1,2\n'
+    text += '1.5,2\n'
+
+    with filetext(text) as fn:
+        sol = pd.read_csv(fn)
+
+        # assume_missing ignored when all dtypes specifed
+        df = dd.read_csv(fn, sample=30, dtype='int64', assume_missing=True)
+        assert df.numbers.dtype == 'int64'
 
 
 def test_index_col():

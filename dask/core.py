@@ -232,7 +232,7 @@ def get_deps(dsk):
     return dependencies, dependents
 
 
-def flatten(seq):
+def flatten(seq, container=list):
     """
 
     >>> list(flatten([1]))
@@ -254,8 +254,8 @@ def flatten(seq):
         yield seq
     else:
         for item in seq:
-            if isinstance(item, list):
-                for item2 in flatten(item):
+            if isinstance(item, container):
+                for item2 in flatten(item, container=container):
                     yield item2
             else:
                 yield item
@@ -270,7 +270,7 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = dict((t, set()) for t in terms)
+    result = {t: set() for t in terms}
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)
@@ -286,22 +286,24 @@ def subs(task, key, val):
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
     """
-    if not istask(task):
+    type_task = type(task)
+    if not (type_task is tuple and task and callable(task[0])):  # istask(task):
         try:
-            if type(task) is type(key) and task == key:
+            if type_task is type(key) and task == key:
                 return val
         except Exception:
             pass
-        if isinstance(task, list):
+        if type_task is list:
             return [subs(x, key, val) for x in task]
         return task
     newargs = []
     for arg in task[1:]:
-        if istask(arg):
+        type_arg = type(arg)
+        if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
             arg = subs(arg, key, val)
-        elif isinstance(arg, list):
+        elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
-        elif type(arg) is type(key) and arg == key:
+        elif type_arg is type(key) and arg == key:
             arg = val
         newargs.append(arg)
     return task[:1] + tuple(newargs)

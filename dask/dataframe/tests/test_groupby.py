@@ -61,20 +61,22 @@ def groupby_error():
                         'y': list('abcbabbcda')})
     ddf = dd.from_pandas(pdf, 3)
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ddf.groupby('A')
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ddf.groupby(['x', 'A'])
 
     dp = ddf.groupby('y')
 
     msg = 'Column not found: '
-    with tm.assertRaisesRegexp(KeyError, msg):
+    with pytest.raises(KeyError) as err:
         dp['A']
+    assert msg in str(err.value)
 
-    with tm.assertRaisesRegexp(KeyError, msg):
+    with pytest.raises(KeyError) as err:
         dp[['x', 'A']]
+    assert msg in str(err.value)
 
 
 def groupby_internal_head():
@@ -143,27 +145,27 @@ def test_groupby_dir():
 
 @pytest.mark.parametrize('get', [dask.async.get_sync, dask.threaded.get])
 def test_groupby_on_index(get):
-    full = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
-                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
-    d = dd.from_pandas(full, npartitions=3)
+    pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                        'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(pdf, npartitions=3)
 
-    e = d.set_index('a')
-    efull = full.set_index('a')
-    assert_eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
+    ddf2 = ddf.set_index('a')
+    pdf2 = pdf.set_index('a')
+    assert_eq(ddf.groupby('a').b.mean(), ddf2.groupby(ddf2.index).b.mean())
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
     with dask.set_options(get=get):
-        assert_eq(d.groupby('a').apply(func),
-                  full.groupby('a').apply(func))
+        assert_eq(ddf.groupby('a').apply(func),
+                  pdf.groupby('a').apply(func))
 
-        assert_eq(d.groupby('a').apply(func).set_index('a'),
-                  full.groupby('a').apply(func).set_index('a'))
+        assert_eq(ddf.groupby('a').apply(func).set_index('a'),
+                  pdf.groupby('a').apply(func).set_index('a'))
 
-        assert_eq(efull.groupby(efull.index).apply(func),
-                  e.groupby(e.index).apply(func))
+        assert_eq(pdf2.groupby(pdf2.index).apply(func),
+                  ddf2.groupby(ddf2.index).apply(func))
 
 
 def test_groupby_multilevel_getitem():
@@ -256,11 +258,8 @@ def test_series_groupby_propagates_names():
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df['y'].sum()
-
-    result = ddf.groupby('x').apply(func, meta=('y', 'i8'))
-
+    result = ddf.groupby('x').apply(func)
     expected = df.groupby('x').apply(func)
-    expected.name = 'y'
     assert_eq(result, expected)
 
 
@@ -288,17 +287,19 @@ def test_series_groupby_errors():
     ss = dd.from_pandas(s, npartitions=2)
 
     msg = "No group keys passed!"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         s.groupby([])    # pandas
-    with tm.assertRaisesRegexp(ValueError, msg):
+    assert msg in str(err.value)
+    with pytest.raises(ValueError) as err:
         ss.groupby([])   # dask should raise the same error
+    assert msg in str(err.value)
 
     sss = dd.from_pandas(s, npartitions=3)
     pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
 
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         s.groupby('x')    # pandas
-    with tm.assertRaises(KeyError):
+    with pytest.raises(KeyError):
         ss.groupby('x')   # dask should raise the same error
 
 
@@ -1065,3 +1066,34 @@ def test_groupby_unaligned_index():
 
     for (res, sol) in good:
         assert_eq(res, sol)
+
+
+def test_groupby_slice_agg_reduces():
+    d = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 3, 4, 5]})
+    a = dd.from_pandas(d, npartitions=2)
+    result = a.groupby("a")["b"].agg(['min', 'max'])
+    expected = d.groupby("a")['b'].agg(['min', 'max'])
+    assert_eq(result, expected)
+
+
+def test_groupby_agg_grouper_single():
+    # https://github.com/dask/dask/issues/2255
+    d = pd.DataFrame({'a': [1, 2, 3, 4]})
+    a = dd.from_pandas(d, npartitions=2)
+
+    result = a.groupby('a')['a'].agg(['min', 'max'])
+    expected = d.groupby('a')['a'].agg(['min', 'max'])
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('slice_', [
+    'a', ['a'], ['a', 'b'], ['b'],
+])
+def test_groupby_agg_grouper_multiple(slice_):
+    # https://github.com/dask/dask/issues/2255
+    d = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [1, 2, 3, 4]})
+    a = dd.from_pandas(d, npartitions=2)
+
+    result = a.groupby('a')[slice_].agg(['min', 'max'])
+    expected = d.groupby('a')[slice_].agg(['min', 'max'])
+    assert_eq(result, expected)

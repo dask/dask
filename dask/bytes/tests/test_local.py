@@ -62,6 +62,14 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
+def test_with_urls():
+    with filetexts(files, mode='b'):
+        # OS-independent file:// URI with glob *
+        url = to_uri('.test.accounts.') + '*'
+        sample, values = read_bytes(url, blocksize=None)
+        assert sum(map(len, values)) == len(files)
+
+
 def test_read_bytes_block():
     with filetexts(files, mode='b'):
         for bs in [5, 15, 45, 1500]:
@@ -198,9 +206,9 @@ def test_compression_text(fmt):
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
-    fs = LocalFileSystem()
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
+        fs = LocalFileSystem()
         assert fs.logical_size('.tmp.getsize', fmt) == 10
 
 
@@ -322,3 +330,35 @@ def test_glob_patterns():
 
         myfiles = open_files('.test.accounts.[01].json')
         assert len(myfiles) == 1
+
+
+def test_abs_paths(tmpdir):
+    tmpdir = str(tmpdir)
+    here = os.getcwd()
+    os.chdir(tmpdir)
+    with open('tmp', 'w') as f:
+        f.write('hi')
+    out = LocalFileSystem().glob('*')
+    assert len(out) == 1
+    assert os.sep in out[0]
+    assert tmpdir in out[0] and 'tmp' in out[0]
+
+    fs = LocalFileSystem()
+    os.chdir(here)
+    assert fs.open('tmp', 'r').read() == 'hi'
+
+
+try:
+    # used only in test_with_urls - may be more generally useful
+    import pathlib
+
+    def to_uri(path):
+        return pathlib.Path(os.path.abspath(path)).as_uri()
+
+except (ImportError, NameError):
+    import urlparse, urllib
+
+    def to_uri(path):
+        return urlparse.urljoin(
+            'file:', urllib.pathname2url(os.path.abspath(path)))
+

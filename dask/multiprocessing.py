@@ -59,7 +59,8 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     """
     pool = _globals['pool']
     if pool is None:
-        pool = multiprocessing.Pool(num_workers)
+        pool = multiprocessing.Pool(num_workers,
+                                    initializer=initialize_worker_process)
         cleanup = True
     else:
         cleanup = False
@@ -88,3 +89,14 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         if cleanup:
             pool.close()
     return result
+
+
+def initialize_worker_process():
+    """
+    Initialize a worker process before running any tasks in it.
+    """
+    # If Numpy is already imported, presumably its random state was
+    # inherited from the parent => re-seed it.
+    np = sys.modules.get('numpy')
+    if np is not None:
+        np.random.seed()

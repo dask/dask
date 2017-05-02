@@ -1,9 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 from .core import (DataFrame, Series, Index, _Frame, map_partitions,
-                   repartition, to_delayed)
+                   repartition, to_delayed, to_datetime)
 from .io import (from_array, from_pandas, from_bcolz,
-                 from_dask_array, read_hdf,
+                 from_dask_array, read_hdf, read_sql_table,
                  from_delayed, read_csv, to_csv, read_table,
                  demo, to_hdf, to_records, to_bag)
 from .optimize import optimize

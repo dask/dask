@@ -4,6 +4,7 @@ from collections import OrderedDict, Iterator
 import copy
 from functools import partial
 from hashlib import md5
+import inspect
 import pickle
 import os
 import uuid
@@ -98,7 +99,7 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = cls._optimize(ensure_dict(dsk), keys, **kwargs)
+        dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -252,7 +253,7 @@ def visualize(*args, **kwargs):
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks.extend([arg._optimize(ensure_dict(arg.dask), arg._keys())
+        dsks.extend([optimization_function(arg)(ensure_dict(arg.dask), arg._keys())
                      for arg in args])
     else:
         dsks.extend([arg.dask for arg in args])
@@ -269,7 +270,7 @@ def normalize_function(func):
         return function_cache[func]
     except KeyError:
         result = _normalize_function(func)
-        if len(function_cache) > 500:  # clear half of cache if full
+        if len(function_cache) >= 500:  # clear half of cache if full
             for k in list(function_cache)[::2]:
                 del function_cache[k]
         function_cache[func] = result
@@ -304,7 +305,7 @@ def _normalize_function(func):
 
 normalize_token = Dispatch()
 normalize_token.register((int, float, str, unicode, bytes, type(None), type,
-                          slice),
+                          slice, complex),
                          identity)
 
 
@@ -415,6 +416,24 @@ def tokenize(*args, **kwargs):
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
 
 
+def dont_optimize(dsk, keys):
+    return dsk
+
+
+def optimization_function(obj):
+    if isinstance(obj, type):
+        cls = obj
+    else:
+        cls = type(obj)
+    name = cls.__name__.lower() + '_optimize' # dask.set_options(array_optimize=foo)
+    if name in _globals:
+        return _globals[name] or dont_optimize
+    try:
+        return cls._optimize
+    except AttributeError:
+        return dont_optimize
+
+
 def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
@@ -422,7 +441,7 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     optimizations = (kwargs.pop('optimizations', None) or
                      _globals.get('optimizations', []))
     if optimize_graph:
-        groups = groupby(lambda x: x._optimize, collections)
+        groups = groupby(optimization_function, collections)
         groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:
@@ -518,29 +537,31 @@ def persist(*args, **kwargs):
     if not collections:
         return args
 
-    try:
-        from distributed.client import default_client
-    except ImportError:
-        pass
-    else:
+    get = kwargs.pop('get', None) or _globals['get']
+
+    if inspect.ismethod(get):
         try:
-            client = default_client()
-        except ValueError:
+            from distributed.client import default_client
+        except ImportError:
             pass
         else:
-            collections = client.persist(collections, **kwargs)
-            if isinstance(collections, list):  # distributed is inconsistent here
-                collections = tuple(collections)
+            try:
+                client = default_client()
+            except ValueError:
+                pass
             else:
-                collections = (collections,)
-            results_iter = iter(collections)
-            return tuple(a if not isinstance(a, Base)
-                         else next(results_iter)
-                         for a in args)
+                if client.get == _globals['get']:
+                    collections = client.persist(collections, **kwargs)
+                    if isinstance(collections, list):  # distributed is inconsistent here
+                        collections = tuple(collections)
+                    else:
+                        collections = (collections,)
+                    results_iter = iter(collections)
+                    return tuple(a if not isinstance(a, Base)
+                                 else next(results_iter)
+                                 for a in args)
 
     optimize_graph = kwargs.pop('optimize_graph', True)
-
-    get = kwargs.pop('get', None) or _globals['get']
 
     if not get:
         get = collections[0]._default_get

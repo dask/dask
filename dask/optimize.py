@@ -505,8 +505,18 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    ave_width = ave_width or _globals.get('fuse_ave_width') or 1
-    max_height = max_height or _globals.get('fuse_max_height') or len(dsk)
+    if ave_width is None:
+        if _globals.get('fuse_ave_width') is None:
+            ave_width = 1
+        else:
+            ave_width = _globals['fuse_ave_width']
+
+    if max_height is None:
+        if _globals.get('fuse_max_height') is None:
+            max_height = len(dsk)
+        else:
+            max_height = _globals['fuse_max_height']
+
     max_depth_new_edges = (
         max_depth_new_edges or
         _globals.get('fuse_max_depth_new_edges') or
@@ -517,6 +527,10 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         _globals.get('fuse_max_width') or
         1.5 + ave_width * math.log(ave_width + 1)
     )
+
+    if not ave_width or not max_height:
+        return dsk, dependencies
+
     if rename_keys is None:
         rename_keys = _globals.get('fuse_rename_keys', True)
     if rename_keys is True:
@@ -553,6 +567,8 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     children_stack = []
     # For speed
     deps_pop = deps.pop
+    reducible_add = reducible.add
+    reducible_pop = reducible.pop
     reducible_remove = reducible.remove
     fused_trees_pop = fused_trees.pop
     info_stack_append = info_stack.append
@@ -561,7 +577,8 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     children_stack_extend = children_stack.extend
     children_stack_pop = children_stack.pop
     while reducible:
-        parent = next(iter(reducible))
+        parent = reducible_pop()
+        reducible_add(parent)
         while parent in reducible:
             # Go to the top
             parent = rdeps[parent][0]
@@ -727,34 +744,13 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 parent = rdeps[parent][0]
 
     if key_renamer is not None:
-        alias_names = {}
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:
-                alias_names[root_key] = alias
                 rv[alias] = rv[root_key]
                 rv[root_key] = alias
                 deps[alias] = deps[root_key]
                 deps[root_key] = {alias}
-        aliases_set = set(alias_names)
-        for root_key, alias in alias_names.items():
-            if root_key in rdeps:
-                for key in set(rdeps[root_key]) - aliases_set:
-                    if key in rv and root_key in deps[key]:
-                        rv[key] = subs(rv[key], root_key, alias)
-                        deps[key].remove(root_key)
-                        deps[key].add(alias)
-        for root_key in fused_trees:
-            alias = alias_names[root_key] if root_key in alias_names else root_key
-            for key in deps[alias] & aliases_set:
-                key_alias = alias_names[key]
-                rv[alias] = subs(rv[alias], key, key_alias)
-                deps[alias].remove(key)
-                deps[alias].add(key_alias)
-        if keys is not None:
-            for key in aliases_set - keys:
-                del rv[key]
-                del deps[key]
     return rv, deps
 
 
@@ -812,3 +808,7 @@ def key_split(s):
             return result
     except Exception:
         return 'Other'
+
+
+def dont_optimize(dsk, keys, **kwargs):
+    return dsk

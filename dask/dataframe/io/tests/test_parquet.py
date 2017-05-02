@@ -16,30 +16,10 @@ from dask.dataframe.utils import assert_eq
 
 fastparquet = pytest.importorskip('fastparquet')
 
-
-def test_local():
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-        data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                             'i64': np.arange(1000, dtype=np.int64),
-                             'f': np.arange(1000, dtype=np.float64),
-                             'bhello': np.random.choice(['hello', 'yo', 'people'], size=1000).astype("O")})
-        df = dd.from_pandas(data, chunksize=500)
-
-        df.to_parquet(tmp, write_index=False, object_encoding='utf8')
-
-        files = os.listdir(tmp)
-        assert '_metadata' in files
-        assert 'part.0.parquet' in files
-
-        df2 = read_parquet(tmp, index=False)
-
-        assert len(df2.divisions) > 1
-
-        out = df2.compute(get=dask.get).reset_index()
-
-        for column in df.columns:
-            assert (data[column] == out[column]).all()
+try:
+    import pyarrow.parquet as pyarrow  # noqa
+except ImportError:
+    pyarrow = False
 
 
 df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
@@ -55,8 +35,51 @@ def fn(tmpdir):
     return str(tmpdir)
 
 
+@pytest.fixture(params=[
+    pytest.mark.skipif(not fastparquet, 'fastparquet',
+                       reason='fastparquet not found'),
+    pytest.mark.skipif(not pyarrow, 'arrow',
+                       reason='pyarrow not found')
+])
+def engine(request):
+    return request.param
+
+
+def test_local(engine):
+    with tmpdir() as tmp:
+        tmp = str(tmp)
+        data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                             'i64': np.arange(1000, dtype=np.int64),
+                             'f': np.arange(1000, dtype=np.float64),
+                             'bhello': np.random.choice(['hello', 'yo', 'people'], size=1000).astype("O")})
+        df = dd.from_pandas(data, chunksize=500)
+
+        df.to_parquet(tmp, write_index=False, object_encoding='utf8')
+
+        files = os.listdir(tmp)
+        assert '_metadata' in files
+        assert 'part.0.parquet' in files
+
+        df2 = read_parquet(tmp, index=False, engine=engine)
+
+        assert len(df2.divisions) > 1
+
+        out = df2.compute(get=dask.get).reset_index()
+
+        for column in df.columns:
+            assert (data[column] == out[column]).all()
+
+
 def test_index(fn):
     ddf = read_parquet(fn)
+    assert_eq(df, ddf)
+
+
+def test_glob(fn):
+    os.unlink(os.path.join(fn, '_metadata'))
+    files = os.listdir(fn)
+    assert '_metadata' not in files
+    ddf = read_parquet(os.path.join(fn, '*'))
     assert_eq(df, ddf)
 
 
@@ -65,12 +88,12 @@ def test_auto_add_index(fn):
     assert_eq(df[['x']], ddf)
 
 
-def test_index_column(fn):
+def test_index_column(fn, engine):
     ddf = read_parquet(fn, columns=['myindex'], index='myindex')
     assert_eq(df[[]], ddf)
 
 
-def test_index_column_no_index(fn):
+def test_index_column_no_index(fn, engine):
     ddf = read_parquet(fn, columns=['myindex'])
     assert_eq(df[[]], ddf)
 
@@ -98,14 +121,17 @@ def test_series(fn):
     assert_eq(df.x, ddf)
 
 
-def test_names(fn):
-    assert set(read_parquet(fn).dask) == set(read_parquet(fn).dask)
-    assert (set(read_parquet(fn).dask) !=
-            set(read_parquet(fn, columns=['x']).dask))
-    assert (set(read_parquet(fn, columns='x').dask) !=
-            set(read_parquet(fn, columns=['x']).dask))
-    assert (set(read_parquet(fn, columns=('x',)).dask) ==
-            set(read_parquet(fn, columns=['x']).dask))
+def test_names(fn, engine):
+    def read(fn, **kwargs):
+        return read_parquet(fn, engine=engine, **kwargs)
+
+    assert (set(read(fn).dask) == set(read(fn).dask))
+
+    assert (set(read(fn).dask) !=
+            set(read(fn, columns=['x']).dask))
+
+    assert (set(read(fn, columns=('x',)).dask) ==
+            set(read(fn, columns=['x']).dask))
 
 
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
@@ -119,11 +145,11 @@ def test_optimize(fn, c):
     assert all(v[4] == c for v in dsk.values())
 
 
-def test_roundtrip_from_pandas():
+def test_roundtrip_from_pandas(engine):
     with tmpfile() as fn:
         df = pd.DataFrame({'x': [1, 2, 3]})
         fastparquet.write(fn, df)
-        ddf = dd.io.parquet.read_parquet(fn, index=False)
+        ddf = dd.io.parquet.read_parquet(fn, index=False, engine=engine)
         assert_eq(df, ddf)
 
 
@@ -135,11 +161,21 @@ def test_categorical():
         to_parquet(tmp, ddf)
 
         ddf2 = read_parquet(tmp, categories=['x'])
-
         assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
+        # autocat
+        ddf2 = read_parquet(tmp)
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+
         ddf2.loc[:1000].compute()
         df.index.name = 'index'  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
+
+        # dereference cats
+        ddf2 = read_parquet(tmp, categories=[])
+
+        ddf2.loc[:1000].compute()
+        assert (df.x == ddf2.x).all()
 
 
 def test_append():
@@ -249,7 +285,7 @@ def test_ordering():
         assert_eq(ddf, ddf2)
 
 
-def test_read_parquet_custom_columns():
+def test_read_parquet_custom_columns(engine):
     with tmpdir() as tmp:
         tmp = str(tmp)
         data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
@@ -257,10 +293,10 @@ def test_read_parquet_custom_columns():
         df = dd.from_pandas(data, chunksize=50)
         df.to_parquet(tmp)
 
-        df2 = read_parquet(tmp, columns=['i32', 'f'])
+        df2 = read_parquet(tmp, columns=['i32', 'f'], engine=engine)
         assert_eq(df2, df2, check_index=False)
 
-        df3 = read_parquet(tmp, columns=['f', 'i32'])
+        df3 = read_parquet(tmp, columns=['f', 'i32'], engine=engine)
         assert_eq(df3, df3, check_index=False)
 
 
@@ -351,3 +387,17 @@ def test_timestamp_index():
         ddf.to_parquet(fn)
         ddf2 = dd.read_parquet(fn)
         assert_eq(ddf, ddf2)
+
+
+@pytest.mark.skipif(not pyarrow, reason='pyarrow not found')
+@pytest.mark.xfail(reason="to_parquet does not write nulls by default")
+def test_to_parquet_default_writes_nulls():
+    import pyarrow.parquet as pq
+
+    df = pd.DataFrame({'c1': [1., np.nan, 2, np.nan, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with tmpfile() as fn:
+        ddf.to_parquet(fn)
+        table = pq.read_table(fn)
+        assert table[0].null_count == 2
