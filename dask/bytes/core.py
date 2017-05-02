@@ -390,7 +390,7 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                                  encoding=encoding, errors=errors, **kwargs)
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
-        elif "*" in urlpath or "?" in urlpath or "[" in urlpath:
+        elif "*" in urlpath or "[" in urlpath:
             paths = myopen.fs.glob(urlpath)
         else:
             paths = [urlpath]

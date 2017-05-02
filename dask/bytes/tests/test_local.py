@@ -325,9 +325,6 @@ def test_glob_patterns():
         myfiles = open_files('.test.accounts.*')
         assert len(myfiles) == len(files)
 
-        myfiles = open_files('.test.accounts.?.json')
-        assert len(myfiles) == len(files)
-
         myfiles = open_files('.test.accounts.[01].json')
         assert len(myfiles) == 1
 
