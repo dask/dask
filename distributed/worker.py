@@ -66,7 +66,6 @@ READY = ('ready', 'constrained')
 
 
 class WorkerBase(Server):
-
     def __init__(self, scheduler_ip, scheduler_port=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
@@ -162,6 +161,14 @@ class WorkerBase(Server):
             self.heartbeat_active = True
             logger.debug("Heartbeat: %s" % self.address)
             try:
+                if proc:
+                    memory_info = proc.memory_info()
+                    kwargs = {'memory': memory_info.vms,
+                              'memory-vms': memory_info.vms,
+                              'memory-rss': memory_info.rss}
+                else:
+                    kwargs = {}
+
                 yield self.scheduler.register(
                         address=self.address,
                         name=self.name,
@@ -170,12 +177,11 @@ class WorkerBase(Server):
                         host_info=self.host_health(),
                         services=self.service_ports,
                         memory_limit=self.memory_limit,
-                        memory=proc.memory_info().vms if proc else None,
                         executing=len(self.executing),
                         in_memory=len(self.data),
                         ready=len(self.ready),
-                        in_flight=len(self.in_flight_tasks)
-                )
+                        in_flight=len(self.in_flight_tasks),
+                        **kwargs)
             finally:
                 self.heartbeat_active = False
         else:
