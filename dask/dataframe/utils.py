@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import textwrap
 from distutils.version import LooseVersion
 
@@ -125,12 +126,21 @@ def insert_meta_param_description(*args, **kwargs):
     if not args:
         return lambda f: insert_meta_param_description(f, **kwargs)
     f = args[0]
+    indent = " " * kwargs.get('pad', 8)
+    body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
+                         subsequent_indent=indent, width=78)
+    descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
     if f.__doc__:
-        indent = " " * kwargs.get('pad', 8)
-        body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
-                             subsequent_indent=indent, width=78)
-        descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
-        f.__doc__ = f.__doc__.replace('$META', descr)
+        if '$META' in f.__doc__:
+            f.__doc__ = f.__doc__.replace('$META', descr)
+        else:
+            # Put it at the end of the parameters section
+            parameter_header = 'Parameters\n%s----------' % indent[4:]
+            first, last = re.split('Parameters\\n[ ]*----------', f.__doc__)
+            parameters, rest = last.split('\n\n', 1)
+            f.__doc__ = '{0}{1}{2}\n{3}{4}\n\n{5}'.format(first, parameter_header,
+                                                          parameters, indent[4:],
+                                                          descr, rest)
     return f
 
 
