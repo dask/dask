@@ -1055,14 +1055,23 @@ def ensure_dict(d):
     return dict(d)
 
 
-def package_of(obj):
-    """ Return package containing object's definition
+_packages = {}
+
+
+def package_of(typ):
+    """ Return package containing type's definition
 
     Or return None if not found
     """
-    # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
-    mod = inspect.getmodule(obj)
-    if not mod:
-        return
-    base, _sep, _stem = mod.__name__.partition('.')
-    return sys.modules[base]
+    try:
+        return _packages[typ]
+    except KeyError:
+        # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
+        mod = inspect.getmodule(typ)
+        if not mod:
+            result = None
+        else:
+            base, _sep, _stem = mod.__name__.partition('.')
+            result = sys.modules[base]
+        _packages[typ] = result
+        return result
