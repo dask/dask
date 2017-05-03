@@ -13,7 +13,6 @@ import os
 import sys
 import traceback
 import pickle
-from threading import Lock
 import uuid
 import warnings
 
@@ -2532,7 +2531,7 @@ def dot(a, b):
 
 def insert_to_ooc(out, arr, lock=True, region=None):
     if lock is True:
-        lock = Lock()
+        lock = SerializableLock()
 
     def store(out, x, index, lock, region):
         if lock:
