@@ -1,6 +1,45 @@
 Changelog
 =========
 
+0.14.2 / 2017-05-03
+-------------------
+
+Array
++++++
+
+-  Add da.indices (:pr:`2268`), da.tile (:pr:`2153`), da.roll (:pr:`2135`)
+-  Simultaneously support drop_axis and new_axis in da.map_blocks (:pr:`2264`)
+-  Rechunk and concatenate work with unknown chunksizes (:pr:`2235`) and (:pr:`2251`)
+-  Support non-numpy container arrays, notably sparse arrays (:pr:`2234`)
+-  Tensordot contracts over multiple axes (:pr:`2186`)
+-  Allow delayed targets in da.store (:pr:`2181`)
+-  Support interactions against lists and tuples (:pr:`2148`)
+-  Constructor plugins for debugging (:pr:`2142`)
+-  Multi-dimensional FFTs (single chunk) (:pr:`2116`)
+
+Bag
++++
+
+-  to_dataframe enforces consistent types (:pr:`2199`)
+
+DataFrame
++++++++++
+
+-  Set_index always fully sorts the index (:pr:`2290`)
+-  Support compatibility with pandas 0.20.0 (:pr:`2249`), (:pr:`2248`), and (:pr:`2246`)
+-  Support Arrow Parquet reader (:pr:`2223`)
+-  Time-based rolling windows (:pr:`2198`)
+-  Repartition can now create more partitions, not just less (:pr:`2168`)
+
+Core
+++++
+
+-  Always use absolute paths when on POSIX file system (:pr:`2263`)
+-  Support user provided graph optimizations (:pr:`2219`)
+-  Refactor path handling (:pr:`2207`)
+-  Improve fusion performance (:pr:`2129`), (:pr:`2131`), and (:pr:`2112`)
+
+
 0.14.1 / 2017-03-22
 -------------------
 
