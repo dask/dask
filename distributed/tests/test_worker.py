@@ -338,11 +338,11 @@ def test_spill_to_disk(e, s):
     yield _wait(z)
     assert set(w.data) == {x.key, y.key, z.key}
     assert set(w.data.fast) == {y.key, z.key}
-    assert set(w.data.slow) == {x.key}
+    assert set(w.data.slow) == {x.key} or set(w.data.slow) == {x.key, y.key}
 
     yield x._result()
     assert set(w.data.fast) == {x.key, z.key}
-    assert set(w.data.slow) == {y.key}
+    assert set(w.data.slow) == {y.key} or set(w.data.slow) == {x.key, y.key}
     yield w._close()
 
 
