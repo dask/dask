@@ -69,7 +69,6 @@ Top level user functions:
     DataFrame.rtruediv
     DataFrame.sample
     DataFrame.set_index
-    DataFrame.set_partition
     DataFrame.std
     DataFrame.sub
     DataFrame.sum

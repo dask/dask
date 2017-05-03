@@ -459,6 +459,15 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
 
     if not divisions:
         divisions = compute_divisions(result, **kwargs)
+    elif len(divisions) != len(df.divisions):
+        msg = ("When doing `df.set_index(col, sorted=True, divisions=...)`, "
+               "divisions indicates known splits in the index column. In this "
+               "case divisions must be the same length as the existing "
+               "divisions in `df`\n\n"
+               "If the intent is to repartition into new divisions after "
+               "setting the index, you probably want:\n\n"
+               "`df.set_index(col, sorted=True).repartition(divisions=divisions)`")
+        raise ValueError(msg)
 
     result.divisions = tuple(divisions)
     return result
