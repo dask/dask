@@ -1,6 +1,27 @@
 Changelog
 =========
 
+1.16.2 - May 3rd, 2017
+-------------------------
+
+-  Support ``async with Client`` syntax (:pr:`1053`)
+-  Use internal bokeh server for default diagnostics server (:pr:`1047`)
+-  Improve styling of bokeh plots when empty (:pr:`1046`) (:pr:`1037`)
+-  Support efficient serialization for sparse arrays (:pr:`1040`)
+-  Prioritize newly arrived work in worker (:pr:`1035`)
+-  Prescatter data with joblib backend (:pr:`1022`)
+-  Make client.restart more robust to worker failure (:pr:`1018`)
+-  Support preloading a module or script in dask-worker or dask-scheduler processes (:pr:`1016`)
+-  Specify network interface in command line interface (:pr:`1007`)
+-  Client.scatter supports a single element (:pr:`1003`)
+-  Use blosc compression on all memoryviews passing through comms (:pr:`998`)
+-  Add concurrent.futures-compatible Executor (:pr:`997`)
+-  Add as_completed.batches method and return results (:pr:`994`) (:pr:`971`)
+-  Allow worker_clients to optionally stay within the thread pool (:pr:`993`)
+-  Add bytes-stored and tasks-processing diagnostic histograms (:pr:`990`)
+-  Run supports non-msgpack-serializable results (:pr:`965`)
+
+
 1.16.1 - March 22nd, 2017
 -------------------------
 
