@@ -107,6 +107,7 @@ def test_anova():
     (dask.array.stats.ttest_1samp, 2),
     (dask.array.stats.ttest_rel, 2),
     (dask.array.stats.skewtest, 1),
+    (dask.array.stats.kurtosis, 1),
     (dask.array.stats.kurtosistest, 1),
     (dask.array.stats.normaltest, 1),
     (dask.array.stats.moment, 1),
@@ -115,3 +116,19 @@ def test_anova():
 def test_nan_raises(func, nargs, nan_policy):
     with pytest.raises(NotImplementedError):
         func(*(None,) * nargs, nan_policy=nan_policy)
+
+
+def test_power_divergence_invalid():
+    a = np.random.random(size=30,)
+    a_ = da.from_array(a, 3)
+
+    with pytest.raises(ValueError):
+        dask.array.stats.power_divergence(a_, lambda_='wrong')
+
+
+def test_skew_raises():
+    a = da.ones((7,), chunks=(7,))
+    with pytest.raises(ValueError) as rec:
+        dask.array.stats.skewtest(a)
+
+    assert rec.match("7 samples")
