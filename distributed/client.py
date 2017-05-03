@@ -544,6 +544,15 @@ class Client(object):
             self.start()
         return self
 
+    @gen.coroutine
+    def __aenter__(self):
+        yield self._start()
+        raise gen.Return(self)
+
+    @gen.coroutine
+    def __aexit__(self, typ, value, traceback):
+        yield self._shutdown()
+
     def __exit__(self, type, value, traceback):
         self.shutdown()
 
@@ -664,6 +673,9 @@ class Client(object):
                 raise gen.Return()
             if self.status == 'running':
                 self._send_to_scheduler({'op': 'close-stream'})
+            if self._start_arg is None:
+                with ignoring(AttributeError):
+                    yield self.cluster._close()
             self.status = 'closed'
             if _global_client[0] is self:
                 _global_client[0] = None

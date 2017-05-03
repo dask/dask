@@ -80,7 +80,7 @@ def test_wait(loop):
                 fs += [e.submit(slowdec, i, delay=0.05) for i in range(N)]
                 res = wait(fs, return_when=FIRST_EXCEPTION)
                 assert len(res.not_done) > 0
-                assert len(res.done) > N - 2  # likely, unless tasks get reordered
+                assert len(res.done) >= N - 2  # likely, unless tasks get reordered
 
                 errors = []
                 for fs in res.done:
@@ -98,11 +98,19 @@ def test_cancellation(loop):
         with Client(s['address'], loop=loop) as c:
             with c.get_executor(pure=False) as e:
                 fut = e.submit(time.sleep, 2.0)
-                assert number_of_processing_tasks(c) > 0
+                start = time.time()
+                while number_of_processing_tasks(c) == 0:
+                    assert time.time() < start + 1
+                    time.sleep(0.01)
                 assert not fut.done()
+
                 fut.cancel()
                 assert fut.cancelled()
-                assert number_of_processing_tasks(c) == 0
+                start = time.time()
+                while number_of_processing_tasks(c) != 0:
+                    assert time.time() < start + 1
+                    time.sleep(0.01)
+
                 with pytest.raises(CancelledError):
                     fut.result()
 

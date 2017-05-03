@@ -229,30 +229,35 @@ class LocalCluster(object):
 
     @gen.coroutine
     def _close(self):
+        if self.status == 'closed':
+            return
+
         with ignoring(gen.TimeoutError, CommClosedError, OSError):
             yield All([w._close() for w in self.workers])
         with ignoring(gen.TimeoutError, CommClosedError, OSError):
             yield self.scheduler.close(fast=True)
         del self.workers[:]
+        self.status = 'closed'
 
     def close(self):
         """ Close the cluster """
-        if self.status == 'running':
-            for w in self.workers:
-                self.loop.add_callback(self._stop_worker, w)
-            for i in range(10):
-                if not self.workers:
-                    break
-                else:
-                    sleep(0.01)
-            self.status = 'closed'
-            if self.loop._running:
-                sync(self.loop, self._close)
-            if hasattr(self, '_thread'):
-                sync(self.loop, self.loop.stop)
-                self._thread.join(timeout=1)
-                self.loop.close()
-                del self._thread
+        if self.status == 'closed':
+            return
+
+        for w in self.workers:
+            self.loop.add_callback(self._stop_worker, w)
+        for i in range(10):
+            if not self.workers:
+                break
+            else:
+                sleep(0.01)
+        if self.loop._running:
+            sync(self.loop, self._close)
+        if hasattr(self, '_thread'):
+            sync(self.loop, self.loop.stop)
+            self._thread.join(timeout=1)
+            self.loop.close()
+            del self._thread
 
     @gen.coroutine
     def scale_up(self, n, **kwargs):
