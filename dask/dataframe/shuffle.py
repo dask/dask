@@ -79,7 +79,10 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         if (mins == sorted(mins) and maxes == sorted(maxes) and
                 all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
             divisions = mins + [maxes[-1]]
-            return set_sorted_index(df, index, drop=drop, divisions=divisions)
+            result = set_sorted_index(df, index, drop=drop, divisions=divisions)
+            # There are cases where this still may not be sorted
+            # so sort_index to be sure. https://github.com/dask/dask/issues/2288
+            return result.map_partitions(M.sort_index)
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
