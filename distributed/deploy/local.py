@@ -99,8 +99,7 @@ class LocalCluster(object):
             try:
                 from distributed.bokeh.scheduler import BokehScheduler
             except ImportError:
-                logger.info("To start diagnostics web server please install Bokeh")
-                return
+                logger.debug("To start diagnostics web server please install Bokeh")
             else:
                 services[('bokeh', diagnostics_port)] = BokehScheduler
 
