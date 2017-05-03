@@ -213,22 +213,34 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                                   compression)
 
     b_lineterminator = lineterminator.encode()
-    sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                blocksize=blocksize,
-                                sample=sample,
-                                compression=compression,
-                                **(storage_options or {}))
+    b_sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
+                                  blocksize=blocksize,
+                                  sample=sample,
+                                  compression=compression,
+                                  **(storage_options or {}))
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
 
-    if kwargs.get('header', 'infer') is None:
-        header = b''
-    else:
-        header_row = kwargs.get('skiprows', 0)
-        header = sample.split(b_lineterminator)[header_row] + b_lineterminator
+    # Get header row, and check that sample is long enough. If the file
+    # contains a header row, we need at least 2 nonempty rows + the number of
+    # rows to skip.
+    skiprows = kwargs.get('skiprows', 0)
+    header = kwargs.get('header', 'infer')
+    need = 1 if header is None else 2
+    parts = b_sample.split(b_lineterminator, skiprows + need)
+    # If the last partition is empty, don't count it
+    nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    head = reader(BytesIO(sample), **kwargs)
+    if nparts < skiprows + need and len(b_sample) >= sample:
+        raise ValueError("Sample is not large enough to include at least one "
+                         "row of data. Please increase the number of bytes "
+                         "in `sample` in the call to `read_csv`/`read_table`")
+
+    header = b'' if header is None else parts[skiprows] + b_lineterminator
+
+    # Use sample to infer dtypes
+    head = reader(BytesIO(b_sample), **kwargs)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:

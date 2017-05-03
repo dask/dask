@@ -761,6 +761,37 @@ def test_robust_column_mismatch():
         assert_eq(ddf, ddf)
 
 
+def test_error_if_sample_is_too_small():
+    text = ('AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n'
+            '1,2,3,4,5\n'
+            '6,7,8,9,10\n'
+            '11,12,13,14,15')
+    with filetext(text) as fn:
+        # Sample size stops mid header row
+        sample = 20
+        with pytest.raises(ValueError):
+            dd.read_csv(fn, sample=sample)
+
+        # Saying no header means this is fine
+        assert_eq(dd.read_csv(fn, sample=sample, header=None),
+                  pd.read_csv(fn, header=None))
+
+    skiptext = ('# skip\n'
+                '# these\n'
+                '# lines\n')
+
+    text = skiptext + text
+    with filetext(text) as fn:
+        # Sample size stops mid header row
+        sample = 20 + len(skiptext)
+        with pytest.raises(ValueError):
+            dd.read_csv(fn, sample=sample, skiprows=3)
+
+        # Saying no header means this is fine
+        assert_eq(dd.read_csv(fn, sample=sample, header=None, skiprows=3),
+                  pd.read_csv(fn, header=None, skiprows=3))
+
+
 ############
 #  to_csv  #
 ############
