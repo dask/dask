@@ -9,8 +9,9 @@ import numpy as np
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples
+from .core import _concatenate2, Array, atop, lol_tuples, from_array
 from .ufunc import sqrt
+from .wrap import zeros, ones
 from .numpy_compat import divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
@@ -333,8 +334,33 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
            split_every=None):
-    if not isinstance(order, int) or order < 2:
-        raise ValueError("Order must be an integer >= 2")
+
+    if not isinstance(order, int) or order < 0:
+        raise ValueError("Order must be an integer >= 0")
+
+    if order == 0:
+        # When order equals 0, the result is 1, by definition.
+        shape = list(a.shape)
+        del shape[axis]
+        if shape:
+            # return an actual array of the appropriate shape
+            return ones(shape, dtype=float, chunks=1)
+        else:
+            # the input was 1D, so return a scalar instead of a rank-0 array
+            return from_array(np.array([1.]), chunks=1)
+
+    elif order == 1:
+        # By definition the first order about the mean is 0.
+        shape = list(a.shape)
+        del shape[axis]
+        if shape:
+            # return an actual array of the appropriate shape
+            return zeros(shape, dtype=float, chunks=1)
+        else:
+            # the input was 1D, so return a scalar instead of a rank-0 array
+            # TODO: scalar
+            return from_array(np.array([0.]), chunks=1)
+
     if dtype is not None:
         dt = dtype
     else:

@@ -171,7 +171,7 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
         raise NotImplementedError("`nan_policy` other than 'propagate' "
                                   "have not been implemented.")
 
-    n = a.shape[axis]
+    n = a.shape[axis]  # noqa; for bias
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = (m2 == 0)
@@ -180,17 +180,8 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
     #                 lambda m2, m3: m3 / m2**1.5,
     #                 0.)
     if not bias:
-        can_correct = (n > 2) & (m2 > 0)
-        if can_correct.any():
-            m2 = m2[can_correct]
-            m3 = m3[can_correct]
-            nval = da.sqrt((n - 1.0) * n) / (n - 2.0) * m3 / m2**1.5
-            n_replace = can_correct.shape
-            # a bit inefficient, if nval is long
-            replace_with = da.tile(nval, n_replace)[:n_replace]
-            vals[can_correct] = replace_with[:n_replace]
-            # TODO: np.place
-            # np.place(vals, can_correct, replace_with)
+        # Need a version of np.place
+        raise NotImplementedError("bias=False is not implemented.")
 
     if vals.ndim == 0:
         return vals
@@ -229,8 +220,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
     if nan_policy != 'propagate':
         raise NotImplementedError("`nan_policy` other than 'propagate' "
                                   "have not been implemented.")
-
-    n = a.shape[axis]
+    n = a.shape[axis]  # noqa; for bias
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
     zero = (m2 == 0)
@@ -241,18 +231,8 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
         np.seterr(**olderr)
 
     if not bias:
-        can_correct = (n > 3) & (m2 > 0)
-        if can_correct.any():
-            m2 = m2[can_correct]
-            m4 = m4[can_correct]
-            nval = 1.0 / (n - 2) / (n - 3) * ((n**2 - 1.0) * m4 / m2**2.0 - 3 * (n - 1)**2.0)
-
-            n_replace = can_correct.shape
-            # a bit inefficient, if nval is long
-            replace_with = da.tile(nval + 3.0, n_replace)[:n_replace]
-            vals[can_correct] = replace_with[:n_replace]
-            # TODO: np.place
-            # np.place(vals, can_correct, nval + 3.0)
+        # need a version of np.place
+        raise NotImplementedError("bias=False is not implemented.")
 
     if vals.ndim == 0:
         return vals  # TODO: scalar
@@ -347,22 +327,7 @@ def moment(a, moment=1, axis=0, nan_policy='propagate'):
     if nan_policy != 'propagate':
         raise NotImplementedError("`nan_policy` other than 'propagate' "
                                   "have not been implemented.")
-
-    if a.size == 0:
-        # empty array, return nan(s) with shape matching `moment`
-        if np.isscalar(moment):
-            return np.nan
-        else:
-            # TODO: take chunks from a?
-            return da.ones(np.asarray(moment).shape, dtype=np.float64,
-                           chunks=1) * np.nan
-
-    # for array_like moment input, return a value for each.
-    if not np.isscalar(moment):
-        mmnt = [_moment(a, i, axis) for i in moment]
-        return da.array(mmnt)  # TODO
-    else:
-        return _moment(a, moment, axis)
+    return da.moment(a, moment, axis=axis)
 
 # -------
 # Helpers
@@ -465,55 +430,3 @@ def _square_of_sums(a, axis=0):
     """
     s = da.sum(a, axis)
     return s * s
-
-
-def _moment(a, moment, axis):
-    if isinstance(moment, int) and np.absolute(moment - np.round(moment)) > 0:
-        raise ValueError("All moment parameters must be integers")
-
-    if moment == 0:
-        # When moment equals 0, the result is 1, by definition.
-        shape = list(a.shape)
-        del shape[axis]
-        if shape:
-            # return an actual array of the appropriate shape
-            return da.ones(shape, dtype=float, chunks=1)
-        else:
-            # the input was 1D, so return a scalar instead of a rank-0 array
-            return da.from_array(np.array([1.]), chunks=1)
-
-    elif moment == 1:
-        # By definition the first moment about the mean is 0.
-        shape = list(a.shape)
-        del shape[axis]
-        if shape:
-            # return an actual array of the appropriate shape
-            return da.zeros(shape, dtype=float, chunks=1)
-        else:
-            # the input was 1D, so return a scalar instead of a rank-0 array
-            # TODO: scalar
-            return da.from_array(np.array([0.]), chunks=1)
-    else:
-        # Exponentiation by squares: form exponent sequence
-        n_list = [moment]
-        current_n = moment
-        while current_n > 2:
-            if current_n % 2:
-                current_n = (current_n - 1) / 2
-            else:
-                current_n /= 2
-            n_list.append(current_n)
-
-        # Starting point for exponentiation by squares
-        a_zero_mean = a - da.mean(a, axis, keepdims=True)
-        if n_list[-1] == 1:
-            s = a_zero_mean.copy()  # TODO: copy needed?
-        else:
-            s = a_zero_mean**2
-
-        # Perform multiplications
-        for n in n_list[-2::-1]:
-            s = s**2
-            if n % 2:
-                s *= a_zero_mean
-        return da.mean(s, axis)

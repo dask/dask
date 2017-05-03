@@ -11,9 +11,7 @@ from dask.array.utils import allclose
 
 @pytest.mark.parametrize('kind, kwargs', [
     ('skew', {}),
-    ('skew', {'bias': False}),
     ('kurtosis', {}),
-    ('kurtosis', {'bias': False}),
     ('kurtosis', {'fisher': False}),
 ])
 def test_measures(kind, kwargs):
@@ -26,6 +24,17 @@ def test_measures(kind, kwargs):
     result = dfunc(y, **kwargs)
     assert_eq(result, expected)
     assert isinstance(result, da.Array)
+
+
+def test_bias_raises():
+    x = np.random.random(size=(30, 2))
+    y = da.from_array(x, 3)
+
+    with pytest.raises(NotImplementedError):
+        dask.array.stats.skew(y, bias=False)
+
+    with pytest.raises(NotImplementedError):
+        dask.array.stats.kurtosis(y, bias=False)
 
 
 @pytest.mark.parametrize('kind', [
