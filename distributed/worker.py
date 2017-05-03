@@ -52,11 +52,10 @@ no_value = '--no-value-sentinel--'
 try:
     import psutil
     TOTAL_MEMORY = psutil.virtual_memory().total
-    proc = psutil.Process()
 except ImportError:
     logger.warn("Please install psutil to estimate worker memory use")
     TOTAL_MEMORY = 8e9
-    proc = None
+    psutil = None
 
 
 IN_PLAY = ('waiting', 'ready', 'executing', 'long-running')
@@ -161,8 +160,8 @@ class WorkerBase(Server):
             self.heartbeat_active = True
             logger.debug("Heartbeat: %s" % self.address)
             try:
-                if proc:
-                    memory_info = proc.memory_info()
+                if psutil:
+                    memory_info = psutil.Process().memory_info()
                     kwargs = {'memory': memory_info.vms,
                               'memory-vms': memory_info.vms,
                               'memory-rss': memory_info.rss}

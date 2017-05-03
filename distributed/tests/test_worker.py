@@ -714,9 +714,9 @@ def test_priorities_2(c, s, w):
     assert any(key.startswith('b1') for key in log[:len(log) // 2])
 
 
-@pytest.mark.skipif(not distributed.worker.proc, reason="no psutil")
 @gen_cluster(client=True, worker_kwargs={'heartbeat_interval': 0.020})
 def test_heartbeats(c, s, a, b):
+    pytest.importorskip('psutil')
     start = time()
     while not all(s.worker_info[w].get('memory-rss') for w in s.workers):
         yield gen.sleep(0.01)
