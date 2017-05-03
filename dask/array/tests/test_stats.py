@@ -11,9 +11,9 @@ from dask.array.utils import allclose
 
 @pytest.mark.parametrize('kind, kwargs', [
     ('skew', {}),
-    ('skew', {'bias': True}),
+    ('skew', {'bias': False}),
     ('kurtosis', {}),
-    ('kurtosis', {'bias': True}),
+    ('kurtosis', {'bias': False}),
     ('kurtosis', {'fisher': False}),
 ])
 def test_measures(kind, kwargs):
