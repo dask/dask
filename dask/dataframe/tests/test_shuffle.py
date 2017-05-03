@@ -433,7 +433,7 @@ def test_set_index_sorts():
     ddf = dd.concat(dfs).clear_divisions()
     assert ddf.set_index("timestamp").index.compute().is_monotonic is True
 
-    
+
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
                                   index=[0, 1, 3]),
