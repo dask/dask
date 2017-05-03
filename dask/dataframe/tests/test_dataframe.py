@@ -2749,7 +2749,6 @@ def test_slice_on_filtered_boundary(drop):
     result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
     expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
     assert_eq(result, expected)
-    assert not result.compute().index.is_monotonic  # didn't accidentally sort
 
 
 def test_boundary_slice_nonmonotonic():
