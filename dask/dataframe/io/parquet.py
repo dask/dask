@@ -438,8 +438,12 @@ if fastparquet:
         return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
 
 
-if pyarrow_parquet:
-    @partial(normalize_token.register, pyarrow_parquet.ParquetDataset)
+try:
+    from pyarrow.parquet import ParquetDataset
+except ImportError:
+    pass
+else:
+    @partial(normalize_token.register, ParquetDataset)
     def normalize_PyArrowParquetDataset(ds):
         return (type(ds), ds.paths)
 
