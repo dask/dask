@@ -113,6 +113,7 @@ def test_interrupt():
     elif os.name == 'nt':
         from _thread import interrupt_main
     else:
+        pytest.xfail("This test fails intermittently on non-windows PY3.")
         main_thread = threading.get_ident()
 
         def interrupt_main():
