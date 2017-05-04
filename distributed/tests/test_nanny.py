@@ -17,7 +17,7 @@ from distributed.core import connect, CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps, loads
 from distributed.utils import ignoring
-from distributed.utils_test import gen_cluster, gen_test
+from distributed.utils_test import gen_cluster, gen_test, slow
 from distributed.nanny import isalive
 
 
@@ -156,9 +156,11 @@ def test_close_on_disconnect(s, w):
         assert time() < start + 9
 
 
-@gen_test()
-def test_nanny_death_timeout():
-    w = Nanny('127.0.0.1', 38848, death_timeout=1)
+@slow
+@gen_cluster(client=False, ncores=[])
+def test_nanny_death_timeout(s):
+    yield s.close()
+    w = Nanny(s.address, death_timeout=1)
     yield w._start()
 
     yield gen.sleep(3)
