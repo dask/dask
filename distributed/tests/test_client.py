@@ -39,7 +39,7 @@ from distributed.sizeof import sizeof
 from distributed.utils import sync, tmp_text, ignoring, tokey, All, mp_context
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
         randominc, loop, inc, dec, div, throws, geninc, asyncinc,
-        gen_cluster, gen_test, double, deep, popen)
+        gen_cluster, gen_test, double, deep, popen, captured_logger)
 
 
 @gen_cluster(client=True, timeout=None)
@@ -4044,6 +4044,19 @@ def test_robust_undeserializable_function(c, s, a, b):
 
     assert results == list(map(inc, range(10)))
     assert a.data and b.data
+
+
+def test_quiet_client_shutdown(loop):
+    import logging
+    with captured_logger(logging.getLogger('distributed')) as logger:
+        with Client(loop=loop, processes=False, threads_per_worker=4) as c:
+            futures = c.map(slowinc, range(1000), delay=0.01)
+            sleep(0.200)  # stop part-way
+        sleep(0.5)  # let things settle
+
+        logger.seek(0)  # check logger
+        out = logger.read()
+        assert not out
 
 
 if sys.version_info > (3, 5):

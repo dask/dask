@@ -541,6 +541,7 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
                        allow_other_workers=True)
     while sum(map(len, s.processing.values())) < 2:  # let them start
         yield gen.sleep(0.01)
+    yield gen.sleep(0.2)  # scheduler learns that they are long-running
     incs = c.map(inc, range(100), workers=a.address, allow_other_workers=True)
 
     yield gen.sleep(0.2)

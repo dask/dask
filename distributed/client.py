@@ -705,6 +705,7 @@ class Client(object):
         if self.status == 'closed':
             return
 
+        self.status = 'closing'
         if self._start_arg is None:
             with ignoring(AttributeError):
                 self.cluster.close()
@@ -714,7 +715,7 @@ class Client(object):
 
         if self._should_close_loop:
             sync(self.loop, self.loop.stop)
-            self.loop.close(all_fds=True)
+            self.loop.close(all_fds=False)
             self._loop_thread.join(timeout=timeout)
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)

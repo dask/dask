@@ -830,6 +830,8 @@ class Scheduler(Server):
         state.
         """
         with log_errors():
+            if self.status == 'closed':
+                return
             if address not in self.processing:
                 return 'already-removed'
 
@@ -1090,7 +1092,8 @@ class Scheduler(Server):
                 comm = self.comms[client]
                 comm.send(msg)
             except CommClosedError:
-                logger.critical("Tried writing to closed comm: %s", msg)
+                if self.status == 'running':
+                    logger.critical("Tried writing to closed comm: %s", msg)
             except KeyError:
                 pass
 
@@ -1107,7 +1110,8 @@ class Scheduler(Server):
                 c.send(msg)
                 # logger.debug("Scheduler sends message to client %s", msg)
             except CommClosedError:
-                logger.critical("Tried writing to closed comm: %s", msg)
+                if self.status == 'running':
+                    logger.critical("Tried writing to closed comm: %s", msg)
 
     @gen.coroutine
     def add_client(self, comm, client=None):
@@ -1165,6 +1169,9 @@ class Scheduler(Server):
                     logger.exception(e)
                     bcomm.send(error_message(e, status='scheduler-error'))
                     continue
+
+                if self.status == 'closed':
+                    return
 
                 if not isinstance(msgs, list):
                     msgs = [msgs]
