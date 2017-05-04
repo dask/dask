@@ -33,12 +33,26 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, package_of)
+                     SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
+
+
+concatenate_lookup = Dispatch('concatenate')
+tensordot_lookup = Dispatch('tensordot')
+concatenate_lookup.register((object, np.ndarray), np.concatenate)
+tensordot_lookup.register((object, np.ndarray), np.tensordot)
+
+
+@tensordot_lookup.register_lazy('sparse')
+@concatenate_lookup.register_lazy('sparse')
+def register_sparse():
+    import sparse
+    concatenate_lookup.register(sparse.COO, sparse.concatenate)
+    tensordot_lookup.register(sparse.COO, sparse.tensordot)
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -477,8 +491,8 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    module = package_of(type(max(arrays, key=lambda x: x.__array_priority__))) or np
-    return module.concatenate(arrays, axis=axes[0])
+    concatenate = concatenate_lookup.dispatch(type(max(arrays, key=lambda x: x.__array_priority__)))
+    return concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
@@ -2832,8 +2846,7 @@ def concatenate3(arrays):
 
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
-    module = package_of(type(advanced)) or np
-    if module is not np and hasattr(module, 'concatenate'):
+    if concatenate_lookup.dispatch(type(advanced)) is not np.concatenate:
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
 
