@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import random
 
+import dask
 from dask import delayed
 from time import sleep
 from tornado import gen
@@ -164,3 +165,20 @@ def test_client_executor(c, s, a, b):
     future = c.submit(mysum)
     result = yield future._result()
     assert result == 30 * 29
+
+
+def test_dont_override_default_get(loop):
+    import dask.bag as db
+    def f(x):
+        with worker_client() as c:
+            return True
+
+    b = db.from_sequence([1, 2])
+    b2 = b.map(f)
+
+    with Client(loop=loop, processes=False, set_as_default=True) as c:
+        assert dask.context._globals['get'] == c.get
+        for i in range(2):
+            b2.compute()
+
+        assert dask.context._globals['get'] == c.get

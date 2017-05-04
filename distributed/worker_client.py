@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
-from toolz import keymap, valmap, merge, assoc
+from toolz import keymap, valmap, merge
 import uuid
 
 from dask.base import tokenize
@@ -72,7 +72,9 @@ class WorkerClient(Client):
     def __init__(self, *args, **kwargs):
         loop = kwargs.get('loop')
         self.worker = get_worker()
-        sync(loop, apply, Client.__init__, (self,) + args, assoc(kwargs, 'start', False))
+        kwargs['start'] = False
+        kwargs['set_as_default'] = False
+        sync(loop, apply, Client.__init__, (self,) + args, kwargs)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
