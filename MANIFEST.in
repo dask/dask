@@ -1,6 +1,7 @@
 recursive-include distributed *.py
 recursive-include distributed *.js
 recursive-include distributed *.coffee
+recursive-include distributed *.html
 recursive-include docs *.rst
 
 include setup.py
@@ -10,7 +11,6 @@ include MANIFEST.in
 include requirements.txt
 include distributed/config.yaml
 include distributed/tests/mytestegg-1.0.0-py3.4.egg
-include distributed/bokeh/template.html
 
 prune docs/_build
 include versioneer.py
