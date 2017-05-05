@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 try:
     from distributed import (Client, Executor, progress, as_completed, wait,
             LocalCluster, Scheduler, Worker, nanny, local_client, config,
-            CompatibleExecutor)
+            CompatibleExecutor, worker_client)
 except ImportError:
     msg = ("Dask's distributed scheduler is not installed.\n\n"
            "Please either conda or pip install dask distributed:\n\n"
