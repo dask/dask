@@ -1,8 +1,15 @@
 Changelog
 =========
 
+1.16.3 - May 5th, 2017
+----------------------
+
+-  Add bokeh template files to MANIFEST (:pr:`1063`)
+-  Don't set worker_client.get as default get (:pr:`1061`)
+-  Clean up logging on Client().shutdown() (:pr:`1055`)
+
 1.16.2 - May 3rd, 2017
--------------------------
+----------------------
 
 -  Support ``async with Client`` syntax (:pr:`1053`)
 -  Use internal bokeh server for default diagnostics server (:pr:`1047`)
