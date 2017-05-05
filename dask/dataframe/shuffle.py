@@ -77,7 +77,8 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
                 divisions = [divisions[i] for i in indexes]
 
         if (mins == sorted(mins) and maxes == sorted(maxes) and
-                all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
+                all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:])) and
+                len(mins) > 1 and len(maxes) > 1):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
             # There are cases where this still may not be sorted
