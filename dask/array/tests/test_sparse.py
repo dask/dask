@@ -1,5 +1,5 @@
 import random
-import sys
+from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
@@ -7,6 +7,9 @@ import sparse
 
 import dask.array as da
 from dask.array.utils import assert_eq
+
+if LooseVersion(np.__version__) < '1.11.0':
+    pytestmark = pytest.mark.skip
 
 
 functions = [
@@ -40,8 +43,6 @@ functions = [
 ]
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
-                    reason='indexing issues')
 @pytest.mark.parametrize('func', functions)
 def test_basic(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -60,8 +61,6 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
-                    reason='compatibility issues')
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -79,8 +78,6 @@ def test_tensordot():
               da.tensordot(xx, yy, axes=((1, 2), (1, 0))))
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
-                    reason='indexing issues')
 @pytest.mark.parametrize('func', functions)
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -98,8 +95,6 @@ def test_mixed_concatenate(func):
     assert_eq(dd, ss)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 4),
-                    reason='indexing issues')
 @pytest.mark.parametrize('func', functions)
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
