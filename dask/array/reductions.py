@@ -121,6 +121,19 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
     return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)
 
 
+def empty_type_of(x):
+    return np.ma.empty if isinstance(x, np.ma.masked_array) else np.empty
+
+
+def maybe_ma_divide(x1, x2, dtype=None):
+    if isinstance(x1, np.ma.masked_array) or isinstance(x2, np.ma.masked_array):
+        x = np.ma.divide(x1, x2)
+        if dtype is not None:
+            x = x.astype(dtype)
+        return x
+    return divide(x1, x2, dtype=dtype)
+
+
 @wraps(chunk.sum)
 def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
@@ -225,8 +238,9 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    result = np.empty(shape=n.shape,
-                      dtype=[('total', total.dtype), ('n', n.dtype)])
+    empty = empty_type_of(n)
+    result = empty(shape=n.shape,
+                   dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
@@ -235,15 +249,16 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
 def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = sum(pair['n'], **kwargs)
     total = sum(pair['total'], **kwargs)
-    result = np.empty(shape=n.shape, dtype=pair.dtype)
+    empty = empty_type_of(n)
+    result = empty(shape=n.shape, dtype=pair.dtype)
     result['n'] = n
     result['total'] = total
     return result
 
 
 def mean_agg(pair, dtype='f8', **kwargs):
-    return divide(pair['total'].sum(dtype=dtype, **kwargs),
-                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
+    return maybe_ma_divide(pair['total'].sum(dtype=dtype, **kwargs),
+                           pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -275,14 +290,15 @@ with ignoring(AttributeError):
 
 def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
-    n = numel(A, **kwargs).astype(np.int64, copy=False)
+    n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+    empty = empty_type_of(n)
+    M = empty(shape=n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
         M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
-    result = np.empty(shape=n.shape, dtype=[('total', total.dtype),
-                                            ('n', n.dtype),
-                                            ('M', M.dtype, (order - 1,))])
+    result = empty(shape=n.shape, dtype=[('total', total.dtype),
+                                         ('n', n.dtype),
+                                         ('M', M.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -306,16 +322,17 @@ def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     Ms = data['M']
     total = totals.sum(**kwargs)
     n = sum(ns, **kwargs)
-    mu = divide(total, n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
-    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+    mu = maybe_ma_divide(total, n, dtype=dtype)
+    inner_term = maybe_ma_divide(totals, ns, dtype=dtype) - mu
+    empty = empty_type_of(n)
+    M = empty(shape=n.shape + (order - 1,), dtype=dtype)
 
     for o in range(2, order + 1):
         M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
 
-    result = np.zeros(shape=n.shape, dtype=[('total', total.dtype),
-                                            ('n', n.dtype),
-                                            ('M', Ms.dtype, (order - 1,))])
+    result = empty(shape=n.shape, dtype=[('total', total.dtype),
+                                         ('n', n.dtype),
+                                         ('M', Ms.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -334,11 +351,11 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     keepdim_kw['keepdims'] = True
 
     n = sum(ns, **keepdim_kw)
-    mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
+    mu = maybe_ma_divide(totals.sum(**keepdim_kw), n, dtype=dtype)
+    inner_term = maybe_ma_divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, kwargs)
-    return divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
+    return maybe_ma_divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
@@ -470,6 +487,13 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
         arg[:] = np.ravel_multi_index(total_ind, total_shape)
     else:
         arg += offset_info
+
+    if isinstance(vals, np.ma.masked_array):
+        if 'min' in argfunc.__name__:
+            fill_value = np.ma.minimum_fill_value(vals)
+        else:
+            fill_value = np.ma.maximum_fill_value(vals)
+        vals = np.ma.filled(vals, fill_value)
 
     result = np.empty(shape=vals.shape, dtype=[('vals', vals.dtype),
                                                ('arg', arg.dtype)])
@@ -653,14 +677,28 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
     return handle_out(out, result)
 
 
+def _cumsum_merge(a, b):
+    if isinstance(a, np.ma.masked_array) or isinstance(b, np.ma.masked_array):
+        values = np.ma.getdata(a) + np.ma.getdata(b)
+        return np.ma.masked_array(values, mask=np.ma.getmaskarray(b))
+    return a + b
+
+
+def _cumprod_merge(a, b):
+    if isinstance(a, np.ma.masked_array) or isinstance(b, np.ma.masked_array):
+        values = np.ma.getdata(a) * np.ma.getdata(b)
+        return np.ma.masked_array(values, mask=np.ma.getmaskarray(b))
+    return a * b
+
+
 @wraps(np.cumsum)
 def cumsum(x, axis, dtype=None, out=None):
-    return cumreduction(np.cumsum, operator.add, 0, x, axis, dtype, out=out)
+    return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
 
 
 @wraps(np.cumprod)
 def cumprod(x, axis, dtype=None, out=None):
-    return cumreduction(np.cumprod, operator.mul, 1, x, axis, dtype, out=out)
+    return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
 
 
 def validate_axis(ndim, axis):

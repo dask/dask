@@ -157,3 +157,64 @@ def test_filled():
 
     assert_eq(da.ma.filled(mdx), np.ma.filled(mx))
     assert_eq(da.ma.filled(mdx, -5), np.ma.filled(mx, -5))
+
+
+def assert_eq_ma(a, b):
+    res = a.compute()
+    assert type(res) == type(b)
+    if hasattr(res, 'mask'):
+        np.testing.assert_equal(res.mask, b.mask)
+        a = da.ma.filled(a)
+        b = np.ma.filled(b)
+    assert_eq(a, b, equal_nan=True)
+
+
+@pytest.mark.parametrize('dtype', ('i8', 'f8'))
+@pytest.mark.parametrize('reduction', ['sum', 'prod', 'mean', 'var', 'std',
+                                       'min', 'max', 'any', 'all'])
+def test_reductions(dtype, reduction):
+    x = (np.random.RandomState(42).rand(11, 11) * 10).astype(dtype)
+    dx = da.from_array(x, chunks=(4, 4))
+    mx = np.ma.masked_greater(x, 5)
+    mdx = da.ma.masked_greater(dx, 5)
+
+    dfunc = getattr(da, reduction)
+    func = getattr(np, reduction)
+
+    assert_eq_ma(dfunc(mdx), func(mx))
+    assert_eq_ma(dfunc(mdx, axis=0), func(mx, axis=0))
+    assert_eq_ma(dfunc(mdx, keepdims=True, split_every=4),
+                 func(mx, keepdims=True))
+    assert_eq_ma(dfunc(mdx, axis=0, split_every=2), func(mx, axis=0))
+    assert_eq_ma(dfunc(mdx, axis=0, keepdims=True, split_every=2),
+                 func(mx, axis=0, keepdims=True))
+    assert_eq_ma(dfunc(mdx, axis=1, split_every=2), func(mx, axis=1))
+    assert_eq_ma(dfunc(mdx, axis=1, keepdims=True, split_every=2),
+                 func(mx, axis=1, keepdims=True))
+
+
+@pytest.mark.parametrize('reduction', ['argmin', 'argmax'])
+def test_arg_reductions(reduction):
+    x = np.random.random((10, 10, 10))
+    dx = da.from_array(x, chunks=(3, 4, 5))
+    mx = np.ma.masked_greater(x, 0.5)
+    dmx = da.ma.masked_greater(dx, 0.5)
+
+    dfunc = getattr(da, reduction)
+    func = getattr(np, reduction)
+
+    assert_eq_ma(dfunc(dmx), func(mx))
+    assert_eq_ma(dfunc(dmx, 0), func(mx, 0))
+    assert_eq_ma(dfunc(dmx, 1), func(mx, 1))
+    assert_eq_ma(dfunc(dmx, 2), func(mx, 2))
+
+
+def test_cumulative():
+    x = np.random.RandomState(0).rand(20, 24, 13)
+    dx = da.from_array(x, chunks=(6, 5, 4))
+    mx = np.ma.masked_greater(x, 0.5)
+    dmx = da.ma.masked_greater(dx, 0.5)
+
+    for axis in [0, 1, 2]:
+        assert_eq_ma(dmx.cumsum(axis=axis), mx.cumsum(axis=axis))
+        assert_eq_ma(dmx.cumprod(axis=axis), mx.cumprod(axis=axis))
