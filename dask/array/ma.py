@@ -138,3 +138,13 @@ def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
 @wraps(np.ma.fix_invalid)
 def fix_invalid(a, mask=False, fill_value=None):
     return map_blocks(np.ma.fix_invalid, a, mask, fill_value=fill_value)
+
+
+@wraps(np.ma.getdata)
+def getdata(a):
+    return a.map_blocks(np.ma.getdata)
+
+
+@wraps(np.ma.getmaskarray)
+def getmaskarray(a):
+    return a.map_blocks(np.ma.getmaskarray)

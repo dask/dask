@@ -41,7 +41,7 @@ functions = [
 @pytest.mark.parametrize('func', functions)
 def test_basic(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
-    x[x < 0.8] = 0
+    x[x < 0.4] = 0
 
     y = da.ma.masked_equal(x, 0)
 
@@ -57,9 +57,9 @@ def test_basic(func):
 
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
-    x[x < 0.8] = 0
+    x[x < 0.4] = 0
     y = da.random.random((4, 3, 2), chunks=(2, 2, 1))
-    y[y < 0.8] = 0
+    y[y < 0.4] = 0
 
     xx = da.ma.masked_equal(x, 0)
     yy = da.ma.masked_equal(y, 0)
@@ -77,7 +77,7 @@ def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     y = da.random.random((2, 3, 4), chunks=(1, 2, 2))
 
-    y[y < 0.8] = 0
+    y[y < 0.4] = 0
     yy = da.ma.masked_equal(y, 0)
 
     d = da.concatenate([x, y], axis=0)
@@ -91,7 +91,7 @@ def test_mixed_concatenate(func):
 @pytest.mark.parametrize('func', functions)
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
-    d[d < 0.7] = 0
+    d[d < 0.4] = 0
 
     fn = lambda x: np.ma.masked_equal(x, 0) if random.random() < 0.5 else x
     s = d.map_blocks(fn)
@@ -104,7 +104,7 @@ def test_mixed_random(func):
 
 def test_mixed_output_type():
     y = da.random.random((10, 10), chunks=(5, 5))
-    y[y < 0.8] = 0
+    y[y < 0.4] = 0
 
     y = da.ma.masked_equal(y, 0)
     x = da.zeros((10, 1), chunks=(5, 1))
@@ -197,8 +197,8 @@ def test_reductions(dtype, reduction):
 def test_arg_reductions(reduction):
     x = np.random.random((10, 10, 10))
     dx = da.from_array(x, chunks=(3, 4, 5))
-    mx = np.ma.masked_greater(x, 0.5)
-    dmx = da.ma.masked_greater(dx, 0.5)
+    mx = np.ma.masked_greater(x, 0.4)
+    dmx = da.ma.masked_greater(dx, 0.4)
 
     dfunc = getattr(da, reduction)
     func = getattr(np, reduction)
@@ -212,9 +212,21 @@ def test_arg_reductions(reduction):
 def test_cumulative():
     x = np.random.RandomState(0).rand(20, 24, 13)
     dx = da.from_array(x, chunks=(6, 5, 4))
-    mx = np.ma.masked_greater(x, 0.5)
-    dmx = da.ma.masked_greater(dx, 0.5)
+    mx = np.ma.masked_greater(x, 0.4)
+    dmx = da.ma.masked_greater(dx, 0.4)
 
     for axis in [0, 1, 2]:
         assert_eq_ma(dmx.cumsum(axis=axis), mx.cumsum(axis=axis))
         assert_eq_ma(dmx.cumprod(axis=axis), mx.cumprod(axis=axis))
+
+
+def test_accessors():
+    x = np.random.random((10, 10, 10))
+    dx = da.from_array(x, chunks=(3, 4, 5))
+    mx = np.ma.masked_greater(x, 0.4)
+    dmx = da.ma.masked_greater(dx, 0.4)
+
+    assert_eq(da.ma.getmaskarray(dmx), np.ma.getmaskarray(mx))
+    assert_eq(da.ma.getmaskarray(dx), np.ma.getmaskarray(x))
+    assert_eq(da.ma.getdata(dmx), np.ma.getdata(mx))
+    assert_eq(da.ma.getdata(dx), np.ma.getdata(x))
