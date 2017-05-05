@@ -63,7 +63,7 @@ pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
 pip install -q git+https://github.com/mrocklin/sparse --upgrade --no-deps
 
-if [[ $PYTHONOPTIMIZE != '2' ]]; then
+if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
     conda install -q -c conda-forge numba cython
     pip install -q git+https://github.com/dask/fastparquet
 fi
@@ -85,3 +85,6 @@ pip install -q \
 
 # Install dask
 pip install -q --no-deps -e .[complete]
+
+# Display fixed versions for debugging
+python -c "import numpy,pandas;print('numpy: %s' % numpy.__version__);print('pandas: %s' % pandas.__version__)"
