@@ -148,3 +148,18 @@ def getdata(a):
 @wraps(np.ma.getmaskarray)
 def getmaskarray(a):
     return a.map_blocks(np.ma.getmaskarray)
+
+
+def _set_fill_value(x, fill_value):
+    if isinstance(x, np.ma.masked_array):
+        x = x.copy()
+        np.ma.set_fill_value(x, fill_value=fill_value)
+    return x
+
+
+@wraps(np.ma.set_fill_value)
+def set_fill_value(a, fill_value):
+    fill_value = np.ma.core._check_fill_value(fill_value, a.dtype)
+    res = a.map_blocks(_set_fill_value, fill_value)
+    a.dask = res.dask
+    a.name = res.name
