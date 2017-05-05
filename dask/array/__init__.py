@@ -32,7 +32,9 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum
-from . import random, linalg, ghost, learn, fft, ma
+with ignoring(ImportError):
+    from . import ma
+from . import random, linalg, ghost, learn, fft
 from .wrap import ones, zeros, empty, full
 from .creation import ones_like, zeros_like, empty_like, full_like
 from .rechunk import rechunk

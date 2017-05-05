@@ -6,6 +6,8 @@ import pytest
 import dask.array as da
 from dask.array.utils import assert_eq
 
+pytest.importorskip("dask.array.ma")
+
 
 functions = [
     lambda x: x,

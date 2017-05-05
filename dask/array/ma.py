@@ -1,10 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps, update_wrapper
+from distutils.version import LooseVersion
 
 import numpy as np
 
 from .core import concatenate_lookup, tensordot_lookup, map_blocks, Array
+
+
+if LooseVersion(np.__version__) < '1.11.0':
+    raise ImportError("dask.array.ma requires numpy >= 1.11.0")
 
 
 @concatenate_lookup.register(np.ma.masked_array)
