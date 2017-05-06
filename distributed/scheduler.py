@@ -445,6 +445,8 @@ class Scheduler(Server):
 
             finalize(self, del_scheduler_file)
 
+        self.loop.add_callback(self.reevaluate_occupancy)
+
         return self.finished()
 
     @gen.coroutine
@@ -3033,6 +3035,80 @@ class Scheduler(Server):
         stack_time = self.occupancy[worker] / self.ncores[worker]
         start_time = comm_bytes / BANDWIDTH + stack_time
         return (start_time, self.worker_bytes[worker])
+
+    ###########
+    # Cleanup #
+    ###########
+
+    @gen.coroutine
+    def reevaluate_occupancy(self):
+        """ Periodically reassess task duration time
+
+        The expected duration of a task can change over time.  Unfortunately we
+        don't have a good constant-time way to propagate the effects of these
+        changes out to the summaries that they affect, like the total expected
+        runtime of each of the workers, or what tasks are stealable.
+
+        In this coroutine we walk through all of the workers and re-align their
+        estimates with the current state of tasks.  We do this periodically
+        rather than at every transition, and we only do it if the scheduler
+        process isn't under load (using psutil.Process.cpu_percent()).  This
+        lets us avoid this fringe optimization when we have better things to
+        think about.
+        """
+        with log_errors():
+            import psutil
+            proc = psutil.Process()
+            last = time()
+            while self.status != 'closed':
+                yield gen.sleep(0.100)
+                while not self.rprocessing:
+                    yield gen.sleep(0.100)
+                    last = time()
+
+                for w, processing in list(self.processing.items()):
+                    while proc.cpu_percent() > 50:
+                        yield gen.sleep(0.100)
+                        last = time()
+
+                    if w not in self.workers or not processing:
+                        continue
+
+                    self._reevaluate_occupancy_worker(w)
+
+                    duration = time() - last
+                    if duration > 0.005:  # 5ms since last release
+                        yield gen.sleep(duration * 5)  # 25ms gap
+                        last = time()
+
+    def _reevaluate_occupancy_worker(self, worker):
+        """ See reevaluate_occupancy """
+        w = worker
+        processing = self.processing[w]
+        if not processing or w not in self.workers or self.status == 'closed':
+            return
+        old = self.occupancy[w]
+
+        new = 0
+        nbytes = 0
+        for key in processing:
+            duration = self.task_duration.get(key_split(key), 0.5)
+            processing[key] = duration
+            new += duration
+            for dep in self.dependencies[key]:
+                if dep not in self.has_what[w]:
+                    nbytes += self.nbytes.get(key, 0)
+
+        comm = nbytes / BANDWIDTH
+        self.occupancy[w] = max(new, comm)  # These overlap. Take maximum
+        self.total_occupancy += new - old
+        self.check_idle_saturated(w)
+
+        if new > old * 1.3:  # significant increase in duration
+            steal = self.extensions['stealing']
+            for key in processing:
+                steal.remove_key_from_stealable(key)
+                steal.put_key_in_stealable(key)
 
 
 def decide_worker(dependencies, occupancy, who_has, valid_workers,
