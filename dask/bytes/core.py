@@ -385,6 +385,9 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
 
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         errors='strict', num=1, name_function=None, **kwargs):
+    if hasattr(urlpath, 'name'):
+        # pathlib.Path object
+        urlpath = str(urlpath)
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
                                  encoding=encoding, errors=errors, **kwargs)
