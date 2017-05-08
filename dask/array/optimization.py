@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import getitem
-from itertools import zip_longest
 
 import numpy as np
 
 from .core import getarray, getarray_nofancy, getarray_inline
 from ..context import defer_to_globals
+from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimize import cull, fuse, inline_functions, dont_optimize
 from ..utils import ensure_dict
