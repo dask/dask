@@ -254,7 +254,8 @@ class OpenFileCreator(object):
         self.text = text
         self.encoding = encoding
         self.errors = errors
-        self.storage_options = infer_storage_options(urlpath, inherit_storage_options=kwargs)
+        self.storage_options = infer_storage_options(
+            urlpath, inherit_storage_options=kwargs)
         self.protocol = self.storage_options.pop('protocol')
         ensure_protocol(self.protocol)
         try:
@@ -386,7 +387,7 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         errors='strict', num=1, name_function=None, **kwargs):
     if hasattr(urlpath, 'name'):
-        # pathlib.Path object
+        # deal with pathlib.Path objects - must be local
         urlpath = str(urlpath)
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,

@@ -70,12 +70,15 @@ def test_with_urls():
         assert sum(map(len, values)) == len(files)
 
 
-def test_with_Paths():
+def test_with_paths():
     pathlib = pytest.importorskip('pathlib')
     with filetexts(files, mode='b'):
         url = pathlib.Path('./.test.accounts.*')
         sample, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
+    with pytest.raises(OSError):
+        url = pathlib.Path('file://.test.accounts.*')
+        read_bytes(url, blocksize=None)
 
 
 def test_read_bytes_block():
