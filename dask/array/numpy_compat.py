@@ -34,6 +34,7 @@ try:
             raise TypeError('Divide not working with dtype: '
                             'https://github.com/numpy/numpy/issues/3484')
         divide = np.divide
+        ma_divide = np.ma.divide
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
@@ -46,6 +47,10 @@ except TypeError:
         if dtype is not None:
             x = x.astype(dtype)
         return x
+
+    ma_divide = np.ma.core._DomainedBinaryOperation(divide,
+                                                    np.ma.core._DomainSafeDivide(),
+                                                    0, 1)
 
 # functions copied from numpy
 try:

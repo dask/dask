@@ -12,12 +12,32 @@ from . import chunk
 from .core import _concatenate2, Array, atop, lol_tuples, handle_out
 from .ufunc import sqrt
 from .wrap import zeros, ones
-from .numpy_compat import divide
+from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..context import _globals
-from ..utils import ignoring, funcname
+from ..utils import ignoring, funcname, Dispatch
 from .. import sharedict
+
+
+# Generic functions to support chunks of different types
+empty_lookup = Dispatch('empty')
+empty_lookup.register((object, np.ndarray), np.empty)
+empty_lookup.register(np.ma.masked_array, np.ma.empty)
+divide_lookup = Dispatch('divide')
+divide_lookup.register((object, np.ndarray), np_divide)
+divide_lookup.register(np.ma.masked_array, ma_divide)
+
+
+def divide(a, b, dtype=None):
+    key = lambda x: getattr(x, '__array_priority__', float('-inf'))
+    f = divide_lookup.dispatch(type(builtins.max(a, b, key=key)))
+    return f(a, b, dtype=dtype)
+
+
+def empty_of_type(obj, *args, **kwargs):
+    """Create an empty array with of the same cls as `obj`"""
+    return empty_lookup.dispatch(type(obj))(*args, **kwargs)
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
@@ -119,19 +139,6 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
     return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)
-
-
-def empty_type_of(x):
-    return np.ma.empty if isinstance(x, np.ma.masked_array) else np.empty
-
-
-def maybe_ma_divide(x1, x2, dtype=None):
-    if isinstance(x1, np.ma.masked_array) or isinstance(x2, np.ma.masked_array):
-        x = np.ma.divide(x1, x2)
-        if dtype is not None:
-            x = x.astype(dtype)
-        return x
-    return divide(x1, x2, dtype=dtype)
 
 
 @wraps(chunk.sum)
@@ -238,9 +245,8 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    empty = empty_type_of(n)
-    result = empty(shape=n.shape,
-                   dtype=[('total', total.dtype), ('n', n.dtype)])
+    result = empty_of_type(n, shape=n.shape,
+                           dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
@@ -249,16 +255,15 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
 def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = sum(pair['n'], **kwargs)
     total = sum(pair['total'], **kwargs)
-    empty = empty_type_of(n)
-    result = empty(shape=n.shape, dtype=pair.dtype)
+    result = empty_of_type(n, shape=n.shape, dtype=pair.dtype)
     result['n'] = n
     result['total'] = total
     return result
 
 
 def mean_agg(pair, dtype='f8', **kwargs):
-    return maybe_ma_divide(pair['total'].sum(dtype=dtype, **kwargs),
-                           pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
+    return divide(pair['total'].sum(dtype=dtype, **kwargs),
+                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -292,13 +297,13 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
     n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    empty = empty_type_of(n)
-    M = empty(shape=n.shape + (order - 1,), dtype=dtype)
+    M = empty_of_type(n, shape=n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
         M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
-    result = empty(shape=n.shape, dtype=[('total', total.dtype),
-                                         ('n', n.dtype),
-                                         ('M', M.dtype, (order - 1,))])
+    result = empty_of_type(n, shape=n.shape,
+                           dtype=[('total', total.dtype),
+                                  ('n', n.dtype),
+                                  ('M', M.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -322,17 +327,17 @@ def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     Ms = data['M']
     total = totals.sum(**kwargs)
     n = sum(ns, **kwargs)
-    mu = maybe_ma_divide(total, n, dtype=dtype)
-    inner_term = maybe_ma_divide(totals, ns, dtype=dtype) - mu
-    empty = empty_type_of(n)
-    M = empty(shape=n.shape + (order - 1,), dtype=dtype)
+    mu = divide(total, n, dtype=dtype)
+    inner_term = divide(totals, ns, dtype=dtype) - mu
+    M = empty_of_type(n, shape=n.shape + (order - 1,), dtype=dtype)
 
     for o in range(2, order + 1):
         M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
 
-    result = empty(shape=n.shape, dtype=[('total', total.dtype),
-                                         ('n', n.dtype),
-                                         ('M', Ms.dtype, (order - 1,))])
+    result = empty_of_type(n, shape=n.shape,
+                           dtype=[('total', total.dtype),
+                                  ('n', n.dtype),
+                                  ('M', Ms.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -351,11 +356,11 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     keepdim_kw['keepdims'] = True
 
     n = sum(ns, **keepdim_kw)
-    mu = maybe_ma_divide(totals.sum(**keepdim_kw), n, dtype=dtype)
-    inner_term = maybe_ma_divide(totals, ns, dtype=dtype) - mu
+    mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
+    inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, kwargs)
-    return maybe_ma_divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
+    return divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
