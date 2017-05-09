@@ -37,10 +37,22 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
 # http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 # math operations
+add = wrap_elemwise(np.add)
+subtract = wrap_elemwise(np.subtract)
+multiply = wrap_elemwise(np.multiply)
+divide = wrap_elemwise(np.divide)
 logaddexp = wrap_elemwise(np.logaddexp)
 logaddexp2 = wrap_elemwise(np.logaddexp2)
+true_divide = wrap_elemwise(np.true_divide)
+floor_divide = wrap_elemwise(np.floor_divide)
+negative = wrap_elemwise(np.negative)
+power = wrap_elemwise(np.power)
+remainder = wrap_elemwise(np.remainder)
+mod = wrap_elemwise(np.mod)
+# fmod: see below
 conj = wrap_elemwise(np.conj)
 exp = wrap_elemwise(np.exp)
+exp2 = wrap_elemwise(np.exp2)
 log = wrap_elemwise(np.log)
 log2 = wrap_elemwise(np.log2)
 log10 = wrap_elemwise(np.log10)
@@ -48,6 +60,8 @@ log1p = wrap_elemwise(np.log1p)
 expm1 = wrap_elemwise(np.expm1)
 sqrt = wrap_elemwise(np.sqrt)
 square = wrap_elemwise(np.square)
+cbrt = wrap_elemwise(np.cbrt)
+reciprocal = wrap_elemwise(np.reciprocal)
 
 # trigonometric functions
 sin = wrap_elemwise(np.sin)
@@ -68,6 +82,12 @@ deg2rad = wrap_elemwise(np.deg2rad)
 rad2deg = wrap_elemwise(np.rad2deg)
 
 # comparison functions
+greater = wrap_elemwise(np.greater)
+greater_equal = wrap_elemwise(np.greater_equal)
+less = wrap_elemwise(np.less)
+less_equal = wrap_elemwise(np.less_equal)
+not_equal = wrap_elemwise(np.not_equal)
+equal = wrap_elemwise(np.equal)
 logical_and = wrap_elemwise(np.logical_and)
 logical_or = wrap_elemwise(np.logical_or)
 logical_xor = wrap_elemwise(np.logical_xor)
@@ -86,6 +106,7 @@ isnan = wrap_elemwise(np.isnan)
 signbit = wrap_elemwise(np.signbit)
 copysign = wrap_elemwise(np.copysign)
 nextafter = wrap_elemwise(np.nextafter)
+spacing = wrap_elemwise(np.spacing)
 # modf: see below
 ldexp = wrap_elemwise(np.ldexp)
 # frexp: see below
@@ -110,6 +131,11 @@ clip = wrap_elemwise(np.clip)
 fabs = wrap_elemwise(np.fabs)
 sign = wrap_elemwise(np.sign)
 absolute = wrap_elemwise(np.absolute)
+
+i0 = wrap_elemwise(np.i0)
+sinc = wrap_elemwise(np.sinc)
+
+nan_to_num = wrap_elemwise(np.nan_to_num)
 
 
 def frexp(x):
