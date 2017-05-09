@@ -19,13 +19,14 @@ def test_ufunc_meta():
 
 
 @pytest.mark.parametrize('ufunc',
-                         ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
-                          'expm1', 'sqrt', 'square', 'sin', 'cos', 'tan',
-                          'arctan', 'sinh', 'cosh', 'tanh',
+                         ['conj', 'exp', 'exp2', 'log', 'log2', 'log10',
+                          'log1p', 'expm1', 'sqrt', 'cbrt', 'square', 'sin',
+                          'cos', 'tan', 'arctan', 'sinh', 'cosh', 'tanh',
                           'arcsinh', 'arccosh', 'deg2rad', 'rad2deg',
-                          'isfinite', 'isinf', 'isnan', 'signbit',
-                          'degrees', 'radians', 'rint', 'fabs', 'sign', 'absolute',
-                          'floor', 'ceil', 'trunc', 'logical_not'])
+                          'isfinite', 'isinf', 'isnan', 'signbit', 'i0',
+                          'reciprocal', 'degrees', 'radians', 'rint', 'fabs',
+                          'sign', 'absolute', 'floor', 'ceil', 'trunc',
+                          'logical_not', 'spacing', 'sinc', 'nan_to_num'])
 def test_ufunc(ufunc):
 
     dafunc = getattr(da, ufunc)
@@ -47,11 +48,15 @@ def test_ufunc(ufunc):
     assert_eq(dafunc(arr), npfunc(arr))
 
 
-@pytest.mark.parametrize('ufunc', ['logaddexp', 'logaddexp2', 'arctan2',
+@pytest.mark.parametrize('ufunc', ['add', 'subtract', 'multiply', 'divide',
+                                   'true_divide', 'floor_divide', 'power',
+                                   'remainder', 'mod', 'fmax', 'fmin',
+                                   'logaddexp', 'logaddexp2', 'arctan2',
                                    'hypot', 'copysign', 'nextafter', 'ldexp',
                                    'fmod', 'logical_and', 'logical_or',
                                    'logical_xor', 'maximum', 'minimum',
-                                   'fmax', 'fmin'])
+                                   'greater', 'greater_equal', 'less',
+                                   'less_equal', 'not_equal', 'equal'])
 def test_ufunc_2args(ufunc):
 
     dafunc = getattr(da, ufunc)
