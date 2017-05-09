@@ -1005,10 +1005,6 @@ def test_repr():
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
-    # Empty array
-    d = da.Array({}, 'd', ((), (3, 4)), dtype='i8')
-    assert str(d.shape) in repr(d)
-    assert str(d.dtype) in repr(d)
 
 
 def test_slicing_with_ellipsis():
@@ -2917,15 +2913,15 @@ def test_zero_sized_array_rechunk():
 def test_atop_zero_shape():
     da.atop(lambda x: x, 'i',
             da.arange(10, chunks=10), 'i',
-            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((),)), 'a',
+            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((0,),)), 'a',
             dtype='float64')
 
 
 def test_atop_zero_shape_new_axes():
     da.atop(lambda x: np.ones(42), 'i',
-            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((),)), 'a',
+            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((0,),)), 'a',
             dtype='float64', new_axes={'i': 42})
 
 
