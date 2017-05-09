@@ -420,6 +420,15 @@ def test_multiple_list_slicing():
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
+def test_empty_list():
+    x = np.ones((5, 5, 5), dtype='i4')
+    dx = da.from_array(x, chunks=2)
+
+    assert_eq(dx[[], :3, :2], x[[], :3, :2])
+    assert_eq(dx[:3, [], :2], x[:3, [], :2])
+    assert_eq(dx[:3, :2, []], x[:3, :2, []])
+
+
 def test_uneven_chunks():
     assert da.ones(20, chunks=5)[::2].chunks == ((3, 2, 3, 2),)
 
