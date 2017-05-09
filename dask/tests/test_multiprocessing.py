@@ -9,7 +9,7 @@ import pytest
 
 from dask import compute, delayed
 from dask.context import set_options
-from dask.multiprocessing import get, _dumps, _loads
+from dask.multiprocessing import get, _dumps, _loads, remote_exception
 from dask.utils_test import inc
 
 
@@ -35,6 +35,18 @@ def test_errors_propagate():
     except Exception as e:
         assert isinstance(e, ValueError)
         assert "12345" in str(e)
+
+
+def test_remote_exception():
+    e = TypeError("hello")
+    a = remote_exception(e, 'traceback-body')
+    b = remote_exception(e, 'traceback-body')
+
+    assert type(a) == type(b)
+    assert isinstance(a, TypeError)
+    assert 'hello' in str(a)
+    assert 'Traceback' in str(a)
+    assert 'traceback-body' in str(a)
 
 
 def make_bad_result():

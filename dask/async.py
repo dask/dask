@@ -116,9 +116,8 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
-import traceback
 
-from .compatibility import Queue, Empty
+from .compatibility import Queue, Empty, reraise
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from .context import _globals
@@ -278,7 +277,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task_info, dumps, loads, get_id, raise_on_exception=False):
+def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
     """
     Compute task and handle all administration
 
@@ -290,21 +289,12 @@ def execute_task(key, task_info, dumps, loads, get_id, raise_on_exception=False)
         task, data = loads(task_info)
         result = _execute_task(task, data)
         id = get_id()
-        result = dumps((result, None, id))
+        result = dumps((result, id))
+        failed = False
     except BaseException as e:
-        if raise_on_exception:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = ''.join(traceback.format_tb(exc_traceback))
-        try:
-            result = dumps((e, tb, None))
-        except BaseException as e:
-            if raise_on_exception:
-                raise
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            tb = ''.join(traceback.format_tb(exc_traceback))
-            result = dumps((e, tb, None))
-    return key, result
+        result = pack_exception(e, dumps)
+        failed = True
+    return key, result, failed
 
 
 def release_data(key, state, delete=True):
@@ -380,6 +370,10 @@ def default_get_id():
     return None
 
 
+def default_pack_exception(e, dumps):
+    raise
+
+
 def identity(x):
     """ Identity function. Returns x.
 
@@ -409,10 +403,9 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              get_id=default_get_id, raise_on_exception=False,
-              rerun_exceptions_locally=None, callbacks=None,
-              dumps=identity, loads=identity,
-              **kwargs):
+              get_id=default_get_id, rerun_exceptions_locally=None,
+              pack_exception=default_pack_exception, raise_exception=reraise,
+              callbacks=None, dumps=identity, loads=identity, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -422,12 +415,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     Parameters
     ----------
-
     apply_async : function
         Asynchronous apply function as found on Pool or ThreadPool
     num_workers : int
         The number of active tasks we should have at any one time
-    dsk: dict
+    dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
         Keys corresponding to desired data
@@ -439,6 +431,12 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
+    pack_exception : callable, optional
+        Function to take an exception and ``dumps`` method, and return a
+        serialized tuple of ``(exception, traceback)`` to send back to the
+        scheduler. Default is to just raise the exception.
+    raise_exception : callable, optional
+        Function that takes an exception and a traceback, and raises an error.
     dumps: callable, optional
         Function to serialize task data and results to communicate between
         worker and parent.  Defaults to identity.
@@ -451,7 +449,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     See Also
     --------
-
     threaded.get
     """
     queue = Queue()
@@ -504,7 +501,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             # Submit
             apply_async(execute_task,
                         args=(key, dumps((dsk[key], data)),
-                              dumps, loads, get_id, raise_on_exception),
+                              dumps, loads, get_id, pack_exception),
                         callback=queue.put)
 
         # Seed initial tasks into the thread pool
@@ -513,16 +510,17 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
-            key, res_info = queue_get(queue)
-            res, tb, worker_id = loads(res_info)
-            if isinstance(res, BaseException):
+            key, res_info, failed = queue_get(queue)
+            if failed:
+                exc, tb = loads(res_info)
                 if rerun_exceptions_locally:
                     data = dict((dep, state['cache'][dep])
                                 for dep in get_dependencies(dsk, key))
                     task = dsk[key]
                     _execute_task(task, data)  # Re-execute locally
                 else:
-                    raise(remote_exception(res, tb))
+                    raise_exception(exc, tb)
+            res, worker_id = loads(res_info)
             state['cache'][key] = res
             finish_task(dsk, key, state, results, keyorder.get)
             for f in posttask_cbs:
@@ -565,8 +563,7 @@ def get_sync(dsk, keys, **kwargs):
     Can be useful for debugging.
     """
     kwargs.pop('num_workers', None)    # if num_workers present, remove it
-    return get_async(apply_sync, 1, dsk, keys,
-                     raise_on_exception=True, **kwargs)
+    return get_async(apply_sync, 1, dsk, keys, **kwargs)
 
 
 def sortkey(item):
@@ -585,61 +582,3 @@ def sortkey(item):
     ('tuple', ('x', 1))
     """
     return (type(item).__name__, item)
-
-
-"""
-Remote Exceptions
------------------
-
-We want the following behaviors from remote exceptions
-
-1.  Include the original error message
-2.  Respond to try-except blocks with original error type
-3.  Include remote traceback
-"""
-
-
-class RemoteException(Exception):
-    """ Remote Exception
-
-    Contains the exception and traceback from a remotely run task
-    """
-    def __init__(self, exception, traceback):
-        self.exception = exception
-        self.traceback = traceback
-
-    def __str__(self):
-        return (str(self.exception) + "\n\n"
-                "Traceback\n"
-                "---------\n" +
-                self.traceback)
-
-    def __dir__(self):
-        return sorted(set(dir(type(self)) +
-                      list(self.__dict__) +
-                      dir(self.exception)))
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            return getattr(self.exception, key)
-
-
-exceptions = dict()
-
-
-def remote_exception(exc, tb):
-    """ Metaclass that wraps exception type in RemoteException """
-    if type(exc) in exceptions:
-        typ = exceptions[type(exc)]
-        return typ(exc, tb)
-    else:
-        try:
-            typ = type(exc.__class__.__name__,
-                       (RemoteException, type(exc)),
-                       {'exception_type': type(exc)})
-            exceptions[type(exc)] = typ
-            return typ(exc, tb)
-        except TypeError:
-            return exc
