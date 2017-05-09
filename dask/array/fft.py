@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import wraps
 import inspect
 
 import numpy as np
@@ -9,6 +10,9 @@ try:
     import scipy.fftpack
 except ImportError:
     scipy = None
+
+from .creation import linspace as _linspace
+from .core import concatenate as _concatenate
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -211,3 +215,15 @@ irfft2 = fft_wrap(np.fft.irfft2, dtype=np.float_)
 irfftn = fft_wrap(np.fft.irfftn, dtype=np.float_)
 hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
 ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
+
+
+@wraps(np.fft.fftfreq)
+def fftfreq(n, d=1.0, chunks=None):
+    n_1 = n + 1
+    n_2 = n_1 // 2
+
+    l = _linspace(0, 1, n_1, chunks=chunks)
+    r = _concatenate([l[:n_2], l[n_2:-1] - 1])
+    r /= d
+
+    return r
