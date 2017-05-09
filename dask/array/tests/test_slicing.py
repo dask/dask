@@ -549,3 +549,9 @@ def test_None_overlap_int():
 
 def test_negative_n_slicing():
     assert_eq(da.ones(2, chunks=2)[-2], np.ones(2)[-2])
+
+
+def test_negative_list_slicing():
+    x = np.arange(5)
+    dx = da.from_array(x, chunks=2)
+    assert_eq(dx[[0, -5]], x[[0, -5]])
