@@ -195,3 +195,9 @@ def test_wrap_fftns(modname, funcname, dtype):
         wfunc(darr2c, (darr2c.shape[0] - 1, darr2c.shape[1] - 1), (0, 1)),
         func(nparrc, (nparrc.shape[0] - 1, nparrc.shape[1] - 1), (0, 1))
     )
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 6, 7])
+@pytest.mark.parametrize("d", [1.0, 0.5, 2 * np.pi])
+def test_fftfreq(n, d):
+    assert_eq(da.fft.fftfreq(n, d, chunks=n), np.fft.fftfreq(n, d))
