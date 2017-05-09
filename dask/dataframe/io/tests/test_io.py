@@ -13,7 +13,7 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
 from dask.utils import tmpfile
-from dask.scheduler import get_sync
+from dask.local import get_sync
 
 from dask.dataframe.utils import assert_eq
 

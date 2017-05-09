@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from .core import istask
 from .context import set_options
-from .scheduler import get_sync as get
+from .local import get_sync as get
 try:
     from .delayed import do, delayed
 except ImportError:

@@ -1,5 +1,5 @@
 from dask.cache import Cache
-from dask.scheduler import get_sync
+from dask.local import get_sync
 from dask.threaded import get
 from operator import add
 from dask.context import _globals

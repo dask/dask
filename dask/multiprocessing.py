@@ -5,7 +5,7 @@ import traceback
 import pickle
 import sys
 
-from .scheduler import get_async  # TODO: get better get
+from .local import get_async  # TODO: get better get
 from .context import _globals
 from .optimize import fuse, cull
 

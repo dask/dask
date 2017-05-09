@@ -7,7 +7,6 @@ import pandas.util.testing as tm
 import pytest
 
 import dask
-from dask.scheduler import get_sync
 import dask.dataframe as dd
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories
@@ -198,7 +197,7 @@ def test_categorical_set_index(shuffle):
     df['y'] = df.y.astype('category', ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.set_options(get=get_sync, shuffle=shuffle):
+    with dask.set_options(get=dask.get, shuffle=shuffle):
         b = a.set_index('y', npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']

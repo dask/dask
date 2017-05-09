@@ -143,7 +143,7 @@ def test_groupby_dir():
     assert 'b c d e' not in dir(g)
 
 
-@pytest.mark.parametrize('get', [dask.scheduler.get_sync, dask.threaded.get])
+@pytest.mark.parametrize('get', [dask.get, dask.threaded.get])
 def test_groupby_on_index(get):
     pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},

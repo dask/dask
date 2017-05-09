@@ -67,12 +67,12 @@ def test_futures_to_delayed_array(loop):
 
 @gen_cluster(client=True)
 def test_local_get_with_distributed_active(c, s, a, b):
-    with dask.set_options(get=dask.scheduler.get_sync):
+    with dask.set_options(get=dask.get):
         x = delayed(inc)(1).persist()
     yield gen.sleep(0.01)
     assert not s.task_state # scheduler hasn't done anything
 
-    y = delayed(inc)(2).persist(get=dask.scheduler.get_sync)
+    y = delayed(inc)(2).persist(get=dask.get)
     yield gen.sleep(0.01)
     assert not s.task_state # scheduler hasn't done anything
 

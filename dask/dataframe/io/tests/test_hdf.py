@@ -313,7 +313,7 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, '/data_*_*')
 
 
-@pytest.mark.parametrize('get', [dask.scheduler.get_sync,
+@pytest.mark.parametrize('get', [dask.get,
                                  dask.threaded.get,
                                  dask.multiprocessing.get])
 @pytest.mark.parametrize('npartitions', [1, 4, 10])

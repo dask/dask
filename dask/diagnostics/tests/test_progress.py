@@ -2,7 +2,7 @@ from operator import add, mul
 
 import pytest
 
-from dask.scheduler import get_sync
+from dask.local import get_sync
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
 from dask.threaded import get as get_threaded

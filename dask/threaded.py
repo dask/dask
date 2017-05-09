@@ -11,7 +11,7 @@ from multiprocessing.pool import ThreadPool
 import threading
 from threading import current_thread, Lock
 
-from .scheduler import get_async
+from .local import get_async
 from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 

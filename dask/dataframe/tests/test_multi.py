@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from dask.scheduler import get_sync
+from dask.local import get_sync
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,

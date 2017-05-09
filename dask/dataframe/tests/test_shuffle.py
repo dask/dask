@@ -16,9 +16,8 @@ from dask.dataframe.shuffle import (shuffle,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd)
-
-from dask.scheduler import get_sync
 from dask.dataframe.utils import assert_eq, make_meta
+
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
                               index=[0, 1, 3]),
@@ -40,8 +39,8 @@ def test_shuffle(shuffle):
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == d.npartitions
 
-    x = get_sync(s.dask, (s._name, 0))
-    y = get_sync(s.dask, (s._name, 1))
+    x = dask.get(s.dask, (s._name, 0))
+    y = dask.get(s.dask, (s._name, 1))
 
     assert not (set(x.b) & set(y.b))  # disjoint
     assert set(s.dask).issuperset(d.dask)
@@ -57,7 +56,7 @@ def test_shuffle_npartitions_task():
     df = pd.DataFrame({'x': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle='tasks', npartitions=17, max_branch=4)
-    sc = s.compute(get=get_sync)
+    sc = s.compute(get=dask.get)
     assert s.npartitions == 17
     assert set(s.dask).issuperset(set(ddf.dask))
 
@@ -91,7 +90,7 @@ def test_shuffle_from_one_partition_to_one_other(method):
 
     for i in [1, 2]:
         b = shuffle(a, 'x', npartitions=i, shuffle=method)
-        assert len(a.compute(get=get_sync)) == len(b.compute(get=get_sync))
+        assert len(a.compute(get=dask.get)) == len(b.compute(get=dask.get))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -214,7 +213,7 @@ def test_set_index_tasks_2(shuffle):
         freq='2H', partition_freq='1M', seed=1)
 
     df2 = df.set_index('name', shuffle=shuffle)
-    df2.value.sum().compute(get=get_sync)
+    df2.value.sum().compute(get=dask.get)
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -305,7 +304,7 @@ def test_set_index_divisions_2():
     result = ddf.set_index('y', divisions=['a', 'c', 'd'])
     assert result.divisions == ('a', 'c', 'd')
 
-    assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
+    assert list(result.compute(get=dask.get).index[-2:]) == ['d', 'd']
 
 
 def test_set_index_divisions_compute():

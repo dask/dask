@@ -8,7 +8,7 @@ functionality to aid in profiling and inspecting dask graph execution.
 Scheduler Callbacks
 -------------------
 
-Schedulers based on ``dask.scheduler.get_async`` (currently
+Schedulers based on ``dask.local.get_async`` (currently
 ``dask.get``, ``dask.threaded.get``, and ``dask.multiprocessing.get``)
 accept five callbacks, allowing for inspection of scheduler execution.
 
