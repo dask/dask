@@ -7,10 +7,10 @@ The asynchronous scheduler requires an ``apply_async`` function and a
 
 *  ``multithreading.Pool().apply_async`` - uses multiple processes
 *  ``multithreading.pool.ThreadPool().apply_async`` - uses multiple threads
-*  ``dask.async.apply_sync`` - uses only the main thread (useful for debugging)
+*  ``dask.scheduler.apply_sync`` - uses only the main thread (useful for debugging)
 
 Full dask ``get`` functions exist in each of ``dask.threaded.get``,
-``dask.multiprocessing.get`` and ``dask.async.get_sync`` respectively.
+``dask.multiprocessing.get`` and ``dask.get`` respectively.
 
 
 Policy

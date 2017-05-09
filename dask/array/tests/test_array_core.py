@@ -18,7 +18,7 @@ import dask
 import dask.array as da
 from dask.base import tokenize
 from dask.delayed import delayed
-from dask.async import get_sync
+from dask.scheduler import get_sync
 from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 

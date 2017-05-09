@@ -9,7 +9,7 @@ from warnings import warn
 import pandas as pd
 from toolz import merge
 
-from ...async import get_sync
+from ...scheduler import get_sync
 from ...base import tokenize
 from ...compatibility import PY3
 from ...context import _globals

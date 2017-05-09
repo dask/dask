@@ -15,7 +15,7 @@ import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
-from dask.async import get_sync
+from dask.scheduler import get_sync
 from dask.compatibility import BZ2File, GzipFile, PY2
 from dask.utils import filetexts, tmpfile, tmpdir, open
 from dask.utils_test import inc, add
@@ -1088,7 +1088,7 @@ def test_bag_picklable():
 
 def test_msgpack_unicode():
     b = db.from_sequence([{"a": 1}]).groupby("a")
-    result = b.compute(get=dask.async.get_sync)
+    result = b.compute(get=dask.scheduler.get_sync)
     assert dict(result) == {1: [{'a': 1}]}
 
 

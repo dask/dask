@@ -17,7 +17,7 @@ from dask.dataframe.shuffle import (shuffle,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd)
 
-from dask.async import get_sync
+from dask.scheduler import get_sync
 from dask.dataframe.utils import assert_eq, make_meta
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},

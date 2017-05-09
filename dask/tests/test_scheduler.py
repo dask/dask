@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import dask
 
-from dask.async import start_state_from_dask, get_sync, finish_task, sortkey
+from dask.scheduler import start_state_from_dask, get_sync, finish_task, sortkey
 from dask.order import order
 from dask.utils_test import GetFunctionTestMixin, inc, add
 

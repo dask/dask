@@ -319,7 +319,7 @@ def test_compute_array_bag():
 
     pytest.raises(ValueError, lambda: compute(x, b))
 
-    xx, bb = compute(x, b, get=dask.async.get_sync)
+    xx, bb = compute(x, b, get=dask.scheduler.get_sync)
     assert np.allclose(xx, np.arange(5))
     assert bb == [1, 2, 3]
 
@@ -445,7 +445,7 @@ def test_persist_array_bag():
     with pytest.raises(ValueError):
         persist(x, b)
 
-    xx, bb = persist(x, b, get=dask.async.get_sync)
+    xx, bb = persist(x, b, get=dask.scheduler.get_sync)
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)

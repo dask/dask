@@ -14,7 +14,7 @@ from toolz import partition_all, valmap
 import pandas.util.testing as tm
 
 import dask
-from dask.async import get_sync
+from dask.scheduler import get_sync
 
 import dask.dataframe as dd
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,

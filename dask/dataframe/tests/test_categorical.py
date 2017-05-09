@@ -7,7 +7,7 @@ import pandas.util.testing as tm
 import pytest
 
 import dask
-from dask.async import get_sync
+from dask.scheduler import get_sync
 import dask.dataframe as dd
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import make_meta, assert_eq, is_categorical_dtype, clear_known_categories

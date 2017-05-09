@@ -8,7 +8,7 @@ import pandas.util.testing as tm
 import pytest
 
 import dask
-import dask.async
+import dask.scheduler
 from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet

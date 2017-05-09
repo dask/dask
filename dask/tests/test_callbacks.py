@@ -1,4 +1,4 @@
-from dask.async import get_sync
+from dask.scheduler import get_sync
 from dask.threaded import get as get_threaded
 from dask.callbacks import Callback
 

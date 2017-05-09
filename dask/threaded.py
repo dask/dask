@@ -1,7 +1,7 @@
 """
 A threaded shared-memory scheduler
 
-See async.py
+See scheduler.py
 """
 from __future__ import absolute_import, division, print_function
 
@@ -11,7 +11,7 @@ from multiprocessing.pool import ThreadPool
 import threading
 from threading import current_thread, Lock
 
-from .async import get_async
+from .scheduler import get_async
 from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 

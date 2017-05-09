@@ -18,7 +18,7 @@ from pandas.api.types import is_categorical_dtype, is_scalar
 import toolz
 
 from ..core import get_deps
-from ..async import get_sync
+from ..scheduler import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
