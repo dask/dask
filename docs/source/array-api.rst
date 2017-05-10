@@ -160,6 +160,10 @@ Fast Fourier Transforms
    fft.irfftn
    fft.hfft
    fft.ihfft
+   fft.fftfreq
+   fft.rfftfreq
+   fft.fftshift
+   fft.ifftshift
 
 Linear Algebra
 ~~~~~~~~~~~~~~
@@ -444,6 +448,10 @@ Other functions
 .. autofunction:: irfftn
 .. autofunction:: hfft
 .. autofunction:: ihfft
+.. autofunction:: fftfreq
+.. autofunction:: rfftfreq
+.. autofunction:: fftshift
+.. autofunction:: ifftshift
 
 .. currentmodule:: dask.array.random
 
