@@ -722,15 +722,17 @@ class Bag(Base):
             split_every = 8
         if split_every is False:
             split_every = self.npartitions
+
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         is_last = self.npartitions == 1
-        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i), is_last))
-                   for i in range(self.npartitions))
+        dsk = {(a, i): (empty_safe_apply, perpartition, (self.name, i), is_last)
+               for i in range(self.npartitions)}
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
+
         while k > 1:
             c = fmt + str(depth)
             is_last = k <= split_every
@@ -743,8 +745,15 @@ class Bag(Base):
             b = c
             depth += 1
 
+        if self.npartitions == 1:
+            dsk[(a, 0)] = (aggregate, [dsk[(a, 0)]])
+
         if not self.npartitions:
-            return Item({b: (aggregate, [])}, b)
+            task = (aggregate, [])
+            if out_type is Item:
+                return Item({b: task}, b)
+            else:
+                return Bag({(b, 0): task}, b, 1)
 
         if out_type is Item:
             dsk[b] = dsk.pop((b, 0))

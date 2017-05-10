@@ -229,8 +229,9 @@ def test_topk():
     assert b.topk(4).name == b.topk(4).name
 
 
-def test_topk_with_non_callable_key():
-    b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=2)
+@pytest.mark.parametrize('npartitions', [1, 2])
+def test_topk_with_non_callable_key(npartitions):
+    b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=npartitions)
     assert list(b.topk(2, key=1)) == [(1, 10), (2, 9)]
     assert list(b.topk(2, key=0)) == [(3, 8), (2, 9)]
     assert b.topk(2, key=1).name == b.topk(2, key=1).name
@@ -285,15 +286,20 @@ def test_tree_reductions():
     assert c.key != b.sum().key
 
 
-def test_mean():
-    assert b.mean().compute(get=dask.get) == 2.0
-    assert float(b.mean()) == 2.0
+@pytest.mark.parametrize('npartitions', [1, 3, 4])
+def test_aggregation(npartitions):
+    L = list(range(15))
+    b = db.range(15, npartitions=npartitions)
+    assert b.mean().compute(get=dask.get) == sum(L) / len(L)
+    assert b.sum().compute(get=dask.get) == sum(L)
+    assert b.count().compute(get=dask.get) == len(L)
 
 
-def test_non_splittable_reductions():
+@pytest.mark.parametrize('npartitions', [1, 10])
+def test_non_splittable_reductions(npartitions):
     np = pytest.importorskip('numpy')
     data = list(range(100))
-    c = db.from_sequence(data, npartitions=10)
+    c = db.from_sequence(data, npartitions=npartitions)
     assert c.mean().compute() == np.mean(data)
     assert c.std().compute(get=dask.get) == np.std(data)
 
@@ -1035,13 +1041,14 @@ def test_reduction_empty():
     assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
 
 
-def test_reduction_empty_aggregate():
-    b = db.from_sequence([0, 0, 0, 1], npartitions=4).filter(None)
+@pytest.mark.parametrize('npartitions', [1, 2, 4])
+def test_reduction_empty_aggregate(npartitions):
+    b = db.from_sequence([0, 0, 0, 1], npartitions=npartitions).filter(None)
     assert b.min(split_every=2).compute(get=dask.get) == 1
     vals = db.compute(b.min(split_every=2), b.max(split_every=2), get=dask.get)
     assert vals == (1, 1)
     with pytest.raises(ValueError):
-        b = db.from_sequence([0, 0, 0, 0], npartitions=4)
+        b = db.from_sequence([0, 0, 0, 0], npartitions=npartitions)
         b.filter(None).min(split_every=2).compute(get=dask.get)
 
 
