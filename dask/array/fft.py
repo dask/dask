@@ -253,3 +253,28 @@ def fftshift(x, axes=None):
         y = _concatenate([y[r], y[l]], axis=i)
 
     return y
+
+
+@wraps(np.fft.ifftshift)
+def ifftshift(x, axes=None):
+    if axes is None:
+        axes = list(range(x.ndim))
+    elif not isinstance(axes, collections.Sequence):
+        axes = (axes,)
+
+    y = x
+    for i in axes:
+        n = y.shape[i]
+        n_2 = n // 2
+
+        l = y.ndim * [slice(None)]
+        l[i] = slice(None, n_2)
+        l = tuple(l)
+
+        r = y.ndim * [slice(None)]
+        r[i] = slice(n_2, None)
+        r = tuple(r)
+
+        y = _concatenate([y[r], y[l]], axis=i)
+
+    return y
