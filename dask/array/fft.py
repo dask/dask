@@ -243,7 +243,6 @@ def rfftfreq(n, d=1.0, chunks=None):
     return _fftfreq_helper(n, d=d, chunks=chunks, real=True)
 
 
-@wraps(np.fft.fftshift)
 def _fftshift_helper(x, axes=None, inverse=False):
     if axes is None:
         axes = list(range(x.ndim))
