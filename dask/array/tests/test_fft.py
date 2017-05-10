@@ -223,3 +223,28 @@ def test_fftshift(funcname, axes):
     d = da.from_array(a, chunks=(2, 3, 4))
 
     assert_eq(da_func(d, axes), np_func(a, axes))
+
+
+@pytest.mark.parametrize("funcname1, funcname2", [
+    ("fftshift", "ifftshift"),
+    ("ifftshift", "fftshift"),
+])
+@pytest.mark.parametrize("axes", [
+    None,
+    0,
+    1,
+    2,
+    (0, 1),
+    (1, 2),
+    (0, 2),
+    (0, 1, 2),
+])
+def test_fftshift_identity(funcname1, funcname2, axes):
+    da_func1 = getattr(da.fft, funcname1)
+    da_func2 = getattr(da.fft, funcname2)
+
+    s = (5, 6, 7)
+    a = np.arange(np.prod(s)).reshape(s)
+    d = da.from_array(a, chunks=(2, 3, 4))
+
+    assert_eq(d, da_func1(da_func2(d, axes), axes))
