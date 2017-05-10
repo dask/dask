@@ -87,7 +87,7 @@ except ImportError:
     import itertools
     from weakref import ref
 
-    class finalize:
+    class finalize(object):
         """Class for finalization of weakrefable objects
 
         finalize(obj, func, *args, **kwargs) returns a callable finalizer

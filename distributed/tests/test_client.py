@@ -30,7 +30,7 @@ from distributed import Worker, Nanny, recreate_exceptions
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, _wait,
-        wait, _as_completed, as_completed, tokenize, _global_client,
+        wait, _as_completed, as_completed, tokenize, _get_global_client,
         default_client, _first_completed, ensure_default_get, futures_of,
         temp_default_client)
 from distributed.metrics import time
@@ -842,20 +842,20 @@ def test_get_releases_data(c, s, a, b):
 
 
 def test_global_clients(loop):
-    assert not _global_client[0]
+    assert _get_global_client() is None
     with pytest.raises(ValueError):
         default_client()
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            assert _global_client == [c]
+            assert _get_global_client() is c
             assert default_client() is c
             with Client(s['address'], loop=loop) as f:
-                assert _global_client == [f]
+                assert _get_global_client() is f
                 assert default_client() is f
                 assert default_client(c) is c
                 assert default_client(f) is f
 
-    assert not _global_client[0]
+    assert _get_global_client() is None
 
 
 @gen_cluster(client=True)

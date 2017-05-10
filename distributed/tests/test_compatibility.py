@@ -20,7 +20,10 @@ def test_finalize():
         l.append(value)
 
     o = C()
-    finalize(o, cb, 1)
+    f = finalize(o, cb, 1)
+    assert f in f._select_for_exit()
+    f.atexit = False
+    assert f not in f._select_for_exit()
     assert not l
     del o
     assert l.pop() == 1
