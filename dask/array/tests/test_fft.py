@@ -201,3 +201,25 @@ def test_wrap_fftns(modname, funcname, dtype):
 @pytest.mark.parametrize("d", [1.0, 0.5, 2 * np.pi])
 def test_fftfreq(n, d):
     assert_eq(da.fft.fftfreq(n, d, chunks=n), np.fft.fftfreq(n, d))
+
+
+@pytest.mark.parametrize("funcname", ["fftshift", "ifftshift"])
+@pytest.mark.parametrize("axes", [
+    None,
+    0,
+    1,
+    2,
+    (0, 1),
+    (1, 2),
+    (0, 2),
+    (0, 1, 2),
+])
+def test_fftshift(funcname, axes):
+    np_func = getattr(np.fft, funcname)
+    da_func = getattr(da.fft, funcname)
+
+    s = (5, 6, 7)
+    a = np.arange(np.prod(s)).reshape(s)
+    d = da.from_array(a, chunks=(2, 3, 4))
+
+    assert_eq(da_func(d, axes), np_func(a, axes))
