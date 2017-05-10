@@ -85,7 +85,7 @@ regardless; these do not have a coroutine-equivalent.
 
 
 Client
---------
+------
 
 .. autoclass:: Client
    :members:
@@ -112,3 +112,11 @@ Other
 
 .. autofunction:: distributed.worker_client
 .. autofunction:: distributed.get_worker
+
+
+Asyncio Client
+--------------
+
+.. currentmodule:: distributed.asyncio
+.. autoclass:: AioClient
+   :members:

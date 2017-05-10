@@ -63,6 +63,10 @@ install:
         conda install -q cython
         pip install git+https://github.com/jcrist/crick.git
     fi;
+  - |
+    if [[ $PYTHON == 3.5 || $PYTHON == 3.6 ]]; then
+        pip install -q pytest-aiohttp
+    fi;
 
   # Install distributed
   - pip install --no-deps -e .

@@ -322,25 +322,24 @@ class AllExit(Exception):
 
 
 class Client(object):
-    """ Drive computations on a distributed cluster
+    """ Connect to and drive computation on a distributed Dask cluster
 
-    The Client connects users to a distributed compute cluster.  It provides
-    an asynchronous user interface around functions and futures.  This class
-    resembles executors in ``concurrent.futures`` but also allows ``Future``
-    objects within ``submit/map`` calls.
+    The Client connects users to a dask.distributed compute cluster.  It
+    provides an asynchronous user interface around functions and futures.  This
+    class resembles executors in ``concurrent.futures`` but also allows
+    ``Future`` objects within ``submit/map`` calls.
 
     Parameters
     ----------
-    address: string, tuple, or ``LocalCluster``
-        This can be the address of a ``Scheduler`` server, either
-        as a string ``'127.0.0.1:8787'`` or tuple ``('127.0.0.1', 8787)``
-        or it can be a local ``LocalCluster`` object.
+    address: string, or Cluster
+        This can be the address of a ``Scheduler`` server like a string
+        ``'127.0.0.1:8786'`` or a cluster object like ``LocalCluster()``
 
     Examples
     --------
-    Provide cluster's head node address on initialization:
+    Provide cluster's scheduler node address on initialization:
 
-    >>> client = Client('127.0.0.1:8787')  # doctest: +SKIP
+    >>> client = Client('127.0.0.1:8786')  # doctest: +SKIP
 
     Use ``submit`` method to send individual computations to the cluster
 
@@ -360,12 +359,14 @@ class Client(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
+    _Future = Future
+
     def __init__(self, address=None, start=True, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None, **kwargs):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
-        self.loop = loop or IOLoop() if start else IOLoop.current()
+        self.loop = loop or (IOLoop() if start else IOLoop.current())
         self.coroutines = []
         self.id = str(uuid.uuid1())
         self.generation = 0
@@ -468,8 +469,6 @@ class Client(object):
                 except (ValueError, KeyError):  # JSON file not yet flushed
                     yield gen.sleep(0.01)
         elif self._start_arg is None:
-            # Special case: if Client() was instantiated without a
-            # scheduler address or cluster reference, spawn a new cluster
             from .deploy import LocalCluster
 
             try:
@@ -798,7 +797,7 @@ class Client(object):
         skey = tokey(key)
 
         if skey in self.futures:
-            return Future(key, self)
+            return self._Future(key, self)
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1113,13 +1112,13 @@ class Client(object):
                                             client=self.id,
                                             broadcast=broadcast)
         if isinstance(data, dict):
-            out = {k: Future(k, self) for k in keys}
+            out = {k: self._Future(k, self) for k in keys}
         elif isinstance(data, (tuple, list, set, frozenset)):
-            out = type(data)([Future(k, self) for k in keys])
+            out = type(data)([self._Future(k, self) for k in keys])
         elif isinstance(data, (Iterable, Iterator)):
-            out = [Future(k, self) for k in keys]
+            out = [self._Future(k, self) for k in keys]
         else:
-            out = [Future(k, self) for k in keys]
+            out = [self._Future(k, self) for k in keys]
 
         for key in keys:
             self.futures[key].finish(type=None)
@@ -1495,7 +1494,7 @@ class Client(object):
 
         keyset = set(keys)
         flatkeys = list(map(tokey, keys))
-        futures = {key: Future(key, self) for key in keyset}
+        futures = {key: self._Future(key, self) for key in keyset}
 
         values = {k for k, v in dsk.items() if isinstance(v, Future)
                                             and k not in keyset}
@@ -1605,7 +1604,7 @@ class Client(object):
                 if not changed:
                     changed = True
                     dsk = dict(dsk)
-                dsk[key] = Future(key, self)
+                dsk[key] = self._Future(key, self)
 
         if changed:
             dsk, _ = dask.optimize.cull(dsk, keys)
@@ -2615,7 +2614,7 @@ class AsCompleted(object):
 
         This future will emit from the iterator once it finishes
         """
-        if type(future) is not Future:
+        if not isinstance(future, Future):
             raise TypeError("Input must be a future, got %s" % str(future))
         with self.lock:
             self.futures[future] += 1
@@ -2738,7 +2737,7 @@ def futures_of(o, client=None):
             stack.extend(x)
         if type(x) is dict:
             stack.extend(x.values())
-        if type(x) is Future:
+        if isinstance(x, Future):
             futures.add(x)
         if hasattr(x, 'dask'):
             stack.extend(x.dask.values())
