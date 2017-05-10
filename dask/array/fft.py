@@ -230,6 +230,18 @@ def fftfreq(n, d=1.0, chunks=None):
     return r
 
 
+@wraps(np.fft.rfftfreq)
+def rfftfreq(n, d=1.0, chunks=None):
+    n_1 = n + 1
+    n_2 = n // 2 + 1
+
+    l = _linspace(0, 1, n_1, chunks=chunks)
+    r = l[:n_2]
+    r /= d
+
+    return r
+
+
 @wraps(np.fft.fftshift)
 def _fftshift_helper(x, axes=None, inverse=False):
     if axes is None:
