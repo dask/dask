@@ -31,9 +31,7 @@ def deserialize_keras_model(header, frames):
     return model
 
 
-register_serialization('keras.engine.training.Model', serialize_keras_model,
-                       deserialize_keras_model)
-register_serialization('keras.models.Model', serialize_keras_model,
-                       deserialize_keras_model)
-register_serialization('keras.models.Sequential', serialize_keras_model,
-                       deserialize_keras_model)
+for module in ['keras', 'tensorflow.contrib.keras.python.keras']:
+    for name in ['engine.training.Model', 'models.Model', 'models.Sequential']:
+        register_serialization('.'.join([module, name]), serialize_keras_model,
+                               deserialize_keras_model)
