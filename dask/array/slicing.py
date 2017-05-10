@@ -709,7 +709,7 @@ def check_index(ind, dimension):
     """
     if isinstance(ind, list):
         x = np.array(ind)
-        if (x >= dimension).any() or (x <= -dimension).any():
+        if (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
