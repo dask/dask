@@ -743,6 +743,9 @@ class Bag(Base):
             b = c
             depth += 1
 
+        if not self.npartitions:
+            return Item({b: (aggregate, [])}, b)
+
         if out_type is Item:
             dsk[b] = dsk.pop((b, 0))
             return Item(merge(self.dask, dsk), b)

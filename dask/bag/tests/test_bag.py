@@ -1142,3 +1142,11 @@ def test_temporary_directory():
         b2 = b.groupby(lambda x: x % 2)
         b2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+
+
+def test_empty_bag():
+    b = db.from_sequence([])
+    assert b.map(inc).all().compute(get=dask.get)
+    assert not b.map(inc).any().compute(get=dask.get)
+    assert not b.map(inc).sum().compute(get=dask.get)
+    assert not b.map(inc).count().compute(get=dask.get)
