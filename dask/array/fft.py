@@ -218,16 +218,29 @@ hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
 ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
 
 
-@wraps(np.fft.fftfreq)
-def fftfreq(n, d=1.0, chunks=None):
-    n_1 = n + 1
-    n_2 = n_1 // 2
+def _fftfreq_helper(n, d=1.0, chunks=None, real=False):
+    r = _linspace(0, 1, n + 1, chunks=chunks)
 
-    l = _linspace(0, 1, n_1, chunks=chunks)
-    r = _concatenate([l[:n_2], l[n_2:-1] - 1])
+    if real:
+        n_2 = n // 2 + 1
+        r = r[:n_2]
+    else:
+        n_2 = (n + 1) // 2
+        r = _concatenate([r[:n_2], r[n_2:-1] - 1])
+
     r /= d
 
     return r
+
+
+@wraps(np.fft.fftfreq)
+def fftfreq(n, d=1.0, chunks=None):
+    return _fftfreq_helper(n, d=d, chunks=chunks, real=False)
+
+
+@wraps(np.fft.rfftfreq)
+def rfftfreq(n, d=1.0, chunks=None):
+    return _fftfreq_helper(n, d=d, chunks=chunks, real=True)
 
 
 @wraps(np.fft.fftshift)
