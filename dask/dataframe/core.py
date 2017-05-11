@@ -1304,6 +1304,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def describe(self, split_every=False):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
+        if self.ndim == 2 and len(num.columns) == 0:
+            raise ValueError("DataFrame contains only non-numeric data.")
+        elif self.ndim == 1 and self.dtype == 'object':
+            raise ValueError("Cannot compute ``describe`` on object dtype.")
 
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),

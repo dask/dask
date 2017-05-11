@@ -254,6 +254,18 @@ def test_describe():
     assert_eq(df.describe(), ddf.describe(split_every=2))
 
 
+def test_describe_empty():
+    # https://github.com/dask/dask/issues/2326
+    ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
+    with pytest.raises(ValueError) as rec:
+        ddf.describe()
+    assert rec.match('DataFrame contains only non-numeric data.')
+
+    with pytest.raises(ValueError) as rec:
+        ddf.A.describe()
+    assert rec.match('Cannot compute ``describe`` on object dtype.')
+
+
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
