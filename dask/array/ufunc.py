@@ -114,6 +114,7 @@ fmod = wrap_elemwise(np.fmod)
 floor = wrap_elemwise(np.floor)
 ceil = wrap_elemwise(np.ceil)
 trunc = wrap_elemwise(np.trunc)
+divide = wrap_elemwise(np.divide)
 
 # more math routines, from this page:
 # http://docs.scipy.org/doc/numpy/reference/routines.math.html
