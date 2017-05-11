@@ -2244,8 +2244,11 @@ class Scheduler(Server):
                 return {key: 'released'}
 
             if startstops:
-                compute_start, compute_stop = [(b, c) for a, b, c in startstops
-                                              if a == 'compute'][0]
+                L = [(b, c) for a, b, c in startstops if a == 'compute']
+                if L:
+                    compute_start, compute_stop = L[0]
+                else:  # This is very rare
+                    compute_start = compute_stop = None
             else:
                 compute_start = compute_stop = None
 
