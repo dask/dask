@@ -6,6 +6,7 @@ import numpy as np
 
 from .core import getarray, getarray_nofancy, getarray_inline
 from ..context import defer_to_globals
+from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimize import cull, fuse, inline_functions, dont_optimize
 from ..utils import ensure_dict
@@ -152,6 +153,20 @@ def normalize_slice(s):
     return slice(start, stop, step)
 
 
+def check_for_nonfusible_fancy_indexing(fancy, normal):
+    # Check for fancy indexing and normal indexing, where the fancy
+    # indexed dimensions != normal indexed dimensions with integers. E.g.:
+    # disallow things like:
+    # x[:, [1, 2], :][0, :, :] -> x[0, [1, 2], :] or
+    # x[0, :, :][:, [1, 2], :] -> x[0, [1, 2], :]
+    for f, n in zip_longest(fancy, normal, fillvalue=slice(None)):
+        if type(f) is not list and isinstance(n, int):
+            raise NotImplementedError("Can't handle normal indexing with "
+                                      "integers and fancy indexing if the "
+                                      "integers and fancy indices don't "
+                                      "align with the same dimensions.")
+
+
 def fuse_slice(a, b):
     """ Fuse stacked slices together
 
@@ -224,9 +239,15 @@ def fuse_slice(a, b):
     # and newaxes
     if isinstance(a, tuple) and isinstance(b, tuple):
 
-        if (any(isinstance(item, list) for item in a) and
-                any(isinstance(item, list) for item in b)):
+        # Check for non-fusible cases with fancy-indexing
+        a_has_lists = any(isinstance(item, list) for item in a)
+        b_has_lists = any(isinstance(item, list) for item in b)
+        if a_has_lists and b_has_lists:
             raise NotImplementedError("Can't handle multiple list indexing")
+        elif a_has_lists:
+            check_for_nonfusible_fancy_indexing(a, b)
+        elif b_has_lists:
+            check_for_nonfusible_fancy_indexing(b, a)
 
         j = 0
         result = list()
