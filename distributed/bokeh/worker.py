@@ -576,8 +576,9 @@ def counters_doc(server, doc):
 
 
 class BokehWorker(BokehServer):
-    def __init__(self, worker, io_loop=None):
+    def __init__(self, worker, io_loop=None, **kwargs):
         self.worker = worker
+        self.server_kwargs = kwargs
         main = Application(FunctionHandler(partial(main_doc, worker)))
         crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker)))
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker)))

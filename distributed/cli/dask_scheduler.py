@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
+from functools import partial
 import logging
 import os
 import shutil
@@ -40,8 +41,10 @@ logger = logging.getLogger('distributed.scheduler')
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
-@click.option('--prefix', type=str, default=None,
+@click.option('--bokeh-prefix', type=str, default=None,
               help="Prefix for the bokeh app")
+@click.option('--prefix', type=str, default=None,
+              help="Deprecated, see --bokeh-prefix")
 @click.option('--use-xheaders', type=bool, default=False, show_default=True,
               help="User xheaders in bokeh app for ssl termination in header")
 @click.option('--pid-file', type=str, default='',
@@ -55,14 +58,18 @@ logger = logging.getLogger('distributed.scheduler')
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
 def main(host, port, http_port, bokeh_port, bokeh_external_port,
-         bokeh_internal_port, show, _bokeh, bokeh_whitelist, prefix,
+         bokeh_internal_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
          use_xheaders, pid_file, scheduler_file, interface, local_directory,
-         preload):
+         preload, prefix):
 
     if bokeh_internal_port:
         print("The --bokeh-internal-port keyword has been removed.\n"
               "The internal bokeh server is now the default bokeh server.\n"
               "Use --bokeh-port %d instead" % bokeh_internal_port)
+        sys.exit(1)
+
+    if prefix:
+        print("The --prefix keyword has moved to --bokeh-prefix")
         sys.exit(1)
 
     if pid_file:
@@ -106,7 +113,8 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
     if _bokeh:
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
-            services[('bokeh', bokeh_port)] = BokehScheduler
+            services[('bokeh', bokeh_port)] = partial(BokehScheduler,
+                                                      prefix=bokeh_prefix)
     scheduler = Scheduler(loop=loop, services=services,
                           scheduler_file=scheduler_file)
     scheduler.start(addr)
@@ -115,13 +123,13 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
     bokeh_proc = None
     if _bokeh and bokeh_external_port is not None:
         if bokeh_external_port == 0: # This is a hack and not robust
-            bokeh_port = open_port() # This port may be taken by the OS
-        try:                         # before we successfully pass it to Bokeh
+            bokeh_external_port = open_port() # This port may be taken by the OS
+        try:                                  # before we successfully pass it to Bokeh
             from distributed.bokeh.application import BokehWebInterface
             bokeh_proc = BokehWebInterface(http_port=http_port,
                     scheduler_address=scheduler.address,
                     bokeh_port=bokeh_external_port,
-                    bokeh_whitelist=bokeh_whitelist, show=show, prefix=prefix,
+                    bokeh_whitelist=bokeh_whitelist, show=show, prefix=bokeh_prefix,
                     use_xheaders=use_xheaders, quiet=False)
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")

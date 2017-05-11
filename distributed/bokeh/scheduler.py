@@ -973,8 +973,10 @@ def status_doc(scheduler, doc):
 
 
 class BokehScheduler(BokehServer):
-    def __init__(self, scheduler, io_loop=None):
+    def __init__(self, scheduler, io_loop=None, **kwargs):
         self.scheduler = scheduler
+        self.server_kwargs = kwargs
+
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc,
                                                             scheduler)))
         workers = Application(FunctionHandler(partial(workers_doc, scheduler)))

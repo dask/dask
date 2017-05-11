@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import atexit
 from datetime import timedelta
+from functools import partial
 import json
 import logging
 import os
@@ -87,13 +88,15 @@ def handle_signal(sig, frame):
                    'Use with dask-scheduler --scheduler-file')
 @click.option('--death-timeout', type=float, default=None,
               help="Seconds to wait for a scheduler before closing")
+@click.option('--bokeh-prefix', type=str, default=None,
+              help="Prefix for the bokeh app")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, temp_filename, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
-         interface, death_timeout, preload):
+         interface, death_timeout, preload, bokeh_prefix):
     if nanny:
         port = nanny_port
     else:
@@ -127,7 +130,8 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         except ImportError:
             pass
         else:
-            services[('bokeh', bokeh_port)] = BokehWorker
+            services[('bokeh', bokeh_port)] = partial(BokehWorker,
+                                                      prefix=bokeh_prefix)
 
     if resources:
         resources = resources.replace(',', ' ').split()
