@@ -15,7 +15,6 @@ import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
-from dask.async import get_sync
 from dask.compatibility import BZ2File, GzipFile, PY2
 from dask.utils import filetexts, tmpfile, tmpdir, open
 from dask.utils_test import inc, add
@@ -188,7 +187,7 @@ def test_fold():
     assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
-    with dask.set_options(get=get_sync):
+    with dask.set_options(get=dask.get):
         assert set(e.fold(add, initial=[]).compute()) == set([1, 2, 3])
 
 
@@ -1088,7 +1087,7 @@ def test_bag_picklable():
 
 def test_msgpack_unicode():
     b = db.from_sequence([{"a": 1}]).groupby("a")
-    result = b.compute(get=dask.async.get_sync)
+    result = b.compute(get=dask.get)
     assert dict(result) == {1: [{'a': 1}]}
 
 

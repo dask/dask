@@ -16,8 +16,8 @@ Briefly, the current options are as follows:
     bound code that needs multiple interpreters to accelerate.  There are some
     costs to sharing data back and forth between processes.  The default
     scheduler for ``dask.bag`` and sometimes useful with ``dask.dataframe``.
-*   ``dask.async.get_sync``: Uses the single main thread.  Good for profiling
-    and debugging because all code is run sequentially
+*   ``dask.get``: Uses the single main thread.  Good for profiling and
+    debugging because all code is run sequentially
 *   ``distributed.Client.get``:  Uses multiple machines connected over
     sockets.  Good for larger work but also a viable alternative to
     ``dask.multiprocessing`` on a single machine.  Also sometimes used for its
@@ -45,11 +45,10 @@ Single Threaded Scheduler
 Debugging, profiling, and general comprehension of code is hard when computing
 in parallel.  Standard tools like ``pdb`` or ``cProfile`` fail to operate well
 when running under multiple threads or processes.  To resolve this problem
-there is a dask scheduler, ``dask.async.get_sync`` that doesn't actually run in
-parallel, but instead steps through your graph in the main thread.  It
-otherwise operates exactly like the threaded and multiprocessing schedulers,
-and so is a faithful proxy when tracking down difficult issues.
-
+there is a dask scheduler, ``dask.get`` that doesn't actually run in parallel,
+but instead steps through your graph in the main thread.  It otherwise operates
+exactly like the threaded and multiprocessing schedulers, and so is a faithful
+proxy when tracking down difficult issues.
 
 Distributed Scheduler on a Cluster
 ----------------------------------

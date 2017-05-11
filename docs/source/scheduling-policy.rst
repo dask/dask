@@ -4,9 +4,10 @@ Scheduling in Depth
 *Note: this technical document is not optimized for user readability.*
 
 The default shared memory scheduler used by most dask collections lives in
-``dask/async.py``. This scheduler dynamically schedules tasks to new workers as
-they become available.  It operates in a shared memory environment without
-consideration to data locality, all workers have access to all data equally.
+``dask/scheduler.py``. This scheduler dynamically schedules tasks to new
+workers as they become available.  It operates in a shared memory environment
+without consideration to data locality, all workers have access to all data
+equally.
 
 We find that our workloads are best served by trying to minimize the memory
 footprint.  This document talks about our policies to accomplish this in our

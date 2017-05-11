@@ -15,15 +15,9 @@ the questions there useful to you.
     frustration is the asynchronous schedulers which, because they run your
     code on different workers, are unable to provide access to the Python
     debugger.  Fortunately you can change to a synchronous scheduler like
-    ``dask.get`` or ``dask.async.get_sync`` by providing a ``get=`` keyword
-    to the ``compute`` method::
+    ``dask.get`` by providing a ``get=`` keyword to the ``compute`` method::
 
-        my_array.compute(get=dask.async.get_sync)
-
-    Both ``dask.async.get_sync`` and ``dask.get`` will provide traceback
-    traversals.  ``dask.async.get_sync`` uses the same machinery of the async
-    schedulers but with only one worker.  ``dask.get`` is dead-simple but does
-    not cache data and so can be slow for some workloads.
+        my_array.compute(get=dask.get)
 
 
 2.  **Q: In ``dask.array`` what is ``chunks``?**

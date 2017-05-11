@@ -14,8 +14,6 @@ from toolz import partition_all, valmap
 import pandas.util.testing as tm
 
 import dask
-from dask.async import get_sync
-
 import dask.dataframe as dd
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
@@ -157,7 +155,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     assert len(values) == 3
     assert all(hasattr(item, 'dask') for item in values)
 
-    result = df.amount.sum().compute(get=get_sync)
+    result = df.amount.sum().compute(get=dask.get)
     assert result == (100 + 200 + 300 + 400 + 500 + 600)
 
 
@@ -222,7 +220,7 @@ def test_enforce_dtypes(reader, blocks):
     header = blocks[0][0].split(b'\n')[0] + b'\n'
     dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                 collection=False)
-    dfs = dask.compute(*dfs, get=get_sync)
+    dfs = dask.compute(*dfs, get=dask.get)
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
 
@@ -236,7 +234,7 @@ def test_enforce_columns(reader, blocks):
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                     collection=False, enforce=True)
-        dask.compute(*dfs, get=get_sync)
+        dask.compute(*dfs, get=dask.get)
 
 
 #############################
@@ -278,10 +276,10 @@ def test_read_csv_files(dd_read, pd_read, files):
 def test_read_csv_index():
     with filetext(csv_text) as fn:
         f = dd.read_csv(fn, blocksize=20).set_index('amount')
-        result = f.compute(get=get_sync)
+        result = f.compute(get=dask.get)
         assert result.index.name == 'amount'
 
-        blocks = dd.DataFrame._get(f.dask, f._keys(), get=get_sync)
+        blocks = dd.DataFrame._get(f.dask, f._keys(), get=dask.get)
         for i, block in enumerate(blocks):
             if i < len(f.divisions) - 2:
                 assert (block.index < f.divisions[i + 1]).all()
@@ -420,7 +418,7 @@ def test_read_csv_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode='b'):
         df = dd.read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
-        assert_eq(df.compute(get=get_sync).reset_index(drop=True),
+        assert_eq(df.compute(get=dask.get).reset_index(drop=True),
                   expected.reset_index(drop=True), check_dtype=False)
 
 
@@ -566,7 +564,7 @@ def test_late_dtypes():
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
         with pytest.raises(ValueError) as e:
-            dd.read_csv(fn, sample=50).compute(get=get_sync)
+            dd.read_csv(fn, sample=50).compute(get=dask.get)
 
         msg = ("Mismatched dtypes found.\n"
                "Expected integers, but found floats for columns:\n"
@@ -809,7 +807,7 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, get=get_sync)
+            dask.compute(*r, get=dask.get)
             result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             assert_eq(result, df)
 
