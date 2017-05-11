@@ -33,10 +33,36 @@ results.
    >>> result.compute()
    Ttest_relResult(statistic=-1.5102104380013242, pvalue=0.13741197274874514)
 
+API
+---
 
-.. toctree::
-   :maxdepth: 1
+.. currentmodule:: dask.array.stats
 
-   stats-api.rst
+.. autosummary::
+   ttest_ind
+   ttest_1samp
+   ttest_rel
+   chisquare
+   power_divergence
+   skew
+   skewtest
+   kurtosis
+   kurtosistest
+   normaltest
+   f_oneway
+   moment
+
+.. autofunction:: ttest_ind
+.. autofunction:: ttest_1samp
+.. autofunction:: ttest_rel
+.. autofunction:: chisquare
+.. autofunction:: power_divergence
+.. autofunction:: skew
+.. autofunction:: skewtest
+.. autofunction:: kurtosis
+.. autofunction:: kurtosistest
+.. autofunction:: normaltest
+.. autofunction:: f_oneway
+.. autofunction:: moment
 
 .. _scipy.stats: https://docs.scipy.org/doc/scipy-0.19.0/reference/stats.html

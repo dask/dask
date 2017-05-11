@@ -338,28 +338,13 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
     if not isinstance(order, int) or order < 0:
         raise ValueError("Order must be an integer >= 0")
 
-    if order == 0:
-        # When order equals 0, the result is 1, by definition.
-        shape = list(a.shape)
-        del shape[axis]
-        if shape:
-            # return an actual array of the appropriate shape
-            return ones(shape, dtype=float, chunks=1)
-        else:
-            # the input was 1D, so return a scalar instead of a rank-0 array
-            return from_array(np.array([1.]), chunks=1)
-
-    elif order == 1:
+    if order < 2:
+        reduced = a.sum(axis=axis)   # get reduced shape and chunks
+        if order == 0:
+            # When order equals 0, the result is 1, by definition.
+            return ones(reduced.shape, chunks=reduced.chunks, dtype='f8')
         # By definition the first order about the mean is 0.
-        shape = list(a.shape)
-        del shape[axis]
-        if shape:
-            # return an actual array of the appropriate shape
-            return zeros(shape, dtype=float, chunks=1)
-        else:
-            # the input was 1D, so return a scalar instead of a rank-0 array
-            # TODO: scalar
-            return from_array(np.array([0.]), chunks=1)
+        return zeros(reduced.shape, chunks=reduced.chunks, dtype='f8')
 
     if dtype is not None:
         dt = dtype
