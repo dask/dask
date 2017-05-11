@@ -386,6 +386,7 @@ class Client(object):
         self.extensions = {}
         self.scheduler_file = scheduler_file
         self._startup_kwargs = kwargs
+        self._connecting_to_scheduler = False
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
@@ -528,16 +529,23 @@ class Client(object):
 
     @gen.coroutine
     def _ensure_connected(self, timeout=5):
-        if self.scheduler_comm and not self.scheduler_comm.closed():
+        if (self.scheduler_comm and not self.scheduler_comm.closed() or
+            self._connecting_to_scheduler):
             return
 
-        comm = yield connect(self.scheduler.address,
-                             timeout=timeout)
+        self._connecting_to_scheduler = True
 
-        yield self.scheduler.identity()
+        try:
+            comm = yield connect(self.scheduler.address,
+                                 timeout=timeout)
 
-        yield comm.write({'op': 'register-client',
-                          'client': self.id, 'reply': False})
+            yield self.scheduler.identity()
+
+            yield comm.write({'op': 'register-client',
+                              'client': self.id,
+                              'reply': False})
+        finally:
+            self._connecting_to_scheduler = False
         msg = yield comm.read()
         assert len(msg) == 1
         assert msg[0]['op'] == 'stream-start'
