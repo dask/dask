@@ -266,7 +266,6 @@ def test_describe_empty():
     assert rec.match('Cannot compute ``describe`` on object dtype.')
 
 
-
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
