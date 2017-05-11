@@ -9,7 +9,7 @@ import numpy as np
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples, from_array
+from .core import _concatenate2, Array, atop, lol_tuples
 from .ufunc import sqrt
 from .wrap import zeros, ones
 from .numpy_compat import divide
