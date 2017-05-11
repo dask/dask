@@ -13,7 +13,10 @@ except ImportError:
     scipy = None
 
 from .creation import linspace as _linspace
-from .core import concatenate as _concatenate
+from .core import (
+    concatenate as _concatenate,
+    normalize_chunks as _normalize_chunks,
+)
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -219,7 +222,15 @@ ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
 
 
 def _fftfreq_helper(n, d=1.0, chunks=None, real=False):
-    r = _linspace(0, 1, n + 1, chunks=chunks)
+    n = int(n)
+
+    l = n + 1
+    s = n // 2 + 1 if real else n
+    t = l - s
+
+    chunks = _normalize_chunks(chunks, (s,))[0] + (t,)
+
+    r = _linspace(0, 1, l, chunks=chunks)
 
     if real:
         n_2 = n // 2 + 1
