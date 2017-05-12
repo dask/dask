@@ -3,16 +3,24 @@ Install Dask
 
 You can install dask with ``conda``, with ``pip``, or by installing from source.
 
+Anaconda
+--------
+
+
 Conda
 -----
 
-Binary Dask packages are maintained on both the ``defaults`` and `conda-forge
-<https://conda-forge.github.io/>`_ channels.  You can install them using
-`conda <https://www.continuum.io/downloads>`_::
+Dask is installed by default in `Anaconda <https://www.continuum.io/downloads>`_::
+
+You can update Dask using `conda <https://www.continuum.io/downloads>`_::
 
     conda install dask
 
-This installs dask and all common dependencies, including Pandas and NumPy.
+This installs Dask and all common dependencies, including Pandas and NumPy.
+
+Dask packages are maintained both on the default channel and on and
+`conda-forge <https://conda-forge.github.io/>`_.
+
 
 Pip
 ---
