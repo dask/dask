@@ -6,11 +6,11 @@ You can install dask with ``conda``, with ``pip``, or by installing from source.
 Conda
 -----
 
-To install the latest version of Dask from the
-`conda-forge <https://conda-forge.github.io/>`_ repository using
+Binary Dask packages are maintained on both the ``defaults`` and `conda-forge
+<https://conda-forge.github.io/>`_ channels.  You can install them using
 `conda <https://www.continuum.io/downloads>`_::
 
-    conda install dask -c conda-forge
+    conda install dask
 
 This installs dask and all common dependencies, including Pandas and NumPy.
 
