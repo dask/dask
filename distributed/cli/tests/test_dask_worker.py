@@ -89,11 +89,13 @@ def test_local_directory(loop, nanny):
             with popen(['dask-worker', '127.0.0.1:8786', nanny,
                         '--no-bokeh', '--local-directory', fn]) as worker:
                 with Client('127.0.0.1:8786', loop=loop, timeout=10) as c:
+                    start = time()
                     while not c.scheduler_info()['workers']:
                         sleep(0.1)
+                        assert time() < start + 8
                     info = c.scheduler_info()
                     worker = list(info['workers'].values())[0]
-                    assert worker['local_directory'] == fn
+                    assert worker['local_directory'].startswith(fn)
 
 
 @pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])

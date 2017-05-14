@@ -6,7 +6,6 @@ import logging
 from multiprocessing.queues import Empty
 import os
 import shutil
-import tempfile
 from time import sleep
 import weakref
 
@@ -46,17 +45,8 @@ class Nanny(Server):
         self.resources = resources
         self.death_timeout = death_timeout
         self.preload = preload
-        if not local_dir:
-            local_dir = tempfile.mkdtemp(prefix='nanny-')
-            self._should_cleanup_local_dir = True
-
-            @atexit.register
-            def _cleanup_local_dir():
-                if os.path.exists(local_dir):
-                    shutil.rmtree(local_dir)
-        else:
-            self._should_cleanup_local_dir = False
         self.local_dir = local_dir
+
         self.worker_dir = ''
         self.status = None
         self.process = None
@@ -264,8 +254,6 @@ class Nanny(Server):
                         self.process.terminate()
 
     def __del__(self):
-        if self._should_cleanup_local_dir and os.path.exists(self.local_dir):
-            shutil.rmtree(self.local_dir)
         self.cleanup()
 
     @gen.coroutine

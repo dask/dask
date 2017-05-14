@@ -18,6 +18,7 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 import distributed
+from distributed import Nanny
 from distributed.core import rpc, connect
 from distributed.client import _wait
 from distributed.scheduler import Scheduler
@@ -722,3 +723,16 @@ def test_heartbeats(c, s, a, b):
     while not all(s.worker_info[w].get('memory-rss') for w in s.workers):
         yield gen.sleep(0.01)
         assert time() < start + 2
+
+
+@pytest.mark.parametrize('worker', [Worker, Nanny])
+def test_worker_dir(worker):
+    with tmpfile() as fn:
+        @gen_cluster(client=True, worker_kwargs={'local_dir': fn})
+        def test_worker_dir(c, s, a, b):
+            directories = [info['local_directory']
+                           for info in s.worker_info.values()]
+            assert all(d.startswith(fn) for d in directories)
+            assert len(set(directories)) == 2  # distinct
+
+        test_worker_dir()

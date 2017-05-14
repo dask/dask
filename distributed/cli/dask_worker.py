@@ -79,8 +79,6 @@ def handle_signal(sig, frame):
               help="File to write the process PID")
 @click.option('--local-directory', default='', type=str,
               help="Directory to place worker files")
-@click.option('--temp-filename', default=None,
-              help="Internal use only")
 @click.option('--resources', type=str, default='',
               help='Resources for task constraints like "GPU=2 MEM=10e9"')
 @click.option('--scheduler-file', type=str, default='',
@@ -94,7 +92,7 @@ def handle_signal(sig, frame):
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-         nanny, name, memory_limit, pid_file, temp_filename, reconnect,
+         nanny, name, memory_limit, pid_file, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
          interface, death_timeout, preload, bokeh_prefix):
     if nanny:
@@ -188,18 +186,6 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
             n.start(port)
         if t is Nanny:
             global_nannies.append(n)
-
-    if temp_filename:
-        @gen.coroutine
-        def f():
-            while nannies[0].status != 'running':
-                yield gen.sleep(0.01)
-            import json
-            msg = {'port': nannies[0].port,
-                   'local_directory': nannies[0].local_dir}
-            with open(temp_filename, 'w') as f:
-                json.dump(msg, f)
-        loop.add_callback(f)
 
     @gen.coroutine
     def run():

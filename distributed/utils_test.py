@@ -24,7 +24,9 @@ from tornado.ioloop import IOLoop
 
 from .core import connect, rpc, CommClosedError
 from .metrics import time
+from .nanny import Nanny
 from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
+from .worker import Worker
 import pytest
 
 
@@ -479,8 +481,12 @@ def end_cluster(s, workers):
     def end_worker(w):
         with ignoring(TimeoutError, CommClosedError, EnvironmentError):
             yield w._close(report=False)
-        if w.local_dir and os.path.exists(w.local_dir):
-            shutil.rmtree(w.local_dir)
+        if isinstance(w, Nanny):
+            dir = w.worker_dir
+        else:
+            dir = w.local_dir
+        if dir and os.path.exists(dir):
+            shutil.rmtree(dir)
 
     yield [end_worker(w) for w in workers]
     yield s.close() # wait until scheduler stops completely
