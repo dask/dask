@@ -722,20 +722,21 @@ class Bag(Base):
             split_every = 8
         if split_every is False:
             split_every = self.npartitions
+
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         is_last = self.npartitions == 1
-        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i), is_last))
-                   for i in range(self.npartitions))
+        dsk = {(a, i): (empty_safe_apply, perpartition, (self.name, i), is_last)
+               for i in range(self.npartitions)}
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
-        while k > 1:
+
+        while k > split_every:
             c = fmt + str(depth)
-            is_last = k <= split_every
             dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
-                                  [(b, j) for j in inds], is_last))
+                                  [(b, j) for j in inds], False))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -743,11 +744,14 @@ class Bag(Base):
             b = c
             depth += 1
 
+        dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
+                         [(b, j) for j in range(k)], True)
+
         if out_type is Item:
-            dsk[b] = dsk.pop((b, 0))
-            return Item(merge(self.dask, dsk), b)
+            dsk[fmt] = dsk.pop((fmt, 0))
+            return Item(merge(self.dask, dsk), fmt)
         else:
-            return Bag(merge(self.dask, dsk), b, 1)
+            return Bag(merge(self.dask, dsk), fmt, 1)
 
     def sum(self, split_every=None):
         """ Sum all elements """
