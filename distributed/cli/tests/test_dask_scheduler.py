@@ -249,6 +249,7 @@ def test_bokeh_port_zero(loop):
             while count < 1:
                 line = proc.stderr.readline()
                 if b'bokeh' in line.lower() or b'web' in line.lower():
+                    sleep(0.01)
                     count += 1
                     assert b':0' not in line
 

@@ -565,7 +565,9 @@ def terminate_process(proc):
             if sys.version_info[0] == 3:
                 proc.wait(10)
             else:
-                proc.wait()
+                start = time()
+                while proc.poll() is None and time() < start + 10:
+                    sleep(0.02)
         finally:
             # Make sure we don't leave the process lingering around
             with ignoring(OSError):
@@ -595,12 +597,12 @@ def popen(*args, **kwargs):
             if dump_stdout:
                 line = '\n\nPrint from stderr\n=================\n'
                 while line:
-                    print(line)
+                    print(line, end='')
                     line = proc.stderr.readline()
 
                 line = '\n\nPrint from stdout\n=================\n'
                 while line:
-                    print(line)
+                    print(line, end='')
                     line = proc.stdout.readline()
 
 
