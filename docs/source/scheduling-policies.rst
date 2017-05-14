@@ -107,3 +107,30 @@ workers do behave in a fair scheduling manner at a *coarse* level if not a fine
 grained one.
 
 Dask's scheduling policies are short-term-efficient and long-term-fair.
+
+
+Where these decisions are made
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The objectives above are mostly followed by small decisions made by the client,
+scheduler, and workers at various points in the computation.
+
+1.  As we submit a graph from the client to the scheduler we assign a numeric
+    priority to each task of that graph.  This priority focuses on
+    computing deeply before broadly, preferring critical paths, preferring
+    nodes with many dependencies, etc..  This is the same logic used by the
+    single-machine scheduler and lives in `dask/order.py
+    <https://github.com/dask/dask/blob/master/dask/order.py>`_.
+2.  When the graph reaches the scheduler the scheduler changes each of these
+    numeric priorities into a tuple of two numbers, the first of which is an
+    increasing counter, the second of which is the client-generated priority
+    described above.  This per-graph counter encourages a first-in-first-out
+    policy between computations.  All tasks from a previous call to compute
+    have a higher priority than all tasks from a subsequent call to compute (or
+    submit, persist, map, or any operation that generates futures).
+3.  Whenever a task is ready to run the scheduler assigns it to a worker.  The
+    scheduler does not wait based on priority.
+4.  However when the worker receives these tasks it considers their priorities
+    when determining which tasks to prioritize for communication or for
+    computation.  The worker maintains a heap of all ready-to-run tasks ordered
+    by this priority.
