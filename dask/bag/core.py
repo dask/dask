@@ -1587,7 +1587,7 @@ def map_chunk(f, args, bag_kwargs, kwargs):
         f = partial(f, **kwargs)
 
     args = [iter(a) for a in args]
-    iters = args.copy()
+    iters = list(args)
     if bag_kwargs:
         keys = list(bag_kwargs)
         kw_val_iters = [iter(v) for v in bag_kwargs.values()]
