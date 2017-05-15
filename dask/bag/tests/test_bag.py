@@ -109,6 +109,47 @@ def test_map_with_kwargs():
                  factor=2).sum().compute() == 2.0
 
 
+def test_bag_map():
+    b = db.from_sequence(range(100), npartitions=10)
+    b2 = db.from_sequence(range(100, 200), npartitions=10)
+    x = b.compute()
+    x2 = b2.compute()
+
+    def myadd(a=1, b=2, c=3):
+        return a + b + c
+
+    assert db.map(myadd, b).compute() == list(map(myadd, x))
+    assert db.map(myadd, a=b).compute() == list(map(myadd, x))
+    assert db.map(myadd, b, b2).compute() == list(map(myadd, x, x2))
+    assert db.map(myadd, b, 10).compute() == [myadd(i, 10) for i in x]
+    assert db.map(myadd, 10, b=b).compute() == [myadd(10, b=i) for i in x]
+
+    sol = [myadd(i, b=j, c=100) for (i, j) in zip(x, x2)]
+    assert db.map(myadd, b, b=b2, c=100).compute() == sol
+
+    sol = [myadd(i, c=100) for (i, j) in zip(x, x2)]
+    assert db.map(myadd, b, c=100).compute() == sol
+
+    x_sum = sum(x)
+    sol = [myadd(x_sum, b=i, c=100) for i in x2]
+    assert db.map(myadd, b.sum(), b=b2, c=100).compute() == sol
+
+    sol = [myadd(i, b=x_sum, c=100) for i in x2]
+    assert db.map(myadd, b2, b.sum(), c=100).compute() == sol
+
+    sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
+    assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
+
+    # Mispatched npartitions
+    fewer_parts = db.from_sequence(range(100), npartitions=5)
+    with pytest.raises(ValueError):
+        db.map(myadd, b, fewer_parts)
+
+    # No bags
+    with pytest.raises(ValueError):
+        db.map(myadd, b.sum(), 1, 2)
+
+
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i),

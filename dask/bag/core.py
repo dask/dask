@@ -1507,6 +1507,132 @@ def bag_zip(*bags):
     return Bag(merge(bags_dsk, dsk), name, npartitions)
 
 
+def map_chunk(f, args, bag_kwargs, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+
+    if bag_kwargs:
+        keys = list(bag_kwargs)
+        kw_iter = (dict(zip(keys, k)) for k in zip(*bag_kwargs.values()))
+        if args:
+            return (f(*a, **k) for a, k in zip(zip(*args), kw_iter))
+        return (f(**k) for k in kw_iter)
+
+    return map(f, *args)
+
+
+def bag_map(func, *args, **kwargs):
+    """Apply a function elementwise across one or more bags.
+
+    Note that all ``Bag`` arguments must have the same number of partitions.
+
+    Parameters
+    ----------
+    func : callable
+    *args, **kwargs : Bag, Item, or object
+        Arguments and keyword arguments to pass to ``func``. Non-Bag args/kwargs
+        are "broadcasted" across all calls to ``func``. Arguments are passed to
+        ``func`` in the order that they're provided.
+
+    Notes
+    -----
+    Corresponding partitions should have the same length; if they do not,
+    the "extra" elements from the longer partition(s) will be dropped.
+
+    Examples
+    --------
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
+
+    Apply a function to all elements in a bag:
+
+    >>> db.map(lambda x: x + 1, b).compute()
+    [1, 2, 3, 4, 5]
+
+    Apply a function with arguments from multiple bags:
+
+    >>> from operator import add
+    >>> db.map(add, b, b2).compute()
+    [5, 7, 9, 11, 13]
+
+    Non-bag arguments are "broadcast" across all calls to the mapped function:
+
+    >>> db.map(add, b, 1).compute()
+    [1, 2, 3, 4, 5]
+
+    Keyword arguments are also supported, and have the same semantics as
+    regular arguments:
+
+    >>> def myadd(x, y=0):
+    ...     return x + y
+    >>> db.map(myadd, b, y=b2).compute()
+    [5, 7, 9, 11, 13]
+    >>> db.map(myadd, b, y=1).compute()
+    [1, 2, 3, 4, 5]
+
+    Both arguments and keyword arguments can also be instances of
+    ``dask.bag.Item``. Here we'll add the max value in the bag to each element:
+
+    >>> db.map(myadd, b, b.max()).compute()
+    [4, 5, 6, 7, 8]
+    """
+    name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
+    dsk = {}
+
+    bags = []
+    args2 = []
+    for a in args:
+        if isinstance(a, Bag):
+            bags.append(a)
+            args2.append(a)
+            dsk.update(a.dask)
+        elif isinstance(a, Item):
+            args2.append((itertools.repeat, a.name))
+            dsk.update(a.dask)
+        else:
+            args2.append((itertools.repeat, a))
+
+    bag_kwargs = {}
+    other_kwargs = {}
+    for k, v in kwargs.items():
+        if isinstance(v, Bag):
+            bag_kwargs[k] = v
+            bags.append(v)
+            dsk.update(v.dask)
+        else:
+            if isinstance(v, Item):
+                dsk.update(v.dask)
+            other_kwargs[k] = v
+
+    if any(isinstance(v, Item) for v in other_kwargs.values()):
+        vals = [b.name if isinstance(b, Item) else b for b in other_kwargs.values()]
+        other_kwargs = (dict, (zip, list(other_kwargs), vals))
+
+    if not bags:
+        raise ValueError("At least one argument must be a Bag.")
+
+    npartitions = {b.npartitions for b in bags}
+    if len(npartitions) > 1:
+        raise ValueError("All bags must have the same number of partitions.")
+    npartitions = npartitions.pop()
+
+    def build_args(n):
+        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+
+    def build_bag_kwargs(n):
+        if not bag_kwargs:
+            return None
+        return (dict, (zip, list(bag_kwargs),
+                       [(b.name, n) for b in bag_kwargs.values()]))
+
+    dsk.update({(name, n): (reify, (map_chunk, func, build_args(n),
+                                    build_bag_kwargs(n), other_kwargs))
+                for n in range(npartitions)})
+
+    return Bag(dsk, name, npartitions)
+
+
 def _reduce(binop, sequence, initial=no_default):
     if initial is not no_default:
         return reduce(binop, sequence, initial)
