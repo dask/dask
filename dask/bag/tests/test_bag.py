@@ -150,6 +150,20 @@ def test_bag_map():
         db.map(myadd, b.sum(), 1, 2)
 
 
+def test_starmap():
+    data = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]
+    b = db.from_sequence(data, npartitions=2)
+
+    def myadd(a, b, c=0):
+        return a + b + c
+
+    assert b.starmap(myadd).compute() == [myadd(*a) for a in data]
+    assert b.starmap(myadd, c=10).compute() == [myadd(*a, c=10) for a in data]
+    max_second = b.pluck(1).max()
+    assert (b.starmap(myadd, c=max_second).compute() ==
+            [myadd(*a, c=max_second.compute()) for a in data])
+
+
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i),
