@@ -1791,8 +1791,11 @@ class Scheduler(Server):
                         pass
 
             workers = set(workers)
-            keys = set.union(*[self.has_what[w] for w in workers])
-            keys = {k for k in keys if self.who_has[k].issubset(workers)}
+            if len(workers) > 0:
+                keys = set.union(*[self.has_what[w] for w in workers])
+                keys = {k for k in keys if self.who_has[k].issubset(workers)}
+            else:
+                keys = set()
 
             other_workers = set(self.worker_info) - workers
             if keys:

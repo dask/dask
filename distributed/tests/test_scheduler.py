@@ -155,6 +155,11 @@ def test_no_workers(client, s):
         yield gen.with_timeout(timedelta(milliseconds=50), x._result())
 
 
+@gen_cluster(ncores=[])
+def test_retire_workers_empty(s):
+    yield s.retire_workers(workers=[])
+
+
 @pytest.mark.skip
 def test_validate_state():
     dsk = {'x': 1, 'y': (inc, 'x')}
