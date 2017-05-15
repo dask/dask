@@ -17,7 +17,8 @@ from distributed.utils import All, get_ip_interface
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.metrics import time
-from distributed.cli.utils import check_python_3
+from distributed.security import Security
+from distributed.cli.utils import check_python_3, uri_from_host_port
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -42,8 +43,16 @@ def handle_signal(sig, frame):
         exit(1)
 
 
+pem_file_option_type = click.Path(exists=True, resolve_path=True)
+
 @click.command()
 @click.argument('scheduler', type=str, required=False)
+@click.option('--tls-ca-file', type=pem_file_option_type, default=None,
+              help="CA cert(s) file for TLS (in PEM format)")
+@click.option('--tls-cert', type=pem_file_option_type, default=None,
+              help="certificate file for TLS (in PEM format)")
+@click.option('--tls-key', type=pem_file_option_type, default=None,
+              help="private key file for TLS (in PEM format)")
 @click.option('--worker-port', type=int, default=0,
               help="Serving computation port, defaults to random")
 @click.option('--http-port', type=int, default=0,
@@ -94,7 +103,13 @@ def handle_signal(sig, frame):
 def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
-         interface, death_timeout, preload, bokeh_prefix):
+         interface, death_timeout, preload, bokeh_prefix,
+         tls_ca_file, tls_cert, tls_key):
+    sec = Security(tls_ca_file=tls_ca_file,
+                   tls_worker_cert=tls_cert,
+                   tls_worker_key=tls_key,
+                   )
+
     if nanny:
         port = nanny_port
     else:
@@ -172,7 +187,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload,
+                 preload=preload, security=sec,
                  **kwargs)
                for i in range(nprocs)]
 
@@ -182,11 +197,14 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         else:
             host = get_ip_interface(interface)
 
+    if host or port:
+        addr = uri_from_host_port(host, port, 0)
+    else:
+        # Choose appropriate address for scheduler
+        addr = None
+
     for n in nannies:
-        if host:
-            n.start((host, port))
-        else:
-            n.start(port)
+        n.start(addr)
         if t is Nanny:
             global_nannies.append(n)
 
@@ -209,12 +227,13 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
 
     @gen.coroutine
     def f():
-        with rpc(nannies[0].scheduler.address) as scheduler:
-            if nanny:
+        if nanny:
+            w = nannies[0]
+            with w.rpc(w.scheduler.address) as scheduler:
                 yield gen.with_timeout(
                         timeout=timedelta(seconds=2),
                         future=All([scheduler.unregister(address=n.worker_address, close=True)
-                                   for n in nannies if n.process and n.worker_address]),
+                                    for n in nannies if n.process and n.worker_address]),
                         io_loop=loop2)
 
     loop2.run_sync(f)

@@ -39,8 +39,10 @@ from .utils_comm import WrappedKey, unpack_remotedata, pack_data
 from .cfexecutor import ClientExecutor
 from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import connect, rpc, clean_exception, CommClosedError
+from .node import Node
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
+from .security import Security
 from .worker import dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph)
@@ -332,7 +334,7 @@ class AllExit(Exception):
     """
 
 
-class Client(object):
+class Client(Node):
     """ Connect to and drive computation on a distributed Dask cluster
 
     The Client connects users to a dask.distributed compute cluster.  It
@@ -373,7 +375,8 @@ class Client(object):
     _Future = Future
 
     def __init__(self, address=None, start=True, loop=None, timeout=5,
-                 set_as_default=True, scheduler_file=None, **kwargs):
+                 set_as_default=True, scheduler_file=None,
+                 security=None, **kwargs):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self._should_close_loop = loop is None and start
@@ -386,6 +389,9 @@ class Client(object):
         self.extensions = {}
         self.scheduler_file = scheduler_file
         self._startup_kwargs = kwargs
+        self.security = security or Security()
+        assert isinstance(self.security, Security)
+        self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
 
         if hasattr(address, "scheduler_address"):
@@ -401,13 +407,16 @@ class Client(object):
             dask.set_options(shuffle='tasks')
 
         self._handlers = {
-                'key-in-memory': self._handle_key_in_memory,
-                'lost-data': self._handle_lost_data,
-                'cancelled-key': self._handle_cancelled_key,
-                'task-erred': self._handle_task_erred,
-                'restart': self._handle_restart,
-                'error': self._handle_error
+            'key-in-memory': self._handle_key_in_memory,
+            'lost-data': self._handle_lost_data,
+            'cancelled-key': self._handle_cancelled_key,
+            'task-erred': self._handle_task_erred,
+            'restart': self._handle_restart,
+            'error': self._handle_error
         }
+
+        super(Client, self).__init__(connection_args=self.connection_args,
+                                     io_loop=self.loop)
 
         if start:
             self.start(timeout=timeout)
@@ -502,7 +511,8 @@ class Client(object):
 
             address = self.cluster.scheduler_address
 
-        self.scheduler = rpc(address, timeout=timeout)
+        self.scheduler = rpc(address, timeout=timeout,
+                             connection_args=self.connection_args)
         self.scheduler_comm = None
 
         yield self._ensure_connected(timeout=timeout)
@@ -536,8 +546,8 @@ class Client(object):
         self._connecting_to_scheduler = True
 
         try:
-            comm = yield connect(self.scheduler.address,
-                                 timeout=timeout)
+            comm = yield connect(self.scheduler.address, timeout=timeout,
+                                 connection_args=self.connection_args)
 
             yield self.scheduler.identity()
 

@@ -21,7 +21,8 @@ from distributed.utils_test import (
     assert_can_connect, assert_cannot_connect,
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
-    assert_can_connect_locally_4, assert_can_connect_locally_6)
+    assert_can_connect_locally_4, assert_can_connect_locally_6,
+    tls_security)
 
 
 EXTERNAL_IP4 = get_ip()
@@ -100,9 +101,9 @@ def test_server_listen():
     """
 
     @contextmanager
-    def listen_on(cls, *args):
+    def listen_on(cls, *args, **kwargs):
         server = cls({})
-        server.listen(*args)
+        server.listen(*args, **kwargs)
         try:
             yield server
         finally:
@@ -181,6 +182,15 @@ def test_server_listen():
             yield assert_can_connect(server.address)
             yield assert_can_connect_locally_6(server.port)
 
+    # TLS
+
+    sec = tls_security()
+    with listen_on(Server, 'tls://',
+                   listen_args=sec.get_listen_args('scheduler')) as server:
+        assert server.address.startswith('tls://')
+        yield assert_can_connect(server.address,
+                                 connection_args=sec.get_connection_args('client'))
+
     # InProc
 
     with listen_on(Server, 'inproc://') as server:
@@ -198,13 +208,13 @@ def test_server_listen():
 
 
 @gen.coroutine
-def check_rpc(listen_arg, rpc_arg=None):
+def check_rpc(listen_addr, rpc_addr=None, listen_args=None, connection_args=None):
     server = Server({'ping': pingpong})
-    server.listen(listen_arg)
-    if rpc_arg is None:
-        rpc_arg = server.address
+    server.listen(listen_addr, listen_args=listen_args)
+    if rpc_addr is None:
+        rpc_addr = server.address
 
-    with rpc(rpc_arg) as remote:
+    with rpc(rpc_addr, connection_args=connection_args) as remote:
         response = yield remote.ping()
         assert response == b'pong'
         assert remote.comms
@@ -229,6 +239,12 @@ def test_rpc_default():
 def test_rpc_tcp():
     yield check_rpc('tcp://:8883', 'tcp://127.0.0.1:8883')
     yield check_rpc('tcp://')
+
+@gen_test()
+def test_rpc_tls():
+    sec = tls_security()
+    yield check_rpc('tcp://', None, sec.get_listen_args('scheduler'),
+                    sec.get_connection_args('worker'))
 
 @gen_test()
 def test_rpc_inproc():
@@ -413,22 +429,15 @@ def test_send_recv_args():
     server = Server({'echo': echo})
     server.listen(0)
 
-    addr = '127.0.0.1:%d' % server.port
-    addr2 = server.address
-
-    result = yield send_recv(addr=addr, op='echo', x=b'1')
+    comm = yield connect(server.address)
+    result = yield send_recv(comm, op='echo', x=b'1')
     assert result == b'1'
-    result = yield send_recv(addr=addr, op='echo', x=b'2', reply=False)
-    assert result == None
-    result = yield send_recv(addr=addr2, op='echo', x=b'2')
-    assert result == b'2'
-
-    comm = yield connect(addr)
-    result = yield send_recv(comm, op='echo', x=b'3')
-    assert result == b'3'
     assert not comm.closed()
-    result = yield send_recv(comm, op='echo', x=b'4', close=True)
-    assert result == b'4'
+    result = yield send_recv(comm, op='echo', x=b'2', reply=False)
+    assert result == None
+    assert not comm.closed()
+    result = yield send_recv(comm, op='echo', x=b'3', close=True)
+    assert result == b'3'
     assert comm.closed()
 
     server.stop()
@@ -480,6 +489,34 @@ def test_connection_pool():
     while any(rpc.available.values()):
         yield gen.sleep(0.01)
         assert time() < start + 2
+
+    rpc.close()
+
+
+@gen_test()
+def test_connection_pool_tls():
+    """
+    Make sure connection args are supported.
+    """
+    sec = tls_security()
+    connection_args = sec.get_connection_args('client')
+    listen_args = sec.get_listen_args('scheduler')
+
+    @gen.coroutine
+    def ping(comm, delay=0.01):
+        yield gen.sleep(delay)
+        raise gen.Return('pong')
+
+    servers = [Server({'ping': ping}) for i in range(10)]
+    for server in servers:
+        server.listen('tls://', listen_args=listen_args)
+
+    rpc = ConnectionPool(limit=5, connection_args=connection_args)
+
+    yield [rpc(s.address).ping() for s in servers[:5]]
+    yield [rpc(s.address).ping() for s in servers[::2]]
+    yield [rpc(s.address).ping() for s in servers]
+    assert rpc.active == 0
 
     rpc.close()
 

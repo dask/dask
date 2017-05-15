@@ -36,7 +36,7 @@ def test_work_stealing(c, s, a, b):
     yield _wait(futures)
     assert len(a.data) > 10
     assert len(b.data) > 10
-    assert len(a.data) > len(b.data)
+    assert len(a.data) > len(b.data) - 5
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
@@ -541,10 +541,19 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
                        allow_other_workers=True)
     while sum(map(len, s.processing.values())) < 2:  # let them start
         yield gen.sleep(0.01)
-    yield gen.sleep(0.2)  # scheduler learns that they are long-running
+
+    start = time()
+    while any(t.key in s.extensions['stealing'].key_stealable for t in long_tasks):
+        yield gen.sleep(0.01)
+        assert time() < start + 1
+
+    na = len(a.executing)
+    nb= len(b.executing)
+
     incs = c.map(inc, range(100), workers=a.address, allow_other_workers=True)
 
     yield gen.sleep(0.2)
-    assert not any(k.startswith('long') for k in s.processing[b.address])
+
+    assert sum(1 for k in s.processing[b.address] if k.startswith('long')) <= nb
 
     yield _wait(long_tasks)

@@ -1,4 +1,8 @@
 *.pyc
 *.py~
 docs/build
+build
+*.egg-info
+continuous_integration/hdfs-initialized
+.cache
 .#*

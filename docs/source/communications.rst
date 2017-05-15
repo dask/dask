@@ -30,6 +30,10 @@ source tree:
 * ``tcp`` is the main transport; it uses TCP sockets and allows for IPv4
   and IPv6 addresses.
 
+* ``tls`` is a secure transport using the well-known `TLS protocol`_ over
+  TCP sockets.  Using it requires specifying keys and
+  certificates as outlined in :ref:`tls`.
+
 * ``zmq`` is an experimental transport using ZeroMQ sockets; it is not
   recommended for production use.
 
@@ -45,6 +49,9 @@ and on an arbitrary port, but you cannot connect to that address.
 Higher-level APIs in ``distributed`` may accept other address formats for
 convenience or compatibility, for example a ``(host, port)`` pair.  However,
 the abstract communications layer always deals with URIs.
+
+
+.. _TLS protocol: https://en.wikipedia.org/wiki/Transport_Layer_Security
 
 
 Functions

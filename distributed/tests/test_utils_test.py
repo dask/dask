@@ -8,11 +8,11 @@ from time import sleep
 import pytest
 from tornado import gen
 
-from distributed import Scheduler, Worker, Client
+from distributed import Scheduler, Worker, Client, config
 from distributed.core import rpc
 from distributed.metrics import time
 from distributed.utils_test import (cluster, loop, gen_cluster,
-        gen_test, wait_for_port, slow)
+        gen_test, wait_for_port, slow, new_config, tls_only_security)
 from distributed.utils import get_ip
 
 def test_cluster(loop):
@@ -37,6 +37,19 @@ def test_gen_cluster_without_client(s, a, b):
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
+
+@gen_cluster(client=True, scheduler='tls://127.0.0.1',
+             ncores=[('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)],
+             security=tls_only_security())
+def test_gen_cluster_tls(e, s, a, b):
+    assert isinstance(e, Client)
+    assert isinstance(s, Scheduler)
+    assert s.address.startswith('tls://')
+    for w in [a, b]:
+        assert isinstance(w, Worker)
+        assert w.address.startswith('tls://')
+    assert s.ncores == {w.address: w.ncores for w in [a, b]}
+
 
 @gen_test()
 def test_gen_test():
@@ -88,3 +101,12 @@ def test_wait_for_port():
         wait_for_port(s1.getsockname())
         t2 = time()
         assert t2 - t1 <= 2.0
+
+
+def test_new_config():
+    c = config.copy()
+    with new_config({'xyzzy': 5}):
+        assert config == {'xyzzy': 5}
+
+    assert config == c
+    assert 'xyzzy' not in config

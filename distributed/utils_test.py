@@ -11,6 +11,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import textwrap
 from time import sleep
 import uuid
@@ -22,9 +23,11 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
+from .config import config
 from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .nanny import Nanny
+from .security import Security
 from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
 from .worker import Worker
 import pytest
@@ -450,16 +453,17 @@ from .client import Client
 
 
 @gen.coroutine
-def start_cluster(ncores, loop, Worker=Worker, scheduler_kwargs={},
-                  worker_kwargs={}):
-    s = Scheduler(loop=loop, validate=True, **scheduler_kwargs)
-    done = s.start('127.0.0.1')
-    workers = [Worker(s.address, ncores=ncore[1], name=i,
+def start_cluster(ncores, scheduler_addr, loop, security=None,
+                  Worker=Worker, scheduler_kwargs={}, worker_kwargs={}):
+    s = Scheduler(loop=loop, validate=True, security=security,
+                  **scheduler_kwargs)
+    done = s.start(scheduler_addr)
+    workers = [Worker(s.address, ncores=ncore[1], name=i, security=security,
                       loop=loop, validate=True,
                       **(merge(worker_kwargs, ncore[2])
                          if len(ncore) > 2
                          else worker_kwargs))
-                for i, ncore in enumerate(ncores)]
+               for i, ncore in enumerate(ncores)]
     for w in workers:
         w.rpc = workers[0].rpc
 
@@ -493,9 +497,10 @@ def end_cluster(s, workers):
     s.stop()
 
 
-def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
-        Worker=Worker, client=False, scheduler_kwargs={}, worker_kwargs={},
-        active_rpc_timeout=0):
+def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
+                scheduler='127.0.0.1', timeout=10, security=None,
+                Worker=Worker, client=False, scheduler_kwargs={},
+                worker_kwargs={}, active_rpc_timeout=0):
     from distributed import Client
     """ Coroutine test with small cluster
 
@@ -513,13 +518,16 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
         def test_func():
             with pristine_loop() as loop:
                 with check_active_rpc(loop, active_rpc_timeout):
-                    s, workers = loop.run_sync(lambda: start_cluster(ncores, loop,
-                                    Worker=Worker, scheduler_kwargs=scheduler_kwargs,
+                    s, workers = loop.run_sync(lambda: start_cluster(ncores,
+                                    scheduler, loop, security=security,
+                                    Worker=Worker,
+                                    scheduler_kwargs=scheduler_kwargs,
                                     worker_kwargs=worker_kwargs))
                     args = [s] + workers
 
                     if client:
-                        e = Client(s.address, loop=loop, start=False)
+                        e = Client(s.address, loop=loop, security=security,
+                                   start=False)
                         loop.run_sync(e._start)
                         args = [e] + args
                     try:
@@ -661,19 +669,20 @@ else:
 
 
 @gen.coroutine
-def assert_can_connect(addr, timeout=None):
+def assert_can_connect(addr, timeout=None, connection_args=None):
     """
     Check that it is possible to connect to the distributed *addr*
     within the given *timeout*.
     """
     if timeout is None:
         timeout = 0.2
-    comm = yield connect(addr, timeout=timeout)
+    comm = yield connect(addr, timeout=timeout,
+                         connection_args=connection_args)
     comm.abort()
 
 
 @gen.coroutine
-def assert_cannot_connect(addr, timeout=None):
+def assert_cannot_connect(addr, timeout=None, connection_args=None):
     """
     Check that it is impossible to connect to the distributed *addr*
     within the given *timeout*.
@@ -681,89 +690,95 @@ def assert_cannot_connect(addr, timeout=None):
     if timeout is None:
         timeout = 0.2
     with pytest.raises(EnvironmentError):
-        comm = yield connect(addr, timeout=timeout)
+        comm = yield connect(addr, timeout=timeout,
+                             connection_args=connection_args)
         comm.abort()
 
 
 @gen.coroutine
-def assert_can_connect_from_everywhere_4_6(port, timeout=None):
+def assert_can_connect_from_everywhere_4_6(port, timeout=None, connection_args=None):
     """
     Check that the local *port* is reachable from all IPv4 and IPv6 addresses.
     """
+    args = (timeout, connection_args)
     futures = [
-        assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
-        assert_can_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+        assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
+        assert_can_connect('tcp://%s:%d' % (get_ip(), port), *args),
         ]
     if has_ipv6():
         futures += [
-            assert_can_connect('tcp://[::1]:%d' % port, timeout),
-            assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            assert_can_connect('tcp://[::1]:%d' % port, *args),
+            assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
             ]
     yield futures
 
 @gen.coroutine
-def assert_can_connect_from_everywhere_4(port, timeout=None):
+def assert_can_connect_from_everywhere_4(port, timeout=None, connection_args=None):
     """
     Check that the local *port* is reachable from all IPv4 addresses.
     """
+    args = (timeout, connection_args)
     futures = [
-            assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
-            assert_can_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+            assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
+            assert_can_connect('tcp://%s:%d' % (get_ip(), port), *args),
         ]
     if has_ipv6():
         futures += [
-            assert_cannot_connect('tcp://[::1]:%d' % port, timeout),
-            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            assert_cannot_connect('tcp://[::1]:%d' % port, *args),
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
             ]
     yield futures
 
 @gen.coroutine
-def assert_can_connect_locally_4(port, timeout=None):
+def assert_can_connect_locally_4(port, timeout=None, connection_args=None):
     """
     Check that the local *port* is only reachable from local IPv4 addresses.
     """
+    args = (timeout, connection_args)
     futures = [
-        assert_can_connect('tcp://127.0.0.1:%d' % port, timeout),
+        assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
         ]
     if get_ip() != '127.0.0.1':  # No outside IPv4 connectivity?
         futures += [
-            assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
+            assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
             ]
     if has_ipv6():
         futures += [
-            assert_cannot_connect('tcp://[::1]:%d' % port, timeout),
-            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            assert_cannot_connect('tcp://[::1]:%d' % port, *args),
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
             ]
     yield futures
 
 @gen.coroutine
-def assert_can_connect_from_everywhere_6(port, timeout=None):
+def assert_can_connect_from_everywhere_6(port, timeout=None, connection_args=None):
     """
     Check that the local *port* is reachable from all IPv6 addresses.
     """
     assert has_ipv6()
+    args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect('tcp://127.0.0.1:%d' % port, timeout),
-        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
-        assert_can_connect('tcp://[::1]:%d' % port, timeout),
-        assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+        assert_cannot_connect('tcp://127.0.0.1:%d' % port, *args),
+        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
+        assert_can_connect('tcp://[::1]:%d' % port, *args),
+        assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
         ]
     yield futures
 
 @gen.coroutine
-def assert_can_connect_locally_6(port, timeout=None):
+def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
     """
     Check that the local *port* is only reachable from local IPv6 addresses.
     """
     assert has_ipv6()
+    args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect('tcp://127.0.0.1:%d' % port, timeout),
-        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), timeout),
-        assert_can_connect('tcp://[::1]:%d' % port, timeout),
+        assert_cannot_connect('tcp://127.0.0.1:%d' % port, *args),
+        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
+        assert_can_connect('tcp://[::1]:%d' % port, *args),
         ]
     if get_ipv6() != '::1':  # No outside IPv6 connectivity?
         futures += [
-            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), timeout),
+            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
             ]
     yield futures
 
@@ -792,3 +807,107 @@ def captured_handler(handler):
         yield handler.stream
     finally:
         handler.stream = orig_stream
+
+
+@contextmanager
+def new_config(new_config):
+    """
+    Temporarily change configuration dictionary.
+    """
+    orig_config = config.copy()
+    try:
+        config.clear()
+        config.update(new_config)
+        yield
+    finally:
+        config.clear()
+        config.update(orig_config)
+
+
+@contextmanager
+def new_config_file(c):
+    """
+    Temporarily change configuration file to match dictionary *c*.
+    """
+    import yaml
+    old_file = os.environ.get('DASK_CONFIG')
+    fd, path = tempfile.mkstemp(prefix='dask-config')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(yaml.dump(c))
+        os.environ['DASK_CONFIG'] = path
+        try:
+            yield
+        finally:
+            if old_file:
+                os.environ['DASK_CONFIG'] = old_file
+            else:
+                del os.environ['DASK_CONFIG']
+    finally:
+        os.remove(path)
+
+
+certs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         'tests'))
+
+def get_cert(filename):
+    """
+    Get the path to one of the test TLS certificates.
+    """
+    path = os.path.join(certs_dir, filename)
+    assert os.path.exists(path), path
+    return path
+
+
+def tls_config():
+    """
+    A functional TLS configuration with our test certs.
+    """
+    ca_file = get_cert('tls-ca-cert.pem')
+    keycert = get_cert('tls-key-cert.pem')
+
+    c = {
+        'tls': {
+            'ca-file': ca_file,
+            'client': {
+                'cert': keycert,
+                },
+            'scheduler': {
+                'cert': keycert,
+                },
+            'worker': {
+                'cert': keycert,
+                },
+            },
+        }
+    return c
+
+
+def tls_only_config():
+    """
+    A functional TLS configuration with our test certs, disallowing
+    plain TCP communications.
+    """
+    c = tls_config()
+    c['require-encryption'] = True
+    return c
+
+
+def tls_security():
+    """
+    A Security object with proper TLS configuration.
+    """
+    with new_config(tls_config()):
+        sec = Security()
+    return sec
+
+
+def tls_only_security():
+    """
+    A Security object with proper TLS configuration and disallowing plain
+    TCP communications.
+    """
+    with new_config(tls_only_config()):
+        sec = Security()
+    assert sec.require_encryption
+    return sec

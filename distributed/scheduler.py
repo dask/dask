@@ -31,10 +31,12 @@ from .config import config
 from .core import (rpc, connect, Server, send_recv,
                    error_message, clean_exception, CommClosedError)
 from .metrics import time
+from .node import ServerNode
 from .publish import PublishExtension
 from .channels import ChannelScheduler
 from .stealing import WorkStealing
 from .recreate_exceptions import ReplayExceptionScheduler
+from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
         key_split, validate_key)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
@@ -50,10 +52,7 @@ LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
 DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 
-# XXX avoid inheriting from Server? there is some large potential for confusion
-# between base and derived attribute namespaces ...
-
-class Scheduler(Server):
+class Scheduler(ServerNode):
     """ Dynamic distributed task scheduler
 
     The scheduler tracks the current state of workers, data, and computations.
@@ -191,7 +190,8 @@ class Scheduler(Server):
                  services=None, allowed_failures=ALLOWED_FAILURES,
                  extensions=[ChannelScheduler, PublishExtension, WorkStealing,
                              ReplayExceptionScheduler],
-                 validate=False, scheduler_file=None, **kwargs):
+                 validate=False, scheduler_file=None, security=None,
+                 **kwargs):
 
         # Attributes
         self.allowed_failures = allowed_failures
@@ -203,6 +203,11 @@ class Scheduler(Server):
         self.service_specs = services or {}
         self.services = {}
         self.scheduler_file = scheduler_file
+
+        self.security = security or Security()
+        assert isinstance(self.security, Security)
+        self.connection_args = self.security.get_connection_args('scheduler')
+        self.listen_args = self.security.get_listen_args('scheduler')
 
         # Communication state
         self.loop = loop or IOLoop.current()
@@ -341,7 +346,9 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(
             handlers=self.handlers, io_loop=self.loop,
-            connection_limit=connection_limit, deserialize=False, **kwargs)
+            connection_limit=connection_limit, deserialize=False,
+            connection_args=self.connection_args,
+            **kwargs)
 
         for ext in extensions:
             ext(self)
@@ -419,10 +426,10 @@ class Scheduler(Server):
             if isinstance(addr_or_port, int):
                 # Listen on all interfaces.  `get_ip()` is not suitable
                 # as it would prevent connecting via 127.0.0.1.
-                self.listen(('', addr_or_port))
+                self.listen(('', addr_or_port), listen_args=self.listen_args)
                 self.ip = get_ip()
             else:
-                self.listen(addr_or_port)
+                self.listen(addr_or_port, listen_args=self.listen_args)
                 self.ip = get_address_host(self.listen_address)
 
             # Services listen on all addresses
@@ -1282,7 +1289,7 @@ class Scheduler(Server):
         Scheduler.handle_client: Equivalent coroutine for clients
         """
         try:
-            comm = yield connect(worker)
+            comm = yield connect(worker, connection_args=self.connection_args)
         except Exception as e:
             logger.error("Failed to connect to worker %r: %s",
                          worker, e)
@@ -1397,6 +1404,7 @@ class Scheduler(Server):
             ncores = {w: self.ncores[w] for w in workers}
 
         keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
+                                                         rpc=self.rpc,
                                                          report=False,
                                                          serialize=False)
 
@@ -1528,8 +1536,14 @@ class Scheduler(Server):
         else:
             addresses = workers
 
-        results = yield All([send_recv(addr=address, close=True,
-                                       deserialize=self.deserialize, **msg)
+        @gen.coroutine
+        def send_message(addr):
+            comm = yield connect(addr, deserialize=self.deserialize,
+                                 connection_args=self.connection_args)
+            resp = yield send_recv(comm, close=True, **msg)
+            raise gen.Return(resp)
+
+        results = yield All([send_message(self.coerce_address(address))
                              for address in addresses
                              if address is not None])
 
@@ -1681,7 +1695,7 @@ class Scheduler(Server):
             del_workers = {k: v for k, v in reverse_dict(del_keys).items() if v}
             yield [self.rpc(addr=worker).delete_data(keys=list(keys),
                                                      report=False)
-                    for worker, keys in del_workers.items()]
+                   for worker, keys in del_workers.items()]
 
             for worker, keys in del_workers.items():
                 self.has_what[worker] -= keys

@@ -102,7 +102,9 @@ Contents
    :maxdepth: 1
    :caption: Additional Features
 
+   configuration
    local-cluster
+   tls
    ec2
    web
    joblib

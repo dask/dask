@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import os
+import ssl
 import sys
 import threading
 
@@ -14,7 +15,7 @@ from distributed.core import pingpong
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (slow, loop, gen_test, gen_cluster,
-                                    requires_ipv6, has_ipv6)
+                                    requires_ipv6, has_ipv6, get_cert)
 
 from distributed.protocol import (loads, dumps,
                                   to_serialize, Serialized, serialize, deserialize)
@@ -38,6 +39,43 @@ else:
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
     EXTERNAL_IP6 = get_ipv6()
+
+
+ca_file = get_cert('tls-ca-cert.pem')
+
+# The Subject field of our test certs
+cert_subject = (
+    (('countryName', 'XY'),),
+    (('localityName', 'Dask-distributed'),),
+    (('organizationName', 'Dask'),),
+    (('commonName', 'localhost'),)
+    )
+
+def check_tls_extra(info):
+    assert isinstance(info, dict)
+    assert info['peercert']['subject'] == cert_subject
+    assert 'cipher' in info
+    cipher_name, proto_name, secret_bits = info['cipher']
+    # Most likely
+    assert 'AES' in cipher_name
+    assert 'TLS' in proto_name
+    assert secret_bits >= 128
+
+
+def get_server_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem'):
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=ca_file)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
+    return ctx
+
+def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem'):
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca_file)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
+    return ctx
+
 
 
 @gen.coroutine
@@ -163,6 +201,7 @@ def test_tcp_specific():
     @gen.coroutine
     def handle_comm(comm):
         assert comm.peer_address.startswith('tcp://' + host)
+        assert comm.extra_info == {}
         msg = yield comm.read()
         msg['op'] = 'pong'
         yield comm.write(msg)
@@ -182,6 +221,57 @@ def test_tcp_specific():
         addr = '%s:%d' % (host, port)
         comm = yield connector.connect(addr)
         assert comm.peer_address == 'tcp://' + addr
+        assert comm.extra_info == {}
+        yield comm.write({'op': 'ping', 'data': key})
+        if delay:
+            yield gen.sleep(delay)
+        msg = yield comm.read()
+        assert msg == {'op': 'pong', 'data': key}
+        l.append(key)
+        yield comm.close()
+
+    yield client_communicate(key=1234)
+
+    # Many clients at once
+    N = 100
+    futures = [client_communicate(key=i, delay=0.05) for i in range(N)]
+    yield futures
+    assert set(l) == {1234} | set(range(N))
+
+
+@gen_test()
+def test_tls_specific():
+    """
+    Test concrete TLS API.
+    """
+    @gen.coroutine
+    def handle_comm(comm):
+        assert comm.peer_address.startswith('tls://' + host)
+        check_tls_extra(comm.extra_info)
+        msg = yield comm.read()
+        msg['op'] = 'pong'
+        yield comm.write(msg)
+        yield comm.close()
+
+    server_ctx = get_server_ssl_context()
+    client_ctx = get_client_ssl_context()
+
+    listener = tcp.TLSListener('localhost', handle_comm,
+                               ssl_context=server_ctx)
+    listener.start()
+    host, port = listener.get_host_port()
+    assert host in ('localhost', '127.0.0.1', '::1')
+    assert port > 0
+
+    connector = tcp.TLSConnector()
+    l = []
+
+    @gen.coroutine
+    def client_communicate(key, delay=0):
+        addr = '%s:%d' % (host, port)
+        comm = yield connector.connect(addr, ssl_context=client_ctx)
+        assert comm.peer_address == 'tls://' + addr
+        check_tls_extra(comm.extra_info)
         yield comm.write({'op': 'ping', 'data': key})
         if delay:
             yield gen.sleep(delay)
@@ -336,7 +426,8 @@ def test_inproc_specific_different_threads():
 #
 
 @gen.coroutine
-def check_client_server(addr, check_listen_addr=None, check_contact_addr=None):
+def check_client_server(addr, check_listen_addr=None, check_contact_addr=None,
+                        listen_args=None, connect_args=None):
     """
     Abstract client / server test.
     """
@@ -355,13 +446,17 @@ def check_client_server(addr, check_listen_addr=None, check_contact_addr=None):
 
         yield comm.close()
 
-    listener = listen(addr, handle_comm)
+    # Arbitrary connection args should be ignored
+    listen_args = listen_args or {'xxx': 'bar'}
+    connect_args = connect_args or {'xxx': 'foo'}
+
+    listener = listen(addr, handle_comm, connection_args=listen_args)
     listener.start()
 
     # Check listener properties
     bound_addr = listener.listen_address
     bound_scheme, bound_loc = parse_address(bound_addr)
-    assert bound_scheme in ('inproc', 'tcp', 'zmq')
+    assert bound_scheme in ('inproc', 'tcp', 'tls', 'zmq')
     assert bound_scheme == parse_address(addr)[0]
 
     if check_listen_addr is not None:
@@ -381,7 +476,8 @@ def check_client_server(addr, check_listen_addr=None, check_contact_addr=None):
 
     @gen.coroutine
     def client_communicate(key, delay=0):
-        comm = yield connect(listener.contact_address)
+        comm = yield connect(listener.contact_address,
+                             connection_args=connect_args)
         assert comm.peer_address == listener.contact_address
 
         yield comm.write({'op': 'ping', 'data': key})
@@ -414,6 +510,7 @@ def tcp_eq(expected_host, expected_port=None):
 
     return checker
 
+tls_eq = tcp_eq
 zmq_eq = tcp_eq
 
 def inproc_check():
@@ -464,6 +561,7 @@ def test_tcp_client_server_ipv4():
     yield check_client_server('tcp://:3223',
                               tcp_eq('0.0.0.0', 3223), tcp_eq(EXTERNAL_IP4, 3223))
 
+
 @requires_ipv6
 @gen_test()
 def test_tcp_client_server_ipv6():
@@ -473,6 +571,28 @@ def test_tcp_client_server_ipv6():
                               tcp_eq('::'), tcp_eq(EXTERNAL_IP6))
     yield check_client_server('tcp://[::]:3232',
                               tcp_eq('::', 3232), tcp_eq(EXTERNAL_IP6, 3232))
+
+
+@gen_test()
+def test_tls_client_server_ipv4():
+    listen_args = {'ssl_context': get_server_ssl_context()}
+    connect_args = {'ssl_context': get_client_ssl_context()}
+    kwargs = dict(listen_args=listen_args, connect_args=connect_args)
+
+    yield check_client_server('tls://127.0.0.1', tls_eq('127.0.0.1'), **kwargs)
+    yield check_client_server('tls://127.0.0.1:3221', tls_eq('127.0.0.1', 3221), **kwargs)
+    yield check_client_server('tls://', tls_eq('0.0.0.0'),
+                              tls_eq(EXTERNAL_IP4), **kwargs)
+
+@requires_ipv6
+@gen_test()
+def test_tls_client_server_ipv6():
+    listen_args = {'ssl_context': get_server_ssl_context()}
+    connect_args = {'ssl_context': get_client_ssl_context()}
+    kwargs = dict(listen_args=listen_args, connect_args=connect_args)
+
+    yield check_client_server('tls://[::1]', tls_eq('::1'), **kwargs)
+
 
 @requires_zmq
 @gen_test()
@@ -507,24 +627,83 @@ def test_inproc_client_server():
 
 
 #
+# TLS certificate handling
+#
+
+@gen_test()
+def test_tls_reject_certificate():
+    cli_ctx = get_client_ssl_context()
+    serv_ctx = get_server_ssl_context()
+
+    # These certs are not signed by our test CA
+    bad_cert_key = ('tls-self-signed-cert.pem', 'tls-self-signed-key.pem')
+    bad_cli_ctx = get_client_ssl_context(*bad_cert_key)
+    bad_serv_ctx = get_server_ssl_context(*bad_cert_key)
+
+    @gen.coroutine
+    def handle_comm(comm):
+        scheme, loc = parse_address(comm.peer_address)
+        assert scheme == 'tls'
+        yield comm.close()
+
+    # Listener refuses a connector not signed by the CA
+    listener = listen('tls://', handle_comm,
+                      connection_args={'ssl_context': serv_ctx})
+    listener.start()
+
+    with pytest.raises(EnvironmentError) as excinfo:
+        yield connect(listener.contact_address, timeout=0.5,
+                      connection_args={'ssl_context': bad_cli_ctx})
+
+    # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
+    if sys.version_info >= (3,) and os.name != 'nt':
+        try:
+            # See https://serverfault.com/questions/793260/what-does-tlsv1-alert-unknown-ca-mean
+            assert "unknown ca" in str(excinfo.value)
+        except AssertionError:
+            if os.name == 'nt':
+                assert "An existing connection was forcibly closed" in str(excinfo.value)
+            else:
+                raise
+
+    # Sanity check
+    comm = yield connect(listener.contact_address, timeout=0.5,
+                         connection_args={'ssl_context': cli_ctx})
+    yield comm.close()
+
+    # Connector refuses a listener not signed by the CA
+    listener = listen('tls://', handle_comm,
+                      connection_args={'ssl_context': bad_serv_ctx})
+    listener.start()
+
+    with pytest.raises(EnvironmentError) as excinfo:
+        yield connect(listener.contact_address, timeout=0.5,
+                      connection_args={'ssl_context': cli_ctx})
+    # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
+    if sys.version_info >= (3,):
+        assert "certificate verify failed" in str(excinfo.value)
+
+
+#
 # Test communication closing
 #
 
 @gen.coroutine
-def check_comm_closed_implicit(addr, delay=None):
+def check_comm_closed_implicit(addr, delay=None, listen_args=None,
+                               connect_args=None):
     @gen.coroutine
     def handle_comm(comm):
         yield comm.close()
 
-    listener = listen(addr, handle_comm)
+    listener = listen(addr, handle_comm, connection_args=listen_args)
     listener.start()
     contact_addr = listener.contact_address
 
-    comm = yield connect(contact_addr)
+    comm = yield connect(contact_addr, connection_args=connect_args)
     with pytest.raises(CommClosedError):
         yield comm.write({})
 
-    comm = yield connect(contact_addr)
+    comm = yield connect(contact_addr, connection_args=connect_args)
     with pytest.raises(CommClosedError):
         yield comm.read()
 
@@ -532,6 +711,15 @@ def check_comm_closed_implicit(addr, delay=None):
 @gen_test()
 def test_tcp_comm_closed_implicit():
     yield check_comm_closed_implicit('tcp://127.0.0.1')
+
+@gen_test()
+def test_tls_comm_closed_implicit():
+    listen_args = {'ssl_context': get_server_ssl_context()}
+    connect_args = {'ssl_context': get_client_ssl_context()}
+
+    yield check_comm_closed_implicit('tls://127.0.0.1',
+                                     listen_args=listen_args,
+                                     connect_args=connect_args)
 
 # XXX zmq transport does not detect a connection is closed by peer
 #@gen_test()
@@ -544,7 +732,7 @@ def test_inproc_comm_closed_implicit():
 
 
 @gen.coroutine
-def check_comm_closed_explicit(addr):
+def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
     @gen.coroutine
     def handle_comm(comm):
         # Wait
@@ -553,16 +741,16 @@ def check_comm_closed_explicit(addr):
         except CommClosedError:
             pass
 
-    listener = listen(addr, handle_comm)
+    listener = listen(addr, handle_comm, connection_args=listen_args)
     listener.start()
     contact_addr = listener.contact_address
 
-    comm = yield connect(contact_addr)
+    comm = yield connect(contact_addr, connection_args=connect_args)
     comm.close()
     with pytest.raises(CommClosedError):
         yield comm.write({})
 
-    comm = yield connect(contact_addr)
+    comm = yield connect(contact_addr, connection_args=connect_args)
     comm.close()
     with pytest.raises(CommClosedError):
         yield comm.read()
@@ -573,6 +761,15 @@ def check_comm_closed_explicit(addr):
 @gen_test()
 def test_tcp_comm_closed_explicit():
     yield check_comm_closed_explicit('tcp://127.0.0.1')
+
+@gen_test()
+def test_tls_comm_closed_explicit():
+    listen_args = {'ssl_context': get_server_ssl_context()}
+    connect_args = {'ssl_context': get_client_ssl_context()}
+
+    yield check_comm_closed_explicit('tls://127.0.0.1',
+                                     listen_args=listen_args,
+                                     connect_args=connect_args)
 
 @requires_zmq
 @gen_test()

@@ -74,8 +74,10 @@ def test_scatter_from_worker(c, s, a, b):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_gather_multi_machine(c, s, a, b):
-    a_address = b.address
+    a_address = a.address
     b_address = b.address
+    assert a_address != b_address
+
     def func():
         with worker_client() as ee:
             x = ee.submit(inc, 1, workers=a_address)

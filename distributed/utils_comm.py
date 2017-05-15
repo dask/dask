@@ -11,7 +11,7 @@ from tornado.gen import Return
 from dask.base import tokenize
 from toolz import merge, concat, groupby, drop
 
-from .core import rpc, coerce_to_address
+from .core import coerce_to_address
 from .utils import All, tokey
 from .protocol.pickle import dumps
 
@@ -20,13 +20,14 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def gather_from_workers(who_has, rpc=rpc, close=True):
+def gather_from_workers(who_has, rpc, close=True):
     """ Gather data directly from peers
 
     Parameters
     ----------
     who_has: dict
         Dict mapping keys to sets of workers that may have that key
+    rpc: callable
 
     Returns dict mapping key to value
 
@@ -99,7 +100,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(ncores, data, report=True, serialize=True):
+def scatter_to_workers(ncores, data, rpc, report=True, serialize=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -134,9 +135,8 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
 
     rpcs = {addr: rpc(addr) for addr in d}
     try:
-        out = yield All([rpcs[address].update_data(data=v,
-                                                 close=True, report=report)
-                     for address, v in d.items()])
+        out = yield All([rpcs[address].update_data(data=v, report=report)
+                         for address, v in d.items()])
     finally:
         for r in rpcs.values():
             r.close_rpc()

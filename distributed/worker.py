@@ -28,11 +28,13 @@ from .comm import get_address_host, get_local_address_for
 from .config import config
 from .compatibility import unicode
 from .core import (error_message, CommClosedError,
-                   rpc, Server, pingpong, coerce_to_address)
+                   rpc, pingpong, coerce_to_address)
 from .metrics import time
+from .node import ServerNode
 from .preloading import preload_modules
 from .protocol import (pickle, to_serialize, deserialize_bytes,
                        serialize_bytelist)
+from .security import Security
 from .sizeof import sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
@@ -64,12 +66,13 @@ PROCESSING = ('waiting', 'ready', 'constrained', 'executing', 'long-running')
 READY = ('ready', 'constrained')
 
 
-class WorkerBase(Server):
+class WorkerBase(ServerNode):
     def __init__(self, scheduler_ip, scheduler_port=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
-                 silence_logs=None, death_timeout=None, preload=(), **kwargs):
+                 silence_logs=None, death_timeout=None, preload=(),
+                 security=None, **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -88,6 +91,11 @@ class WorkerBase(Server):
             if not os.path.exists(local_dir):
                 os.mkdir(local_dir)
         self.local_dir = tempfile.mkdtemp(prefix='worker-', dir=local_dir)
+
+        self.security = security or Security()
+        assert isinstance(self.security, Security)
+        self.connection_args = self.security.get_connection_args('worker')
+        self.listen_args = self.security.get_listen_args('worker')
 
         if memory_limit == 'auto':
             memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
@@ -112,7 +120,7 @@ class WorkerBase(Server):
         self._closed = Event()
         self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(self.ncores)
-        self.scheduler = rpc(scheduler_addr)
+        self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
@@ -146,7 +154,9 @@ class WorkerBase(Server):
           'keys': self.keys,
         }
 
-        super(WorkerBase, self).__init__(handlers, io_loop=self.loop, **kwargs)
+        super(WorkerBase, self).__init__(handlers, io_loop=self.loop,
+                                         connection_args=self.connection_args,
+                                         **kwargs)
 
         self.heartbeat_callback = PeriodicCallback(self.heartbeat,
                                                    self.heartbeat_interval,
@@ -251,16 +261,18 @@ class WorkerBase(Server):
         # XXX Factor this out
         if not addr_or_port:
             # Default address is the required one to reach the scheduler
-            self.listen(get_local_address_for(self.scheduler.address))
+            self.listen(get_local_address_for(self.scheduler.address),
+                        listen_args=self.listen_args)
             self.ip = get_address_host(self.address)
         elif isinstance(addr_or_port, int):
             # addr_or_port is an integer => assume TCP
             self.ip = get_ip(
                 get_address_host(self.scheduler.address)
             )
-            self.listen((self.ip, addr_or_port))
+            self.listen((self.ip, addr_or_port),
+                        listen_args=self.listen_args)
         else:
-            self.listen(addr_or_port)
+            self.listen(addr_or_port, listen_args=self.listen_args)
             self.ip = get_address_host(self.address)
 
         self.name = self.name or self.address
@@ -537,10 +549,10 @@ class WorkerBase(Server):
                     for k, v in who_has.items()
                     if k not in self.data}
         result, missing_keys, missing_workers = yield gather_from_workers(
-                who_has)
+                who_has, rpc=self.rpc)
         if missing_keys:
-            logger.warn("Could not find data: %s on workers: %s",
-                        missing_keys, missing_workers)
+            logger.warn("Could not find data: %s on workers: %s (who_has: %s)",
+                        missing_keys, missing_workers, who_has)
             raise Return({'status': 'missing-data',
                           'keys': missing_keys})
         else:

@@ -17,6 +17,20 @@ multiprocessing-method: forkserver
 # Communication options
 tcp-timeout: 30         # seconds delay before calling an unresponsive connection dead
 default-scheme: tcp
+require-encryption: False   # whether to require encryption on non-local comms
+#tls:
+    #ca-file: xxx.pem
+    #scheduler:
+        #key: xxx.pem
+        #cert: xxx.pem
+    #worker:
+        #key: xxx.pem
+        #cert: xxx.pem
+    #client:
+        #key: xxx.pem
+        #cert: xxx.pem
+    #ciphers:
+        #ECDHE-ECDSA-AES128-GCM-SHA256
 
 # Bokeh web dashboard
 bokeh-export-tool: False

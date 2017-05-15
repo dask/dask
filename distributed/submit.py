@@ -14,6 +14,7 @@ from tornado.ioloop import IOLoop
 from distributed import rpc
 from distributed.compatibility import unicode
 from distributed.core import Server
+from distributed.security import Security
 from distributed.utils import get_ip
 
 
@@ -22,16 +23,21 @@ logger = logging.getLogger('distributed.remote')
 
 class RemoteClient(Server):
     def __init__(self, ip=None, local_dir=tempfile.mkdtemp(prefix='client-'),
-                 loop=None, **kwargs):
+                 loop=None, security=None, **kwargs):
         self.ip = ip or get_ip()
         self.loop = loop or IOLoop.current()
         self.local_dir = local_dir
         handlers = {'upload_file': self.upload_file, 'execute': self.execute}
+
+        self.security = security or Security()
+        assert isinstance(self.security, Security)
+        self.listen_args = self.security.get_listen_args('scheduler')
+
         super(RemoteClient, self).__init__(handlers, io_loop=self.loop, **kwargs)
 
     @gen.coroutine
     def _start(self, port=0):
-        self.listen(port)
+        self.listen(port, listen_args=self.listen_args)
 
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
@@ -77,8 +83,8 @@ def _remote(host, port, loop=IOLoop.current(), client=RemoteClient):
 
 
 @gen.coroutine
-def _submit(remote_client_address, filepath):
-    rc = rpc(remote_client_address)
+def _submit(remote_client_address, filepath, connection_args=None):
+    rc = rpc(remote_client_address, connection_args=connection_args)
     remote_file = os.path.basename(filepath)
     with open(filepath, 'rb') as f:
         bytes_read = f.read()

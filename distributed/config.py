@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 import os
 import sys
+import warnings
 
 from .compatibility import FileExistsError, logging_names
 
@@ -10,46 +11,53 @@ logger = logging.getLogger(__name__)
 
 config = {}
 
-try:
-    import yaml
-except ImportError:
-    pass
-else:
+
+def ensure_config_file(source, destination):
+    if not os.path.exists(destination):
+        import shutil
+        if not os.path.exists(os.path.dirname(destination)):
+            try:
+                os.mkdir(os.path.dirname(destination))
+            except FileExistsError:
+                pass
+        # Atomically create destination.  Parallel testing discovered
+        # a race condition where a process can be busy creating the
+        # destination while another process reads an empty config file.
+        tmp = '%s.tmp.%d' % (destination, os.getpid())
+        shutil.copy(source, tmp)
+        try:
+            os.rename(tmp, destination)
+        except OSError:
+            os.remove(tmp)
+
+
+def determine_config_file():
+    path = os.environ.get('DASK_CONFIG')
+    if path:
+        if (os.path.exists(path) and
+            (os.path.isfile(path) or os.path.islink(path))):
+            return path
+        warnings.warn("DASK_CONFIG set to '%s' but file does not exist "
+                      "or is not a regular file" % (path,),
+                      UserWarning)
+
     dirname = os.path.dirname(__file__)
     default_path = os.path.join(dirname, 'config.yaml')
-    dask_config_path = os.path.join(os.path.expanduser('~'), '.dask', 'config.yaml')
-
-    def ensure_config_file(destination=dask_config_path):
-        if not os.path.exists(destination):
-            import shutil
-            if not os.path.exists(os.path.dirname(destination)):
-                try:
-                    os.mkdir(os.path.dirname(destination))
-                except FileExistsError:
-                    pass
-            # Atomically create destination.  Parallel testing discovered
-            # a race condition where a process can be busy creating the
-            # destination while another process reads an empty config file.
-            tmp = '%s.tmp.%d' % (destination, os.getpid())
-            shutil.copy(default_path, tmp)
-            try:
-                os.rename(tmp, destination)
-            except OSError:
-                os.remove(tmp)
-
-    def load_config_file(config, path=dask_config_path):
-        if not os.path.exists(path):
-            path = default_path
-        with open(path) as f:
-            text = f.read()
-            config.update(yaml.load(text))
+    path = os.path.join(os.path.expanduser('~'), '.dask', 'config.yaml')
 
     try:
-        ensure_config_file()
-        load_config_file(config)
+        ensure_config_file(default_path, path)
     except EnvironmentError as e:
-        logger.warn("Could not write default config file to %s. Received error %s",
-                    default_path, e)
+        logger.warn("Could not write default config file to '%s'. Received error %s",
+                    path, e)
+
+    return path if os.path.exists(path) else default_path
+
+
+def load_config_file(config, path):
+    with open(path) as f:
+        text = f.read()
+        config.update(yaml.load(text))
 
 
 def load_env_vars(config):
@@ -57,9 +65,6 @@ def load_env_vars(config):
         if name.startswith('DASK_'):
             varname = name[5:].lower().replace('_', '-')
             config[varname] = value
-
-
-load_env_vars(config)
 
 
 def initialize_logging(config):
@@ -80,5 +85,15 @@ def initialize_logging(config):
         logger.addHandler(handler)
         logger.propagate = False
 
+
+try:
+    import yaml
+except ImportError:
+    pass
+else:
+    path = determine_config_file()
+    load_config_file(config, path)
+
+load_env_vars(config)
 
 initialize_logging(config)

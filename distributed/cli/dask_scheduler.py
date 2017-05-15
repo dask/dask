@@ -11,6 +11,7 @@ import tempfile
 import click
 
 from distributed import Scheduler
+from distributed.security import Security
 from distributed.utils import ignoring, open_port, get_ip_interface
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
@@ -21,8 +22,20 @@ from tornado.ioloop import IOLoop
 logger = logging.getLogger('distributed.scheduler')
 
 
+pem_file_option_type = click.Path(exists=True, resolve_path=True)
+
 @click.command()
+@click.option('--host', type=str, default='',
+              help="URI, IP or hostname of this server")
 @click.option('--port', type=int, default=None, help="Serving port")
+@click.option('--interface', type=str, default=None,
+              help="Preferred network interface like 'eth0' or 'ib0'")
+@click.option('--tls-ca-file', type=pem_file_option_type, default=None,
+              help="CA cert(s) file for TLS (in PEM format)")
+@click.option('--tls-cert', type=pem_file_option_type, default=None,
+              help="certificate file for TLS (in PEM format)")
+@click.option('--tls-key', type=pem_file_option_type, default=None,
+              help="private key file for TLS (in PEM format)")
 # XXX default port (or URI) values should be centralized somewhere
 @click.option('--http-port', type=int, default=9786,
               help="HTTP port for JSON API diagnostics")
@@ -34,10 +47,6 @@ logger = logging.getLogger('distributed.scheduler')
               help="Deprecated. Use --bokeh-port instead")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
-@click.option('--host', type=str, default='',
-              help="IP, hostname or URI of this server")
-@click.option('--interface', type=str, default=None,
-              help="Preferred network interface like 'eth0' or 'ib0'")
 @click.option('--show/--no-show', default=False, help="Show web UI")
 @click.option('--bokeh-whitelist', default=None, multiple=True,
               help="IP addresses to whitelist for bokeh.")
@@ -60,7 +69,7 @@ logger = logging.getLogger('distributed.scheduler')
 def main(host, port, http_port, bokeh_port, bokeh_external_port,
          bokeh_internal_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
          use_xheaders, pid_file, scheduler_file, interface, local_directory,
-         preload, prefix):
+         preload, prefix, tls_ca_file, tls_cert, tls_key):
 
     if bokeh_internal_port:
         print("The --bokeh-internal-port keyword has been removed.\n"
@@ -71,6 +80,11 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
     if prefix:
         print("The --prefix keyword has moved to --bokeh-prefix")
         sys.exit(1)
+
+    sec = Security(tls_ca_file=tls_ca_file,
+                   tls_scheduler_cert=tls_cert,
+                   tls_scheduler_key=tls_key,
+                   )
 
     if pid_file:
         with open(pid_file, 'w') as f:
@@ -116,7 +130,8 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
             services[('bokeh', bokeh_port)] = partial(BokehScheduler,
                                                       prefix=bokeh_prefix)
     scheduler = Scheduler(loop=loop, services=services,
-                          scheduler_file=scheduler_file)
+                          scheduler_file=scheduler_file,
+                          security=sec)
     scheduler.start(addr)
     preload_modules(preload, parameter=scheduler, file_dir=local_directory)
 
