@@ -34,6 +34,7 @@ from ..base import Base, normalize_token, tokenize
 from ..compatibility import apply, urlopen
 from ..context import _globals, defer_to_globals
 from ..core import quote, istask, get_dependencies, reverse_dict
+from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
@@ -383,14 +384,14 @@ class Bag(Base):
     def map(self, func, *args, **kwargs):
         """Apply a function elementwise across one or more bags.
 
-        Note that all ``Bag`` arguments must have the same number of partitions.
+        Note that all ``Bag`` arguments must be partitioned identically.
 
         Parameters
         ----------
         func : callable
         *args, **kwargs : Bag, Item, or object
             Extra arguments and keyword arguments to pass to ``func`` *after*
-            the calling bag instance. Non-Bag args/kwargs are "broadcasted"
+            the calling bag instance. Non-Bag args/kwargs are broadcasted
             across all calls to ``func``.
 
         Notes
@@ -416,7 +417,7 @@ class Bag(Base):
         >>> b.map(add, b2).compute()
         [5, 7, 9, 11, 13]
 
-        Non-bag arguments are "broadcast" across all calls to the mapped
+        Non-bag arguments are broadcast across all calls to the mapped
         function:
 
         >>> b.map(add, 1).compute()
@@ -459,9 +460,9 @@ class Bag(Base):
         Parameters
         ----------
         func : callable
-        **kwargs : Item or object, optional
+        **kwargs : Item, Delayed, or object, optional
             Extra keyword arguments to pass to ``func``. These can either be
-            normal objects or instances of ``dask.bag.Item``.
+            normal objects, ``dask.bag.Item``, or ``dask.delayed.Delayed``.
 
         Examples
         --------
@@ -483,7 +484,8 @@ class Bag(Base):
         >>> b.starmap(myadd, z=10).compute()
         [13, 17, 21, 25, 29]
 
-        Keyword arguments can also be instances of ``dask.bag.Item``:
+        Keyword arguments can also be instances of ``dask.bag.Item`` or
+        ``dask.delayed.Delayed``:
 
         >>> max_second = b.pluck(1).max()
         >>> max_second.compute()
@@ -495,9 +497,8 @@ class Bag(Base):
                                         tokenize(self, func, kwargs))
         dsk = self.dask.copy()
         if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
             dsk.update(kw_dsk)
-            kwargs = (dict, kw_pairs)
         dsk.update({(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
                    for i in range(self.npartitions)})
         return type(self)(dsk, name, self.npartitions)
@@ -587,7 +588,7 @@ class Bag(Base):
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
 
         Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        ``dask.bag.Item``, ``dask.delayed.Delayed``, or normal python objects.
 
         Examples
         --------
@@ -617,12 +618,12 @@ class Bag(Base):
                                                tokenize(self, func, kwargs))
         dsk = self.dask.copy()
         if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
             dsk.update(kw_dsk)
-        dsk.update(((name, i),
-                    (apply, func, [(self.name, i)], (dict, kw_pairs))
-                    if kwargs else (func, (self.name, i)))
-                   for i in range(self.npartitions))
+            task = lambda i: (apply, func, [(self.name, i)], kwargs)
+        else:
+            task = lambda i: (func, (self.name, i))
+        dsk.update(((name, i), task(i)) for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
 
     def pluck(self, key, default=no_default):
@@ -1601,17 +1602,40 @@ def starmap_chunk(f, x, kwargs):
     return itertools.starmap(f, x)
 
 
+def unpack_scalar_dask_kwargs(kwargs):
+    """Extracts dask values from kwargs
+
+    Currently only ``dask.bag.Item`` and ``dask.delayed.Delayed`` are
+    supported.  Returns a merged dask graph and a task resulting in a keyword
+    dict.
+    """
+    dsk = {}
+    kwargs2 = {}
+    for k, v in kwargs.items():
+        if isinstance(v, (Delayed, Item)):
+            dsk.update(v.dask)
+            kwargs2[k] = v.key
+        elif isinstance(v, Base):
+            raise NotImplementedError("dask.bag doesn't support kwargs of "
+                                      "type %s" % type(v).__name__)
+        else:
+            kwargs2[k] = v
+    if dsk:
+        kwargs = (dict, (zip, list(kwargs2), list(kwargs2.values())))
+    return dsk, kwargs
+
+
 def bag_map(func, *args, **kwargs):
     """Apply a function elementwise across one or more bags.
 
-    Note that all ``Bag`` arguments must have the same number of partitions.
+    Note that all ``Bag`` arguments must be partitioned identically.
 
     Parameters
     ----------
     func : callable
-    *args, **kwargs : Bag, Item, or object
+    *args, **kwargs : Bag, Item, Delayed, or object
         Arguments and keyword arguments to pass to ``func``. Non-Bag args/kwargs
-        are "broadcasted" across all calls to ``func``.
+        are broadcasted across all calls to ``func``.
 
     Notes
     -----
@@ -1636,7 +1660,7 @@ def bag_map(func, *args, **kwargs):
     >>> db.map(add, b, b2).compute()
     [5, 7, 9, 11, 13]
 
-    Non-bag arguments are "broadcast" across all calls to the mapped function:
+    Non-bag arguments are broadcast across all calls to the mapped function:
 
     >>> db.map(add, b, 1).compute()
     [1, 2, 3, 4, 5]
@@ -1652,7 +1676,8 @@ def bag_map(func, *args, **kwargs):
     [1, 2, 3, 4, 5]
 
     Both arguments and keyword arguments can also be instances of
-    ``dask.bag.Item``. Here we'll add the max value in the bag to each element:
+    ``dask.bag.Item`` or ``dask.delayed.Delayed``. Here we'll add the max value
+    in the bag to each element:
 
     >>> db.map(myadd, b, b.max()).compute()
     [4, 5, 6, 7, 8]
@@ -1667,8 +1692,8 @@ def bag_map(func, *args, **kwargs):
             bags.append(a)
             args2.append(a)
             dsk.update(a.dask)
-        elif isinstance(a, Item):
-            args2.append((itertools.repeat, a.name))
+        elif isinstance(a, (Item, Delayed)):
+            args2.append((itertools.repeat, a.key))
             dsk.update(a.dask)
         else:
             args2.append((itertools.repeat, a))
@@ -1681,13 +1706,10 @@ def bag_map(func, *args, **kwargs):
             bags.append(v)
             dsk.update(v.dask)
         else:
-            if isinstance(v, Item):
-                dsk.update(v.dask)
             other_kwargs[k] = v
 
-    if any(isinstance(v, Item) for v in other_kwargs.values()):
-        vals = [b.name if isinstance(b, Item) else b for b in other_kwargs.values()]
-        other_kwargs = (dict, (zip, list(other_kwargs), vals))
+    kw_dsk, other_kwargs = unpack_scalar_dask_kwargs(other_kwargs)
+    dsk.update(kw_dsk)
 
     if not bags:
         raise ValueError("At least one argument must be a Bag.")

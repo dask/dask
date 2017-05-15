@@ -143,6 +143,10 @@ def test_bag_map():
     sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
     assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
 
+    a = dask.delayed(10)
+    assert db.map(myadd, b, a).compute() == [myadd(i, 10) for i in x]
+    assert db.map(myadd, b, b=a).compute() == [myadd(i, b=10) for i in x]
+
     # Mispatched npartitions
     fewer_parts = db.from_sequence(range(100), npartitions=5)
     with pytest.raises(ValueError):
@@ -189,6 +193,8 @@ def test_starmap():
     max_second = b.pluck(1).max()
     assert (b.starmap(myadd, c=max_second).compute() ==
             [myadd(*a, c=max_second.compute()) for a in data])
+    c = dask.delayed(10)
+    assert b.starmap(myadd, c=c).compute() == [myadd(*a, c=10) for a in data]
 
 
 def test_filter():
@@ -416,16 +422,15 @@ def test_map_partitions():
 
 def test_map_partitions_with_kwargs():
     b = db.from_sequence(range(100), npartitions=10)
-    assert b.map_partitions(
-        lambda X, factor=0: [x * factor for x in X],
-        factor=2).sum().compute() == 9900.0
-    assert b.map_partitions(
-        lambda X, total=0: [x / total for x in X],
-        total=b.sum()).sum().compute() == 1.0
-    assert b.map_partitions(
-        lambda X, factor=0, total=0: [x * factor / total for x in X],
-        total=b.sum(),
-        factor=2).sum().compute() == 2.0
+
+    def scale(X, factor=1, total=1):
+        return [x * factor / total for x in X]
+
+    assert b.map_partitions(scale, factor=2).sum().compute() == 9900.0
+    assert b.map_partitions(scale, total=b.sum()).sum().compute() == 1.0
+    assert b.map_partitions(scale, total=b.sum(), factor=2).sum().compute() == 2.0
+    total = dask.delayed(sum)(list(range(100)))
+    assert b.map_partitions(scale, total=total, factor=2).sum().compute() == 2.0
 
 
 def test_random_sample_size():
