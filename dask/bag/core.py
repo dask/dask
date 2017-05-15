@@ -380,53 +380,72 @@ class Bag(Base):
 
     str = property(fget=StringAccessor)
 
-    def map(self, func, **kwargs):
-        """ Map a function across all elements in collection
+    def map(self, func, *args, **kwargs):
+        """Apply a function elementwise across one or more bags.
 
-        >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5))
-        >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
-        [0, 10, 20, 30, 40]
+        Note that all ``Bag`` arguments must have the same number of partitions.
 
-        Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        Parameters
+        ----------
+        func : callable
+        *args, **kwargs : Bag, Item, or object
+            Extra arguments and keyword arguments to pass to ``func`` *after*
+            the calling bag instance. Non-Bag args/kwargs are "broadcasted"
+            across all calls to ``func``.
+
+        Notes
+        -----
+        For calls with multiple `Bag` arguments, corresponding partitions
+        should have the same length; if they do not, the "extra" elements from
+        the longer partition(s) will be dropped.
 
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(1, 101), npartitions=10)
-        >>> def div(num, den=1):
-        ...     return num / den
+        >>> b = db.from_sequence(range(5), npartitions=2)
+        >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
 
-        Using a python object:
+        Apply a function to all elements in a bag:
 
-        >>> hi = b.max().compute()
-        >>> hi
-        100
-        >>> b.map(div, den=hi).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> b.map(lambda x: x + 1).compute()
+        [1, 2, 3, 4, 5]
 
-        Using an ``Item``:
+        Apply a function with arguments from multiple bags:
 
-        >>> b.map(div, den=b.max()).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> from operator import add
+        >>> b.map(add, b2).compute()
+        [5, 7, 9, 11, 13]
 
-        Note that while both versions give the same output, the second forms a
-        single graph, and then computes everything at once, and in some cases
-        may be more efficient.
+        Non-bag arguments are "broadcast" across all calls to the mapped
+        function:
+
+        >>> b.map(add, 1).compute()
+        [1, 2, 3, 4, 5]
+
+        Keyword arguments are also supported, and have the same semantics as
+        regular arguments:
+
+        >>> def myadd(x, y=0):
+        ...     return x + y
+        >>> b.map(myadd, y=b2).compute()
+        [5, 7, 9, 11, 13]
+        >>> b.map(myadd, y=1).compute()
+        [1, 2, 3, 4, 5]
+
+        Both arguments and keyword arguments can also be instances of
+        ``dask.bag.Item``. Here we'll add the max value in the bag to each
+        element:
+
+        >>> b.map(myadd, b.max()).compute()
+        [4, 5, 6, 7, 8]
         """
-        name = 'map-{0}-{1}'.format(funcname(func),
-                                    tokenize(self, func, kwargs))
-        if takes_multiple_arguments(func):
-            func = partial(apply, func)
-        dsk = self.dask.copy()
-        if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
-            dsk.update(kw_dsk)
-            func = (apply, partial, [func], (dict, kw_pairs))
-        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
-                   for i in range(self.npartitions))
-        return type(self)(dsk, name, self.npartitions)
+        if takes_multiple_arguments(func) and not args:
+            warn("Automatic 'splatting' of arguments in `Bag.map` is "
+                 "deprecated and will be removed in a future release. "
+                 "Please use `Bag.starmap` instead.")
+            return self.starmap(func, **kwargs)
+        else:
+            return bag_map(func, self, *args, **kwargs)
 
     def starmap(self, func, **kwargs):
         """Apply a function using argument tuples from the given bag.
@@ -1592,13 +1611,13 @@ def bag_map(func, *args, **kwargs):
     func : callable
     *args, **kwargs : Bag, Item, or object
         Arguments and keyword arguments to pass to ``func``. Non-Bag args/kwargs
-        are "broadcasted" across all calls to ``func``. Arguments are passed to
-        ``func`` in the order that they're provided.
+        are "broadcasted" across all calls to ``func``.
 
     Notes
     -----
-    Corresponding partitions should have the same length; if they do not,
-    the "extra" elements from the longer partition(s) will be dropped.
+    For calls with multiple `Bag` arguments, corresponding partitions should
+    have the same length; if they do not, the "extra" elements from the longer
+    partition(s) will be dropped.
 
     Examples
     --------
@@ -1691,7 +1710,11 @@ def bag_map(func, *args, **kwargs):
                                     build_bag_kwargs(n), other_kwargs))
                 for n in range(npartitions)})
 
-    return Bag(dsk, name, npartitions)
+    # If all bags are the same type, use that type, otherwise fallback to Bag
+    return_type = set(map(type, bags))
+    return_type = return_type.pop() if len(return_type) == 1 else Bag
+
+    return return_type(dsk, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):

@@ -47,14 +47,14 @@ def test_keys():
     assert sorted(b._keys()) == sorted(dsk.keys())
 
 
+# Deprecated test for old map behavior
 def test_map():
     c = b.map(inc)
-    expected = merge(dsk, dict(((c.name, i), (reify, (map, inc, (b.name, i))))
-                               for i in range(b.npartitions)))
-    assert c.dask == expected
+    assert c.compute() == list(map(inc, b.compute()))
     assert c.name == b.map(inc).name
 
 
+# Deprecated test for old map behavior
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
@@ -71,6 +71,7 @@ class B(object):
         pass
 
 
+# Deprecated test for old map behavior
 def test_map_with_constructors():
     assert db.from_sequence([[1, 2, 3]]).map(A).compute()
     assert db.from_sequence([1, 2, 3]).map(B).compute()
@@ -84,6 +85,7 @@ def test_map_with_constructors():
     assert failed
 
 
+# Deprecated test for old map behavior
 def test_map_with_builtins():
     b = db.from_sequence(range(3))
     assert ' '.join(b.map(str)) == '0 1 2'
@@ -98,6 +100,7 @@ def test_map_with_builtins():
         [True, False]
 
 
+# Deprecated test for old map behavior
 def test_map_with_kwargs():
     b = db.from_sequence(range(100), npartitions=10)
     assert b.map(lambda x, factor=0: x * factor,
@@ -148,6 +151,30 @@ def test_bag_map():
     # No bags
     with pytest.raises(ValueError):
         db.map(myadd, b.sum(), 1, 2)
+
+
+def test_map_method():
+    b = db.from_sequence(range(100), npartitions=10)
+    b2 = db.from_sequence(range(100, 200), npartitions=10)
+    x = b.compute()
+    x2 = b2.compute()
+
+    def myadd(a, b=2, c=3):
+        return a + b + c
+
+    assert b.map(myadd).compute() == list(map(myadd, x))
+    assert b.map(myadd, b2).compute() == list(map(myadd, x, x2))
+    assert b.map(myadd, 10).compute() == [myadd(i, 10) for i in x]
+    assert b.map(myadd, b=10).compute() == [myadd(i, b=10) for i in x]
+    assert (b.map(myadd, b2, c=10).compute() ==
+            [myadd(i, j, 10) for (i, j) in zip(x, x2)])
+    x_sum = sum(x)
+    assert (b.map(myadd, b.sum(), c=10).compute() ==
+            [myadd(i, x_sum, 10) for i in x])
+
+    # check that works with multiarg functions. Can be removed after deprecated
+    # behavior is removed
+    assert b.map(add, b2).compute() == list(map(add, x, x2))
 
 
 def test_starmap():
