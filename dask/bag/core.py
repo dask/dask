@@ -1586,14 +1586,37 @@ def map_chunk(f, args, bag_kwargs, kwargs):
     if kwargs:
         f = partial(f, **kwargs)
 
+    args = [iter(a) for a in args]
+    iters = args.copy()
     if bag_kwargs:
         keys = list(bag_kwargs)
-        kw_iter = (dict(zip(keys, k)) for k in zip(*bag_kwargs.values()))
+        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
+        iters.extend(kw_val_iters)
+        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
         if args:
-            return (f(*a, **k) for a, k in zip(zip(*args), kw_iter))
-        return (f(**k) for k in kw_iter)
+            for a, k in zip(zip(*args), kw_iter):
+                yield f(*a, **k)
+        else:
+            for k in kw_iter:
+                yield f(**k)
+    else:
+        for a in zip(*args):
+            yield f(*a)
 
-    return map(f, *args)
+    # Check that all iterators are fully exhausted
+    if len(iters) > 1:
+        for i in iters:
+            if isinstance(i, itertools.repeat):
+                continue
+            try:
+                next(i)
+            except StopIteration:
+                pass
+            else:
+                msg = ("map called with multiple bags that aren't identically "
+                       "partitioned. Please ensure that all bag arguments "
+                       "have the same partition lengths")
+                raise ValueError(msg)
 
 
 def starmap_chunk(f, x, kwargs):

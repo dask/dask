@@ -156,6 +156,13 @@ def test_bag_map():
     with pytest.raises(ValueError):
         db.map(myadd, b.sum(), 1, 2)
 
+    # Unequal partitioning
+    unequal = db.from_sequence(range(110), npartitions=10)
+    with pytest.raises(ValueError):
+        db.map(myadd, b, unequal, c=b2).compute()
+    with pytest.raises(ValueError):
+        db.map(myadd, b, b=unequal, c=b2).compute()
+
 
 def test_map_method():
     b = db.from_sequence(range(100), npartitions=10)
