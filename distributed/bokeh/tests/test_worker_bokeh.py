@@ -36,6 +36,13 @@ def test_simple(c, s, a, b):
         assert 'bokeh' in response.body.decode().lower()
 
 
+@gen_cluster(client=True,
+             worker_kwargs={'services': {('bokeh', 0):  (BokehWorker, {})}})
+def test_services_kwargs(c, s, a, b):
+    assert s.worker_info[a.address]['services'] == {'bokeh': a.services['bokeh'].port}
+    assert isinstance(a.services['bokeh'], BokehWorker)
+
+
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
     for component in [StateTable, ExecutingTimeSeries,

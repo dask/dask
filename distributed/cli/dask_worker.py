@@ -128,8 +128,11 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         except ImportError:
             pass
         else:
-            services[('bokeh', bokeh_port)] = partial(BokehWorker,
-                                                      prefix=bokeh_prefix)
+            if bokeh_prefix:
+                result = (BokehWorker, {'prefix': bokeh_prefix})
+            else:
+                result = BokehWorker
+            services[('bokeh', bokeh_port)] = result
 
     if resources:
         resources = resources.replace(',', ' ').split()

@@ -235,7 +235,12 @@ class WorkerBase(Server):
             else:
                 port = 0
 
-            self.services[k] = v(self, io_loop=self.loop)
+            if isinstance(v, tuple):
+                v, kwargs = v
+            else:
+                v, kwargs = v, {}
+
+            self.services[k] = v(self, io_loop=self.loop, **kwargs)
             self.services[k].listen((listen_ip, port))
             self.service_ports[k] = self.services[k].port
 
