@@ -68,6 +68,17 @@ def test_takes_multiple_arguments():
     assert not takes_multiple_arguments(Singular)
     assert takes_multiple_arguments(Multi)
 
+    def f():
+        pass
+
+    assert not takes_multiple_arguments(f)
+
+    def vararg(*args):
+        pass
+
+    assert takes_multiple_arguments(vararg)
+    assert not takes_multiple_arguments(vararg, varargs=False)
+
 
 def test_dispatch():
     foo = Dispatch()

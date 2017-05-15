@@ -440,7 +440,7 @@ class Bag(Base):
         >>> b.map(myadd, b.max()).compute()
         [4, 5, 6, 7, 8]
         """
-        if takes_multiple_arguments(func) and not args:
+        if takes_multiple_arguments(func, varargs=False) and not args:
             warn("Automatic 'splatting' of arguments in `Bag.map` is "
                  "deprecated and will be removed in a future release. "
                  "Please use `Bag.starmap` instead.")
