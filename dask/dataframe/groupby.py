@@ -163,6 +163,41 @@ def _groupby_get_group(df, by_key, get_key, columns):
 # Aggregation
 ###############################################################
 
+# Implementation detail: use class to make it easier to pass inside spec
+class Aggregation(object):
+    """A user defined aggregation.
+
+    Parameters
+    ----------
+    name:str
+        the name of the aggregation. It should be unique, since intermediate
+        result will be identified by this name.
+
+    chunk: callable
+        a function that will be called with the grouped column of each
+        partition. It can either return a single series or a tuple of series.
+        The index has to be equal to the groups.
+
+    :agg: callable
+        a function that will be called to aggregate the results of each chunk.
+        Again the argument(s) will be grouped series. If ``chunk`` returned a
+        tuple, `àgg`` will be called with all of them as individual positional
+        arguments.
+
+    :finalize: callable
+        an optional finalizer that will be called with the results from the
+        aggregation.
+
+    TODO: add examples
+
+    """
+    def __init__(self, name, chunk, agg, finalize=None):
+        self.chunk = chunk
+        self.agg = agg
+        self.finalize = finalize
+        self.__name__ = name
+
+
 def _groupby_aggregate(df, aggfunc=None, levels=None):
     return aggfunc(df.groupby(level=levels, sort=False))
 
@@ -389,7 +424,9 @@ def _build_agg_args(spec):
     finalizers = []
 
     for (result_column, func, input_column) in spec:
-        func = funcname(known_np_funcs.get(func, func))
+        if not isinstance(func, Aggregation):
+            func = funcname(known_np_funcs.get(func, func))
+
         impls = _build_agg_args_single(result_column, func, input_column)
 
         # overwrite existing result-columns, generate intermedates only once
@@ -425,6 +462,9 @@ def _build_agg_args_single(result_column, func, input_column):
 
     elif func == 'mean':
         return _build_agg_args_mean(result_column, func, input_column)
+
+    elif isinstance(func, Aggregation):
+        return _build_agg_args_custom(result_column, func, input_column)
 
     else:
         raise ValueError("unknown aggregate {}".format(func))
@@ -496,6 +536,30 @@ def _build_agg_args_mean(result_column, func, input_column):
     )
 
 
+def _build_agg_args_custom(result_column, func, input_column):
+    col = _make_agg_id(funcname(func), input_column)
+
+    if func.finalize is None:
+        finalizer = (result_column, operator.itemgetter(col), dict())
+
+    else:
+        finalizer = (
+            result_column, _apply_func_to_columns,
+            dict(func=func.finalize, prefix=col)
+        )
+
+    return dict(
+        chunk_funcs=[
+            (col, _apply_func_to_column,
+             dict(func=func.chunk, column=input_column))
+        ],
+        aggregate_funcs=[
+            (col, _apply_func_to_columns, dict(func=func.agg, prefix=col))
+        ],
+        finalizer=finalizer
+    )
+
+
 def _groupby_apply_funcs(df, *index, **kwargs):
     """
     Group a dataframe and apply multiple aggregation functions.
@@ -527,7 +591,14 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
     result = collections.OrderedDict()
     for result_column, func, func_kwargs in funcs:
-        result[result_column] = func(grouped, **func_kwargs)
+        r = func(grouped, **func_kwargs)
+
+        if isinstance(r, tuple):
+            for idx, s in enumerate(r):
+                result['{}-{}'.format(result_column, idx)] = s
+
+        else:
+            result[result_column] = r
 
     return pd.DataFrame(result)
 
@@ -550,6 +621,19 @@ def _apply_func_to_column(df_like, column, func):
         return func(df_like)
 
     return func(df_like[column])
+
+
+def _apply_func_to_columns(df_like, prefix, func):
+    if isinstance(df_like, pd.DataFrame):
+        columns = df_like.columns
+    else:
+        # TODO: this looks way to hacky
+        columns = list(df_like.dtypes.columns)
+
+    columns = sorted(col for col in columns if col.startswith(prefix))
+
+    columns = [df_like[col] for col in columns]
+    return func(*columns)
 
 
 def _finalize_mean(df, sum_column, count_column):

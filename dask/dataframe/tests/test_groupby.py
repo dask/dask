@@ -10,6 +10,7 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import (assert_eq, assert_dask_graph,
                                   assert_max_deps, PANDAS_VERSION)
+from dask.utils import M
 
 
 def groupby_internal_repr():
@@ -1232,3 +1233,32 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     # Crude check to see if shuffling was performed.
     # The groupby operation should add only more than 1 task per partition
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
+
+
+def test_groupy_agg_custom_sum():
+    d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
+    a = dd.from_pandas(d, npartitions=2)
+
+    agg_func = dd.Aggregation('custom-sum', M.sum, M.sum)
+
+    result = a.groupby('g').aggregate({'b': agg_func})
+    expected = d.groupby('g').aggregate({'b': 'sum'})
+
+    assert_eq(result, expected)
+
+
+def test_groupy_agg_custom_mean():
+    d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
+    a = dd.from_pandas(d, npartitions=2)
+
+    agg_func = dd.Aggregation(
+        'custom-sum',
+        lambda s: (s.count(), s.sum()),
+        lambda s0, s1: (s0.sum(), s1.sum()),
+        lambda s0, s1: s1 / s0,
+    )
+
+    result = a.groupby('g').aggregate({'b': agg_func})
+    expected = d.groupby('g').aggregate({'b': 'mean'})
+
+    assert_eq(result, expected, check_dtype=False)
