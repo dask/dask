@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from collections import Iterator
 import operator
 import uuid
-import warnings
 
 try:
     from cytoolz import curry, first
@@ -318,20 +317,6 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
         dsk = sharedict.merge(dsk, (name, {name: task}))
         return Delayed(name, dsk)
-
-
-def do(*args, **kwargs):
-    """deprecated, please use ``dask.delayed.delayed``"""
-    warnings.warn("`dask.delayed.do` is deprecated, please use "
-                  "`dask.delayed.delayed` instead")
-    return delayed(*args, **kwargs)
-
-
-def compute(*args, **kwargs):
-    """deprecated, please use ``dask.compute``"""
-    warnings.warn("`dask.delayed.compute` is deprecated, please use "
-                  "`dask.compute` instead")
-    return base.compute(*args, **kwargs)
 
 
 def right(method):
