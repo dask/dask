@@ -57,10 +57,11 @@ class ufunc(object):
     def __getattr__(self, key):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)
-        object.__getattr__(self, key)
+        raise AttributeError("%r object has no attribute "
+                             "%r" % (type(self).__name__, key))
 
     def __dir__(self):
-        return list(self._forward_attrs.union(object.__dir__(self)))
+        return list(self._forward_attrs.union(dir(type(self)), self.__dict__))
 
     def __repr__(self):
         return repr(self._ufunc)

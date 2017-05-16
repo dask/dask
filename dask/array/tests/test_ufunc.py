@@ -28,6 +28,7 @@ def test_ufunc():
 
     assert repr(da.log) == repr(np.log)
     assert 'nin' in dir(da.log)
+    assert 'outer' in dir(da.log)
 
 
 binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
