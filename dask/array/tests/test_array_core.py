@@ -1832,20 +1832,6 @@ def test_from_array_with_missing_chunks():
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
 
 
-def test_cache():
-    x = da.arange(15, chunks=5)
-    y = 2 * x + 1
-    z = y.cache()
-    assert len(z.dask) == 3  # very short graph
-    assert_eq(y, z)
-
-    cache = np.empty(15, dtype=y.dtype)
-    z = y.cache(store=cache)
-    assert len(z.dask) < 6  # very short graph
-    assert z.chunks == y.chunks
-    assert_eq(y, z)
-
-
 def test_take_dask_from_numpy():
     x = np.arange(5).astype('f8')
     y = da.from_array(np.array([1, 2, 3, 3, 2 ,1]), chunks=3)

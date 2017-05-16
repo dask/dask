@@ -3,9 +3,8 @@ from __future__ import absolute_import, division, print_function
 from collections import Iterator
 from functools import wraps, partial
 import operator
-from operator import getitem, setitem
+from operator import getitem
 from pprint import pformat
-import uuid
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -368,30 +367,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
             raise ValueError(msg)
-
-    def cache(self, cache=Cache):
-        """ Evaluate Dataframe and store in local cache
-
-        Uses chest by default to store data on disk
-        """
-        warnings.warn("Deprecation Warning: The `cache` method is deprecated, "
-                      "and will be removed in the next release. To achieve "
-                      "the same behavior, either write to disk or use "
-                      "`Client.persist`, from `dask.distributed`.")
-        if callable(cache):
-            cache = cache()
-
-        # Evaluate and store in cache
-        name = 'cache' + uuid.uuid1().hex
-        dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
-                   for i, key in enumerate(self._keys()))
-        self._get(merge(dsk, self.dask), list(dsk.keys()))
-
-        # Create new dataFrame pointing to that cache
-        name = 'from-cache-' + self._name
-        dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
-                    for i, key in enumerate(self._keys()))
-        return new_dd_object(dsk2, name, self._meta, self.divisions)
 
     @derived_from(pd.DataFrame)
     def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
@@ -1874,8 +1849,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, convert_dtype=True, meta=no_default,
-              name=no_default, args=(), **kwds):
+    def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
         """ Parallel version of pandas.Series.apply
 
         Parameters
@@ -1886,13 +1860,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Try to find better dtype for elementwise function results.
             If False, leave as dtype=object.
         $META
-        name : list, scalar or None, optional
-            Deprecated, use `meta` instead. If list is given, the result is a
-            DataFrame which columns is specified list. Otherwise, the result is
-            a Series which name is given scalar or None (no name). If name
-            keyword is not given, dask tries to infer the result type using its
-            beginning of data. This inference may take some time and lead to
-            unexpected result.
         args : tuple
             Positional arguments to pass to function in addition to the value.
 
@@ -1936,11 +1903,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         --------
         dask.Series.map_partitions
         """
-        if name is not no_default:
-            warnings.warn("`name` is deprecated, please use `meta` instead")
-            if meta is no_default and isinstance(name, (pd.DataFrame, pd.Series)):
-                meta = name
-
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
@@ -2551,8 +2513,7 @@ class DataFrame(_Frame):
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, axis=0, args=(), meta=no_default,
-              columns=no_default, **kwds):
+    def apply(self, func, axis=0, args=(), meta=no_default, **kwds):
         """ Parallel version of pandas.DataFrame.apply
 
         This mimics the pandas version except for the following:
@@ -2568,13 +2529,6 @@ class DataFrame(_Frame):
             - 0 or 'index': apply function to each column (NOT SUPPORTED)
             - 1 or 'columns': apply function to each row
         $META
-        columns : list, scalar or None
-            Deprecated, please use `meta` instead. If list is given, the result
-            is a DataFrame which columns is specified list. Otherwise, the
-            result is a Series which name is given scalar or None (no name). If
-            name keyword is not given, dask tries to infer the result type
-            using its beginning of data. This inference may take some time and
-            lead to unexpected result
         args : tuple
             Positional arguments to pass to function in addition to the array/series
 
@@ -2626,11 +2580,6 @@ class DataFrame(_Frame):
             msg = ("dd.DataFrame.apply only supports axis=1\n"
                    "  Try: df.apply(func, axis=1)")
             raise NotImplementedError(msg)
-
-        if columns is not no_default:
-            warnings.warn("`columns` is deprecated, please use `meta` instead")
-            if meta is no_default and isinstance(columns, (pd.DataFrame, pd.Series)):
-                meta = columns
 
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "

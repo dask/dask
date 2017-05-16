@@ -279,7 +279,7 @@ def test_to_hdf_lock_delays():
 
     # saving to multiple hdf nodes
     with tmpfile() as fn:
-        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a = a.apply(delayed_nop, axis=1, meta=a)
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
         assert_eq(df16, out)
@@ -288,7 +288,7 @@ def test_to_hdf_lock_delays():
     # adding artifichial delays to make sure last tasks finish first
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data*')
-        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a = a.apply(delayed_nop, axis=1, meta=a)
         a.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
         assert_eq(df16, out)
