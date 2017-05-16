@@ -155,6 +155,17 @@ def test_tokenize_numpy_memmap_no_filename():
         assert tokenize(b) == tokenize(b)
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_ufunc_consistent():
+    assert tokenize(np.sin) == '02106e2c67daf452fb480d264e0dac21'
+    assert tokenize(np.cos) == 'c99e52e912e4379882a9a4b387957a0b'
+
+    # Make a ufunc that isn't in the numpy namespace. Similar to
+    # any found in other packages.
+    inc = np.frompyfunc(lambda x: x + 1, 1, 1)
+    assert tokenize(inc) == tokenize(inc)
+
+
 def test_normalize_base():
     for i in [1, 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
