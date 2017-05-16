@@ -16,7 +16,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, PY2
-from dask.utils import filetexts, tmpfile, tmpdir, open
+from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
 

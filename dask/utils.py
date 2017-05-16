@@ -1,14 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import codecs
 import functools
 import inspect
-import io
 import math
 import os
 import re
 import shutil
-import struct
 import sys
 import tempfile
 from errno import ENOENT
@@ -20,8 +17,7 @@ import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
-                            urlsplit, unicode)
+from .compatibility import long, getargspec, PY3, urlsplit, unicode
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -170,18 +166,6 @@ def noop_context():
     yield
 
 
-def repr_long_list(seq):
-    """
-
-    >>> repr_long_list(list(range(100)))
-    '[0, 1, 2, ..., 98, 99]'
-    """
-    if len(seq) < 8:
-        return repr(seq)
-    else:
-        return repr(seq[:3])[:-1] + ', ..., ' + repr(seq[-2:])[1:]
-
-
 class IndexCallable(object):
     """ Provide getitem syntax for functions
 
@@ -239,144 +223,6 @@ def infer_compression(filename):
     return compressions.get(extension, None)
 
 
-opens = {'gzip': GzipFile, 'bz2': BZ2File, 'xz': LZMAFile}
-
-
-def open(filename, mode='rb', compression=None, **kwargs):
-    if compression == 'infer':
-        compression = infer_compression(filename)
-    return opens.get(compression, io.open)(filename, mode, **kwargs)
-
-
-def get_bom(fn, compression=None):
-    """
-    Get the Byte Order Mark (BOM) if it exists.
-    """
-    boms = set((codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE))
-    with open(fn, mode='rb', compression=compression) as f:
-        f.seek(0)
-        bom = f.read(2)
-        f.seek(0)
-    if bom in boms:
-        return bom
-    else:
-        return b''
-
-
-def get_bin_linesep(encoding, linesep):
-    """
-    Simply doing `linesep.encode(encoding)` does not always give you
-    *just* the linesep bytes, for some encodings this prefix's the
-    linesep bytes with the BOM. This function ensures we just get the
-    linesep bytes.
-    """
-    if encoding == 'utf-16':
-        return linesep.encode('utf-16')[2:]  # [2:] strips bom
-    else:
-        return linesep.encode(encoding)
-
-
-def textblock(filename, start, end, compression=None, encoding=system_encoding,
-              linesep=os.linesep, buffersize=4096):
-    """Pull out a block of text from a file given start and stop bytes.
-
-    This gets data starting/ending from the next linesep delimiter. Each block
-    consists of bytes in the range [start,end[, i.e. the stop byte is excluded.
-    If `start` is 0, then `start` corresponds to the true start byte. If
-    `start` is greater than 0 and does not point to the beginning of a new
-    line, then `start` is incremented until it corresponds to the start byte of
-    the next line. If `end` does not point to the beginning of a new line, then
-    the line that begins before `end` is included in the block although its
-    last byte exceeds `end`.
-
-    Examples
-    --------
-    >> with open('myfile.txt', 'wb') as f:
-    ..     f.write('123\n456\n789\nabc')
-
-    In the example below, 1 and 10 don't line up with endlines.
-
-    >> u''.join(textblock('myfile.txt', 1, 10))
-    '456\n789\n'
-    """
-    # Make sure `linesep` is not a byte string because
-    # `io.TextIOWrapper` in Python versions other than 2.7 dislike byte
-    # strings for the `newline` argument.
-    linesep = str(linesep)
-
-    # Get byte representation of the line separator.
-    bin_linesep = get_bin_linesep(encoding, linesep)
-    bin_linesep_len = len(bin_linesep)
-
-    if buffersize < bin_linesep_len:
-        error = ('`buffersize` ({0:d}) must be at least as large as the '
-                 'number of line separator bytes ({1:d}).')
-        raise ValueError(error.format(buffersize, bin_linesep_len))
-
-    chunksize = end - start
-
-    with open(filename, 'rb', compression) as f:
-        with io.BufferedReader(f) as fb:
-            # If `start` does not correspond to the beginning of the file, we
-            # need to move the file pointer to `start - len(bin_linesep)`,
-            # search for the position of the next a line separator, and set
-            # `start` to the position after that line separator.
-            if start > 0:
-                # `start` is decremented by `len(bin_linesep)` to detect the
-                # case where the original `start` value corresponds to the
-                # beginning of a line.
-                start = max(0, start - bin_linesep_len)
-                # Set the file pointer to `start`.
-                fb.seek(start)
-                # Number of bytes to shift the file pointer before reading a
-                # new chunk to make sure that a multi-byte line separator, that
-                # is split by the chunk reader, is still detected.
-                shift = 1 - bin_linesep_len
-                while True:
-                    buf = f.read(buffersize)
-                    if len(buf) < bin_linesep_len:
-                        raise StopIteration
-                    try:
-                        # Find the position of the next line separator and add
-                        # `len(bin_linesep)` which yields the position of the
-                        # first byte of the next line.
-                        start += buf.index(bin_linesep)
-                        start += bin_linesep_len
-                    except ValueError:
-                        # No line separator was found in the current chunk.
-                        # Before reading the next chunk, we move the file
-                        # pointer back `len(bin_linesep) - 1` bytes to make
-                        # sure that a multi-byte line separator, that may have
-                        # been split by the chunk reader, is still detected.
-                        start += len(buf)
-                        start += shift
-                        fb.seek(shift, os.SEEK_CUR)
-                    else:
-                        # We have found the next line separator, so we need to
-                        # set the file pointer to the first byte of the next
-                        # line.
-                        fb.seek(start)
-                        break
-
-            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
-                # Retrieve and yield lines until the file pointer reaches
-                # `end`.
-                while start < end:
-                    line = next(fbw)
-                    # We need to encode the line again to get the byte length
-                    # in order to correctly update `start`.
-                    bin_line_len = len(line.encode(encoding))
-                    if chunksize < bin_line_len:
-                        error = ('`chunksize` ({0:d}) is less than the line '
-                                 'length ({1:d}). This may cause duplicate '
-                                 'processing of this line. It is advised to '
-                                 'increase `chunksize`.')
-                        raise IOError(error.format(chunksize, bin_line_len))
-
-                    yield line
-                    start += bin_line_len
-
-
 def concrete(seq):
     """ Make nested iterators concrete lists
 
@@ -390,10 +236,6 @@ def concrete(seq):
     if isinstance(seq, (tuple, list)):
         seq = list(map(concrete, seq))
     return seq
-
-
-def skip(func):
-    pass
 
 
 def pseudorandom(n, p, random_state=None):
@@ -461,24 +303,6 @@ def is_integer(i):
         return i
     else:
         return False
-
-
-def file_size(fn, compression=None):
-    """ Size of a file on disk
-
-    If compressed then return the uncompressed file size
-    """
-    if compression == 'gzip':
-        with open(fn, 'rb') as f:
-            f.seek(-4, 2)
-            result = struct.unpack('I', f.read(4))[0]
-    elif compression:
-        # depending on the implementation, this may be inefficient
-        with open(fn, 'rb', compression) as f:
-            result = f.seek(0, 2)
-    else:
-        result = os.stat(fn).st_size
-    return result
 
 
 ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
