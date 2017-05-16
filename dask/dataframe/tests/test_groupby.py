@@ -1235,7 +1235,7 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
-def test_groupy_agg_custom_sum():
+def test_groupby_agg_custom_sum():
     d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
@@ -1247,7 +1247,7 @@ def test_groupy_agg_custom_sum():
     assert_eq(result, expected)
 
 
-def test_groupy_agg_custom_mean():
+def test_groupby_agg_custom_mean():
     d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 

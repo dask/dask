@@ -181,7 +181,7 @@ class Aggregation(object):
     :agg: callable
         a function that will be called to aggregate the results of each chunk.
         Again the argument(s) will be grouped series. If ``chunk`` returned a
-        tuple, `àgg`` will be called with all of them as individual positional
+        tuple, ``agg`` will be called with all of them as individual positional
         arguments.
 
     :finalize: callable
