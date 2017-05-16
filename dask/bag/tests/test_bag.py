@@ -46,14 +46,14 @@ def test_keys():
     assert sorted(b._keys()) == sorted(dsk.keys())
 
 
+# Deprecated test for old map behavior
 def test_map():
     c = b.map(inc)
-    expected = merge(dsk, dict(((c.name, i), (reify, (map, inc, (b.name, i))))
-                               for i in range(b.npartitions)))
-    assert c.dask == expected
+    assert c.compute() == list(map(inc, b.compute()))
     assert c.name == b.map(inc).name
 
 
+# Deprecated test for old map behavior
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
@@ -70,6 +70,7 @@ class B(object):
         pass
 
 
+# Deprecated test for old map behavior
 def test_map_with_constructors():
     assert db.from_sequence([[1, 2, 3]]).map(A).compute()
     assert db.from_sequence([1, 2, 3]).map(B).compute()
@@ -83,6 +84,7 @@ def test_map_with_constructors():
     assert failed
 
 
+# Deprecated test for old map behavior
 def test_map_with_builtins():
     b = db.from_sequence(range(3))
     assert ' '.join(b.map(str)) == '0 1 2'
@@ -97,6 +99,7 @@ def test_map_with_builtins():
         [True, False]
 
 
+# Deprecated test for old map behavior
 def test_map_with_kwargs():
     b = db.from_sequence(range(100), npartitions=10)
     assert b.map(lambda x, factor=0: x * factor,
@@ -106,6 +109,105 @@ def test_map_with_kwargs():
     assert b.map(lambda x, factor=0, total=0: x * factor / total,
                  total=b.sum(),
                  factor=2).sum().compute() == 2.0
+
+
+def test_bag_map():
+    b = db.from_sequence(range(100), npartitions=10)
+    b2 = db.from_sequence(range(100, 200), npartitions=10)
+    x = b.compute()
+    x2 = b2.compute()
+
+    def myadd(a=1, b=2, c=3):
+        return a + b + c
+
+    assert db.map(myadd, b).compute() == list(map(myadd, x))
+    assert db.map(myadd, a=b).compute() == list(map(myadd, x))
+    assert db.map(myadd, b, b2).compute() == list(map(myadd, x, x2))
+    assert db.map(myadd, b, 10).compute() == [myadd(i, 10) for i in x]
+    assert db.map(myadd, 10, b=b).compute() == [myadd(10, b=i) for i in x]
+
+    sol = [myadd(i, b=j, c=100) for (i, j) in zip(x, x2)]
+    assert db.map(myadd, b, b=b2, c=100).compute() == sol
+
+    sol = [myadd(i, c=100) for (i, j) in zip(x, x2)]
+    assert db.map(myadd, b, c=100).compute() == sol
+
+    x_sum = sum(x)
+    sol = [myadd(x_sum, b=i, c=100) for i in x2]
+    assert db.map(myadd, b.sum(), b=b2, c=100).compute() == sol
+
+    sol = [myadd(i, b=x_sum, c=100) for i in x2]
+    assert db.map(myadd, b2, b.sum(), c=100).compute() == sol
+
+    sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
+    assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
+
+    a = dask.delayed(10)
+    assert db.map(myadd, b, a).compute() == [myadd(i, 10) for i in x]
+    assert db.map(myadd, b, b=a).compute() == [myadd(i, b=10) for i in x]
+
+    # Mispatched npartitions
+    fewer_parts = db.from_sequence(range(100), npartitions=5)
+    with pytest.raises(ValueError):
+        db.map(myadd, b, fewer_parts)
+
+    # No bags
+    with pytest.raises(ValueError):
+        db.map(myadd, b.sum(), 1, 2)
+
+    # Unequal partitioning
+    unequal = db.from_sequence(range(110), npartitions=10)
+    with pytest.raises(ValueError):
+        db.map(myadd, b, unequal, c=b2).compute()
+    with pytest.raises(ValueError):
+        db.map(myadd, b, b=unequal, c=b2).compute()
+
+
+def test_map_method():
+    b = db.from_sequence(range(100), npartitions=10)
+    b2 = db.from_sequence(range(100, 200), npartitions=10)
+    x = b.compute()
+    x2 = b2.compute()
+
+    def myadd(a, b=2, c=3):
+        return a + b + c
+
+    assert b.map(myadd).compute() == list(map(myadd, x))
+    assert b.map(myadd, b2).compute() == list(map(myadd, x, x2))
+    assert b.map(myadd, 10).compute() == [myadd(i, 10) for i in x]
+    assert b.map(myadd, b=10).compute() == [myadd(i, b=10) for i in x]
+    assert (b.map(myadd, b2, c=10).compute() ==
+            [myadd(i, j, 10) for (i, j) in zip(x, x2)])
+    x_sum = sum(x)
+    assert (b.map(myadd, b.sum(), c=10).compute() ==
+            [myadd(i, x_sum, 10) for i in x])
+
+    # check that map works with multiarg functions. Can be removed after
+    # deprecated behavior is removed
+    assert b.map(add, b2).compute() == list(map(add, x, x2))
+
+    # check that map works with vararg functions. Can be removed after
+    # deprecated behavior is removed
+    def vararg_inc(*args):
+        return inc(*args)
+
+    assert b.map(vararg_inc).compute(get=dask.get) == list(map(inc, x))
+
+
+def test_starmap():
+    data = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]
+    b = db.from_sequence(data, npartitions=2)
+
+    def myadd(a, b, c=0):
+        return a + b + c
+
+    assert b.starmap(myadd).compute() == [myadd(*a) for a in data]
+    assert b.starmap(myadd, c=10).compute() == [myadd(*a, c=10) for a in data]
+    max_second = b.pluck(1).max()
+    assert (b.starmap(myadd, c=max_second).compute() ==
+            [myadd(*a, c=max_second.compute()) for a in data])
+    c = dask.delayed(10)
+    assert b.starmap(myadd, c=c).compute() == [myadd(*a, c=10) for a in data]
 
 
 def test_filter():
@@ -339,16 +441,15 @@ def test_map_partitions():
 
 def test_map_partitions_with_kwargs():
     b = db.from_sequence(range(100), npartitions=10)
-    assert b.map_partitions(
-        lambda X, factor=0: [x * factor for x in X],
-        factor=2).sum().compute() == 9900.0
-    assert b.map_partitions(
-        lambda X, total=0: [x / total for x in X],
-        total=b.sum()).sum().compute() == 1.0
-    assert b.map_partitions(
-        lambda X, factor=0, total=0: [x * factor / total for x in X],
-        total=b.sum(),
-        factor=2).sum().compute() == 2.0
+
+    def scale(X, factor=1, total=1):
+        return [x * factor / total for x in X]
+
+    assert b.map_partitions(scale, factor=2).sum().compute() == 9900.0
+    assert b.map_partitions(scale, total=b.sum()).sum().compute() == 1.0
+    assert b.map_partitions(scale, total=b.sum(), factor=2).sum().compute() == 2.0
+    total = dask.delayed(sum)(list(range(100)))
+    assert b.map_partitions(scale, total=total, factor=2).sum().compute() == 2.0
 
 
 def test_random_sample_size():

@@ -494,7 +494,7 @@ MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
                             isinstance, issubclass, map, pow, setattr])
 
 
-def takes_multiple_arguments(func):
+def takes_multiple_arguments(func, varargs=True):
     """ Does this function take multiple arguments?
 
     >>> def f(x, y): pass
@@ -534,12 +534,11 @@ def takes_multiple_arguments(func):
     except:
         is_constructor = False
 
-    if spec.varargs:
+    if varargs and spec.varargs:
         return True
 
-    if spec.defaults is None:
-        return len(spec.args) - is_constructor != 1
-    return len(spec.args) - len(spec.defaults) - is_constructor > 1
+    ndefaults = 0 if spec.defaults is None else len(spec.defaults)
+    return len(spec.args) - ndefaults - is_constructor > 1
 
 
 class Dispatch(object):
