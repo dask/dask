@@ -401,6 +401,15 @@ def register_numpy():
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
 
+    @normalize_token.register(np.ufunc)
+    def normalize_ufunc(x):
+        try:
+            name = x.__name__
+            if getattr(np, name) is x:
+                return 'np.' + name
+        except:
+            return normalize_function(x)
+
 
 def tokenize(*args, **kwargs):
     """ Deterministic token
