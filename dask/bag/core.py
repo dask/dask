@@ -5,14 +5,12 @@ from functools import wraps, partial
 import itertools
 import math
 from operator import getitem
-import os
 import types
 import uuid
 from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
@@ -31,15 +29,15 @@ except:
                        count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
+from ..bytes.core import write_bytes
 from ..compatibility import apply, urlopen
 from ..context import _globals, defer_to_globals
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
-from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert)
-from ..bytes.core import write_bytes
+from ..utils import (system_encoding, takes_multiple_arguments, funcname,
+                     digit, insert, eq_strict)
 
 
 no_default = '__no__default__'
@@ -76,11 +74,6 @@ def lazify(dsk):
     ``dask.bag.core.lazify_task``
     """
     return valmap(lazify_task, dsk)
-
-
-def list2(L):
-    """A call to list that won't get removed by lazify"""
-    return list(L)
 
 
 def inline_singleton_lists(dsk, dependencies=None):
@@ -196,29 +189,6 @@ def finalize(results):
 
 def finalize_item(results):
     return results[0]
-
-
-def unpack_kwargs(kwargs):
-    """ Extracts dask values from kwargs
-
-    Currently only dask.bag.Item and python literal values are supported.
-
-    Returns a merged dask graph and a list of [key, val] pairs suitable for
-    eventually constructing a dict.
-    """
-    dsk = {}
-    kw_pairs = []
-    for key, val in iteritems(kwargs):
-        if isinstance(val, Item):
-            dsk.update(val.dask)
-            val = val.key
-        # TODO elif isinstance(val, Delayed):
-        elif isinstance(val, Base):
-            raise NotImplementedError(
-                '%s not supported as kwarg value to Bag.map_partitions'
-                % type(val).__name__)
-        kw_pairs.append([key, val])
-    return dsk, kw_pairs
 
 
 class StringAccessor(object):
@@ -1184,7 +1154,7 @@ class Bag(Base):
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
         name = 'to_dataframe-' + tokenize(self, cols, dtypes)
-        dsk = {(name, i): (to_dataframe, (list2, (self.name, i)), cols, dtypes)
+        dsk = {(name, i): (to_dataframe, (self.name, i), cols, dtypes)
                for i in range(self.npartitions)}
 
         divisions = [None] * (self.npartitions + 1)
@@ -1308,38 +1278,6 @@ def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
-
-
-def write(data, filename, compression, encoding):
-    dirname = os.path.dirname(filename)
-    if not os.path.exists(dirname):
-        with ignoring(OSError):
-            os.makedirs(dirname)
-
-    f = open(filename, mode='wb', compression=compression)
-
-    # Check presence of endlines
-    data = iter(data)
-    try:
-        firstline = next(data)
-    except StopIteration:
-        f.close()
-        return
-    if not (firstline.endswith(os.linesep) or firstline.endswith('\n')):
-        sep = os.linesep if firstline.endswith(os.linesep) else '\n'
-        firstline = firstline + sep
-        data = (line + sep for line in data)
-    f.write(firstline.encode(encoding))
-
-    try:
-        lastline = ''
-        for line in data:
-            f.write(lastline.encode(encoding))
-            lastline = line
-        f.write(lastline.rstrip(os.linesep).encode(encoding))
-
-    finally:
-        f.close()
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
@@ -1955,5 +1893,5 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
-    res = pd.DataFrame(seq, columns=columns)
+    res = pd.DataFrame(seq, columns=list(columns))
     return res.astype(dtypes, copy=False)
