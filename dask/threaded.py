@@ -20,14 +20,8 @@ def _thread_get_id():
     return current_thread().ident
 
 
-default_pool = None
-
-
-default_thread = _thread_get_id()
-
-
 main_thread = current_thread()
-
+default_pool = None
 pools = defaultdict(dict)
 pools_lock = Lock()
 
