@@ -14,15 +14,6 @@ from ..delayed import delayed
 from ..utils import (build_name_function, infer_compression, import_required,
                      ensure_bytes, ensure_unicode, infer_storage_options)
 
-# delayed = delayed(pure=True)
-
-# Global registration dictionaries for backend storage functions
-# See docstrings to functions below for more information
-_read_bytes = dict()
-_open_files_write = dict()
-_open_files = dict()
-_open_text_files = dict()
-
 
 def write_block_to_file(data, lazy_file):
     """
@@ -462,10 +453,6 @@ def _expand_paths(path, name_function, num):
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
-       (protocol in _filesystems))):
-        return
-
     if protocol == 's3':
         import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
@@ -479,6 +466,9 @@ def ensure_protocol(protocol):
                "    conda install distributed hdfs3 -c conda-forge")
         import_required('distributed.hdfs', msg)
         import_required('hdfs3', msg)
+
+    elif protocol in _filesystems:
+        return
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)

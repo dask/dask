@@ -1,13 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 from glob import glob
-import logging
 import os
 
 from ..base import tokenize
 from ..utils import infer_storage_options
-
-logger = logging.getLogger(__name__)
 
 from . import core
 
