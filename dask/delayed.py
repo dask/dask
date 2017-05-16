@@ -1,15 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from itertools import chain
 import operator
 import uuid
 import warnings
 
 try:
-    from cytoolz import unique, curry, first
+    from cytoolz import curry, first
 except ImportError:
-    from toolz import unique, curry, first
+    from toolz import curry, first
 
 from . import base, threaded
 from .compatibility import apply
@@ -20,11 +19,6 @@ from .utils import concrete, funcname, methodcaller, ensure_dict
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
-
-
-def flat_unique(ls):
-    """Flatten ``ls``, filter by unique id, and return a list"""
-    return list(unique(chain.from_iterable(ls), key=id))
 
 
 def unzip(ls, nout):
