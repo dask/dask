@@ -3,10 +3,9 @@ from __future__ import print_function, division, absolute_import
 from glob import glob
 import os
 
-from ..base import tokenize
-from ..utils import infer_storage_options
-
 from . import core
+from .utils import infer_storage_options
+from ..base import tokenize
 
 
 class LocalFileSystem(core.FileSystem):

@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from s3fs import S3FileSystem
 
 from . import core
-from ..utils import infer_storage_options
+from .utils import infer_storage_options
 
 
 class DaskS3FileSystem(S3FileSystem, core.FileSystem):

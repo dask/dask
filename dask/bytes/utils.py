@@ -1,9 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
+import math
+import os
+import re
+
 from toolz import identity
 
-if sys.version_info[0] < 3:
+from ..compatibility import urlsplit, PY2
+
+if PY2:
     class SeekableFile(object):
         def __init__(self, file):
             if isinstance(file, SeekableFile):  # idempotent
@@ -35,6 +40,88 @@ if sys.version_info[0] < 3:
             return getattr(self.file, key)
 else:
     SeekableFile = identity
+
+
+compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
+
+
+def infer_compression(filename):
+    extension = os.path.splitext(filename)[-1].strip('.')
+    return compressions.get(extension, None)
+
+
+def infer_storage_options(urlpath, inherit_storage_options=None):
+    """ Infer storage options from URL path and merge it with existing storage
+    options.
+
+    Parameters
+    ----------
+    urlpath: str or unicode
+        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
+    storage_options: dict (optional)
+        Its contents will get merged with the inferred information from the
+        given path
+
+    Returns
+    -------
+    Storage options dict.
+
+    Examples
+    --------
+    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
+    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
+    >>> infer_storage_options(
+    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    {"protocol": "hdfs", "username": "username", "password": "pwd",
+    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
+    "url_query": "q=1", "extra": "value"}
+    """
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
+        return {'protocol': 'file',
+                'path': urlpath}
+
+    parsed_path = urlsplit(urlpath)
+    protocol = parsed_path.scheme or 'file'
+    path = parsed_path.path
+    if protocol == 'file':
+        # Special case parsing file protocol URL on Windows according to:
+        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        if windows_path:
+            path = '%s:%s' % windows_path.groups()
+
+    inferred_storage_options = {
+        'protocol': protocol,
+        'path': path,
+    }
+
+    if parsed_path.netloc:
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        if parsed_path.port:
+            inferred_storage_options['port'] = parsed_path.port
+        if parsed_path.username:
+            inferred_storage_options['username'] = parsed_path.username
+        if parsed_path.password:
+            inferred_storage_options['password'] = parsed_path.password
+
+    if parsed_path.query:
+        inferred_storage_options['url_query'] = parsed_path.query
+    if parsed_path.fragment:
+        inferred_storage_options['url_fragment'] = parsed_path.fragment
+
+    if inherit_storage_options:
+        if set(inherit_storage_options) & set(inferred_storage_options):
+            raise KeyError("storage options (%r) and path url options (%r) "
+                           "collision is detected"
+                           % (inherit_storage_options, inferred_storage_options))
+        inferred_storage_options.update(inherit_storage_options)
+
+    return inferred_storage_options
 
 
 def seek_delimiter(file, delimiter, blocksize):
@@ -127,3 +214,32 @@ def read_block(f, offset, length, delimiter=None):
         f.seek(offset)
 
     return f.read(length)
+
+
+def build_name_function(max_int):
+    """ Returns a function that receives a single integer
+    and returns it as a string padded by enough zero characters
+    to align with maximum possible integer
+
+    >>> name_f = build_name_function(57)
+
+    >>> name_f(7)
+    '07'
+    >>> name_f(31)
+    '31'
+    >>> build_name_function(1000)(42)
+    '0042'
+    >>> build_name_function(999)(42)
+    '042'
+    >>> build_name_function(0)(0)
+    '0'
+    """
+    # handle corner cases max_int is 0 or exact power of 10
+    max_int += 1e-8
+
+    pad_length = int(math.ceil(math.log10(max_int)))
+
+    def name_function(i):
+        return str(i).zfill(pad_length)
+
+    return name_function

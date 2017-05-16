@@ -7,12 +7,12 @@ from toolz import merge, partial
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
-from .utils import SeekableFile, read_block
+from .utils import (SeekableFile, read_block, infer_compression,
+                    infer_storage_options, build_name_function)
 from ..compatibility import PY2, unicode
 from ..base import tokenize, normalize_token
 from ..delayed import delayed
-from ..utils import (build_name_function, infer_compression, import_required,
-                     ensure_bytes, ensure_unicode, infer_storage_options)
+from ..utils import import_required, ensure_bytes, ensure_unicode
 
 
 def write_block_to_file(data, lazy_file):
