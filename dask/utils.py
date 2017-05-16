@@ -718,13 +718,6 @@ def dependency_depth(dsk):
     return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
 
 
-def eq_strict(a, b):
-    """Returns True if both values have the same type and are equal."""
-    if type(a) is type(b):
-        return a == b
-    return False
-
-
 def memory_repr(num):
     for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
         if num < 1024.0:

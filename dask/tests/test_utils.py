@@ -6,7 +6,7 @@ import pytest
 
 from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
-                        infer_storage_options, eq_strict, memory_repr,
+                        infer_storage_options, memory_repr,
                         methodcaller, M, skip_doctest, SerializableLock,
                         funcname, ndeepmap, ensure_dict, package_of)
 from dask.utils_test import inc
@@ -140,11 +140,6 @@ def test_infer_storage_options_c(urlpath, expected_path):
     so = infer_storage_options(urlpath)
     assert so['protocol'] == 'file'
     assert so['path'] == expected_path
-
-
-def test_eq_strict():
-    assert eq_strict('a', 'a')
-    assert not eq_strict(b'a', u'a')
 
 
 def test_memory_repr():

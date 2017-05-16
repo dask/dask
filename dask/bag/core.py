@@ -37,11 +37,13 @@ from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert, eq_strict)
+                     digit, insert)
 
 
 no_default = '__no__default__'
-no_result = '__no__result__'
+no_result = type('no_result', (object,),
+                 {'__slots__': (),
+                  '__reduce__': lambda self: 'no_result'})
 
 
 def lazify_task(task, start=True):
@@ -1826,7 +1828,7 @@ def empty_safe_apply(func, part, is_last):
 
 
 def empty_safe_aggregate(func, parts, is_last):
-    parts2 = (p for p in parts if not eq_strict(p, no_result))
+    parts2 = (p for p in parts if p is not no_result)
     return empty_safe_apply(func, parts2, is_last)
 
 
