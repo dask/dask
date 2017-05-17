@@ -5,6 +5,7 @@ import pytest
 np = pytest.importorskip('numpy')
 
 import os
+import sys
 import time
 from distutils.version import LooseVersion
 from operator import add, sub, getitem
@@ -624,6 +625,18 @@ def test_dot_method():
     b = from_array(y, chunks=(5, 5))
 
     assert_eq(a.dot(b), x.dot(y))
+
+
+@pytest.mark.skipif(sys.version_info < (3, 5),
+                    reason="Matrix multiplication operator only after Py3.5")
+def test_matmul():
+    x = np.random.random((5, 5))
+    y = np.random.random((5, 2))
+    a = from_array(x, chunks=(1, 5))
+    b = from_array(y, chunks=(5, 1))
+    assert_eq(eval('a @ b'), a.dot(b))
+    assert_eq(eval('a @ b'), eval('x @ y'))
+    assert_eq(eval('[1, 2, 3, 4, 5] @ b)', eval('[1, 2, 3, 4, 5] @ y')))
 
 
 def test_T():
