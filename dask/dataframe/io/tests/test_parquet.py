@@ -265,6 +265,18 @@ def test_append_different_columns():
             ddf3.to_parquet(tmp, append=True)
         assert 'Appended dtypes' in str(excinfo.value)
 
+def test_partitions():
+    """Test the reading of partitioned directories"""
+    with tmpdir() as tmp:
+        path = os.path.join(str(tmp), 'subdir')
+        
+        df1 = pd.DataFrame({'a': [1], 'b': pd.Categorical([2])})
+        fastparquet.write(path, df1, partition_on=['b'], file_scheme='hive')
+        
+        df2 = dd.read_parquet(path, index=False)
+        
+        assert_eq(df1, df2)
+        
 
 def test_ordering():
     with tmpdir() as tmp:

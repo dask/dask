@@ -99,7 +99,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         categories = pf.categories
     dtypes = pf._dtypes(categories)
 
-    meta = _meta_from_dtypes(all_columns, pf.columns, dtypes)
+    meta = _meta_from_dtypes(all_columns, tuple(pf.columns + list(pf.cats)), dtypes)
 
     for cat in categories:
         meta[cat] = pd.Series(pd.Categorical([],
