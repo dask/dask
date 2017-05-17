@@ -12,7 +12,7 @@ from .utils import (SeekableFile, read_block, infer_compression,
 from ..compatibility import PY2, unicode
 from ..base import tokenize, normalize_token
 from ..delayed import delayed
-from ..utils import import_required, ensure_bytes, ensure_unicode
+from ..utils import import_required, ensure_bytes, ensure_unicode, is_integer
 
 
 def write_block_to_file(data, lazy_file):
@@ -137,6 +137,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     client = None
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
+
+    if blocksize is not None:
+        if not is_integer(blocksize):
+            raise TypeError("blocksize must be an integer")
+        blocksize = int(blocksize)
 
     blocks, lengths, machines = fs.get_block_locations(paths)
     if blocks:
