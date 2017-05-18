@@ -18,16 +18,39 @@ def test_ufunc_meta():
     assert da.frexp.__doc__.replace('    # doctest: +SKIP', '') == np.frexp.__doc__
 
 
-@pytest.mark.parametrize('ufunc',
-                         ['conj', 'exp', 'exp2', 'log', 'log2', 'log10',
-                          'log1p', 'expm1', 'sqrt', 'cbrt', 'square', 'sin',
-                          'cos', 'tan', 'arctan', 'sinh', 'cosh', 'tanh',
-                          'arcsinh', 'arccosh', 'deg2rad', 'rad2deg',
-                          'isfinite', 'isinf', 'isnan', 'signbit', 'i0',
-                          'reciprocal', 'degrees', 'radians', 'rint', 'fabs',
-                          'sign', 'absolute', 'floor', 'ceil', 'trunc',
-                          'logical_not', 'spacing', 'sinc', 'nan_to_num'])
-def test_ufunc(ufunc):
+def test_ufunc():
+    for attr in ['nin', 'nargs', 'nout', 'ntypes', 'identity',
+                 'signature', 'types']:
+        assert getattr(da.log, attr) == getattr(np.log, attr)
+
+    with pytest.raises(AttributeError):
+        da.log.not_an_attribute
+
+    assert repr(da.log) == repr(np.log)
+    assert 'nin' in dir(da.log)
+    assert 'outer' in dir(da.log)
+
+
+binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
+                 'floor_divide', 'fmax', 'fmin', 'fmod', 'greater',
+                 'greater_equal', 'hypot', 'ldexp', 'less', 'less_equal',
+                 'logaddexp', 'logaddexp2', 'logical_and', 'logical_or',
+                 'logical_xor', 'maximum', 'minimum', 'mod', 'multiply',
+                 'nextafter', 'not_equal', 'power', 'remainder', 'subtract',
+                 'true_divide']
+
+unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
+                'arctanh', 'cbrt', 'ceil', 'conj', 'cos', 'cosh', 'deg2rad',
+                'degrees', 'exp', 'exp2', 'expm1', 'fabs', 'fix', 'floor',
+                'i0', 'isfinite', 'isinf', 'isnan', 'log', 'log10', 'log1p',
+                'log2', 'logical_not', 'nan_to_num', 'negative', 'rad2deg',
+                'radians', 'reciprocal', 'rint', 'sign', 'signbit', 'sin',
+                'sinc', 'sinh', 'spacing', 'sqrt', 'square', 'tan', 'tanh',
+                'trunc']
+
+
+@pytest.mark.parametrize('ufunc', unary_ufuncs)
+def test_unary_ufunc(ufunc):
 
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -37,27 +60,19 @@ def test_ufunc(ufunc):
 
     # applying Dask ufunc doesn't trigger computation
     assert isinstance(dafunc(darr), da.Array)
-    assert_eq(dafunc(darr), npfunc(arr))
+    assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
     # applying NumPy ufunc triggers computation
     assert isinstance(npfunc(darr), np.ndarray)
-    assert_eq(npfunc(darr), npfunc(arr))
+    assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
     # applying Dask ufunc to normal ndarray triggers computation
     assert isinstance(dafunc(arr), np.ndarray)
-    assert_eq(dafunc(arr), npfunc(arr))
+    assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
 
 
-@pytest.mark.parametrize('ufunc', ['add', 'subtract', 'multiply', 'divide',
-                                   'true_divide', 'floor_divide', 'power',
-                                   'remainder', 'mod', 'fmax', 'fmin',
-                                   'logaddexp', 'logaddexp2', 'arctan2',
-                                   'hypot', 'copysign', 'nextafter', 'ldexp',
-                                   'fmod', 'logical_and', 'logical_or',
-                                   'logical_xor', 'maximum', 'minimum',
-                                   'greater', 'greater_equal', 'less',
-                                   'less_equal', 'not_equal', 'equal'])
-def test_ufunc_2args(ufunc):
+@pytest.mark.parametrize('ufunc', binary_ufuncs)
+def test_binary_ufunc(ufunc):
 
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -92,6 +107,45 @@ def test_ufunc_2args(ufunc):
 
     assert isinstance(dafunc(10, arr1), np.ndarray)
     assert_eq(dafunc(10, arr1), npfunc(10, arr1))
+
+
+def test_ufunc_outer():
+    arr1 = np.random.randint(1, 100, size=20)
+    darr1 = da.from_array(arr1, 3)
+
+    arr2 = np.random.randint(1, 100, size=(10, 3))
+    darr2 = da.from_array(arr2, 3)
+
+    # Check output types
+    assert isinstance(da.add.outer(darr1, darr2), da.Array)
+    assert isinstance(da.add.outer(arr1, darr2), da.Array)
+    assert isinstance(da.add.outer(darr1, arr2), da.Array)
+    assert isinstance(da.add.outer(arr1, arr2), np.ndarray)
+
+    # Check mix of dimensions, dtypes, and numpy/dask/object
+    cases = [((darr1, darr2), (arr1, arr2)),
+             ((darr2, darr1), (arr2, arr1)),
+             ((darr2, darr1.astype('f8')), (arr2, arr1.astype('f8'))),
+             ((darr1, arr2), (arr1, arr2)),
+             ((darr1, 1), (arr1, 1)),
+             ((1, darr2), (1, arr2)),
+             ((1.5, darr2), (1.5, arr2)),
+             (([1, 2, 3], darr2), ([1, 2, 3], arr2)),
+             ((darr1.sum(), darr2), (arr1.sum(), arr2)),
+             ((np.array(1), darr2), (np.array(1), arr2))]
+
+    for (dA, dB), (A, B) in cases:
+        assert_eq(da.add.outer(dA, dB), np.add.outer(A, B))
+
+    # Check dtype kwarg works
+    assert_eq(da.add.outer(darr1, darr2, dtype='f8'),
+              np.add.outer(arr1, arr2, dtype='f8'))
+
+    with pytest.raises(ValueError):
+        da.add.outer(darr1, darr2, out=arr1)
+
+    with pytest.raises(ValueError):
+        da.sin.outer(darr1, darr2)
 
 
 @pytest.mark.parametrize('ufunc', ['isreal', 'iscomplex', 'real', 'imag'])
@@ -170,3 +224,15 @@ def test_clip():
     assert_eq(x.clip(max=5), d.clip(max=5))
     assert_eq(x.clip(max=1, min=5), d.clip(max=1, min=5))
     assert_eq(x.clip(min=1, max=5), d.clip(min=1, max=5))
+
+
+def test_angle():
+    real = np.random.randint(1, 100, size=(20, 20))
+    imag = np.random.randint(1, 100, size=(20, 20)) * 1j
+    comp = real + imag
+    dacomp = da.from_array(comp, 3)
+
+    assert_eq(da.angle(dacomp), np.angle(comp))
+    assert_eq(da.angle(dacomp, deg=True), np.angle(comp, deg=True))
+    assert isinstance(da.angle(comp), np.ndarray)
+    assert_eq(da.angle(comp), np.angle(comp))
