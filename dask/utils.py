@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import functools
 import inspect
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -15,7 +16,7 @@ import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import long, getargspec, PY3, unicode
+from .compatibility import long, getargspec, PY3, unicode, urlsplit
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -778,3 +779,80 @@ def package_of(typ):
             result = sys.modules[base]
         _packages[typ] = result
         return result
+
+
+# XXX: Kept to keep old versions of distributed/dask in sync. After
+# distributed's dask requirement is updated to > this commit, this function can
+# be moved to dask.bytes.utils.
+def infer_storage_options(urlpath, inherit_storage_options=None):
+    """ Infer storage options from URL path and merge it with existing storage
+    options.
+
+    Parameters
+    ----------
+    urlpath: str or unicode
+        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
+    storage_options: dict (optional)
+        Its contents will get merged with the inferred information from the
+        given path
+
+    Returns
+    -------
+    Storage options dict.
+
+    Examples
+    --------
+    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
+    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
+    >>> infer_storage_options(
+    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    {"protocol": "hdfs", "username": "username", "password": "pwd",
+    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
+    "url_query": "q=1", "extra": "value"}
+    """
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
+        return {'protocol': 'file',
+                'path': urlpath}
+
+    parsed_path = urlsplit(urlpath)
+    protocol = parsed_path.scheme or 'file'
+    path = parsed_path.path
+    if protocol == 'file':
+        # Special case parsing file protocol URL on Windows according to:
+        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        if windows_path:
+            path = '%s:%s' % windows_path.groups()
+
+    inferred_storage_options = {
+        'protocol': protocol,
+        'path': path,
+    }
+
+    if parsed_path.netloc:
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        if parsed_path.port:
+            inferred_storage_options['port'] = parsed_path.port
+        if parsed_path.username:
+            inferred_storage_options['username'] = parsed_path.username
+        if parsed_path.password:
+            inferred_storage_options['password'] = parsed_path.password
+
+    if parsed_path.query:
+        inferred_storage_options['url_query'] = parsed_path.query
+    if parsed_path.fragment:
+        inferred_storage_options['url_fragment'] = parsed_path.fragment
+
+    if inherit_storage_options:
+        if set(inherit_storage_options) & set(inferred_storage_options):
+            raise KeyError("storage options (%r) and path url options (%r) "
+                           "collision is detected"
+                           % (inherit_storage_options, inferred_storage_options))
+        inferred_storage_options.update(inherit_storage_options)
+
+    return inferred_storage_options
