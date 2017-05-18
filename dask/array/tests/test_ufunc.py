@@ -119,6 +119,7 @@ def test_ufunc_outer():
     # Check output types
     assert isinstance(da.add.outer(darr1, darr2), da.Array)
     assert isinstance(da.add.outer(arr1, darr2), da.Array)
+    assert isinstance(da.add.outer(darr1, arr2), da.Array)
     assert isinstance(da.add.outer(arr1, arr2), np.ndarray)
 
     # Check mix of dimensions, dtypes, and numpy/dask/object
