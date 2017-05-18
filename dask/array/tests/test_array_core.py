@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from distutils.version import LooseVersion
+import operator
 from operator import add, sub, getitem
 from threading import Lock
 import warnings
@@ -634,9 +635,10 @@ def test_matmul():
     y = np.random.random((5, 2))
     a = from_array(x, chunks=(1, 5))
     b = from_array(y, chunks=(5, 1))
-    assert_eq(eval('a @ b'), a.dot(b))
-    assert_eq(eval('a @ b'), eval('x @ y'))
-    assert_eq(eval('[1, 2, 3, 4, 5] @ b)', eval('[1, 2, 3, 4, 5] @ y')))
+    assert_eq(operator.matmul(a, b), a.dot(b))
+    assert_eq(operator.matmul(a, b), operator.matmul(x, y))
+    list_vec = list(range(1, 6))
+    assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
 
 
 def test_T():
