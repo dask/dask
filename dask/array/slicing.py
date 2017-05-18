@@ -585,22 +585,6 @@ def posify_index(shape, ind):
     return ind
 
 
-def insert_many(seq, where, val):
-    """ Insert value at many locations in sequence
-
-    >>> insert_many(['a', 'b', 'c'], [0, 2], 'z')
-    ('z', 'a', 'z', 'b', 'c')
-    """
-    seq = list(seq)
-    result = []
-    for i in range(len(where) + len(seq)):
-        if i in where:
-            result.append(val)
-        else:
-            result.append(seq.pop(0))
-    return tuple(result)
-
-
 @memoize
 def _expander(where):
     if not where:
@@ -628,8 +612,7 @@ def _expander(where):
 
 
 def expander(where):
-    """ An optimized version of insert_many() when *where*
-    is known upfront and used many times.
+    """Create a function to insert value at many locations in sequence.
 
     >>> expander([0, 2])(['a', 'b', 'c'], 'z')
     ('z', 'a', 'z', 'b', 'c')

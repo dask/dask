@@ -1,15 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from itertools import chain
 import operator
 import uuid
-import warnings
 
 try:
-    from cytoolz import unique, curry, first
+    from cytoolz import curry, first
 except ImportError:
-    from toolz import unique, curry, first
+    from toolz import curry, first
 
 from . import base, threaded
 from .compatibility import apply
@@ -20,11 +18,6 @@ from .utils import concrete, funcname, methodcaller, ensure_dict
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
-
-
-def flat_unique(ls):
-    """Flatten ``ls``, filter by unique id, and return a list"""
-    return list(unique(chain.from_iterable(ls), key=id))
 
 
 def unzip(ls, nout):
@@ -324,20 +317,6 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
         dsk = sharedict.merge(dsk, (name, {name: task}))
         return Delayed(name, dsk)
-
-
-def do(*args, **kwargs):
-    """deprecated, please use ``dask.delayed.delayed``"""
-    warnings.warn("`dask.delayed.do` is deprecated, please use "
-                  "`dask.delayed.delayed` instead")
-    return delayed(*args, **kwargs)
-
-
-def compute(*args, **kwargs):
-    """deprecated, please use ``dask.compute``"""
-    warnings.warn("`dask.delayed.compute` is deprecated, please use "
-                  "`dask.compute` instead")
-    return base.compute(*args, **kwargs)
 
 
 def right(method):

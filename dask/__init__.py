@@ -4,7 +4,7 @@ from .core import istask
 from .context import set_options
 from .local import get_sync as get
 try:
-    from .delayed import do, delayed
+    from .delayed import delayed
 except ImportError:
     pass
 try:

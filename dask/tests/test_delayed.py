@@ -6,9 +6,9 @@ from random import random
 from toolz import identity, partial, merge
 import pytest
 
-from dask import set_options
+from dask import set_options, compute
 from dask.compatibility import PY2, PY3
-from dask.delayed import delayed, to_task_dask, compute, Delayed
+from dask.delayed import delayed, to_task_dask, Delayed
 
 
 def test_to_task_dask():
