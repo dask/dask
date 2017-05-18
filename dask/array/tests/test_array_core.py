@@ -637,6 +637,7 @@ def test_matmul():
     b = from_array(y, chunks=(5, 1))
     assert_eq(operator.matmul(a, b), a.dot(b))
     assert_eq(operator.matmul(a, b), operator.matmul(x, y))
+    assert_eq(operator.matmul(a, y), operator.matmul(x, b))
     list_vec = list(range(1, 6))
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
 
