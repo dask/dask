@@ -11,12 +11,13 @@ from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+from numbers import Integral
 from threading import Lock
 import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import long, getargspec, PY3, unicode, urlsplit
+from .compatibility import getargspec, PY3, unicode, urlsplit
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -285,15 +286,7 @@ def is_integer(i):
     >>> is_integer('abc')
     False
     """
-    import numpy as np
-    if isinstance(i, (int, long)):
-        return True
-    if isinstance(i, float):
-        return (i).is_integer()
-    if issubclass(type(i), np.integer):
-        return i
-    else:
-        return False
+    return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
 ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,

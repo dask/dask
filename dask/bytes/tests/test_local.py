@@ -62,6 +62,18 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
+def test_read_bytes_blocksize_float():
+    with filetexts(files, mode='b'):
+        sample, vals = read_bytes('.test.account*', blocksize=5.0)
+        results = compute(*concat(vals))
+        ourlines = b"".join(results).split(b'\n')
+        testlines = b"".join(files.values()).split(b'\n')
+        assert set(ourlines) == set(testlines)
+
+        with pytest.raises(TypeError):
+            read_bytes('.test.account*', blocksize=5.5)
+
+
 def test_with_urls():
     with filetexts(files, mode='b'):
         # OS-independent file:// URI with glob *
