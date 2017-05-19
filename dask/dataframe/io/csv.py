@@ -259,53 +259,70 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
 
-This parallelizes the ``pandas.{reader}`` file in the following ways:
+This parallelizes the ``pandas.{reader}`` function in the following ways:
 
-1.  It supports loading many files at once using globstrings as follows:
+- It supports loading many files at once using globstrings:
 
     >>> df = dd.{reader}('myfiles.*.csv')  # doctest: +SKIP
 
-2.  In some cases it can break up large files as follows:
+- In some cases it can break up large files:
 
     >>> df = dd.{reader}('largefile.csv', blocksize=25e6)  # 25MB chunks  # doctest: +SKIP
 
-3.  You can read CSV files from external resources (e.g. S3, HDFS)
-    providing a URL:
+- It can read CSV files from external resources (e.g. S3, HDFS) by
+  providing a URL:
 
     >>> df = dd.{reader}('s3://bucket/myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
 
-Internally ``dd.{reader}`` uses ``pandas.{reader}`` and so supports many
-of the same keyword arguments with the same performance guarantees.
-
-See the docstring for ``pandas.{reader}`` for more information on available
-keyword arguments.
-
-Note that this function may fail if a {file_type} file includes quoted strings
-that contain the line terminator.
+Internally ``dd.{reader}`` uses ``pandas.{reader}`` and supports many of the
+same keyword arguments with the same performance guarantees. See the docstring
+for ``pandas.{reader}`` for more information on available keyword arguments.
 
 Parameters
 ----------
 urlpath : string
     Absolute or relative filepath, URL (may include protocols like
     ``s3://``), or globstring for {file_type} files.
-blocksize : int or None
+blocksize : int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
     If ``None``, use a single block for each file.
-collection : boolean
+collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
-sample : int
+sample : int, optional
     Number of bytes to use when determining dtypes
 assume_missing : bool, optional
     If True, all integer columns that aren't specified in ``dtype`` are assumed
     to contain missing values, and are converted to floats. Default is False.
-storage_options : dict
-    Extra options that make sense to a particular storage connection, e.g.
+storage_options : dict, optional
+    Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
-**kwargs : dict
-    Options to pass down to ``pandas.{reader}``
+**kwargs
+    Extra keyword arguments to forward to ``pandas.{reader}``.
+
+Notes
+-----
+Dask dataframe tries to infer the ``dtype`` of each column by reading a sample
+from the start of the file (or of the first file if it's a glob). Usually this
+works fine, but if the ``dtype`` is different later in the file (or in other
+files) this can cause issues. For example, if all the rows in the sample had
+integer dtypes, but later on there was a ``NaN``, then this would error at
+compute time. To fix this, you have a few options:
+
+- Provide explicit dtypes for the offending columns using the ``dtype``
+  keyword. This is the recommended solution.
+
+- Use the ``assume_missing`` keyword to assume that all columns inferred as
+  integers contain missing values, and convert them to floats.
+
+- Increase the size of the sample using the ``sample`` keyword.
+
+It should also be noted that this function may fail if a {file_type} file
+includes quoted strings that contain the line terminator. To get around this
+you can specify ``blocksize=None`` to not split files into multiple partitions,
+at the cost of reduced parallelism.
 """
 
 
