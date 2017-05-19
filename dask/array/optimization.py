@@ -48,31 +48,37 @@ def hold_keys(dsk, dependencies):
     We don't want to fuse data present in the graph because it is easier to
     serialize as a raw value.
 
-    We don't want to fuse getitem/getarrays because we want to move around only
-    small pieces of data, rather than the underlying arrays.
+    We don't want to fuse chains after getitem/getarrays because we want to
+    move around only small pieces of data, rather than the underlying arrays.
     """
     dependents = reverse_dict(dependencies)
     data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
-    getters = (getitem, getarray, getarray_inline)
+    getters = (getarray, getarray_nofancy, getarray_inline, getitem)
 
     hold_keys = list(data)
     for dat in data:
         deps = dependents[dat]
         for dep in deps:
             task = dsk[dep]
-            try:
-                if task[0] in getters:
+            # If the task is a get* function, we walk up the chain, and stop
+            # when there's either more than one dependent, or the dependent is
+            # no longer a get* function or an alias. We then add the final
+            # key to the list of keys not to fuse.
+            if type(task) is tuple and task and task[0] in getters:
+                try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
-                        if new_task[0] in (getitem, getarray):
+                        # If the task is a get* or an alias, continue up the
+                        # linear chain
+                        if new_task[0] in getters or new_task in dsk:
                             dep = new_dep
                             task = new_task
                         else:
                             break
-                    hold_keys.append(dep)
-            except (IndexError, TypeError):
-                pass
+                except (IndexError, TypeError):
+                    pass
+                hold_keys.append(dep)
     return hold_keys
 
 
