@@ -400,3 +400,15 @@ def test_to_parquet_default_writes_nulls():
         ddf.to_parquet(fn)
         table = pq.read_table(fn)
         assert table[0].null_count == 2
+
+
+def test_partition_on(tmpdir):
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
+                       'b': np.random.random(size=100),
+                       'c': np.random.randint(1, 5, size=100)})
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(tmpdir, partition_on=['a'])
+    out = dd.read_parquet(tmpdir, engine='fastparquet').compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
