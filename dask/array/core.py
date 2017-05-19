@@ -1498,6 +1498,8 @@ class Array(Base):
         return elemwise(operator.xor, other, self)
 
     def __matmul__(self, other):
+        if not hasattr(other, 'ndim'):
+            other = np.asarray(other)  # account for array-like RHS
         return tensordot(self, other, axes=((self.ndim - 1,),
                                             (other.ndim - 2,)))
 
