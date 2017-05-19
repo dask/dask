@@ -74,6 +74,11 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     elif len(minmax) > 1:
         if index:
             index_col = index
+        elif index is None:
+            # attempt auto-index
+            index = pf._get_index()
+            if index:
+                index_col = index
         elif 'index' in minmax:
             index_col = 'index'
         else:
@@ -361,6 +366,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
         index_col = df.columns[0]
     else:
         ignore_divisions = True
+        index_col = []
 
     object_encoding = object_encoding or 'utf8'
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
@@ -369,7 +375,8 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
                          'because this required data in memory.')
     fmd = fastparquet.writer.make_metadata(df._meta, has_nulls=has_nulls,
                                            fixed_text=fixed_text,
-                                           object_encoding=object_encoding)
+                                           object_encoding=object_encoding,
+                                           index_cols=[index_col])
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
