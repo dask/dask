@@ -640,6 +640,7 @@ def test_matmul():
     assert_eq(operator.matmul(a, y), operator.matmul(x, b))
     list_vec = list(range(1, 6))
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
+    assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
 
 
 def test_T():
