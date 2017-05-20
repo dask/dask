@@ -389,7 +389,6 @@ def test_timestamp_index():
 
 
 @pytest.mark.skipif(not pyarrow, reason='pyarrow not found')
-@pytest.mark.xfail(reason="to_parquet does not write nulls by default")
 def test_to_parquet_default_writes_nulls():
     import pyarrow.parquet as pq
 
@@ -399,7 +398,7 @@ def test_to_parquet_default_writes_nulls():
     with tmpfile() as fn:
         ddf.to_parquet(fn)
         table = pq.read_table(fn)
-        assert table[0].null_count == 2
+        assert table[1].null_count == 2
 
 
 def test_partition_on(tmpdir):

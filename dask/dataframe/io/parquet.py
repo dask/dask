@@ -296,7 +296,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                              categories=categories, index=index)
 
 
-def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
+def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                fixed_text=None, object_encoding=None, storage_options=None,
                append=False, ignore_divisions=False, partition_on=[]):
     """Store Dask.dataframe to Parquet files
@@ -317,11 +317,11 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=None,
     write_index : boolean
         Whether or not to write the index.  Defaults to True *if* divisions are
         known.
-    has_nulls : bool, list or None
+    has_nulls : bool, list or 'infer'
         Specifies whether to write NULLs information for columns. If bools,
-        apply to all columns, if list, use for only the named columns, if None,
-        use only for columns which don't have a sentinel NULL marker (currently
-        object columns only).
+        apply to all columns, if list, use for only the named columns, if
+        'infer', use only for columns which don't have a sentinel NULL marker
+        (currently object columns only).
     fixed_text : dict {col: int}
         For column types that are written as bytes (bytes, utf8 strings, or
         json and bson-encoded objects), if a column is included here, the
