@@ -2605,3 +2605,20 @@ def test_boundary_slice_same(index, left, right):
     df = pd.DataFrame({"A": range(len(index))}, index=index)
     result = boundary_slice(df, left, right)
     tm.assert_frame_equal(result, df)
+
+
+@pytest.mark.parametrize('npartitions,ascending', [
+    (1, True),
+    (10, True),
+    (1, False),
+    (10, False),
+])
+def test_sort_values(npartitions, ascending):
+    vals = list(num % 100 for num in range(50, 150))
+    df = pd.DataFrame({'val': vals})
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+
+    np.testing.assert_allclose(
+        ddf.sort_values('val', ascending=ascending).val.compute(),
+        df.sort_values('val', ascending=ascending).val,
+    )

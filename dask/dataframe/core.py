@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from functools import wraps, partial
+import itertools as it
 import operator
 from operator import getitem
 from pprint import pformat
@@ -2709,6 +2710,14 @@ class DataFrame(_Frame):
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
+    @derived_from(pd.DataFrame)
+    def sort_values(self, by, axis=0, ascending=True, na_position='last'):
+        if axis != 0:
+            raise RuntimeError('sort_values along axis %s is currently not supported' % axis)
+
+        sort_values_kwargs = dict(by=by, ascending=ascending, na_position=na_position)
+        return even_odd_sort_values(self, sort_values_kwargs)
+
     @property
     def _repr_data(self):
         meta = self._meta
@@ -3756,6 +3765,58 @@ def safe_head(df, n):
                "`npartitions` to `head`.")
         warnings.warn(msg.format(n, len(r)))
     return r
+
+
+def even_odd_sort_values(df, sort_values_kwargs):
+    """Sort a dataframe with an even-odd block sort."""
+    if df.npartitions == 1:
+        return df.map_partitions(sort_dataframes, **sort_values_kwargs)
+
+    dsk = dict(df.dask)
+    name = df._name
+
+    n_iterations = 2 * (1 + df.npartitions // 2)
+    for iteration, offset in zip(range(n_iterations), it.cycle([0, 1])):
+        name, dsk_update = sort_values_step(name, df.npartitions, offset, sort_values_kwargs)
+        dsk.update(dsk_update)
+
+    return DataFrame(dsk, name, df._meta, divisions=(None,) * (1 + df.npartitions))
+
+
+def sort_values_step(input_name, npartitions, offset, sort_values_kwargs):
+    dsk = {}
+    output_name = 'sort_values-{}'.format(tokenize(input_name, sort_values_kwargs))
+    merge_name = 'sort_values_merge-{}'.format(tokenize(input_name, sort_values_kwargs))
+
+    sorter = partial(sort_dataframes, **sort_values_kwargs)
+
+    for idx in range(offset):
+        dsk[output_name, idx] = lambda x: x, (input_name, idx)
+
+    for a, b in zip(range(offset + 0, npartitions, 2), range(offset + 1, npartitions, 2)):
+        dsk[merge_name, a] = sorter, (input_name, a), (input_name, b)
+        dsk[output_name, a] = lower_half, (merge_name, a)
+        dsk[output_name, b] = upper_half, (merge_name, a)
+
+    consumed = offset + 2 * ((npartitions - offset) // 2)
+
+    for idx in range(consumed, npartitions):
+        dsk[output_name, idx] = lambda x: x, (input_name, idx)
+
+    return output_name, dsk
+
+
+def sort_dataframes(*dataframes, **kwargs):
+    df = pd.concat(list(dataframes), axis=0, ignore_index=True)
+    return df.sort_values(**kwargs)
+
+
+def lower_half(ab):
+    return ab.iloc[:ab.shape[0] // 2]
+
+
+def upper_half(ab):
+    return ab.iloc[ab.shape[0] // 2:]
 
 
 def maybe_shift_divisions(df, periods, freq):
