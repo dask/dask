@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip('bokeh')
 from tornado import gen
 
-from dask import do
+from dask import delayed
 from distributed.client import _wait
 from distributed.diagnostics.progress_stream import (progress_quads,
         nbytes_bar, progress_stream, _incrementing_index_cache)
@@ -58,7 +58,7 @@ def test_progress_stream(c, s, a, b):
 
     x = 1
     for i in range(5):
-        x = do(inc)(x)
+        x = delayed(inc)(x)
     future = c.compute(x)
 
     yield _wait(futures + [future])

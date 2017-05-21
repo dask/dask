@@ -1,17 +1,17 @@
 """ This file is experimental and may disappear without warning """
 from __future__ import print_function, division, absolute_import
 
-import logging
-
 from dask.base import tokenize
 from dask.bytes import core
-from dask.utils import infer_storage_options
 from hdfs3 import HDFileSystem
 
+# infer_storage_options moved after dask 0.14.3 release
+try:
+    from dask.bytes.utils import infer_storage_options
+except ImportError:
+    from dask.utils import infer_storage_options
+
 from .utils import PY3
-
-
-logger = logging.getLogger(__name__)
 
 
 class DaskHDFileSystem(HDFileSystem):

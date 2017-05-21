@@ -1700,10 +1700,10 @@ class Client(Node):
 
         Examples
         --------
-        >>> from dask import do, value
+        >>> from dask import delayed
         >>> from operator import add
-        >>> x = dask.do(add)(1, 2)
-        >>> y = dask.do(add)(x, x)
+        >>> x = delayed(add)(1, 2)
+        >>> y = delayed(add)(x, x)
         >>> xx, yy = client.compute([x, y])  # doctest: +SKIP
         >>> xx  # doctest: +SKIP
         <Future: status: finished, key: add-8f6e709446674bad78ea8aeecfee188e>
