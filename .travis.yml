@@ -1,20 +1,28 @@
-language: python
+language: generic
 sudo: false
 dist: trusty
 services:
   - docker
 
-matrix:
-  fast_finish: true
-
 env:
   matrix:
     - PYTHON=2.7 PACKAGES="blosc futures faulthandler"
     - PYTHON=3.4 COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
-    - PYTHON=3.5 CRICK=true
-    - PYTHON=3.6 PACKAGES=blosc
+    - PYTHON=3.5 CRICK=true ASYNCIO=true
+    - PYTHON=3.6 PACKAGES=blosc ASYNCIO=true
     - HDFS=true PYTHON=2.7
     - HDFS=true PYTHON=3.5 PACKAGES=blosc
+
+matrix:
+  fast_finish: true
+  #include:
+  #- os: osx
+    #env: PYTHON=3.6 RUNSLOW=false
+  ## Together with fast_finish, allow build to be marked successful before the OS X job finishes
+  #allow_failures:
+  #- os: osx
+    ## This needs to be the exact same line as above
+    #env: PYTHON=3.6 RUNSLOW=false
 
 addons:
   hosts:
@@ -33,66 +41,14 @@ before_install:
     fi;
 
 install:
-  # Note we disable progress bars to make Travis log loading much faster
-
-  # Install conda
-  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
-
-  # Install dependencies
-  - conda create -q -n test-environment python=$PYTHON
-  - source activate test-environment
-  - conda install -q pytest pytest-timeout pytest-faulthandler coverage tornado=4.4 toolz dill dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client h5py netcdf4 lz4 paramiko tblib click flake8 $PACKAGES -c conda-forge
-  - |
-    if [[ $HDFS == true ]]; then
-        conda install -q libxml2 krb5 boost
-        conda install -q -c conda-forge libhdfs3 libgsasl libntlm
-        pip install -q git+https://github.com/dask/hdfs3 --upgrade
-    fi;
-  - pip install -q git+https://github.com/dask/dask.git --upgrade
-  - pip install -q git+https://github.com/joblib/joblib.git --upgrade
-  - pip install -q git+https://github.com/dask/s3fs.git --upgrade
-  - pip install -q git+https://github.com/dask/zict.git --upgrade
-  - pip install -q sortedcollections msgpack-python
-  - pip install -q keras --upgrade --no-deps
-  - |
-    if [[ $CRICK == true ]]; then
-        conda install -q cython
-        pip install git+https://github.com/jcrist/crick.git
-    fi;
-  - |
-    if [[ $PYTHON == 3.5 || $PYTHON == 3.6 ]]; then
-        pip install -q pytest-aiohttp
-    fi;
-
-  # Install distributed
-  - pip install --no-deps -e .
+  - source continuous_integration/travis/install.sh
 
 script:
-    - export PYTEST_OPTIONS="--verbose -r s --timeout-method=thread --timeout=300 --runslow --durations=20"
-    - |
-      if [[ $HDFS == true ]]; then
-        py.test distributed/tests/test_hdfs.py $PYTEST_OPTIONS
-        if [ $? -ne 0 ]; then
-            # Diagnose test error
-            echo "--"
-            echo "-- HDFS namenode log follows"
-            echo "--"
-            docker exec -it $(docker ps -q) bash -c "tail -n50 /usr/local/hadoop/logs/hadoop-root-namenode-hdfs-container.log"
-            (exit 1)
-        fi
-      elif [[ $COVERAGE == true ]]; then
-        coverage run $(which py.test) distributed -m "not avoid_travis" $PYTEST_OPTIONS;
-      else
-        py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS;
-      fi;
-    - flake8 distributed/*.py distributed/{bokeh,protocol,deploy}/*.py # no tests yet
+  - source continuous_integration/travis/run_tests.sh
+  - flake8 distributed/*.py distributed/{bokeh,protocol,deploy}/*.py # no tests yet
 
 after_success:
-    - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
+  - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
 
 notifications:
   email: false
