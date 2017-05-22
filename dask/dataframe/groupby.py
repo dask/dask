@@ -419,6 +419,16 @@ def _build_agg_args(spec):
     """
     known_np_funcs = {np.min: 'min', np.max: 'max'}
 
+    # check that there are no name conflicts for a single input column
+    by_name = {}
+    for _, func, input_column in spec:
+        key = funcname(known_np_funcs.get(func, func)), input_column
+        by_name.setdefault(key, []).append((func, input_column))
+
+    for funcs in by_name.values():
+        if len(funcs) != 1:
+            raise ValueError('conflicting aggregation functions: {}'.format(funcs))
+
     chunks = {}
     aggs = {}
     finalizers = []

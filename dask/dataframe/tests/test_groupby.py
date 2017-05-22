@@ -1252,7 +1252,7 @@ def test_groupby_agg_custom_mean():
     a = dd.from_pandas(d, npartitions=2)
 
     agg_func = dd.Aggregation(
-        'custom-sum',
+        'custom-mean',
         lambda s: (s.count(), s.sum()),
         lambda s0, s1: (s0.sum(), s1.sum()),
         lambda s0, s1: s1 / s0,
@@ -1260,5 +1260,37 @@ def test_groupby_agg_custom_mean():
 
     result = a.groupby('g').aggregate({'b': agg_func})
     expected = d.groupby('g').aggregate({'b': 'mean'})
+
+    assert_eq(result, expected, check_dtype=False)
+
+
+def test_groupby_agg_custom__name_clash_with_internal_same_column():
+    """for a single input column only unique names are allowed"""
+    d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
+    a = dd.from_pandas(d, npartitions=2)
+
+    agg_func = dd.Aggregation('sum', lambda s: s.sum(), lambda s0: s0.sum())
+
+    with pytest.raises(ValueError):
+        a.groupby('g').aggregate({'b': [agg_func, 'sum']})
+
+
+def test_groupby_agg_custom__name_clash_with_internal_different_column():
+    """custom aggregation functions can share the name of a builtin function"""
+    d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3, 'c': [4, 5, 6] * 3})
+    a = dd.from_pandas(d, npartitions=2)
+
+    # NOTE: this function is purposefully misnamed
+    agg_func = dd.Aggregation(
+        'sum',
+        lambda s: (s.count(), s.sum()),
+        lambda s0, s1: (s0.sum(), s1.sum()),
+        lambda s0, s1: s1 / s0,
+    )
+
+    # NOTE: the name of agg-func is supressed in the output,
+    # since only a single agg func per column was specified
+    result = a.groupby('g').aggregate({'b': agg_func, 'c': 'sum'})
+    expected = d.groupby('g').aggregate({'b': 'mean', 'c': 'sum'})
 
     assert_eq(result, expected, check_dtype=False)
