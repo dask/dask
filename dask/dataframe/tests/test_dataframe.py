@@ -1,6 +1,7 @@
 import sys
 from operator import add
 from itertools import product
+import string
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -2607,7 +2608,7 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
-@pytest.mark.parametrize('npartitions,ascending', [
+@pytest.mark.parametrize('npartitions, ascending', [
     (1, True),
     (10, True),
     (1, False),
@@ -2618,7 +2619,38 @@ def test_sort_values(npartitions, ascending):
     df = pd.DataFrame({'val': vals})
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    np.testing.assert_allclose(
-        ddf.sort_values('val', ascending=ascending).val.compute(),
-        df.sort_values('val', ascending=ascending).val,
+    assert_eq(
+        ddf.sort_values('val', ascending=ascending, temporary_index=False),
+        df.sort_values('val', ascending=ascending),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize('values', [
+    lambda: list(num % 100 for num in range(50, 150)),
+    lambda: 4 * list(string.ascii_letters),
+])
+def test_index_sort_values(values):
+    df = pd.DataFrame({'val': values()})
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    assert_eq(
+        ddf.sort_values('val', temporary_index=True),
+        df.sort_values('val'),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize('by', [['int', 'str'], ['str', 'int']])
+def test_index_sort_values_multiple(by):
+    df = pd.DataFrame({
+        'int': list(num % 100 for num in range(50, 150)),
+        'str': 4 * list(string.ascii_letters[:25]),
+    })
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    assert_eq(
+        ddf.sort_values(by, temporary_index=True),
+        df.sort_values(by),
+        check_index=False,
     )

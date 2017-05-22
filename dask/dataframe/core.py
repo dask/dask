@@ -2711,11 +2711,18 @@ class DataFrame(_Frame):
                                      task=len(self.dask))
 
     @derived_from(pd.DataFrame)
-    def sort_values(self, by, axis=0, ascending=True, na_position='last'):
+    def sort_values(self, by, axis=0, ascending=True, na_position='last', temporary_index=True):
         if axis != 0:
             raise RuntimeError('sort_values along axis %s is currently not supported' % axis)
 
+        if not isinstance(by, list):
+            by = [by]
+
         sort_values_kwargs = dict(by=by, ascending=ascending, na_position=na_position)
+
+        if temporary_index:
+            return index_sort_values(self, by[0], sort_values_kwargs)
+
         return even_odd_sort_values(self, sort_values_kwargs)
 
     @property
@@ -3765,6 +3772,20 @@ def safe_head(df, n):
                "`npartitions` to `head`.")
         warnings.warn(msg.format(n, len(r)))
     return r
+
+
+def index_sort_values(df, index_on, sort_values_kwargs):
+    return (
+        df
+        .set_index(index_on)
+        .reset_index()
+        # NOTE: reset index will put the index column always in front, reorder columns to fix this
+        .map_partitions(fix_columns_and_sort, column_order=list(df.columns), **sort_values_kwargs)
+    )
+
+
+def fix_columns_and_sort(df, column_order, **sort_values_kwargs):
+    return df[list(column_order)].sort_values(**sort_values_kwargs)
 
 
 def even_odd_sort_values(df, sort_values_kwargs):
