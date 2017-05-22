@@ -78,7 +78,7 @@ class AioClient(Client):
 
     The AioClient can receive an asyncio loop explicitly:
 
-    >>> loop = syncio.get_event_loop()  # doctest: +SKIP
+    >>> loop = asyncio.get_event_loop()  # doctest: +SKIP
     >>> client = AioClient('127.0.0.1:8786', loop=loop)  # doctest: +SKIP
 
     Start the client:
