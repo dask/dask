@@ -622,7 +622,7 @@ class Client(Node):
                     msgs = yield self.scheduler_comm.comm.read()
                 except CommClosedError:
                     if self.status == 'running':
-                        logger.warn("Client report stream closed to scheduler")
+                        logger.warning("Client report stream closed to scheduler")
                         logger.info("Reconnecting...")
                         self.status = 'connecting'
                         yield self._reconnect()
@@ -696,7 +696,7 @@ class Client(Node):
             self._restart_event.set()
 
     def _handle_error(self, exception=None):
-        logger.warn("Scheduler exception:")
+        logger.warning("Scheduler exception:")
         logger.exception(exception)
 
     @gen.coroutine
@@ -1032,7 +1032,7 @@ class Client(Node):
             response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
-                logger.warn("Couldn't gather keys %s", response['keys'])
+                logger.warning("Couldn't gather keys %s", response['keys'])
                 for key in response['keys']:
                     self._send_to_scheduler({'op': 'report-key',
                                              'key': key})

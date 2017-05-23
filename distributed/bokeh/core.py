@@ -53,8 +53,9 @@ class BokehServer(object):
         if self.server._tornado._ping_job is not None:
             self.server._tornado._ping_job.stop()
 
-        # self.server.stop()
         # https://github.com/bokeh/bokeh/issues/5494
+        if bokeh.__version__ >= '0.12.4':
+            self.server.stop()
 
 
 def format_bytes(n):

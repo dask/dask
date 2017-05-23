@@ -608,16 +608,13 @@ def popen(*args, **kwargs):
             terminate_process(proc)
         finally:
             # XXX Also dump stdout if return code != 0 ?
+            out, err = proc.communicate()
             if dump_stdout:
-                line = '\n\nPrint from stderr\n=================\n'
-                while line:
-                    print(line, end='')
-                    line = proc.stderr.readline()
+                print('\n\nPrint from stderr\n=================\n')
+                print(err)
 
-                line = '\n\nPrint from stdout\n=================\n'
-                while line:
-                    print(line, end='')
-                    line = proc.stdout.readline()
+                print('\n\nPrint from stdout\n=================\n')
+                print(out)
 
 
 def wait_for_port(address, timeout=5):

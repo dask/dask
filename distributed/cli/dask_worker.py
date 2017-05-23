@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 from sys import exit
 from time import sleep
 
@@ -28,7 +29,6 @@ logger = logging.getLogger('distributed.dask_worker')
 
 global_nannies = []
 
-import signal
 
 def handle_signal(sig, frame):
     loop = IOLoop.instance()
@@ -40,6 +40,7 @@ def handle_signal(sig, frame):
     if loop._running:
         loop.add_callback_from_signal(loop.stop)
     else:
+        loop.close()
         exit(1)
 
 
@@ -237,6 +238,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                         io_loop=loop2)
 
     loop2.run_sync(f)
+    loop2.close()
 
     if nanny:
         for n in nannies:

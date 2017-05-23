@@ -63,7 +63,7 @@ class LocalCluster(object):
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
                  services={}, worker_services={}, nanny=None, **worker_kwargs):
         if nanny is not None:
-            warnings.warn("nanny has been deprecated, used processes=")
+            warnings.warning("nanny has been deprecated, used processes=")
             processes = nanny
         self.status = None
         self.processes = processes

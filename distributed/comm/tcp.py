@@ -91,7 +91,7 @@ def set_tcp_timeout(stream):
             TCP_USER_TIMEOUT = 18  # since Linux 2.6.37
             sock.setsockopt(socket.SOL_TCP, TCP_USER_TIMEOUT, timeout * 1000)
     except EnvironmentError as e:
-        logger.warn("Could not set timeout on TCP stream: %s", e)
+        logger.warning("Could not set timeout on TCP stream: %s", e)
 
 
 def convert_stream_closed_error(exc):
@@ -129,7 +129,7 @@ class TCP(Comm):
     def _get_finalizer(self):
         def finalize(stream=self.stream, r=repr(self)):
             if not stream.closed():
-                logger.warn("Closing dangling stream in %s" % (r,))
+                logger.warning("Closing dangling stream in %s" % (r,))
                 stream.close()
 
         return finalize
@@ -392,9 +392,9 @@ class TLSListener(BaseTCPListener):
             yield stream.wait_for_handshake()
         except EnvironmentError as e:
             # The handshake went wrong, log and ignore
-            logger.warn("listener on %r: TLS handshake failed with remote %r: %s",
-                        self.listen_address, address,
-                        getattr(e, "real_error", None) or e)
+            logger.warning("listener on %r: TLS handshake failed with remote %r: %s",
+                           self.listen_address, address,
+                           getattr(e, "real_error", None) or e)
         else:
             comm = TLS(stream, address, self.deserialize)
             self.comm_handler(comm)

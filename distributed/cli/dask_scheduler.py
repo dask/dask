@@ -149,7 +149,7 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
         except ImportError:
             logger.info("Please install Bokeh to get Web UI")
         except Exception as e:
-            logger.warn("Could not start Bokeh web UI", exc_info=True)
+            logger.warning("Could not start Bokeh web UI", exc_info=True)
 
     logger.info('Local Directory: %26s', local_directory)
     logger.info('-' * 47)

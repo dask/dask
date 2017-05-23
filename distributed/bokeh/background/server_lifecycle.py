@@ -41,7 +41,7 @@ def http_get(route):
         logger.info("Can not connect to %s", url, exc_info=True)
         return
     except HTTPError:
-        logger.warn("http route %s failed", route)
+        logger.warning("http route %s failed", route)
         return
     msg = json.loads(response.body.decode())
     messages[route]['deque'].append(msg)
@@ -58,7 +58,7 @@ def workers():
         response = yield client.fetch(
                 'http://%(host)s:%(http-port)d/workers.json' % options)
     except HTTPError:
-        logger.warn("workers http route failed")
+        logger.warning("workers http route failed")
         return
     msg = json.loads(response.body.decode())
     if msg:

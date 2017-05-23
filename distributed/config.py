@@ -48,8 +48,9 @@ def determine_config_file():
     try:
         ensure_config_file(default_path, path)
     except EnvironmentError as e:
-        logger.warn("Could not write default config file to '%s'. Received error %s",
-                    path, e)
+        warnings.warn("Could not write default config file to '%s'. "
+                      "Received error %s" % (path, e),
+                      UserWarning)
 
     return path if os.path.exists(path) else default_path
 

@@ -241,7 +241,7 @@ class Server(object):
                     handler = self.handlers[op]
                 except KeyError:
                     result = "No handler found: %s" % op
-                    logger.warn(result, exc_info=True)
+                    logger.warning(result, exc_info=True)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
@@ -249,7 +249,7 @@ class Server(object):
                         if type(result) is gen.Future:
                             result = yield result
                     except CommClosedError as e:
-                        logger.warn("Lost connection to %r: %s", address, e)
+                        logger.warning("Lost connection to %r: %s", address, e)
                         break
                     except Exception as e:
                         logger.exception(e)
@@ -258,8 +258,8 @@ class Server(object):
                     try:
                         yield comm.write(result)
                     except EnvironmentError as e:
-                        logger.warn("Lost connection to %r while sending result for op %r: %s",
-                                    address, op, e)
+                        logger.warning("Lost connection to %r while sending result for op %r: %s",
+                                       address, op, e)
                         break
                 msg = result = None
                 if close_desired:
@@ -438,8 +438,8 @@ class rpc(object):
             self.status = 'closed'
             still_open = [comm for comm in self.comms if not comm.closed()]
             if still_open:
-                logger.warn("rpc object %s deleted with %d open comms",
-                            self, len(still_open))
+                logger.warning("rpc object %s deleted with %d open comms",
+                               self, len(still_open))
                 for comm in still_open:
                     comm.abort()
 

@@ -20,7 +20,7 @@ import tempfile
 import threading
 import warnings
 
-from .compatibility import cache_from_source, invalidate_caches, reload
+from .compatibility import cache_from_source, getargspec, invalidate_caches, reload
 
 try:
     import resource
@@ -72,7 +72,7 @@ def has_arg(func, argname):
     """
     while True:
         try:
-            if argname in inspect.getargspec(func).args:
+            if argname in getargspec(func).args:
                 return True
         except TypeError:
             break
@@ -432,12 +432,23 @@ def truncate_exception(e, n=10000):
         return e
 
 
-def queue_to_iterator(q):
-    while True:
-        result = q.get()
-        if isinstance(result, StopIteration):
-            raise result
-        yield result
+if sys.version_info >= (3,):
+    # (re-)raising StopIteration is deprecated in 3.6+
+    exec("""def queue_to_iterator(q):
+        while True:
+            result = q.get()
+            if isinstance(result, StopIteration):
+                return result.value
+            yield result
+        """)
+else:
+    # Returning non-None from generator is a syntax error in 2.x
+    def queue_to_iterator(q):
+        while True:
+            result = q.get()
+            if isinstance(result, StopIteration):
+                raise result
+            yield result
 
 
 def _dump_to_queue(seq, q):

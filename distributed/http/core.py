@@ -44,7 +44,7 @@ def resource_collect(pid=None):
     return {'cpu_percent': psutil.cpu_percent(),
             'status': p.status(),
             'memory_percent': p.memory_percent(),
-            'memory_info_ex': p.memory_info_ex(),
+            'memory_info': p.memory_info(),
             'disk_io_counters': metrics.disk_io_counters(),
             'net_io_counters': metrics.net_io_counters()}
 

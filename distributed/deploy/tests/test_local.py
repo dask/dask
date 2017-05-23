@@ -218,7 +218,7 @@ def test_bokeh(loop):
             assert time() < start + 20
             sleep(0.01)
 
-    with pytest.raises(requests.ReadTimeout):
+    with pytest.raises(requests.RequestException):
         requests.get(url, timeout=0.2)
 
 

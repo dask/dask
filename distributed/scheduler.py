@@ -1212,7 +1212,7 @@ class Scheduler(ServerNode):
                             logger.exception(e)
                             raise
                     else:
-                        logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+                        logger.warning("Bad message: op=%s, %s", op, msg, exc_info=True)
 
                     if op == 'close':
                         breakout = True
@@ -1727,8 +1727,8 @@ class Scheduler(ServerNode):
                 if v['status'] == 'OK':
                     self.add_keys(worker=w, keys=list(gathers[w]))
                 else:
-                    logger.warn("Communication failed during replication: %s",
-                                v)
+                    logger.warning("Communication failed during replication: %s",
+                                   v)
 
                 self.log_event(w, {'action': 'replicate-add',
                                    'keys': gathers[w]})
@@ -1789,8 +1789,8 @@ class Scheduler(ServerNode):
     def retire_workers(self, comm=None, workers=None, remove=True, close=False,
                        close_workers=False):
         if close:
-            logger.warn("The keyword close= has been deprecated. "
-                        "Use close_workers= instead")
+            logger.warning("The keyword close= has been deprecated. "
+                           "Use close_workers= instead")
         close_workers = close_workers or close
         with log_errors():
             if workers is None:

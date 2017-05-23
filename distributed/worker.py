@@ -55,7 +55,7 @@ try:
     import psutil
     TOTAL_MEMORY = psutil.virtual_memory().total
 except ImportError:
-    logger.warn("Please install psutil to estimate worker memory use")
+    logger.warning("Please install psutil to estimate worker memory use")
     TOTAL_MEMORY = 8e9
     psutil = None
 
@@ -551,8 +551,8 @@ class WorkerBase(ServerNode):
         result, missing_keys, missing_workers = yield gather_from_workers(
                 who_has, rpc=self.rpc)
         if missing_keys:
-            logger.warn("Could not find data: %s on workers: %s (who_has: %s)",
-                        missing_keys, missing_workers, who_has)
+            logger.warning("Could not find data: %s on workers: %s (who_has: %s)",
+                           missing_keys, missing_workers, who_has)
             raise Return({'status': 'missing-data',
                           'keys': missing_keys})
         else:
@@ -753,7 +753,7 @@ def run(server, comm, function, args=(), kwargs={}, is_coro=False, wait=True):
         if is_coro:
             result = (yield result) if wait else None
     except Exception as e:
-        logger.warn(" Run Failed\n"
+        logger.warning(" Run Failed\n"
             "Function: %s\n"
             "args:     %s\n"
             "kwargs:   %s\n",
@@ -1113,7 +1113,7 @@ class Worker(WorkerBase):
                 if stop - start > 0.010:
                     self.startstops[key].append(('deserialize', start, stop))
             except Exception as e:
-                logger.warn("Could not deserialize task", exc_info=True)
+                logger.warning("Could not deserialize task", exc_info=True)
                 emsg = error_message(e)
                 emsg['key'] = key
                 emsg['op'] = 'task-erred'
@@ -1891,7 +1891,7 @@ class Worker(WorkerBase):
             else:
                 self.exceptions[key] = result['exception']
                 self.tracebacks[key] = result['traceback']
-                logger.warn(" Compute Failed\n"
+                logger.warning(" Compute Failed\n"
                     "Function:  %s\n"
                     "args:      %s\n"
                     "kwargs:    %s\n"
