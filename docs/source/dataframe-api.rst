@@ -13,7 +13,6 @@ Top level user functions:
     DataFrame.apply
     DataFrame.assign
     DataFrame.astype
-    DataFrame.cache
     DataFrame.categorize
     DataFrame.columns
     DataFrame.compute

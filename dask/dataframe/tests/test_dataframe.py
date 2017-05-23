@@ -1,5 +1,5 @@
 import sys
-from operator import getitem, add
+from operator import add
 from itertools import product
 
 import pandas as pd
@@ -252,6 +252,18 @@ def test_describe():
     ddf = dd.from_pandas(df, 4)
     assert_eq(df.describe(), ddf.describe())
     assert_eq(df.describe(), ddf.describe(split_every=2))
+
+
+def test_describe_empty():
+    # https://github.com/dask/dask/issues/2326
+    ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
+    with pytest.raises(ValueError) as rec:
+        ddf.describe()
+    assert rec.match('DataFrame contains only non-numeric data.')
+
+    with pytest.raises(ValueError) as rec:
+        ddf.A.describe()
+    assert rec.match('Cannot compute ``describe`` on object dtype.')
 
 
 def test_cumulative():
@@ -585,13 +597,6 @@ def test_ndim():
 
 def test_dtype():
     assert (d.dtypes == full.dtypes).all()
-
-
-def test_cache():
-    d2 = d.cache()
-    assert all(task[0] == getitem for task in d2.dask.values())
-
-    assert_eq(d2.a, d.a)
 
 
 def test_value_counts():
@@ -1700,10 +1705,10 @@ def test_apply():
     assert_eq(ddf.x.apply(lambda x: x + 1),
               df.x.apply(lambda x: x + 1))
 
-    # specify columns
-    assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
+    # specify meta
+    assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1, meta=(None, int)),
               df.apply(lambda xy: xy[0] + xy[1], axis=1))
-    assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis='columns', columns=None),
+    assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis='columns', meta=(None, int)),
               df.apply(lambda xy: xy[0] + xy[1], axis='columns'))
 
     # inference
@@ -1712,9 +1717,9 @@ def test_apply():
     assert_eq(ddf.apply(lambda xy: xy, axis=1),
               df.apply(lambda xy: xy, axis=1))
 
-    # result will be dataframe
+    # specify meta
     func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, name=[0, 1]), df.x.apply(func))
+    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
     assert_eq(ddf.x.apply(func), df.x.apply(func))
 

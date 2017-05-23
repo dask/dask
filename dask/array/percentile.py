@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from itertools import count
 from functools import wraps
 from collections import Iterator
 
@@ -29,9 +28,6 @@ def _percentile(a, q, interpolation='linear'):
     if not np.issubdtype(a.dtype, np.number):
         interpolation = 'nearest'
     return np.percentile(a, q, interpolation=interpolation)
-
-
-names = ('percentile-%d' % i for i in count(1))
 
 
 def percentile(a, q, interpolation='linear'):

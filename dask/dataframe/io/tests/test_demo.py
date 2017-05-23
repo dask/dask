@@ -48,6 +48,7 @@ def test_no_overlaps():
                for i in range(df.npartitions - 2))
 
 
+@pytest.mark.xfail
 def test_daily_stock():
     pytest.importorskip('pandas_datareader')
     df = dd.demo.daily_stock('GOOG', start='2010-01-01', stop='2010-01-30', freq='1h')

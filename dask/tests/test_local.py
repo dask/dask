@@ -2,8 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import dask
 
-from dask.async import (start_state_from_dask, get_sync, finish_task, sortkey,
-                        remote_exception)
+from dask.local import start_state_from_dask, get_sync, finish_task, sortkey
 from dask.order import order
 from dask.utils_test import GetFunctionTestMixin, inc, add
 
@@ -174,22 +173,9 @@ def test_exceptions_propagate():
         assert False
     except MyException as e:
         assert "My Exception!" in str(e)
-        assert "Traceback" in str(e)
         assert 'a' in dir(e)
-        assert 'traceback' in dir(e)
-        assert e.exception.a == 1 and e.exception.b == 2
-        assert e.a == 1 and e.b == 2
-
-
-def test_remote_exception():
-    e = TypeError("hello")
-    a = remote_exception(e, 'traceback')
-    b = remote_exception(e, 'traceback')
-
-    assert type(a) == type(b)
-    assert isinstance(a, TypeError)
-    assert 'hello' in str(a)
-    assert 'traceback' in str(a)
+        assert e.a == 1
+        assert e.b == 2
 
 
 def test_ordering():

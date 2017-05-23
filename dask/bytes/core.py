@@ -7,21 +7,12 @@ from toolz import merge, partial
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
-from .utils import SeekableFile, read_block
+from .utils import (SeekableFile, read_block, infer_compression,
+                    infer_storage_options, build_name_function)
 from ..compatibility import PY2, unicode
 from ..base import tokenize, normalize_token
 from ..delayed import delayed
-from ..utils import (build_name_function, infer_compression, import_required,
-                     ensure_bytes, ensure_unicode, infer_storage_options)
-
-# delayed = delayed(pure=True)
-
-# Global registration dictionaries for backend storage functions
-# See docstrings to functions below for more information
-_read_bytes = dict()
-_open_files_write = dict()
-_open_files = dict()
-_open_text_files = dict()
+from ..utils import import_required, ensure_bytes, ensure_unicode, is_integer
 
 
 def write_block_to_file(data, lazy_file):
@@ -146,6 +137,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     client = None
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
+
+    if blocksize is not None:
+        if not is_integer(blocksize):
+            raise TypeError("blocksize must be an integer")
+        blocksize = int(blocksize)
 
     blocks, lengths, machines = fs.get_block_locations(paths)
     if blocks:
@@ -479,10 +475,6 @@ def _expand_paths(path, name_function, num):
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
-       (protocol in _filesystems))):
-        return
-
     if protocol == 's3':
         import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
@@ -496,6 +488,9 @@ def ensure_protocol(protocol):
                "    conda install distributed hdfs3 -c conda-forge")
         import_required('distributed.hdfs', msg)
         import_required('hdfs3', msg)
+
+    elif protocol in _filesystems:
+        return
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)

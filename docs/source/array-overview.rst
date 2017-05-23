@@ -66,6 +66,8 @@ will be disappointed.  Notably, Dask array has the following limitations:
     difficult to do in parallel, and are of somewhat diminished value on very
     large data (you rarely actually need a full sort).
     Often we include parallel-friendly alternatives like ``topk``.
-4.  It is very inefficient to iterate over a Dask array with for loops.
+4.  Dask array doesn't implement operations like ``tolist`` that would be very
+    inefficient for larger datasets. Likewise it is very inefficient to iterate
+    over a Dask array with for loops.
 5.  Dask development is driven by immediate need, and so many lesser used
     functions have not been implemented. Community contributions are encouraged.

@@ -886,7 +886,7 @@ class _GroupBy(object):
                               funcs=finalizers)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, meta=no_default, columns=no_default):
+    def apply(self, func, meta=no_default):
         """ Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
@@ -900,22 +900,11 @@ class _GroupBy(object):
         func: function
             Function to apply
         $META
-        columns: list, scalar or None
-            Deprecated, use `meta` instead. If list is given, the result is a
-            DataFrame which columns is specified list. Otherwise, the result is
-            a Series which name is given scalar or None (no name). If name
-            keyword is not given, dask tries to infer the result type using its
-            beginning of data. This inference may take some time and lead to
-            unexpected result
 
         Returns
         -------
         applied : Series or DataFrame depending on columns keyword
         """
-        if columns is not no_default:
-            warnings.warn("`columns` is deprecated, please use `meta` instead")
-            if meta is no_default and isinstance(columns, (pd.DataFrame, pd.Series)):
-                meta = columns
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
@@ -950,8 +939,7 @@ class _GroupBy(object):
             cols = ['_index_' + c for c in self.index.columns]
             index2 = df3[cols]
             if isinstance(meta, pd.DataFrame):
-                df4 = df3.map_partitions(drop_columns, columns,
-                                         meta.columns.dtype)
+                df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
             else:
                 df4 = df3.drop(cols, axis=1)
         elif isinstance(self.index, Series):

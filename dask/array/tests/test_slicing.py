@@ -420,6 +420,15 @@ def test_multiple_list_slicing():
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
+def test_empty_list():
+    x = np.ones((5, 5, 5), dtype='i4')
+    dx = da.from_array(x, chunks=2)
+
+    assert_eq(dx[[], :3, :2], x[[], :3, :2])
+    assert_eq(dx[:3, [], :2], x[:3, [], :2])
+    assert_eq(dx[:3, :2, []], x[:3, :2, []])
+
+
 def test_uneven_chunks():
     assert da.ones(20, chunks=5)[::2].chunks == ((3, 2, 3, 2),)
 
@@ -549,3 +558,10 @@ def test_None_overlap_int():
 
 def test_negative_n_slicing():
     assert_eq(da.ones(2, chunks=2)[-2], np.ones(2)[-2])
+
+
+def test_negative_list_slicing():
+    x = np.arange(5)
+    dx = da.from_array(x, chunks=2)
+    assert_eq(dx[[0, -5]], x[[0, -5]])
+    assert_eq(dx[[4, -1]], x[[4, -1]])

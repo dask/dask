@@ -30,6 +30,7 @@ Top level user functions:
     Bag.random_sample
     Bag.remove
     Bag.repartition
+    Bag.starmap
     Bag.std
     Bag.sum
     Bag.take
@@ -50,6 +51,7 @@ Create Bags
    from_url
    range
    concat
+   map
    zip
 
 Turn Bags into other things
@@ -74,4 +76,5 @@ Other functions
 .. autofunction:: from_url
 .. autofunction:: range
 .. autofunction:: concat
+.. autofunction:: map
 .. autofunction:: zip

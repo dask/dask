@@ -1,13 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-import logging
-from ..utils import infer_storage_options
-
 from s3fs import S3FileSystem
 
 from . import core
-
-logger = logging.getLogger(__name__)
+from .utils import infer_storage_options
 
 
 class DaskS3FileSystem(S3FileSystem, core.FileSystem):

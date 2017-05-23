@@ -8,17 +8,15 @@ from collections import Iterator
 import sys
 import traceback
 from contextlib import contextmanager
-import warnings
 
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 from pandas.core.common import is_datetime64tz_dtype
 from pandas.api.types import is_categorical_dtype, is_scalar
-import toolz
 
 from ..core import get_deps
-from ..async import get_sync
+from ..local import get_sync
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -78,30 +76,6 @@ def shard_df_on_index(df, divisions):
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i + 1]]
         yield df.iloc[indices[-1]:]
-
-
-def unique(divisions):
-    """ Polymorphic unique function
-
-    >>> list(unique([1, 2, 3, 1, 2, 3]))
-    [1, 2, 3]
-
-    >>> unique(np.array([1, 2, 3, 1, 2, 3]))
-    array([1, 2, 3])
-
-    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False))
-    [Alice, Bob]
-    Categories (2, object): [Alice, Bob]
-    """
-    if isinstance(divisions, np.ndarray):
-        return np.unique(divisions)
-    if isinstance(divisions, pd.Categorical):
-        return pd.Categorical.from_codes(np.unique(divisions.codes),
-                                         divisions.categories,
-                                         divisions.ordered)
-    if isinstance(divisions, (tuple, list, Iterator)):
-        return tuple(toolz.unique(divisions))
-    raise NotImplementedError()
 
 
 _META_TYPES = "meta : pd.DataFrame, pd.Series, dict, iterable, tuple, optional"
@@ -537,11 +511,6 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
             else:
                 assert np.allclose(a, b)
     return True
-
-
-def eq(*args, **kwargs):
-    warnings.warn('eq is deprecated. Use assert_frame instead', UserWarning)
-    assert_eq(*args, **kwargs)
 
 
 def assert_dask_graph(dask, label):

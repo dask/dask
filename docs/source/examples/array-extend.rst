@@ -1,7 +1,7 @@
 Build Custom Dask.Array Function
 ================================
 
-As discussed in the :doc:`array design document <array-design>` to create a
+As discussed in the :doc:`array design document <../array-design>` to create a
 dask ``Array`` object we need the following:
 
 1.  A dask graph
@@ -13,7 +13,7 @@ Often ``dask.array`` functions take other ``Array`` objects as inputs along
 with parameters, add tasks to a new dask dictionary, create a new ``chunks``
 tuple, and then construct and return a new ``Array`` object.  The hard parts
 are invariably creating the right tasks and creating a new ``chunks`` tuple.
-Careful review of the :doc:`array design document <array-design>` is suggested.
+Careful review of the :doc:`array design document <../array-design>` is suggested.
 
 
 Example `eye`

@@ -155,6 +155,17 @@ def test_tokenize_numpy_memmap_no_filename():
         assert tokenize(b) == tokenize(b)
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_ufunc_consistent():
+    assert tokenize(np.sin) == '02106e2c67daf452fb480d264e0dac21'
+    assert tokenize(np.cos) == 'c99e52e912e4379882a9a4b387957a0b'
+
+    # Make a ufunc that isn't in the numpy namespace. Similar to
+    # any found in other packages.
+    inc = np.frompyfunc(lambda x: x + 1, 1, 1)
+    assert tokenize(inc) == tokenize(inc)
+
+
 def test_normalize_base():
     for i in [1, 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
@@ -319,7 +330,7 @@ def test_compute_array_bag():
 
     pytest.raises(ValueError, lambda: compute(x, b))
 
-    xx, bb = compute(x, b, get=dask.async.get_sync)
+    xx, bb = compute(x, b, get=dask.get)
     assert np.allclose(xx, np.arange(5))
     assert bb == [1, 2, 3]
 
@@ -445,7 +456,7 @@ def test_persist_array_bag():
     with pytest.raises(ValueError):
         persist(x, b)
 
-    xx, bb = persist(x, b, get=dask.async.get_sync)
+    xx, bb = persist(x, b, get=dask.get)
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)

@@ -9,7 +9,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..async import get_sync
+from ..local import get_sync
 from ..sharedict import ShareDict
 
 if LooseVersion(np.__version__) >= '1.10.0':

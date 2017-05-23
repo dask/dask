@@ -4,7 +4,6 @@ from math import ceil
 from operator import getitem
 import os
 from threading import Lock
-from warnings import warn
 
 import pandas as pd
 import numpy as np
@@ -470,8 +469,7 @@ def to_records(df):
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
-                 metadata=None):
+def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -490,9 +488,6 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     prefix : str, optional
         Prefix to prepend to the keys.
     """
-    if metadata is not None and meta is None:
-        warn("Deprecation warning: Use meta keyword, not metadata")
-        meta = metadata
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]

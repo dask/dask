@@ -161,9 +161,9 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
 
     Examples
     --------
-    >>> import dask.dataframe as dd
-    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')
-    >>> df  # doctest: +NORMALIZE_WHITESPACE
+    >>> import dask.dataframe as dd  # doctest: +SKIP
+    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
+    >>> df  # doctest: +SKIP
     Dask DataFrame Structure:
                            close     high      low     open
     npartitions=252

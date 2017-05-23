@@ -18,7 +18,7 @@ import dask
 import dask.array as da
 from dask.base import tokenize
 from dask.delayed import delayed
-from dask.async import get_sync
+from dask.local import get_sync
 from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
@@ -1005,10 +1005,6 @@ def test_repr():
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
-    # Empty array
-    d = da.Array({}, 'd', ((), (3, 4)), dtype='i8')
-    assert str(d.shape) in repr(d)
-    assert str(d.dtype) in repr(d)
 
 
 def test_slicing_with_ellipsis():
@@ -1834,20 +1830,6 @@ def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
-
-
-def test_cache():
-    x = da.arange(15, chunks=5)
-    y = 2 * x + 1
-    z = y.cache()
-    assert len(z.dask) == 3  # very short graph
-    assert_eq(y, z)
-
-    cache = np.empty(15, dtype=y.dtype)
-    z = y.cache(store=cache)
-    assert len(z.dask) < 6  # very short graph
-    assert z.chunks == y.chunks
-    assert_eq(y, z)
 
 
 def test_take_dask_from_numpy():
@@ -2917,15 +2899,15 @@ def test_zero_sized_array_rechunk():
 def test_atop_zero_shape():
     da.atop(lambda x: x, 'i',
             da.arange(10, chunks=10), 'i',
-            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((),)), 'a',
+            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((0,),)), 'a',
             dtype='float64')
 
 
 def test_atop_zero_shape_new_axes():
     da.atop(lambda x: np.ones(42), 'i',
-            da.from_array(np.ones((0, 2)), ((), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((),)), 'a',
+            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+            da.from_array(np.ones((0,)), ((0,),)), 'a',
             dtype='float64', new_axes={'i': 42})
 
 

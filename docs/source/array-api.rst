@@ -160,6 +160,10 @@ Fast Fourier Transforms
    fft.irfftn
    fft.hfft
    fft.ihfft
+   fft.fftfreq
+   fft.rfftfreq
+   fft.fftshift
+   fft.ifftshift
 
 Linear Algebra
 ~~~~~~~~~~~~~~
@@ -215,6 +219,23 @@ Random
    random.wald
    random.weibull
    random.zipf
+
+Stats
+~~~~~
+
+.. autosummary::
+   stats.ttest_ind
+   stats.ttest_1samp
+   stats.ttest_rel
+   stats.chisquare
+   stats.power_divergence
+   stats.skew
+   stats.skewtest
+   stats.kurtosis
+   stats.kurtosistest
+   stats.normaltest
+   stats.f_oneway
+   stats.moment
 
 Image Support
 ~~~~~~~~~~~~~
@@ -444,6 +465,10 @@ Other functions
 .. autofunction:: irfftn
 .. autofunction:: hfft
 .. autofunction:: ihfft
+.. autofunction:: fftfreq
+.. autofunction:: rfftfreq
+.. autofunction:: fftshift
+.. autofunction:: ifftshift
 
 .. currentmodule:: dask.array.random
 
@@ -481,6 +506,21 @@ Other functions
 .. autofunction:: wald
 .. autofunction:: weibull
 .. autofunction:: zipf
+
+.. currentmodule:: dask.array.stats
+
+.. autofunction:: ttest_ind
+.. autofunction:: ttest_1samp
+.. autofunction:: ttest_rel
+.. autofunction:: chisquare
+.. autofunction:: power_divergence
+.. autofunction:: skew
+.. autofunction:: skewtest
+.. autofunction:: kurtosis
+.. autofunction:: kurtosistest
+.. autofunction:: normaltest
+.. autofunction:: f_oneway
+.. autofunction:: moment
 
 .. currentmodule:: dask.array.image
 

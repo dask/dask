@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterable, MutableMapping, Mapping
+from collections import Iterable, Mapping
 from collections import Iterator
 from functools import partial, wraps
 import inspect
@@ -72,12 +72,30 @@ def getarray_nofancy(a, b, lock=None):
     """ A simple wrapper around ``getarray``.
 
     Used to indicate to the optimization passes that the backend doesn't
-    support "fancy indexing"
+    support fancy indexing.
     """
     return getarray(a, b, lock=lock)
 
 
 def getarray_inline(a, b, lock=None):
+    """ A getarray function that optimizations feel comfortable inlining
+
+    Slicing operations with this function may be inlined into a graph, such as
+    in the following rewrite
+
+    **Before**
+
+    >>> a = x[:10]  # doctest: +SKIP
+    >>> b = a + 1  # doctest: +SKIP
+    >>> c = a * 2  # doctest: +SKIP
+
+    **After**
+
+    >>> b = x[:10] + 1  # doctest: +SKIP
+    >>> c = x[:10] * 2  # doctest: +SKIP
+
+    This inlining can be relevant to operations when running off of disk.
+    """
     return getarray(a, b, lock=lock)
 
 
@@ -1026,7 +1044,7 @@ class Array(Base):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] if c else 0 for c in self.chunks))
+        chunksize = str(tuple(c[0] for c in self.chunks))
         name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
@@ -1118,85 +1136,6 @@ class Array(Base):
         """
         from ..dataframe import from_dask_array
         return from_dask_array(self, columns=columns)
-
-    def cache(self, store=None, **kwargs):
-        """ Evaluate and cache array
-
-        Parameters
-        ----------
-        store: MutableMapping or ndarray-like
-            Place to put computed and cached chunks
-        kwargs:
-            Keyword arguments to pass on to ``get`` function for scheduling
-
-        Examples
-        --------
-
-        This triggers evaluation and store the result in either
-
-        1.  An ndarray object supporting setitem (see da.store)
-        2.  A MutableMapping like a dict or chest
-
-        It then returns a new dask array that points to this store.
-        This returns a semantically equivalent dask array.
-
-        >>> import dask.array as da
-        >>> x = da.arange(5, chunks=2)
-        >>> y = 2*x + 1
-        >>> z = y.cache()  # triggers computation
-
-        >>> y.compute()  # Does entire computation
-        array([1, 3, 5, 7, 9])
-
-        >>> z.compute()  # Just pulls from store
-        array([1, 3, 5, 7, 9])
-
-        You might base a cache off of an array like a numpy array or
-        h5py.Dataset.
-
-        >>> cache = np.empty(5, dtype=x.dtype)
-        >>> z = y.cache(store=cache)
-        >>> cache
-        array([1, 3, 5, 7, 9])
-
-        Or one might use a MutableMapping like a dict or chest
-
-        >>> cache = dict()
-        >>> z = y.cache(store=cache)
-        >>> cache  # doctest: +SKIP
-        {('x', 0): array([1, 3]),
-         ('x', 1): array([5, 7]),
-         ('x', 2): array([9])}
-        """
-        warnings.warn("Deprecation Warning: The `cache` method is deprecated, "
-                      "and will be removed in the next release. To achieve "
-                      "the same behavior, either write to disk or use "
-                      "`Client.persist`, from `dask.distributed`.")
-        if store is not None and hasattr(store, 'shape'):
-            self.store(store)
-            return from_array(store, chunks=self.chunks)
-        if store is None:
-            try:
-                from chest import Chest
-                store = Chest()
-            except ImportError:
-                if self.nbytes <= 1e9:
-                    store = dict()
-                else:
-                    msg = ("No out-of-core storage found."
-                           "Either:\n"
-                           "1. Install ``chest``, an out-of-core dictionary\n"
-                           "2. Provide an on-disk array like an h5py.Dataset")
-                    raise ValueError(msg)   # pragma: no cover
-        if isinstance(store, MutableMapping):
-            name = 'cache-' + tokenize(self)
-            dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
-                       for k in core.flatten(self._keys()))
-            Array._get(sharedict.merge(dsk, self.dask), list(dsk.keys()), **kwargs)
-
-            dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
-                        for k in store)
-            return Array(dsk2, self.name, chunks=self.chunks, dtype=self.dtype)
 
     def __int__(self):
         return int(self.compute())
@@ -1786,7 +1725,7 @@ def normalize_chunks(chunks, shape=None):
     ((10, 10, 10), (5,))
 
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
-    ((), ())
+    ((0,), (0,))
     """
     if chunks is None:
         raise ValueError(chunks_none_error_message)
@@ -1796,7 +1735,7 @@ def normalize_chunks(chunks, shape=None):
         if isinstance(chunks, Number):
             chunks = (chunks,) * len(shape)
     if not chunks and shape and all(s == 0 for s in shape):
-        chunks = ((),) * len(shape)
+        chunks = ((0,),) * len(shape)
 
     if shape and len(chunks) != len(shape):
         if not (len(shape) == 1 and sum(chunks) == shape[0]):
@@ -1811,6 +1750,10 @@ def normalize_chunks(chunks, shape=None):
         chunks = sum((blockdims_from_blockshape((s,), (c,))
                       if not isinstance(c, (tuple, list)) else (c,)
                       for s, c in zip(shape, chunks)), ())
+    for c in chunks:
+        if not c:
+            raise ValueError("Empty tuples are not allowed in chunks. Express "
+                             "zero length dimensions with 0(s) in chunks")
 
     return tuple(map(tuple, chunks))
 
@@ -3568,6 +3511,8 @@ def _vindex(x, *indexes):
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
     bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
     axis = _get_axis(indexes)
+    token = tokenize(x, indexes)
+    out_name = 'vindex-merge-' + token
 
     points = list()
     for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
@@ -3577,42 +3522,42 @@ def _vindex(x, *indexes):
                        for k, (ind, j) in enumerate(zip(idx, block_idx))]
         points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
-    per_block = groupby(1, points)
-    per_block = dict((k, v) for k, v in per_block.items() if v)
-
-    other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
-                                  for i, c in zip(indexes, x.chunks)]))
-
-    token = tokenize(x, indexes)
-    name = 'vindex-slice-' + token
-
-    full_slices = [slice(None, None) if i is None else None for i in indexes]
-
-    dsk = dict((keyname(name, i, okey),
-                (_vindex_transpose,
-                 (_vindex_slice, (x.name,) + interleave_none(okey, key),
-                  interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))),
-                 axis))
-               for i, key in enumerate(per_block)
-               for okey in other_blocks)
-
-    if per_block:
-        dsk2 = dict((keyname('vindex-merge-' + token, 0, okey),
-                     (_vindex_merge,
-                      [list(pluck(0, per_block[key])) for key in per_block],
-                      [keyname(name, i, okey) for i in range(len(per_block))]))
-                    for okey in other_blocks)
-    else:
-        dsk2 = dict()
-
     chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
-    chunks.insert(0, (len(points),) if points else ())
+    chunks.insert(0, (len(points),) if points else (0,))
     chunks = tuple(chunks)
 
-    name = 'vindex-merge-' + token
-    dsk.update(dsk2)
+    if points:
+        per_block = groupby(1, points)
+        per_block = dict((k, v) for k, v in per_block.items() if v)
 
-    return Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, x.dtype)
+        other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
+                                    for i, c in zip(indexes, x.chunks)]))
+
+        full_slices = [slice(None, None) if i is None else None for i in indexes]
+
+        name = 'vindex-slice-' + token
+        dsk = dict((keyname(name, i, okey),
+                    (_vindex_transpose,
+                    (_vindex_slice, (x.name,) + interleave_none(okey, key),
+                     interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))),
+                     axis))
+                   for i, key in enumerate(per_block)
+                   for okey in other_blocks)
+
+        dsk.update((keyname('vindex-merge-' + token, 0, okey),
+                   (_vindex_merge,
+                    [list(pluck(0, per_block[key])) for key in per_block],
+                    [keyname(name, i, okey) for i in range(len(per_block))]))
+                   for okey in other_blocks)
+
+        return Array(sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks,
+                     x.dtype)
+
+    # output has a zero dimension, just create a new zero-shape array with the
+    # same dtype
+    from .wrap import empty
+    return empty(tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype,
+                 name=out_name)
 
 
 def _get_axis(indexes):

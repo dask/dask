@@ -208,6 +208,12 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     where_list = [i for i, ind in enumerate(index) if isinstance(ind, list)]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
+    # Is the single list an empty list? In this case just treat it as a zero
+    # length slice
+    if where_list and not index[where_list[0]]:
+        index2 = list(index2)
+        index2[where_list.pop()] = slice(0, 0, 1)
+        index2 = tuple(index2)
 
     # No lists, hooray! just use slice_slices_and_integers
     if not where_list:
@@ -579,22 +585,6 @@ def posify_index(shape, ind):
     return ind
 
 
-def insert_many(seq, where, val):
-    """ Insert value at many locations in sequence
-
-    >>> insert_many(['a', 'b', 'c'], [0, 2], 'z')
-    ('z', 'a', 'z', 'b', 'c')
-    """
-    seq = list(seq)
-    result = []
-    for i in range(len(where) + len(seq)):
-        if i in where:
-            result.append(val)
-        else:
-            result.append(seq.pop(0))
-    return tuple(result)
-
-
 @memoize
 def _expander(where):
     if not where:
@@ -622,8 +612,7 @@ def _expander(where):
 
 
 def expander(where):
-    """ An optimized version of insert_many() when *where*
-    is known upfront and used many times.
+    """Create a function to insert value at many locations in sequence.
 
     >>> expander([0, 2])(['a', 'b', 'c'], 'z')
     ('z', 'a', 'z', 'b', 'c')
@@ -709,7 +698,7 @@ def check_index(ind, dimension):
     """
     if isinstance(ind, list):
         x = np.array(ind)
-        if (x >= dimension).any() or (x <= -dimension).any():
+        if (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return

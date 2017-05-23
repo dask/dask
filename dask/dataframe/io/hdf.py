@@ -9,18 +9,16 @@ from warnings import warn
 import pandas as pd
 from toolz import merge
 
-from ...async import get_sync
+from .io import _link
+from ..core import DataFrame, new_dd_object
+from ... import multiprocessing
 from ...base import tokenize
+from ...bytes.utils import build_name_function
 from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
-from ... import multiprocessing
-
-from ..core import DataFrame, new_dd_object
-
-from ...utils import build_name_function, effective_get, get_scheduler_lock
-
-from .io import _link
+from ...local import get_sync
+from ...utils import effective_get, get_scheduler_lock
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):

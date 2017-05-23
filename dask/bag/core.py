@@ -5,14 +5,12 @@ from functools import wraps, partial
 import itertools
 import math
 from operator import getitem
-import os
 import types
 import uuid
 from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
@@ -31,18 +29,21 @@ except:
                        count, pluck, groupby, topk)
 
 from ..base import Base, normalize_token, tokenize
+from ..bytes.core import write_bytes
 from ..compatibility import apply, urlopen
 from ..context import _globals, defer_to_globals
 from ..core import quote, istask, get_dependencies, reverse_dict
+from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
-from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
+from ..utils import (system_encoding, takes_multiple_arguments, funcname,
                      digit, insert)
-from ..bytes.core import write_bytes
 
 
 no_default = '__no__default__'
-no_result = '__no__result__'
+no_result = type('no_result', (object,),
+                 {'__slots__': (),
+                  '__reduce__': lambda self: 'no_result'})
 
 
 def lazify_task(task, start=True):
@@ -75,11 +76,6 @@ def lazify(dsk):
     ``dask.bag.core.lazify_task``
     """
     return valmap(lazify_task, dsk)
-
-
-def list2(L):
-    """A call to list that won't get removed by lazify"""
-    return list(L)
 
 
 def inline_singleton_lists(dsk, dependencies=None):
@@ -195,29 +191,6 @@ def finalize(results):
 
 def finalize_item(results):
     return results[0]
-
-
-def unpack_kwargs(kwargs):
-    """ Extracts dask values from kwargs
-
-    Currently only dask.bag.Item and python literal values are supported.
-
-    Returns a merged dask graph and a list of [key, val] pairs suitable for
-    eventually constructing a dict.
-    """
-    dsk = {}
-    kw_pairs = []
-    for key, val in iteritems(kwargs):
-        if isinstance(val, Item):
-            dsk.update(val.dask)
-            val = val.key
-        # TODO elif isinstance(val, Delayed):
-        elif isinstance(val, Base):
-            raise NotImplementedError(
-                '%s not supported as kwarg value to Bag.map_partitions'
-                % type(val).__name__)
-        kw_pairs.append([key, val])
-    return dsk, kw_pairs
 
 
 class StringAccessor(object):
@@ -380,52 +353,126 @@ class Bag(Base):
 
     str = property(fget=StringAccessor)
 
-    def map(self, func, **kwargs):
-        """ Map a function across all elements in collection
+    def map(self, func, *args, **kwargs):
+        """Apply a function elementwise across one or more bags.
 
-        >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5))
-        >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
-        [0, 10, 20, 30, 40]
+        Note that all ``Bag`` arguments must be partitioned identically.
 
-        Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        Parameters
+        ----------
+        func : callable
+        *args, **kwargs : Bag, Item, or object
+            Extra arguments and keyword arguments to pass to ``func`` *after*
+            the calling bag instance. Non-Bag args/kwargs are broadcasted
+            across all calls to ``func``.
+
+        Notes
+        -----
+        For calls with multiple `Bag` arguments, corresponding partitions
+        should have the same length; if they do not, the "extra" elements from
+        the longer partition(s) will be dropped.
 
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(1, 101), npartitions=10)
-        >>> def div(num, den=1):
-        ...     return num / den
+        >>> b = db.from_sequence(range(5), npartitions=2)
+        >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
 
-        Using a python object:
+        Apply a function to all elements in a bag:
 
-        >>> hi = b.max().compute()
-        >>> hi
-        100
-        >>> b.map(div, den=hi).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> b.map(lambda x: x + 1).compute()
+        [1, 2, 3, 4, 5]
 
-        Using an ``Item``:
+        Apply a function with arguments from multiple bags:
 
-        >>> b.map(div, den=b.max()).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> from operator import add
+        >>> b.map(add, b2).compute()
+        [5, 7, 9, 11, 13]
 
-        Note that while both versions give the same output, the second forms a
-        single graph, and then computes everything at once, and in some cases
-        may be more efficient.
+        Non-bag arguments are broadcast across all calls to the mapped
+        function:
+
+        >>> b.map(add, 1).compute()
+        [1, 2, 3, 4, 5]
+
+        Keyword arguments are also supported, and have the same semantics as
+        regular arguments:
+
+        >>> def myadd(x, y=0):
+        ...     return x + y
+        >>> b.map(myadd, y=b2).compute()
+        [5, 7, 9, 11, 13]
+        >>> b.map(myadd, y=1).compute()
+        [1, 2, 3, 4, 5]
+
+        Both arguments and keyword arguments can also be instances of
+        ``dask.bag.Item``. Here we'll add the max value in the bag to each
+        element:
+
+        >>> b.map(myadd, b.max()).compute()
+        [4, 5, 6, 7, 8]
         """
-        name = 'map-{0}-{1}'.format(funcname(func),
-                                    tokenize(self, func, kwargs))
-        if takes_multiple_arguments(func):
-            func = partial(apply, func)
+        if takes_multiple_arguments(func, varargs=False) and not args:
+            warn("Automatic 'splatting' of arguments in `Bag.map` is "
+                 "deprecated and will be removed in a future release. "
+                 "Please use `Bag.starmap` instead.")
+            return self.starmap(func, **kwargs)
+        else:
+            return bag_map(func, self, *args, **kwargs)
+
+    def starmap(self, func, **kwargs):
+        """Apply a function using argument tuples from the given bag.
+
+        This is similar to ``itertools.starmap``, except it also accepts
+        keyword arguments. In pseudocode, this is could be written as:
+
+        >>> def starmap(func, bag, **kwargs):
+        ...     return (func(*args, **kwargs) for args in bag)
+
+        Parameters
+        ----------
+        func : callable
+        **kwargs : Item, Delayed, or object, optional
+            Extra keyword arguments to pass to ``func``. These can either be
+            normal objects, ``dask.bag.Item``, or ``dask.delayed.Delayed``.
+
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> data = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]
+        >>> b = db.from_sequence(data, npartitions=2)
+
+        Apply a function to each argument tuple:
+
+        >>> from operator import add
+        >>> b.starmap(add).compute()
+        [3, 7, 11, 15, 19]
+
+        Apply a function to each argument tuple, with additional keyword
+        arguments:
+
+        >>> def myadd(x, y, z=0):
+        ...     return x + y + z
+        >>> b.starmap(myadd, z=10).compute()
+        [13, 17, 21, 25, 29]
+
+        Keyword arguments can also be instances of ``dask.bag.Item`` or
+        ``dask.delayed.Delayed``:
+
+        >>> max_second = b.pluck(1).max()
+        >>> max_second.compute()
+        10
+        >>> b.starmap(myadd, z=max_second).compute()
+        [13, 17, 21, 25, 29]
+        """
+        name = 'starmap-{0}-{1}'.format(funcname(func),
+                                        tokenize(self, func, kwargs))
         dsk = self.dask.copy()
         if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
             dsk.update(kw_dsk)
-            func = (apply, partial, [func], (dict, kw_pairs))
-        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
-                   for i in range(self.npartitions))
+        dsk.update({(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
+                   for i in range(self.npartitions)})
         return type(self)(dsk, name, self.npartitions)
 
     @property
@@ -513,7 +560,7 @@ class Bag(Base):
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
 
         Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        ``dask.bag.Item``, ``dask.delayed.Delayed``, or normal python objects.
 
         Examples
         --------
@@ -543,12 +590,12 @@ class Bag(Base):
                                                tokenize(self, func, kwargs))
         dsk = self.dask.copy()
         if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
             dsk.update(kw_dsk)
-        dsk.update(((name, i),
-                    (apply, func, [(self.name, i)], (dict, kw_pairs))
-                    if kwargs else (func, (self.name, i)))
-                   for i in range(self.npartitions))
+            task = lambda i: (apply, func, [(self.name, i)], kwargs)
+        else:
+            task = lambda i: (func, (self.name, i))
+        dsk.update(((name, i), task(i)) for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
 
     def pluck(self, key, default=no_default):
@@ -722,20 +769,21 @@ class Bag(Base):
             split_every = 8
         if split_every is False:
             split_every = self.npartitions
+
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         is_last = self.npartitions == 1
-        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i), is_last))
-                   for i in range(self.npartitions))
+        dsk = {(a, i): (empty_safe_apply, perpartition, (self.name, i), is_last)
+               for i in range(self.npartitions)}
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
-        while k > 1:
+
+        while k > split_every:
             c = fmt + str(depth)
-            is_last = k <= split_every
             dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
-                                  [(b, j) for j in inds], is_last))
+                                  [(b, j) for j in inds], False))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -743,11 +791,14 @@ class Bag(Base):
             b = c
             depth += 1
 
+        dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
+                         [(b, j) for j in range(k)], True)
+
         if out_type is Item:
-            dsk[b] = dsk.pop((b, 0))
-            return Item(merge(self.dask, dsk), b)
+            dsk[fmt] = dsk.pop((fmt, 0))
+            return Item(merge(self.dask, dsk), fmt)
         else:
-            return Bag(merge(self.dask, dsk), b, 1)
+            return Bag(merge(self.dask, dsk), fmt, 1)
 
     def sum(self, split_every=None):
         """ Sum all elements """
@@ -1105,7 +1156,7 @@ class Bag(Base):
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
         name = 'to_dataframe-' + tokenize(self, cols, dtypes)
-        dsk = {(name, i): (to_dataframe, (list2, (self.name, i)), cols, dtypes)
+        dsk = {(name, i): (to_dataframe, (self.name, i), cols, dtypes)
                for i in range(self.npartitions)}
 
         divisions = [None] * (self.npartitions + 1)
@@ -1229,38 +1280,6 @@ def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
-
-
-def write(data, filename, compression, encoding):
-    dirname = os.path.dirname(filename)
-    if not os.path.exists(dirname):
-        with ignoring(OSError):
-            os.makedirs(dirname)
-
-    f = open(filename, mode='wb', compression=compression)
-
-    # Check presence of endlines
-    data = iter(data)
-    try:
-        firstline = next(data)
-    except StopIteration:
-        f.close()
-        return
-    if not (firstline.endswith(os.linesep) or firstline.endswith('\n')):
-        sep = os.linesep if firstline.endswith(os.linesep) else '\n'
-        firstline = firstline + sep
-        data = (line + sep for line in data)
-    f.write(firstline.encode(encoding))
-
-    try:
-        lastline = ''
-        for line in data:
-            f.write(lastline.encode(encoding))
-            lastline = line
-        f.write(lastline.rstrip(os.linesep).encode(encoding))
-
-    finally:
-        f.close()
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
@@ -1507,6 +1526,186 @@ def bag_zip(*bags):
     return Bag(merge(bags_dsk, dsk), name, npartitions)
 
 
+def map_chunk(f, args, bag_kwargs, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+
+    args = [iter(a) for a in args]
+    iters = list(args)
+    if bag_kwargs:
+        keys = list(bag_kwargs)
+        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
+        iters.extend(kw_val_iters)
+        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
+        if args:
+            for a, k in zip(zip(*args), kw_iter):
+                yield f(*a, **k)
+        else:
+            for k in kw_iter:
+                yield f(**k)
+    else:
+        for a in zip(*args):
+            yield f(*a)
+
+    # Check that all iterators are fully exhausted
+    if len(iters) > 1:
+        for i in iters:
+            if isinstance(i, itertools.repeat):
+                continue
+            try:
+                next(i)
+            except StopIteration:
+                pass
+            else:
+                msg = ("map called with multiple bags that aren't identically "
+                       "partitioned. Please ensure that all bag arguments "
+                       "have the same partition lengths")
+                raise ValueError(msg)
+
+
+def starmap_chunk(f, x, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+    return itertools.starmap(f, x)
+
+
+def unpack_scalar_dask_kwargs(kwargs):
+    """Extracts dask values from kwargs
+
+    Currently only ``dask.bag.Item`` and ``dask.delayed.Delayed`` are
+    supported.  Returns a merged dask graph and a task resulting in a keyword
+    dict.
+    """
+    dsk = {}
+    kwargs2 = {}
+    for k, v in kwargs.items():
+        if isinstance(v, (Delayed, Item)):
+            dsk.update(v.dask)
+            kwargs2[k] = v.key
+        elif isinstance(v, Base):
+            raise NotImplementedError("dask.bag doesn't support kwargs of "
+                                      "type %s" % type(v).__name__)
+        else:
+            kwargs2[k] = v
+    if dsk:
+        kwargs = (dict, (zip, list(kwargs2), list(kwargs2.values())))
+    return dsk, kwargs
+
+
+def bag_map(func, *args, **kwargs):
+    """Apply a function elementwise across one or more bags.
+
+    Note that all ``Bag`` arguments must be partitioned identically.
+
+    Parameters
+    ----------
+    func : callable
+    *args, **kwargs : Bag, Item, Delayed, or object
+        Arguments and keyword arguments to pass to ``func``. Non-Bag args/kwargs
+        are broadcasted across all calls to ``func``.
+
+    Notes
+    -----
+    For calls with multiple `Bag` arguments, corresponding partitions should
+    have the same length; if they do not, the "extra" elements from the longer
+    partition(s) will be dropped.
+
+    Examples
+    --------
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
+
+    Apply a function to all elements in a bag:
+
+    >>> db.map(lambda x: x + 1, b).compute()
+    [1, 2, 3, 4, 5]
+
+    Apply a function with arguments from multiple bags:
+
+    >>> from operator import add
+    >>> db.map(add, b, b2).compute()
+    [5, 7, 9, 11, 13]
+
+    Non-bag arguments are broadcast across all calls to the mapped function:
+
+    >>> db.map(add, b, 1).compute()
+    [1, 2, 3, 4, 5]
+
+    Keyword arguments are also supported, and have the same semantics as
+    regular arguments:
+
+    >>> def myadd(x, y=0):
+    ...     return x + y
+    >>> db.map(myadd, b, y=b2).compute()
+    [5, 7, 9, 11, 13]
+    >>> db.map(myadd, b, y=1).compute()
+    [1, 2, 3, 4, 5]
+
+    Both arguments and keyword arguments can also be instances of
+    ``dask.bag.Item`` or ``dask.delayed.Delayed``. Here we'll add the max value
+    in the bag to each element:
+
+    >>> db.map(myadd, b, b.max()).compute()
+    [4, 5, 6, 7, 8]
+    """
+    name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
+    dsk = {}
+
+    bags = []
+    args2 = []
+    for a in args:
+        if isinstance(a, Bag):
+            bags.append(a)
+            args2.append(a)
+            dsk.update(a.dask)
+        elif isinstance(a, (Item, Delayed)):
+            args2.append((itertools.repeat, a.key))
+            dsk.update(a.dask)
+        else:
+            args2.append((itertools.repeat, a))
+
+    bag_kwargs = {}
+    other_kwargs = {}
+    for k, v in kwargs.items():
+        if isinstance(v, Bag):
+            bag_kwargs[k] = v
+            bags.append(v)
+            dsk.update(v.dask)
+        else:
+            other_kwargs[k] = v
+
+    kw_dsk, other_kwargs = unpack_scalar_dask_kwargs(other_kwargs)
+    dsk.update(kw_dsk)
+
+    if not bags:
+        raise ValueError("At least one argument must be a Bag.")
+
+    npartitions = {b.npartitions for b in bags}
+    if len(npartitions) > 1:
+        raise ValueError("All bags must have the same number of partitions.")
+    npartitions = npartitions.pop()
+
+    def build_args(n):
+        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+
+    def build_bag_kwargs(n):
+        if not bag_kwargs:
+            return None
+        return (dict, (zip, list(bag_kwargs),
+                       [(b.name, n) for b in bag_kwargs.values()]))
+
+    dsk.update({(name, n): (reify, (map_chunk, func, build_args(n),
+                                    build_bag_kwargs(n), other_kwargs))
+                for n in range(npartitions)})
+
+    # If all bags are the same type, use that type, otherwise fallback to Bag
+    return_type = set(map(type, bags))
+    return_type = return_type.pop() if len(return_type) == 1 else Bag
+
+    return return_type(dsk, name, npartitions)
+
+
 def _reduce(binop, sequence, initial=no_default):
     if initial is not no_default:
         return reduce(binop, sequence, initial)
@@ -1629,7 +1828,7 @@ def empty_safe_apply(func, part, is_last):
 
 
 def empty_safe_aggregate(func, parts, is_last):
-    parts2 = (p for p in parts if not eq_strict(p, no_result))
+    parts2 = (p for p in parts if p is not no_result)
     return empty_safe_apply(func, parts2, is_last)
 
 
@@ -1696,5 +1895,5 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
-    res = pd.DataFrame(seq, columns=columns)
+    res = pd.DataFrame(seq, columns=list(columns))
     return res.astype(dtypes, copy=False)
