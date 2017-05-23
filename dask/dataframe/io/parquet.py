@@ -298,7 +298,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                fixed_text=None, object_encoding=None, storage_options=None,
-               append=False, ignore_divisions=False, partition_on=[]):
+               append=False, ignore_divisions=False, partition_on=None):
     """Store Dask.dataframe to Parquet files
 
     Notes
@@ -358,6 +358,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
 
     """
     import fastparquet
+    partition_on = partition_on or []
 
     fs, paths, myopen = get_fs_paths_myopen(path, None, 'wb',
                                             **(storage_options or {}))
