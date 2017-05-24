@@ -3809,7 +3809,7 @@ def repeat(a, repeats, axis=None):
         else:
             raise NotImplementedError("Must supply an integer axis value")
 
-    if not isinstance(repeats, int):
+    if not isinstance(repeats, Integral):
         raise NotImplementedError("Only integer valued repeats supported")
 
     if repeats == 1:

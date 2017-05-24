@@ -12,8 +12,12 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from pandas.core.common import is_datetime64tz_dtype
 from pandas.api.types import is_categorical_dtype, is_scalar
+try:
+    from pandas.api.types import is_datetime64tz_dtype
+except ImportError:
+    # pandas < 0.19.2
+    from pandas.core.common import is_datetime64tz_dtype
 
 from ..core import get_deps
 from ..local import get_sync
