@@ -13,15 +13,15 @@ hashers = []  # In decreasing performance order
 # - MurmurHash is 8x faster than SHA1
 # - SHA1 is significantly faster than all other hashlib algorithms
 
-if 0:
-    # CityHash disabled until the reference leak in
+try:
+    import cityhash  # `pip install cityhash`
+except ImportError:
+    pass
+else:
+    # CityHash disabled unless the reference leak in
     # https://github.com/escherba/python-cityhash/pull/16
-    # gets fixed.
-    try:
-        import cityhash  # `pip install cityhash`
-    except ImportError:
-        pass
-    else:
+    # is fixed.
+    if cityhash.__version__ >= '0.2.2':
         def _hash_cityhash(buf):
             """
             Produce a 16-bytes hash of *buf* using CityHash.
