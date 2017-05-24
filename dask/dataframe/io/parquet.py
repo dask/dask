@@ -64,9 +64,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
            not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not(fastparquet.api.filter_out_cats(rg, filters))]
 
-    # Find an index among the partially sorted columns
-    minmax = fastparquet.api.sorted_partitioned_columns(pf)
-
     if index is False:
         index_col = None
     elif index is None:
@@ -110,7 +107,12 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
            for i, rg in enumerate(rgs)}
 
     if index_col:
-        divisions = list(minmax[index_col]['min']) + [minmax[index_col]['max'][-1]]
+        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        if index_col in minmax:
+            divisions = list(minmax[index_col]['min']) + [minmax[
+                                        index_col]['max'][-1]]
+        else:
+            divisions = (None,) * (len(rgs) + 1)
     else:
         divisions = (None,) * (len(rgs) + 1)
 
