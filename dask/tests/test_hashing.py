@@ -34,3 +34,12 @@ def test_hash_buffer_hex(x):
         assert isinstance(h, str)
         assert 16 <= len(h) < 64
         assert h == hash_buffer_hex(x, hasher=hasher)
+
+
+@pytest.mark.parametrize('hasher', hashers)
+def test_hashers(hasher):
+    # Sanity check
+    x = b'x'
+    h = hasher(x)
+    assert isinstance(h, bytes)
+    assert 8 <= len(h) < 32

@@ -10,6 +10,7 @@ hashers = []  # In decreasing performance order
 
 # Timings on a largish array:
 # - CityHash is 2x faster than MurmurHash
+# - xxHash is slightly slower than CityHash
 # - MurmurHash is 8x faster than SHA1
 # - SHA1 is significantly faster than all other hashlib algorithms
 
@@ -35,6 +36,19 @@ else:
         hashers.append(_hash_cityhash)
 
 try:
+    import xxhash  # `pip install xxhash`
+except ImportError:
+    pass
+else:
+    def _hash_xxhash(buf):
+        """
+        Produce a 8-bytes hash of *buf* using xxHash.
+        """
+        return xxhash.xxh64(buf).digest()
+
+    hashers.append(_hash_xxhash)
+
+try:
     import mmh3  # `pip install mmh3`
 except ImportError:
     pass
@@ -50,7 +64,7 @@ else:
 
 def _hash_sha1(buf):
     """
-    Produce a 20-bytes hash of *buf* using MurmurHash.
+    Produce a 20-bytes hash of *buf* using SHA1.
     """
     return hashlib.sha1(buf).digest()
 

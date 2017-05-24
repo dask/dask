@@ -83,7 +83,8 @@ pip install -q \
     flake8 \
     mmh3 \
     pandas_datareader \
-    pytest-xdist
+    pytest-xdist \
+    xxhash
 
 # Install dask
 pip install -q --no-deps -e .[complete]
