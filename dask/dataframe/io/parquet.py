@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pandas as pd
-from toolz import first, partial
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
@@ -109,8 +108,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     if index_col:
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_col in minmax:
-            divisions = list(minmax[index_col]['min']) + [minmax[
-                                        index_col]['max'][-1]]
+            divisions = (list(minmax[index_col]['min']) +
+                         [minmax[index_col]['max'][-1]])
         else:
             divisions = (None,) * (len(rgs) + 1)
     else:
