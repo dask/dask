@@ -81,7 +81,7 @@ Dask dataframe divides `categorical data`_ into two types:
   different categories in each partition.  Internally, unknown categoricals are
   indicated by the presence of ``dd.utils.UNKNOWN_CATEGORIES`` in the
   categories on the ``_meta`` attribute.  Since most dataframe operations
-  propogate the categories, the known/unknown status should propogate through
+  propagate the categories, the known/unknown status should propagate through
   operations (similar to how ``NaN`` propagates).
 
 For metadata specified as a description (option 2 above), unknown categoricals
