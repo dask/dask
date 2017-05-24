@@ -69,24 +69,10 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
     if index is False:
         index_col = None
-    elif len(minmax) == 1:
-        index_col = first(minmax)
-    elif len(minmax) > 1:
-        if index:
-            index_col = index
-        elif index is None:
-            # attempt auto-index
-            index = pf._get_index()
-            if index:
-                index_col = index
-        elif 'index' in minmax:
-            index_col = 'index'
-        else:
-            raise ValueError("Multiple possible indexes exist: %s.  "
-                             "Please select one with index='index-name'"
-                             % sorted(minmax))
+    elif index is None:
+        index_col = pf._get_index()
     else:
-        index_col = None
+        index_col = index
 
     if columns is None:
         all_columns = tuple(pf.columns + list(pf.cats))
