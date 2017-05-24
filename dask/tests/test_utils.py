@@ -242,3 +242,39 @@ def test_package_of():
         pass
     else:
         assert package_of(numpy.memmap) is numpy
+
+def test_debug_windows_first():
+    # this one probably fails
+    from ctypes import windll, create_string_buffer
+    import struct
+
+    # stdin handle is -10
+    # stdout handle is -11
+    # stderr handle is -12
+
+    h = windll.kernel32.GetStdHandle(-12)
+    csbi = create_string_buffer(22)
+    res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+
+    (bufx, bufy, curx, cury, wattr, left, top, right, bottom, maxx,
+     maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+    sizex = right - left + 1
+    sizey = bottom - top + 1
+    print(h, csbi, res, sizex, sizey)
+    assert 0
+
+
+def test_debug_windows_tput():
+    import subprocess
+    proc = subprocess.Popen(["tput", "cols"],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE)
+    output = proc.communicate(input=None)
+    cols = int(output[0])
+    proc = subprocess.Popen(["tput", "lines"],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE)
+    output = proc.communicate(input=None)
+    rows = int(output[0])
+    print(rows, cols)
+    assert 0
