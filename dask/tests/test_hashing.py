@@ -1,10 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import sys
-
 import pytest
 
-import dask
 from dask.hashing import hashers, hash_buffer, hash_buffer_hex
 
 
@@ -18,7 +15,7 @@ buffers = [
     np.ones((100, 100)),
     np.zeros((100, 100), dtype=[('a', 'i4'), ('b', 'i2')]),
     np.ones(10000, dtype=np.int8)[1:],  # unaligned
-    ]
+]
 
 
 @pytest.mark.parametrize('x', buffers)

@@ -28,7 +28,6 @@ else:
         else:
             return binascii.a2b_hex('%032x' % h)
 
-
     hashers.append(_hash_cityhash)
 
 try:
@@ -41,7 +40,6 @@ else:
         Produce a 16-bytes hash of *buf* using MurmurHash.
         """
         return mmh3.hash_bytes(buf)
-
 
     hashers.append(_hash_murmurhash)
 
