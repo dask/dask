@@ -67,14 +67,14 @@ def hash_buffer(buf, hasher=None):
     if hasher is not None:
         try:
             return hasher(buf)
-        except TypeError:
+        except (TypeError, OverflowError):
             # Some hash libraries may have overly-strict type checking,
-            # not accepting all kinds of buffers
+            # not accepting all buffers
             pass
     for hasher in hashers:
         try:
             return hasher(buf)
-        except TypeError:
+        except (TypeError, OverflowError):
             pass
     raise TypeError("unsupported type for hashing: %s" % (type(buf),))
 
