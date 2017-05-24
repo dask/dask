@@ -422,23 +422,26 @@ def test_read_csv_compression(fmt, blocksize):
                   expected.reset_index(drop=True), check_dtype=False)
 
 
-def test_warn_non_seekable_files(capsys):
+def test_warn_non_seekable_files():
     files2 = valmap(compress['gzip'], csv_files)
     with filetexts(files2, mode='b'):
 
-        # with tm.assert_produces_warning(UserWarning):
-        df = dd.read_csv('2014-01-*.csv', compression='gzip')
-        assert df.npartitions == 3
-        out, err = capsys.readouterr()
-        assert 'gzip' in err
-        assert 'blocksize=None' in err
+        with pytest.warns(UserWarning) as w:
+            df = dd.read_csv('2014-01-*.csv', compression='gzip')
+            assert df.npartitions == 3
 
-        df = dd.read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
-        out, err = capsys.readouterr()
-        assert not err and not out
+        assert len(w) == 1
+        msg = str(w[0].message)
+        assert 'gzip' in msg
+        assert 'blocksize=None' in msg
+
+        with pytest.warns(None) as w:
+            df = dd.read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
+        assert len(w) == 0
 
         with pytest.raises(NotImplementedError):
-            df = dd.read_csv('2014-01-*.csv', compression='foo')
+            with pytest.warns(None):
+                df = dd.read_csv('2014-01-*.csv', compression='foo')
 
 
 def test_windows_line_terminator():

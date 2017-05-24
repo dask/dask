@@ -1,5 +1,4 @@
 import operator
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -234,7 +233,7 @@ def test_categorical_accessor_presence():
 def test_categorize_nan():
     df = dd.from_pandas(pd.DataFrame({"A": ['a', 'b', 'a', float('nan')]}),
                         npartitions=2)
-    with warnings.catch_warnings(record=True) as record:
+    with pytest.warns(None) as record:
         df.categorize().compute()
     assert len(record) == 0
 
