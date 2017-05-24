@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import numpy as np
-from numpy.lib import stride_tricks
 
 try:
     import blosc
@@ -33,22 +32,36 @@ def serialize_numpy_ndarray(x):
         frames = [pickle.dumps(x)]
         return header, frames
 
+    # We cannot blindly pickle the dtype as some may fail pickling,
+    # so we have a mixture of strategies.
     if x.dtype.kind == 'V':
-        dt = x.dtype.descr
+        # Preserving all the information works best when pickling
+        try:
+            # Only use stdlib pickle as cloudpickle is slow when failing
+            # (microseconds instead of nanoseconds)
+            dt = (1, pickle.pickle.dumps(x.dtype))
+            pickle.loads(dt[1])  # does it unpickle fine?
+        except Exception:
+            # dtype fails pickling => fall back on the descr if reasonable.
+            if x.dtype.type is not np.void or x.dtype.alignment != 1:
+                raise
+            else:
+                dt = (0, x.dtype.descr)
     else:
-        dt = x.dtype.str
+        dt = (0, x.dtype.str)
 
     if not x.shape:
+        # 0d array
         strides = x.strides
         data = x.ravel().view('u1').data
-    elif np.isfortran(x):
+    elif x.flags.c_contiguous or x.flags.f_contiguous:
+        # Avoid a copy and respect order when unserializing
         strides = x.strides
-        data = stride_tricks.as_strided(x, shape=(np.prod(x.shape),),
-                                           strides=(x.dtype.itemsize,)).view('u1').data
+        data = x.ravel(order='K').view('u1').data
     else:
         x = np.ascontiguousarray(x)
         strides = x.strides
-        data = x.ravel().view('u1').data
+        data = x.view('u1').data
 
     header = {'dtype': dt,
               'shape': x.shape,
@@ -72,14 +85,14 @@ def deserialize_numpy_ndarray(header, frames):
         if header.get('pickle'):
             return pickle.loads(frames[0])
 
-        dt = header['dtype']
-        if isinstance(dt, tuple):
-            dt = list(dt)
+        is_custom, dt = header['dtype']
+        if is_custom:
+            dt = pickle.loads(dt)
+        else:
+            dt = np.dtype(dt)
 
         x = np.ndarray(header['shape'], dtype=dt, buffer=frames[0],
-                strides=header['strides'])
-
-        x = stride_tricks.as_strided(x, strides=header['strides'])
+                       strides=header['strides'])
 
         return x
 
