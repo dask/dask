@@ -263,7 +263,7 @@ def random_state_data(n, random_state=None):
     Parameters
     ----------
     n : int
-        Number of tuples to return.
+        Number of arrays to return.
     random_state : int or np.random.RandomState, optional
         If an int, is used to seed a new ``RandomState``.
     """
@@ -272,9 +272,10 @@ def random_state_data(n, random_state=None):
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
-    maxuint32 = np.iinfo(np.uint32).max
-    return [(random_state.rand(624) * maxuint32).astype('uint32')
-            for i in range(n)]
+    random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
+    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    assert len(l) == n
+    return l
 
 
 def is_integer(i):
