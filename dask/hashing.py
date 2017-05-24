@@ -13,22 +13,26 @@ hashers = []  # In decreasing performance order
 # - MurmurHash is 8x faster than SHA1
 # - SHA1 is significantly faster than all other hashlib algorithms
 
-try:
-    import cityhash  # `pip install cityhash`
-except ImportError:
-    pass
-else:
-    def _hash_cityhash(buf):
-        """
-        Produce a 16-bytes hash of *buf* using CityHash.
-        """
-        h = cityhash.CityHash128(buf)
-        if sys.version_info >= (3,):
-            return h.to_bytes(16, 'little')
-        else:
-            return binascii.a2b_hex('%032x' % h)
+if 0:
+    # CityHash disabled until the reference leak in
+    # https://github.com/escherba/python-cityhash/pull/16
+    # gets fixed.
+    try:
+        import cityhash  # `pip install cityhash`
+    except ImportError:
+        pass
+    else:
+        def _hash_cityhash(buf):
+            """
+            Produce a 16-bytes hash of *buf* using CityHash.
+            """
+            h = cityhash.CityHash128(buf)
+            if sys.version_info >= (3,):
+                return h.to_bytes(16, 'little')
+            else:
+                return binascii.a2b_hex('%032x' % h)
 
-    hashers.append(_hash_cityhash)
+        hashers.append(_hash_cityhash)
 
 try:
     import mmh3  # `pip install mmh3`
