@@ -37,7 +37,7 @@ class RandomState(object):
     >>> state = da.random.RandomState(1234)  # a seed
     >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
     >>> x.compute()
-    array([ 10.06307943,   9.91493648,  10.0822082 ])
+    array([ 10.01867852,  10.04812289,   9.89649746])
 
     See Also:
         np.random.RandomState
