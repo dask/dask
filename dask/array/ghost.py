@@ -399,6 +399,9 @@ def coerce_depth(ndim, depth):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
+
+    depth = dict([(int(a), int(d)) for a, d in depth.items()])
+
     return depth
 
 
