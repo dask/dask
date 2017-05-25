@@ -256,8 +256,15 @@ def test_silent_startup(capsys, loop):
         sleep(0.5)
 
     out, err = capsys.readouterr()
-    assert not out
-    assert not err
+    try:
+        assert not out
+        assert not err
+    except AssertionError:
+        print("=== Cluster stdout ===")
+        print(out)
+        print("=== Cluster stderr ===")
+        print(err)
+        raise
 
 
 def test_only_local_access(loop):
