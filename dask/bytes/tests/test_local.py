@@ -82,6 +82,8 @@ def test_with_urls():
         assert sum(map(len, values)) == len(files)
 
 
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="pathlib and moto clash on windows")
 def test_with_paths():
     pathlib = pytest.importorskip('pathlib')
     with filetexts(files, mode='b'):
