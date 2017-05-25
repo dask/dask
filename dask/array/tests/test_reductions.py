@@ -176,21 +176,25 @@ def test_arg_reductions(dfunc, func):
                          [(da.nanargmin, np.nanargmin),
                           (da.nanargmax, np.nanargmax)])
 def test_nanarg_reductions(dfunc, func):
+
     x = np.random.random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
     with pytest.raises(ValueError):
-        dfunc(a, 1).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a, 1).compute()
 
     with pytest.raises(ValueError):
-        dfunc(a, 2).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a, 2).compute()
 
     x[:] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     with pytest.raises(ValueError):
-        dfunc(a).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a).compute()
 
 
 def test_reductions_2D_nans():
@@ -214,23 +218,33 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
     reduction_2d_test(da.nanprod, a, nanprod, x, False, False)
     reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
-    reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
-    reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
-    reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
-    reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
+    with pytest.warns(None):  # division by 0 warning
+        reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
+    with pytest.warns(None):  # division by 0 warning
+        reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
+    with pytest.warns(None):  # all NaN axis warning
+        reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
+    with pytest.warns(None):  # all NaN axis warning
+        reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
     assert_eq(da.argmax(a), np.argmax(x))
     assert_eq(da.argmin(a), np.argmin(x))
-    assert_eq(da.nanargmax(a), np.nanargmax(x))
-    assert_eq(da.nanargmin(a), np.nanargmin(x))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a), np.nanargmax(x))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a), np.nanargmin(x))
     assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
     assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
     assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-    assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
 def test_moment():
@@ -307,10 +321,11 @@ def test_reductions_with_empty_array():
     x2 = dx2.compute()
 
     for dx, x in [(dx1, x1), (dx2, x2)]:
-        assert_eq(dx.mean(), x.mean())
-        assert_eq(dx.mean(axis=0), x.mean(axis=0))
-        assert_eq(dx.mean(axis=1), x.mean(axis=1))
-        assert_eq(dx.mean(axis=2), x.mean(axis=2))
+        with pytest.warns(None):  # empty slice warning
+            assert_eq(dx.mean(), x.mean())
+            assert_eq(dx.mean(axis=0), x.mean(axis=0))
+            assert_eq(dx.mean(axis=1), x.mean(axis=1))
+            assert_eq(dx.mean(axis=2), x.mean(axis=2))
 
 
 def assert_max_deps(x, n, eq=True):

@@ -194,7 +194,7 @@ def test_lu_1():
 @pytest.mark.parametrize('size', [10, 20, 30, 50])
 def test_lu_2(size):
     np.random.seed(10)
-    A = np.random.random_integers(0, 10, (size, size))
+    A = np.random.randint(0, 10, (size, size))
 
     dA = da.from_array(A, chunks=(5, 5))
     dp, dl, du = da.linalg.lu(dA)
@@ -205,7 +205,7 @@ def test_lu_2(size):
 @pytest.mark.parametrize('size', [50, 100, 200])
 def test_lu_3(size):
     np.random.seed(10)
-    A = np.random.random_integers(0, 10, (size, size))
+    A = np.random.randint(0, 10, (size, size))
 
     dA = da.from_array(A, chunks=(25, 25))
     dp, dl, du = da.linalg.lu(dA)
@@ -213,15 +213,15 @@ def test_lu_3(size):
 
 
 def test_lu_errors():
-    A = np.random.random_integers(0, 10, (10, 10, 10))
+    A = np.random.randint(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
-    A = np.random.random_integers(0, 10, (10, 8))
+    A = np.random.randint(0, 11, (10, 8))
     dA = da.from_array(A, chunks=(5, 4))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
-    A = np.random.random_integers(0, 10, (20, 20))
+    A = np.random.randint(0, 11, (20, 20))
     dA = da.from_array(A, chunks=(5, 4))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
@@ -230,8 +230,8 @@ def test_lu_errors():
 def test_solve_triangular_vector(shape, chunk):
     np.random.seed(1)
 
-    A = np.random.random_integers(1, 10, (shape, shape))
-    b = np.random.random_integers(1, 10, shape)
+    A = np.random.randint(1, 11, (shape, shape))
+    b = np.random.randint(1, 11, shape)
 
     # upper
     Au = np.triu(A)
@@ -254,8 +254,8 @@ def test_solve_triangular_vector(shape, chunk):
 def test_solve_triangular_matrix(shape, chunk):
     np.random.seed(1)
 
-    A = np.random.random_integers(1, 10, (shape, shape))
-    b = np.random.random_integers(1, 10, (shape, 5))
+    A = np.random.randint(1, 10, (shape, shape))
+    b = np.random.randint(1, 10, (shape, 5))
 
     # upper
     Au = np.triu(A)
@@ -278,8 +278,8 @@ def test_solve_triangular_matrix(shape, chunk):
 def test_solve_triangular_matrix2(shape, chunk):
     np.random.seed(1)
 
-    A = np.random.random_integers(1, 10, (shape, shape))
-    b = np.random.random_integers(1, 10, (shape, shape))
+    A = np.random.randint(1, 10, (shape, shape))
+    b = np.random.randint(1, 10, (shape, shape))
 
     # upper
     Au = np.triu(A)
@@ -299,14 +299,14 @@ def test_solve_triangular_matrix2(shape, chunk):
 
 
 def test_solve_triangular_errors():
-    A = np.random.random_integers(0, 10, (10, 10, 10))
-    b = np.random.random_integers(1, 10, 10)
+    A = np.random.randint(0, 10, (10, 10, 10))
+    b = np.random.randint(1, 10, 10)
     dA = da.from_array(A, chunks=(5, 5, 5))
     db = da.from_array(b, chunks=5)
     pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
-    A = np.random.random_integers(0, 10, (10, 10))
-    b = np.random.random_integers(1, 10, 10)
+    A = np.random.randint(0, 10, (10, 10))
+    b = np.random.randint(1, 10, 10)
     dA = da.from_array(A, chunks=(3, 3))
     db = da.from_array(b, chunks=5)
     pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
@@ -316,11 +316,11 @@ def test_solve_triangular_errors():
 def test_solve(shape, chunk):
     np.random.seed(1)
 
-    A = np.random.random_integers(1, 10, (shape, shape))
+    A = np.random.randint(1, 10, (shape, shape))
     dA = da.from_array(A, (chunk, chunk))
 
     # vector
-    b = np.random.random_integers(1, 10, shape)
+    b = np.random.randint(1, 10, shape)
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
@@ -328,7 +328,7 @@ def test_solve(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float))
 
     # tall-and-skinny matrix
-    b = np.random.random_integers(1, 10, (shape, 5))
+    b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db)
@@ -336,7 +336,7 @@ def test_solve(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float))
 
     # matrix
-    b = np.random.random_integers(1, 10, (shape, shape))
+    b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db)
@@ -348,7 +348,7 @@ def test_solve(shape, chunk):
 def test_inv(shape, chunk):
     np.random.seed(1)
 
-    A = np.random.random_integers(1, 10, (shape, shape))
+    A = np.random.randint(1, 10, (shape, shape))
     dA = da.from_array(A, (chunk, chunk))
 
     res = da.linalg.inv(dA)
@@ -358,7 +358,7 @@ def test_inv(shape, chunk):
 
 def _get_symmat(size):
     np.random.seed(1)
-    A = np.random.random_integers(1, 20, (size, size))
+    A = np.random.randint(1, 21, (size, size))
     lA = np.tril(A)
     return lA.dot(lA.T)
 
@@ -371,7 +371,7 @@ def test_solve_sym_pos(shape, chunk):
     dA = da.from_array(A, (chunk, chunk))
 
     # vector
-    b = np.random.random_integers(1, 10, shape)
+    b = np.random.randint(1, 10, shape)
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
@@ -379,7 +379,7 @@ def test_solve_sym_pos(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float))
 
     # tall-and-skinny matrix
-    b = np.random.random_integers(1, 10, (shape, 5))
+    b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
@@ -387,7 +387,7 @@ def test_solve_sym_pos(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float))
 
     # matrix
-    b = np.random.random_integers(1, 10, (shape, shape))
+    b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
@@ -408,8 +408,8 @@ def test_cholesky(shape, chunk):
                          [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk):
     np.random.seed(1)
-    A = np.random.random_integers(1, 20, (nrow, ncol))
-    b = np.random.random_integers(1, 20, nrow)
+    A = np.random.randint(1, 20, (nrow, ncol))
+    b = np.random.randint(1, 20, nrow)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)

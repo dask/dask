@@ -58,22 +58,24 @@ def test_unary_ufunc(ufunc):
     arr = np.random.randint(1, 100, size=(20, 20))
     darr = da.from_array(arr, 3)
 
-    # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(darr), da.Array)
-    assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
+    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+        # applying Dask ufunc doesn't trigger computation
+        assert isinstance(dafunc(darr), da.Array)
+        assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
-    # applying NumPy ufunc triggers computation
-    assert isinstance(npfunc(darr), np.ndarray)
-    assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
+    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+        # applying NumPy ufunc triggers computation
+        assert isinstance(npfunc(darr), np.ndarray)
+        assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
-    # applying Dask ufunc to normal ndarray triggers computation
-    assert isinstance(dafunc(arr), np.ndarray)
-    assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
+    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+        # applying Dask ufunc to normal ndarray triggers computation
+        assert isinstance(dafunc(arr), np.ndarray)
+        assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
 
 
 @pytest.mark.parametrize('ufunc', binary_ufuncs)
 def test_binary_ufunc(ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -99,14 +101,16 @@ def test_binary_ufunc(ufunc):
     assert isinstance(dafunc(darr1, 10), da.Array)
     assert_eq(dafunc(darr1, 10), npfunc(arr1, 10))
 
-    assert isinstance(dafunc(10, darr1), da.Array)
-    assert_eq(dafunc(10, darr1), npfunc(10, arr1))
+    with pytest.warns(None):  # overflow in ldexp
+        assert isinstance(dafunc(10, darr1), da.Array)
+        assert_eq(dafunc(10, darr1), npfunc(10, arr1))
 
     assert isinstance(dafunc(arr1, 10), np.ndarray)
     assert_eq(dafunc(arr1, 10), npfunc(arr1, 10))
 
-    assert isinstance(dafunc(10, arr1), np.ndarray)
-    assert_eq(dafunc(10, arr1), npfunc(10, arr1))
+    with pytest.warns(None):  # overflow in ldexp
+        assert isinstance(dafunc(10, arr1), np.ndarray)
+        assert_eq(dafunc(10, arr1), npfunc(10, arr1))
 
 
 def test_ufunc_outer():
