@@ -97,7 +97,7 @@ From Raw Dask Graphs
 This section is mainly for developers wishing to extend dask.dataframe.  It
 discusses internal API not normally needed by users.  Everything below can be
 done just as effectively with :doc:`dask.delayed<delayed-overview>`  described
-just above.  You should never need to create a dataframe object by han
+just above.  You should never need to create a dataframe object by hand.
 
 To construct a DataFrame manually from a dask graph you need the following
 information:

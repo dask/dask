@@ -149,7 +149,7 @@ Unknown Chunks
 
 Some arrays have unknown chunk sizes.  These are designated using ``np.nan``
 rather than an integer.  These arrays support many but not all operations.  In
-particular, opeations like slicing are not possible and will result in an
+particular, operations like slicing are not possible and will result in an
 error.
 
 .. code-block:: python
