@@ -878,7 +878,14 @@ def test_include_communication_in_occupancy(c, s, a, b):
     while z.key not in s.rprocessing:
         yield gen.sleep(0.01)
 
-    assert s.processing[b.address][z.key] > 1
+    try:
+        assert s.processing[b.address][z.key] > 1
+    except Exception:
+        print("processing:", s.processing)
+        print("rprocessing:", s.rprocessing)
+        print("task_duration:", s.task_duration)
+        print("nbytes:", s.nbytes)
+        raise
 
 
 @gen_cluster(client=True)
