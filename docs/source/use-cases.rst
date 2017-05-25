@@ -107,7 +107,7 @@ without significantly changing their code.
    import dask.dataframe as dd
 
    df = dd.read_csv('data/2016-*.*.csv', parse_dates=['timestamp'])
-   df.groupby(df.timestamp.dt.hour).value.mean().compute()
+   df.groupby(df.timestamp.dt.hour).mean().compute()
 
 .. _Pandas: http://pandas.pydata.org/
 
@@ -130,7 +130,7 @@ the analyst is already very comfortable.
 
    import dask.dataframe as dd
    df = dd.read_csv('hdfs://data/2016-*.*.csv', parse_dates=['timestamp'])
-   df.groupby(df.timestamp.dt.hour).value.mean().compute()
+   df.groupby(df.timestamp.dt.hour).mean().compute()
 
 .. _HDFS3: https://hdfs3.readthedocs.io/en/latest/
 
