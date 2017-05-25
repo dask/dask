@@ -252,13 +252,12 @@ def test_scale_up_and_down():
 
 
 def test_silent_startup(capsys, loop):
-    with LocalCluster(diagnostics_port=None, loop=loop, scheduler_port=0):
+    with LocalCluster(1, diagnostics_port=None, loop=loop, scheduler_port=0):
         sleep(0.5)
 
     out, err = capsys.readouterr()
     assert not out
-    for line in err.split('\n'):
-        assert 'worker' not in line or 'Exception ignored' in line
+    assert not err
 
 
 def test_only_local_access(loop):
