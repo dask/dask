@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import gzip
 import os
 from time import sleep
+import sys
 
 import pytest
 from toolz import concat, valmap, partial
