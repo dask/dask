@@ -152,6 +152,10 @@ class AioClient(Client):
         finally:
             BaseAsyncIOLoop.clear_current()
 
+    def __del__(self):
+        # Override Client.__del__ to avoid running self.shutdown()
+        assert self.status != 'running'
+
     gather = to_asyncio(Client._gather)
     scatter = to_asyncio(Client._scatter)
     cancel = to_asyncio(Client._cancel)
