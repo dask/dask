@@ -2,7 +2,8 @@
 import pytest
 
 asyncio = pytest.importorskip('asyncio')
-aiohttp = pytest.importorskip('aiohttp')  # pytest-aiohttp
+# pytest-aiohttp is required to run `async def` test functions
+aiohttp = pytest.importorskip('aiohttp')
 
 from time import time
 from operator import add
