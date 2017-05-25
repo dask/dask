@@ -13,7 +13,7 @@ environment:
     - PYTHON: "3.5"
       ARCH: "64"
       NUMPY: "1.12.1"
-      PANDAS: "0.19.2"
+      PANDAS: "0.20.1"
       CONDA_ENV: testenv
 
 init:
