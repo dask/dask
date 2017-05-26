@@ -304,7 +304,12 @@ def _nonempty_index(idx):
         return pd.Index(['a', 'b'], name=idx.name)
     elif typ is pd.DatetimeIndex:
         start = '1970-01-01'
-        data = [start, start] if idx.freq is None else None
+        # Need a non-monotonic decreasing index to avoid issues with
+        # partial string indexing see https://github.com/dask/dask/issues/2389
+        # and https://github.com/pandas-dev/pandas/issues/16515
+        # This doesn't mean `_meta_nonempty` should ever rely on
+        # `self.monotonic_increasing` or `self.monotonic_decreasing`
+        data = [start, '1970-01-02'] if idx.freq is None else None
         return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
                                 tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:

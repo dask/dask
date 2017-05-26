@@ -244,6 +244,20 @@ def test_loc_on_pandas_datetimes():
     assert_eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
 
 
+def test_loc_datetime_no_freq():
+    # https://github.com/dask/dask/issues/2389
+
+    datetime_index = pd.date_range('2016-01-01', '2016-01-31', freq='12h')
+    datetime_index.freq = None  # FORGET FREQUENCY
+    df = pd.DataFrame({'num': range(len(datetime_index))}, index=datetime_index)
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    slice_ = slice('2016-01-03', '2016-01-05')
+    result = ddf.loc[slice_, :]
+    expected = df.loc[slice_, :]
+    assert_eq(result, expected)
+
+
 def test_coerce_loc_index():
     for t in [pd.Timestamp, np.datetime64]:
         assert isinstance(_coerce_loc_index([t('2014')], '2014'), t)
