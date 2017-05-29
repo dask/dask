@@ -2,30 +2,42 @@ from __future__ import absolute_import, division, print_function
 
 from itertools import product
 from math import ceil
-from numbers import Number
-from operator import getitem, add, itemgetter
+from numbers import Integral, Number
+from operator import add, getitem, itemgetter
 
 import numpy as np
-from toolz import merge, accumulate, pluck, memoize
+from toolz import accumulate, memoize, merge, pluck
 
 from ..base import tokenize
-from ..compatibility import long
-
 
 colon = slice(None, None, None)
+
+
+def _sanitize_index_element(ind):
+    """Sanitize a one-element index."""
+    if isinstance(ind, Number):
+        ind2 = int(ind)
+        if ind2 != ind:
+            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
+        else:
+            return ind2
+    elif ind is None:
+        return None
+    else:
+        raise TypeError("Invalid index type", type(ind), ind)
 
 
 def sanitize_index(ind):
     """ Sanitize the elements for indexing along one axis
 
     >>> sanitize_index([2, 3, 5])
-    [2, 3, 5]
+    array([2, 3, 5])
     >>> sanitize_index([True, False, True, False])
-    [0, 2]
+    array([0, 2])
     >>> sanitize_index(np.array([1, 2, 3]))
-    [1, 2, 3]
+    array([1, 2, 3])
     >>> sanitize_index(np.array([False, True, True]))
-    [1, 2]
+    array([1, 2])
     >>> type(sanitize_index(np.int32(0)))
     <type 'int'>
     >>> sanitize_index(1.0)
@@ -35,28 +47,34 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
-    if isinstance(ind, Number):
-        ind2 = int(ind)
-        if ind2 != ind:
-            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
-        else:
-            return ind2
-    if hasattr(ind, 'tolist'):
-        ind = ind.tolist()
-    if isinstance(ind, list) and ind and isinstance(ind[0], bool):
-        ind = [a for a, b in enumerate(ind) if b]
-        return ind
-    if isinstance(ind, list):
-        return [sanitize_index(i) for i in ind]
-    if isinstance(ind, slice):
-        return slice(sanitize_index(ind.start),
-                     sanitize_index(ind.stop),
-                     sanitize_index(ind.step))
     if ind is None:
-        return ind
-    try:
-        return sanitize_index(np.array(ind).tolist())
-    except:
+        return None
+    elif isinstance(ind, slice):
+        return slice(_sanitize_index_element(ind.start),
+                     _sanitize_index_element(ind.stop),
+                     _sanitize_index_element(ind.step))
+    elif isinstance(ind, Number):
+        return _sanitize_index_element(ind)
+    index_array = np.asanyarray(ind)
+    if index_array.dtype == bool:
+        nonzero = np.nonzero(index_array)
+        if len(nonzero) == 1:
+            # If a 1-element tuple, unwrap the element
+            nonzero = nonzero[0]
+        return np.asanyarray(nonzero)
+    elif np.issubdtype(index_array.dtype, int):
+        return index_array
+    elif np.issubdtype(index_array.dtype, float):
+        int_index = index_array.astype(np.intp)
+        if np.allclose(index_array, int_index):
+            return int_index
+        else:
+            check_int = np.isclose(index_array, int_index)
+            first_err = index_array.ravel(
+            )[np.flatnonzero(~check_int)[0]]
+            raise IndexError("Bad index.  Must be integer-like: %s" %
+                             first_err)
+    else:
         raise TypeError("Invalid index type", type(ind), ind)
 
 
@@ -122,17 +140,20 @@ def slice_array(out_name, in_name, blockdims, index):
     """
     index = replace_ellipsis(len(blockdims), index)
     index = tuple(map(sanitize_index, index))
+
     blockdims = tuple(map(tuple, blockdims))
 
     # x[:, :, :] - Punt and return old value
-    if all(index == slice(None, None, None) for index in index):
+    if all(isinstance(index, slice) and index == slice(None, None, None)
+           for index in index):
         suffixes = product(*[range(len(bd)) for bd in blockdims])
         dsk = dict(((out_name,) + s, (in_name,) + s)
                    for s in suffixes)
         return dsk, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
-    missing = len(blockdims) - (len(index) - index.count(None))
+    not_none_count = sum(i is not None for i in index)
+    missing = len(blockdims) - not_none_count
     index += (slice(None, None, None),) * missing
 
     # Pass down to next function
@@ -195,22 +216,25 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     slice_slices_and_integers - handle slicing with slices and integers
     """
     shape = tuple(map(sum, blockdims))
-    assert all(isinstance(i, (slice, list, int, long)) for i in index)
+    assert all(isinstance(i, (slice, list, Integral, np.ndarray))
+               for i in index)
     if not len(blockdims) == len(index):
         raise IndexError("Too many indices for array")
-    for bd, i in zip(blockdims, index):
-        check_index(i, sum(bd))
+
+    for bd_size, i in zip(shape, index):
+        check_index(i, bd_size)
 
     # Change indices like -1 to 9
     index2 = posify_index(shape, index)
 
     # Do we have more than one list in the index?
-    where_list = [i for i, ind in enumerate(index) if isinstance(ind, list)]
+    where_list = [i for i, ind in enumerate(index)
+                  if isinstance(ind, np.ndarray) and ind.ndim > 0]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
     # Is the single list an empty list? In this case just treat it as a zero
     # length slice
-    if where_list and not index[where_list[0]]:
+    if where_list and not index[where_list[0]].size:
         index2 = list(index2)
         index2[where_list.pop()] = slice(0, 0, 1)
         index2 = tuple(index2)
@@ -221,11 +245,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
-                               if isinstance(i, list) else i
+                               if isinstance(i, np.ndarray) else i
                                for i in index2)
 
     # lists and full slices.  Just use take
-    if all(isinstance(i, list) or i == slice(None, None, None)
+    if all(isinstance(i, np.ndarray) or i == slice(None, None, None)
             for i in index2):
         axis = where_list[0]
         blockdims2, dsk3 = take(out_name, in_name, blockdims,
@@ -239,7 +263,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
         # After collapsing some axes due to int indices, adjust axis parameter
         axis = where_list[0]
         axis2 = axis - sum(1 for i, ind in enumerate(index2)
-                           if i < axis and isinstance(ind, (int, long)))
+                           if i < axis and isinstance(ind, Integral))
 
         # Do work
         blockdims2, dsk2 = take(out_name, tmp, blockdims2, index2[axis],
@@ -264,7 +288,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
         if np.isnan(dim) and ind != slice(None, None, None):
             raise ValueError("Arrays chunk sizes are unknown: %s", shape)
 
-    assert all(isinstance(ind, (slice, int, long)) for ind in index)
+    assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
@@ -278,7 +302,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     out_names = list(product([out_name],
                              *[range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
                                for d, i in zip(block_slices, index)
-                               if not isinstance(i, (int, long))]))
+                               if not isinstance(i, Integral)]))
 
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
@@ -288,7 +312,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     new_blockdims = [new_blockdim(d, db, i)
                      for d, i, db in zip(shape, index, blockdims)
-                     if not isinstance(i, (int, long))]
+                     if not isinstance(i, Integral)]
 
     return dsk_out, new_blockdims
 
@@ -358,7 +382,7 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    if isinstance(index, (int, long)):
+    if isinstance(index, Integral):
         i = 0
         ind = index
         lens = list(lengths)
@@ -432,15 +456,18 @@ def partition_by_size(sizes, seq):
     """
 
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
-    [[1, 5, 9], [2, 19], [5]]
+    [array([1, 5, 9]), array([ 2, 19]), array([5])]
     """
-    seq = np.array(seq)
-    right = np.cumsum(sizes)
-    locations = np.searchsorted(seq, right)
-    locations = [0] + locations.tolist()
-    left = [0] + right.tolist()
-    return [(seq[locations[i]:locations[i + 1]] - left[i]).tolist()
-            for i in range(len(locations) - 1)]
+    seq = np.asanyarray(seq)
+    left = np.empty(len(sizes) + 1, dtype=int)
+    left[0] = 0
+
+    right = np.cumsum(sizes, out=left[1:])
+    locations = np.empty(len(sizes) + 1, dtype=int)
+    locations[0] = 0
+    locations[1:] = np.searchsorted(seq, right)
+    return [(seq[j:k] - l)
+            for j, k, l in zip(locations[:-1], locations[1:], left)]
 
 
 def issorted(seq):
@@ -451,14 +478,9 @@ def issorted(seq):
     >>> issorted([3, 1, 2])
     False
     """
-    if not seq:
+    if len(seq) == 0:
         return True
-    x = seq[0]
-    for elem in seq[1:]:
-        if elem < x:
-            return False
-        x = elem
-    return True
+    return np.all(seq[:-1] <= seq[1:])
 
 
 def take_sorted(outname, inname, blockdims, index, axis=0):
@@ -483,9 +505,9 @@ def take_sorted(outname, inname, blockdims, index, axis=0):
     """
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about
 
-    index_lists = partition_by_size(sizes, sorted(index))
-    where_index = [i for i, il in enumerate(index_lists) if il]
-    index_lists = [il for il in index_lists if il]
+    index_lists = partition_by_size(sizes, index)
+    where_index = [i for i, il in enumerate(index_lists) if len(il)]
+    index_lists = [il for il in index_lists if len(il)]
 
     dims = [range(len(bd)) for bd in blockdims]
 
@@ -532,23 +554,31 @@ def take(outname, inname, blockdims, index, axis=0):
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 2): (getitem, ('x', 2), ([7],))}
     """
+
+    index = np.asanyarray(index)
+
     if issorted(index):
         return take_sorted(outname, inname, blockdims, index, axis)
+
+    if isinstance(index, np.ndarray) and index.ndim > 0:
+        sorted_idx = np.sort(index)
+    else:
+        sorted_idx = index
 
     n = len(blockdims)
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about
 
-    index_lists = partition_by_size(sizes, sorted(index))
+    index_lists = partition_by_size(sizes, sorted_idx)
 
     dims = [[0] if axis == i else list(range(len(bd)))
             for i, bd in enumerate(blockdims)]
     keys = list(product([outname], *dims))
 
-    rev_index = list(map(sorted(index).index, index))
+    rev_index = np.searchsorted(sorted_idx, index)
     vals = [(getitem, (np.concatenate,
                        [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
                          ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
-                        for i, IL in enumerate(index_lists) if IL], axis),
+                        for i, IL in enumerate(index_lists) if len(IL)], axis),
              ((colon, ) * axis + (rev_index, ) + (colon, ) * (n - axis - 1)))
             for d in product(*dims)]
 
@@ -566,22 +596,23 @@ def posify_index(shape, ind):
     >>> posify_index(10, -3)
     7
     >>> posify_index(10, [3, -3])
-    [3, 7]
+    array([3, 7])
 
     >>> posify_index((10, 20), (3, -3))
     (3, 17)
-    >>> posify_index((10, 20), (3, [3, 4, -3]))
-    (3, [3, 4, 17])
+    >>> posify_index((10, 20), (3, [3, 4, -3]))  # doctest: +NORMALIZE_WHITESPACE
+    (3, array([ 3,  4, 17]))
     """
     if isinstance(ind, tuple):
         return tuple(map(posify_index, shape, ind))
-    if isinstance(ind, (int, long)):
+    if isinstance(ind, Integral):
         if ind < 0:
             return ind + shape
         else:
             return ind
-    if isinstance(ind, list):
-        return [i + shape if i < 0 else i for i in ind]
+    if isinstance(ind, (np.ndarray, list)):
+        ind = np.asanyarray(ind)
+        return np.where(ind < 0, ind + shape, ind)
     return ind
 
 
@@ -636,7 +667,7 @@ def new_blockdim(dim_shape, lengths, index):
         return lengths
     if isinstance(index, list):
         return [len(index)]
-    assert not isinstance(index, (int, long))
+    assert not isinstance(index, Integral)
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(),
                    key=itemgetter(0))
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
@@ -657,11 +688,11 @@ def replace_ellipsis(n, index):
     """
     # Careful about using in or index because index may contain arrays
     isellipsis = [i for i, ind in enumerate(index) if ind is Ellipsis]
-    extra_dimensions = n - (len(index) - sum(i is None for i in index) - 1)
     if not isellipsis:
         return index
     else:
         loc = isellipsis[0]
+    extra_dimensions = n - (len(index) - sum(i is None for i in index) - 1)
     return (index[:loc] + (slice(None, None, None),) * extra_dimensions +
             index[loc + 1:])
 
@@ -696,8 +727,8 @@ def check_index(ind, dimension):
 
     >>> check_index(slice(0, 3), 5)
     """
-    if isinstance(ind, list):
-        x = np.array(ind)
+    if isinstance(ind, (list, np.ndarray)):
+        x = np.asanyarray(ind)
         if (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):

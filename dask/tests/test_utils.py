@@ -59,11 +59,10 @@ def test_dispatch():
     assert foo((1, 2.0, b)) == (2, 1.0, b)
 
 
-@pytest.mark.slow
 def test_random_state_data():
     seed = 37
     state = np.random.RandomState(seed)
-    n = 100000
+    n = 10000
 
     # Use an integer
     states = random_state_data(n, seed)
@@ -72,6 +71,7 @@ def test_random_state_data():
     # Use RandomState object
     states2 = random_state_data(n, state)
     for s1, s2 in zip(states, states2):
+        assert s1.shape == (624,)
         assert (s1 == s2).all()
 
     # Consistent ordering

@@ -148,7 +148,7 @@ The following parameters may be passed to s3fs using ``storage_options``:
 
     - token: if authentication has been done with some other S3 client
 
-    - use_ssl: whether connections are encryted and secure (default True)
+    - use_ssl: whether connections are encrypted and secure (default True)
 
     - client_kwargs: dict passed to the `boto3 client`_, with keys such
       as `region_name`, `endpoint_url`
