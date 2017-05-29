@@ -1,16 +1,17 @@
-import pytest
-pytest.importorskip('numpy')
-
 import itertools
 from operator import getitem
 
-from dask.compatibility import skip
-import dask.array as da
-from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
-                                sanitize_index)
-from dask.array.utils import assert_eq
-import numpy as np
+import pytest
 from toolz import merge
+
+np = pytest.importorskip('numpy')
+
+import dask.array as da
+from dask.array.slicing import (_sanitize_index_element, _slice_1d,
+                                new_blockdim, sanitize_index, slice_array,
+                                take)
+from dask.array.utils import assert_eq
+from dask.compatibility import skip
 
 
 def same_keys(a, b):
@@ -250,13 +251,14 @@ def test_slicing_with_newaxis():
 def test_take():
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {('y', 0): (getitem, (np.concatenate,
-                                     [(getitem, ('x', 0), ([1, 3, 5],)),
-                                      (getitem, ('x', 2), ([7],))], 0),
-                           ([2, 0, 3, 1], ))}
-    assert dsk == expected
+                                     [(getitem, ('x', 0), (np.array([1, 3, 5]),)),
+                                      (getitem, ('x', 2), (np.array([7]),))], 0),
+                           (np.array([2, 0, 3, 1]), ))}
+    np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
     assert chunks == ((4,),)
 
-    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [
+                       5, 1, 47, 3], axis=0)
     expected = {('y', 0, j): (getitem, (np.concatenate,
                                         [(getitem, ('x', 0, j),
                                           ([1, 3, 5], slice(None, None, None))),
@@ -264,10 +266,11 @@ def test_take():
                                           ([7], slice(None, None, None)))], 0),
                               ([2, 0, 3, 1], slice(None, None, None)))
                 for j in range(2)}
-    assert dsk == expected
+    np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
     assert chunks == ((4,), (20, 20))
 
-    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [
+                       5, 1, 37, 3], axis=1)
     expected = {('y', i, 0): (getitem, (np.concatenate,
                                         [(getitem, ('x', i, 0),
                                           (slice(None, None, None), [1, 3, 5])),
@@ -275,7 +278,7 @@ def test_take():
                                           (slice(None, None, None), [17]))], 1),
                               (slice(None, None, None), [2, 0, 3, 1]))
                 for i in range(4)}
-    assert dsk == expected
+    np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
     assert chunks == ((20, 20, 20, 20), (4,))
 
 
@@ -283,7 +286,7 @@ def test_take_sorted():
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     expected = {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
                 ('y', 1): (getitem, ('x', 2), ([7],))}
-    assert dsk == expected
+    np.testing.assert_equal(dsk, expected)
     assert chunks == ((3, 1),)
 
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
@@ -293,7 +296,7 @@ def test_take_sorted():
                      dict((('y', i, 1), (getitem, ('x', i, 1),
                                          (slice(None, None, None), [17])))
                           for i in range(4)))
-    assert dsk == expected
+    np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20), (3, 1))
 
 
@@ -307,7 +310,7 @@ def test_slice_lists():
                                      ([0], slice(None, None, None)))], 0),
                          ([1, 0, 2], slice(None, None, None)))
            for i in range(4)}
-    assert y == exp
+    np.testing.assert_equal(y, exp)
     assert chunks == ((3,), (3, 3, 3, 1))
 
 
@@ -332,14 +335,14 @@ def test_slicing_with_numpy_arrays():
                          (np.array([1, 2, 9]), slice(None, None, None)))
 
     assert bd1 == bd2
-    assert a == b
+    np.testing.assert_equal(a, b)
 
     i = [False, True, True, False, False,
          False, False, False, False, True, False]
     c, bd3 = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
                          (i, slice(None, None, None)))
     assert bd1 == bd3
-    assert a == c
+    np.testing.assert_equal(a, c)
 
 
 def test_slicing_and_chunks():
@@ -363,6 +366,7 @@ def test_slice_list_then_None():
 
 
 class ReturnItem(object):
+
     def __getitem__(self, key):
         return key
 
@@ -445,13 +449,18 @@ def test_slicing_consistent_names():
     assert same_keys(a[:, 5:2:-1], a[:, 5:2:-1])
 
 
+def test_sanitize_index_element():
+    with pytest.raises(TypeError):
+        _sanitize_index_element('Hello!')
+
+
 def test_sanitize_index():
     pd = pytest.importorskip('pandas')
     with pytest.raises(TypeError):
         sanitize_index('Hello!')
 
-    assert sanitize_index(pd.Series([1, 2, 3])) == [1, 2, 3]
-    assert sanitize_index((1, 2, 3)) == [1, 2, 3]
+    np.testing.assert_equal(sanitize_index(pd.Series([1, 2, 3])), [1, 2, 3])
+    np.testing.assert_equal(sanitize_index((1, 2, 3)), [1, 2, 3])
 
 
 def test_uneven_blockdims():
@@ -535,7 +544,7 @@ def test_slicing_none_int_ellipses(a, b, c, d):
 
 @pytest.mark.slow
 def test_slicing_none_int_ellipes():
-    shape = (2,3,5,7,11)
+    shape = (2, 3, 5, 7, 11)
     x = np.arange(np.prod(shape)).reshape(shape)
     y = da.core.asarray(x)
     for ind in itertools.product(indexers, indexers, indexers, indexers):
@@ -547,7 +556,7 @@ def test_slicing_none_int_ellipes():
 
 def test_None_overlap_int():
     a, b, c, d = (0, slice(None, 2, None), None, Ellipsis)
-    shape = (2,3,5,7,11)
+    shape = (2, 3, 5, 7, 11)
     x = np.arange(np.prod(shape)).reshape(shape)
     y = da.core.asarray(x)
 
