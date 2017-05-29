@@ -14,7 +14,6 @@ from dask.array.utils import assert_eq
 from dask.compatibility import skip
 
 
-
 def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
