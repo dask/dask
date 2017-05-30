@@ -6,7 +6,7 @@ Install
 
 ::
 
-    $ pip install distributed --upgrade
+    $ pip install dask distributed --upgrade
 
 See :doc:`installation <install>` document for more information.
 
@@ -19,12 +19,11 @@ scheduler and worker for you.
 
 .. code-block:: python
 
-   >>> from distributed import Client
-   >>> client = Client()
+   >>> from dask.distributed import Client
+   >>> client = Client()  # set up local cluster on your lapotp
    >>> client
    <Client: scheduler="127.0.0.1:8786" processes=8 cores=8>
-   
-   
+
 
 Setup Dask.distributed the Hard Way
 -----------------------------------
@@ -46,11 +45,10 @@ Launch an Client and point it to the IP/port of the scheduler.
 
 .. code-block:: python
 
-   >>> from distributed import Client
+   >>> from dask.distributed import Client
    >>> client = Client('127.0.0.1:8786')
 
 See :doc:`setup <setup>` for advanced use.
-
 
 
 Map and Submit Functions
@@ -98,7 +96,7 @@ once.
 
 .. code-block:: python
 
-   >>> total.result()     # result for single future
+   >>> total.result()   # result for single future
    -285
    >>> client.gather(A) # gather for many futures
    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]

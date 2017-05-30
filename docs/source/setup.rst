@@ -278,4 +278,3 @@ We can then run this preload script by referring to its filename (or module name
 if it is on the path) when we start the scheduler::
 
    dask-scheduler --preload scheduler-setup.py
-
