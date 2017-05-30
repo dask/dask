@@ -1,4 +1,5 @@
 import sys
+import warnings
 from operator import add
 from itertools import product
 
@@ -1736,6 +1737,8 @@ def test_apply():
 
 
 def test_apply_warns():
+    if ('once', None, Warning, None, 0) in warnings.filters:
+        pytest.skip("Global warning filter interferes with this test")
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
