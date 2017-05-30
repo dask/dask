@@ -35,7 +35,7 @@ from .preloading import preload_modules
 from .protocol import (pickle, to_serialize, deserialize_bytes,
                        serialize_bytelist)
 from .security import Security
-from .sizeof import sizeof
+from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file)

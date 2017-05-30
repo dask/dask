@@ -736,3 +736,17 @@ def test_worker_dir(worker):
             assert len(set(directories)) == 2  # distinct
 
         test_worker_dir()
+
+
+@gen_cluster(client=True)
+def test_dataframe_attribute_error(c, s, a, b):
+    class BadSize(object):
+        def __init__(self, data):
+            self.data = data
+
+        def __sizeof__(self):
+            raise TypeError('Hello')
+
+    future = c.submit(BadSize, 123)
+    result = yield future._result()
+    assert result.data == 123

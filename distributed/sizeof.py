@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import logging
 import sys
 
 from dask.utils import Dispatch
@@ -9,6 +10,9 @@ try:  # PyPy does not support sys.getsizeof
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
     getsizeof = lambda x: 100
+
+
+logger = logging.getLogger(__name__)
 
 
 sizeof = Dispatch()
@@ -88,3 +92,16 @@ def register_spmatrix():
         return sum(
             sizeof(v) for v in s.__dict__.values()
         )
+
+
+def safe_sizeof(obj, default_size=1e6):
+    """ Safe variant of sizeof that captures and logs exceptions
+
+    This returns a default size of 1e6 if the sizeof function fails
+    """
+    try:
+        return sizeof(obj)
+    except Exception:
+        logger.warn('Sizeof calculation failed.  Defaulting to 1MB',
+                    exc_info=True)
+        return int(default_size)
