@@ -105,6 +105,8 @@ def align_partitions(*dfs):
                          "to set the index.")
 
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs1])))
+    if len(divisions) == 1:  # single value for index
+        divisions = (divisions[0], divisions[0])
     dfs2 = [df.repartition(divisions, force=True)
             if isinstance(df, _Frame) else df for df in dfs]
 
