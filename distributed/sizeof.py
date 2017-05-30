@@ -54,10 +54,9 @@ def register_pandas():
 
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        p = sum(c.memory_usage(index=False) for _, c in df.iteritems())
-        p += sizeof(df.index)
-        for col in df.columns:
-            col = df[col]
+        p = sizeof(df.index)
+        for name, col in df.iteritems():
+            p += col.memory_usage(index=False)
             if col.dtype == object:
                 p += object_size(col._values)
         return int(p) + 1000

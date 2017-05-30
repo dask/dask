@@ -38,6 +38,13 @@ def test_pandas():
     assert isinstance(sizeof(df.index), int)
 
 
+def test_pandas_repeated_column():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    assert sizeof(df[['x', 'x', 'x']]) > sizeof(df)
+
+
 def test_sparse_matrix():
     sparse = pytest.importorskip('scipy.sparse')
     sp = sparse.eye(10)
