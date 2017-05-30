@@ -234,6 +234,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 
 * :doc:`debugging`
 * :doc:`support`
+* :doc:`external-packages`
 * :doc:`changelog`
 * :doc:`presentations`
 * :doc:`develop`
@@ -251,6 +252,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 
    debugging.rst
    support.rst
+   external-packages.rst
    changelog.rst
    presentations.rst
    develop.rst
