@@ -122,7 +122,7 @@ from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from .context import _globals
 from .order import order
-from .callbacks import unpack_callbacks
+from .callbacks import unpack_callbacks, local_callbacks
 from .optimize import cull
 from .utils_test import add, inc  # noqa: F401
 
@@ -453,10 +453,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     """
     queue = Queue()
 
-    if callbacks is None:
-        callbacks = _globals['callbacks']
-    _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
-
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -464,80 +460,80 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     results = set(result_flat)
 
     dsk = dict(dsk)
-    started_cbs = []
-    try:
-        for cb in callbacks:
-            if cb[0]:
-                cb[0](dsk)
-            started_cbs.append(cb)
+    with local_callbacks(callbacks) as callbacks:
+        _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
+        started_cbs = []
+        succeeded = False
+        try:
+            for cb in callbacks:
+                if cb[0]:
+                    cb[0](dsk)
+                started_cbs.append(cb)
 
-        dsk, dependencies = cull(dsk, list(results))
+            dsk, dependencies = cull(dsk, list(results))
 
-        keyorder = order(dsk)
+            keyorder = order(dsk)
 
-        state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
-        for _, start_state, _, _, _ in callbacks:
-            if start_state:
-                start_state(dsk, state)
+            for _, start_state, _, _, _ in callbacks:
+                if start_state:
+                    start_state(dsk, state)
 
-        if rerun_exceptions_locally is None:
-            rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
+            if rerun_exceptions_locally is None:
+                rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
 
-        if state['waiting'] and not state['ready']:
-            raise ValueError("Found no accessible jobs in dask")
+            if state['waiting'] and not state['ready']:
+                raise ValueError("Found no accessible jobs in dask")
 
-        def fire_task():
-            """ Fire off a task to the thread pool """
-            # Choose a good task to compute
-            key = state['ready'].pop()
-            state['running'].add(key)
-            for f in pretask_cbs:
-                f(key, dsk, state)
+            def fire_task():
+                """ Fire off a task to the thread pool """
+                # Choose a good task to compute
+                key = state['ready'].pop()
+                state['running'].add(key)
+                for f in pretask_cbs:
+                    f(key, dsk, state)
 
-            # Prep data to send
-            data = dict((dep, state['cache'][dep])
-                        for dep in get_dependencies(dsk, key))
-            # Submit
-            apply_async(execute_task,
-                        args=(key, dumps((dsk[key], data)),
-                              dumps, loads, get_id, pack_exception),
-                        callback=queue.put)
+                # Prep data to send
+                data = dict((dep, state['cache'][dep])
+                            for dep in get_dependencies(dsk, key))
+                # Submit
+                apply_async(execute_task,
+                            args=(key, dumps((dsk[key], data)),
+                                  dumps, loads, get_id, pack_exception),
+                            callback=queue.put)
 
-        # Seed initial tasks into the thread pool
-        while state['ready'] and len(state['running']) < num_workers:
-            fire_task()
-
-        # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready'] or state['running']:
-            key, res_info, failed = queue_get(queue)
-            if failed:
-                exc, tb = loads(res_info)
-                if rerun_exceptions_locally:
-                    data = dict((dep, state['cache'][dep])
-                                for dep in get_dependencies(dsk, key))
-                    task = dsk[key]
-                    _execute_task(task, data)  # Re-execute locally
-                else:
-                    raise_exception(exc, tb)
-            res, worker_id = loads(res_info)
-            state['cache'][key] = res
-            finish_task(dsk, key, state, results, keyorder.get)
-            for f in posttask_cbs:
-                f(key, res, dsk, state, worker_id)
-
+            # Seed initial tasks into the thread pool
             while state['ready'] and len(state['running']) < num_workers:
                 fire_task()
 
-    except BaseException:
-        for _, _, _, _, finish in started_cbs:
-            if finish:
-                finish(dsk, state, True)
-        raise
+            # Main loop, wait on tasks to finish, insert new ones
+            while state['waiting'] or state['ready'] or state['running']:
+                key, res_info, failed = queue_get(queue)
+                if failed:
+                    exc, tb = loads(res_info)
+                    if rerun_exceptions_locally:
+                        data = dict((dep, state['cache'][dep])
+                                    for dep in get_dependencies(dsk, key))
+                        task = dsk[key]
+                        _execute_task(task, data)  # Re-execute locally
+                    else:
+                        raise_exception(exc, tb)
+                res, worker_id = loads(res_info)
+                state['cache'][key] = res
+                finish_task(dsk, key, state, results, keyorder.get)
+                for f in posttask_cbs:
+                    f(key, res, dsk, state, worker_id)
 
-    for _, _, _, _, finish in started_cbs:
-        if finish:
-            finish(dsk, state, False)
+                while state['ready'] and len(state['running']) < num_workers:
+                    fire_task()
+
+            succeeded = True
+
+        finally:
+            for _, _, _, _, finish in started_cbs:
+                if finish:
+                    finish(dsk, state, not succeeded)
 
     return nested_get(result, state['cache'])
 
