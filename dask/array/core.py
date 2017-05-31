@@ -491,7 +491,8 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
     args = [np.ones((1,) * x.ndim, dtype=x.dtype)
             if isinstance(x, Array) else x for x in args]
     try:
-        o = func(*args, **kwargs)
+        with np.errstate(all='ignore'):
+            o = func(*args, **kwargs)
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
