@@ -381,31 +381,38 @@ class Dispatch(object):
 
         return wrapper(func) if func is not None else wrapper
 
-    def __call__(self, arg):
-        # Fast path with direct lookup on type
+    def dispatch(self, cls):
+        """Return the function implementation for the given ``cls``"""
+        # Fast path with direct lookup on cls
         lk = self._lookup
-        typ = type(arg)
         try:
-            impl = lk[typ]
+            impl = lk[cls]
         except KeyError:
             pass
         else:
-            return impl(arg)
+            return impl
         # Is a lazy registration function present?
-        toplevel, _, _ = typ.__module__.partition('.')
+        toplevel, _, _ = cls.__module__.partition('.')
         try:
             register = self._lazy.pop(toplevel)
         except KeyError:
             pass
         else:
             register()
-            return self(arg)  # recurse
+            return self.dispatch(cls) # recurse
         # Walk the MRO and cache the lookup result
-        for cls in inspect.getmro(typ)[1:]:
-            if cls in lk:
-                lk[typ] = lk[cls]
-                return lk[cls](arg)
-        raise TypeError("No dispatch for {0} type".format(typ))
+        for cls2 in inspect.getmro(cls)[1:]:
+            if cls2 in lk:
+                lk[cls] = lk[cls2]
+                return lk[cls2]
+        raise TypeError("No dispatch for {0}".format(cls))
+
+    def __call__(self, arg):
+        """
+        Call the corresponding method based on type of argument.
+        """
+        meth = self.dispatch(type(arg))
+        return meth(arg)
 
 
 def ensure_not_exists(filename):
