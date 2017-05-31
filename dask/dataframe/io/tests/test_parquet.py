@@ -13,7 +13,10 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
 
-fastparquet = pytest.importorskip('fastparquet')
+try:
+    import fastparquet
+except ImportError:
+    fastparquet = False
 
 try:
     import pyarrow.parquet as pyarrow  # noqa
@@ -411,3 +414,31 @@ def test_partition_on(tmpdir):
     out = dd.read_parquet(tmpdir, engine='fastparquet').compute()
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+
+@pytest.mark.skipif(not fastparquet, reason="Filters only in fastparquet")
+def test_filters(fn):
+
+    df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    # Ok with 1 partition and filters
+    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False)
+    ddf2 = dd.read_parquet(fn, index=False,
+                           filters=[('at', '==', 'aa')]).compute()
+    assert_eq(ddf2, ddf)
+
+    # Ok with >1 partition and no filters
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    dd.read_parquet(fn).compute()
+    assert_eq(ddf2, ddf)
+
+    # Ok with >1 partition and filters using base fastparquet
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
+    assert len(df2) > 0
+
+    # Fails with >1 partition and filters
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()  # -> KeyError: ('read-parquet-e38d96ce99311317127a227242daf29c', 1)
+    assert len(ddf2) > 0

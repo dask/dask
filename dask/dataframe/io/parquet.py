@@ -111,6 +111,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         if index_col in minmax:
             divisions = (list(minmax[index_col]['min']) +
                          [minmax[index_col]['max'][-1]])
+            divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
+                         if rg in rgs] + [divisions[-1]]
         else:
             divisions = (None,) * (len(rgs) + 1)
     else:
