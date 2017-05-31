@@ -1,11 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
+from distributed import Worker
 from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin
 
 
 @gen_cluster(client=True)
-def test_diagnostic(c, s, a, b):
+def test_simple(c, s, a, b):
+
     class Counter(SchedulerPlugin):
         def start(self, scheduler):
             self.scheduler = scheduler
@@ -31,3 +33,41 @@ def test_diagnostic(c, s, a, b):
     assert counter.count == 3
     s.remove_plugin(counter)
     assert counter not in s.plugins
+
+
+@gen_cluster(ncores=[], client=False)
+def test_add_remove_worker(s):
+    events = []
+
+    class MyPlugin(SchedulerPlugin):
+        def add_worker(self, worker, scheduler):
+            assert scheduler is s
+            events.append(('add_worker', worker))
+
+        def remove_worker(self, worker, scheduler):
+            assert scheduler is s
+            events.append(('remove_worker', worker))
+
+    plugin = MyPlugin()
+    s.add_plugin(plugin)
+    assert events == []
+
+    a = Worker(s.address)
+    b = Worker(s.address)
+    yield a._start()
+    yield b._start()
+    yield a._close()
+    yield b._close()
+
+    assert events == [('add_worker', a.address),
+                      ('add_worker', b.address),
+                      ('remove_worker', a.address),
+                      ('remove_worker', b.address),
+                      ]
+
+    events[:] = []
+    s.remove_plugin(plugin)
+    a = Worker(s.address)
+    yield a._start()
+    yield a._close()
+    assert events == []
