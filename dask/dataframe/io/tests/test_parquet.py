@@ -13,10 +13,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
 
-try:
-    import fastparquet
-except ImportError:
-    fastparquet = False
+fastparquet = pytest.importorskip('fastparquet')
 
 try:
     import pyarrow.parquet as pyarrow  # noqa
@@ -416,7 +413,6 @@ def test_partition_on(tmpdir):
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
 
-@pytest.mark.skipif(not fastparquet, reason="Filters only in fastparquet")
 def test_filters(fn):
 
     df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
