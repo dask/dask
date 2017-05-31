@@ -114,9 +114,9 @@ class AioClient(Client):
 
         loop = asyncio.get_event_loop()
 
-        # Distributed expects to call Tornado's IOLoop.current() and get the
+        # "distributed" expects to call Tornado's IOLoop.current() and get the
         # main loop, with a "_running" property. Install asyncio's loop instead.
-        ioloop = AioLoop(loop, make_current=True)
+        ioloop = AioLoop(loop)
         super().__init__(*args, loop=ioloop, start=False, set_as_default=False,
                          **kwargs)
 

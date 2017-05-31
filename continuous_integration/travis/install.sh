@@ -72,10 +72,6 @@ if [[ $CRICK == true ]]; then
     pip install -q git+https://github.com/jcrist/crick.git
 fi;
 
-if [[ $ASYNCIO == true ]]; then
-    pip install -q pytest-aiohttp
-fi;
-
 # Install distributed
 pip install --no-deps -e .
 
