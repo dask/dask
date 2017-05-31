@@ -424,17 +424,17 @@ def test_filters(fn):
                            filters=[('at', '==', 'aa')]).compute()
     assert_eq(ddf2, ddf)
 
-    # Ok with >1 partition and no filters
+    # with >1 partition and no filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn)
     dd.read_parquet(fn).compute()
     assert_eq(ddf2, ddf)
 
-    # Ok with >1 partition and filters using base fastparquet
+    # with >1 partition and filters using base fastparquet
     ddf.repartition(npartitions=2, force=True).to_parquet(fn)
     df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
     assert len(df2) > 0
 
-    # Fails with >1 partition and filters
+    # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()  # -> KeyError: ('read-parquet-e38d96ce99311317127a227242daf29c', 1)
+    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
     assert len(ddf2) > 0
