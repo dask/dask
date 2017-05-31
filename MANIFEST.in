@@ -1,11 +1,11 @@
 recursive-include dask *.py
-recursive-include docs *.rst
+recursive-include docs/source *
+include docs/Makefile docs/make.bat
 
 include setup.py
 include README.rst
 include LICENSE.txt
 include MANIFEST.in
 
-prune docs/_build
 include versioneer.py
 include dask/_version.py
