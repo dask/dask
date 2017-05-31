@@ -2609,8 +2609,7 @@ class AsCompleted(object):
         self.with_results = with_results
 
         if futures:
-            for future in futures:
-                self.add(future)
+            self.update(futures)
 
     @gen.coroutine
     def track_future(self, future):
@@ -2627,16 +2626,28 @@ class AsCompleted(object):
                 self.queue.put_nowait(future)
             self.condition.notify()
 
+    def update(self, futures):
+        """ Add multiple futures to the collection.
+
+        The added futures will emit from the iterator once they finish"""
+        with self.lock:
+            for f in futures:
+                if not isinstance(f, Future):
+                    raise TypeError("Input must be a future, got %s" % f)
+                self.futures[f] += 1
+                self.loop.add_callback(self.track_future, f)
+
     def add(self, future):
         """ Add a future to the collection
 
         This future will emit from the iterator once it finishes
         """
-        if not isinstance(future, Future):
-            raise TypeError("Input must be a future, got %s" % str(future))
+        self.update((future,))
+
+    def is_empty(self):
+        """Return True if there no waiting futures, False otherwise"""
         with self.lock:
-            self.futures[future] += 1
-        self.loop.add_callback(self.track_future, future)
+            return not self.futures and self.queue.empty()
 
     def __iter__(self):
         return self
@@ -2645,9 +2656,8 @@ class AsCompleted(object):
         return self
 
     def __next__(self):
-        with self.lock:
-            if not self.futures and self.queue.empty():
-                raise StopIteration()
+        if self.is_empty():
+            raise StopIteration()
         return self.queue.get()
 
     @gen.coroutine
