@@ -403,7 +403,7 @@ def test_callable_obj():
     assert f().compute() == 2
 
 
-def test_name_consitent_across_instances():
+def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}

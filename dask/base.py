@@ -16,6 +16,7 @@ from . import sharedict
 from .compatibility import bind_method, unicode, PY3
 from .context import _globals
 from .core import flatten
+from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
 from .sharedict import ShareDict
 
@@ -387,15 +388,15 @@ def register_numpy():
                     x.shape, x.strides, offset)
         if x.dtype.hasobject:
             try:
-                data = md5('-'.join(x.flat).encode('utf-8')).hexdigest()
+                data = hash_buffer_hex('-'.join(x.flat).encode('utf-8'))
             except TypeError:
-                data = md5(b'-'.join([unicode(item).encode('utf-8') for item in
-                                      x.flat])).hexdigest()
+                data = hash_buffer_hex(b'-'.join([unicode(item).encode('utf-8') for item in
+                                                  x.flat]))
         else:
             try:
-                data = md5(x.ravel().view('i1').data).hexdigest()
+                data = hash_buffer_hex(x.ravel(order='K').view('i1'))
             except (BufferError, AttributeError, ValueError):
-                data = md5(x.copy().ravel().view('i1').data).hexdigest()
+                data = hash_buffer_hex(x.copy().ravel(order='K').view('i1'))
         return (data, x.dtype, x.shape, x.strides)
 
     normalize_token.register(np.dtype, repr)
