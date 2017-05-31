@@ -5,11 +5,11 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.optimize import fuse
+from dask.utils import SerializableLock
+from dask.array.core import getarray, getarray_nofancy
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
 from dask.array.utils import assert_eq
-
-from dask.array.core import getarray, getarray_nofancy
 
 
 def test_fuse_getitem():
@@ -54,6 +54,29 @@ def test_fuse_getitem():
              ((getitem, (getitem, 'x', (slice(1000, 2000),)),
                (slice(5, 10), slice(10, 20))),
               (getitem, 'x', (slice(1005, 1010), slice(10, 20))))]
+
+    for inp, expected in pairs:
+        result = optimize_slices({'y': inp})
+        assert result == {'y': expected}
+
+
+def test_fuse_getitem_lock():
+    lock1 = SerializableLock()
+    lock2 = SerializableLock()
+
+    pairs = [((getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20)),
+              (getarray, 'x', slice(1015, 1020), lock1)),
+
+             ((getitem, (getarray, 'x', (slice(1000, 2000), slice(100, 200)), lock1),
+                        (slice(15, 20), slice(50, 60))),
+              (getarray, 'x', (slice(1015, 1020), slice(150, 160)), lock1)),
+
+             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), slice(100, 200)), lock1),
+                        (slice(15, 20), slice(50, 60))),
+              (getarray_nofancy, 'x', (slice(1015, 1020), slice(150, 160)), lock1)),
+
+             ((getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20), lock2),
+              (getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20), lock2))]
 
     for inp, expected in pairs:
         result = optimize_slices({'y': inp})
@@ -164,6 +187,18 @@ def test_minimize_data_transfer():
     for dep in deps:
         assert dsk[dep][0] in (getitem, getarray)
         assert dsk[dep][1] == big_key
+
+
+def test_fuse_slices_with_alias():
+    dsk = {'x': np.arange(16).reshape((4, 4)),
+           ('dx', 0, 0): (getarray, 'x', (slice(0, 4), slice(0, 4))),
+           ('alias', 0, 0): ('dx', 0, 0),
+           ('dx2', 0): (getitem, ('alias', 0, 0), (slice(None), 0))}
+    keys = [('dx2', 0)]
+    dsk2 = optimize(dsk, keys)
+    assert len(dsk2) == 3
+    fused_key = set(dsk2).difference(['x', ('dx2', 0)]).pop()
+    assert dsk2[fused_key] == (getarray, 'x', (slice(0, 4), 0))
 
 
 def test_dont_fuse_fancy_indexing_in_getarray_nofancy():

@@ -48,31 +48,37 @@ def hold_keys(dsk, dependencies):
     We don't want to fuse data present in the graph because it is easier to
     serialize as a raw value.
 
-    We don't want to fuse getitem/getarrays because we want to move around only
-    small pieces of data, rather than the underlying arrays.
+    We don't want to fuse chains after getitem/getarrays because we want to
+    move around only small pieces of data, rather than the underlying arrays.
     """
     dependents = reverse_dict(dependencies)
     data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
-    getters = (getitem, getarray, getarray_inline)
+    getters = (getarray, getarray_nofancy, getarray_inline, getitem)
 
     hold_keys = list(data)
     for dat in data:
         deps = dependents[dat]
         for dep in deps:
             task = dsk[dep]
-            try:
-                if task[0] in getters:
+            # If the task is a get* function, we walk up the chain, and stop
+            # when there's either more than one dependent, or the dependent is
+            # no longer a get* function or an alias. We then add the final
+            # key to the list of keys not to fuse.
+            if type(task) is tuple and task and task[0] in getters:
+                try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
-                        if new_task[0] in (getitem, getarray):
+                        # If the task is a get* or an alias, continue up the
+                        # linear chain
+                        if new_task[0] in getters or new_task in dsk:
                             dep = new_dep
                             task = new_task
                         else:
                             break
-                    hold_keys.append(dep)
-            except (IndexError, TypeError):
-                pass
+                except (IndexError, TypeError):
+                    pass
+                hold_keys.append(dep)
     return hold_keys
 
 
@@ -91,9 +97,16 @@ def optimize_slices(dsk):
     for k, v in dsk.items():
         if type(v) is tuple and v[0] in getters and len(v) == 3:
             f, a, a_index = v
+            a_lock = None
             getter = f
-            while type(a) is tuple and a[0] in getters and len(a) == 3:
-                f2, b, b_index = a
+            while type(a) is tuple and a[0] in getters and len(a) in (3, 4):
+                if len(a) == 3:
+                    f2, b, b_index = a
+                    b_lock = None
+                else:
+                    f2, b, b_index, b_lock = a
+                if a_lock is not None and a_lock is not b_lock:
+                    break
                 if (type(a_index) is tuple) != (type(b_index) is tuple):
                     break
                 if type(a_index) is tuple:
@@ -118,22 +131,18 @@ def optimize_slices(dsk):
                         getter = getarray
                 except NotImplementedError:
                     break
-                a, a_index = b, c_index
-            if getter is not getitem:
+                a, a_index, a_lock = b, c_index, b_lock
+            if (getter is getitem and
+                ((type(a_index) is slice and not a_index.start and
+                  a_index.stop is None and a_index.step is None) or
+                 (type(a_index) is tuple and
+                  all(type(s) is slice and not s.start and s.stop is None and
+                      s.step is None for s in a_index)))):
+                dsk[k] = a
+            elif a_lock is None:
                 dsk[k] = (getter, a, a_index)
-            elif (type(a_index) is slice and
-                    not a_index.start and
-                    a_index.stop is None and
-                    a_index.step is None):
-                dsk[k] = a
-            elif type(a_index) is tuple and all(type(s) is slice and
-                                                not s.start and
-                                                s.stop is None and
-                                                s.step is None
-                                                for s in a_index):
-                dsk[k] = a
             else:
-                dsk[k] = (getitem, a, a_index)
+                dsk[k] = (getter, a, a_index, a_lock)
     return dsk
 
 

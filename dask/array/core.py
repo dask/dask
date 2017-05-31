@@ -533,9 +533,13 @@ def map_blocks(func, *args, **kwargs):
     new_axis : number or iterable, optional
         New dimensions created by the function. Note that these are applied
         after ``drop_axis`` (if present).
+    token : string, optional
+        The key prefix to use for the output array. If not provided, will be
+        determined from the function name.
     name : string, optional
-        The key name to use for the array. If not provided, will be determined
-        by a hash of the arguments.
+        The key name to use for the output array. Note that this fully
+        specifies the output key name, and must be unique. If not provided,
+        will be determined by a hash of the arguments.
     **kwargs :
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
@@ -608,10 +612,11 @@ def map_blocks(func, *args, **kwargs):
     >>> def func(block, block_id=None):
     ...     pass
 
-    You may specify the name of the resulting task in the graph with the
-    optional ``name`` keyword argument.
+    You may specify the key name prefix of the resulting task in the graph with
+    the optional ``token`` keyword argument.
 
-    >>> y = x.map_blocks(lambda x: x + 1, name='increment')
+    >>> x.map_blocks(lambda x: x + 1, token='increment')  # doctest: +SKIP
+    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,)>
     """
     if not callable(func):
         msg = ("First argument must be callable function, not %s\n"
@@ -619,7 +624,10 @@ def map_blocks(func, *args, **kwargs):
                "   or:   da.map_blocks(function, x, y, z)")
         raise TypeError(msg % type(func).__name__)
     name = kwargs.pop('name', None)
-    name = name or '%s-%s' % (funcname(func), tokenize(func, args, **kwargs))
+    token = kwargs.pop('token', None)
+    if not name:
+        name = '%s-%s' % (token or funcname(func),
+                          tokenize(token or func, args, **kwargs))
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])

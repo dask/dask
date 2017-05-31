@@ -895,6 +895,10 @@ def test_map_blocks():
     e = d.map_blocks(inc, name='increment')
     assert e.name == 'increment'
 
+    e = d.map_blocks(inc, token='increment')
+    assert e.name != 'increment'
+    assert e.name.startswith('increment')
+
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
 
@@ -1021,6 +1025,8 @@ def test_slicing_with_ndarray():
 
     assert_eq(d[np.arange(8)], x)
     assert_eq(d[np.ones(8, dtype=bool)], x)
+    assert_eq(d[np.array([1])], x[[1]])
+    assert_eq(d[np.array([True])], x[[0]])
 
 
 def test_dtype():
