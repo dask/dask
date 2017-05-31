@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME = dask
+%:
+	dh $@ --with python2,python3 --buildsystem=pybuild
+
+override_dh_auto_test:
+	# do nothing, we either need to install nosetests, make the test modules
+	# induviduall executable, or make the tests importable.
+	echo "Skipping tests"

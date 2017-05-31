@@ -1,0 +1,5 @@
+dask (0.6.1-1) UNRELEASED; urgency=medium
+
+  * Initial release. (closes: #412)
+
+ -- blake griffith <bgriffith@continuum.io>  Sun, 02 Aug 2015 15:02:57 -0500

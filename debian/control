@@ -1,0 +1,36 @@
+Source: dask
+Maintainer: blake griffith <bgriffith@continuum.io>
+Section: python
+Priority: optional
+Build-Depends: dh-python, debhelper (>=9), python-all, python-setuptools, python3-all-dev, python3-setuptools
+Standards-Version: 3.9.6
+X-Python-Version: >= 2.6
+X-Python3-Version: >= 3.2
+
+Package: python-dask
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-numpy, python-pandas, python-dill, python-zmq
+Homepage: http://dask.pydata.org
+Description: Task scheduling and blocked algorithms for parallel processing.
+ Dask provides multi-core execution on larger-than-memory datasets using
+ blocked algorithms and task scheduling. It maps high-level NumPy, Pandas, and
+ list operations on large datasets on to many operations on small in-memory
+ datasets. It then executes these graphs in parallel on a single machine. Dask
+ lets us use traditional NumPy, Pandas, and list programming while operating on
+ inconveniently large data in a small amount of space.
+ .
+ This is the python 2 version of the package.
+
+Package: python3-dask
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, python3-numpy, python3-pandas, python3-dill, python3-zmq
+Homepage: http://dask.pydata.org
+Description: Task scheduling and blocked algorithms for parallel processing.
+ Dask provides multi-core execution on larger-than-memory datasets using
+ blocked algorithms and task scheduling. It maps high-level NumPy, Pandas, and
+ list operations on large datasets on to many operations on small in-memory
+ datasets. It then executes these graphs in parallel on a single machine. Dask
+ lets us use traditional NumPy, Pandas, and list programming while operating on
+ inconveniently large data in a small amount of space.
+ .
+ This is the python 3 version of the package.
