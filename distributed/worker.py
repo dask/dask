@@ -979,7 +979,8 @@ class Worker(WorkerBase):
 
         self._transitions = {
                 ('waiting', 'ready'): self.transition_waiting_ready,
-                ('waiting', 'memory'): self.transition_waiting_memory,
+                ('waiting', 'memory'): self.transition_waiting_done,
+                ('waiting', 'error'): self.transition_waiting_done,
                 ('ready', 'executing'): self.transition_ready_executing,
                 ('ready', 'memory'): self.transition_ready_memory,
                 ('constrained', 'executing'): self.transition_constrained_executing,
@@ -1303,7 +1304,7 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
-    def transition_waiting_memory(self, key, value=None):
+    def transition_waiting_done(self, key, value=None):
         try:
             if self.validate:
                 assert self.task_state[key] == 'waiting'
@@ -1354,6 +1355,7 @@ class Worker(WorkerBase):
                 assert key not in self.waiting_for_data
                 assert key not in self.ready
 
+            out = None
             if key in self.resource_restrictions:
                 for resource, quantity in self.resource_restrictions[key].items():
                     self.available_resources[resource] += quantity
@@ -1365,8 +1367,17 @@ class Worker(WorkerBase):
                 self.long_running.remove(key)
 
             if value is not no_value:
-                self.task_state[key] = 'memory'
-                self.put_key_in_memory(key, value)
+                try:
+                    self.task_state[key] = 'memory'
+                    self.put_key_in_memory(key, value, transition=False)
+                except Exception as e:
+                    logger.info("Failed to put key in memory", exc_info=True)
+                    msg = error_message(e)
+                    self.exceptions[key] = msg['exception']
+                    self.tracebacks[key] = msg['traceback']
+                    self.task_state[key] = 'error'
+                    out = 'error'
+
                 if key in self.dep_state:
                     self.transition_dep(key, 'memory')
 
@@ -1374,6 +1385,8 @@ class Worker(WorkerBase):
                 self.send_task_state_to_scheduler(key)
             else:
                 raise CommClosedError
+
+            return out
 
         except EnvironmentError:
             logger.info("Comm closed")
@@ -1510,7 +1523,7 @@ class Worker(WorkerBase):
             d['startstops'] = self.startstops[key]
         self.batched_stream.send(d)
 
-    def put_key_in_memory(self, key, value):
+    def put_key_in_memory(self, key, value, transition=True):
         if key in self.data:
             return
 
@@ -1535,7 +1548,7 @@ class Worker(WorkerBase):
                 if not self.waiting_for_data[dep]:
                     self.transition(dep, 'ready')
 
-        if key in self.task_state:
+        if transition and key in self.task_state:
             self.transition(key, 'memory')
 
         self.log.append((key, 'put-in-memory'))
@@ -1627,6 +1640,15 @@ class Worker(WorkerBase):
                 self.ensure_computing()
                 self.ensure_communicating()
 
+    def bad_dep(self, dep):
+        exc = ValueError("Could not find dependent %s.  Check worker logs" % str(dep))
+        for key in self.dependents[dep]:
+            msg = error_message(exc)
+            self.exceptions[key] = msg['exception']
+            self.tracebacks[key] = msg['traceback']
+            self.transition(key, 'error')
+        self.release_dep(dep)
+
     @gen.coroutine
     def handle_missing_dep(self, *deps):
         original_deps = list(deps)
@@ -1640,7 +1662,7 @@ class Worker(WorkerBase):
                 suspicious = self.suspicious_deps[dep]
                 if suspicious > 5:
                     deps.remove(dep)
-                    self.release_dep(dep)
+                    self.bad_dep(dep)
             if not deps:
                 return
 

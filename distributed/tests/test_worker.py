@@ -750,3 +750,54 @@ def test_dataframe_attribute_error(c, s, a, b):
     future = c.submit(BadSize, 123)
     result = yield future._result()
     assert result.data == 123
+
+
+@gen_cluster(client=True)
+def test_fail_write_to_disk(c, s, a, b):
+    class Bad(object):
+        def __getstate__(self):
+            raise TypeError()
+
+        def __sizeof__(self):
+            return int(100e9)
+
+    future = c.submit(Bad)
+    yield _wait(future)
+
+    assert future.status == 'error'
+
+    with pytest.raises(TypeError):
+        yield future._result()
+
+    futures = c.map(inc, range(10))
+    results = yield c._gather(futures)
+    assert results == list(map(inc, range(10)))
+
+
+@gen_cluster(client=True, worker_kwargs={'memory_limit': 1000})
+def test_fail_write_many_to_disk(c, s, a, b):
+    a.validate = False
+    b.validate = False
+    class Bad(object):
+        def __init__(self, x):
+            pass
+
+        def __getstate__(self):
+            raise TypeError()
+
+        def __sizeof__(self):
+            return 500
+
+    futures = c.map(Bad, range(10))
+    future = c.submit(lambda *args: 123, *futures)
+
+    yield _wait(future)
+
+    with pytest.raises(Exception) as info:
+        yield future._result()
+
+    # workers still operational
+    result = yield c.submit(inc, 1, workers=a.address)
+    assert result == 2
+    result = yield c.submit(inc, 2, workers=b.address)
+    assert result == 3
