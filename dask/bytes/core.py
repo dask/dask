@@ -250,7 +250,8 @@ class OpenFileCreator(object):
         self.text = text
         self.encoding = encoding
         self.errors = errors
-        self.storage_options = infer_storage_options(urlpath, inherit_storage_options=kwargs)
+        self.storage_options = infer_storage_options(
+            urlpath, inherit_storage_options=kwargs)
         self.protocol = self.storage_options.pop('protocol')
         ensure_protocol(self.protocol)
         try:
@@ -381,9 +382,17 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
 
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         errors='strict', num=1, name_function=None, **kwargs):
+    if hasattr(urlpath, 'name'):
+        # deal with pathlib.Path objects - must be local
+        urlpath = str(urlpath)
+        ispath = True
+    else:
+        ispath = False
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
                                  encoding=encoding, errors=errors, **kwargs)
+        if ispath and myopen.protocol != 'file':
+            raise ValueError("Only use pathlib.Path with local files.")
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
@@ -391,8 +400,16 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
         else:
             paths = [urlpath]
     elif isinstance(urlpath, (list, set, tuple, dict)):
+        if hasattr(urlpath[0], 'name'):
+            # deal with pathlib.Path objects - must be local
+            urlpath = [str(u) for u in urlpath]
+            ispath = True
+        else:
+            ispath = False
         myopen = OpenFileCreator(urlpath[0], compression, text='b' not in mode,
                                  encoding=encoding, **kwargs)
+        if ispath and myopen.protocol != 'file':
+            raise ValueError("Only use pathlib.Path with local files.")
         paths = urlpath
     else:
         raise ValueError('url type not understood: %s' % urlpath)
