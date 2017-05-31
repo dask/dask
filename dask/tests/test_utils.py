@@ -54,9 +54,32 @@ def test_dispatch():
         pass
     b = Bar()
     assert foo(1) == 2
+    assert foo.dispatch(int)(1) == 2
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+
+def test_dispatch_lazy():
+    # this tests the recursive component of dispatch
+    foo = Dispatch()
+    foo.register(int, lambda a: a)
+
+    import decimal
+
+    # keep it outside lazy dec for test
+    def foo_dec(a):
+        return a + 1
+
+    @foo.register_lazy("decimal")
+    def register_decimal():
+        import decimal
+        foo.register(decimal.Decimal, foo_dec)
+
+    # This test needs to be *before* any other calls
+    assert foo.dispatch(decimal.Decimal) == foo_dec
+    assert foo(decimal.Decimal(1)) == decimal.Decimal(2)
+    assert foo(1) == 1
 
 
 def test_random_state_data():
