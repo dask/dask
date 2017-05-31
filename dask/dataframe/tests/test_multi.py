@@ -1173,3 +1173,13 @@ def test_append_categorical():
         res = ddf1.index.append(ddf2.index)
         assert_eq(res, df1.index.append(df2.index))
         assert has_known_categories(res) == known
+
+
+def test_singleton_divisions():
+    df = pd.DataFrame({'x': [1, 1, 1]}, index=[1, 2, 3])
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.set_index('x')
+
+    joined = ddf2.join(ddf2, rsuffix='r')
+    assert joined.divisions == (1, 1)
+    joined.compute()
