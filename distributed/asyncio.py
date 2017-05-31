@@ -5,6 +5,8 @@
 import asyncio
 from functools import wraps
 
+from toolz import merge
+
 from tornado.platform.asyncio import BaseAsyncIOLoop
 from tornado.platform.asyncio import to_asyncio_future
 
@@ -12,10 +14,12 @@ from .client import Client, Future, AsCompleted, _wait
 from .utils import ignoring
 
 
-def to_asyncio(fn):
+def to_asyncio(fn, **default_kwargs):
     """Converts Tornado gen.coroutines and futures to asyncio ones"""
     @wraps(fn)
     def convert(*args, **kwargs):
+        if default_kwargs:
+            kwargs = merge(default_kwargs, kwargs)
         return to_asyncio_future(fn(*args, **kwargs))
     return convert
 
@@ -164,7 +168,7 @@ class AioClient(Client):
     run_on_scheduler = to_asyncio(Client._run_on_scheduler)
     run = to_asyncio(Client._run)
     run_coroutine = to_asyncio(Client._run_coroutine)
-    get = to_asyncio(Client._get)
+    get = to_asyncio(Client.get, sync=False)
     upload_environment = to_asyncio(Client._upload_environment)
     restart = to_asyncio(Client._restart)
     upload_file = to_asyncio(Client._upload_file)

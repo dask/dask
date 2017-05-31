@@ -301,17 +301,21 @@ def test_gather_strict(c, s, a, b):
 
 @gen_cluster(client=True, timeout=None)
 def test_get(c, s, a, b):
-    result = yield c._get({'x': (inc, 1)}, 'x')
+    future = c.get({'x': (inc, 1)}, 'x', sync=False)
+    assert isinstance(future, Future)
+    result = yield future
     assert result == 2
 
-    result = yield c._get({'x': (inc, 1)}, ['x'])
+    futures = c.get({'x': (inc, 1)}, ['x'], sync=False)
+    assert isinstance(futures[0], Future)
+    result = yield futures
     assert result == [2]
 
-    result = yield c._get({}, [])
+    result = yield c.get({}, [], sync=False)
     assert result == []
 
-    result = yield c._get({('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
-                          ('x', 2))
+    result = yield c.get({('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
+                         ('x', 2), sync=False)
     assert result == 3
 
 
@@ -515,7 +519,7 @@ def test_missing_worker(s, a, b):
 
     dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
 
-    result = yield c._get(dsk, 'c')
+    result = yield c.get(dsk, 'c', sync=False)
     assert result == 3
     assert bad not in s.ncores
 
@@ -636,7 +640,8 @@ def test_restrictions_get(c, s, a, b):
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     restrictions = {'y': {a.ip}, 'z': {b.ip}}
 
-    result = yield c._get(dsk, ['y', 'z'], restrictions)
+    futures = c.get(dsk, ['y', 'z'], restrictions, sync=False)
+    result = yield futures
     assert result == [2, 3]
     assert 'y' in a.data
     assert 'z' in b.data
@@ -746,7 +751,7 @@ def test_submit_then_get_with_Future(c, s, a, b):
     x = c.submit(slowinc, 1)
     dsk = {'y': (inc, x)}
 
-    result = yield c._get(dsk, 'y')
+    result = yield c.get(dsk, 'y', sync=False)
     assert result == 3
 
 
@@ -755,7 +760,7 @@ def test_aliases(c, s, a, b):
     x = c.submit(inc, 1)
 
     dsk = {'y': x}
-    result = yield c._get(dsk, 'y')
+    result = yield c.get(dsk, 'y', sync=False)
     assert result == 2
 
 
@@ -766,7 +771,7 @@ def test_aliases_2(c, s, a, b):
         ({'x': 'y', 'y': 1}, ['x']),
         ({'x': 1, 'y': 'x', 'z': 'y', 'w': (inc, 'z')}, ['w'])]
     for dsk, keys in dsk_keys:
-        result = yield c._get(dsk, keys)
+        result = yield c.get(dsk, keys, sync=False)
         assert list(result) == list(dask.get(dsk, keys))
 
 
@@ -836,7 +841,7 @@ def test_scatter_hash(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_get_releases_data(c, s, a, b):
-    [x] = yield c._get({'x': (inc, 1)}, ['x'])
+    [x] = yield c.get({'x': (inc, 1)}, ['x'], sync=False)
     import gc; gc.collect()
     assert c.refcount['x'] == 0
 
@@ -933,8 +938,8 @@ def test_pragmatic_move_small_data_to_large_data(c, s, a, b):
 def test_get_with_non_list_key(c, s, a, b):
     dsk = {('x', 0): (inc, 1), 5: (inc, 2)}
 
-    x = yield c._get(dsk, ('x', 0))
-    y = yield c._get(dsk, 5)
+    x = yield c.get(dsk, ('x', 0), sync=False)
+    y = yield c.get(dsk, 5, sync=False)
     assert x == 2
     assert y == 3
 
@@ -943,7 +948,7 @@ def test_get_with_non_list_key(c, s, a, b):
 def test_get_with_error(c, s, a, b):
     dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
     with pytest.raises(ZeroDivisionError):
-        yield c._get(dsk, 'y')
+        yield c.get(dsk, 'y', sync=False)
 
 
 def test_get_with_error_sync(loop):
@@ -1098,7 +1103,7 @@ def test_traceback(c, s, a, b):
 @gen_cluster(client=True)
 def test_get_traceback(c, s, a, b):
     try:
-        yield c._get({'x': (div, 1, 0)}, 'x')
+        yield c.get({'x': (div, 1, 0)}, 'x', sync=False)
     except ZeroDivisionError:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         L = traceback.format_tb(exc_traceback)
@@ -1344,7 +1349,7 @@ def test_client_with_scheduler(c, s, a, b):
     AA, BB, xx = yield c._gather([A, B, x])
     assert (AA, BB, xx) == (1, 2, 2)
 
-    result = yield c._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
+    result = yield c.get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y', sync=False)
     assert result == 12
 
 
@@ -2156,7 +2161,7 @@ def test_futures_of_cancelled_raises(c, s, a, b):
         yield x._result()
 
     with pytest.raises(CancelledError):
-        yield c._get({'x': (inc, x), 'y': (inc, 2)}, ['x', 'y'])
+        yield c.get({'x': (inc, x), 'y': (inc, 2)}, ['x', 'y'], sync=False)
 
     with pytest.raises(CancelledError):
         c.submit(inc, x)
@@ -2415,7 +2420,7 @@ def test_persist_get(c, s, a, b):
     xxyy3 = delayed(add)(xxyy2, 10)
 
     yield gen.sleep(0.5)
-    result = yield c._get(xxyy3.dask, xxyy3._keys())
+    result = yield c.get(xxyy3.dask, xxyy3._keys(), sync=False)
     assert result[0] == ((1+1) + (2+2)) + 10
 
     result = yield c.compute(xxyy3)._result()
@@ -3002,26 +3007,26 @@ def test_shutdown_idempotent(loop):
             c.shutdown()
 
 
-@gen_cluster(client=True)
-def test_get_returns_early(c, s, a, b):
-    start = time()
-    with ignoring(RuntimeError):
-        result = yield c._get({'x': (throws, 1), 'y': (sleep, 1)}, ['x', 'y'])
-    assert time() < start + 0.5
-    assert not c.futures
+def test_get_returns_early(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            start = time()
+            with ignoring(RuntimeError):
+                result = c.get({'x': (throws, 1), 'y': (sleep, 1)}, ['x', 'y'])
+            assert time() < start + 0.5
+            assert not c.futures
 
-    start = time()
-    while 'y' in s.tasks:
-        yield gen.sleep(0.01)
-        assert time() < start + 3
+            start = time()
+            while any(c.processing().values()):
+                sleep(0.01)
+                assert time() < start + 3
 
-    x = c.submit(inc, 1)
-    yield x._result()
+            x = c.submit(inc, 1)
+            x.result()
 
-    with ignoring(RuntimeError):
-        result = yield c._get({'x': (throws, 1),
-                               x.key: (inc, 1)}, ['x', x.key])
-    assert x.key in s.tasks
+            with ignoring(RuntimeError):
+                result = c.get({'x': (throws, 1), x.key: (inc, 1)}, ['x', x.key])
+            assert x.key in c.futures
 
 
 @slow
@@ -3040,15 +3045,16 @@ def test_Client_clears_references_after_restart(c, s, a, b):
     assert key not in c.refcount
 
 
-@gen_cluster(client=True)
-def test_get_stops_work_after_error(c, s, a, b):
-    with pytest.raises(RuntimeError):
-        yield c._get({'x': (throws, 1), 'y': (sleep, 1.5)}, ['x', 'y'])
+def test_get_stops_work_after_error(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            with pytest.raises(RuntimeError):
+                c.get({'x': (throws, 1), 'y': (sleep, 1.5)}, ['x', 'y'])
 
-    start = time()
-    while len(s.tasks):
-        yield gen.sleep(0.01)
-        assert time() < start + 0.5
+            start = time()
+            while any(c.processing().values()):
+                sleep(0.01)
+                assert time() < start + 0.5
 
 
 def test_as_completed_list(loop):

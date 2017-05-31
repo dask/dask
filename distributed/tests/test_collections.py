@@ -54,7 +54,7 @@ def test__futures_to_dask_dataframe(c, s, a, b):
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.divisions == (0, 30, 60, 80)
     expr = ddf.x.sum()
-    result = yield c._get(expr.dask, expr._keys())
+    result = yield c.get(expr.dask, expr._keys(), sync=False)
     assert result == [sum([df.x.sum() for df in dfs])]
 
 
@@ -127,7 +127,7 @@ def test__futures_to_dask_array(c, s, a, b):
 
     assert isinstance(x, da.Array)
     expr = x.sum()
-    result = yield c._get(expr.dask, expr._keys())
+    result = yield c.get(expr.dask, expr._keys(), sync=False)
     assert isinstance(result[0], np.number)
 
 

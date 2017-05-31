@@ -1568,30 +1568,8 @@ class Client(Node):
 
         return futures
 
-    @gen.coroutine
-    def _get(self, dsk, keys, restrictions=None, loose_restrictions=None,
-             resources=None, raise_on_error=True):
-        futures = self._graph_to_futures(dsk, set(flatten([keys])),
-                restrictions, loose_restrictions, resources=resources)
-
-        packed = pack_data(keys, futures)
-        try:
-            result = yield self._gather(packed)
-        except Exception as e:
-            if raise_on_error:
-                raise
-            else:
-                result = 'error', e
-                raise gen.Return(result)
-        finally:
-            for f in futures.values():
-                f.release()
-        if not raise_on_error:
-            result = 'OK', result
-        raise gen.Return(result)
-
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
-            resources=None, **kwargs):
+            resources=None, sync=True, **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -1601,6 +1579,8 @@ class Client(Node):
         restrictions: dict (optional)
             A mapping of {key: {set of worker hostnames}} that restricts where
             jobs can take place
+        sync: bool (optional)
+            Returns Futures if False or concrete values if True (default).
 
         Examples
         --------
@@ -1613,9 +1593,18 @@ class Client(Node):
         --------
         Client.compute: Compute asynchronous collections
         """
-        return sync(self.loop, self._get, dsk, keys, restrictions=restrictions,
-                    loose_restrictions=loose_restrictions,
-                    resources=resources)
+        futures = self._graph_to_futures(dsk, set(flatten([keys])),
+                                         restrictions, loose_restrictions,
+                                         resources=resources)
+        packed = pack_data(keys, futures)
+        if sync:
+            try:
+                results = self.gather(packed)
+            finally:
+                for f in futures.values():
+                    f.release()
+            return results
+        return packed
 
     def _optimize_insert_futures(self, dsk, keys):
         """ Replace known keys in dask graph with Futures
