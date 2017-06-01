@@ -460,7 +460,8 @@ class Counters(DashboardComponent):
     def add_counter_figure(self, name):
         with log_errors():
             n = len(self.server.counters[name].intervals)
-            sources = {i: ColumnDataSource({'x': [], 'y': [], 'y-center': []})
+            sources = {i: ColumnDataSource({'x': [], 'y': [],
+                                            'y-center': [], 'counts': []})
                         for i in range(n)}
 
             fig = figure(title=name, tools='', height=150,
@@ -493,6 +494,7 @@ class Counters(DashboardComponent):
                 for i, d in enumerate(digest.components):
                     if d.size():
                         ys, xs = d.histogram(100)
+                        xs = xs[1:]
                         if name.endswith('duration'):
                             xs *= 1000
                         self.digest_sources[name][i].data.update({'x': xs, 'y': ys})
@@ -509,9 +511,9 @@ class Counters(DashboardComponent):
                         ys = [factor * c for c in counts]
                         y_centers = [y / 2 for y in ys]
                         xs = list(map(str, xs))
-                        self.counter_sources[name][i].data.update(
-                                {'x': xs, 'y': ys, 'y-center': y_centers,
-                                 'counts': counts})
+                        d = {'x': xs, 'y': ys, 'y-center': y_centers,
+                             'counts': counts}
+                        self.counter_sources[name][i].data.update(d)
                     fig.title.text = '%s: %d' % (name, counter.size())
                     fig.x_range.factors = list(map(str, xs))
 

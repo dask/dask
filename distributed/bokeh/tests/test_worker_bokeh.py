@@ -85,7 +85,6 @@ def test_counters(c, s, a, b):
         yield gen.sleep(1)
         assert time() < start + 5
 
-
     a.digests['foo'].add(1)
     a.digests['foo'].add(2)
     aa.add_digest_figure('foo')
@@ -94,6 +93,11 @@ def test_counters(c, s, a, b):
     a.counters['bar'].add(2)
     a.counters['bar'].add(2)
     aa.add_counter_figure('bar')
+
+    for x in [aa.counter_sources.values(), aa.digest_sources.values()]:
+        for y in x:
+            for z in y.values():
+                assert len(set(map(len, z.data.values()))) == 1
 
 
 @gen_cluster(client=True)
