@@ -1,5 +1,4 @@
 import sys
-import warnings
 from operator import add
 from itertools import product
 
@@ -1736,7 +1735,7 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis='index')
 
 
-@pytest.mark.skipif(sys.version_info <= (2, 7),
+@pytest.mark.skipif(sys.version_info <= (3, 0),
                     reason="Global filter is applied by another library, and "
                            "not reset properly.")
 def test_apply_warns():
