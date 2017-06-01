@@ -1040,20 +1040,22 @@ class Bag(Base):
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def concat(self):
+    def flatten(self):
         """ Concatenate nested lists into one long list
 
         >>> b = from_sequence([[1], [2, 3]])
         >>> list(b)
         [[1], [2, 3]]
 
-        >>> list(b.concat())
+        >>> list(b.flatten())
         [1, 2, 3]
         """
-        name = 'concat-' + tokenize(self)
+        name = 'flatten-' + tokenize(self)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
+
+    concat = flatten
 
     def __iter__(self):
         return iter(self.compute())
