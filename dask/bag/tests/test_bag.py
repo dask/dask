@@ -1007,7 +1007,7 @@ def test_from_delayed_iterator():
     assert db.compute(
         bag.count(),
         bag.pluck('operations').count(),
-        bag.pluck('operations').concat().count(),
+        bag.pluck('operations').flatten().count(),
         get=dask.get,
     ) == (25, 25, 50)
 

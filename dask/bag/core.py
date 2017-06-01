@@ -1055,7 +1055,9 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
-    concat = flatten
+    def concat(self):
+        warn("Deprecated.  Use the .flatten method instead")
+        return self.flatten()
 
     def __iter__(self):
         return iter(self.compute())
