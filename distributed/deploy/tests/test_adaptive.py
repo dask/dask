@@ -41,8 +41,7 @@ def test_adaptive_local_cluster_multi_workers():
                            diagnostics_port=None, loop=loop, start=False)
     cluster.scheduler.allowed_failures = 1000
     alc = Adaptive(cluster.scheduler, cluster, interval=100)
-    c = Client(cluster, start=False, loop=loop)
-    yield c
+    c = yield Client(cluster, asynchronous=True, loop=loop)
 
     futures = c.map(slowinc, range(100), delay=0.01)
 

@@ -127,8 +127,7 @@ def test_channel_scheduler(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_multiple_maxlen(c, s, a, b):
-    c2 = Client((s.ip, s.port), start=False)
-    yield c2
+    c2 = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.channel('x', maxlen=10)
     assert x.data.maxlen == 10
@@ -186,8 +185,7 @@ def test_stop(loop):
 
 @gen_cluster(client=True)
 def test_values(c, s, a, b):
-    c2 = Client((s.ip, s.port), start=False)
-    yield c2
+    c2 = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.channel('x')
     x2 = c2.channel('x')

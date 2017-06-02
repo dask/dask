@@ -376,7 +376,8 @@ class Client(Node):
 
     def __init__(self, address=None, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None,
-                 security=None, start=None, **kwargs):
+                 security=None, start=None, asynchronous=False,
+                 **kwargs):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.coroutines = []
@@ -394,7 +395,7 @@ class Client(Node):
 
         if loop is None:
             self._should_close_loop = None
-            if in_ioloop():
+            if asynchronous:
                 self.loop = IOLoop.current()
             else:
                 self.loop = IOLoop()
@@ -426,7 +427,7 @@ class Client(Node):
         super(Client, self).__init__(connection_args=self.connection_args,
                                      io_loop=self.loop)
 
-        self.start(timeout=timeout)
+        self.start(timeout=timeout, asynchronous=asynchronous)
 
         from distributed.channels import ChannelClient
         ChannelClient(self)  # registers itself on construction
@@ -447,11 +448,11 @@ class Client(Node):
 
     __repr__ = __str__
 
-    def start(self, **kwargs):
+    def start(self, asynchronous=None, **kwargs):
         """ Start scheduler running in separate thread """
         if hasattr(self, '_loop_thread'):
             return
-        if not self.loop._running:
+        if not asynchronous and not self.loop._running:
             from threading import Thread
             self._loop_thread = Thread(target=self.loop.start)
             self._loop_thread.daemon = True
@@ -463,7 +464,7 @@ class Client(Node):
         pc = PeriodicCallback(lambda: None, 1000, io_loop=self.loop)
         self.loop.add_callback(pc.start)
         _set_global_client(self)
-        if in_ioloop():
+        if asynchronous:
             self._started = self._start(**kwargs)
         else:
             sync(self.loop, self._start, **kwargs)

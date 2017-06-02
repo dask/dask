@@ -53,11 +53,9 @@ def worker_client(timeout=3, separate_thread=True):
         secede()  # have this thread secede from the thread pool
         worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
 
-    with WorkerClient(address, loop=worker.loop, security=worker.security) as wc:
+    with WorkerClient(address, loop=worker.loop, security=worker.security,
+                      asynchronous=True) as wc:
         # Make sure connection errors are bubbled to the caller
-        @gen.coroutine
-        def f():
-            yield wc
         sync(wc.loop, gen.with_timeout, timedelta(seconds=timeout), wc._started)
         assert wc.status == 'running'
         yield wc

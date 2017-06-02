@@ -25,12 +25,13 @@ def test_cluster(loop):
 
 
 @gen_cluster(client=True)
-def test_gen_cluster(e, s, a, b):
-    assert isinstance(e, Client)
+def test_gen_cluster(c, s, a, b):
+    assert isinstance(c, Client)
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
+
 
 @gen_cluster(client=False)
 def test_gen_cluster_without_client(s, a, b):
@@ -38,6 +39,7 @@ def test_gen_cluster_without_client(s, a, b):
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
+
 
 @gen_cluster(client=True, scheduler='tls://127.0.0.1',
              ncores=[('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)],

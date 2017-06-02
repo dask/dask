@@ -201,7 +201,7 @@ def test_exceptions(c, s, a, b):
 
 @gen_cluster()
 def test_gc(s, a, b):
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.submit(inc, 10)
     yield x
@@ -501,7 +501,7 @@ def test_missing_worker(s, a, b):
     s.who_has['b'] = {bad}
     s.has_what[bad] = {'b'}
 
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
     dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
 
@@ -714,13 +714,12 @@ def test_map_quotes(c, s, a, b):
 @gen_cluster()
 def test_two_consecutive_clients_share_results(s, a, b):
     from random import randint
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.submit(randint, 0, 1000, pure=True)
     xx = yield x
 
-    f = Client((s.ip, s.port))
-    yield f
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     y = f.submit(randint, 0, 1000, pure=True)
     yy = yield y
@@ -1222,10 +1221,8 @@ def test_upload_file_exception_sync(loop):
 @pytest.mark.xfail
 @gen_cluster()
 def test_multiple_clients(s, a, b):
-    a = Client((s.ip, s.port))
-    yield a
-    b = Client((s.ip, s.port))
-    yield b
+    a = yield Client((s.ip, s.port), asynchronous=True)
+    b = yield Client((s.ip, s.port), asynchronous=True)
 
     x = a.submit(inc, 1)
     y = b.submit(inc, 2)
@@ -1634,9 +1631,9 @@ def test_waiting_data(c, s, a, b):
 
 @gen_cluster()
 def test_multi_client(s, a, b):
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
-    f = yield Client((s.ip, s.port))
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     assert set(s.comms) == {c.id, f.id}
 
@@ -1698,9 +1695,9 @@ def test_cleanup_after_broken_client_connection(s, a, b):
 
 @gen_cluster()
 def test_multi_garbage_collection(s, a, b):
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
-    f = yield Client((s.ip, s.port))
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.submit(inc, 1)
     y = f.submit(inc, 2)
@@ -1817,8 +1814,8 @@ def test__cancel_tuple_key(c, s, a, b):
 
 @gen_cluster()
 def test__cancel_multi_client(s, a, b):
-    c = yield Client((s.ip, s.port))
-    f = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     x = c.submit(slowinc, 1)
     y = f.submit(slowinc, 1)
@@ -2363,7 +2360,7 @@ def test_worker_aliases():
     b = Worker(s.ip, s.port, name='bob')
     yield [a._start(), b._start()]
 
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
 
     L = c.map(inc, range(10), workers='alice')
     yield _wait(L)
@@ -2431,10 +2428,10 @@ def test_client_num_fds(loop):
 
 @gen_cluster()
 def test_startup_shutdown_startup(s, a, b):
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
     yield c._shutdown()
 
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
     yield c._shutdown()
 
 
@@ -3086,7 +3083,7 @@ def test_status():
     s = Scheduler()
     s.start(0)
 
-    c = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
     assert c.status == 'running'
     x = c.submit(inc, 1)
 
@@ -3231,8 +3228,8 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
 @gen_cluster(client=False, timeout=None)
 def test_idempotence(s, a, b):
-    c = yield Client((s.ip, s.port))
-    f = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     # Submit
     x = c.submit(inc, 1)
@@ -3428,8 +3425,8 @@ def test_scatter_compute_store_lose_processing(c, s, a, b):
 
 @gen_cluster(client=False)
 def test_serialize_future(s, a, b):
-    c = yield Client((s.ip, s.port))
-    f = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     future = c.submit(lambda: 1)
     result = yield future
@@ -3447,8 +3444,8 @@ def test_serialize_future(s, a, b):
 
 @gen_cluster(client=False)
 def test_temp_client(s, a, b):
-    c = yield Client((s.ip, s.port))
-    f = yield Client((s.ip, s.port))
+    c = yield Client((s.ip, s.port), asynchronous=True)
+    f = yield Client((s.ip, s.port), asynchronous=True)
 
     with temp_default_client(c):
         assert default_client() is c
@@ -3776,7 +3773,7 @@ def test_scatter_dict_workers(c, s, a, b):
 @gen_test()
 def test_client_timeout():
     loop = IOLoop.current()
-    c = Client('127.0.0.1:57484', loop=loop)
+    c = Client('127.0.0.1:57484', asynchronous=True)
 
     s = Scheduler(loop=loop)
     yield gen.sleep(4)

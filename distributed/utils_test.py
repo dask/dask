@@ -538,8 +538,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         c = []
                         @gen.coroutine
                         def f():
-                            c2 = Client(s.address, loop=loop, security=security)
-                            yield c2._started
+                            c2 = yield Client(s.address, loop=loop, security=security,
+                                              asynchronous=True)
                             c.append(c2)
                         loop.run_sync(f)
                         args = c + args

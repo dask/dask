@@ -44,7 +44,7 @@ def test_async_with(loop):
     client = None
     cluster = None
     async def f():
-        async with Client(processes=False) as c:
+        async with Client(processes=False, asynchronous=True) as c:
             nonlocal result, client, cluster
             result = await c.submit(lambda x: x + 1, 10)
 

@@ -253,9 +253,8 @@ def test_fast_kill(c, s, a, b):
 
 @gen_cluster(Worker=Nanny)
 def test_multiple_clients_restart(s, a, b):
-    e1 = yield Client((s.ip, s.port), start=False)
-    yield e1
-    e2 = yield Client((s.ip, s.port), start=False)
+    e1 = yield Client((s.ip, s.port), asynchronous=True)
+    e2 = yield Client((s.ip, s.port), asynchronous=True)
 
     x = e1.submit(inc, 1)
     y = e2.submit(inc, 2)
