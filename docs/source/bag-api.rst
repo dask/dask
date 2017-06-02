@@ -10,10 +10,10 @@ Top level user functions:
     Bag.all
     Bag.any
     Bag.compute
-    Bag.concat
     Bag.count
     Bag.distinct
     Bag.filter
+    Bag.flatten
     Bag.fold
     Bag.foldby
     Bag.frequencies

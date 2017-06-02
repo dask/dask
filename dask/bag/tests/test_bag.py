@@ -736,13 +736,14 @@ def test_concat():
     b = db.from_sequence([4, 5, 6])
     c = db.concat([a, b])
     assert list(c) == [1, 2, 3, 4, 5, 6]
-
     assert c.name == db.concat([a, b]).name
-    assert b.concat().name != a.concat().name
-    assert b.concat().name == b.concat().name
 
-    b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
-    assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
+
+def test_flatten():
+    b = db.from_sequence([[1], [2, 3]])
+    assert list(b.flatten()) == [1, 2, 3]
+    assert list(b.flatten()) == list(b.concat())
+    assert b.flatten().name == b.flatten().name
 
 
 def test_concat_after_map():
@@ -1006,7 +1007,7 @@ def test_from_delayed_iterator():
     assert db.compute(
         bag.count(),
         bag.pluck('operations').count(),
-        bag.pluck('operations').concat().count(),
+        bag.pluck('operations').flatten().count(),
         get=dask.get,
     ) == (25, 25, 50)
 
