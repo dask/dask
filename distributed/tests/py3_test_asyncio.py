@@ -40,10 +40,8 @@ def coro_test(fn):
 
 @coro_test
 async def test_asyncio_start_shutdown():
-    c = AioClient(processes=False)
-    assert c.status is None
+    c = await AioClient(processes=False)
 
-    await c.start()
     assert c.status == 'running'
     # AioClient has installed its AioLoop shim.
     assert isinstance(IOLoop.current(instance=False), BaseAsyncIOLoop)
@@ -349,8 +347,7 @@ async def test_asyncio_run_coroutine():
 @slow
 @coro_test
 async def test_asyncio_restart():
-    c = AioClient(processes=False)
-    await c.start()
+    c = await AioClient(processes=False)
 
     assert c.status == 'running'
     x = c.submit(inc, 1)

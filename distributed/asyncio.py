@@ -117,27 +117,21 @@ class AioClient(Client):
 
         loop = asyncio.get_event_loop()
 
-        # "distributed" expects to call Tornado's IOLoop.current() and get the
-        # main loop, with a "_running" property. Install asyncio's loop instead.
+        # dask.distributed expects to call Tornado's IOLoop.current() and get
+        # the main loop, with a "_running" property. Install asyncio's loop
+        # instead.
         ioloop = AioLoop(loop)
-        super().__init__(*args, loop=ioloop, set_as_default=False, **kwargs)
+        super().__init__(*args, loop=ioloop, set_as_default=False, asynchronous=True, **kwargs)
 
     async def __aenter__(self):
-        await self.start()
+        await to_asyncio_future(self._started)
         return self
 
     async def __aexit__(self, type, value, traceback):
         await self.shutdown()
 
-    async def start(self, timeout=5, **kwargs):
-        if self.status == 'running':
-            return
-
-        self.status = 'running'
-        future = self._start(timeout=timeout, **kwargs)
-        result = await to_asyncio_future(future)
-
-        return result
+    def __await__(self):
+        return to_asyncio_future(self._started).__await__()
 
     async def shutdown(self, fast=False):
         if self.status == 'closed':
