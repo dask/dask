@@ -389,7 +389,6 @@ def test_timestamp_index():
 
 
 @pytest.mark.skipif(not pyarrow, reason='pyarrow not found')
-@pytest.mark.xfail(reason="to_parquet does not write nulls by default")
 def test_to_parquet_default_writes_nulls():
     import pyarrow.parquet as pq
 
@@ -399,4 +398,43 @@ def test_to_parquet_default_writes_nulls():
     with tmpfile() as fn:
         ddf.to_parquet(fn)
         table = pq.read_table(fn)
-        assert table[0].null_count == 2
+        assert table[1].null_count == 2
+
+
+def test_partition_on(tmpdir):
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
+                       'b': np.random.random(size=100),
+                       'c': np.random.randint(1, 5, size=100)})
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(tmpdir, partition_on=['a'])
+    out = dd.read_parquet(tmpdir, engine='fastparquet').compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+
+def test_filters(fn):
+
+    df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    # Ok with 1 partition and filters
+    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False)
+    ddf2 = dd.read_parquet(fn, index=False,
+                           filters=[('at', '==', 'aa')]).compute()
+    assert_eq(ddf2, ddf)
+
+    # with >1 partition and no filters
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    dd.read_parquet(fn).compute()
+    assert_eq(ddf2, ddf)
+
+    # with >1 partition and filters using base fastparquet
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
+    assert len(df2) > 0
+
+    # with >1 partition and filters
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
+    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
+    assert len(ddf2) > 0
