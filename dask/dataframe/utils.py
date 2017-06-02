@@ -294,11 +294,17 @@ def make_meta(x, index=None):
     raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
+if PANDAS_VERSION >= "0.20.0":
+    _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
+else:
+    _numeric_index_types = (pd.Int64Index, pd.Float64Index)
+
+
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif typ in (pd.Int64Index, pd.Float64Index):
+    elif typ in _numeric_index_types:
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(['a', 'b'], name=idx.name)

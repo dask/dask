@@ -3,7 +3,8 @@ import pandas as pd
 import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
-                                  raise_on_meta_error, UNKNOWN_CATEGORIES)
+                                  raise_on_meta_error, UNKNOWN_CATEGORIES,
+                                  PANDAS_VERSION)
 
 import pytest
 
@@ -226,6 +227,15 @@ def test_meta_nonempty_index():
         assert type(idx1) is type(idx2)
         assert idx1.name == idx2.name
     assert res.names == idx.names
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
+                    reason="Pandas < 0.20.0 doesn't support UInt64Index")
+def test_meta_nonempty_uint64index():
+    idx = pd.UInt64Index([1], name='foo')
+    res = meta_nonempty(idx)
+    assert type(res) is pd.UInt64Index
+    assert res.name == idx.name
 
 
 def test_meta_nonempty_scalar():
