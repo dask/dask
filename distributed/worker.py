@@ -1057,7 +1057,7 @@ class Worker(WorkerBase):
                         self.add_task(**msg)
                     elif op == 'release-task':
                         self.log.append((msg['key'], 'release-task'))
-                        self.release_key(**msg)
+                        self.release_key(report=False, **msg)
                     elif op == 'delete-data':
                         self.delete_data(**msg)
                     else:
@@ -1671,11 +1671,12 @@ class Worker(WorkerBase):
                             dep, self.suspicious_deps[dep])
 
             who_has = yield self.scheduler.who_has(keys=list(deps))
+            who_has = {k: v for k, v in who_has.items() if v}
             self.update_who_has(who_has)
             for dep in deps:
                 self.suspicious_deps[dep] += 1
 
-                if dep not in who_has:
+                if not who_has.get(dep):
                     self.log.append((dep, 'no workers found',
                                      self.dependents.get(dep)))
                     self.release_dep(dep)
@@ -1716,7 +1717,7 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
-    def release_key(self, key, cause=None, reason=None):
+    def release_key(self, key, cause=None, reason=None, report=True):
         try:
             if key not in self.task_state:
                 return
@@ -1761,7 +1762,7 @@ class Worker(WorkerBase):
             if key in self.resource_restrictions:
                 del self.resource_restrictions[key]
 
-            if state in PROCESSING:  # not finished
+            if report and state in PROCESSING:  # not finished
                 self.batched_stream.send({'op': 'release',
                                           'key': key,
                                           'cause': cause})
