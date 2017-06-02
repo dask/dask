@@ -292,6 +292,7 @@ class Scheduler(ServerNode):
         self.worker_handlers = {'task-finished': self.handle_task_finished,
                                 'task-erred': self.handle_task_erred,
                                 'release': self.handle_missing_data,
+                                'release-worker-data': self.release_worker_data,
                                 'add-keys': self.add_keys}
 
         self.client_handlers = {'update-graph': self.update_graph,
@@ -1276,6 +1277,18 @@ class Scheduler(ServerNode):
         self.transitions(r)
         if self.validate:
             assert all(self.who_has.values())
+
+    def release_worker_data(self, stream=None, keys=None, worker=None):
+        hw = self.has_what[worker]
+        recommendations = dict()
+        for key in set(keys) & hw:
+            hw.remove(key)
+            wh = self.who_has[key]
+            wh.remove(worker)
+            if not wh:
+                recommendations[key] = 'released'
+        if recommendations:
+            self.transitions(recommendations)
 
     @gen.coroutine
     def handle_worker(self, worker):

@@ -419,8 +419,9 @@ class WorkerBase(ServerNode):
             logger.debug("Deleted %d keys", len(keys))
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
+                # TODO: this route seems to not exist?
                 yield self.scheduler.remove_keys(address=self.address,
-                                              keys=list(keys))
+                                                 keys=list(keys))
         raise Return('OK')
 
     @gen.coroutine
@@ -995,7 +996,7 @@ class Worker(WorkerBase):
                 ('waiting', 'flight'): self.transition_dep_waiting_flight,
                 ('waiting', 'memory'): self.transition_dep_waiting_memory,
                 ('flight', 'waiting'): self.transition_dep_flight_waiting,
-                ('flight', 'memory'): self.transition_dep_flight_memory
+                ('flight', 'memory'): self.transition_dep_flight_memory,
         }
 
         self.incoming_transfer_log = deque(maxlen=(100000))
@@ -1224,7 +1225,7 @@ class Worker(WorkerBase):
             except KeyError:
                 pass
 
-            if not self.who_has[dep]:
+            if not self.who_has.get(dep):
                 if dep not in self._missing_dep_flight:
                     self._missing_dep_flight.add(dep)
                     self.loop.add_callback(self.handle_missing_dep, dep)
@@ -1617,6 +1618,11 @@ class Worker(WorkerBase):
                 logger.error("Worker stream died during communication: %s",
                              worker)
                 self.log.append(('receive-dep-failed', worker))
+                for d in self.has_what.pop(worker):
+                    self.who_has[d].remove(worker)
+                    if not self.who_has[d]:
+                        del self.who_has[d]
+
             except Exception as e:
                 logger.exception(e)
                 if self.batched_stream and LOG_PDB:
@@ -1704,6 +1710,8 @@ class Worker(WorkerBase):
     def update_who_has(self, who_has):
         try:
             for dep, workers in who_has.items():
+                if not workers:
+                    continue
                 if dep in self.who_has:
                     self.who_has[dep].update(workers)
                 else:
@@ -1774,15 +1782,19 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
-    def release_dep(self, dep):
+    def release_dep(self, dep, report=False):
         try:
             if dep not in self.dep_state:
                 return
             self.log.append((dep, 'release-dep'))
-            self.dep_state.pop(dep)
+            state = self.dep_state.pop(dep)
 
             if dep in self.suspicious_deps:
                 del self.suspicious_deps[dep]
+
+            if dep in self.who_has:
+                for worker in self.who_has.pop(dep):
+                    self.has_what[worker].remove(dep)
 
             if dep not in self.task_state:
                 if dep in self.data:
@@ -1797,6 +1809,10 @@ class Worker(WorkerBase):
                 self.dependencies[key].remove(dep)
                 if self.task_state[key] != 'memory':
                     self.release_key(key, cause=dep)
+
+            if report and state == 'memory':
+                self.batched_stream.send({'op': 'release-worker-data',
+                                          'keys': [dep]})
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:

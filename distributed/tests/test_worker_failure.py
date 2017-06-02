@@ -339,3 +339,35 @@ def test_restart_during_computation(c, s, a, b):
 
     assert len(s.ncores) == 2
     assert not s.task_state
+
+
+@gen_cluster(client=True, timeout=None)
+def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
+    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n.start(0)
+
+    start = time()
+    while len(s.ncores) < 3:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    futures = c.map(slowinc, range(20), delay=0.01)
+    yield _wait(futures)
+
+    result = yield c.submit(sum, futures, workers=a.address)
+    for dep in set(a.dep_state) - set(a.task_state):
+        a.release_dep(dep, report=True)
+
+    n_worker_address = n.worker_address
+    n.process.terminate()
+
+    while len(s.workers) > 2:
+        yield gen.sleep(0.01)
+
+    total = c.submit(sum, futures, workers=a.address)
+    yield total
+
+    assert not a.has_what.get(n_worker_address)
+    assert not any(n_worker_address in s for s in a.who_has.values())
+
+    yield n._close()
