@@ -44,7 +44,7 @@ def test_submit_after_failed_worker_async(c, s, a, b):
 
     s.loop.add_callback(n._kill)
     total = c.submit(sum, L)
-    result = yield total._result()
+    result = yield total
     assert result == sum(map(inc, range(10)))
 
     yield n._close()
@@ -57,7 +57,7 @@ def test_submit_after_failed_worker(c, s, a, b):
     yield a._close()
 
     total = c.submit(sum, L)
-    result = yield total._result()
+    result = yield total
     assert result == sum(map(inc, range(10)))
 
 
@@ -135,7 +135,7 @@ def test_restart(c, s, a, b):
     x = c.submit(inc, 1)
     y = c.submit(inc, x)
     z = c.submit(div, 1, 0)
-    yield y._result()
+    yield y
 
     assert set(s.who_has) == {x.key, y.key}
 
@@ -216,7 +216,7 @@ def test_restart_fast(c, s, a, b):
     assert all(x.status == 'cancelled' for x in L)
 
     x = c.submit(inc, 1)
-    result = yield x._result()
+    result = yield x
     assert result == 2
 
 
@@ -247,21 +247,20 @@ def test_fast_kill(c, s, a, b):
     assert all(x.status == 'cancelled' for x in L)
 
     x = c.submit(inc, 1)
-    result = yield x._result()
+    result = yield x
     assert result == 2
 
 
 @gen_cluster(Worker=Nanny)
 def test_multiple_clients_restart(s, a, b):
-    e1 = Client((s.ip, s.port), start=False)
-    yield e1._start()
-    e2 = Client((s.ip, s.port), start=False)
-    yield e2._start()
+    e1 = yield Client((s.ip, s.port), start=False)
+    yield e1
+    e2 = yield Client((s.ip, s.port), start=False)
 
     x = e1.submit(inc, 1)
     y = e2.submit(inc, 2)
-    xx = yield x._result()
-    yy = yield y._result()
+    xx = yield x
+    yy = yield y
     assert xx == 2
     assert yy == 3
 
@@ -293,7 +292,7 @@ def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
     del x
     import gc; gc.collect()
     yield gen.sleep(0.1)
-    yield y._result()
+    yield y
 
 
 @gen_cluster(client=True, timeout=60, active_rpc_timeout=10)

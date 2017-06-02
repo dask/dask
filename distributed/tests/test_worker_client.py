@@ -47,7 +47,7 @@ def test_scatter_from_worker(c, s, a, b):
             return total.result()
 
     future = c.submit(func)
-    result = yield future._result()
+    result = yield future
     assert result == sum([1, 2, 3, 4, 5])
 
     def func():
@@ -63,7 +63,7 @@ def test_scatter_from_worker(c, s, a, b):
             return correct
 
     future = c.submit(func)
-    result = yield future._result()
+    result = yield future
     assert result is True
 
     start = time()
@@ -87,7 +87,7 @@ def test_gather_multi_machine(c, s, a, b):
         return xx, yy
 
     future = c.submit(func)
-    result = yield future._result()
+    result = yield future
 
     assert result == (2, 3)
 
@@ -99,7 +99,7 @@ def test_same_loop(c, s, a, b):
             return lc.loop is lc.worker.loop
 
     future = c.submit(f)
-    result = yield future._result()
+    result = yield future
     assert result
 
 
@@ -132,7 +132,7 @@ def test_async(c, s, a, b):
         return result
 
     future = c.compute(delayed(mysum)())
-    yield future._result()
+    yield future
 
     start = time()
     while len(a.data) + len(b.data) > 1:
@@ -165,7 +165,7 @@ def test_client_executor(c, s, a, b):
                 return sum(e.map(double, range(30)))
 
     future = c.submit(mysum)
-    result = yield future._result()
+    result = yield future
     assert result == 30 * 29
 
 

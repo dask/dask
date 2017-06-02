@@ -186,4 +186,4 @@ def test_dont_compress_uncompressable_data():
 @gen_cluster(client=True, timeout=60)
 def test_dumps_large_blosc(c, s, a, b):
     x = c.submit(np.ones, BIG_BYTES_SHARD_SIZE * 2, dtype='u1')
-    result = yield x._result()
+    result = yield x

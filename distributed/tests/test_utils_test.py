@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
 import socket
+import sys
 import threading
 from time import sleep
 
@@ -110,3 +111,7 @@ def test_new_config():
 
     assert config == c
     assert 'xyzzy' not in config
+
+
+if sys.version_info >= (3, 5):
+    from distributed.tests.py3_test_utils_tst import *

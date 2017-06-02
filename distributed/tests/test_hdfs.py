@@ -229,7 +229,7 @@ def test_write_bytes(c, s, a, b):
             'hdfs://%s/data/file.*.dat' % basedir))
         yield _wait(futures)
 
-        yield futures[0]._result()
+        yield futures[0]
 
         assert len(hdfs.ls('%s/data/' % basedir)) == 3
         with hdfs.open('%s/data/file.1.dat' % basedir) as f:
@@ -296,7 +296,7 @@ def test_read_csv(e, s, a, b):
 
         df = dd.read_csv('hdfs://%s/*.csv' % basedir, lineterminator='\n')
         result = e.compute(df.id.sum(), sync=False)
-        result = yield result._result()
+        result = yield result
         assert result == 1 + 2 + 3 + 4
 
 
@@ -325,7 +325,7 @@ def test_read_csv_lazy(e, s, a, b):
         yield gen.sleep(0.5)
         assert not s.tasks
 
-        result = yield e.compute(df.id.sum(), sync=False)._result()
+        result = yield e.compute(df.id.sum(), sync=False)
         assert result == 1 + 2 + 3 + 4
 
 
@@ -352,13 +352,13 @@ def test__read_text(c, s, a, b):
 
         future = c.compute(coll)
         yield gen.sleep(0.5)
-        result = yield future._result()
+        result = yield future
         assert result == [2, 2, 2, 2, 2, 2]
 
         b = db.read_text('hdfs://%s/other.txt' % basedir)
         b = c.persist(b)
         future = c.compute(b.str.split().concat())
-        result = yield future._result()
+        result = yield future
         assert result == ['a', 'b', 'c', 'd']
 
 
@@ -370,7 +370,7 @@ def test__read_text_json_endline(e, s, a):
             f.write(b'{"x": 1}\n{"x": 2}\n')
 
         b = db.read_text('hdfs://%s/text.1.txt' % basedir).map(json.loads)
-        result = yield e.compute(b)._result()
+        result = yield e.compute(b)
 
         assert result == [{"x": 1}, {"x": 2}]
 
@@ -385,7 +385,7 @@ def test__read_text_unicode(e, s, a, b):
             f.write(b'\n'.join([data, data]))
 
         f = db.read_text('hdfs://' + fn, collection=False)
-        result = yield e.compute(f[0])._result()
+        result = yield e.compute(f[0])
         assert len(result) == 2
         assert list(map(unicode.strip, result)) == [data.decode('utf-8')] * 2
         assert len(result[0].strip()) == 5

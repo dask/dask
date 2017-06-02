@@ -154,8 +154,8 @@ Tornado Coroutines
 
 If we are operating in an asynchronous environment then all blocking functions
 listed above have asynchronous equivalents.  Currently these have the exact
-same name but are prepended with an underscore (``_``) so, ``.result`` is
-synchronous while ``._result`` is asynchronous.  If a function has no
+same name but are prepended with an underscore (``_``) so, ``.gather`` is
+synchronous while ``._gather`` is asynchronous.  If a function has no
 asynchronous counterpart then that means it does not significantly block.  The
 ``.submit`` and ``.map`` functions are examples of this; they return
 immediately in either case.

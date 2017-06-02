@@ -28,7 +28,7 @@ def test_simple(c, s, a, b):
     y = c.submit(inc, x)
     z = c.submit(inc, y)
 
-    yield z._result()
+    yield z
 
     assert counter.count == 3
     s.remove_plugin(counter)

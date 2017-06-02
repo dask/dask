@@ -84,7 +84,7 @@ def test_steal_expensive_data_slow_computation(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_worksteal_many_thieves(c, s, *workers):
     x = c.submit(slowinc, -1, delay=0.1)
-    yield x._result()
+    yield x
 
     xs = c.map(slowinc, [x] * 100, pure=False, delay=0.1)
 
@@ -158,7 +158,7 @@ def test_new_worker_steals(c, s, a):
     b = Worker(s.ip, s.port, loop=s.loop, ncores=1)
     yield b._start()
 
-    result = yield total._result()
+    result = yield total
     assert result == sum(map(inc, range(100)))
 
     for w in [a, b]:
@@ -182,7 +182,7 @@ def test_work_steal_no_kwargs(c, s, a, b):
     assert 20 < len(b.data) < 80
 
     total = c.submit(sum, futures)
-    result = yield total._result()
+    result = yield total
 
     assert result == sum(map(inc, range(100)))
 
@@ -190,7 +190,7 @@ def test_work_steal_no_kwargs(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)])
 def test_dont_steal_worker_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
-    yield future._result()
+    yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, workers=a.address)
 
@@ -213,7 +213,7 @@ def test_dont_steal_worker_restrictions(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1), ('127.0.0.2', 1)])
 def test_dont_steal_host_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
-    yield future._result()
+    yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, workers='127.0.0.1')
     yield gen.sleep(0.1)
@@ -231,7 +231,7 @@ def test_dont_steal_host_restrictions(c, s, a, b):
                                   ('127.0.0.1', 1)])
 def test_dont_steal_resource_restrictions(c, s, a, b):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
-    yield future._result()
+    yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, resources={'A': 1})
     yield gen.sleep(0.1)
@@ -250,7 +250,7 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
              timeout=3)
 def test_steal_resource_restrictions(c, s, a):
     future = c.submit(slowinc, 1, delay=0.10, workers=a.address)
-    yield future._result()
+    yield future
 
     futures = c.map(slowinc, range(100), delay=0.2, resources={'A': 1})
     while len(a.task_state) < 101:
@@ -534,8 +534,8 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
         with worker_client() as c:
             sleep(delay)
 
-    yield c.submit(long, 0.1)._result()  # learn duration
-    yield c.submit(inc, 1)._result()  # learn duration
+    yield c.submit(long, 0.1)  # learn duration
+    yield c.submit(inc, 1)  # learn duration
 
     long_tasks = c.map(long, [0.5, 0.6], workers=a.address,
                        allow_other_workers=True)

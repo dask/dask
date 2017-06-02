@@ -89,5 +89,5 @@ def test_netcdf4_serialize(c, s, a, b):
             dset = f.variables['x']
             x = da.from_array(dset, chunks=2)
             y = c.compute(x)
-            y = yield y._result()
+            y = yield y
             assert (y[:] == dset[:]).all()

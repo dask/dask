@@ -55,7 +55,7 @@ def test_many_Progress(c, s, a, b):
     bars = [Progress(keys=[z], scheduler=s) for i in range(10)]
     yield [b.setup() for b in bars]
 
-    yield z._result()
+    yield z
 
     start = time()
     while not all(b.status == 'finished' for b in bars):
@@ -77,11 +77,11 @@ def test_multiprogress(c, s, a, b):
     assert p.all_keys == {'f': {f.key for f in [x1, x2, x3]},
                           'g': {f.key for f in [y1, y2]}}
 
-    yield x3._result()
+    yield x3
 
     assert p.keys['f'] == set()
 
-    yield y2._result()
+    yield y2
 
     assert p.keys == {'f': set(),
                       'g': set()}
@@ -100,7 +100,7 @@ def test_robust_to_bad_plugin(c, s, a, b):
 
     x = c.submit(inc, 1)
     y = c.submit(inc, x)
-    result = yield y._result()
+    result = yield y
     assert result == 3
 
 
@@ -134,7 +134,7 @@ def test_AllProgress(c, s, a, b):
     assert p.nbytes['inc'] == p.nbytes['dec']
 
     t = c.submit(sum, [x, y, z])
-    yield t._result()
+    yield t
 
     keys = {x.key, y.key, z.key}
     del x, y, z

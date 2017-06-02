@@ -174,8 +174,8 @@ def test_random_seed(c, s, a, b):
         x = c.submit(func, 0, 2**31, pure=False, workers=a.worker_address)
         y = c.submit(func, 0, 2**31, pure=False, workers=b.worker_address)
         assert x.key != y.key
-        x = yield x._result()
-        y = yield y._result()
+        x = yield x
+        y = yield y
         assert x != y
 
     yield check_func(lambda a, b: random.randint(a, b))

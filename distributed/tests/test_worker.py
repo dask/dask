@@ -129,7 +129,7 @@ def test_worker_bad_args(c, s, a, b):
     # Make sure job died because of bad func and not because of bad
     # argument.
     with pytest.raises(ZeroDivisionError):
-        yield y._result()
+        yield y
 
     if sys.version_info[0] >= 3:
         tb = yield y._traceback()
@@ -209,7 +209,7 @@ def test_upload_file(c, s, a, b):
         return foobar.x
 
     future = c.submit(g, workers=a.address)
-    result = yield future._result()
+    result = yield future
     assert result == 123
 
     yield a._close()
@@ -242,7 +242,7 @@ def test_upload_egg(c, s, a, b):
         return testegg.inc(x)
 
     future = c.submit(g, 10, workers=a.address)
-    result = yield future._result()
+    result = yield future
     assert result == 10 + 1
 
     yield a._close()
@@ -341,7 +341,7 @@ def test_spill_to_disk(e, s):
     assert set(w.data.fast) == {y.key, z.key}
     assert set(w.data.slow) == {x.key} or set(w.data.slow) == {x.key, y.key}
 
-    yield x._result()
+    yield x
     assert set(w.data.fast) == {x.key, z.key}
     assert set(w.data.slow) == {y.key} or set(w.data.slow) == {x.key, y.key}
     yield w._close()
@@ -389,7 +389,7 @@ def test_Executor(c, s):
         yield w._start()
 
         future = c.submit(inc, 1)
-        result = yield future._result()
+        result = yield future
         assert result == 2
 
         assert e._threads  # had to do some work
@@ -436,7 +436,7 @@ def test_inter_worker_communication(c, s, a, b):
     [x, y] = yield c._scatter([1, 2], workers=a.address)
 
     future = c.submit(add, x, y, workers=b.address)
-    result = yield future._result()
+    result = yield future
     assert result == 3
 
 
@@ -445,7 +445,7 @@ def test_clean(c, s, a, b):
     x = c.submit(inc, 1, workers=a.address)
     y = c.submit(inc, x, workers=b.address)
 
-    yield y._result()
+    yield y
 
     collections = [a.tasks, a.task_state, a.startstops, a.data, a.nbytes,
                    a.durations, a.priorities, a.types, a.threads]
@@ -470,7 +470,7 @@ def test_message_breakup(c, s, a, b):
     b.target_message_size = 10 * n
     xs = [c.submit(mul, b'%d' % i, n, workers=a.address) for i in range(30)]
     y = c.submit(lambda *args: None, xs, workers=b.address)
-    yield y._result()
+    yield y
 
     assert 2 <= len(b.incoming_transfer_log) <= 20
     assert 2 <= len(a.outgoing_transfer_log) <= 20
@@ -513,7 +513,7 @@ def test_system_monitor(s, a, b):
 def test_restrictions(c, s, a, b):
     # Resource restrictions
     x = c.submit(inc, 1, resources={'A': 1})
-    yield x._result()
+    yield x
     assert a.resource_restrictions == {x.key: {'A': 1}}
     yield c._cancel(x)
 
@@ -687,7 +687,7 @@ def test_priorities(c, s, w):
     b1 = delayed(slowinc)(b, dask_key_name='b1', delay=0.05)
 
     z = delayed(add)(a2, b1)
-    future = yield c.compute(z)._result()
+    future = yield c.compute(z)
 
     log = [t for t in w.log if t[1] == 'executing' and t[2] == 'memory']
     assert [t[0] for t in log[:5]] == ['a', 'b', 'a1', 'b1', 'a2']
@@ -748,7 +748,7 @@ def test_dataframe_attribute_error(c, s, a, b):
             raise TypeError('Hello')
 
     future = c.submit(BadSize, 123)
-    result = yield future._result()
+    result = yield future
     assert result.data == 123
 
 
@@ -767,7 +767,7 @@ def test_fail_write_to_disk(c, s, a, b):
     assert future.status == 'error'
 
     with pytest.raises(TypeError):
-        yield future._result()
+        yield future
 
     futures = c.map(inc, range(10))
     results = yield c._gather(futures)
@@ -794,7 +794,7 @@ def test_fail_write_many_to_disk(c, s, a, b):
     yield _wait(future)
 
     with pytest.raises(Exception) as info:
-        yield future._result()
+        yield future
 
     # workers still operational
     result = yield c.submit(inc, 1, workers=a.address)

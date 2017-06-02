@@ -77,7 +77,7 @@ def test_recompute_released_results(c, s, a, b):
 
     z = delayed(dec)(x)
     zz = c.compute(z)
-    result = yield zz._result()
+    result = yield zz
     assert result == 1
 
 
@@ -131,7 +131,7 @@ def test_no_valid_workers(client, s, a, b, c):
     assert x.key in s.unrunnable
 
     with pytest.raises(gen.TimeoutError):
-        yield gen.with_timeout(timedelta(milliseconds=50), x._result())
+        yield gen.with_timeout(timedelta(milliseconds=50), x)
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
@@ -139,7 +139,7 @@ def test_no_valid_workers_loose_restrictions(client, s, a, b, c):
     x = client.submit(inc, 1, workers='127.0.0.5:9999',
                       allow_other_workers=True)
 
-    result = yield x._result()
+    result = yield x
     assert result == 2
 
 
@@ -152,7 +152,7 @@ def test_no_workers(client, s):
     assert x.key in s.unrunnable
 
     with pytest.raises(gen.TimeoutError):
-        yield gen.with_timeout(timedelta(milliseconds=50), x._result())
+        yield gen.with_timeout(timedelta(milliseconds=50), x)
 
 
 @gen_cluster(ncores=[])
@@ -431,7 +431,7 @@ def test_delete_data(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
 def test_delete(c, s, a):
     x = c.submit(inc, 1)
-    yield x._result()
+    yield x
     assert x.key in a.data
 
     yield c._cancel(x)
@@ -1094,7 +1094,7 @@ def test_scheduler_file():
         assert data['address'] == s.address
 
         c = Client(scheduler_file=fn, loop=s.loop, start=False)
-        yield c._start()
+        yield c
     yield s.close()
 
 

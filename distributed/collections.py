@@ -40,7 +40,7 @@ def _futures_to_dask_dataframe(futures, divisions=None, client=None):
         divisions2 = [None] * (len(futures) + 1)
     else:
         raise NotImplementedError()
-    empty = yield empty._result()
+    empty = yield empty
 
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
@@ -167,7 +167,7 @@ def _futures_to_collection(futures, client=None, **kwargs):
     while not isinstance(element, Future):
         element = element[0]
 
-    typ = yield client.submit(type, element)._result()
+    typ = yield client.submit(type, element)
     if 'pandas' in typ.__module__:
         func = _futures_to_dask_dataframe
     elif 'numpy' in typ.__module__:

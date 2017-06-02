@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
+from datetime import timedelta
 from toolz import keymap, valmap, merge
 import uuid
 
@@ -54,7 +55,10 @@ def worker_client(timeout=3, separate_thread=True):
 
     with WorkerClient(address, loop=worker.loop, security=worker.security) as wc:
         # Make sure connection errors are bubbled to the caller
-        sync(wc.loop, wc._start, timeout=timeout)
+        @gen.coroutine
+        def f():
+            yield wc
+        sync(wc.loop, gen.with_timeout, timedelta(seconds=timeout), wc._started)
         assert wc.status == 'running'
         yield wc
 

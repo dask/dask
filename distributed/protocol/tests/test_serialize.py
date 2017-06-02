@@ -109,7 +109,7 @@ def test_object_in_graph(c, s, a, b):
     v2 = delayed(identity)(v)
 
     future = c.compute(v2)
-    result = yield future._result()
+    result = yield future
 
     assert isinstance(result, MyObj)
     assert result.data == 123

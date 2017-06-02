@@ -30,7 +30,7 @@ def test_stress_1(c, s, a, b):
         yield gen.sleep(0.1)
         seq = [c.submit(add, seq[i], seq[i + 1])
                 for i in range(0, len(seq), 2)]
-    result = yield seq[0]._result()
+    result = yield seq[0]
     assert result == sum(map(inc, range(n)))
 
 
@@ -186,7 +186,7 @@ def test_stress_communication(c, s, *workers):
 
     future = c.compute(z.sum())
 
-    result = yield future._result()
+    result = yield future
     assert isinstance(result, float)
 
 

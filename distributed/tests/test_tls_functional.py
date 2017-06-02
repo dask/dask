@@ -49,13 +49,13 @@ def test_client_submit(c, s, a, b):
     assert s.address.startswith('tls://')
 
     x = c.submit(inc, 10)
-    result = yield x._result()
+    result = yield x
     assert result == 11
 
     yy = [c.submit(slowinc, i) for i in range(10)]
     results = []
     for y in yy:
-        results.append((yield y._result()))
+        results.append((yield y))
     assert results == list(range(1, 11))
 
 
@@ -95,7 +95,7 @@ def test_nanny(c, s, a, b):
     assert s.ncores == {n.worker_address: n.ncores for n in [a, b]}
 
     x = c.submit(inc, 10)
-    result = yield x._result()
+    result = yield x
     assert result == 11
 
 
@@ -155,7 +155,7 @@ def test_worker_client_gather(c, s, a, b):
         return xx, yy
 
     future = c.submit(func)
-    result = yield future._result()
+    result = yield future
 
     assert result == (2, 3)
 
@@ -168,5 +168,5 @@ def test_worker_client_executor(c, s, a, b):
                 return sum(e.map(double, range(30)))
 
     future = c.submit(mysum)
-    result = yield future._result()
+    result = yield future
     assert result == 30 * 29

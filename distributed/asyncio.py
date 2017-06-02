@@ -72,8 +72,7 @@ class AioClient(Client):
     Start the client::
 
         async def start_the_client():
-            client = AioClient()
-            await client.start()
+            client = await AioClient()
 
             # Use the client....
 
@@ -121,8 +120,7 @@ class AioClient(Client):
         # "distributed" expects to call Tornado's IOLoop.current() and get the
         # main loop, with a "_running" property. Install asyncio's loop instead.
         ioloop = AioLoop(loop)
-        super().__init__(*args, loop=ioloop, start=False, set_as_default=False,
-                         **kwargs)
+        super().__init__(*args, loop=ioloop, set_as_default=False, **kwargs)
 
     async def __aenter__(self):
         await self.start()

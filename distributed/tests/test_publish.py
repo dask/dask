@@ -11,9 +11,9 @@ from distributed.utils_test import cluster, loop
 @gen_cluster(client=False)
 def test_publish_simple(s, a, b):
     c = Client((s.ip, s.port), start=False)
-    yield c._start()
+    yield c
     f = Client((s.ip, s.port), start=False)
-    yield f._start()
+    yield f
 
     data = yield c._scatter(range(3))
     out = yield c._publish_dataset(data=data)
@@ -38,9 +38,9 @@ def test_publish_simple(s, a, b):
 @gen_cluster(client=False)
 def test_publish_roundtrip(s, a, b):
     c = Client((s.ip, s.port), start=False)
-    yield c._start()
+    yield c
     f = Client((s.ip, s.port), start=False)
-    yield f._start()
+    yield f
 
     data = yield c._scatter([0, 1, 2])
     yield c._publish_dataset(data=data)
@@ -139,9 +139,9 @@ def test_unpublish_multiple_datasets_sync(loop):
 def test_publish_bag(s, a, b):
     db = pytest.importorskip('dask.bag')
     c = Client((s.ip, s.port), start=False)
-    yield c._start()
+    yield c
     f = Client((s.ip, s.port), start=False)
-    yield f._start()
+    yield f
 
     bag = db.from_sequence([0, 1, 2])
     bagp = c.persist(bag)
@@ -159,7 +159,7 @@ def test_publish_bag(s, a, b):
     assert set(result.dask.keys()) == set(bagp.dask.keys())
     assert {f.key for f in result.dask.values()} == {f.key for f in bagp.dask.values()}
 
-    out = yield f.compute(result)._result()
+    out = yield f.compute(result)
     assert out == [0, 1, 2]
     yield c._shutdown()
     yield f._shutdown()

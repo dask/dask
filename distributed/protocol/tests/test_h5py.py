@@ -107,7 +107,7 @@ def test_h5py_serialize(c, s, a, b):
             dset = f['/group/x']
             x = da.from_array(dset, chunks=dset.chunks, lock=lock)
             y = c.compute(x)
-            y = yield y._result()
+            y = yield y
             assert (y[:] == dset[:]).all()
 
 
@@ -122,5 +122,5 @@ def test_h5py_serialize_2(c, s, a, b):
             dset = f['/group/x']
             x = da.from_array(dset, chunks=(3,))
             y = c.compute(x.sum())
-            y = yield y._result()
+            y = yield y
             assert y == (1 + 2 + 3 + 4) * 3

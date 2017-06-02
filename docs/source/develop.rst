@@ -93,7 +93,7 @@ using the ``@gen_cluster`` style of test
        assert future.key in c.futures
 
        # result = future.result()  # This synchronous API call would block
-       result = yield future._result()
+       result = yield future
        assert result == 2
 
        assert future.key in s.tasks

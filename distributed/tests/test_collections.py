@@ -93,7 +93,7 @@ def test_dataframes(c, s, a, b):
     assert rdf.divisions == ldf.divisions
 
     remote = c.compute(rdf)
-    result = yield remote._result()
+    result = yield remote
 
     tm.assert_frame_equal(result,
                           ldf.compute(get=dask.get))
@@ -109,7 +109,7 @@ def test_dataframes(c, s, a, b):
     for f in exprs:
         local = f(ldf).compute(get=dask.get)
         remote = c.compute(f(rdf))
-        remote = yield remote._result()
+        remote = yield remote
         assert_equal(local, remote)
 
 
@@ -141,7 +141,7 @@ def test__future_to_dask_array(c, s, a, b):
     assert a.dtype == np.ones(1).dtype
     assert isinstance(a, da.Array)
 
-    aa = yield c.compute(a)._result()
+    aa = yield c.compute(a)
     assert (aa == 1).all()
 
 
@@ -201,7 +201,7 @@ def test__dask_array_collections(c, s, a, b):
         local = expr(x_local, y_local).compute(get=dask.get)
 
         remote = c.compute(expr(x_remote, y_remote))
-        remote = yield remote._result()
+        remote = yield remote
 
         assert np.all(local == remote)
 
@@ -225,7 +225,7 @@ def test__futures_to_dask_bag(c, s, a, b):
     for expr in exprs:
         local = expr(lb).compute(get=dask.get)
         remote = c.compute(expr(rb))
-        remote = yield remote._result()
+        remote = yield remote
 
         assert local == remote
 
@@ -332,7 +332,7 @@ def test_loc(c, s, a, b):
     df = pd.util.testing.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=10)
     future = c.compute(ddf.loc['2000-01-17':'2000-01-24'])
-    yield future._result()
+    yield future
 
 
 def test_dataframe_groupby_tasks(loop):

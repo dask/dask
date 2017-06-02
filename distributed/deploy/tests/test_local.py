@@ -233,7 +233,7 @@ def test_scale_up_and_down():
     cluster = LocalCluster(0, scheduler_port=0, processes=False, silence_logs=False,
                            diagnostics_port=None, loop=loop, start=False)
     c = Client(cluster, start=False, loop=loop)
-    yield c._start()
+    yield c
 
     assert not cluster.workers
 
