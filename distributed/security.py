@@ -105,8 +105,11 @@ class Security(object):
 
     def _get_tls_context(self, tls, purpose):
         if tls.get('ca_file') and tls.get('cert'):
-            ctx = ssl.create_default_context(purpose=purpose,
-                                             cafile=tls['ca_file'])
+            try:
+                ctx = ssl.create_default_context(purpose=purpose,
+                                                 cafile=tls['ca_file'])
+            except AttributeError:
+                raise RuntimeError("TLS functionality requires Python 2.7.9+")
             ctx.verify_mode = ssl.CERT_REQUIRED
             # We expect a dedicated CA for the cluster and people using
             # IP addresses rather than hostnames
@@ -123,7 +126,9 @@ class Security(object):
         """
         d = {}
         tls = self.get_tls_config_for_role(role)
-        d['ssl_context'] = self._get_tls_context(tls, ssl.Purpose.SERVER_AUTH)
+        # Ensure backwards compatibility (ssl.Purpose is Python 2.7.9+ only)
+        purpose = ssl.Purpose.SERVER_AUTH if hasattr(ssl, "Purpose") else None
+        d['ssl_context'] = self._get_tls_context(tls, purpose)
         d['require_encryption'] = self.require_encryption
         return d
 
@@ -134,6 +139,8 @@ class Security(object):
         """
         d = {}
         tls = self.get_tls_config_for_role(role)
-        d['ssl_context'] = self._get_tls_context(tls, ssl.Purpose.CLIENT_AUTH)
+        # Ensure backwards compatibility (ssl.Purpose is Python 2.7.9+ only)
+        purpose = ssl.Purpose.CLIENT_AUTH if hasattr(ssl, "Purpose") else None
+        d['ssl_context'] = self._get_tls_context(tls, purpose)
         d['require_encryption'] = self.require_encryption
         return d
