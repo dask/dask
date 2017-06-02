@@ -328,10 +328,6 @@ def done_callback(future, callback):
 def normalize_future(f):
     return [f.key, type(f)]
 
-def in_ioloop():
-    """ Are we running within the current IOLoop? """
-    return IOLoop.current()._running and IOLoop.current()._thread_ident == get_thread_identity()
-
 
 class AllExit(Exception):
     """Custom exception class to exit All(...) early.
