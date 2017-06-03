@@ -89,3 +89,28 @@ def test_hold_futures(s, a, b):
 
     assert result == 11
     yield c2._shutdown()
+
+
+@gen_cluster(client=True)
+def test_picklability(c, s, a, b):
+    q = Queue()
+
+    def f(x):
+        q.put(x + 1)
+
+    yield c.submit(f, 10)
+    result = yield q._get()
+    assert result == 11
+
+
+def test_picklability_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address']) as c:
+            q = Queue()
+
+            def f(x):
+                q.put(x + 1)
+
+            c.submit(f, 10).result()
+
+            assert q.get() == 11

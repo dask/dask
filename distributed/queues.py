@@ -7,7 +7,7 @@ import uuid
 from tornado import gen
 import tornado.queues
 
-from .client import Future, _get_global_client
+from .client import Future, _get_global_client, Client
 from .utils import tokey, sync
 
 logger = logging.getLogger(__name__)
@@ -18,11 +18,11 @@ class QueueExtension(object):
 
     This adds the following routes to the scheduler
 
-    *  queue-create
-    *  queue-release
-    *  queue-put
-    *  queue-get
-    *  queue-size
+    *  queue_create
+    *  queue_release
+    *  queue_put
+    *  queue_get
+    *  queue_size
     """
     def __init__(self, scheduler):
         self.scheduler = scheduler
@@ -80,9 +80,14 @@ class QueueExtension(object):
 class Queue(object):
     """ Distributed Queue
 
-    This allows multiple clients to share futures between each other with a
-    multi-producer/multi-consumer queue.  All metadata is sequentialized
-    through the scheduler.
+    This allows multiple clients to share futures or small bits of data between
+    each other with a multi-producer/multi-consumer queue.  All metadata is
+    sequentialized through the scheduler.
+
+    Elements of the Queue must be either Futures or msgpack-encodable data
+    (ints, strings, lists, dicts).  All data is sent through the scheduler so
+    it is wise not to send large objects.  To share large objects scatter the
+    data and share the future instead.
 
     Examples
     --------
@@ -91,16 +96,20 @@ class Queue(object):
     >>> queue = Queue('x')  # doctest: +SKIP
     >>> future = client.submit(f, x)  # doctest: +SKIP
     >>> queue.put(future)  # doctest: +SKIP
+
+    See Also
+    --------
+    Variable: shared variable between clients
     """
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
         self.name = name or 'queue-' + uuid.uuid4().hex
         if self.client._asynchronous:
-            self._started = self.client.scheduler.queue_create(name=name,
+            self._started = self.client.scheduler.queue_create(name=self.name,
                                                                maxsize=maxsize)
         else:
             sync(self.client.loop, self.client.scheduler.queue_create,
-                 name=name, maxsize=maxsize)
+                 name=self.name, maxsize=maxsize)
             self._started = gen.moment
 
     def __await__(self):
@@ -122,12 +131,15 @@ class Queue(object):
                                                   name=self.name)
 
     def put(self, value, timeout=None):
+        """ Put data into the queue """
         return sync(self.client.loop, self._put, value, timeout=timeout)
 
     def get(self, timeout=None):
+        """ Get data from the queue """
         return sync(self.client.loop, self._get, timeout=timeout)
 
     def qsize(self):
+        """ Current number of elements in the queue """
         return sync(self.client.loop, self._qsize)
 
     @gen.coroutine
@@ -154,3 +166,13 @@ class Queue(object):
 
     def __del__(self):
         self._release()
+
+    def __getstate__(self):
+        return (self.name, self.client.scheduler.address)
+
+    def __setstate__(self, state):
+        name, address = state
+        client = _get_global_client()
+        if client is None or client.scheduler.address != address:
+            client = Client(address, set_as_default=False)
+        self.__init__(name=name, client=client)
