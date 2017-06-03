@@ -236,13 +236,10 @@ class Channel(object):
         with self._lock:
             self.count += 1
             if type == 'Future':
-                self.data.append(Future(value, self.client))
+                self.data.append(Future(value, self.client, inform=True))
             else:
                 self.data.append(value)
         if type == 'Future':
-            self.client._send_to_scheduler({'op': 'client-desires-keys',
-                                            'keys': [value],
-                                            'client': self.client.id})
             if value in self._pending:
                 del self._pending[value]
 

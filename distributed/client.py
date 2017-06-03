@@ -92,11 +92,11 @@ class Future(WrappedKey):
     _cb_executor = None
     _cb_executor_pid = None
 
-    def __init__(self, key, client):
+    def __init__(self, key, client, inform=False):
         self.key = key
         self._cleared = False
         tkey = tokey(key)
-        self.client = client
+        self.client = client or _get_global_client()
         self.client._inc_ref(tkey)
         self._generation = self.client.generation
 
@@ -104,6 +104,11 @@ class Future(WrappedKey):
             self._state = client.futures[tkey]
         else:
             self._state = client.futures[tkey] = FutureState(Event())
+
+        if inform:
+            self.client._send_to_scheduler({'op': 'client-desires-keys',
+                                            'keys': [tokey(key)],
+                                            'client': self.client.id})
 
     @property
     def executor(self):
@@ -392,6 +397,7 @@ class Client(Node):
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
+        self._asynchronous = asynchronous
 
         if loop is None:
             self._should_close_loop = None

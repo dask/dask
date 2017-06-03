@@ -8,6 +8,7 @@ from .client import (Client, Executor, CompatibleExecutor,
                      wait, as_completed, default_client)
 from .tornado_client import TornadoClient
 from .nanny import Nanny
+from .queues import Queue
 from .scheduler import Scheduler
 from .utils import sync
 from .worker import Worker, get_worker

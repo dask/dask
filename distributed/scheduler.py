@@ -34,6 +34,7 @@ from .metrics import time
 from .node import ServerNode
 from .publish import PublishExtension
 from .channels import ChannelScheduler
+from .queues import QueueExtension
 from .stealing import WorkStealing
 from .recreate_exceptions import ReplayExceptionScheduler
 from .security import Security
@@ -189,7 +190,7 @@ class Scheduler(ServerNode):
                  delete_interval=500, synchronize_worker_interval=60000,
                  services=None, allowed_failures=ALLOWED_FAILURES,
                  extensions=[ChannelScheduler, PublishExtension, WorkStealing,
-                             ReplayExceptionScheduler],
+                             ReplayExceptionScheduler, QueueExtension],
                  validate=False, scheduler_file=None, security=None,
                  **kwargs):
 
