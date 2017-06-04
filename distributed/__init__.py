@@ -11,6 +11,7 @@ from .nanny import Nanny
 from .queues import Queue
 from .scheduler import Scheduler
 from .utils import sync
+from .variable import Variable
 from .worker import Worker, get_worker
 from .worker_client import local_client, worker_client
 

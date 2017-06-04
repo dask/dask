@@ -7,33 +7,29 @@ import pytest
 from toolz import take
 from tornado import gen
 
-from distributed import Client, Queue
+from distributed import Client, Variable
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, loop, cluster, slowinc
 
 
 @gen_cluster(client=True)
-def test_queue(c, s, a, b):
-    x = yield Queue('x')
-    y = yield Queue('y')
-    xx = yield Queue('x')
+def test_variable(c, s, a, b):
+    x = Variable('x')
+    xx = Variable('x')
     assert x.client is c
 
     future = c.submit(inc, 1)
 
-    yield x._put(future)
-    yield y._put(future)
+    yield x._set(future)
     future2 = yield xx._get()
     assert future.key == future2.key
-
-    with pytest.raises(gen.TimeoutError):
-        yield x._get(timeout=0.1)
 
     del future, future2
 
     yield gen.sleep(0.1)
-    assert s.task_state  # future still present in y's queue
-    yield y._get()  # burn future
+    assert s.task_state  # future still present
+
+    x.delete()
 
     start = time()
     while s.task_state:
@@ -43,28 +39,23 @@ def test_queue(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_queue_with_data(c, s, a, b):
-    x = yield Queue('x')
-    xx = yield Queue('x')
+    x = Variable('x')
+    xx = Variable('x')
     assert x.client is c
 
-    yield x._put([1, 'hello'])
+    yield x._set([1, 'hello'])
     data = yield xx._get()
 
     assert data == [1, 'hello']
-
-    with pytest.raises(gen.TimeoutError):
-        yield x._get(timeout=0.1)
 
 
 def test_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address']) as c:
             future = c.submit(lambda x: x + 1, 10)
-            x = Queue('x')
-            xx = Queue('x')
-            x.put(future)
-            assert x.qsize() == 1
-            assert xx.qsize() == 1
+            x = Variable('x')
+            xx = Variable('x')
+            x.set(future)
             future2 = xx.get()
 
             assert future2.result() == 11
@@ -74,16 +65,16 @@ def test_sync(loop):
 def test_hold_futures(s, a, b):
     c1 = yield Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
-    q1 = yield Queue('q')
-    yield q1._put(future)
-    del q1
+    x1 = Variable('x')
+    yield x1._set(future)
+    del x1
     yield c1._shutdown()
 
     yield gen.sleep(0.1)
 
     c2 = yield Client(s.address, asynchronous=True)
-    q2 = yield Queue('q')
-    future2 = yield q2._get()
+    x2 = Variable('x')
+    future2 = yield x2._get()
     result = yield future2
 
     assert result == 11
@@ -91,25 +82,45 @@ def test_hold_futures(s, a, b):
 
 
 @gen_cluster(client=True)
-def test_picklability(c, s, a, b):
-    q = Queue()
+def test_timeout(c, s, a, b):
+    v = Variable('v')
 
-    def f(x):
-        q.put(x + 1)
+    start = time()
+    with pytest.raises(gen.TimeoutError):
+        yield v._get(timeout=0.1)
+    assert time() - start < 0.5
 
-    yield c.submit(f, 10)
-    result = yield q._get()
+
+@gen_cluster(client=True)
+def test_cleanup(c, s, a, b):
+    v = Variable('v')
+    vv = Variable('v')
+
+    x = c.submit(lambda x: x + 1, 10)
+    y = c.submit(lambda x: x + 1, 20)
+    x_key = x.key
+
+    yield v._set(x)
+    del x
+    yield gen.sleep(0.1)
+
+    t_future = xx = vv._get()
+    yield gen.moment
+    v._set(y)
+
+    future = yield t_future
+    assert future.key == x_key
+    result = yield future
     assert result == 11
 
 
-def test_picklability_sync(loop):
+def test_pickleable(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address']) as c:
-            q = Queue()
+            v = Variable('v')
 
             def f(x):
-                q.put(x + 1)
+                v.set(x + 1)
 
             c.submit(f, 10).result()
-
-            assert q.get() == 11
+            assert v.get() == 11

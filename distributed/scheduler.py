@@ -32,16 +32,18 @@ from .core import (rpc, connect, Server, send_recv,
                    error_message, clean_exception, CommClosedError)
 from .metrics import time
 from .node import ServerNode
-from .publish import PublishExtension
-from .channels import ChannelScheduler
-from .queues import QueueExtension
-from .stealing import WorkStealing
-from .recreate_exceptions import ReplayExceptionScheduler
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
         key_split, validate_key)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .versions import get_versions
+
+from .channels import ChannelScheduler
+from .publish import PublishExtension
+from .queues import QueueExtension
+from .recreate_exceptions import ReplayExceptionScheduler
+from .stealing import WorkStealing
+from .variable import VariableExtension
 
 
 logger = logging.getLogger(__name__)
@@ -190,7 +192,8 @@ class Scheduler(ServerNode):
                  delete_interval=500, synchronize_worker_interval=60000,
                  services=None, allowed_failures=ALLOWED_FAILURES,
                  extensions=[ChannelScheduler, PublishExtension, WorkStealing,
-                             ReplayExceptionScheduler, QueueExtension],
+                             ReplayExceptionScheduler, QueueExtension,
+                             VariableExtension],
                  validate=False, scheduler_file=None, security=None,
                  **kwargs):
 
