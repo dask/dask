@@ -8,6 +8,7 @@ import pandas.util.testing as tm
 import pytest
 
 import dask
+import dask.multiprocessing
 from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.io.parquet import read_parquet, to_parquet
@@ -445,3 +446,22 @@ def test_no_index(fn):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, write_index=False)
     dd.read_parquet(fn).compute()
+
+
+@pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
+def test_to_parquet_lazy(tmpdir, get):
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({'a': [1, 2, 3, 4],
+                       'b': [1., 2., 3., 4.]})
+    df.index.name = 'index'
+    ddf = dd.from_pandas(df, npartitions=2)
+    value = ddf.to_parquet(tmpdir, compute=False)
+
+    assert hasattr(value, 'dask')
+    # assert not os.path.exists(tmpdir)
+    value.compute(get=get)
+    assert os.path.exists(tmpdir)
+
+    ddf2 = dd.read_parquet(tmpdir)
+
+    assert_eq(ddf, ddf2)
