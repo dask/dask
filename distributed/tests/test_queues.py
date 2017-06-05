@@ -142,3 +142,27 @@ def test_race(c, s, *workers):
     assert all(r > 80 for r in results)
     qsize = yield q._qsize()
     assert not qsize
+
+
+@gen_cluster(client=True)
+def test_same_futures(c, s, a, b):
+    q = Queue('x')
+    future = yield c._scatter(123)
+
+    for i in range(5):
+        yield q._put(future)
+
+    assert s.wants_what['queue-x'] == {future.key}
+
+    for i in range(4):
+        future2 = yield q._get()
+        assert s.wants_what['queue-x'] == {future.key}
+        yield gen.sleep(0.05)
+        assert s.wants_what['queue-x'] == {future.key}
+
+    yield q._get()
+
+    start = time()
+    while s.wants_what['queue-x']:
+        yield gen.sleep(0.01)
+        assert time() - start < 2

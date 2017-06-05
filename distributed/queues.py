@@ -27,7 +27,8 @@ class QueueExtension(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.queues = dict()
-        self.refcount = defaultdict(lambda: 0)
+        self.client_refcount = dict()
+        self.future_refcount = defaultdict(lambda: 0)
 
         self.scheduler.handlers.update({'queue_create': self.create,
                                         'queue_release': self.release,
@@ -42,14 +43,14 @@ class QueueExtension(object):
     def create(self, stream=None, name=None, client=None, maxsize=0):
         if name not in self.queues:
             self.queues[name] = tornado.queues.Queue(maxsize=maxsize)
-            self.refcount[name] = 1
+            self.client_refcount[name] = 1
         else:
-            self.refcount[name] += 1
+            self.client_refcount[name] += 1
 
     def release(self, stream=None, name=None, client=None):
-        self.refcount[name] -= 1
-        if self.refcount[name] == 0:
-            del self.refcount[name]
+        self.client_refcount[name] -= 1
+        if self.client_refcount[name] == 0:
+            del self.client_refcount[name]
             futures = self.queues[name].queue
             del self.queues[name]
             self.scheduler.client_releases_keys(keys=[f.key for f in futures],
@@ -59,19 +60,23 @@ class QueueExtension(object):
     def put(self, stream=None, name=None, key=None, data=None, client=None, timeout=None):
         if key is not None:
             record = {'type': 'Future', 'value': key}
+            self.future_refcount[name, key] += 1
             self.scheduler.client_desires_keys(keys=[key], client='queue-%s' % name)
         else:
             record = {'type': 'msgpack', 'value': data}
         yield self.queues[name].put(record, timeout=timeout)
 
     def future_release(self, name=None, key=None, client=None):
-        self.scheduler.client_releases_keys(keys=[key],
-                                            client='queue-%s' % name)
+        self.future_refcount[name, key] -= 1
+        if self.future_refcount[name, key] == 0:
+            self.scheduler.client_releases_keys(keys=[key],
+                                                client='queue-%s' % name)
+            del self.future_refcount[name, key]
 
     @gen.coroutine
     def get(self, stream=None, name=None, client=None, timeout=None):
-        key = yield self.queues[name].get(timeout=timeout)
-        raise gen.Return(key)
+        record = yield self.queues[name].get(timeout=timeout)
+        raise gen.Return(record)
 
     def qsize(self, stream=None, name=None, client=None):
         return self.queues[name].qsize()
