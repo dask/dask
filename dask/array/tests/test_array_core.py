@@ -661,7 +661,7 @@ def test_choose():
 def test_where():
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, chunks=(4, 5))
-    y = np.random.randint(10, size=15)
+    y = np.random.randint(10, size=15, dtype=np.uint8)
     e = from_array(y, chunks=(4,))
 
     assert_eq(where(d > 5, d, 0), np.where(x > 5, x, 0))
