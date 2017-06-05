@@ -76,6 +76,9 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
                 indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
                 divisions = [divisions[i] for i in indexes]
 
+        mins = remove_nans(mins)
+        maxes = remove_nans(maxes)
+
         if (mins == sorted(mins) and maxes == sorted(maxes) and
                 all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
             divisions = mins + [maxes[-1]]
@@ -86,6 +89,26 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
+
+
+def remove_nans(divisions):
+    """ Remove nans from divisions
+
+    These sometime pop up when we call min/max on an empty partition
+
+    Examples
+    --------
+    >>> remove_nans((np.nan, 1, 2))
+    [1, 1, 2]
+    >>> remove_nans((1, np.nan, 2))
+    [1, 2, 2]
+    """
+    divisions = list(divisions)
+    for i in range(len(divisions) - 2, -1, -1):
+        d = divisions[i]
+        if isinstance(d, float) and math.isnan(d):
+            divisions[i] = divisions[i + 1]
+    return divisions
 
 
 def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
