@@ -111,8 +111,8 @@ def test_server_listen():
 
     # Note server.address is the concrete, contactable address
 
-    with listen_on(Server, 8882) as server:
-        assert server.port == 8882
+    with listen_on(Server, 7800) as server:
+        assert server.port == 7800
         assert server.address == 'tcp://%s:%d' % (EXTERNAL_IP4, server.port)
         yield assert_can_connect(server.address)
         yield assert_can_connect_from_everywhere_4_6(server.port)
@@ -129,34 +129,34 @@ def test_server_listen():
         yield assert_can_connect(server.address)
         yield assert_can_connect_from_everywhere_4_6(server.port)
 
-    with listen_on(Server, ('', 2468)) as server:
-        assert server.port == 2468
+    with listen_on(Server, ('', 7801)) as server:
+        assert server.port == 7801
         assert server.address == 'tcp://%s:%d' % (EXTERNAL_IP4, server.port)
         yield assert_can_connect(server.address)
         yield assert_can_connect_from_everywhere_4_6(server.port)
 
-    with listen_on(Server, 'tcp://:2468') as server:
-        assert server.port == 2468
+    with listen_on(Server, 'tcp://:7802') as server:
+        assert server.port == 7802
         assert server.address == 'tcp://%s:%d' % (EXTERNAL_IP4, server.port)
         yield assert_can_connect(server.address)
         yield assert_can_connect_from_everywhere_4_6(server.port)
 
     # Only IPv4
 
-    with listen_on(Server, ('0.0.0.0', 2468)) as server:
-        assert server.port == 2468
+    with listen_on(Server, ('0.0.0.0', 7810)) as server:
+        assert server.port == 7810
         assert server.address == 'tcp://%s:%d' % (EXTERNAL_IP4, server.port)
         yield assert_can_connect(server.address)
         yield assert_can_connect_from_everywhere_4(server.port)
 
-    with listen_on(Server, ('127.0.0.1', 2468)) as server:
-        assert server.port == 2468
+    with listen_on(Server, ('127.0.0.1', 7811)) as server:
+        assert server.port == 7811
         assert server.address == 'tcp://127.0.0.1:%d' % server.port
         yield assert_can_connect(server.address)
         yield assert_can_connect_locally_4(server.port)
 
-    with listen_on(Server, 'tcp://127.0.0.1:2468') as server:
-        assert server.port == 2468
+    with listen_on(Server, 'tcp://127.0.0.1:7812') as server:
+        assert server.port == 7812
         assert server.address == 'tcp://127.0.0.1:%d' % server.port
         yield assert_can_connect(server.address)
         yield assert_can_connect_locally_4(server.port)
@@ -164,20 +164,20 @@ def test_server_listen():
     # Only IPv6
 
     if has_ipv6():
-        with listen_on(Server, ('::', 2468)) as server:
-            assert server.port == 2468
+        with listen_on(Server, ('::', 7813)) as server:
+            assert server.port == 7813
             assert server.address == 'tcp://[%s]:%d' % (EXTERNAL_IP6, server.port)
             yield assert_can_connect(server.address)
             yield assert_can_connect_from_everywhere_6(server.port)
 
-        with listen_on(Server, ('::1', 2468)) as server:
-            assert server.port == 2468
+        with listen_on(Server, ('::1', 7814)) as server:
+            assert server.port == 7814
             assert server.address == 'tcp://[::1]:%d' % server.port
             yield assert_can_connect(server.address)
             yield assert_can_connect_locally_6(server.port)
 
-        with listen_on(Server, 'tcp://[::1]:2468') as server:
-            assert server.port == 2468
+        with listen_on(Server, 'tcp://[::1]:7815') as server:
+            assert server.port == 7815
             assert server.address == 'tcp://[::1]:%d' % server.port
             yield assert_can_connect(server.address)
             yield assert_can_connect_locally_6(server.port)

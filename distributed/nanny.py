@@ -17,7 +17,7 @@ from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import disk_io_counters, net_io_counters, time
 from .node import ServerNode
 from .security import Security
-from .utils import get_ip, ignoring, mp_context, log_errors
+from .utils import get_ip, ignoring, mp_context, log_errors, silence_logging
 from .worker import _ncores, run
 
 
@@ -68,7 +68,7 @@ class Nanny(ServerNode):
         self.should_watch = True
 
         if silence_logs:
-            logger.setLevel(silence_logs)
+            silence_logging(level=silence_logs)
         self.silence_logs = silence_logs
 
         handlers = {'instantiate': self.instantiate,
@@ -335,7 +335,8 @@ class Nanny(ServerNode):
 
 
 def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
-                    worker_ip, worker_port, local_dir, **kwargs):
+                    worker_ip, worker_port, local_dir, silence_logs,
+                    **kwargs):
     """
     Create a worker in a forked child.
     """
@@ -349,11 +350,15 @@ def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
     else:
         initialize_worker_process()
 
+    if silence_logs:
+        logger.setLevel(silence_logs)
+
     IOLoop.clear_instance()  # pragma: no cover
     loop = IOLoop()  # pragma: no cover
     loop.make_current()  # pragma: no cover
     worker = Worker(scheduler_addr, ncores=ncores,
-                    service_ports={'nanny': nanny_port}, local_dir=local_dir,
+                    service_ports={'nanny': nanny_port},
+                    local_dir=local_dir, silence_logs=silence_logs,
                     **kwargs)  # pragma: no cover
 
     @gen.coroutine  # pragma: no cover
@@ -378,7 +383,7 @@ def run_worker_fork(q, scheduler_addr, ncores, nanny_port,
         pass
     finally:
         loop.stop()
-        loop.close(all_fds=True)
+        loop.close()
 
 
 def isalive(proc):

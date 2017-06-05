@@ -12,7 +12,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from ..core import CommClosedError
-from ..utils import sync, ignoring, All
+from ..utils import sync, ignoring, All, silence_logging
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -69,11 +69,7 @@ class LocalCluster(object):
         self.processes = processes
         self.silence_logs = silence_logs
         if silence_logs:
-            for l in ['distributed.scheduler',
-                      'distributed.worker',
-                      'distributed.core',
-                      'distributed.nanny']:
-                logging.getLogger(l).setLevel(silence_logs)
+            silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
             if processes:
                 n_workers = _ncores
@@ -98,10 +94,12 @@ class LocalCluster(object):
         if diagnostics_port is not None:
             try:
                 from distributed.bokeh.scheduler import BokehScheduler
+                from distributed.bokeh.worker import BokehWorker
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
                 services[('bokeh', diagnostics_port)] = BokehScheduler
+                worker_services[('bokeh', 0)] = BokehWorker
 
         self.scheduler = Scheduler(loop=self.loop,
                                    services=services)
@@ -167,15 +165,6 @@ class LocalCluster(object):
             kwargs['quiet'] = True
         else:
             W = Worker
-
-        try:
-            from distributed.bokeh.worker import BokehWorker
-        except ImportError:
-            pass
-        else:
-            if 'services' not in kwargs:
-                kwargs['services'] = {}
-            kwargs['services'][('bokeh', 0)] = BokehWorker
 
         w = W(self.scheduler.address, loop=self.loop,
               death_timeout=death_timeout,

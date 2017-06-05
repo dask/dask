@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from functools import partial
+import subprocess
 import sys
 from time import sleep
 from threading import Lock
@@ -250,19 +251,22 @@ def test_scale_up_and_down():
     yield cluster._close()
 
 
-def test_silent_startup(capsys, loop):
-    with LocalCluster(1, diagnostics_port=None, loop=loop, scheduler_port=0):
-        sleep(0.5)
+def test_silent_startup():
+    code = """if 1:
+        from time import sleep
+        from distributed import LocalCluster
 
-    out, err = capsys.readouterr()
+        with LocalCluster(1, diagnostics_port=None, scheduler_port=0):
+            sleep(1.5)
+        """
+
+    out = subprocess.check_output([sys.executable, "-Wi", "-c", code],
+                                  stderr=subprocess.STDOUT)
     try:
         assert not out
-        assert not err
     except AssertionError:
-        print("=== Cluster stdout ===")
-        print(out)
-        print("=== Cluster stderr ===")
-        print(err)
+        print("=== Cluster stdout / stderr ===")
+        print(out.decode())
         raise
 
 

@@ -1313,7 +1313,8 @@ class Scheduler(ServerNode):
             self.remove_worker(address=worker)
             return
         yield comm.write({'op': 'compute-stream', 'reply': False})
-        self.worker_comms[worker].start(comm)
+        worker_comm = self.worker_comms[worker]
+        worker_comm.start(comm)
         logger.info("Starting worker compute stream, %s", worker)
 
         io_error = None
@@ -1358,10 +1359,11 @@ class Scheduler(ServerNode):
                 if io_error:
                     logger.info("Worker %r failed from closed comm: %s",
                                 worker, io_error)
-                yield comm.close()
+                worker_comm.abort()
                 self.remove_worker(address=worker)
             else:
                 assert comm.closed()
+                worker_comm.abort()
 
     def correct_time_delay(self, worker, msg):
         """

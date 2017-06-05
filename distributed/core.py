@@ -122,7 +122,13 @@ class Server(object):
         if not self.__stopped:
             self.__stopped = True
             if self.listener is not None:
-                self.listener.stop()
+                # Delay closing the server socket until the next IO loop tick.
+                # Otherwise race conditions can appear if an event handler
+                # for an accept() call is already scheduled by the IO loop,
+                # raising EBADF.
+                # The demonstrator for this is Worker.terminate(), which
+                # closes the server socket in response to an incoming message.
+                self.io_loop.add_callback(self.listener.stop)
 
     def _measure_tick(self):
         now = time()
@@ -204,6 +210,9 @@ class Server(object):
 
         Coroutines should expect a single Comm object.
         """
+        if self.__stopped:
+            comm.abort()
+            return
         address = comm.peer_address
         op = None
 

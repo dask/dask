@@ -126,6 +126,8 @@ class BatchedSend(object):
     def abort(self):
         if self.comm is None:
             return
+        self.please_stop = True
+        self.buffer = []
         self.waker.set()
         if not self.comm.closed():
             self.comm.abort()

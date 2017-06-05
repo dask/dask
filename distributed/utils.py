@@ -377,6 +377,21 @@ def log_errors(pdb=False):
         raise
 
 
+def silence_logging(level, root='distributed'):
+    """
+    Force all existing loggers below *root* to the given level at least
+    (or keep the existing level if less verbose).
+    """
+    if isinstance(level, str):
+        level = logging_names[level.upper()]
+
+    for name, logger in logging.root.manager.loggerDict.items():
+        if (isinstance(logger, logging.Logger)
+            and logger.name.startswith(root + '.')
+            and logger.level < level):
+            logger.setLevel(level)
+
+
 @memoize
 def ensure_ip(hostname):
     """ Ensure that address is an IP address

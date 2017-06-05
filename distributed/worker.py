@@ -38,7 +38,8 @@ from .security import Security
 from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
-                    ignoring, validate_key, mp_context, import_file)
+                    ignoring, validate_key, mp_context, import_file,
+                    silence_logging)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -84,7 +85,7 @@ class WorkerBase(ServerNode):
         self.death_timeout = death_timeout
         self.preload = preload
         if silence_logs:
-            logger.setLevel(silence_logs)
+            silence_logging(level=silence_logs)
 
         if local_dir:
             local_dir = os.path.abspath(local_dir)
