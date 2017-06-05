@@ -24,14 +24,6 @@ def to_asyncio(fn, **default_kwargs):
     return convert
 
 
-class AioLoop(BaseAsyncIOLoop):
-
-    @property
-    def _running(self):
-        """Distributed checks IOLoop's _running property extensively"""
-        return self.asyncio_loop.is_running()
-
-
 class AioFuture(Future):
     """Provides awaitable syntax for a distributed Future"""
 
@@ -116,11 +108,7 @@ class AioClient(Client):
             raise Exception("AioClient instance can't be set as default")
 
         loop = asyncio.get_event_loop()
-
-        # dask.distributed expects to call Tornado's IOLoop.current() and get
-        # the main loop, with a "_running" property. Install asyncio's loop
-        # instead.
-        ioloop = AioLoop(loop)
+        ioloop = BaseAsyncIOLoop(loop)
         super().__init__(*args, loop=ioloop, set_as_default=False, asynchronous=True, **kwargs)
 
     async def __aenter__(self):
