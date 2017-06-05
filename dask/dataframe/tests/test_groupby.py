@@ -1235,31 +1235,43 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
-def test_groupby_agg_custom_sum():
+custom_mean = dd.Aggregation(
+    'mean',
+    lambda s: (s.count(), s.sum()),
+    lambda s0, s1: (s0.sum(), s1.sum()),
+    lambda s0, s1: s1 / s0,
+)
+
+custom_sum = dd.Aggregation('sum', lambda s: s.sum(), lambda s0: s0.sum())
+
+
+@pytest.mark.parametrize('pandas_spec, dask_spec, check_dtype', [
+    ({'b': 'mean'}, {'b': custom_mean}, False),
+    ({'b': 'sum'}, {'b': custom_sum}, True),
+    (['mean', 'sum'], [custom_mean, custom_sum], False),
+    ({'b': ['mean', 'sum']}, {'b': [custom_mean, custom_sum]}, False),
+])
+def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
+    df = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby('g').aggregate(pandas_spec)
+    result = ddf.groupby('g').aggregate(dask_spec)
+
+    assert_eq(result, expected, check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize('pandas_spec, dask_spec', [
+    ('mean', custom_mean),
+    (['mean'], [custom_mean]),
+    (['mean', 'sum'], [custom_mean, custom_sum]),
+])
+def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
-    agg_func = dd.Aggregation('custom-sum', M.sum, M.sum)
-
-    result = a.groupby('g').aggregate({'b': agg_func})
-    expected = d.groupby('g').aggregate({'b': 'sum'})
-
-    assert_eq(result, expected)
-
-
-def test_groupby_agg_custom_mean():
-    d = pd.DataFrame({'g': [0, 0, 1] * 3, 'b': [1, 2, 3] * 3})
-    a = dd.from_pandas(d, npartitions=2)
-
-    agg_func = dd.Aggregation(
-        'custom-mean',
-        lambda s: (s.count(), s.sum()),
-        lambda s0, s1: (s0.sum(), s1.sum()),
-        lambda s0, s1: s1 / s0,
-    )
-
-    result = a.groupby('g').aggregate({'b': agg_func})
-    expected = d.groupby('g').aggregate({'b': 'mean'})
+    expected = d['b'].groupby(d['g']).aggregate(pandas_spec)
+    result = a['b'].groupby(a['g']).aggregate(dask_spec)
 
     assert_eq(result, expected, check_dtype=False)
 
@@ -1288,7 +1300,7 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
         lambda s0, s1: s1 / s0,
     )
 
-    # NOTE: the name of agg-func is supressed in the output,
+    # NOTE: the name of agg-func is suppressed in the output,
     # since only a single agg func per column was specified
     result = a.groupby('g').aggregate({'b': agg_func, 'c': 'sum'})
     expected = d.groupby('g').aggregate({'b': 'mean', 'c': 'sum'})

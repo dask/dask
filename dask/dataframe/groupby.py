@@ -953,12 +953,18 @@ class _GroupBy(object):
             spec = _normalize_spec(arg, non_group_columns)
 
         elif isinstance(self.obj, Series):
-            # implementation detail: if self.obj is a series, a pseudo column
-            # None is used to denote the series itself. This pseudo column is
-            # removed from the result columns before passing the spec along.
-            spec = _normalize_spec({None: arg}, [])
-            spec = [(result_column, func, input_column)
-                    for ((_, result_column), func, input_column) in spec]
+            if isinstance(arg, (list, tuple, dict)):
+                # implementation detail: if self.obj is a series, a pseudo column
+                # None is used to denote the series itself. This pseudo column is
+                # removed from the result columns before passing the spec along.
+                spec = _normalize_spec({None: arg}, [])
+                spec = [(result_column, func, input_column)
+                        for ((_, result_column), func, input_column) in spec]
+
+            else:
+                spec = _normalize_spec({None: arg}, [])
+                spec = [(self.obj.name, func, input_column)
+                        for (_, func, input_column) in spec]
 
         else:
             raise ValueError("aggregate on unknown object {}".format(self.obj))
@@ -1157,17 +1163,13 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
-        # short-circuit 'simple' aggregations
-        if (
-            not isinstance(arg, (list, dict)) and
-            arg in {'sum', 'mean', 'var', 'size', 'std', 'count'}
-        ):
-            return getattr(self, arg)(split_every=split_every,
-                                      split_out=split_out)
-
         result = super(SeriesGroupBy, self).aggregate(arg, split_every=split_every, split_out=split_out)
         if self._slice:
             result = result[self._slice]
+
+        if not isinstance(arg, (list, dict)):
+            result = result[result.columns[0]]
+
         return result
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
