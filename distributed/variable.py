@@ -76,7 +76,7 @@ class VariableExtension(object):
                 timeout2 = timeout - (time() - start)
             else:
                 timeout2 = None
-            if timeout2 < 0:
+            if timeout2 and timeout2 < 0:
                 raise gen.TimeoutError()
             yield self.started.wait(timeout=timeout2)
         record = self.variables[name]

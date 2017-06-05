@@ -124,3 +124,16 @@ def test_pickleable(loop):
 
             c.submit(f, 10).result()
             assert v.get() == 11
+
+
+@gen_cluster(client=True)
+def test_timeout_get(c, s, a, b):
+    v = Variable('v')
+
+    tornado_future = v._get()
+
+    vv = Variable('v')
+    yield vv._set(1)
+
+    result = yield tornado_future
+    assert result == 1
