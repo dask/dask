@@ -822,7 +822,7 @@ def test_concat_unknown_divisions_errors():
     bb = dd.from_pandas(b, npartitions=2, sort=False)
 
     with pytest.raises(ValueError):
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning):  # Concat with unknown divisions
             dd.concat([aa, bb], axis=1).compute()
 
 
@@ -1117,6 +1117,7 @@ def test_append2():
     assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
     with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
         assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
         assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
@@ -1125,6 +1126,7 @@ def test_append2():
     assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
     with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
         assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
         assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
@@ -1133,6 +1135,7 @@ def test_append2():
     assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
     with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
         assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
         assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
@@ -1141,6 +1144,7 @@ def test_append2():
     assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
     with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
         assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
         assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 

@@ -131,7 +131,8 @@ def test_full_groupby_multilevel(grouper):
         df['b'] = df.b - df.b.mean()
         return df
 
-    # last one causes a DeprcationWarning from pandas, hard to track down...
+    # last one causes a DeprcationWarning from pandas.
+    # See https://github.com/pandas-dev/pandas/issues/16481
     assert_eq(df.groupby(grouper(df)).apply(func),
               ddf.groupby(grouper(ddf)).apply(func, meta={"a": int, "d": int,
                                                           "b": float}))
@@ -261,7 +262,7 @@ def test_series_groupby_propagates_names():
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df['y'].sum()
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning):  # meta inference
         result = ddf.groupby('x').apply(func)
     expected = df.groupby('x').apply(func)
     assert_eq(result, expected)
@@ -517,7 +518,7 @@ def test_apply_shuffle():
                         'D': np.random.randn(20)})
     ddf = dd.from_pandas(pdf, 3)
 
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning):  # meta inference
         assert_eq(ddf.groupby('A').apply(lambda x: x.sum()),
                   pdf.groupby('A').apply(lambda x: x.sum()))
 

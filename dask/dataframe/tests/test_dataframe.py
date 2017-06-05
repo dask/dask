@@ -1381,6 +1381,7 @@ def test_eval():
         with pytest.raises(NotImplementedError):
             d.eval('z = x + y', inplace=True)
 
+        # catch FutureWarning from pandas about assignment in eval
         with pytest.warns(None):
             if p.eval('z = x + y', inplace=None) is None:
                 with pytest.raises(NotImplementedError):
