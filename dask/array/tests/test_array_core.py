@@ -664,8 +664,9 @@ def test_where():
     y = np.random.randint(10, size=15, dtype=np.uint8)
     e = from_array(y, chunks=(4,))
 
-    assert_eq(where(d > 5, d, 0), np.where(x > 5, x, 0))
-    assert_eq(where(d > 5, d, -e[:, None]), np.where(x > 5, x, -y[:, None]))
+    for c1, c2 in [(d > 5, x > 5), (True, True), (False, False)]:
+        assert_eq(where(c1, d, 0), np.where(c2, x, 0))
+        assert_eq(where(c1, d, -e[:, None]), np.where(c2, x, -y[:, None]))
 
 
 def test_where_has_informative_error():
