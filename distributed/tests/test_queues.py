@@ -7,9 +7,10 @@ import pytest
 from toolz import take
 from tornado import gen
 
-from distributed import Client, Queue
+from distributed import Client, Queue, Nanny, worker_client
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, loop, cluster, slowinc
+from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
+                                    slow)
 
 
 @gen_cluster(client=True)
@@ -113,3 +114,31 @@ def test_picklability_sync(loop):
             c.submit(f, 10).result()
 
             assert q.get() == 11
+
+
+@slow
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 5, Worker=Nanny,
+             timeout=None)
+def test_race(c, s, *workers):
+    def f(i):
+        with worker_client() as c:
+            q = Queue('x', client=c)
+            for _ in range(100):
+                future = q.get()
+                x = future.result()
+                y = c.submit(inc, x)
+                q.put(y)
+                sleep(0.01)
+            result = q.get().result()
+            return result
+
+    q = Queue('x', client=c)
+    L = yield c._scatter(range(5))
+    for future in L:
+        yield q._put(future)
+
+    futures = c.map(f, range(5))
+    results = yield c._gather(futures)
+    assert all(r > 80 for r in results)
+    qsize = yield q._qsize()
+    assert not qsize

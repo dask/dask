@@ -7,9 +7,10 @@ import pytest
 from toolz import take
 from tornado import gen
 
-from distributed import Client, Variable
+from distributed import Client, Variable, worker_client, Nanny
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, loop, cluster, slowinc
+from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
+                                    slow)
 
 
 @gen_cluster(client=True)
@@ -137,3 +138,35 @@ def test_timeout_get(c, s, a, b):
 
     result = yield tornado_future
     assert result == 1
+
+
+@slow
+@gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 5, Worker=Nanny,
+             timeout=None)
+def test_race(c, s, *workers):
+    def f(i):
+        with worker_client() as c:
+            v = Variable('x', client=c)
+            for _ in range(100):
+                future = v.get()
+                x = future.result()
+                y = c.submit(inc, x)
+                v.set(y)
+                sleep(0.01)
+            result = v.get().result()
+            sleep(0.1)  # allow fire-and-forget messages to clear
+            return result
+
+    v = Variable('x', client=c)
+    x = yield c._scatter(1)
+    yield v._set(x)
+
+    futures = c.map(f, range(10))
+    results = yield c._gather(futures)
+    assert all(r > 80 for r in results)
+
+    start = time()
+    while len(s.wants_what['variable-x']) != 1:
+        yield gen.sleep(0.01)
+        if not time() - start < 2:
+            import pdb; pdb.set_trace()
