@@ -982,6 +982,23 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
+def test_to_delayed_optimizes():
+    b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
+    b2 = b.map(inc).map(inc).map(inc)
+
+    [d] = b2.to_delayed()
+    text = str(dict(d.dask))
+    assert text.count('reify') == 1
+
+    d = b2.sum().to_delayed()
+    text = str(dict(d.dask))
+    assert text.count('reify') == 0
+
+    [d] = b2.to_textfiles('foo.txt', compute=False)
+    text = str(dict(d.dask))
+    assert text.count('reify') <= 1
+
+
 def test_from_delayed():
     from dask.delayed import delayed
     a, b, c = delayed([1, 2, 3]), delayed([4, 5, 6]), delayed([7, 8, 9])

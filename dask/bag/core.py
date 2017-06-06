@@ -48,15 +48,20 @@ no_result = type('no_result', (object,),
 
 def lazify_task(task, start=True):
     """
-    Given a task, remove unnecessary calls to ``list``
+    Given a task, remove unnecessary calls to ``list`` and ``reify``
+
+    This traverses tasks and small lists.  We choose not to traverse down lists
+    of size >= 50 because it is unlikely that sequences this long contain other
+    sequences in practice.
 
     Examples
     --------
-
     >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
     >>> lazify_task(task)  # doctest: +SKIP
     (sum, (map, inc, [1, 2, 3]))
     """
+    if type(task) is list and len(task) < 50:
+        return [lazify_task(arg, False) for arg in task]
     if not istask(task):
         return task
     head, tail = task[0], task[1:]
@@ -304,7 +309,8 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        return Delayed(self.key, self.dask)
+        dsk = self._optimize(self.dask, [self.key])
+        return Delayed(self.key, dsk)
 
 
 class Bag(Base):
@@ -1173,7 +1179,8 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        return [Delayed(k, self.dask) for k in self._keys()]
+        dsk = self._optimize(self.dask, self._keys())
+        return [Delayed(k, dsk) for k in self._keys()]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
