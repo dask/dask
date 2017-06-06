@@ -1403,7 +1403,7 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def scatter(self, comm=None, data=None, workers=None, client=None,
-            broadcast=False, timeout=2):
+                broadcast=False, timeout=2):
         """ Send data out to workers
 
         See also
@@ -1422,10 +1422,11 @@ class Scheduler(ServerNode):
             workers = [self.coerce_address(w) for w in workers]
             ncores = {w: self.ncores[w] for w in workers}
 
+        assert isinstance(data, dict)
+
         keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                                          rpc=self.rpc,
-                                                         report=False,
-                                                         serialize=False)
+                                                         report=False)
 
         self.update_data(who_has=who_has, nbytes=nbytes, client=client)
 

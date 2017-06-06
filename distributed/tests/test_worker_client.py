@@ -1,10 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import random
+from time import sleep
 
 import dask
 from dask import delayed
-from time import sleep
+import pytest
 from tornado import gen
 
 from distributed import worker_client, Client, as_completed
@@ -70,6 +71,18 @@ def test_scatter_from_worker(c, s, a, b):
     while not all(v == 1 for v in s.ncores.values()):
         yield gen.sleep(0.1)
         assert time() < start + 5
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_scatter_singleton(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    def func():
+        with worker_client() as c:
+            x = np.ones(5)
+            future = c.scatter(x)
+            assert future.type == np.ndarray
+
+    yield c.submit(func)
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)

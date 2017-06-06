@@ -824,6 +824,35 @@ def test_scatter_hash(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_scatter_tokenize_local(c, s, a, b):
+    from dask.base import normalize_token
+    class MyObj(object):
+        pass
+
+    L = []
+
+    @normalize_token.register(MyObj)
+    def f(x):
+        L.append(x)
+        return 'x'
+
+    obj = MyObj()
+
+    future = yield c._scatter(obj)
+    assert L and L[0] is obj
+
+
+@gen_cluster(client=True)
+def test_scatter_singletons(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    pd = pytest.importorskip('pandas')
+    for x in [1, np.ones(5), pd.DataFrame({'x': [1, 2, 3]})]:
+        future = yield c._scatter(x)
+        result = yield future
+        assert str(result) == str(x)
+
+
+@gen_cluster(client=True)
 def test_get_releases_data(c, s, a, b):
     [x] = yield c.get({'x': (inc, 1)}, ['x'], sync=False)
     import gc; gc.collect()
@@ -966,7 +995,7 @@ def test_iterator_scatter(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             aa = c.scatter([1,2,3])
-            assert [1,2,3] == c.gather(aa)
+            assert [1, 2, 3] == c.gather(aa)
 
             g = (i for i in range(10))
             futures = c.scatter(g)
@@ -1066,6 +1095,90 @@ def test_iterator_gather(loop):
             assert isinstance(i_out[3], StopIteration)
             assert i_out[3].args == i_in[3].args
             assert i_out[4:] == i_in[4:]
+
+
+@gen_cluster(client=True)
+def test_scatter_direct(c, s, a, b):
+    future = yield c._scatter(123, direct=True)
+    assert future.key in a.data or future.key in b.data
+    assert s.who_has[future.key]
+    assert future.status == 'finished'
+    result = yield future
+    assert result == 123
+
+
+@gen_cluster(client=True)
+def test_scatter_direct_numpy(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = np.ones(5)
+    future = yield c._scatter(x, direct=True)
+    result = yield future
+    assert np.allclose(x, result)
+
+
+@gen_cluster(client=True)
+def test_scatter_direct_broadcast(c, s, a, b):
+    future2 = yield c._scatter(456, direct=True, broadcast=True)
+    assert future2.key in a.data
+    assert future2.key in b.data
+    assert s.who_has[future2.key] == {a.address, b.address}
+    result = yield future2
+    assert result == 456
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4)
+def test_scatter_direct_balanced(c, s, *workers):
+    futures = yield c._scatter([1, 2, 3], direct=True)
+    assert sorted([len(w.data) for w in workers]) == [0, 1, 1, 1]
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4)
+def test_scatter_direct_broadcast_target(c, s, *workers):
+    futures = yield c._scatter([123, 456], direct=True,
+                                workers=workers[0].address)
+    assert futures[0].key in workers[0].data
+    assert futures[1].key in workers[0].data
+
+    futures = yield c._scatter([123, 456], direct=True, broadcast=True,
+                                workers=[w.address for w in workers[:3]])
+    assert (f.key in w.data and w.address in s.who_has[f.key]
+            for f in futures
+            for w in workers[:3])
+
+
+@gen_cluster(client=True, ncores=[])
+def test_scatter_direct_empty(c, s):
+    with pytest.raises(ValueError):
+        yield c._scatter(123, direct=True)
+
+
+@gen_cluster(client=True, timeout=None, ncores=[('127.0.0.1', 1)] * 5)
+def test_scatter_direct_spread_evenly(c, s, *workers):
+    futures = []
+    for i in range(10):
+        future = yield c._scatter(i, direct=True)
+        futures.append(future)
+
+    assert all(w.data for w in workers)
+
+
+@pytest.mark.parametrize('direct', [True, False])
+@pytest.mark.parametrize('broadcast', [True, False])
+def test_scatter_gather_sync(loop, direct, broadcast):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            futures = c.scatter([1, 2, 3], direct=direct, broadcast=broadcast)
+            results = c.gather(futures, direct=direct)
+            assert results == [1, 2, 3]
+
+
+@gen_cluster(client=True)
+def test_gather_direct(c, s, a, b):
+    futures = yield c._scatter([1, 2, 3])
+
+    data = yield c._gather(futures, direct=True)
+    assert data == [1, 2, 3]
+
 
 @gen_cluster(client=True)
 def test_many_submits_spread_evenly(c, s, a, b):

@@ -35,7 +35,8 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.queues import Queue
 
 from .batched import BatchedSend
-from .utils_comm import WrappedKey, unpack_remotedata, pack_data
+from .utils_comm import (WrappedKey, unpack_remotedata, pack_data,
+                         scatter_to_workers, gather_from_workers)
 from .cfexecutor import ClientExecutor
 from .compatibility import Queue as pyQueue, Empty, isqueue, get_thread_identity
 from .core import connect, rpc, clean_exception, CommClosedError
@@ -1006,7 +1007,7 @@ class Client(Node):
         return [futures[tokey(k)] for k in keys]
 
     @gen.coroutine
-    def _gather(self, futures, errors='raise'):
+    def _gather(self, futures, errors='raise', direct=False):
         futures2, keys = unpack_remotedata(futures, byte_keys=True)
         keys = [tokey(key) for key in keys]
         bad_data = dict()
@@ -1053,7 +1054,19 @@ class Client(Node):
                         raise ValueError("Bad value, `errors=%s`" % errors)
             keys = [k for k in keys if k not in bad_keys]
 
-            response = yield self.scheduler.gather(keys=keys)
+            if direct:
+                who_has = yield self.scheduler.who_has(keys=keys)
+                data, missing_keys, missing_workers = yield gather_from_workers(
+                    who_has, rpc=self.rpc, close=False)
+                response = {'status': 'OK', 'data': data}
+                if missing_keys:
+                    keys2 = [key for key in keys if key not in data]
+                    response = yield self.scheduler.gather(keys=keys2)
+                    if response['status'] == 'OK':
+                        response['data'].update(data)
+
+            else:
+                response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
                 logger.warning("Couldn't gather keys %s", response['keys'])
@@ -1085,7 +1098,7 @@ class Client(Node):
             for item in results:
                 qout.put(item)
 
-    def gather(self, futures, errors='raise', maxsize=0):
+    def gather(self, futures, errors='raise', maxsize=0, direct=False):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -1129,17 +1142,19 @@ class Client(Node):
         if isqueue(futures):
             qout = pyQueue(maxsize=maxsize)
             t = Thread(target=self._threaded_gather, args=(futures, qout),
-                        kwargs={'errors': errors})
+                       kwargs={'errors': errors, 'direct': direct})
             t.daemon = True
             t.start()
             return qout
         elif isinstance(futures, Iterator):
-            return (self.gather(f, errors=errors) for f in futures)
+            return (self.gather(f, errors=errors, direct=direct)
+                    for f in futures)
         else:
-            return sync(self.loop, self._gather, futures, errors=errors)
+            return sync(self.loop, self._gather, futures, errors=errors,
+                        direct=direct)
 
     @gen.coroutine
-    def _scatter(self, data, workers=None, broadcast=False):
+    def _scatter(self, data, workers=None, broadcast=False, direct=False):
         if isinstance(workers, six.string_types):
             workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
@@ -1147,45 +1162,54 @@ class Client(Node):
             d = yield self._scatter(keymap(tokey, data), workers, broadcast)
             raise gen.Return({k: d[tokey(k)] for k in data})
 
+        if isinstance(data, type(range(0))):
+            data = list(data)
+        input_type = type(data)
+        names = False
         unpack = False
-        if isinstance(data, dict):
-            data2 = valmap(to_serialize, data)
-            types = valmap(type, data)
-        elif isinstance(data, (list, tuple, set, frozenset)):
-            data2 = list(map(to_serialize, data))
-            types = list(map(type, data))
-        elif isinstance(data, (Iterable, Iterator)):
-            data2 = list(map(to_serialize, data))
-            types = list(map(type, data))
-        else:
-            data2 = [to_serialize(data)]
-            types = [type(data)]
+        if isinstance(data, Iterator):
+            data = list(data)
+        if isinstance(data, (set, frozenset)):
+            data = list(data)
+        if not isinstance(data, (dict, list, tuple, set, frozenset)):
             unpack = True
-        keys = yield self.scheduler.scatter(data=data2, workers=workers,
+            data = [data]
+        if isinstance(data, (list, tuple)):
+            names = list(map(tokenize, data))
+            data = dict(zip(names, data))
+
+        assert isinstance(data, dict)
+
+        data2 = valmap(to_serialize, data)
+        types = valmap(type, data)
+        if direct:
+            ncores = yield self.scheduler.ncores(workers=workers)
+            if not ncores:
+                raise ValueError("No valid workers")
+
+            _, who_has, nbytes = yield scatter_to_workers(ncores, data2,
+                                                          report=False,
+                                                          rpc=self.rpc)
+
+            yield self.scheduler.update_data(who_has=who_has, nbytes=nbytes)
+        else:
+            yield self.scheduler.scatter(data=data2, workers=workers,
                                             client=self.id,
                                             broadcast=broadcast)
-        if isinstance(data, dict):
-            out = {k: self._Future(k, self) for k in keys}
-        elif isinstance(data, (tuple, list, set, frozenset)):
-            out = type(data)([self._Future(k, self) for k in keys])
-        elif isinstance(data, (Iterable, Iterator)):
-            out = [self._Future(k, self) for k in keys]
-        else:
-            out = [self._Future(k, self) for k in keys]
 
-        for key in keys:
-            self.futures[key].finish(type=None)
+        out = {k: self._Future(k, self) for k in data2}
+        for key, typ in types.items():
+            self.futures[key].finish(type=typ)
 
-        if isinstance(types, list):
-            for key, typ in zip(keys, types):
-                self.futures[key].type = typ
-        elif isinstance(types, dict):
-            for key in keys:
-                self.futures[key].type = types[key]
+        if direct and broadcast:
+            yield self._replicate(list(out.values()), workers=workers)
+
+        if issubclass(input_type, (list, tuple, set, frozenset)):
+            out = input_type(out[k] for k in names)
 
         if unpack:
-            out = out[0]
-
+            assert len(out) == 1
+            out = list(out.values())[0]
         raise gen.Return(out)
 
     def _threaded_scatter(self, q_or_i, qout, **kwargs):
@@ -1209,7 +1233,7 @@ class Client(Node):
             for future in futures:
                 qout.put(future)
 
-    def scatter(self, data, workers=None, broadcast=False, maxsize=0):
+    def scatter(self, data, workers=None, broadcast=False, direct=False, maxsize=0):
         """ Scatter data into distributed memory
 
         This moves data from the local client process into the workers of the
@@ -1227,6 +1251,10 @@ class Client(Node):
         broadcast: bool (defaults to False)
             Whether to send each data element to all workers.
             By default we round-robin based on number of cores.
+        direct: bool (defaults to False)
+            Send data directly to workers, bypassing the central scheduler
+            This avoids burdening the scheduler but assumes that the client is
+            able to talk directly with the workers.
         maxsize: int (optional)
             Maximum size of queue if using queues, 0 implies infinite
 
@@ -1284,7 +1312,7 @@ class Client(Node):
                 return queue_to_iterator(qout)
         else:
             return sync(self.loop, self._scatter, data, workers=workers,
-                        broadcast=broadcast)
+                        broadcast=broadcast, direct=direct)
 
     @gen.coroutine
     def _cancel(self, futures):

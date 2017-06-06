@@ -1,19 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import Iterable, defaultdict
+from collections import defaultdict
 from itertools import cycle
 import random
-import uuid
 
 from tornado import gen
 from tornado.gen import Return
 
-from dask.base import tokenize
 from toolz import merge, concat, groupby, drop
 
-from .core import coerce_to_address
+from .core import rpc
 from .utils import All, tokey
-from .protocol.pickle import dumps
 
 
 no_default = '__no_default__'
@@ -100,7 +97,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(ncores, data, rpc, report=True, serialize=True):
+def scatter_to_workers(ncores, data, rpc=rpc, report=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -109,29 +106,19 @@ def scatter_to_workers(ncores, data, rpc, report=True, serialize=True):
 
     See scatter for parameter docstring
     """
-    if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
-        k = len(data) // len(ncores)
-        ncores = {coerce_to_address(worker): k for worker in ncores}
+    assert isinstance(ncores, dict)
+    assert isinstance(data, dict)
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
-    if isinstance(data, dict):
-        names, data = list(zip(*data.items()))
-    else:
-        names = []
-        for x in data:
-            try:
-                names.append(tokenize(x))
-            except:
-                names.append(str(uuid.uuid1()))
+    names, data = list(zip(*data.items()))
 
     worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))
     _round_robin_counter[0] += len(data)
 
     L = list(zip(worker_iter, names, data))
     d = groupby(0, L)
-    d = {worker: {key: dumps(value) if serialize else value
-                   for _, key, value in v}
-          for worker, v in d.items()}
+    d = {worker: {key: value for _, key, value in v}
+         for worker, v in d.items()}
 
     rpcs = {addr: rpc(addr) for addr in d}
     try:
