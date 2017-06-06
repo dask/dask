@@ -49,6 +49,7 @@ def test_no_overlaps():
 
 
 @pytest.mark.xfail
+@pytest.mark.network
 def test_daily_stock():
     pytest.importorskip('pandas_datareader')
     df = dd.demo.daily_stock('GOOG', start='2010-01-01', stop='2010-01-30', freq='1h')
