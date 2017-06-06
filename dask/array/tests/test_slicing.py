@@ -605,3 +605,36 @@ def test_normalize_index():
     (result,) = normalize_index([-5, -2, 1], (np.nan,))
     assert result.tolist() == [-5, -2, 1]
     assert normalize_index(slice(-5, -2), (np.nan,)) == (slice(-5, -2),)
+
+
+def test_slice_array_mask_simple():
+    x = np.arange(12).reshape(4, 3)
+    y = np.array([1, 1, 2, 3])
+    dx = da.from_array(x, 2)
+    dy = da.from_array(y, 2)
+    expected = np.array([[0, 1, 2],
+                         [3, 4, 5]])
+    result = dx[dy == 1]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('x, y', [
+    (np.arange(12).reshape(4, 3), np.array([1, 1, 2, 3])),
+    (np.arange(24).reshape(4, 3, 2), np.array([1, 1, 2, 3])),
+])
+@pytest.mark.parametrize('chunks', (1, 2, 4))
+def test_slice_array_mask(x, y, chunks):
+    dx = da.from_array(x, chunks=chunks)
+    dy = da.from_array(y, chunks=chunks)
+    #dask and dask
+    assert_eq(dx[dy == 1], x[y == 1])
+    # dask and numpy
+    assert_eq(dx[y == 1], x[y == 1])
+
+
+def test_slice_array_mask_higher():
+    x = np.arange(30).reshape(2, 3, 5)
+    dx = da.from_array(x, chunks=5)
+    m = x.sum(2) % 10 == 0
+    dm = dx.sum(2) % 10 == 0
+    assert_eq(dx[dm], x[m])

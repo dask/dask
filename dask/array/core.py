@@ -2504,6 +2504,7 @@ def elemwise(op, *args, **kwargs):
 
     arrays = [a for a in args if not is_scalar_for_elemwise(a)]
     other = [(i, a) for i, a in enumerate(args) if is_scalar_for_elemwise(a)]
+    atop_args = concat((a, tuple(range(a.ndim)[::-1])) for a in arrays)
 
     need_enforce_dtype = False
     if 'dtype' in kwargs:
@@ -2525,8 +2526,8 @@ def elemwise(op, *args, **kwargs):
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))
-
     atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
+
     if other:
         atop_kwargs['function'] = op
         atop_kwargs['other'] = other
@@ -2538,7 +2539,6 @@ def elemwise(op, *args, **kwargs):
     result = atop(op, expr_inds,
                   *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                   **atop_kwargs)
-
     return handle_out(out, result)
 
 
@@ -3212,13 +3212,96 @@ def from_npy_stack(dirname, mmap_mode='r'):
     return Array(dsk, name, chunks, dtype)
 
 
-def slice_with_dask_array(x, index):
-    y = elemwise(getitem, x, index, dtype=x.dtype)
+def _elemwise_array_mask(op, *args, **kwargs):
+    """
+    Modified version of :func:`elemwise` for getitem where the mask is
+    a boolean array, which requires slightly different reduction and
+    broadcasting rules from other operations.
 
-    name = 'getitem-' + tokenize(x, index)
+    This probably only makes sense to call from `slice_with_dask_array`, as
 
-    dsk = {(name, i): k
-           for i, k in enumerate(core.flatten(y._keys()))}
-    chunks = ((np.nan,) * y.npartitions,)
+
+    See also
+    --------
+    atop
+    elemwise
+    slice_with_dask_array
+    """
+    if not set(['name', 'dtype']).issuperset(kwargs):
+        msg = "%s does not take the following keyword arguments %s"
+        raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
+    args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
+    arrays = [a for a in args if not is_scalar_for_elemwise(a)]
+
+    # these are the two differences from elemwise
+    out_ndim = arrays[0].ndim
+    atop_args = concat((a, tuple(range(out_ndim)[::-1])[:a.ndim]) for a in arrays)
+
+    expr_inds = tuple(range(out_ndim))[::-1]
+    dt = arrays[0].dtype
+
+    name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
+                                                  tokenize(op, dt, *args))
+    y = atop(op, expr_inds, *atop_args, dtype=dt, name=name)
+
+    x, index = arrays  # _is_boolean_masks checks the length of args, so this should be OK
+    # When `x.ndim > index.ndim`, then the output from `elemwise` is always `x.ndim`.
+    # The correct dimensions is `x.ndim - index.nndim + 1`, but we can't do that earlier
+    # since it doesn't play well with atop. We update the dask from `y`
+    # and adjust the dimensionality here. The output shape is
+
+    # - the number of True items on the indexing axes (nan, since we don't know this)
+    # - the original number of elements in all other axes
+
+    dsk = {}
+    ndim = x.ndim - index.ndim + 1
+    same = x.chunks[-(ndim - 1):]
+    unknown = [(np.nan,) * len(chunk) for chunk in x.chunks[:ndim - len(same)]]
+    chunks = tuple(unknown) + same
+
+    dsk = {}
+    for k in core.flatten(y._keys()):
+        dsk[k[:ndim + 1]] = y.dask[k]
 
     return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
+
+
+def slice_with_dask_array(x, index):
+    """
+    Slice one dask array with another
+
+    Parameters
+    ----------
+    x, index : dask.Array
+
+    Returns
+    -------
+    sliced: dask.Array
+
+    Notes
+    -----
+    This supports two cases
+
+    1. ``x.shape == index.shape``
+    2. ``index`` is a boolean mask, whose shape matches on all dimensions being masked.
+    """
+    name = 'getitem-' + tokenize(x, index)
+
+    if _is_boolean_mask(getitem, (x, index)):
+        return _elemwise_array_mask(getitem, x, index, dtype=x.dtype)
+    else:
+        # when x.shape == index.shape -> 1-d array like you raveled
+        y = elemwise(getitem, x, index, dtype=x.dtype)
+        dsk = {(name, i): k
+               for i, k in enumerate(core.flatten(y._keys()))}
+
+        chunks = ((np.nan,) * y.npartitions,)
+        return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
+
+
+def _is_boolean_mask(op, arrays):
+
+    if len(arrays) == 2:
+        x, index = arrays
+        return op == getitem and isinstance(x, Array) and x.ndim > index.ndim and index.dtype == bool
+    return False
