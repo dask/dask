@@ -8,7 +8,7 @@ import ssl
 import struct
 import sys
 
-from tornado import gen
+from tornado import gen, netutil
 from tornado.iostream import IOStream, StreamClosedError
 from tornado.tcpclient import TCPClient
 from tornado.tcpserver import TCPServer
@@ -315,7 +315,12 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
         self.tcp_server.handle_stream = self.handle_stream
         for i in range(5):
             try:
-                self.tcp_server.listen(self.port, self.ip)
+                # When shuffling data between workers, there can
+                # really be O(cluster size) connection requests
+                # on a single worker socket, make sure the backlog
+                # is large enough not to lose any.
+                sockets = netutil.bind_sockets(self.port, address=self.ip,
+                                               backlog=2048)
             except EnvironmentError as e:
                 # EADDRINUSE can happen sporadically when trying to bind
                 # to an ephemeral port
@@ -323,6 +328,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
                     raise
                 exc = e
             else:
+                self.tcp_server.add_sockets(sockets)
                 break
         else:
             raise exc
