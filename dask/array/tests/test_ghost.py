@@ -191,7 +191,6 @@ def test_ghost():
 
 def test_map_overlap():
     x = da.arange(10, chunks=5)
-
     y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype)
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
