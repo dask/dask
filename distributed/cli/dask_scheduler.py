@@ -41,8 +41,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="HTTP port for JSON API diagnostics")
 @click.option('--bokeh-port', type=int, default=8787,
               help="Bokeh port for visual diagnostics")
-@click.option('--bokeh-external-port', type=int, default=None,
-              help="Optional port for the external (old) Bokeh server")
 @click.option('--bokeh-internal-port', type=int, default=None,
               help="Deprecated. Use --bokeh-port instead")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
@@ -66,10 +64,10 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
-def main(host, port, http_port, bokeh_port, bokeh_external_port,
-         bokeh_internal_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
-         use_xheaders, pid_file, scheduler_file, interface, local_directory,
-         preload, prefix, tls_ca_file, tls_cert, tls_key):
+def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
+         bokeh_whitelist, bokeh_prefix, use_xheaders, pid_file, scheduler_file,
+         interface, local_directory, preload, prefix, tls_ca_file, tls_cert,
+         tls_key):
 
     if bokeh_internal_port:
         print("The --bokeh-internal-port keyword has been removed.\n"
@@ -135,22 +133,6 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
     scheduler.start(addr)
     preload_modules(preload, parameter=scheduler, file_dir=local_directory)
 
-    bokeh_proc = None
-    if _bokeh and bokeh_external_port is not None:
-        if bokeh_external_port == 0: # This is a hack and not robust
-            bokeh_external_port = open_port() # This port may be taken by the OS
-        try:                                  # before we successfully pass it to Bokeh
-            from distributed.bokeh.application import BokehWebInterface
-            bokeh_proc = BokehWebInterface(http_port=http_port,
-                    scheduler_address=scheduler.address,
-                    bokeh_port=bokeh_external_port,
-                    bokeh_whitelist=bokeh_whitelist, show=show, prefix=bokeh_prefix,
-                    use_xheaders=use_xheaders, quiet=False)
-        except ImportError:
-            logger.info("Please install Bokeh to get Web UI")
-        except Exception as e:
-            logger.warning("Could not start Bokeh web UI", exc_info=True)
-
     logger.info('Local Directory: %26s', local_directory)
     logger.info('-' * 47)
     try:
@@ -158,8 +140,6 @@ def main(host, port, http_port, bokeh_port, bokeh_external_port,
         loop.close()
     finally:
         scheduler.stop()
-        if bokeh_proc:
-            bokeh_proc.close()
         if local_directory_created:
             shutil.rmtree(local_directory)
 

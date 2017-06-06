@@ -129,26 +129,6 @@ def test_bokeh_non_standard_ports(loop):
         requests.get('http://localhost:4832/status/')
 
 
-def test_bokeh_external_port(loop):
-    pytest.importorskip('bokeh')
-
-    with popen(['dask-scheduler', '--bokeh-external-port', '4833']) as proc:
-        with Client('127.0.0.1:8786', loop=loop) as c:
-            d = c.scheduler_info()
-
-        start = time()
-        while True:
-            try:
-                response = requests.get('http://localhost:4833/workers/')
-                assert response.ok
-                break
-            except:
-                sleep(0.1)
-                assert time() < start + 20
-    with pytest.raises(Exception):
-        requests.get('http://localhost:4833/workers/')
-
-
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 def test_bokeh_whitelist(loop):

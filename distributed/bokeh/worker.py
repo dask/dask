@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 import logging
 import math
+import os
 
 from bokeh.layouts import row, column, widgetbox
 from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool,
@@ -24,6 +25,13 @@ from ..utils import log_errors, key_split
 
 
 logger = logging.getLogger(__name__)
+
+import jinja2
+
+with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
+    template_source = f.read()
+
+template = jinja2.Template(template_source)
 
 
 class StateTable(DashboardComponent):
@@ -545,6 +553,7 @@ def main_doc(worker, doc):
                             communicating_ts.root,
                             communicating_stream.root,
                             sizing_mode='scale_width'))
+        doc.template = template
 
 
 def crossfilter_doc(worker, doc):
@@ -557,6 +566,7 @@ def crossfilter_doc(worker, doc):
         doc.add_periodic_callback(crossfilter.update, 500)
 
         doc.add_root(column(statetable.root, crossfilter.root))
+        doc.template = template
 
 
 def systemmonitor_doc(worker, doc):
@@ -566,6 +576,7 @@ def systemmonitor_doc(worker, doc):
         doc.add_periodic_callback(sysmon.update, 500)
 
         doc.add_root(sysmon.root)
+        doc.template = template
 
 
 def counters_doc(server, doc):
@@ -575,6 +586,7 @@ def counters_doc(server, doc):
         doc.add_periodic_callback(counter.update, 500)
 
         doc.add_root(counter.root)
+        doc.template = template
 
 
 class BokehWorker(BokehServer):
