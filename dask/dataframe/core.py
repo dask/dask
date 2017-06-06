@@ -3798,7 +3798,8 @@ def to_delayed(df):
     >>> partitions = df.to_delayed()  # doctest: +SKIP
     """
     from ..delayed import Delayed
-    return [Delayed(k, df.dask) for k in df._keys()]
+    dsk = df._optimize(df.dask, df._keys())
+    return [Delayed(k, dsk) for k in df._keys()]
 
 
 @wraps(pd.to_datetime)

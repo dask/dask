@@ -2228,6 +2228,13 @@ def test_to_delayed():
     assert a.compute() == s
 
 
+def test_to_delayed_optimizes():
+    x = da.ones((4, 4), chunks=(2, 2))
+    y = x[1:][1:][1:][:, 1:][:, 1:][:, 1:]
+    d = y.to_delayed().flatten().tolist()[0]
+    assert len([k for k in d.dask if k[0].startswith('getitem')]) == 1
+
+
 def test_cumulative():
     x = da.arange(20, chunks=5)
     assert_eq(x.cumsum(axis=0), np.arange(20).cumsum())

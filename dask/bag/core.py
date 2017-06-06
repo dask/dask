@@ -37,7 +37,7 @@ from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert)
+                     digit, insert, ensure_dict)
 
 
 no_default = '__no__default__'
@@ -48,15 +48,20 @@ no_result = type('no_result', (object,),
 
 def lazify_task(task, start=True):
     """
-    Given a task, remove unnecessary calls to ``list``
+    Given a task, remove unnecessary calls to ``list`` and ``reify``
+
+    This traverses tasks and small lists.  We choose not to traverse down lists
+    of size >= 50 because it is unlikely that sequences this long contain other
+    sequences in practice.
 
     Examples
     --------
-
     >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
     >>> lazify_task(task)  # doctest: +SKIP
     (sum, (map, inc, [1, 2, 3]))
     """
+    if type(task) is list and len(task) < 50:
+        return [lazify_task(arg, False) for arg in task]
     if not istask(task):
         return task
     head, tail = task[0], task[1:]
@@ -167,10 +172,16 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    out = write_bytes(b.to_delayed(), path, name_function, compression,
-                      encoding=encoding)
+    from dask import delayed
+    writes = write_bytes(b.to_delayed(), path, name_function, compression,
+                         encoding=encoding)
+
+    # Use Bag optimizations on these delayed objects
+    dsk = ensure_dict(delayed(writes).dask)
+    dsk2 = Bag._optimize(dsk, [w.key for w in writes])
+    out = [Delayed(w.key, dsk2) for w in writes]
+
     if compute:
-        from dask import delayed
         get = get or _globals.get('get', None) or Bag._default_get
         delayed(out).compute(get=get)
     else:
@@ -304,7 +315,8 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        return Delayed(self.key, self.dask)
+        dsk = self._optimize(self.dask, [self.key])
+        return Delayed(self.key, dsk)
 
 
 class Bag(Base):
@@ -1173,7 +1185,8 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        return [Delayed(k, self.dask) for k in self._keys()]
+        dsk = self._optimize(self.dask, self._keys())
+        return [Delayed(k, dsk) for k in self._keys()]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
