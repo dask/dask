@@ -37,7 +37,7 @@ from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert)
+                     digit, insert, ensure_dict)
 
 
 no_default = '__no__default__'
@@ -172,10 +172,16 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    out = write_bytes(b.to_delayed(), path, name_function, compression,
-                      encoding=encoding)
+    from dask import delayed
+    writes = write_bytes(b.to_delayed(), path, name_function, compression,
+                         encoding=encoding)
+
+    # Use Bag optimizations on these delayed objects
+    dsk = ensure_dict(delayed(writes).dask)
+    dsk2 = Bag._optimize(dsk, [w.key for w in writes])
+    out = [Delayed(w.key, dsk2) for w in writes]
+
     if compute:
-        from dask import delayed
         get = get or _globals.get('get', None) or Bag._default_get
         delayed(out).compute(get=get)
     else:

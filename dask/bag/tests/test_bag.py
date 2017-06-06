@@ -996,7 +996,7 @@ def test_to_delayed_optimizes():
 
     [d] = b2.to_textfiles('foo.txt', compute=False)
     text = str(dict(d.dask))
-    assert text.count('reify') <= 1
+    assert text.count('reify') <= 0
 
 
 def test_from_delayed():
