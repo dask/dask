@@ -666,7 +666,10 @@ def test_where():
 
     for c1, c2 in [(d > 5, x > 5), (True, True), (False, False)]:
         for b1, b2 in [(0, 0), (-e[:, None], -y[:, None])]:
-            assert_eq(where(c1, d, b1), np.where(c2, x, b2))
+            w1 = where(c1, d, b1)
+            w2 = np.where(c2, x, b2)
+
+            assert_eq(w1, w2)
 
 
 def test_where_has_informative_error():
