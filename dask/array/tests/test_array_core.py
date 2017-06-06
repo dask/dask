@@ -745,6 +745,26 @@ def test_broadcast_to():
     pytest.raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
+def test_broadcast_to_array():
+    x = np.random.randint(10, size=(5, 1, 6))
+
+    for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+        a = np.broadcast_to(x, shape)
+        d = broadcast_to(x, shape)
+
+        assert_eq(a, d)
+
+
+def test_broadcast_to_scalar():
+    x = 5
+
+    for shape in [tuple(), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+        a = np.broadcast_to(x, shape)
+        d = broadcast_to(x, shape)
+
+        assert_eq(a, d)
+
+
 def test_ravel():
     x = np.random.randint(10, size=(4, 6))
 
