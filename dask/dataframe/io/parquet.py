@@ -362,7 +362,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         index_col = df.columns[0]
     else:
         ignore_divisions = True
-        index_col = []
+        index_col = None
 
     object_encoding = object_encoding or 'utf8'
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and

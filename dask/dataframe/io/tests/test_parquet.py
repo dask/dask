@@ -438,3 +438,10 @@ def test_filters(fn):
     ddf.repartition(npartitions=2, force=True).to_parquet(fn)
     dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
     assert len(ddf2) > 0
+
+
+def test_no_index(fn):
+    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, write_index=False)
+    dd.read_parquet(fn).compute()
