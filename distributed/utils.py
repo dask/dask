@@ -791,3 +791,24 @@ class itemgetter(object):
 
     def __reduce__(self):
         return (itemgetter, (self.index,))
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    """
+    if n > 1e9:
+        return '%0.2f GB' % (n / 1e9)
+    if n > 1e6:
+        return '%0.2f MB' % (n / 1e6)
+    if n > 1e3:
+        return '%0.2f kB' % (n / 1000)
+    return '%d B' % n
