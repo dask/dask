@@ -91,7 +91,8 @@ Install dask and dependencies::
 
 For development dask uses the following additional dependencies::
 
-   pip install pytest moto mock
+   pip install pytest moto mock partd sparse
+   conda install cloudpickle
 
 
 Run Tests
