@@ -530,3 +530,12 @@ def test_to_delayed():
     assert isinstance(b, Delayed)
 
     assert_eq(a.compute(), df.iloc[:2])
+
+
+def test_to_delayed_optimizes():
+    df = pd.DataFrame({'x': list(range(20))})
+    ddf = dd.from_pandas(df, npartitions=20)
+    x = (ddf + 1).loc[:2]
+
+    d = x.to_delayed()[0]
+    assert len(d.dask) < 20

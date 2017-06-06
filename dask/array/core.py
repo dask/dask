@@ -1700,8 +1700,9 @@ class Array(Base):
         dask.array.from_delayed
         """
         from ..delayed import Delayed
-        return np.array(ndeepmap(self.ndim, lambda k: Delayed(k, self.dask), self._keys()),
-                        dtype=object)
+        dsk = self._optimize(self.dask, self._keys())
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), self._keys())
+        return np.array(L, dtype=object)
 
     @wraps(np.repeat)
     def repeat(self, repeats, axis=None):
