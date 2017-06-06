@@ -999,3 +999,34 @@ def test_zmq_deserialize():
 @gen_test()
 def test_inproc_deserialize():
     yield check_deserialize('inproc://')
+
+
+
+def _raise_eoferror():
+    raise EOFError
+
+
+class _EOFRaising(object):
+    def __reduce__(self):
+        return _raise_eoferror, ()
+
+
+@gen.coroutine
+def check_deserialize_eoferror(addr):
+    """
+    EOFError when deserializing should close the comm.
+    """
+    @gen.coroutine
+    def handle_comm(comm):
+        yield comm.write({'data': to_serialize(_EOFRaising())})
+        with pytest.raises(CommClosedError):
+            yield comm.read()
+
+    with listen(addr, handle_comm) as listener:
+        comm = yield connect(listener.contact_address, deserialize=deserialize)
+        with pytest.raises(CommClosedError):
+            yield comm.read()
+
+@gen_test()
+def test_tcp_deserialize_eoferror():
+    yield check_deserialize_eoferror('tcp://')

@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def to_frames(msg):
     """
+    Serialize a message into a list of Distributed protocol frames.
     """
     try:
         return list(protocol.dumps(msg))
@@ -23,8 +24,20 @@ def to_frames(msg):
 
 def from_frames(frames, deserialize=True):
     """
+    Unserialize a list of Distributed protocol frames.
     """
-    return protocol.loads(frames, deserialize=deserialize)
+    try:
+        return protocol.loads(frames, deserialize=deserialize)
+    except EOFError:
+        size = sum(map(len, frames))
+        if size > 1000:
+            datastr = "[too large to display]"
+        else:
+            datastr = frames
+        # Aid diagnosing
+        logger.error("truncated data stream (%d bytes): %s", size,
+                     datastr)
+        raise
 
 
 def get_tcp_server_address(tcp_server):

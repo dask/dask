@@ -8,6 +8,7 @@ import ssl
 import struct
 import sys
 
+import tornado
 from tornado import gen, netutil
 from tornado.iostream import IOStream, StreamClosedError
 from tornado.tcpclient import TCPClient
@@ -110,6 +111,7 @@ class TCP(Comm):
     """
     An established communication based on an underlying Tornado IOStream.
     """
+    _iostream_allows_memoryview = tornado.version_info >= (4, 5)
 
     def __init__(self, stream, peer_addr, deserialize=True):
         self._peer_addr = peer_addr
@@ -164,7 +166,12 @@ class TCP(Comm):
             self.stream = None
             convert_stream_closed_error(e)
 
-        msg = from_frames(frames, deserialize=self.deserialize)
+        try:
+            msg = from_frames(frames, deserialize=self.deserialize)
+        except EOFError:
+            # Frames possibly garbled or truncated by communication error
+            self.abort()
+            raise CommClosedError("aborted stream on truncated data")
         raise gen.Return(msg)
 
     @gen.coroutine
@@ -173,8 +180,10 @@ class TCP(Comm):
         if stream is None:
             raise CommClosedError
 
-        # IOStream.write() only takes bytes objects, not memoryviews
-        frames = [ensure_bytes(f) for f in to_frames(msg)]
+        if self._iostream_allows_memoryview:
+            frames = to_frames(msg)
+        else:
+            frames = [ensure_bytes(f) for f in to_frames(msg)]
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +
