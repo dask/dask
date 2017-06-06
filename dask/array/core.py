@@ -2811,6 +2811,7 @@ def insert(arr, obj, values, axis):
 
 @wraps(chunk.broadcast_to)
 def broadcast_to(x, shape):
+    x = asarray(x)
     shape = tuple(shape)
 
     if x.shape == shape:
