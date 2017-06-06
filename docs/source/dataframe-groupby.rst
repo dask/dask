@@ -130,7 +130,7 @@ For example, ``sum`` could be implemented as
 
 .. code-block:: python
 
-    custom_sum = dd.Aggregation('sum', lambda s: s.sum(), lambda s0: s0.sum())
+    custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
     df.groupby('g').agg(custom_sum)
 
 The name argument should be different from existing reductions to avoid data
