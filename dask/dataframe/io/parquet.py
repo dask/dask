@@ -429,12 +429,12 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                   compression=compression)
                   for outfile, partition in zip(outfiles, partitions)]
 
-    out = delayed(_write_metadata)(writes, filenames, fmd, path, metadata_fn,
-                                   myopen, sep)
-
     if compute:
-        out.compute()
+        writes = delayed(writes).compute()
+        _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep)
     else:
+        out = delayed(_write_metadata)(writes, filenames, fmd, path, metadata_fn,
+                                       myopen, sep)
         return out
 
 
