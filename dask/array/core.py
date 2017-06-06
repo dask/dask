@@ -2537,7 +2537,7 @@ def elemwise(op, *args, **kwargs):
         atop_kwargs['enforce_dtype_function'] = op
         op = _enforce_dtype
     result = atop(op, expr_inds,
-                  *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                  *atop_args,
                   **atop_kwargs)
     return handle_out(out, result)
 
