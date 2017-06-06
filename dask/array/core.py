@@ -2811,6 +2811,10 @@ def insert(arr, obj, values, axis):
 @wraps(chunk.broadcast_to)
 def broadcast_to(x, shape):
     shape = tuple(shape)
+
+    if x.shape == shape:
+        return x
+
     ndim_new = len(shape) - x.ndim
     if ndim_new < 0 or any(new != old
                            for new, old in zip(shape[ndim_new:], x.shape)
