@@ -288,7 +288,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                fixed_text=None, object_encoding=None, storage_options=None,
-               append=False, ignore_divisions=False, partition_on=None):
+               append=False, ignore_divisions=False, partition_on=None,
+               compute=True):
     """Store Dask.dataframe to Parquet files
 
     Notes
@@ -333,6 +334,9 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
         there will be no global groupby.
+    compute: bool (True)
+        If true (default) then we compute immediately.
+        If False then we return a dask.delayed object for future computation.
 
     This uses the fastparquet project:
     http://fastparquet.readthedocs.io/en/latest
@@ -345,7 +349,6 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
     See Also
     --------
     read_parquet: Read parquet data to dask.dataframe
-
     """
     import fastparquet
     partition_on = partition_on or []
@@ -419,17 +422,30 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         writes = [delayed(fastparquet.writer.partition_on_columns)(
             partition, partition_on, path, filename, fmd, sep,
             compression, fs.open, fs.mkdirs)
-            for filename, partition in zip(filenames, partitions)
-        ]
+            for filename, partition in zip(filenames, partitions)]
     else:
         writes = [delayed(fastparquet.writer.make_part_file)(
                   myopen(outfile, 'wb'), partition, fmd.schema,
                   compression=compression)
                   for outfile, partition in zip(outfiles, partitions)]
 
-    out = delayed(writes).compute()
+    if compute:
+        writes = delayed(writes).compute()
+        _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep)
+    else:
+        out = delayed(_write_metadata)(writes, filenames, fmd, path, metadata_fn,
+                                       myopen, sep)
+        return out
 
-    for fn, rg in zip(filenames, out):
+
+def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
+    """ Write Parquet metadata after writing all row groups
+
+    See Also
+    --------
+    to_parquet
+    """
+    for fn, rg in zip(filenames, writes):
         if rg is not None:
             if isinstance(rg, list):
                 for r in rg:
