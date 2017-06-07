@@ -699,7 +699,9 @@ def test_series_aggregate__examples(spec, split_every, grouper):
     # but we should still test it for now
     with pytest.warns(None):
         assert_eq(ps.groupby(grouper(pdf)).agg(spec),
-                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
+                  # pandas < 0.20.0 does not propagate the name for size
+                  check_names=(spec != 'size'))
 
 
 @pytest.mark.parametrize('spec', [
