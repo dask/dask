@@ -2918,6 +2918,8 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
+@pytest.mark.skipif(np.__version__ >= '1.13.0',
+                    reason='boolean slicing rules changed')
 def test_setitem_mixed_d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
