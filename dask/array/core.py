@@ -2721,7 +2721,23 @@ See the following documentation page for details:
 def where(condition, x=None, y=None):
     if x is None or y is None:
         raise TypeError(where_error_message)
-    return choose(condition, [y, x])
+
+    x = asarray(x)
+    y = asarray(y)
+
+    shape = broadcast_shapes(x.shape, y.shape)
+    dtype = np.promote_types(x.dtype, y.dtype)
+
+    x = broadcast_to(x, shape).astype(dtype)
+    y = broadcast_to(y, shape).astype(dtype)
+
+    if isinstance(condition, (bool, np.bool8)):
+        if condition:
+            return x
+        else:
+            return y
+    else:
+        return choose(condition, [y, x])
 
 
 @wraps(chunk.coarsen)
