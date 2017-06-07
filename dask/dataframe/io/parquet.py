@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import json
 import numpy as np
 import pandas as pd
 from toolz import partial
@@ -457,6 +458,19 @@ def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
 
     if len(fmd.row_groups) == 0:
         raise ValueError("All partitions were empty")
+    cats = {}
+    for col in df._meta:
+        if str(df[col].dtype) != 'category':
+            continue
+        for rg in fmd.row_groups:
+            for chunk in rg.columns:
+                if chunk.meta_data.path_in_schema[-1] == col:
+                    cats[col] = max(
+                        cats.get(col, 0),
+                        int(chunk.meta_data.key_value_metadata[0].value))
+    if cats:
+        fmd.key_value_metadata = [fastparquet.parquet_thrift.KeyValue(
+            key="fastparquet.cats", value=json.dumps(cats))]
     fastparquet.writer.write_common_metadata(metadata_fn, fmd, open_with=myopen,
                                              no_row_groups=False)
 

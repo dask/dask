@@ -362,6 +362,24 @@ def test_categories(fn):
         ddf2 = dd.read_parquet(fn, categories=['foo'])
 
 
+def test_auto_categories(fn):
+    df = pd.DataFrame({'x': range(2**17),
+                       'y': range(2**17)})
+    df['y'] = df.y.astype(str).astype('category')
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(fn)
+
+    # cats get written to all files
+    pf = fastparquet.ParquetFile(os.path.join(fn, 'part.0.parquet'))
+    assert pf.categories['y'] == 2**17
+
+    ddf2 = dd.read_parquet(fn)
+    assert ddf2.y.dtype == 'category'
+    out = ddf2.compute()
+    assert out.y.cat.codes.dtype == 'int32'
+    assert (df.y == out.y).all()
+
+
 def test_empty_partition(fn):
     df = pd.DataFrame({"a": range(10), "b": range(10)})
     ddf = dd.from_pandas(df, npartitions=5)
