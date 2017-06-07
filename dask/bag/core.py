@@ -1092,7 +1092,7 @@ class Bag(Base):
         npartitions: int
             If using the disk-based shuffle, the number of output partitions
         blocksize: int
-            If using the disk-based shuffle, the size of shuffle blocks
+            If using the disk-based shuffle, the size of shuffle blocks (bytes)
         max_branch: int
             If using the task-based shuffle, the amount of splitting each
             partition undergoes.  Increase this for fewer copies but more

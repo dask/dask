@@ -122,7 +122,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         the size and index of the dataframe, the output may have fewer
         partitions than requested.
     chunksize : int, optional
-        The size of the partitions of the index.
+        The number of rows per index partition to use.
     sort: bool
         Sort input first to obtain cleanly divided partitions or don't sort and
         don't get cleanly divided partitions
@@ -209,7 +209,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
     ----------
     x : bcolz.ctable
     chunksize : int, optional
-        The size of blocks to pull out from ctable.
+        The size(rows) of blocks to pull out from ctable.
     categorize : bool, defaults to True
         Automatically categorize all string dtypes
     index : string, optional
