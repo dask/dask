@@ -679,6 +679,23 @@ def test_where():
             assert_eq(w1, w2)
 
 
+def test_where_bool_optimization():
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, chunks=(4, 5))
+    y = np.random.randint(10, size=(15, 16))
+    e = from_array(y, chunks=(4, 5))
+
+    for c in [True, False, np.True_, np.False_]:
+        w1 = where(c, d, e)
+        w2 = np.where(c, x, y)
+
+        assert_eq(w1, w2)
+
+        ex_w1 = d if c else e
+
+        assert w1 is ex_w1
+
+
 def test_where_has_informative_error():
     x = da.ones(5, chunks=3)
     try:
