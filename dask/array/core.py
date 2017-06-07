@@ -6,6 +6,7 @@ from collections import Iterator
 from functools import partial, wraps
 import inspect
 from itertools import product
+import math
 from numbers import Integral, Number
 import operator
 from operator import add, getitem, mul
@@ -1764,7 +1765,7 @@ def normalize_chunks(chunks, shape=None):
             raise ValueError("Empty tuples are not allowed in chunks. Express "
                              "zero length dimensions with 0(s) in chunks")
 
-    return tuple(map(tuple, chunks))
+    return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
 def from_array(x, chunks, name=None, lock=False, fancy=True, getitem=None):
