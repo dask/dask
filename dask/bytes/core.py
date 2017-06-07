@@ -112,7 +112,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     not_zero: bool
         Force seek of start-of-file delimiter, discarding header.
     blocksize: int (=128MB)
-        Chunk size
+        Chunk size in bytes
     compression: string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     sample: bool or int
