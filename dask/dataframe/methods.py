@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
@@ -253,8 +255,11 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # concatenates.
             dfs3 = [df if isinstance(df, pd.DataFrame) else
                     df.to_frame().rename(columns={df.name: 0}) for df in dfs2]
-            cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
-                                  for df in dfs3], join=join).any()
+            # pandas may raise a RuntimeWarning for comparing ints and strs
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
+                                      for df in dfs3], join=join).any()
 
         if cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
@@ -280,7 +285,10 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                 out[col] = union_categoricals(parts)
             out = out.reindex_axis(cat_mask.index, axis=1)
         else:
-            out = pd.concat(dfs3, join=join)
+            # pandas may raise a RuntimeWarning for comparing ints and strs
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                out = pd.concat(dfs3, join=join)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:

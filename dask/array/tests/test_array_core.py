@@ -543,9 +543,11 @@ def test_operators():
     assert_eq(c, x + x.reshape((10, 1)))
 
     expr = (3 / a * b)**2 > 5
-    assert_eq(expr, (3 / x * y)**2 > 5)
+    with pytest.warns(None):  # ZeroDivisionWarning
+        assert_eq(expr, (3 / x * y)**2 > 5)
 
-    c = da.exp(a)
+    with pytest.warns(None):  # OverflowWarning
+        c = da.exp(a)
     assert_eq(c, np.exp(x))
 
     assert_eq(abs(-a), a)
@@ -592,7 +594,8 @@ def test_tensordot():
         assert_eq(tensordot(a, y, axes=axes), np.tensordot(x, y, axes=axes))
 
     assert same_keys(tensordot(a, b, axes=(1, 0)), tensordot(a, b, axes=(1, 0)))
-    assert not same_keys(tensordot(a, b, axes=0), tensordot(a, b, axes=1))
+    with pytest.warns(None):  # Increasing number of chunks warning
+        assert not same_keys(tensordot(a, b, axes=0), tensordot(a, b, axes=1))
 
     # assert (tensordot(a, a).chunks
     #      == tensordot(a, a, axes=((1, 0), (0, 1))).chunks)
@@ -1430,11 +1433,13 @@ def test_arithmetic():
 
     assert_eq(da.logaddexp(a, b), np.logaddexp(x, y))
     assert_eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
-    assert_eq(da.exp(b), np.exp(y))
+    with pytest.warns(None):  # Overflow warning
+        assert_eq(da.exp(b), np.exp(y))
     assert_eq(da.log(a), np.log(x))
     assert_eq(da.log10(a), np.log10(x))
     assert_eq(da.log1p(a), np.log1p(x))
-    assert_eq(da.expm1(b), np.expm1(y))
+    with pytest.warns(None):  # Overflow warning
+        assert_eq(da.expm1(b), np.expm1(y))
     assert_eq(da.sqrt(a), np.sqrt(x))
     assert_eq(da.square(a), np.square(x))
 
@@ -1447,7 +1452,8 @@ def test_arithmetic():
     assert_eq(da.arctan2(b * 10, a), np.arctan2(y * 10, x))
     assert_eq(da.hypot(b, a), np.hypot(y, x))
     assert_eq(da.sinh(a), np.sinh(x))
-    assert_eq(da.cosh(b), np.cosh(y))
+    with pytest.warns(None):  # Overflow warning
+        assert_eq(da.cosh(b), np.cosh(y))
     assert_eq(da.tanh(a), np.tanh(x))
     assert_eq(da.arcsinh(b * 10), np.arcsinh(y * 10))
     assert_eq(da.arccosh(b * 10), np.arccosh(y * 10))
@@ -1472,7 +1478,8 @@ def test_arithmetic():
     assert_eq(da.signbit(a - 3), np.signbit(x - 3))
     assert_eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
     assert_eq(da.nextafter(a - 3, b), np.nextafter(x - 3, y))
-    assert_eq(da.ldexp(c, c), np.ldexp(z, z))
+    with pytest.warns(None):  # overflow warning
+        assert_eq(da.ldexp(c, c), np.ldexp(z, z))
     assert_eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
     assert_eq(da.floor(a * 0.5), np.floor(x * 0.5))
     assert_eq(da.ceil(a), np.ceil(x))
@@ -2019,7 +2026,8 @@ def test_cov():
 
     assert_eq(da.cov(d), np.cov(x))
     assert_eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
-    assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
+    with pytest.warns(None):  # warning dof <= 0 for slice
+        assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
     assert_eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert_eq(da.cov(d, d), np.cov(x, x))
 
@@ -2102,6 +2110,7 @@ def test_view():
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(x, chunks=(2, 3))
+    # TODO: DeprecationWarning: Changing the shape of non-C contiguous array by
     assert_eq(x.view('i4'), d.view('i4', order='F'))
     assert_eq(x.view('i2'), d.view('i2', order='F'))
 
@@ -2376,11 +2385,11 @@ def test_tril_triu():
 
 
 def test_tril_triu_errors():
-    A = np.random.random_integers(0, 10, (10, 10, 10))
+    A = np.random.randint(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
     pytest.raises(ValueError, lambda: da.triu(dA))
 
-    A = np.random.random_integers(0, 10, (30, 35))
+    A = np.random.randint(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5))
     pytest.raises(NotImplementedError, lambda: da.triu(dA))
 
@@ -2797,7 +2806,8 @@ def test_no_chunks_2d():
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
 
-    assert_eq(da.log(x), np.log(X))
+    with pytest.warns(None):  # zero division warning
+        assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
     assert_eq(x.sum(axis=1, keepdims=True), X.sum(axis=1, keepdims=True))

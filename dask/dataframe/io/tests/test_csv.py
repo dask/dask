@@ -436,11 +436,12 @@ def test_warn_non_seekable_files():
         assert 'blocksize=None' in msg
 
         with pytest.warns(None) as w:
-            df = dd.read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
+            df = dd.read_csv('2014-01-*.csv', compression='gzip',
+                             blocksize=None)
         assert len(w) == 0
 
         with pytest.raises(NotImplementedError):
-            with pytest.warns(None):
+            with pytest.warns(UserWarning):  # needed for pytest
                 df = dd.read_csv('2014-01-*.csv', compression='foo')
 
 
@@ -730,8 +731,8 @@ def test_read_csv_sep():
     charlie###300""")
 
     with filetext(sep_text) as fn:
-        ddf = dd.read_csv(fn, sep="###")
-        df = pd.read_csv(fn, sep="###")
+        ddf = dd.read_csv(fn, sep="###", engine="python")
+        df = pd.read_csv(fn, sep="###", engine="python")
 
         assert (df.columns == ddf.columns).all()
         assert len(df) == len(ddf)

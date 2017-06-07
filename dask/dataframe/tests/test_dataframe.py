@@ -1381,9 +1381,11 @@ def test_eval():
         with pytest.raises(NotImplementedError):
             d.eval('z = x + y', inplace=True)
 
-        if p.eval('z = x + y', inplace=None) is None:
-            with pytest.raises(NotImplementedError):
-                d.eval('z = x + y', inplace=None)
+        # catch FutureWarning from pandas about assignment in eval
+        with pytest.warns(None):
+            if p.eval('z = x + y', inplace=None) is None:
+                with pytest.raises(NotImplementedError):
+                    d.eval('z = x + y', inplace=None)
 
 
 @pytest.mark.parametrize('include, exclude', [
@@ -1702,7 +1704,7 @@ def test_apply():
     ddf = dd.from_pandas(df, npartitions=2)
 
     func = lambda row: row['x'] + row['y']
-    assert_eq(ddf.x.apply(lambda x: x + 1),
+    assert_eq(ddf.x.apply(lambda x: x + 1, meta=("x", int)),
               df.x.apply(lambda x: x + 1))
 
     # specify meta
@@ -1712,16 +1714,19 @@ def test_apply():
               df.apply(lambda xy: xy[0] + xy[1], axis='columns'))
 
     # inference
-    assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
-              df.apply(lambda xy: xy[0] + xy[1], axis=1))
-    assert_eq(ddf.apply(lambda xy: xy, axis=1),
-              df.apply(lambda xy: xy, axis=1))
+    with pytest.warns(None):
+        assert_eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
+                  df.apply(lambda xy: xy[0] + xy[1], axis=1))
+    with pytest.warns(None):
+        assert_eq(ddf.apply(lambda xy: xy, axis=1),
+                  df.apply(lambda xy: xy, axis=1))
 
     # specify meta
     func = lambda x: pd.Series([x, x])
     assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
-    assert_eq(ddf.x.apply(func), df.x.apply(func))
+    with pytest.warns(None):
+        assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -1729,6 +1734,24 @@ def test_apply():
 
     with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis='index')
+
+
+@pytest.mark.skipif(sys.version_info <= (3, 0),
+                    reason="Global filter is applied by another library, and "
+                           "not reset properly.")
+def test_apply_warns():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    func = lambda row: row['x'] + row['y']
+
+    with pytest.warns(UserWarning) as w:
+        ddf.apply(func, axis=1)
+    assert len(w) == 1
+
+    with pytest.warns(None) as w:
+        ddf.apply(func, axis=1, meta=(None, int))
+    assert len(w) == 0
 
 
 def test_applymap():
@@ -1886,13 +1909,15 @@ def test_apply_infer_columns():
         return pd.Series([x.sum(), x.mean()], index=['sum', 'mean'])
 
     # DataFrame to completely different DataFrame
-    result = ddf.apply(return_df, axis=1)
+    with pytest.warns(None):
+        result = ddf.apply(return_df, axis=1)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(['sum', 'mean']))
     assert_eq(result, df.apply(return_df, axis=1))
 
     # DataFrame to Series
-    result = ddf.apply(lambda x: 1, axis=1)
+    with pytest.warns(None):
+        result = ddf.apply(lambda x: 1, axis=1)
     assert isinstance(result, dd.Series)
     assert result.name is None
     assert_eq(result, df.apply(lambda x: 1, axis=1))
@@ -1901,13 +1926,15 @@ def test_apply_infer_columns():
         return pd.Series([x * 2, x * 3], index=['x2', 'x3'])
 
     # Series to completely different DataFrame
-    result = ddf.x.apply(return_df2)
+    with pytest.warns(None):
+        result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(['x2', 'x3']))
     assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
-    result = ddf.x.apply(lambda x: 1)
+    with pytest.warns(None):
+        result = ddf.x.apply(lambda x: 1)
     assert isinstance(result, dd.Series)
     assert result.name == 'x'
     assert_eq(result, df.x.apply(lambda x: 1))

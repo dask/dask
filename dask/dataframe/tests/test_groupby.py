@@ -110,7 +110,7 @@ def test_full_groupby():
         return df
 
     assert_eq(df.groupby('a').apply(func),
-              ddf.groupby('a').apply(func))
+              ddf.groupby('a').apply(func, meta={"a": int, "b": float}))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -131,8 +131,11 @@ def test_full_groupby_multilevel(grouper):
         df['b'] = df.b - df.b.mean()
         return df
 
+    # last one causes a DeprcationWarning from pandas.
+    # See https://github.com/pandas-dev/pandas/issues/16481
     assert_eq(df.groupby(grouper(df)).apply(func),
-              ddf.groupby(grouper(ddf)).apply(func))
+              ddf.groupby(grouper(ddf)).apply(func, meta={"a": int, "d": int,
+                                                          "b": float}))
 
 
 def test_groupby_dir():
@@ -158,14 +161,15 @@ def test_groupby_on_index(get):
         return df.assign(b=df.b - df.b.mean())
 
     with dask.set_options(get=get):
-        assert_eq(ddf.groupby('a').apply(func),
-                  pdf.groupby('a').apply(func))
+        with pytest.warns(None):
+            assert_eq(ddf.groupby('a').apply(func),
+                      pdf.groupby('a').apply(func))
 
-        assert_eq(ddf.groupby('a').apply(func).set_index('a'),
-                  pdf.groupby('a').apply(func).set_index('a'))
+            assert_eq(ddf.groupby('a').apply(func).set_index('a'),
+                      pdf.groupby('a').apply(func).set_index('a'))
 
-        assert_eq(pdf2.groupby(pdf2.index).apply(func),
-                  ddf2.groupby(ddf2.index).apply(func))
+            assert_eq(pdf2.groupby(pdf2.index).apply(func),
+                      ddf2.groupby(ddf2.index).apply(func))
 
 
 def test_groupby_multilevel_getitem():
@@ -258,7 +262,8 @@ def test_series_groupby_propagates_names():
     df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df['y'].sum()
-    result = ddf.groupby('x').apply(func)
+    with pytest.warns(UserWarning):  # meta inference
+        result = ddf.groupby('x').apply(func)
     expected = df.groupby('x').apply(func)
     assert_eq(result, expected)
 
@@ -513,34 +518,35 @@ def test_apply_shuffle():
                         'D': np.random.randn(20)})
     ddf = dd.from_pandas(pdf, 3)
 
-    assert_eq(ddf.groupby('A').apply(lambda x: x.sum()),
-              pdf.groupby('A').apply(lambda x: x.sum()))
+    with pytest.warns(UserWarning):  # meta inference
+        assert_eq(ddf.groupby('A').apply(lambda x: x.sum()),
+                  pdf.groupby('A').apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A']).apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A']).apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A']).apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A']).apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
 
-    # SeriesGroupBy
-    assert_eq(ddf.groupby('A')['B'].apply(lambda x: x.sum()),
-              pdf.groupby('A')['B'].apply(lambda x: x.sum()))
+        # SeriesGroupBy
+        assert_eq(ddf.groupby('A')['B'].apply(lambda x: x.sum()),
+                  pdf.groupby('A')['B'].apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A'])['B'].apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A'])['B'].apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A'])['B'].apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A'])['B'].apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
 
-    # DataFrameGroupBy with column slice
-    assert_eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
-              pdf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()))
+        # DataFrameGroupBy with column slice
+        assert_eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
+                  pdf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A'])[['B', 'C']].apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A'])[['B', 'C']].apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A'])[['B', 'C']].apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A'])[['B', 'C']].apply(lambda x: x.sum()))
 
-    assert_eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
-              pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
+        assert_eq(ddf.groupby(ddf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()),
+                  pdf.groupby(pdf['A'] + 1)[['B', 'C']].apply(lambda x: x.sum()))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -559,17 +565,18 @@ def test_apply_shuffle_multilevel(grouper):
                         'D': np.random.randn(20)})
     ddf = dd.from_pandas(pdf, 3)
 
-    # DataFrameGroupBy
-    assert_eq(ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
-              pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()))
+    with pytest.warns(UserWarning):
+        # DataFrameGroupBy
+        assert_eq(ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
+                  pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()))
 
-    # SeriesGroupBy
-    assert_eq(ddf.groupby(grouper(ddf))['B'].apply(lambda x: x.sum()),
-              pdf.groupby(grouper(pdf))['B'].apply(lambda x: x.sum()))
+        # SeriesGroupBy
+        assert_eq(ddf.groupby(grouper(ddf))['B'].apply(lambda x: x.sum()),
+                  pdf.groupby(grouper(pdf))['B'].apply(lambda x: x.sum()))
 
-    # DataFrameGroupBy with column slice
-    assert_eq(ddf.groupby(grouper(ddf))[['B', 'C']].apply(lambda x: x.sum()),
-              pdf.groupby(grouper(pdf))[['B', 'C']].apply(lambda x: x.sum()))
+        # DataFrameGroupBy with column slice
+        assert_eq(ddf.groupby(grouper(ddf))[['B', 'C']].apply(lambda x: x.sum()),
+                  pdf.groupby(grouper(pdf))[['B', 'C']].apply(lambda x: x.sum()))
 
 
 def test_numeric_column_names():
@@ -581,7 +588,7 @@ def test_numeric_column_names():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
-    assert_eq(ddf.groupby(0).apply(lambda x: x),
+    assert_eq(ddf.groupby(0).apply(lambda x: x, meta={0: int, 1: int, 2: int}),
               df.groupby(0).apply(lambda x: x))
 
 
@@ -594,12 +601,14 @@ def test_groupby_apply_tasks():
     with dask.set_options(shuffle='tasks'):
         for ind in [lambda x: 'A', lambda x: x.A]:
             a = df.groupby(ind(df)).apply(len)
-            b = ddf.groupby(ind(ddf)).apply(len)
+            with pytest.warns(UserWarning):
+                b = ddf.groupby(ind(ddf)).apply(len)
             assert_eq(a, b.compute())
             assert not any('partd' in k[0] for k in b.dask)
 
             a = df.groupby(ind(df)).B.apply(len)
-            b = ddf.groupby(ind(ddf)).B.apply(len)
+            with pytest.warns(UserWarning):
+                b = ddf.groupby(ind(ddf)).B.apply(len)
             assert_eq(a, b.compute())
             assert not any('partd' in k[0] for k in b.dask)
 
@@ -610,7 +619,8 @@ def test_groupby_multiprocessing():
                        'B': ['1','1','a','a','a']})
     ddf = dd.from_pandas(df, npartitions=3)
     with dask.set_options(get=get):
-        assert_eq(ddf.groupby('B').apply(lambda x: x),
+        assert_eq(ddf.groupby('B').apply(lambda x: x, meta={"A": int,
+                                                            "B": object}),
                   df.groupby('B').apply(lambda x: x))
 
 
@@ -652,8 +662,12 @@ def test_aggregate__examples(spec, split_every, grouper):
                        columns=['c', 'b', 'a', 'd'])
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-    assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
-              ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+    # Warning from pandas deprecation .agg(dict[dict])
+    # it's from pandas, so no reason to assert the deprecation warning,
+    # but we should still test it for now
+    with pytest.warns(None):
+        assert_eq(pdf.groupby(grouper(pdf)).agg(spec),
+                  ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 @pytest.mark.parametrize('spec', [
@@ -678,9 +692,12 @@ def test_series_aggregate__examples(spec, split_every, grouper):
 
     ddf = dd.from_pandas(pdf, npartitions=10)
     ds = ddf['c']
-
-    assert_eq(ps.groupby(grouper(pdf)).agg(spec),
-              ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
+    # Warning from pandas deprecation .agg(dict[dict])
+    # it's from pandas, so no reason to assert the deprecation warning,
+    # but we should still test it for now
+    with pytest.warns(None):
+        assert_eq(ps.groupby(grouper(pdf)).agg(spec),
+                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 @pytest.mark.parametrize('spec', [

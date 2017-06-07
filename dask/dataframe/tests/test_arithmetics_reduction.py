@@ -635,9 +635,15 @@ def test_reductions(split_every):
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
-        assert_eq(dds.std(split_every=split_every), pds.std())
-        assert_eq(dds.var(split_every=split_every), pds.var())
-        assert_eq(dds.sem(split_every=split_every), pds.sem())
+        with pytest.warns(None):
+            # runtime warnings; https://github.com/dask/dask/issues/2381
+            assert_eq(dds.std(split_every=split_every), pds.std())
+        with pytest.warns(None):
+            # runtime warnings; https://github.com/dask/dask/issues/2381
+            assert_eq(dds.var(split_every=split_every), pds.var())
+        with pytest.warns(None):
+            # runtime warnings; https://github.com/dask/dask/issues/2381
+            assert_eq(dds.sem(split_every=split_every), pds.sem())
         assert_eq(dds.std(ddof=0, split_every=split_every), pds.std(ddof=0))
         assert_eq(dds.var(ddof=0, split_every=split_every), pds.var(ddof=0))
         assert_eq(dds.sem(ddof=0, split_every=split_every), pds.sem(ddof=0))

@@ -911,7 +911,7 @@ class _GroupBy(object):
                    "  Before: .apply(func)\n"
                    "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
-            warnings.warn(msg)
+            warnings.warn(msg, stacklevel=2)
 
             with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
                 meta = self._meta_nonempty.apply(func)

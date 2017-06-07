@@ -583,6 +583,7 @@ def test_join_by_index_patterns(how, shuffle):
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_merge_by_multiple_columns(how, shuffle):
+    # warnings here from pandas
     pdf1l = pd.DataFrame({'a': list('abcdefghij'),
                           'b': list('abcdefghij'),
                           'c': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
@@ -805,8 +806,9 @@ def test_concat_unknown_divisions():
 
     assert not aa.known_divisions
 
-    assert_eq(pd.concat([a, b], axis=1),
-              dd.concat([aa, bb], axis=1))
+    with pytest.warns(UserWarning):
+        assert_eq(pd.concat([a, b], axis=1),
+                  dd.concat([aa, bb], axis=1))
 
     cc = dd.from_pandas(b, npartitions=1, sort=False)
     with pytest.raises(ValueError):
@@ -820,7 +822,8 @@ def test_concat_unknown_divisions_errors():
     bb = dd.from_pandas(b, npartitions=2, sort=False)
 
     with pytest.raises(ValueError):
-        dd.concat([aa, bb], axis=1).compute()
+        with pytest.warns(UserWarning):  # Concat with unknown divisions
+            dd.concat([aa, bb], axis=1).compute()
 
 
 def test_concat2():
@@ -959,8 +962,10 @@ def test_concat5():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        assert_eq(dd.concat(case, interleave_partitions=True),
-                  pd.concat(pdcase))
+        with pytest.warns(None):
+            # some cases will raise warning directly from pandas
+            assert_eq(dd.concat(case, interleave_partitions=True),
+                      pd.concat(pdcase))
 
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
                   pd.concat(pdcase, join='inner'))
@@ -1111,29 +1116,37 @@ def test_append2():
     assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
     assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-    assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
+        assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
     assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
     assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-    assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
+        assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
     assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
     assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
-    assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
+        assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
     assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
     assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
-    assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
+        assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
 
 def test_append_categorical():
