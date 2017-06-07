@@ -765,7 +765,10 @@ class Client(Node):
             except TypeError:
                 exception = Exception("Undeserializable exception", exception)
             if traceback:
-                traceback = loads(traceback)
+                try:
+                    traceback = loads(traceback)
+                except AttributeError:
+                    traceback = None
             else:
                 traceback = None
             state.set_error(exception, traceback)
