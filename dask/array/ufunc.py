@@ -125,7 +125,7 @@ power = ufunc(np.power)
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
-conj = ufunc(np.conj)
+conj = conjugate = ufunc(np.conjugate)
 exp = ufunc(np.exp)
 exp2 = ufunc(np.exp2)
 log = ufunc(np.log)

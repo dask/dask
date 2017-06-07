@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
+
 import pytest
 np = pytest.importorskip('numpy')
 
@@ -64,8 +66,8 @@ def test_unary_ufunc(ufunc):
         assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(darr), np.ndarray)
+        # applying NumPy ufunc is lazy
+        assert isinstance(npfunc(darr), da.Array)
         assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
@@ -90,7 +92,7 @@ def test_binary_ufunc(ufunc):
     assert_eq(dafunc(darr1, darr2), npfunc(arr1, arr2))
 
     # applying NumPy ufunc triggers computation
-    assert isinstance(npfunc(darr1, darr2), np.ndarray)
+    assert isinstance(npfunc(darr1, darr2), da.Array)
     assert_eq(npfunc(darr1, darr2), npfunc(arr1, arr2))
 
     # applying Dask ufunc to normal ndarray triggers computation
@@ -202,18 +204,18 @@ def test_ufunc_2results(ufunc):
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
 
-    # applying NumPy ufunc triggers computation
+    # applying NumPy ufunc is now laxy
     res1, res2 = npfunc(darr)
-    assert isinstance(res1, np.ndarray)
-    assert isinstance(res2, np.ndarray)
+    assert isinstance(res1, da.Array)
+    assert isinstance(res2, da.Array)
     exp1, exp2 = npfunc(arr)
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
 
     # applying Dask ufunc to normal ndarray triggers computation
     res1, res2 = npfunc(darr)
-    assert isinstance(res1, np.ndarray)
-    assert isinstance(res2, np.ndarray)
+    assert isinstance(res1, da.Array)
+    assert isinstance(res2, da.Array)
     exp1, exp2 = npfunc(arr)
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
@@ -241,3 +243,24 @@ def test_angle():
     assert_eq(da.angle(dacomp, deg=True), np.angle(comp, deg=True))
     assert isinstance(da.angle(comp), np.ndarray)
     assert_eq(da.angle(comp), np.angle(comp))
+
+
+def test_array_ufunc():
+    x = np.arange(24).reshape((4, 6))
+    d = da.from_array(x, chunks=(2, 3))
+
+    for func in [np.sin, np.isreal, np.sum, np.negative, partial(np.prod, axis=0)]:
+        assert isinstance(func(d), da.Array)
+        assert_eq(func(d), func(x))
+
+
+def test_array_ufunc_binop():
+    x = np.arange(25).reshape((5, 5))
+    d = da.from_array(x, chunks=(2, 2))
+
+    for func in [np.add, np.multiply]:
+        assert isinstance(func(d, d), da.Array)
+        assert_eq(func(d, d), func(x, x))
+
+        assert isinstance(func.outer(d, d), da.Array)
+        assert_eq(func.outer(d, d), func.outer(x, x))

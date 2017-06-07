@@ -21,11 +21,13 @@ from .. import sharedict
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
-              split_every=None, combine=None, name=None):
+              split_every=None, combine=None, name=None, out=None):
     """ General version of reductions
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
     """
+    if out is not None:
+        raise NotImplementedError("The out= keyword is not supported")
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
@@ -121,88 +123,94 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
 
 
 @wraps(chunk.sum)
-def sum(a, axis=None, dtype=None, keepdims=False, split_every=None):
+def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = np.empty((1,), dtype=a.dtype).sum().dtype
     return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every)
+                     dtype=dt, split_every=split_every, out=out)
 
 
 @wraps(chunk.prod)
-def prod(a, axis=None, dtype=None, keepdims=False, split_every=None):
+def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = np.empty((1,), dtype=a.dtype).prod().dtype
     return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every)
+                     dtype=dt, split_every=split_every, out=out)
 
 
 @wraps(chunk.min)
-def min(a, axis=None, keepdims=False, split_every=None):
+def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.min, chunk.min, axis=axis, keepdims=keepdims,
-                     dtype=a.dtype, split_every=split_every)
+                     dtype=a.dtype, split_every=split_every, out=out)
 
 
 @wraps(chunk.max)
-def max(a, axis=None, keepdims=False, split_every=None):
+def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims,
-                     dtype=a.dtype, split_every=split_every)
+                     dtype=a.dtype, split_every=split_every, out=out)
 
 
 @wraps(chunk.any)
-def any(a, axis=None, keepdims=False, split_every=None):
+def any(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims,
-                     dtype='bool', split_every=split_every)
+                     dtype='bool', split_every=split_every, out=out)
 
 
 @wraps(chunk.all)
-def all(a, axis=None, keepdims=False, split_every=None):
+def all(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims,
-                     dtype='bool', split_every=split_every)
+                     dtype='bool', split_every=split_every, out=out)
 
 
 @wraps(chunk.nansum)
-def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None):
+def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = chunk.nansum(np.empty((1,), dtype=a.dtype)).dtype
     return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every)
+                     dtype=dt, split_every=split_every, out=out)
 
 
 with ignoring(AttributeError):
     @wraps(chunk.nanprod)
-    def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None):
+    def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None,
+            out=None):
         if dtype is not None:
             dt = dtype
         else:
             dt = chunk.nanprod(np.empty((1,), dtype=a.dtype)).dtype
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
-                         keepdims=keepdims, dtype=dt, split_every=split_every)
+                         keepdims=keepdims, dtype=dt, split_every=split_every,
+                         out=out)
 
     @wraps(chunk.nancumsum)
-    def nancumsum(x, axis, dtype=None):
-        return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype)
+    def nancumsum(x, axis, dtype=None, out=None):
+        return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype,
+                            out=out)
 
     @wraps(chunk.nancumprod)
-    def nancumprod(x, axis, dtype=None):
-        return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype)
+    def nancumprod(x, axis, dtype=None, out=None):
+        return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype,
+                            out=out)
 
 
 @wraps(chunk.nanmin)
-def nanmin(a, axis=None, keepdims=False, split_every=None):
+def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis,
-                     keepdims=keepdims, dtype=a.dtype, split_every=split_every)
+                     keepdims=keepdims, dtype=a.dtype, split_every=split_every,
+                     out=out)
 
 
 @wraps(chunk.nanmax)
-def nanmax(a, axis=None, keepdims=False, split_every=None):
+def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(a, chunk.nanmax, chunk.nanmax, axis=axis,
-                     keepdims=keepdims, dtype=a.dtype, split_every=split_every)
+                     keepdims=keepdims, dtype=a.dtype, split_every=split_every,
+                     out=out)
 
 
 def numel(x, **kwargs):
@@ -240,23 +248,25 @@ def mean_agg(pair, dtype='f8', **kwargs):
 
 
 @wraps(chunk.mean)
-def mean(a, axis=None, dtype=None, keepdims=False, split_every=None):
+def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = np.mean(np.empty(shape=(1,), dtype=a.dtype)).dtype
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every, combine=mean_combine)
+                     dtype=dt, split_every=split_every, combine=mean_combine,
+                     out=out)
 
 
-def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None):
+def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
+            out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = np.mean(np.empty(shape=(1,), dtype=a.dtype)).dtype
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every,
+                     split_every=split_every, out=out,
                      combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 
@@ -333,8 +343,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
-           split_every=None):
-
+           split_every=None, out=None):
     if not isinstance(order, int) or order < 0:
         raise ValueError("Order must be an integer >= 0")
 
@@ -353,22 +362,24 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
     return reduction(a, partial(moment_chunk, order=order),
                      partial(moment_agg, order=order, ddof=ddof),
                      axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every,
+                     dtype=dt, split_every=split_every, out=out,
                      combine=partial(moment_combine, order=order))
 
 
 @wraps(chunk.var)
-def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
+        out=None):
     if dtype is not None:
         dt = dtype
     else:
         dt = np.var(np.ones(shape=(1,), dtype=a.dtype)).dtype
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     combine=moment_combine, name='var')
+                     combine=moment_combine, name='var', out=out)
 
 
-def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
+           out=None):
     if dtype is not None:
         dt = dtype
     else:
@@ -376,7 +387,7 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     combine=partial(moment_combine, sum=np.nansum))
+                     combine=partial(moment_combine, sum=np.nansum), out=out)
 
 
 with ignoring(AttributeError):
@@ -384,17 +395,19 @@ with ignoring(AttributeError):
 
 
 @wraps(chunk.std)
-def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
+        out=None):
     result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                        split_every=split_every))
+                        split_every=split_every, out=out))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
 
 
-def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
+           out=None):
     result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims,
-                         ddof=ddof, split_every=split_every))
+                         ddof=ddof, split_every=split_every, out=out))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
@@ -404,7 +417,8 @@ with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None):
+def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
+          out=None):
     """ Vector norm
 
     See np.linalg.norm
@@ -412,18 +426,20 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None):
     if ord is None or ord == 'fro':
         ord = 2
     if ord == np.inf:
-        return max(abs(a), axis=axis, keepdims=keepdims, split_every=split_every)
+        return max(abs(a), axis=axis, keepdims=keepdims,
+                   split_every=split_every, out=out)
     elif ord == -np.inf:
-        return min(abs(a), axis=axis, keepdims=keepdims, split_every=split_every)
+        return min(abs(a), axis=axis, keepdims=keepdims,
+                   split_every=split_every, out=out)
     elif ord == 1:
         return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every)
+                   split_every=split_every, out=out)
     elif ord % 2 == 0:
         return sum(a ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every) ** (1. / ord)
+                   split_every=split_every, out=out) ** (1. / ord)
     else:
         return sum(abs(a) ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every) ** (1. / ord)
+                   split_every=split_every, out=out) ** (1. / ord)
 
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
@@ -486,7 +502,7 @@ def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
     return arg
 
 
-def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
+def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None):
     """Generic function for argreduction.
 
     Parameters
@@ -501,6 +517,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
     axis : int, optional
     split_every : int or dict, optional
     """
+    if out is not None:
+        raise NotImplementedError("The out= keyword is not supported")
     if axis is None:
         axis = tuple(range(x.ndim))
         ravel = True
@@ -554,8 +572,8 @@ def make_arg_reduction(func, argfunc, is_nan_func=False):
         agg = partial(arg_agg, func, argfunc)
 
     @wraps(argfunc)
-    def _(x, axis=None, split_every=None):
-        return arg_reduction(x, chunk, combine, agg, axis, split_every)
+    def _(x, axis=None, split_every=None, out=None):
+        return arg_reduction(x, chunk, combine, agg, axis, split_every, out=out)
 
     return _
 
@@ -580,7 +598,7 @@ nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
-def cumreduction(func, binop, ident, x, axis, dtype=None):
+def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
     """ Generic function for cumulative reduction
 
     Parameters
@@ -604,6 +622,8 @@ def cumreduction(func, binop, ident, x, axis, dtype=None):
     cumsum
     cumprod
     """
+    if out is not None:
+        raise NotImplementedError("The out= keyword is not supported")
     if dtype is None:
         dtype = func(np.empty((0,), dtype=x.dtype)).dtype
     assert isinstance(axis, int)
