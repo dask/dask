@@ -15,7 +15,7 @@
       body {
         min-height: 100%;
         margin: 0 4%;
-        padding: 20px;
+        padding: 0px 20px;
         border-left:  1px solid #F0F0F0;
         border-right: 1px solid #F0F0F0;
         background: #FFF;
@@ -44,30 +44,42 @@
         content: ".";
         font-size: 0;
       }
-      .header {
-        width: 100;
-        clear: both;
-        overflow: hidden;
-      }
-      .header h1 {
-        font-family: 'Source Sans Pro', sans-serif;
-        font-size: 18px;
-        text-transform: uppercase;
-        color: #2e484c;
-        margin: 1em 0 0 0;
-        float: left;
-      }
-      .header p {
-        font-family: 'Source Sans Pro', sans-serif;
-        font-size: 18px;
-        float: left;
-        max-width: 60%;
-      }
-      .header img {
-        height: 50px;
+      .navbar img {
+        height: 40px;
         float: right;
-        margin-bottom: 20px;
+        margin-bottom: 0px;
+        padding: 0px 24px;
       }
+      .navbar ul {
+          list-style-type: none;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          background-color: #EEE;
+      }
+
+      .navbar li {
+          float: left;
+          font-size: 18px;
+          transition: .3s background-color;
+      }
+
+      .navbar li a {
+          display: block;
+          color: black;
+          text-align: center;
+          padding: 11px 16px;
+          text-decoration: none;
+      }
+
+      .navbar li:hover {
+          background-color: #eaaa6d;
+      }
+
+      .active {
+          background-color: rgba(234, 170, 109, 0.7);
+      }
+
       a {
         color: #1f5396;
         text-decoration: none;
@@ -80,25 +92,20 @@
       a:focus {
         outline: 5px auto -webkit-focus-ring-color;
         outline-offset: -2px;
-      }
-      .bk-root .bk-toolbar-box .bk-toolbar-right {
+      } .bk-root .bk-toolbar-box .bk-toolbar-right {
         top: 4px;
         right: 4px;
       }
     </style>
   </head>
   <body>
-    <div class="header">
-      <img src="https://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg">
-      <p>
-        Dask
-        &mdash;
-        <a href="https://dask.pydata.org/en/latest/">Algorithm Docs</a>
-        &mdash;
-        <a href="https://distributed.readthedocs.io/en/latest/">Scheduler Docs</a>
-        &mdash;
-        <a href="/">Diagnostic Pages</a>
-      </p>
+    <div class="navbar">
+      <ul>
+          <li><a href="http://dask.pydata.org/en/latest/" style="padding:0px 0px;"><img src="https://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg"></a></li>
+          {% for page in pages %}
+          <li{% if page == active_page %} class="active"{% endif %}><a href="/{{ page }}">{{ page|title }}</a></li>
+          {% endfor %}
+      </ul>
     </div>
     <div class="dashboard">
       {{ plot_div }}
