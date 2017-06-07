@@ -2663,6 +2663,7 @@ def elemwise(op, *args, **kwargs):
     --------
     atop
     """
+    out = kwargs.pop('out', None)
     if not set(['name', 'dtype']).issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
@@ -2695,14 +2696,44 @@ def elemwise(op, *args, **kwargs):
                                                   tokenize(op, dt, *args))
 
     if other:
-        return atop(partial_by_order, expr_inds,
+        result = atop(partial_by_order, expr_inds,
                     *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                     dtype=dt, name=name, function=op, other=other,
                     token=funcname(op))
     else:
-        return atop(op, expr_inds,
+        result = atop(op, expr_inds,
                     *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                     dtype=dt, name=name)
+
+    return handle_out(out, result)
+
+
+def handle_out(out, result):
+    """ Handle out paramters
+
+    If out is a dask.array then this overwrites the contents of that array with
+    the result
+    """
+    if isinstance(out, tuple):
+        if len(out) == 1:
+            out = out[0]
+        elif len(out) > 1:
+            raise NotImplementedError("The out parameter is not fully supported")
+        else:
+            out = None
+    if isinstance(out, Array):
+        if out.shape != result.shape:
+            raise NotImplementedError("The out parameter is not fully supported")
+        out._chunks = result.chunks
+        if hasattr(out, '_cached_keys'):
+            del out._cached_keys
+        out.dask = result.dask
+        out.dtype = result.dtype
+        out.name = result.name
+    elif out is not None:
+        raise NotImplementedError("The out parameter is not fully supported")
+    else:
+        return result
 
 
 @wraps(np.around)

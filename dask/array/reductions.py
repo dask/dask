@@ -9,7 +9,7 @@ import numpy as np
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples
+from .core import _concatenate2, Array, atop, lol_tuples, handle_out
 from .ufunc import sqrt
 from .wrap import zeros, ones
 from .numpy_compat import divide
@@ -26,8 +26,6 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
     """
-    if out is not None:
-        raise NotImplementedError("The out= keyword is not supported")
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
@@ -48,8 +46,9 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     tmp._chunks = tuple((1, ) * len(c) if i in axis else c for (i, c)
                         in enumerate(tmp.chunks))
 
-    return _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
-                        combine, name=name)
+    result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
+                          combine, name=name)
+    return handle_out(out, result)
 
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
@@ -517,8 +516,6 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     axis : int, optional
     split_every : int or dict, optional
     """
-    if out is not None:
-        raise NotImplementedError("The out= keyword is not supported")
     if axis is None:
         axis = tuple(range(x.ndim))
         ravel = True
@@ -551,7 +548,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     # The dtype of `tmp` doesn't actually matter, just need to provide something
     tmp = Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=x.dtype)
     dtype = np.argmin([1]).dtype
-    return _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
+    result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
+    return handle_out(out, result)
 
 
 def make_arg_reduction(func, argfunc, is_nan_func=False):
@@ -622,8 +620,6 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
     cumsum
     cumprod
     """
-    if out is not None:
-        raise NotImplementedError("The out= keyword is not supported")
     if dtype is None:
         dtype = func(np.empty((0,), dtype=x.dtype)).dtype
     assert isinstance(axis, int)
@@ -655,7 +651,8 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
                                       (operator.getitem, (m.name,) + old, slc))
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
-    return Array(sharedict.merge(m.dask, (name, dsk)), name, x.chunks, m.dtype)
+    result = Array(sharedict.merge(m.dask, (name, dsk)), name, x.chunks, m.dtype)
+    return handle_out(out, result)
 
 
 @wraps(np.cumsum)

@@ -264,3 +264,20 @@ def test_array_ufunc_binop():
 
         assert isinstance(func.outer(d, d), da.Array)
         assert_eq(func.outer(d, d), func.outer(x, x))
+
+
+def test_array_ufunc_out():
+    x = da.arange(10, chunks=(5,))
+    np.sin(x, out=x)
+    np.add(x, 10, out=x)
+    assert_eq(x, np.sin(np.arange(10)) + 10)
+
+
+@pytest.mark.parametrize('func', [np.sum,
+                                  np.argmax,
+                                  pytest.mark.xfail(np.cumsum, reason='numpy fails')])
+def test_array_ufunc_reduction_out(func):
+    x = da.arange(10, chunks=(5,))
+    y = da.ones((10, 10), chunks=(4, 4))
+    func(y, axis=0, out=x)
+    assert_eq(x, func(np.ones((10, 10)), axis=0))
