@@ -661,7 +661,7 @@ def test_choose():
 def test_where():
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, chunks=(4, 5))
-    y = np.random.randint(10, size=15, dtype=np.uint8)
+    y = np.random.randint(10, size=15).astype(np.uint8)
     e = from_array(y, chunks=(4,))
 
     for c1, c2 in [(d > 5, x > 5), (True, True), (False, False)]:
