@@ -281,3 +281,8 @@ def test_array_ufunc_reduction_out(func):
     y = da.ones((10, 10), chunks=(4, 4))
     func(y, axis=0, out=x)
     assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+def test_unsupported_ufunc_methods():
+    x = da.arange(10, chunks=(5,))
+    assert_eq(np.add.reduce(x), np.add.reduce(x.compute()))

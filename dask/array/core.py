@@ -1057,7 +1057,7 @@ class Array(Base):
         else:
             from ..base import compute
             inputs2 = compute(*inputs)
-            return numpy_ufunc(*inputs2, **kwargs)
+            return getattr(numpy_ufunc, method)(*inputs2, **kwargs)
 
     def __repr__(self):
         """
