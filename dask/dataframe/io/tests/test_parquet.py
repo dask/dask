@@ -471,4 +471,4 @@ def test_empty(fn):
     assert '_metadata' in files
     out = dd.read_parquet(fn).compute()
     assert len(out) == 0
-    assert list(out.columns) == ['a', 'b']
+    assert_eq(out, df)
