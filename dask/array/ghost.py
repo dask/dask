@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from operator import getitem
 from itertools import product
+from numbers import Integral
 
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
@@ -394,10 +395,11 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
 
 
 def coerce_depth(ndim, depth):
-    if isinstance(depth, int):
+    if isinstance(depth, Integral):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
+
     return depth
 
 
