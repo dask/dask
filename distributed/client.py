@@ -2672,7 +2672,7 @@ def _first_completed(futures):
     raise gen.Return(result)
 
 
-class AsCompleted(object):
+class as_completed(object):
     """
     Return futures in the order in which they complete
 
@@ -2845,7 +2845,8 @@ class AsCompleted(object):
                 return
 
 
-as_completed = AsCompleted
+def AsCompleted(*args, **kwargs):
+    raise Exception("This has moved to as_completed")
 
 
 def default_client(c=None):

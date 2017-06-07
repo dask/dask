@@ -10,7 +10,8 @@ from toolz import merge
 from tornado.platform.asyncio import BaseAsyncIOLoop
 from tornado.platform.asyncio import to_asyncio_future
 
-from .client import Client, Future, AsCompleted, _wait
+from . import client
+from .client import Client, Future
 from .utils import ignoring
 
 
@@ -161,10 +162,8 @@ class AioClient(Client):
         raise RuntimeError("Use AioClient in an 'async with' block, not 'with'")
 
 
-class AioAsCompleted(AsCompleted):
+class as_completed(client.as_completed):
+    __anext__ = to_asyncio(client.as_completed.__anext__)
 
-    __anext__ = to_asyncio(AsCompleted.__anext__)
 
-
-wait = to_asyncio(_wait)
-as_completed = AioAsCompleted
+wait = to_asyncio(client._wait)
