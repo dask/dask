@@ -188,7 +188,20 @@ class Aggregation(object):
         an optional finalizer that will be called with the results from the
         aggregation.
 
-    TODO: add examples
+    For example, ``sum`` can be implemented as::
+
+        custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
+        df.groupby('g').agg(custom_sum)
+
+    and ``mean`` can be implemented as::
+
+        custom_mean = dd.Aggregation(
+            'custom_mean',
+            lambda s: (s.count(), s.sum()),
+            lambda count, sum: (count.sum(), sum.sum()),
+            lambda count, sum: sum/ count,
+        )
+        df.groupby('g').agg(custom_mean)
 
     """
     def __init__(self, name, chunk, agg, finalize=None):
