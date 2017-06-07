@@ -352,7 +352,9 @@ class SystemMonitor(DashboardComponent):
         self.worker = worker
 
         names = worker.monitor.quantities
+        self.last = 0
         self.source = ColumnDataSource({name: [] for name in names})
+        self.source.data.update(self.get_data())
 
         x_range = DataRange1d(follow='end', follow_interval=20000,
                               range_padding=0)
@@ -401,16 +403,18 @@ class SystemMonitor(DashboardComponent):
         self.cpu.y_range.start = 0
         self.bandwidth.y_range.start = 0
 
-        self.last = 0
         self.root = column(*plots, **kw)
         self.worker.monitor.update()
 
+    def get_data(self):
+        d = self.worker.monitor.range_query(start=self.last)
+        d['time'] = [x * 1000 for x in d['time']]
+        self.last = self.worker.monitor.count
+        return d
+
     def update(self):
         with log_errors():
-            d = self.worker.monitor.range_query(start=self.last)
-            d['time'] = [x * 1000 for x in d['time']]
-            self.source.stream(d, 1000)
-            self.last = self.worker.monitor.count
+            self.source.stream(self.get_data(), 1000)
 
 
 class Counters(DashboardComponent):
