@@ -664,7 +664,11 @@ def test_where():
     y = np.random.randint(10, size=15).astype(np.uint8)
     e = from_array(y, chunks=(4,))
 
-    for c1, c2 in [(d > 5, x > 5), (True, True), (False, False)]:
+    for c1, c2 in [(d > 5, x > 5),
+                   (True, True),
+                   (np.True_, np.True_),
+                   (False, False),
+                   (np.False_, np.False_)]:
         for b1, b2 in [(0, 0), (-e[:, None], -y[:, None])]:
             w1 = where(c1, d, b1)
             w2 = np.where(c2, x, b2)
