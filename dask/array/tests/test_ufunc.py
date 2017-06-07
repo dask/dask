@@ -176,7 +176,8 @@ def test_complex(ufunc):
         assert_eq(dafunc(darr), npfunc(arr))
 
         # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(darr), np.ndarray)
+        if np.__version__ < '1.13.0':
+            assert isinstance(npfunc(darr), np.ndarray)
         assert_eq(npfunc(darr), npfunc(arr))
 
         # applying Dask ufunc to normal ndarray triggers computation
