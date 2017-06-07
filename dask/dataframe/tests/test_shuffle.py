@@ -618,3 +618,19 @@ def test_temporary_directory():
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+
+
+def test_empty_partitions():
+    # See https://github.com/dask/dask/issues/2408
+    df = pd.DataFrame({'a': list(range(10))})
+    df['b'] = df['a'] % 3
+    df['c'] = df['b'].astype(str)
+
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf = ddf.set_index('b')
+    ddf = ddf.repartition(npartitions=3)
+    ddf.get_partition(0).compute()
+    assert_eq(ddf, df.set_index('b'))
+
+    ddf = ddf.set_index('c')
+    assert_eq(ddf, df.set_index('b').set_index('c'))
