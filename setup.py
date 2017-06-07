@@ -15,6 +15,8 @@ extras_require = {
   'delayed': ['toolz >= 0.7.3'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
+extras_require['dev'] = extras_require['complete'] + ['pytest', 'asv',
+                                                      'sphinx']
 
 packages = ['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.bytes',
             'dask.dataframe', 'dask.dataframe.io', 'dask.dataframe.tseries',
