@@ -1829,6 +1829,12 @@ class Client(Node):
             collections = [collections]
             singleton = True
 
+        traverse = kwargs.pop('traverse', True)
+        if traverse:
+            collections = tuple(dask.delayed(a)
+                         if isinstance(a, (list, set, tuple, dict, Iterator))
+                         else a for a in collections)
+
         variables = [a for a in collections if isinstance(a, Base)]
 
         dsk = self.collections_to_dsk(variables, optimize_graph, **kwargs)

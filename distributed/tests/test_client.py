@@ -3618,6 +3618,20 @@ def test_compute_workers(e, s, a, b, c):
     assert s.loose_restrictions == {total.key} | {v.key for v in L1}
 
 
+@gen_cluster(client=True)
+def test_compute_nested_containers(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    np = pytest.importorskip('numpy')
+    x = da.ones(10, chunks=(5,)) + 1
+
+    future = c.compute({'x': [x], 'y': 123})
+    result = yield future
+
+    assert isinstance(result, dict)
+    assert (result['x'][0] == np.ones(10) + 1).all()
+    assert result['y'] == 123
+
+
 def test_get_restrictions():
     L1 = [delayed(inc)(i) for i in range(4)]
     total = delayed(sum)(L1)
