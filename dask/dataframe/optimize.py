@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 from .io import dataframe_from_ctable
 from ..optimize import cull, fuse_getitem, fuse, dont_optimize
-from ..context import _globals, defer_to_globals
+from ..context import defer_to_globals
 from .. import core
 
 try:
@@ -23,7 +23,6 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
     if _read_parquet_row_group:
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
-    dsk, dependencies = fuse(dsk, keys, dependencies=dependencies,
-                             ave_width=_globals.get('fuse_ave_width', 0))
+    dsk, dependencies = fuse(dsk, keys, dependencies=dependencies)
     dsk, _ = cull(dsk, keys)
     return dsk
