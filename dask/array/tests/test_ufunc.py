@@ -204,7 +204,7 @@ def test_ufunc_2results(ufunc):
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
 
-    # applying NumPy ufunc is now laxy
+    # applying NumPy ufunc is now lazy
     res1, res2 = npfunc(darr)
     assert isinstance(res1, da.Array)
     assert isinstance(res2, da.Array)
@@ -271,16 +271,6 @@ def test_array_ufunc_out():
     np.sin(x, out=x)
     np.add(x, 10, out=x)
     assert_eq(x, np.sin(np.arange(10)) + 10)
-
-
-@pytest.mark.parametrize('func', [np.sum,
-                                  np.argmax,
-                                  pytest.mark.xfail(np.cumsum, reason='numpy fails')])
-def test_array_ufunc_reduction_out(func):
-    x = da.arange(10, chunks=(5,))
-    y = da.ones((10, 10), chunks=(4, 4))
-    func(y, axis=0, out=x)
-    assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
 def test_unsupported_ufunc_methods():

@@ -656,13 +656,13 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
 
 
 @wraps(np.cumsum)
-def cumsum(x, axis, dtype=None):
-    return cumreduction(np.cumsum, operator.add, 0, x, axis, dtype)
+def cumsum(x, axis, dtype=None, out=None):
+    return cumreduction(np.cumsum, operator.add, 0, x, axis, dtype, out=out)
 
 
 @wraps(np.cumprod)
-def cumprod(x, axis, dtype=None):
-    return cumreduction(np.cumprod, operator.mul, 1, x, axis, dtype)
+def cumprod(x, axis, dtype=None, out=None):
+    return cumreduction(np.cumprod, operator.mul, 1, x, axis, dtype, out=out)
 
 
 def validate_axis(ndim, axis):

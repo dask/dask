@@ -1048,6 +1048,7 @@ class Array(Base):
         return sum(self.chunks[0])
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        import pdb; pdb.set_trace()
         from . import ufunc
         da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
         if method == '__call__':
@@ -1641,15 +1642,15 @@ class Array(Base):
         from .ghost import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
-    def cumsum(self, axis, dtype=None):
+    def cumsum(self, axis, dtype=None, out=None):
         """ See da.cumsum for docstring """
         from .reductions import cumsum
-        return cumsum(self, axis, dtype)
+        return cumsum(self, axis, dtype, out=out)
 
-    def cumprod(self, axis, dtype=None):
+    def cumprod(self, axis, dtype=None, out=None):
         """ See da.cumprod for docstring """
         from .reductions import cumprod
-        return cumprod(self, axis, dtype)
+        return cumprod(self, axis, dtype, out=out)
 
     @wraps(squeeze)
     def squeeze(self):
@@ -2723,7 +2724,9 @@ def handle_out(out, result):
             out = None
     if isinstance(out, Array):
         if out.shape != result.shape:
-            raise NotImplementedError("The out parameter is not fully supported")
+            raise NotImplementedError(
+                "Mismatched shapes between result and out parameter. "
+                "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
         if hasattr(out, '_cached_keys'):
             del out._cached_keys
