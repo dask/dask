@@ -623,7 +623,7 @@ def test_temporary_directory():
 def test_empty_partitions():
     # See https://github.com/dask/dask/issues/2408
     df = pd.DataFrame({'a': list(range(10))})
-    df['b'] = df['a'] % 3;
+    df['b'] = df['a'] % 3
     df['c'] = df['b'].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=3)
