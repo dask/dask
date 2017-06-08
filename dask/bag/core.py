@@ -37,7 +37,7 @@ from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline, dont_optimize
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert)
+                     digit, insert, ensure_dict)
 
 
 no_default = '__no__default__'
@@ -271,7 +271,7 @@ class Item(Base):
         if not isinstance(value, Delayed) and hasattr(value, 'key'):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(value.dask, value.key)
+        return Item(ensure_dict(value.dask), value.key)
 
     def __init__(self, dsk, key):
         self.dask = dsk
@@ -1419,7 +1419,7 @@ def from_delayed(values):
               if not isinstance(v, Delayed) and hasattr(v, 'key')
               else v
               for v in values]
-    dsk = merge(v.dask for v in values)
+    dsk = merge(ensure_dict(v.dask) for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
@@ -1576,7 +1576,7 @@ def unpack_scalar_dask_kwargs(kwargs):
     kwargs2 = {}
     for k, v in kwargs.items():
         if isinstance(v, (Delayed, Item)):
-            dsk.update(v.dask)
+            dsk.update(ensure_dict(v.dask))
             kwargs2[k] = v.key
         elif isinstance(v, Base):
             raise NotImplementedError("dask.bag doesn't support kwargs of "
@@ -1656,7 +1656,7 @@ def bag_map(func, *args, **kwargs):
             dsk.update(a.dask)
         elif isinstance(a, (Item, Delayed)):
             args2.append((itertools.repeat, a.key))
-            dsk.update(a.dask)
+            dsk.update(ensure_dict(a.dask))
         else:
             args2.append((itertools.repeat, a))
 
@@ -1745,7 +1745,7 @@ def map_partitions(func, *args, **kwargs):
     for vals in [args, kwargs.values()]:
         for a in vals:
             if isinstance(a, (Bag, Item, Delayed)):
-                dsk.update(a.dask)
+                dsk.update(ensure_dict(a.dask))
                 if isinstance(a, Bag):
                     bags.append(a)
             elif isinstance(a, Base):
