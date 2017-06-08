@@ -4,7 +4,6 @@ from collections import deque, namedtuple
 import itertools
 import logging
 import os
-import sys
 import threading
 import weakref
 
@@ -13,7 +12,7 @@ from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 
 from ..compatibility import finalize
-from ..protocol import nested_deserialize, Serialize, Serialized
+from ..protocol import nested_deserialize
 from ..utils import get_ip
 
 from .registry import Backend, backends
@@ -67,6 +66,7 @@ class Manager(object):
 
 
 global_manager = Manager()
+
 
 def new_address():
     """

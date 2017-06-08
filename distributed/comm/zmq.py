@@ -1,17 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import timedelta
 import logging
-import struct
-import sys
 
 from tornado import gen, ioloop
 
 import zmq
 from zmq.eventloop import ioloop as zmqioloop
-from zmq.eventloop.future import Context
 
-from .. import config
 from ..utils import PY3, ensure_ip, get_ip, get_ipv6
 
 from . import zmqimpl
@@ -33,8 +28,8 @@ def install():
     if not isinstance(inst, zmqioloop.IOLoop):
         raise RuntimeError("failed to install ZeroMQ IO Loop, got %r" % (inst,))
 
-install()
 
+install()
 
 
 NOCOPY_THRESHOLD = 1000 ** 2   # 1 MB
@@ -49,6 +44,7 @@ NOCOPY_THRESHOLD = 1000 ** 2   # 1 MB
     #return sock
 
 ctx = zmqimpl.Context()
+
 
 def make_socket(sockty):
     sock = ctx.socket(sockty)
@@ -254,7 +250,7 @@ class ZMQListener(Listener):
         """
         The listening address as a string.
         """
-        return 'zmq://'+ unparse_host_port(*self.get_host_port())
+        return 'zmq://' + unparse_host_port(*self.get_host_port())
 
     @property
     def contact_address(self):

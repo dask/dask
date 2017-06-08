@@ -7,7 +7,6 @@ from tornado.concurrent import Future
 
 import zmq
 from zmq import POLLOUT, POLLIN
-from zmq.eventloop.future import Poller
 from zmq.eventloop.ioloop import IOLoop
 
 

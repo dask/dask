@@ -7,9 +7,7 @@ import logging
 from six import with_metaclass
 
 from tornado import gen
-from tornado.ioloop import IOLoop
 
-from ..config import config
 from ..metrics import time
 from . import registry
 from .addressing import parse_address

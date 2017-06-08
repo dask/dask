@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 
 from six import with_metaclass
 

@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import timedelta
 import errno
 import logging
 import socket
@@ -10,7 +9,7 @@ import sys
 
 import tornado
 from tornado import gen, netutil
-from tornado.iostream import IOStream, StreamClosedError
+from tornado.iostream import StreamClosedError
 from tornado.tcpclient import TCPClient
 from tornado.tcpserver import TCPServer
 

@@ -45,7 +45,7 @@ install:
 
 script:
   - source continuous_integration/travis/run_tests.sh
-  - flake8 distributed/*.py distributed/{bokeh,protocol,deploy}/*.py # no tests yet
+  - flake8 distributed/*.py distributed/{bokeh,comm,deploy,protocol}/*.py # no tests yet
 
 after_success:
   - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
