@@ -1616,8 +1616,8 @@ class Worker(WorkerBase):
                     self.batched_stream.send({'op': 'add-keys',
                                               'keys': list(response)})
             except EnvironmentError as e:
-                logger.error("Worker stream died during communication: %s",
-                             worker)
+                logger.exception("Worker stream died during communication: %s",
+                                 worker)
                 self.log.append(('receive-dep-failed', worker))
                 for d in self.has_what.pop(worker):
                     self.who_has[d].remove(worker)
