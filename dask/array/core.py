@@ -1056,15 +1056,21 @@ class Array(Base):
         if method == '__call__':
             if numpy_ufunc.signature is not None:
                 return NotImplemented
-            if numpy_ufunc.__name__ in ('frexp', 'modf'):  # multi-output
+            if numpy_ufunc.nout > 1:
                 from . import ufunc
-                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                try:
+                    da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                except AttributeError:
+                    return NotImplemented
                 return da_ufunc(*inputs, **kwargs)
             else:
                 return elemwise(numpy_ufunc, *inputs, **kwargs)
         elif method == 'outer':
             from . import ufunc
-            da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+            try:
+                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+            except AttributeError:
+                return NotImplemented
             return da_ufunc.outer(*inputs, **kwargs)
         else:
             return NotImplemented
