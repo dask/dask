@@ -641,6 +641,13 @@ def test_matmul():
     list_vec = list(range(1, 6))
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
+    z = np.random.random((5, 5, 5))
+    with pytest.raises(NotImplementedError):
+        operator.matmul(a, z)
+    c = from_array(z, chunks=(1, 5, 1))
+    with pytest.raises(NotImplementedError):
+        operator.matmul(x, c)
+    assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
 def test_T():
