@@ -18,3 +18,18 @@ try:
     from .io import read_parquet, to_parquet
 except ImportError:
     pass
+
+# just testing
+from shutil import get_terminal_size
+
+import pandas.core.categorical
+pandas.core.categorical.get_terminal_size = get_terminal_size
+
+import pandas.core.series
+pandas.core.series.get_terminal_size = get_terminal_size
+
+import pandas.io.formats.console
+pandas.io.formats.console.get_terminal_size = get_terminal_size
+
+import pandas.io.formats.format
+pandas.io.formats.format.get_terminal_size = get_terminal_size
