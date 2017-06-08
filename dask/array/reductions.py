@@ -178,7 +178,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
 with ignoring(AttributeError):
     @wraps(chunk.nanprod)
     def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None,
-            out=None):
+                out=None):
         if dtype is not None:
             dt = dtype
         else:

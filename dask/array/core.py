@@ -2713,13 +2713,13 @@ def elemwise(op, *args, **kwargs):
 
     if other:
         result = atop(partial_by_order, expr_inds,
-                    *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                    dtype=dt, name=name, function=op, other=other,
-                    token=funcname(op))
+                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                      dtype=dt, name=name, function=op, other=other,
+                      token=funcname(op))
     else:
         result = atop(op, expr_inds,
-                    *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                    dtype=dt, name=name)
+                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                      dtype=dt, name=name)
 
     return handle_out(out, result)
 
@@ -2749,8 +2749,9 @@ def handle_out(out, result):
         out.dtype = result.dtype
         out.name = result.name
     elif out is not None:
-        raise NotImplementedError("The out parameter is not fully supported."
-                " Received type %s, expected Dask Array" % type(out).__name__)
+        msg = ("The out parameter is not fully supported."
+               " Received type %s, expected Dask Array" % type(out).__name__)
+        raise NotImplementedError(msg)
     else:
         return result
 
