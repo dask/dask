@@ -1956,10 +1956,10 @@ def test_chunks_is_immutable():
 def test_raise_on_bad_kwargs():
     x = da.ones(5, chunks=3)
     try:
-        da.minimum(x, out=None)
+        da.minimum(x, foo=None)
     except TypeError as e:
         assert 'minimum' in str(e)
-        assert 'out' in str(e)
+        assert 'foo' in str(e)
 
 
 def test_long_slice():
