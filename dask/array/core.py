@@ -1428,6 +1428,30 @@ class Array(Base):
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
+    def __matmul__(self, other):
+        if not hasattr(other, 'ndim'):
+            other = np.asarray(other)  # account for array-like RHS
+        if other.ndim > 2:
+            msg = ('The matrix multiplication operator (@) is not yet '
+                   'implemented for higher-dimensional Dask arrays. Try '
+                   '`dask.array.tensordot` and see the discussion at '
+                   'https://github.com/dask/dask/pull/2349 for details.')
+            raise NotImplementedError(msg)
+        return tensordot(self, other, axes=((self.ndim - 1,),
+                                            (other.ndim - 2,)))
+
+    def __rmatmul__(self, other):
+        if not hasattr(other, 'ndim'):
+            other = np.asarray(other)  # account for array-like on LHS
+        if self.ndim > 2:
+            msg = ('The matrix multiplication operator (@) is not yet '
+                   'implemented for higher-dimensional Dask arrays. Try '
+                   '`dask.array.tensordot` and see the discussion at '
+                   'https://github.com/dask/dask/pull/2349 for details.')
+            raise NotImplementedError(msg)
+        return tensordot(other, self, axes=((other.ndim - 1,),
+                                            (self.ndim - 2,)))
+
     @wraps(np.any)
     def any(self, axis=None, keepdims=False, split_every=None):
         from .reductions import any
