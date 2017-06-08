@@ -1500,12 +1500,21 @@ class Array(Base):
     def __matmul__(self, other):
         if not hasattr(other, 'ndim'):
             other = np.asarray(other)  # account for array-like RHS
+        if other.ndim > 2:
+            msg = ('Matrix multiplication for higher-dimensional arrays '
+                   'is not yet implemented in Dask. See the discussion at '
+                   'https://github.com/dask/dask/pull/2349 for details.')
+            raise NotImplementedError(msg)
         return tensordot(self, other, axes=((self.ndim - 1,),
                                             (other.ndim - 2,)))
 
     def __rmatmul__(self, other):
         if not hasattr(other, 'ndim'):
             other = np.asarray(other)  # account for array-like on LHS
+        if self.ndim > 2:
+            msg = ('Matrix multiplication for higher-dimensional arrays '
+                   'is not yet implemented in Dask. See the discussion at '
+                   'https://github.com/dask/dask/pull/2349 for details.')
         return tensordot(other, self, axes=((other.ndim - 1,),
                                             (self.ndim - 2,)))
 
