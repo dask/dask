@@ -415,6 +415,8 @@ class Client(Node):
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
+        self._loop_thread = None
+        self.scheduler = None
 
         if loop is None:
             self._should_close_loop = None
@@ -458,12 +460,12 @@ class Client(Node):
         ReplayExceptionClient(self)
 
     def __str__(self):
-        if hasattr(self, '_loop_thread'):
+        if self._loop_thread is not None:
             n = sync(self.loop, self.scheduler.ncores)
             return '<%s: scheduler=%r processes=%d cores=%d>' % (
                     self.__class__.__name__,
                     self.scheduler.address, len(n), sum(n.values()))
-        elif hasattr(self, 'scheduler'):
+        elif self.scheduler is not None:
             return '<%s: scheduler=%r>' % (
                     self.__class__.__name__, self.scheduler.address)
         else:
@@ -472,14 +474,19 @@ class Client(Node):
     __repr__ = __str__
 
     def _repr_html_(self):
-        if hasattr(self, '_loop_thread'):
+        if self._loop_thread is not None:
             info = sync(self.loop, self.scheduler.identity)
         else:
             info = False
 
-        text = ("<h3>Client</h3>\n"
-                "<ul>\n"
-                "  <li><b>Scheduler: </b>%s\n") % self.scheduler.address
+        if self.scheduler is not None:
+            text = ("<h3>Client</h3>\n"
+                    "<ul>\n"
+                    "  <li><b>Scheduler: </b>%s\n") % self.scheduler.address
+        else:
+            text = ("<h3>Client</h3>\n"
+                    "<ul>\n"
+                    "  <li><b>Scheduler: not connected</b>\n")
         if info and 'bokeh' in info['services']:
             protocol, rest = self.scheduler.address.split('://')
             port = info['services']['bokeh']
@@ -515,7 +522,7 @@ class Client(Node):
 
     def start(self, asynchronous=None, **kwargs):
         """ Start scheduler running in separate thread """
-        if hasattr(self, '_loop_thread'):
+        if self._loop_thread is not None:
             return
         if not asynchronous and not self.loop._running:
             from threading import Thread
@@ -807,6 +814,7 @@ class Client(Node):
                 yield self.scheduler_comm.close()
             with ignoring(AttributeError):
                 self.scheduler.close_rpc()
+            self.scheduler = None
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates
@@ -837,6 +845,7 @@ class Client(Node):
             sync(self.loop, self.loop.stop)
             self.loop.close()
             self._loop_thread.join(timeout=timeout)
+        self._loop_thread = None
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)
         with ignoring(AttributeError):

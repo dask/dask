@@ -1594,12 +1594,17 @@ def test_badly_serialized_input_stderr(capsys, loop):
 
 
 def test_repr(loop):
+    funcs = [str, repr, lambda x: x._repr_html_()]
     with cluster(nworkers=3) as (s, [a, b, c]):
         with Client(s['address'], loop=loop) as c:
-            for func in [str, repr, lambda x: x._repr_html_()]:
+            for func in funcs:
                 text = func(c)
                 assert c.scheduler.address in text
                 assert '2' in text
+
+        for func in funcs:
+            text = func(c)
+            assert 'not connected' in text
 
 
 @gen_cluster(client=True)
