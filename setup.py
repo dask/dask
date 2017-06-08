@@ -35,5 +35,6 @@ setup(name='dask',
       packages=packages + tests,
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
+      install_requires=extras_require['dataframe'],
       extras_require=extras_require,
       zip_safe=False)
