@@ -431,7 +431,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
     else:
         writes = [delayed(fastparquet.writer.make_part_file)(
                   myopen(outfile, 'wb'), partition, fmd.schema,
-                  compression=compression)
+                  compression=compression, fmd=fmd)
                   for outfile, partition in zip(outfiles, partitions)]
 
     if compute:
