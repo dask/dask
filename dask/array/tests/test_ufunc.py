@@ -67,7 +67,10 @@ def test_unary_ufunc(ufunc):
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
         # applying NumPy ufunc is lazy
-        assert isinstance(npfunc(darr), da.Array)
+        if isinstance(npfunc, np.ufunc):
+            assert isinstance(npfunc(darr), da.Array)
+        else:
+            assert isinstance(npfunc(darr), np.ndarray)
         assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
@@ -275,4 +278,5 @@ def test_array_ufunc_out():
 
 def test_unsupported_ufunc_methods():
     x = da.arange(10, chunks=(5,))
-    assert_eq(np.add.reduce(x), np.add.reduce(x.compute()))
+    with pytest.raises(TypeError):
+        assert np.add.reduce(x)

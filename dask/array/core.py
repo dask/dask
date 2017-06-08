@@ -1048,17 +1048,26 @@ class Array(Base):
         return sum(self.chunks[0])
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
-        import pdb; pdb.set_trace()
-        from . import ufunc
-        da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+        out = kwargs.get('out', ())
+        for x in inputs + out:
+            if not isinstance(x, (np.ndarray, Number, Array)):
+                return NotImplemented
+
         if method == '__call__':
-            return da_ufunc(*inputs, **kwargs)
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.__name__ in ('frexp', 'modf'):  # multi-output
+                from . import ufunc
+                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                return da_ufunc(*inputs, **kwargs)
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
         elif method == 'outer':
+            from . import ufunc
+            da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
             return da_ufunc.outer(*inputs, **kwargs)
         else:
-            from ..base import compute
-            inputs2 = compute(*inputs)
-            return getattr(numpy_ufunc, method)(*inputs2, **kwargs)
+            return NotImplemented
 
     def __repr__(self):
         """
