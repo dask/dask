@@ -121,6 +121,11 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     if isinstance(divisions[0], np.datetime64):
         divisions = [pd.Timestamp(d) for d in divisions]
 
+    if not dsk:
+        # empty dataframe
+        dsk = {(name, 0): meta}
+        divisions = (None, None)
+
     return out_type(dsk, name, meta, divisions)
 
 
@@ -455,8 +460,6 @@ def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
                     chunk.file_path = fn
                 fmd.row_groups.append(rg)
 
-    if len(fmd.row_groups) == 0:
-        raise ValueError("All partitions were empty")
     fastparquet.writer.write_common_metadata(metadata_fn, fmd, open_with=myopen,
                                              no_row_groups=False)
 

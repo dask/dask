@@ -374,10 +374,6 @@ def test_empty_partition(fn):
     assert_eq(ddf2.compute(), ddf3.compute(), check_names=False,
               check_index=False)
 
-    ddf2 = ddf[ddf.a <= -5]
-    with pytest.raises(ValueError):
-        ddf2.to_parquet(fn)
-
 
 def test_timestamp_index():
     with tmpfile() as fn:
@@ -465,3 +461,14 @@ def test_to_parquet_lazy(tmpdir, get):
     ddf2 = dd.read_parquet(tmpdir)
 
     assert_eq(ddf, ddf2)
+
+
+def test_empty(fn):
+    df = pd.DataFrame({'a': ['a', 'b', 'b'], 'b': [4, 5, 6]})[0:0]
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, write_index=False)
+    files = os.listdir(fn)
+    assert '_metadata' in files
+    out = dd.read_parquet(fn).compute()
+    assert len(out) == 0
+    assert_eq(out, df)
