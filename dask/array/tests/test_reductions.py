@@ -386,6 +386,7 @@ def test_reduction_names():
     assert x.mean().name.startswith('mean')
 
 
+@pytest.mark.skipif(np.__version__ < '1.12.0', reason='argmax out parameter')
 @pytest.mark.parametrize('func', [np.sum,
                                   np.argmax])
 def test_array_reduction_out(func):

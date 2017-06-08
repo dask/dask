@@ -571,7 +571,8 @@ def make_arg_reduction(func, argfunc, is_nan_func=False):
 
     @wraps(argfunc)
     def _(x, axis=None, split_every=None, out=None):
-        return arg_reduction(x, chunk, combine, agg, axis, split_every, out=out)
+        return arg_reduction(x, chunk, combine, agg, axis,
+                             split_every=split_every, out=out)
 
     return _
 
