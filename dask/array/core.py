@@ -1517,6 +1517,7 @@ class Array(Base):
                    'implemented for higher-dimensional Dask arrays. Try '
                    '`dask.array.tensordot` and see the discussion at '
                    'https://github.com/dask/dask/pull/2349 for details.')
+            raise NotImplementedError(msg)
         return tensordot(other, self, axes=((other.ndim - 1,),
                                             (self.ndim - 2,)))
 
