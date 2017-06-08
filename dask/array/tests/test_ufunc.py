@@ -53,7 +53,8 @@ unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
 
 @pytest.mark.parametrize('ufunc', unary_ufuncs)
 def test_unary_ufunc(ufunc):
-
+    if ufunc == 'fix' and np.__version__ >= '1.13.0':
+        pytest.skip('fix calls floor in a way that we do not yet support')
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
