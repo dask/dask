@@ -280,3 +280,13 @@ def test_unsupported_ufunc_methods():
     x = da.arange(10, chunks=(5,))
     with pytest.raises(TypeError):
         assert np.add.reduce(x)
+
+
+def test_out_numpy():
+    x = da.arange(10, chunks=(5,))
+    empty = np.empty(10, dtype=x.dtype)
+    with pytest.raises((TypeError, NotImplementedError)) as info:
+        np.add(x, 1, out=empty)
+
+    assert 'ndarray' in str(info.value)
+    assert 'Array' in str(info.value)

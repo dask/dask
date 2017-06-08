@@ -2743,7 +2743,8 @@ def handle_out(out, result):
         out.dtype = result.dtype
         out.name = result.name
     elif out is not None:
-        raise NotImplementedError("The out parameter is not fully supported")
+        raise NotImplementedError("The out parameter is not fully supported."
+                " Received type %s, expected Dask Array" % type(out).__name__)
     else:
         return result
 
