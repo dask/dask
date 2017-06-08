@@ -369,8 +369,8 @@ class Bag(Base):
         Notes
         -----
         For calls with multiple `Bag` arguments, corresponding partitions
-        should have the same length; if they do not, the "extra" elements from
-        the longer partition(s) will be dropped.
+        should have the same length; if they do not, the call will error at
+        compute time.
 
         Examples
         --------
@@ -1603,8 +1603,7 @@ def bag_map(func, *args, **kwargs):
     Notes
     -----
     For calls with multiple `Bag` arguments, corresponding partitions should
-    have the same length; if they do not, the "extra" elements from the longer
-    partition(s) will be dropped.
+    have the same length; if they do not, the call will error at compute time.
 
     Examples
     --------
