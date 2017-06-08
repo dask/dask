@@ -4,8 +4,10 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import math
 import os
+import random
 import sys
 from collections import Iterator
+from itertools import repeat
 
 import partd
 from toolz import merge, join, filter, identity, valmap, groupby, pluck
@@ -439,17 +441,35 @@ def test_map_partitions():
     assert b.map_partitions(lambda a: len(a) + 1).name != b.map_partitions(len).name
 
 
-def test_map_partitions_with_kwargs():
-    b = db.from_sequence(range(100), npartitions=10)
+def test_map_partitions_args_kwargs():
+    x = [random.randint(-100, 100) for i in range(100)]
+    y = [random.randint(-100, 100) for i in range(100)]
 
-    def scale(X, factor=1, total=1):
-        return [x * factor / total for x in X]
+    dx = db.from_sequence(x, npartitions=10)
+    dy = db.from_sequence(y, npartitions=10)
 
-    assert b.map_partitions(scale, factor=2).sum().compute() == 9900.0
-    assert b.map_partitions(scale, total=b.sum()).sum().compute() == 1.0
-    assert b.map_partitions(scale, total=b.sum(), factor=2).sum().compute() == 2.0
-    total = dask.delayed(sum)(list(range(100)))
-    assert b.map_partitions(scale, total=total, factor=2).sum().compute() == 2.0
+    def maximum(x, y=0):
+        y = repeat(y) if isinstance(y, int) else y
+        return [max(a, b) for (a, b) in zip(x, y)]
+
+    sol = maximum(x, y=10)
+    assert db.map_partitions(maximum, dx, y=10).compute() == sol
+    assert dx.map_partitions(maximum, y=10).compute() == sol
+    assert dx.map_partitions(maximum, 10).compute() == sol
+
+    sol = maximum(x, y)
+    assert db.map_partitions(maximum, dx, dy).compute() == sol
+    assert dx.map_partitions(maximum, y=dy).compute() == sol
+    assert dx.map_partitions(maximum, dy).compute() == sol
+
+    dy_mean = dy.mean().apply(int)
+    sol = maximum(x, int(sum(y) / len(y)))
+    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
+    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+
+    dy_mean = dask.delayed(dy_mean)
+    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
+    assert dx.map_partitions(maximum, dy_mean).compute() == sol
 
 
 def test_random_sample_size():
