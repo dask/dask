@@ -645,12 +645,23 @@ def test_matmul():
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
     z = np.random.random((5, 5, 5))
+    c = from_array(z, chunks=(1, 5, 1))
     with pytest.raises(NotImplementedError):
         operator.matmul(a, z)
+
+    assert_eq(operator.matmul(z, a), operator.matmul(c, x))
+
+
+@pytest.mark.skipif(sys.version_info < (3, 5),
+                    reason="Matrix multiplication operator only after Py3.5")
+@pytest.mark.skipif(np.__version__ == '1.13.0',
+                    reason="https://github.com/numpy/numpy/issues/9028")
+def test_matmul_raises():
+    x = np.random.random((5, 5))
+    z = np.random.random((5, 5, 5))
     c = from_array(z, chunks=(1, 5, 1))
     with pytest.raises(NotImplementedError):
         operator.matmul(x, c)
-    assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
 def test_T():
