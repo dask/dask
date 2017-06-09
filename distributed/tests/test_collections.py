@@ -13,12 +13,6 @@ import dask.bag as db
 from distributed import Client
 from distributed.client import _wait, wait
 from distributed.utils_test import cluster, loop, gen_cluster
-from distributed.collections import (_futures_to_dask_dataframe,
-        futures_to_dask_dataframe, _futures_to_dask_array,
-        futures_to_dask_array, _futures_to_collection,
-        _futures_to_dask_bag, futures_to_dask_bag, _future_to_dask_array,
-         _futures_to_dask_arrays, futures_to_collection, future_to_dask_array,
-         futures_to_dask_arrays)
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -43,42 +37,6 @@ def assert_equal(a, b):
         tm.assert_index_equal(a, b)
     else:
         assert a == b
-
-
-@gen_cluster(client=True)
-def test__futures_to_dask_dataframe(c, s, a, b):
-    remote_dfs = c.map(identity, dfs)
-    ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
-            client=c)
-
-    assert isinstance(ddf, dd.DataFrame)
-    assert ddf.divisions == (0, 30, 60, 80)
-    expr = ddf.x.sum()
-    result = yield c.get(expr.dask, expr._keys(), sync=False)
-    assert result == [sum([df.x.sum() for df in dfs])]
-
-
-@gen_cluster(client=True)
-def test_no_divisions(c, s, a, b):
-    dfs = c.map(tm.makeTimeDataFrame, range(5, 10))
-
-    df = yield _futures_to_dask_dataframe(dfs)
-    assert not df.known_divisions
-    assert list(df.columns) == list(tm.makeTimeDataFrame(5).columns)
-
-
-def test_futures_to_dask_dataframe(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            remote_dfs = c.map(lambda x: x, dfs)
-            ddf = futures_to_dask_dataframe(remote_dfs, divisions=True)
-
-            assert isinstance(ddf, dd.DataFrame)
-            assert ddf.x.sum().compute(get=c.get) == sum([df.x.sum() for df in dfs])
-
-            ddf2 = futures_to_collection(remote_dfs, divisions=True)
-            assert type(ddf) == type(ddf2)
-            assert ddf.dask == ddf2.dask
 
 
 @gen_cluster(timeout=240, client=True)
@@ -113,66 +71,6 @@ def test_dataframes(c, s, a, b):
         assert_equal(local, remote)
 
 
-@gen_cluster(timeout=60, client=True)
-def test__futures_to_dask_array(c, s, a, b):
-    import dask.array as da
-    remote_arrays = [[[c.submit(np.full, (2, 3, 4), i + j + k)
-                        for i in range(2)]
-                        for j in range(2)]
-                        for k in range(4)]
-
-    x = yield _futures_to_dask_array(remote_arrays, client=c)
-    assert x.chunks == ((2, 2, 2, 2), (3, 3), (4, 4))
-    assert x.dtype == np.full((), 0).dtype
-
-    assert isinstance(x, da.Array)
-    expr = x.sum()
-    result = yield c.get(expr.dask, expr._keys(), sync=False)
-    assert isinstance(result[0], np.number)
-
-
-@gen_cluster(client=True)
-def test__future_to_dask_array(c, s, a, b):
-    import dask.array as da
-    f = c.submit(np.ones, (5, 5))
-    a = yield _future_to_dask_array(f)
-
-    assert a.shape == (5, 5)
-    assert a.dtype == np.ones(1).dtype
-    assert isinstance(a, da.Array)
-
-    aa = yield c.compute(a)
-    assert (aa == 1).all()
-
-
-@gen_cluster(client=True)
-def test__futures_to_dask_arrays(c, s, a, b):
-    import dask.array as da
-
-    fs = c.map(np.ones, [(5, i) for i in range(1, 6)], pure=False)
-    arrs = yield _futures_to_dask_arrays(fs)
-    assert len(fs) == len(arrs) == 5
-
-    assert all(a.shape == (5, i + 1) for i, a in enumerate(arrs))
-    assert all(a.dtype == np.ones(1).dtype for a in arrs)
-    assert all(isinstance(a, da.Array) for a in arrs)
-
-    xs = yield c._gather(c.compute(arrs))
-    assert all((x == 1).all() for x in xs)
-
-
-def test_futures_to_dask_arrays(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            futures = c.map(np.ones, [(5, i) for i in range(1, 6)])
-            x = future_to_dask_array(futures[0])
-            assert x.shape == (5, 1)
-            assert (x.compute(get=c.get) == 1).all()
-
-            xs = futures_to_dask_arrays(futures)
-            assert [x.shape for x in xs] == [(5, i) for i in range(1, 6)]
-
-
 
 @gen_cluster(client=True)
 def test__dask_array_collections(c, s, a, b):
@@ -204,86 +102,6 @@ def test__dask_array_collections(c, s, a, b):
         remote = yield remote
 
         assert np.all(local == remote)
-
-
-@gen_cluster(client=True)
-def test__futures_to_dask_bag(c, s, a, b):
-    import dask.bag as db
-
-    L = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    futures = yield c._scatter(L)
-
-    rb = yield _futures_to_dask_bag(futures)
-    assert isinstance(rb, db.Bag)
-    assert rb.npartitions == len(L)
-
-    lb = db.from_sequence([1, 2, 3, 4, 5, 6, 7, 8, 9], npartitions=3)
-
-    exprs = [lambda x: x.map(lambda x: x + 1).sum(),
-             lambda x: x.filter(lambda x: x % 2)]
-
-    for expr in exprs:
-        local = expr(lb).compute(get=dask.get)
-        remote = c.compute(expr(rb))
-        remote = yield remote
-
-        assert local == remote
-
-
-def test_futures_to_dask_bag(loop):
-    import dask.bag as db
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-            futures = c.scatter(data)
-            b = futures_to_dask_bag(futures)
-
-            assert isinstance(b, db.Bag)
-            assert b.map(lambda x: x + 1).sum().compute(get=c.get) == sum(range(2, 11))
-
-
-@pytest.mark.skipif(not sys.platform.startswith('linux'),
-                    reason='KQueue error - uncertain cause')
-def test_futures_to_dask_array(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            remote_arrays = [[c.submit(np.full, (3, 3), i + j)
-                                for i in range(3)]
-                                for j in range(3)]
-
-            x = futures_to_dask_array(remote_arrays, client=c)
-            assert x.chunks == ((3, 3, 3), (3, 3, 3))
-            assert x.dtype == np.full((), 0).dtype
-
-            assert x.sum().compute(get=c.get) == 162
-            assert (x + x.T).sum().compute(get=c.get) == 162 * 2
-
-            y = futures_to_collection(remote_arrays, client=c)
-            assert x.dask == y.dask
-
-
-@gen_cluster(client=True)
-def test__futures_to_collection(c, s, a, b):
-    remote_dfs = c.map(identity, dfs)
-    ddf = yield _futures_to_collection(remote_dfs, divisions=True)
-    ddf2 = yield _futures_to_dask_dataframe(remote_dfs, divisions=True)
-    assert isinstance(ddf, dd.DataFrame)
-
-    assert ddf.dask == ddf2.dask
-
-    remote_arrays = c.map(np.arange, range(3, 5))
-    x = yield _futures_to_collection(remote_arrays)
-    y = yield _futures_to_dask_array(remote_arrays)
-
-    assert type(x) == type(y)
-    assert x.dask == y.dask
-
-    remote_lists = yield c._scatter([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    b = yield _futures_to_collection(remote_lists)
-    c = yield _futures_to_dask_bag(remote_lists)
-
-    assert type(b) == type(c)
-    assert b.dask == b.dask
 
 
 @gen_cluster(client=True)

@@ -15,11 +15,6 @@ from .variable import Variable
 from .worker import Worker, get_worker
 from .worker_client import local_client, worker_client
 
-try:
-    from .collections import futures_to_collection
-except:
-    pass
-
 from ._version import get_versions
 versions = get_versions()
 __version__ = versions['version']
