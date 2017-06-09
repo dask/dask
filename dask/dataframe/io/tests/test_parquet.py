@@ -464,7 +464,8 @@ def test_to_parquet_lazy(tmpdir, get):
 
 
 def test_empty(fn):
-    df = pd.DataFrame({'a': ['a', 'b', 'b'], 'b': [4, 5, 6]})[0:0]
+    df0 = pd.DataFrame({'a': ['a', 'b', 'b'], 'b': [4, 5, 6]})
+    df = df0.head(0)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, write_index=False)
     files = os.listdir(fn)
@@ -472,3 +473,8 @@ def test_empty(fn):
     out = dd.read_parquet(fn).compute()
     assert len(out) == 0
     assert_eq(out, df)
+
+    ddf = dd.from_pandas(df0, npartitions=2)
+    ddf.to_parquet(fn, write_index=False, append=True)
+    out = dd.read_parquet(fn).compute()
+    assert_eq(out, df0)

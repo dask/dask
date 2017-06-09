@@ -106,7 +106,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                        categories, pf.schema, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
-    if index_col:
+    if index_col and dsk:
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_col in minmax:
             divisions = (list(minmax[index_col]['min']) +
@@ -386,7 +386,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
-        if pf.file_scheme != 'hive':
+        if pf.file_scheme not in ['hive', 'empty']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
         elif set(pf.columns) != set(df.columns):
@@ -405,7 +405,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         fmd = pf.fmd
         i_offset = fastparquet.writer.find_max_part(fmd.row_groups)
 
-        if not ignore_divisions:
+        if not ignore_divisions and pf.row_groups:
             minmax = fastparquet.api.sorted_partitioned_columns(pf)
             divisions = list(minmax[index_col]['min']) + [
                 minmax[index_col]['max'][-1]]
