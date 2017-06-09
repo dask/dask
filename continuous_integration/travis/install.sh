@@ -44,7 +44,6 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
-    # pyarrow \  # conflicts with numpy 1.13.0 for now
     pytables \
     pytest \
     scikit-image \
