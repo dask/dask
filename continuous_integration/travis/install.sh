@@ -45,7 +45,7 @@ conda install -q -c conda-forge \
     partd \
     psutil \
     pytables \
-    pytest \
+    pytest=3.1.1 \
     scikit-image \
     scikit-learn \
     scipy \
