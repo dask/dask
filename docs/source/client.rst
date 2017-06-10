@@ -152,13 +152,21 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
 Tornado Coroutines
 ------------------
 
-If we are operating in an asynchronous environment then all blocking functions
-listed above have asynchronous equivalents.  Currently these have the exact
-same name but are prepended with an underscore (``_``) so, ``.gather`` is
-synchronous while ``._gather`` is asynchronous.  If a function has no
-asynchronous counterpart then that means it does not significantly block.  The
-``.submit`` and ``.map`` functions are examples of this; they return
-immediately in either case.
+If we are operating in an asynchronous environment then the blocking functions
+listed above become have asynchronous equivalents.  You must start your client
+with the ``asynchronous=True`` keyword and ``yield`` or ``await`` blocking
+functions.
+
+.. code-block:: python
+
+   @gen.coroutine
+   def f():
+       client = yield Client(asynchronous=True)
+       future = client.submit(func, *args)
+       result = yield future
+       return result
+
+See the :doc:`Asynchronous <asynchronous>` documentation for more information.
 
 
 Additional Links

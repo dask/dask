@@ -74,16 +74,33 @@ API
 Asynchronous methods
 --------------------
 
-If you desire Tornado coroutines rather than typical functions these can
-commonly be found as underscore-prefixed versions of the functions above.  For
-example the ``client.restart()`` method can be replaced in an asynchronous workflow
-with ``yield client._restart()``.  Many methods like ``client.compute`` are non-blocking
-regardless; these do not have a coroutine-equivalent.
+Most methods and functions can be used equally well within a blocking or
+asynchronous environment using Tornado coroutines.  If used within a Tornado
+IOLoop then you should yield or await otherwise blocking operations
+appropriately.
+
+You must tell the client that you intend to use it within an asynchronous
+environment by passing the ``asynchronous=True`` keyword
 
 .. code-block:: python
 
-   client.restart()  # synchronous
-   yield client._restart()  # non-blocking
+   # blocking
+   client = Client()
+   future = client.submit(func, *args)  # immediate, no blocking/async difference
+   result = client.gather(future)  # blocking
+
+   # asynchronous Python 2/3
+   client = yield Client(asynchronous=True)
+   future = client.submit(func, *args)  # immediate, no blocking/async difference
+   result = yield client.gather(future)  # non-blocking/asynchronous
+
+   # asynchronous Python 3
+   client = await Client(asynchronous=True)
+   future = client.submit(func, *args)  # immediate, no blocking/async difference
+   result = await client.gather(future)  # non-blocking/asynchronous
+
+The asynchronous variants must be run within a Tornado coroutine.  See the
+:doc:`Asynchronous <asynchronous>` documentation for more information.
 
 
 Client
@@ -115,12 +132,6 @@ Other
 .. autofunction:: distributed.worker_client
 .. autofunction:: distributed.get_worker
 
-
-Tornado Client
---------------
-
-.. currentmodule:: distributed.tornado_client
-.. autoclass:: TornadoClient
 
 Asyncio Client
 --------------

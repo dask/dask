@@ -87,45 +87,46 @@ Contents
    :caption: Build Understanding
 
    efficiency
+   limitations
    locality
    manage-computation
    memory
+   related-work
    resilience
    scheduling-policies
    scheduling-state
    worker
    work-stealing
-   limitations
-   related-work
 
 .. toctree::
    :maxdepth: 1
    :caption: Additional Features
 
+   adaptive
+   asynchronous
+   channels
    configuration
-   local-cluster
-   tls
    ec2
-   web
-   joblib
+   local-cluster
    ipython
+   joblib
    publish
    queues
-   channels
    resources
-   task-launch
-   adaptive
    submitting-applications
+   task-launch
+   tls
+   web
 
 .. toctree::
    :maxdepth: 1
    :caption: Developer Documentation
 
+   changelog
+   communications
    develop
    foundations
    journey
    protocol
    serialization
-   communications
    plugins
-   changelog

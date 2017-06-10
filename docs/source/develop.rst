@@ -107,7 +107,6 @@ instead you need to use the coroutine API, where all blocking functions are
 prepended with an underscore (``_``).  Beware, it is a common mistake to use
 the blocking interface within these tests.
 
-
 If you want to test the normal synchronous API you can use a ``with cluster``
 style test, which sets up a scheduler and workers for you in different forked
 processes:

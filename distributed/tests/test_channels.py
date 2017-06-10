@@ -121,7 +121,7 @@ def test_channel_scheduler(c, s, a, b):
             assert time() < start + 2
             yield gen.sleep(0.01)
 
-    results = yield c._gather(list(chan.data))
+    results = yield c.gather(list(chan.data))
     assert results == [6, 7, 8, 9, 10]
 
 
@@ -151,7 +151,7 @@ def test_multiple_maxlen(c, s, a, b):
     assert len(x2) == 20  # They stay this long after a delay
     assert len(s.task_state) == 20
 
-    yield c2._shutdown()
+    yield c2.shutdown()
 
 
 def test_stop(loop):
@@ -199,7 +199,7 @@ def test_values(c, s, a, b):
 
     assert list(x2.data) == data
 
-    yield c2._shutdown()
+    yield c2.shutdown()
 
 
 def test_channel_gets_updates_immediately(loop):

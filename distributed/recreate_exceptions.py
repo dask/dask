@@ -118,7 +118,7 @@ class ReplayExceptionClient(object):
         --------
         ReplayExceptionClient.recreate_error_locally
         """
-        return sync(self.client.loop, self._get_futures_error, future)
+        return self.client.sync(self._get_futures_error, future)
 
     @gen.coroutine
     def _recreate_error_locally(self, future):

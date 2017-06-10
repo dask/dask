@@ -21,8 +21,8 @@ def test_variable(c, s, a, b):
 
     future = c.submit(inc, 1)
 
-    yield x._set(future)
-    future2 = yield xx._get()
+    yield x.set(future)
+    future2 = yield xx.get()
     assert future.key == future2.key
 
     del future, future2
@@ -44,8 +44,8 @@ def test_queue_with_data(c, s, a, b):
     xx = Variable('x')
     assert x.client is c
 
-    yield x._set([1, 'hello'])
-    data = yield xx._get()
+    yield x.set([1, 'hello'])
+    data = yield xx.get()
 
     assert data == [1, 'hello']
 
@@ -67,19 +67,19 @@ def test_hold_futures(s, a, b):
     c1 = yield Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
     x1 = Variable('x')
-    yield x1._set(future)
+    yield x1.set(future)
     del x1
-    yield c1._shutdown()
+    yield c1.shutdown()
 
     yield gen.sleep(0.1)
 
     c2 = yield Client(s.address, asynchronous=True)
     x2 = Variable('x')
-    future2 = yield x2._get()
+    future2 = yield x2.get()
     result = yield future2
 
     assert result == 11
-    yield c2._shutdown()
+    yield c2.shutdown()
 
 
 @gen_cluster(client=True)
@@ -88,7 +88,7 @@ def test_timeout(c, s, a, b):
 
     start = time()
     with pytest.raises(gen.TimeoutError):
-        yield v._get(timeout=0.1)
+        yield v.get(timeout=0.1)
     assert time() - start < 0.5
 
 
@@ -101,7 +101,7 @@ def test_cleanup(c, s, a, b):
     y = c.submit(lambda x: x + 1, 20)
     x_key = x.key
 
-    yield v._set(x)
+    yield v.set(x)
     del x
     yield gen.sleep(0.1)
 
@@ -131,10 +131,10 @@ def test_pickleable(loop):
 def test_timeout_get(c, s, a, b):
     v = Variable('v')
 
-    tornado_future = v._get()
+    tornado_future = v.get()
 
     vv = Variable('v')
-    yield vv._set(1)
+    yield vv.set(1)
 
     result = yield tornado_future
     assert result == 1
@@ -158,11 +158,11 @@ def test_race(c, s, *workers):
             return result
 
     v = Variable('x', client=c)
-    x = yield c._scatter(1)
-    yield v._set(x)
+    x = yield c.scatter(1)
+    yield v.set(x)
 
     futures = c.map(f, range(10))
-    results = yield c._gather(futures)
+    results = yield c.gather(futures)
     assert all(r > 80 for r in results)
 
     start = time()

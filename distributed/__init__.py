@@ -6,7 +6,6 @@ from .deploy import LocalCluster
 from .diagnostics import progress
 from .client import (Client, Executor, CompatibleExecutor,
                      wait, as_completed, default_client)
-from .tornado_client import TornadoClient
 from .nanny import Nanny
 from .queues import Queue
 from .scheduler import Scheduler

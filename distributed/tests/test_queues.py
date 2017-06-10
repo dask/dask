@@ -22,19 +22,19 @@ def test_queue(c, s, a, b):
 
     future = c.submit(inc, 1)
 
-    yield x._put(future)
-    yield y._put(future)
-    future2 = yield xx._get()
+    yield x.put(future)
+    yield y.put(future)
+    future2 = yield xx.get()
     assert future.key == future2.key
 
     with pytest.raises(gen.TimeoutError):
-        yield x._get(timeout=0.1)
+        yield x.get(timeout=0.1)
 
     del future, future2
 
     yield gen.sleep(0.1)
     assert s.task_state  # future still present in y's queue
-    yield y._get()  # burn future
+    yield y.get()  # burn future
 
     start = time()
     while s.task_state:
@@ -48,13 +48,13 @@ def test_queue_with_data(c, s, a, b):
     xx = yield Queue('x')
     assert x.client is c
 
-    yield x._put([1, 'hello'])
-    data = yield xx._get()
+    yield x.put([1, 'hello'])
+    data = yield xx.get()
 
     assert data == [1, 'hello']
 
     with pytest.raises(gen.TimeoutError):
-        yield x._get(timeout=0.1)
+        yield x.get(timeout=0.1)
 
 
 def test_sync(loop):
@@ -76,21 +76,22 @@ def test_hold_futures(s, a, b):
     c1 = yield Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
     q1 = yield Queue('q')
-    yield q1._put(future)
+    yield q1.put(future)
     del q1
-    yield c1._shutdown()
+    yield c1.shutdown()
 
     yield gen.sleep(0.1)
 
     c2 = yield Client(s.address, asynchronous=True)
     q2 = yield Queue('q')
-    future2 = yield q2._get()
+    future2 = yield q2.get()
     result = yield future2
 
     assert result == 11
-    yield c2._shutdown()
+    yield c2.shutdown()
 
 
+@pytest.mark.skip(reason='getting same client from main thread')
 @gen_cluster(client=True)
 def test_picklability(c, s, a, b):
     q = Queue()
@@ -99,7 +100,7 @@ def test_picklability(c, s, a, b):
         q.put(x + 1)
 
     yield c.submit(f, 10)
-    result = yield q._get()
+    result = yield q.get()
     assert result == 11
 
 
@@ -133,34 +134,34 @@ def test_race(c, s, *workers):
             return result
 
     q = Queue('x', client=c)
-    L = yield c._scatter(range(5))
+    L = yield c.scatter(range(5))
     for future in L:
-        yield q._put(future)
+        yield q.put(future)
 
     futures = c.map(f, range(5))
-    results = yield c._gather(futures)
+    results = yield c.gather(futures)
     assert all(r > 80 for r in results)
-    qsize = yield q._qsize()
+    qsize = yield q.qsize()
     assert not qsize
 
 
 @gen_cluster(client=True)
 def test_same_futures(c, s, a, b):
     q = Queue('x')
-    future = yield c._scatter(123)
+    future = yield c.scatter(123)
 
     for i in range(5):
-        yield q._put(future)
+        yield q.put(future)
 
     assert s.wants_what['queue-x'] == {future.key}
 
     for i in range(4):
-        future2 = yield q._get()
+        future2 = yield q.get()
         assert s.wants_what['queue-x'] == {future.key}
         yield gen.sleep(0.05)
         assert s.wants_what['queue-x'] == {future.key}
 
-    yield q._get()
+    yield q.get()
 
     start = time()
     while s.wants_what['queue-x']:

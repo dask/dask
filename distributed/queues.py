@@ -109,7 +109,7 @@ class Queue(object):
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
         self.name = name or 'queue-' + uuid.uuid4().hex
-        if self.client._asynchronous:
+        if self.client.asynchronous:
             self._started = self.client.scheduler.queue_create(name=self.name,
                                                                maxsize=maxsize)
         else:
@@ -137,15 +137,15 @@ class Queue(object):
 
     def put(self, value, timeout=None):
         """ Put data into the queue """
-        return sync(self.client.loop, self._put, value, timeout=timeout)
+        return self.client.sync(self._put, value, timeout=timeout)
 
     def get(self, timeout=None):
         """ Get data from the queue """
-        return sync(self.client.loop, self._get, timeout=timeout)
+        return self.client.sync(self._get, timeout=timeout)
 
     def qsize(self):
         """ Current number of elements in the queue """
-        return sync(self.client.loop, self._qsize)
+        return self.client.sync(self._qsize)
 
     @gen.coroutine
     def _get(self, timeout=None):
