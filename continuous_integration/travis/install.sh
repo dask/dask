@@ -56,6 +56,7 @@ conda install -q -c conda-forge \
 conda install -q -c conda-forge \
     distributed \
     cloudpickle \
+    graphviz \
 
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
@@ -75,6 +76,7 @@ pip install -q \
     cachey \
     graphviz \
     moto \
+    pyarrow \
     --upgrade --no-deps
 
 pip install -q \
