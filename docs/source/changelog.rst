@@ -9,8 +9,11 @@ Array
 
 -  Add dask.stats module (:pr:`2269`)
 -  Support ``ufunc.outer`` (:pr:`2345`)
--  Optimize fancing indexing by reducing graph overhead (:pr:`2333`) (:pr:`2394`)
+-  Optimize fancy indexing by reducing graph overhead (:pr:`2333`) (:pr:`2394`)
 -  Faster array tokenization using alternative hashes (:pr:`2377`)
+-  Added the matmul ``@`` operator (:pr:`2349`)
+-  Improved coverage of the ``numpy.fft`` module (:pr:`2320`) (:pr:`2322`) (:pr:`2327`) (:pr:`2323`)
+-  Support NumPy's ``__array_ufunc__`` protocol (:pr:`2438`)
 
 Bag
 +++
