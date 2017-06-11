@@ -64,6 +64,14 @@ API
    Future.result
    Future.traceback
 
+**Client Coordination**
+
+.. currentmodule:: distributed
+
+.. autosummary:: Queue
+.. autosummary:: Variable
+
+
 **Other**
 
 .. autosummary::
@@ -131,6 +139,11 @@ Other
 
 .. autofunction:: distributed.worker_client
 .. autofunction:: distributed.get_worker
+
+.. autoclass:: Queue
+   :members:
+.. autoclass:: Variable
+   :members:
 
 
 Asyncio Client

@@ -123,6 +123,10 @@ class Variable(object):
     123
     >>> future = client.submit(f, x)  # doctest: +SKIP
     >>> x.set(future)  # doctest: +SKIP
+
+    See Also
+    --------
+    Queue:
     """
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
