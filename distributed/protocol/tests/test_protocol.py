@@ -7,6 +7,7 @@ import pytest
 
 from distributed.protocol import (loads, dumps, msgpack, maybe_compress,
         to_serialize)
+from distributed.protocol.compression import compressions
 from distributed.protocol.serialize import (Serialize, Serialized,
                                             serialize, deserialize)
 from distributed.utils_test import slow
@@ -63,16 +64,32 @@ def test_small_and_big():
 
 def test_maybe_compress():
     import zlib
+
+    try_converters = [bytes, memoryview]
+    try_compressions = ['zlib', 'lz4']
+
     payload = b'123'
+
     with dask.set_options(compression=None):
-        assert maybe_compress(payload) == (None, payload)
+        for f in try_converters:
+            assert maybe_compress(f(payload)) == (None, payload)
 
-    with dask.set_options(compression='zlib'):
-        assert maybe_compress(payload) == (None, payload)
-        assert maybe_compress(b'111') == (None, b'111')
+    for compression in try_compressions:
+        try:
+            __import__(compression)
+        except ImportError:
+            continue
 
-        payload = b'0' * 10000
-        assert maybe_compress(payload) == ('zlib', zlib.compress(payload))
+        with dask.set_options(compression=compression):
+            for f in try_converters:
+                payload = b'123'
+                assert maybe_compress(f(payload)) == (None, payload)
+
+                payload = b'0' * 10000
+                rc, rd = maybe_compress(f(payload))
+                # For some reason compressing memoryviews can force blosc...
+                assert rc in (compression, 'blosc')
+                assert compressions[rc]['decompress'](rd) == payload
 
 
 def test_maybe_compress_sample():
