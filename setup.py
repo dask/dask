@@ -41,6 +41,19 @@ setup(name='distributed',
                 'distributed.http'],
       long_description=(open('README.rst').read() if os.path.exists('README.rst')
                         else ''),
+      classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Topic :: Scientific/Engineering",
+        "Topic :: System :: Distributed Computing",
+      ],
       entry_points='''
         [console_scripts]
         dask-ssh=distributed.cli.dask_ssh:go
