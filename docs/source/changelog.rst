@@ -7,7 +7,7 @@ Changelog
 Array
 +++++
 
--  Add dask.stats module (:pr:`2269`)
+-  Add dask.array.stats submodule (:pr:`2269`)
 -  Support ``ufunc.outer`` (:pr:`2345`)
 -  Optimize fancy indexing by reducing graph overhead (:pr:`2333`) (:pr:`2394`)
 -  Faster array tokenization using alternative hashes (:pr:`2377`)
