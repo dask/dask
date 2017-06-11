@@ -631,7 +631,7 @@ class TaskProgress(DashboardComponent):
         y_range = Range1d(-8, 0)
 
         self.root = figure(
-            id='bk-task-progress-plot',
+            id='bk-task-progress-plot', title='Progress',
             x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
         )
         self.root.line(  # just to define early ranges
