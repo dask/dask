@@ -72,6 +72,14 @@ def dumps(msg):
             header['keys'].append(key)
             out_frames.extend(frames)
 
+        for i, frame in enumerate(out_frames):
+            if type(frame) is memoryview and frame.strides != (1,):
+                try:
+                    frame = frame.cast('b')
+                except TypeError:
+                    frame = frame.tobytes()
+                out_frames[i] = frame
+
         return [small_header, small_payload,
                 msgpack.dumps(header, use_bin_type=True)] + out_frames
     except Exception:

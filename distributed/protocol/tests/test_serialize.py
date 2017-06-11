@@ -172,6 +172,7 @@ def test_serialize_bytes():
 
 
 def test_serialize_list_compress():
+    pytest.importorskip('lz4')
     x = np.ones(1000000)
     L = serialize_bytelist(x)
     assert sum(map(len, L)) < x.nbytes / 2

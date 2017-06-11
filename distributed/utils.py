@@ -812,3 +812,19 @@ def format_bytes(n):
     if n > 1e3:
         return '%0.2f kB' % (n / 1000)
     return '%d B' % n
+
+
+if PY2:
+    def nbytes(frame):
+        """ Number of bytes of a frame or memoryview """
+        if type(frame) in (bytes, buffer):
+            return len(frame)
+        else:
+            return frame.nbytes
+else:
+    def nbytes(frame):
+        """ Number of bytes of a frame or memoryview """
+        if type(frame) is bytes:
+            return len(frame)
+        else:
+            return frame.nbytes

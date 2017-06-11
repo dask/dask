@@ -75,7 +75,7 @@ with ignoring(ImportError):
     def _fixed_lz4_decompress(data):
         try:
             return lz4_decompress(data)
-        except TypeError:
+        except (ValueError, TypeError):
             if isinstance(data, memoryview):
                 return lz4_decompress(data.tobytes())
             else:

@@ -15,7 +15,7 @@ from tornado.tcpserver import TCPServer
 
 from .. import config
 from ..compatibility import finalize
-from ..utils import ensure_bytes, ensure_ip, get_ip, get_ipv6
+from ..utils import ensure_bytes, ensure_ip, get_ip, get_ipv6, nbytes
 
 from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
@@ -186,7 +186,7 @@ class TCP(Comm):
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +
-                       [struct.pack('Q', len(frame)) for frame in frames])
+                       [struct.pack('Q', nbytes(frame)) for frame in frames])
             stream.write(b''.join(lengths))
 
             for frame in frames:

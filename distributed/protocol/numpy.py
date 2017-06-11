@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import fractions
+
 import numpy as np
 
 try:
@@ -53,15 +55,23 @@ def serialize_numpy_ndarray(x):
     if not x.shape:
         # 0d array
         strides = x.strides
-        data = x.ravel().view('u1').data
+        data = x.ravel()
     elif x.flags.c_contiguous or x.flags.f_contiguous:
         # Avoid a copy and respect order when unserializing
         strides = x.strides
-        data = x.ravel(order='K').view('u1').data
+        data = x.ravel(order='K')
     else:
         x = np.ascontiguousarray(x)
         strides = x.strides
-        data = x.view('u1').data
+        data = x.ravel()
+
+    if data.dtype.fields or data.dtype.itemsize > 8:
+        data = data.view('u%d' % fractions.gcd(x.dtype.itemsize, 8))
+
+    try:
+        data = data.data
+    except ValueError:
+        data = data.view('u%d' % fractions.gcd(x.dtype.itemsize, 8)).data
 
     header = {'dtype': dt,
               'shape': x.shape,

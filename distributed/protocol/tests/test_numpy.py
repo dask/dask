@@ -187,3 +187,18 @@ def test_dont_compress_uncompressable_data():
 def test_dumps_large_blosc(c, s, a, b):
     x = c.submit(np.ones, BIG_BYTES_SHARD_SIZE * 2, dtype='u1')
     result = yield x
+
+
+def test_compression_takes_advantage_of_itemsize():
+    blosc = pytest.importorskip('blosc')
+    x = np.arange(1000000, dtype='i8')
+
+    assert (len(blosc.compress(x.data, typesize=8))
+          < len(blosc.compress(x.data, typesize=1)))
+
+    _, a = serialize(x)
+    aa = [maybe_compress(frame)[1] for frame in a]
+    _, b = serialize(x.view('u1'))
+    bb = [maybe_compress(frame)[1] for frame in b]
+
+    assert sum(map(len, aa)) < sum(map(len, bb))

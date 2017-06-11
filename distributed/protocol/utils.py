@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import struct
 
-from ..utils import ensure_bytes
+from ..utils import ensure_bytes, nbytes
 
 BIG_BYTES_SHARD_SIZE = 2**28
 
@@ -26,10 +26,14 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
 
     out = []
     for frame in frames:
-        if len(frame) > n:
+        if len(frame) > n or type(frame) is memoryview and frame.nbytes > n:
             if isinstance(frame, bytes):
                 frame = memoryview(frame)
-            for i in range(0, len(frame), n):
+            try:
+                itemsize = frame.itemsize
+            except AttributeError:
+                itemsize = 1
+            for i in range(0, nbytes(frame), n // itemsize):
                 out.append(frame[i: i + n])
         else:
             out.append(frame)
@@ -80,7 +84,7 @@ def merge_frames(header, frames):
 def pack_frames_prelude(frames):
     lengths = [len(f) for f in frames]
     lengths = ([struct.pack('Q', len(frames))] +
-               [struct.pack('Q', len(frame)) for frame in frames])
+               [struct.pack('Q', nbytes(frame)) for frame in frames])
     return b''.join(lengths)
 
 
