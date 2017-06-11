@@ -1,6 +1,37 @@
 Changelog
 =========
 
+
+1.17.0 - June 9th, 2017
+-----------------------
+
+-  Reevaluate worker occupancy periodically during scheduler downtime
+   (:pr:`1038`) (:pr:`1101`)
+-  Add ``AioClient`` asyncio-compatible client API (:pr:`1029`) (:pr:`1092`)
+   (:pr:`1099`)
+-  Update Keras serializer (:pr:`1067`)
+-  Support TLS/SSL connections for security (:pr:`866`) (:pr:`1034`)
+-  Always create new worker directory when passed ``--local-directory``
+   (:pr:`1079`)
+-  Support pre-scattering data when using joblib frontent (:pr:`1022`)
+-  Make workers more robust to failure of ``sizeof`` function (:pr:`1108`) and
+   writing to disk (:pr:`1096`)
+-  Add ``is_empty`` and ``update`` methods to ``as_completed`` (:pr:`1113`)
+-  Remove ``_get`` coroutine and replace with ``get(..., sync=False)``
+   (:pr:`1109`)
+-  Improve API compatibility with async/await syntax (:pr:`1115`) (:pr:`1124`)
+-  Add distributed Queues (:pr:`1117`) and shared Variables (:pr:`1128`) to
+   enable inter-client coordination
+-  Support direct client-to-worker scattering and gathering (:pr:`1130`) as
+   well as performance enhancements when scattering data
+-  Style improvements for bokeh web dashboards (:pr:`1126`) (:pr:`1141`) as
+   well as a removal of the external bokeh process
+-  HTML reprs for Future and Client objects (:pr:`1136`)
+-  Support nested collections in client.compute (:pr:`1144`)
+-  Use normal client API in asynchronous mode (:pr:`1152`)
+-  Remove old distributed.collections submodule (:pr:`1153`)
+
+
 1.16.3 - May 5th, 2017
 ----------------------
 
