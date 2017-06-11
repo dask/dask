@@ -7,9 +7,8 @@ services:
 env:
   matrix:
     - PYTHON=2.7 PACKAGES="blosc futures faulthandler"
-    - PYTHON=3.4 COVERAGE=true DASK_EXPERIMENTAL_ZMQ=1
-    - PYTHON=3.5 CRICK=true ASYNCIO=true
-    - PYTHON=3.6 PACKAGES=blosc ASYNCIO=true
+    - PYTHON=3.5 COVERAGE=true PACKAGES=blosc CRICK=true DASK_EXPERIMENTAL_ZMQ=1
+    - PYTHON=3.6
     - HDFS=true PYTHON=2.7
     - HDFS=true PYTHON=3.5 PACKAGES=blosc
 
