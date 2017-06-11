@@ -1047,6 +1047,34 @@ class Array(Base):
     def __len__(self):
         return sum(self.chunks[0])
 
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get('out', ())
+        for x in inputs + out:
+            if not isinstance(x, (np.ndarray, Number, Array)):
+                return NotImplemented
+
+        if method == '__call__':
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.nout > 1:
+                from . import ufunc
+                try:
+                    da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                except AttributeError:
+                    return NotImplemented
+                return da_ufunc(*inputs, **kwargs)
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        elif method == 'outer':
+            from . import ufunc
+            try:
+                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+            except AttributeError:
+                return NotImplemented
+            return da_ufunc.outer(*inputs, **kwargs)
+        else:
+            return NotImplemented
+
     def __repr__(self):
         """
 
@@ -1453,67 +1481,76 @@ class Array(Base):
                                             (self.ndim - 2,)))
 
     @wraps(np.any)
-    def any(self, axis=None, keepdims=False, split_every=None):
+    def any(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import any
-        return any(self, axis=axis, keepdims=keepdims, split_every=split_every)
+        return any(self, axis=axis, keepdims=keepdims, split_every=split_every,
+                   out=out)
 
     @wraps(np.all)
-    def all(self, axis=None, keepdims=False, split_every=None):
+    def all(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import all
-        return all(self, axis=axis, keepdims=keepdims, split_every=split_every)
+        return all(self, axis=axis, keepdims=keepdims, split_every=split_every,
+                   out=out)
 
     @wraps(np.min)
-    def min(self, axis=None, keepdims=False, split_every=None):
+    def min(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import min
-        return min(self, axis=axis, keepdims=keepdims, split_every=split_every)
+        return min(self, axis=axis, keepdims=keepdims, split_every=split_every,
+                   out=out)
 
     @wraps(np.max)
-    def max(self, axis=None, keepdims=False, split_every=None):
+    def max(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import max
-        return max(self, axis=axis, keepdims=keepdims, split_every=split_every)
+        return max(self, axis=axis, keepdims=keepdims, split_every=split_every,
+                   out=out)
 
     @wraps(np.argmin)
-    def argmin(self, axis=None, split_every=None):
+    def argmin(self, axis=None, split_every=None, out=None):
         from .reductions import argmin
-        return argmin(self, axis=axis, split_every=split_every)
+        return argmin(self, axis=axis, split_every=split_every, out=out)
 
     @wraps(np.argmax)
-    def argmax(self, axis=None, split_every=None):
+    def argmax(self, axis=None, split_every=None, out=None):
         from .reductions import argmax
-        return argmax(self, axis=axis, split_every=split_every)
+        return argmax(self, axis=axis, split_every=split_every, out=out)
 
     @wraps(np.sum)
-    def sum(self, axis=None, dtype=None, keepdims=False, split_every=None):
+    def sum(self, axis=None, dtype=None, keepdims=False, split_every=None,
+            out=None):
         from .reductions import sum
         return sum(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every)
+                   split_every=split_every, out=out)
 
     @wraps(np.prod)
-    def prod(self, axis=None, dtype=None, keepdims=False, split_every=None):
+    def prod(self, axis=None, dtype=None, keepdims=False, split_every=None,
+             out=None):
         from .reductions import prod
         return prod(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                    split_every=split_every)
+                    split_every=split_every, out=out)
 
     @wraps(np.mean)
-    def mean(self, axis=None, dtype=None, keepdims=False, split_every=None):
+    def mean(self, axis=None, dtype=None, keepdims=False, split_every=None,
+             out=None):
         from .reductions import mean
         return mean(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                    split_every=split_every)
+                    split_every=split_every, out=out)
 
     @wraps(np.std)
-    def std(self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+    def std(self, axis=None, dtype=None, keepdims=False, ddof=0,
+            split_every=None, out=None):
         from .reductions import std
         return std(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                   split_every=split_every)
+                   split_every=split_every, out=out)
 
     @wraps(np.var)
-    def var(self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
+    def var(self, axis=None, dtype=None, keepdims=False, ddof=0,
+            split_every=None, out=None):
         from .reductions import var
         return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                   split_every=split_every)
+                   split_every=split_every, out=out)
 
     def moment(self, order, axis=None, dtype=None, keepdims=False, ddof=0,
-               split_every=None):
+               split_every=None, out=None):
         """Calculate the nth centralized moment.
 
         Parameters
@@ -1550,13 +1587,14 @@ class Array(Base):
 
         from .reductions import moment
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
-                      ddof=ddof, split_every=split_every)
+                      ddof=ddof, split_every=split_every, out=out)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None):
+    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None,
+              out=None):
         """ Vector norm """
         from .reductions import vnorm
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
-                     split_every=split_every)
+                     split_every=split_every, out=out)
 
     @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):
@@ -1619,15 +1657,15 @@ class Array(Base):
         from .ghost import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
-    def cumsum(self, axis, dtype=None):
+    def cumsum(self, axis, dtype=None, out=None):
         """ See da.cumsum for docstring """
         from .reductions import cumsum
-        return cumsum(self, axis, dtype)
+        return cumsum(self, axis, dtype, out=out)
 
-    def cumprod(self, axis, dtype=None):
+    def cumprod(self, axis, dtype=None, out=None):
         """ See da.cumprod for docstring """
         from .reductions import cumprod
-        return cumprod(self, axis, dtype)
+        return cumprod(self, axis, dtype, out=out)
 
     @wraps(squeeze)
     def squeeze(self):
@@ -2641,6 +2679,7 @@ def elemwise(op, *args, **kwargs):
     --------
     atop
     """
+    out = kwargs.pop('out', None)
     if not set(['name', 'dtype']).issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
@@ -2673,14 +2712,48 @@ def elemwise(op, *args, **kwargs):
                                                   tokenize(op, dt, *args))
 
     if other:
-        return atop(partial_by_order, expr_inds,
-                    *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                    dtype=dt, name=name, function=op, other=other,
-                    token=funcname(op))
+        result = atop(partial_by_order, expr_inds,
+                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                      dtype=dt, name=name, function=op, other=other,
+                      token=funcname(op))
     else:
-        return atop(op, expr_inds,
-                    *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                    dtype=dt, name=name)
+        result = atop(op, expr_inds,
+                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                      dtype=dt, name=name)
+
+    return handle_out(out, result)
+
+
+def handle_out(out, result):
+    """ Handle out paramters
+
+    If out is a dask.array then this overwrites the contents of that array with
+    the result
+    """
+    if isinstance(out, tuple):
+        if len(out) == 1:
+            out = out[0]
+        elif len(out) > 1:
+            raise NotImplementedError("The out parameter is not fully supported")
+        else:
+            out = None
+    if isinstance(out, Array):
+        if out.shape != result.shape:
+            raise NotImplementedError(
+                "Mismatched shapes between result and out parameter. "
+                "out=%s, result=%s" % (str(out.shape), str(result.shape)))
+        out._chunks = result.chunks
+        if hasattr(out, '_cached_keys'):
+            del out._cached_keys
+        out.dask = result.dask
+        out.dtype = result.dtype
+        out.name = result.name
+    elif out is not None:
+        msg = ("The out parameter is not fully supported."
+               " Received type %s, expected Dask Array" % type(out).__name__)
+        raise NotImplementedError(msg)
+    else:
+        return result
 
 
 @wraps(np.around)
