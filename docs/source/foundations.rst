@@ -102,7 +102,7 @@ Server Side
            yield comm.write(data)
 
    s = Server({'add': add, 'stream_data': stream_data})
-   s.listen(8888)
+   s.listen('tcp://:8888')   # listen on TCP port 8888
 
    IOLoop.current().start()
 
@@ -158,7 +158,7 @@ with the stream data case above.
 
    @gen.coroutine
    def f():
-       # comm = yield connect('127.0.0.1', 8888)
+       # comm = yield connect('tcp://127.0.0.1', 8888)
        # yield comm.write({'op': 'add', 'x': 1, 'y': 2})
        # result = yield comm.read()
        r = rpc('tcp://127.0.0.1:8888')

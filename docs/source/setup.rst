@@ -112,8 +112,7 @@ Using the Python API
 --------------------
 
 Alternatively you can start up the ``distributed.scheduler.Scheduler`` and
-``distributed.worker.Worker`` objects within a Python session manually.  Both
-are ``tornado.tcpserver.TCPServer`` objects.
+``distributed.worker.Worker`` objects within a Python session manually.
 
 Start the Scheduler, provide the listening port (defaults to 8786) and Tornado
 IOLoop (defaults to ``IOLoop.current()``)
@@ -129,10 +128,9 @@ IOLoop (defaults to ``IOLoop.current()``)
    t.start()
 
    s = Scheduler(loop=loop)
-   s.start(8786)
+   s.start('tcp://:8786')   # Listen on TCP port 8786
 
-On other nodes start worker processes that point to the IP address and port of
-the scheduler.
+On other nodes start worker processes that point to the URL of the scheduler.
 
 .. code-block:: python
 
@@ -144,8 +142,8 @@ the scheduler.
    t = Thread(target=loop.start, daemon=True)
    t.start()
 
-   w = Worker('127.0.0.1', 8786, loop=loop)
-   w.start(0)  # choose randomly assigned port
+   w = Worker('tcp://127.0.0.1:8786', loop=loop)
+   w.start()  # choose randomly assigned port
 
 Alternatively, replace ``Worker`` with ``Nanny`` if you want your workers to be
 managed in a separate process by a local nanny process.  This allows workers to
