@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
+
 import pytest
 np = pytest.importorskip('numpy')
 
@@ -51,7 +53,8 @@ unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
 
 @pytest.mark.parametrize('ufunc', unary_ufuncs)
 def test_unary_ufunc(ufunc):
-
+    if ufunc == 'fix' and np.__version__ >= '1.13.0':
+        pytest.skip('fix calls floor in a way that we do not yet support')
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -64,8 +67,11 @@ def test_unary_ufunc(ufunc):
         assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(darr), np.ndarray)
+        # applying NumPy ufunc is lazy
+        if isinstance(npfunc, np.ufunc) and np.__version__ >= '1.13.0':
+            assert isinstance(npfunc(darr), da.Array)
+        else:
+            assert isinstance(npfunc(darr), np.ndarray)
         assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
     with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
@@ -89,8 +95,11 @@ def test_binary_ufunc(ufunc):
     assert isinstance(dafunc(darr1, darr2), da.Array)
     assert_eq(dafunc(darr1, darr2), npfunc(arr1, arr2))
 
-    # applying NumPy ufunc triggers computation
-    assert isinstance(npfunc(darr1, darr2), np.ndarray)
+    # applying NumPy ufunc triggers computation or is lazy (np >= 1.13.0)
+    if np.__version__ >= '1.13.0':
+        assert isinstance(npfunc(darr1, darr2), da.Array)
+    else:
+        assert isinstance(npfunc(darr1, darr2), np.ndarray)
     assert_eq(npfunc(darr1, darr2), npfunc(arr1, arr2))
 
     # applying Dask ufunc to normal ndarray triggers computation
@@ -202,18 +211,22 @@ def test_ufunc_2results(ufunc):
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
 
-    # applying NumPy ufunc triggers computation
+    # applying NumPy ufunc is now lazy
     res1, res2 = npfunc(darr)
-    assert isinstance(res1, np.ndarray)
-    assert isinstance(res2, np.ndarray)
+    if np.__version__ >= '1.13.0':
+        assert isinstance(res1, da.Array)
+        assert isinstance(res2, da.Array)
+    else:
+        assert isinstance(res1, np.ndarray)
+        assert isinstance(res2, np.ndarray)
     exp1, exp2 = npfunc(arr)
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
 
     # applying Dask ufunc to normal ndarray triggers computation
-    res1, res2 = npfunc(darr)
-    assert isinstance(res1, np.ndarray)
-    assert isinstance(res2, np.ndarray)
+    res1, res2 = dafunc(arr)
+    assert isinstance(res1, da.Array)
+    assert isinstance(res2, da.Array)
     exp1, exp2 = npfunc(arr)
     assert_eq(res1, exp1)
     assert_eq(res2, exp2)
@@ -241,3 +254,52 @@ def test_angle():
     assert_eq(da.angle(dacomp, deg=True), np.angle(comp, deg=True))
     assert isinstance(da.angle(comp), np.ndarray)
     assert_eq(da.angle(comp), np.angle(comp))
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_array_ufunc():
+    x = np.arange(24).reshape((4, 6))
+    d = da.from_array(x, chunks=(2, 3))
+
+    for func in [np.sin, np.isreal, np.sum, np.negative, partial(np.prod, axis=0)]:
+        assert isinstance(func(d), da.Array)
+        assert_eq(func(d), func(x))
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_array_ufunc_binop():
+    x = np.arange(25).reshape((5, 5))
+    d = da.from_array(x, chunks=(2, 2))
+
+    for func in [np.add, np.multiply]:
+        assert isinstance(func(d, d), da.Array)
+        assert_eq(func(d, d), func(x, x))
+
+        assert isinstance(func.outer(d, d), da.Array)
+        assert_eq(func.outer(d, d), func.outer(x, x))
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_array_ufunc_out():
+    x = da.arange(10, chunks=(5,))
+    np.sin(x, out=x)
+    np.add(x, 10, out=x)
+    assert_eq(x, np.sin(np.arange(10)) + 10)
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_unsupported_ufunc_methods():
+    x = da.arange(10, chunks=(5,))
+    with pytest.raises(TypeError):
+        assert np.add.reduce(x)
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_out_numpy():
+    x = da.arange(10, chunks=(5,))
+    empty = np.empty(10, dtype=x.dtype)
+    with pytest.raises((TypeError, NotImplementedError)) as info:
+        np.add(x, 1, out=empty)
+
+    assert 'ndarray' in str(info.value)
+    assert 'Array' in str(info.value)

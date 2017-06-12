@@ -1,6 +1,40 @@
 Changelog
 =========
 
+0.15.0 / 2017-06-09
+-------------------
+
+Array
++++++
+
+-  Add dask.array.stats submodule (:pr:`2269`)
+-  Support ``ufunc.outer`` (:pr:`2345`)
+-  Optimize fancy indexing by reducing graph overhead (:pr:`2333`) (:pr:`2394`)
+-  Faster array tokenization using alternative hashes (:pr:`2377`)
+-  Added the matmul ``@`` operator (:pr:`2349`)
+-  Improved coverage of the ``numpy.fft`` module (:pr:`2320`) (:pr:`2322`) (:pr:`2327`) (:pr:`2323`)
+-  Support NumPy's ``__array_ufunc__`` protocol (:pr:`2438`)
+
+Bag
++++
+
+-  Fix bug where reductions on bags with no partitions would fail (:pr:`2324`)
+-  Add broadcasting and variadic ``db.map`` top-level function.  Also remove
+   auto-expansion of tuples as map arguments (:pr:`2339`)
+-  Rename ``Bag.concat`` to ``Bag.flatten`` (:pr:`2402`)
+
+DataFrame
++++++++++
+
+-  Parquet improvements (:pr:`2277`) (:pr:`2422`)
+
+Core
+++++
+
+-  Move dask.async module to dask.local (:pr:`2318`)
+-  Support callbacks with nested scheduler calls (:pr:`2397`)
+-  Support pathlib.Path objects as uris  (:pr:`2310`)
+
 
 0.14.3 / 2017-05-05
 -------------------
