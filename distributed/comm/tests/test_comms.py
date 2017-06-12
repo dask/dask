@@ -21,19 +21,9 @@ from distributed.protocol import (loads, dumps,
                                   to_serialize, Serialized, serialize, deserialize)
 
 from distributed.comm import (tcp, inproc, connect, listen, CommClosedError,
-                              is_zmq_enabled, parse_address, parse_host_port,
+                              parse_address, parse_host_port,
                               unparse_host_port, resolve_address,
                               get_address_host, get_local_address_for)
-
-
-if is_zmq_enabled():
-    from distributed.comm import zmq
-
-    def requires_zmq(test_func):
-        return test_func
-else:
-    zmq = None
-    requires_zmq = pytest.mark.skip("need to enable zmq using special config option")
 
 
 EXTERNAL_IP4 = get_ip()
@@ -140,9 +130,6 @@ def test_get_address_host():
     assert f('tcp://127.0.0.1:123') == '127.0.0.1'
     assert f('inproc://%s/%d/123' % (get_ip(), os.getpid())) == get_ip()
 
-    if is_zmq_enabled():
-        assert f('zmq://192.168.2.3:456') == '192.168.2.3'
-
 
 def test_resolve_address():
     f = resolve_address
@@ -154,6 +141,7 @@ def test_resolve_address():
 
     if has_ipv6():
         assert f('tcp://[::1]:123') == 'tcp://[::1]:123'
+        assert f('tls://[::1]:123') == 'tls://[::1]:123'
         # OS X returns '::0.0.0.2' as canonical representation
         assert f('[::2]:789') in ('tcp://[::2]:789',
                                   'tcp://[::0.0.0.2]:789')
@@ -161,12 +149,7 @@ def test_resolve_address():
 
     assert f('localhost:123') == 'tcp://127.0.0.1:123'
     assert f('tcp://localhost:456') == 'tcp://127.0.0.1:456'
-
-    if is_zmq_enabled():
-        assert f('zmq://127.0.0.1:456') == 'zmq://127.0.0.1:456'
-        assert f('zmq://localhost:789') == 'zmq://127.0.0.1:789'
-        if has_ipv6():
-            assert f('zmq://[::1]:456') == 'zmq://[::1]:456'
+    assert f('tls://localhost:456') == 'tls://127.0.0.1:456'
 
 
 def test_get_local_address_for():
@@ -176,12 +159,6 @@ def test_get_local_address_for():
     assert f('tcp://8.8.8.8:4444') == 'tcp://' + get_ip()
     if has_ipv6():
         assert f('tcp://[::1]:123') == 'tcp://[::1]'
-
-    if is_zmq_enabled():
-        assert f('zmq://127.0.0.1:80') == 'zmq://127.0.0.1'
-        assert f('zmq://8.8.8.8:4444') == 'zmq://' + get_ip()
-        if has_ipv6():
-            assert f('zmq://[::1]:123') == 'zmq://[::1]'
 
     inproc_arg = 'inproc://%s/%d/444' % (get_ip(), os.getpid())
     inproc_res = f(inproc_arg)
@@ -284,51 +261,6 @@ def test_tls_specific():
 
     # Many clients at once
     N = 100
-    futures = [client_communicate(key=i, delay=0.05) for i in range(N)]
-    yield futures
-    assert set(l) == {1234} | set(range(N))
-
-
-@requires_zmq
-@gen_test()
-def test_zmq_specific():
-    """
-    Test concrete ZMQ API.
-    """
-    debug_loop()
-
-    @gen.coroutine
-    def handle_comm(comm):
-        msg = yield comm.read()
-        msg['op'] = 'pong'
-        yield comm.write(msg)
-        yield comm.close()
-
-    listener = zmq.ZMQListener('127.0.0.1', handle_comm)
-    listener.start()
-    host, port = listener.get_host_port()
-    assert host == '127.0.0.1'
-    assert port > 0
-
-    connector = zmq.ZMQConnector()
-    l = []
-
-    @gen.coroutine
-    def client_communicate(key, delay=0):
-        addr = '%s:%d' % (host, port)
-        comm = yield connector.connect(addr)
-        yield comm.write({'op': 'ping', 'data': key})
-        if delay:
-            yield gen.sleep(delay)
-        msg = yield comm.read()
-        assert msg == {'op': 'pong', 'data': key}
-        l.append(key)
-        yield comm.close()
-
-    yield client_communicate(key=1234)
-
-    # Many clients at once
-    N = 20
     futures = [client_communicate(key=i, delay=0.05) for i in range(N)]
     yield futures
     assert set(l) == {1234} | set(range(N))
@@ -458,7 +390,7 @@ def check_client_server(addr, check_listen_addr=None, check_contact_addr=None,
     # Check listener properties
     bound_addr = listener.listen_address
     bound_scheme, bound_loc = parse_address(bound_addr)
-    assert bound_scheme in ('inproc', 'tcp', 'tls', 'zmq')
+    assert bound_scheme in ('inproc', 'tcp', 'tls')
     assert bound_scheme == parse_address(addr)[0]
 
     if check_listen_addr is not None:
@@ -513,7 +445,6 @@ def tcp_eq(expected_host, expected_port=None):
     return checker
 
 tls_eq = tcp_eq
-zmq_eq = tcp_eq
 
 def inproc_check():
     expected_ip = get_ip()
@@ -594,32 +525,6 @@ def test_tls_client_server_ipv6():
     kwargs = dict(listen_args=listen_args, connect_args=connect_args)
 
     yield check_client_server('tls://[::1]', tls_eq('::1'), **kwargs)
-
-
-@requires_zmq
-@gen_test()
-def test_zmq_client_server_ipv4():
-    yield check_client_server('zmq://127.0.0.1', zmq_eq('127.0.0.1'))
-    yield check_client_server('zmq://127.0.0.1:3241', zmq_eq('127.0.0.1', 3241))
-    yield check_client_server('zmq://0.0.0.0',
-                              zmq_eq('0.0.0.0'), zmq_eq(EXTERNAL_IP4))
-    yield check_client_server('zmq://0.0.0.0:3242',
-                              zmq_eq('0.0.0.0'), zmq_eq(EXTERNAL_IP4, 3242))
-    yield check_client_server('zmq://',
-                              zmq_eq('0.0.0.0'), zmq_eq(EXTERNAL_IP4))
-    yield check_client_server('zmq://:3243',
-                              zmq_eq('0.0.0.0'), zmq_eq(EXTERNAL_IP4, 3243))
-
-@requires_zmq
-@requires_ipv6
-@gen_test()
-def test_zmq_client_server_ipv6():
-    yield check_client_server('zmq://[::1]', zmq_eq('::1'))
-    yield check_client_server('zmq://[::1]:3251', zmq_eq('::1', 3251))
-    yield check_client_server('zmq://[::]',
-                              zmq_eq('::'), zmq_eq(EXTERNAL_IP6))
-    yield check_client_server('zmq://[::]:3252',
-                              zmq_eq('::', 3252), zmq_eq(EXTERNAL_IP6, 3252))
 
 
 @gen_test()
@@ -723,11 +628,6 @@ def test_tls_comm_closed_implicit():
                                      listen_args=listen_args,
                                      connect_args=connect_args)
 
-# XXX zmq transport does not detect a connection is closed by peer
-#@gen_test()
-#def test_zmq_comm_closed():
-    #yield check_comm_closed('zmq://127.0.0.1')
-
 @gen_test()
 def test_inproc_comm_closed_implicit():
     yield check_comm_closed_implicit(inproc.new_address())
@@ -772,11 +672,6 @@ def test_tls_comm_closed_explicit():
     yield check_comm_closed_explicit('tls://127.0.0.1',
                                      listen_args=listen_args,
                                      connect_args=connect_args)
-
-@requires_zmq
-@gen_test()
-def test_zmq_comm_closed_explicit():
-    yield check_comm_closed_explicit('zmq://127.0.0.1')
 
 @gen_test()
 def test_inproc_comm_closed_explicit():
@@ -990,11 +885,6 @@ def check_deserialize(addr):
 @gen_test()
 def test_tcp_deserialize():
     yield check_deserialize('tcp://')
-
-@requires_zmq
-@gen_test()
-def test_zmq_deserialize():
-    yield check_deserialize('zmq://0.0.0.0')
 
 @gen_test()
 def test_inproc_deserialize():

@@ -34,9 +34,6 @@ source tree:
   TCP sockets.  Using it requires specifying keys and
   certificates as outlined in :ref:`tls`.
 
-* ``zmq`` is an experimental transport using ZeroMQ sockets; it is not
-  recommended for production use.
-
 * ``inproc`` is an in-process transport using simple object queues; it
   eliminates serialization and I/O overhead, providing almost zero-cost
   communication between endpoints as long as they are situated in the

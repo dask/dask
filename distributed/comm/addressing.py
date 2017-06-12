@@ -38,8 +38,8 @@ def normalize_address(addr):
     """
     Canonicalize address, adding a default scheme if necessary.
 
-    >>> normalize_address('zmq://[::1]')
-    'zmq://[::1]'
+    >>> normalize_address('tls://[::1]')
+    'tls://[::1]'
     >>> normalize_address('[::1]')
     'tcp://[::1]'
     """
