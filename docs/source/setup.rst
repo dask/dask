@@ -113,7 +113,7 @@ Using the Python API
 
 Alternatively you can start up the ``distributed.scheduler.Scheduler`` and
 ``distributed.worker.Worker`` objects within a Python session manually.  Both
-are ``torando.tcpserver.TCPServer`` objects.
+are ``tornado.tcpserver.TCPServer`` objects.
 
 Start the Scheduler, provide the listening port (defaults to 8786) and Tornado
 IOLoop (defaults to ``IOLoop.current()``)
