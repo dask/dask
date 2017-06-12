@@ -113,6 +113,10 @@ class Variable(object):
     it is wise not to send too much.  If you want to share a large amount of
     data then ``scatter`` it and share the future instead.
 
+    .. warning::
+
+       This object is experimental and has known issues in Python 2
+
     Examples
     --------
     >>> from dask.distributed import Client, Variable # doctest: +SKIP

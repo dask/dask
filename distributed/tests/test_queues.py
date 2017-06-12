@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from operator import add
 from time import sleep
+import sys
 
 import pytest
 from toolz import take
@@ -117,6 +118,7 @@ def test_picklability_sync(loop):
             assert q.get() == 11
 
 
+@pytest.mark.skipif(sys.version_info[0] == 2, reason='Multi-client issues')
 @slow
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 5, Worker=Nanny,
              timeout=None)

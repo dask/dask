@@ -94,6 +94,10 @@ class Queue(object):
     it is wise not to send large objects.  To share large objects scatter the
     data and share the future instead.
 
+    .. warning::
+
+       This object is experimental and has known issues in Python 2
+
     Examples
     --------
     >>> from dask.distributed import Client, Queue  # doctest: +SKIP
