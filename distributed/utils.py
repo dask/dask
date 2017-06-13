@@ -133,9 +133,18 @@ def get_ipv6(host='2001:4860:4860::8888', port=80):
 
 
 def get_ip_interface(ifname):
+    """
+    Get the local IPv4 address of a network interface.
+
+    KeyError is raised if the interface doesn't exist.
+    ValueError is raised if the interface does no have an IPv4 address
+    associated with it.
+    """
     import psutil
-    L = psutil.net_if_addrs()[ifname]
-    return [x.address for x in L if x.family == socket.AF_INET][0]
+    for info in psutil.net_if_addrs()[ifname]:
+        if info.family == socket.AF_INET:
+            return info.address
+    raise ValueError("interface %r doesn't have an IPv4 address" % (ifname,))
 
 
 @contextmanager

@@ -5,6 +5,7 @@ from functools import partial
 import io
 import logging
 import socket
+import sys
 from time import sleep
 from threading import Thread
 import threading
@@ -21,7 +22,7 @@ from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
-        funcname, ensure_bytes, open_port)
+        funcname, ensure_bytes, open_port, get_ip_interface)
 from distributed.utils_test import (loop, inc, throws, div, captured_handler,
                                     captured_logger, has_ipv6)
 
@@ -161,6 +162,17 @@ def test_ensure_ip():
     if has_ipv6():
         assert ensure_ip('2001:4860:4860::8888') == '2001:4860:4860::8888'
         assert ensure_ip('::1') == '::1'
+
+
+def test_get_ip_interface():
+    if sys.platform == 'darwin':
+        assert get_ip_interface('lo0') == '127.0.0.1'
+    elif sys.platform.startswith('linux'):
+        assert get_ip_interface('lo') == '127.0.0.1'
+    else:
+        pytest.skip("test needs to be enhanced for platform %r" % (sys.platform,))
+    with pytest.raises(KeyError):
+        get_ip_interface('__non-existent-interface')
 
 
 def test_truncate_exception():

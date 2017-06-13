@@ -3,6 +3,21 @@ if [[ $RUNSLOW != false ]]; then
     export PYTEST_OPTIONS="$PYTEST_OPTIONS --runslow"
 fi
 
+# On OS X builders, the default open files limit is too small (256)
+if [[ $TRAVIS_OS_NAME == osx ]]; then
+    ulimit -n 8192
+fi
+
+echo "--"
+echo "-- Soft limits"
+echo "--"
+ulimit -a -S
+
+echo "--"
+echo "-- Hard limits"
+echo "--"
+ulimit -a -H
+
 if [[ $HDFS == true ]]; then
     py.test distributed/tests/test_hdfs.py $PYTEST_OPTIONS
     if [ $? -ne 0 ]; then

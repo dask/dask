@@ -15,7 +15,7 @@ from tornado import gen
 
 from distributed import Scheduler, Client
 from distributed.compatibility import WINDOWS
-from distributed.utils import get_ip, ignoring, tmpfile
+from distributed.utils import get_ip, get_ip_interface, ignoring, tmpfile
 from distributed.utils_test import (loop, popen,
                                     assert_can_connect_from_everywhere_4,
                                     assert_can_connect_from_everywhere_4_6,
@@ -165,17 +165,30 @@ def test_multiple_workers(loop):
                         assert time() < start + 10
 
 
-@pytest.mark.skipif(WINDOWS, reason='--interface does not work on windows')
 def test_interface(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--interface', 'lo']) as s:
-        with popen(['dask-worker', '127.0.0.1:8786', '--no-bokeh', '--interface', 'lo']) as a:
-            with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
+    psutil = pytest.importorskip('psutil')
+    if_names = sorted(psutil.net_if_addrs())
+    for if_name in if_names:
+        try:
+            ipv4_addr = get_ip_interface(if_name)
+        except ValueError:
+            pass
+        else:
+            if ipv4_addr == '127.0.0.1':
+                break
+    else:
+        pytest.skip("Could not find loopback interface. "
+                    "Available interfaces are: %s." % (if_names,))
+
+    with popen(['dask-scheduler', '--no-bokeh', '--interface', if_name]) as s:
+        with popen(['dask-worker', '127.0.0.1:8786', '--no-bokeh', '--interface', if_name]) as a:
+            with Client('tcp://127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
                 start = time()
                 while not len(c.ncores()):
                     sleep(0.1)
                     assert time() - start < 5
                 info = c.scheduler_info()
-                assert '127.0.0.1' in info['address']
+                assert 'tcp://127.0.0.1' in info['address']
                 assert all('127.0.0.1' == d['host']
                            for d in info['workers'].values())
 
