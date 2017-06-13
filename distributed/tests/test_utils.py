@@ -11,6 +11,7 @@ from threading import Thread
 import threading
 import traceback
 
+import numpy as np
 import pytest
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -22,7 +23,7 @@ from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
-        funcname, ensure_bytes, open_port, get_ip_interface)
+        funcname, ensure_bytes, open_port, get_ip_interface, nbytes)
 from distributed.utils_test import (loop, inc, throws, div, captured_handler,
                                     captured_logger, has_ipv6)
 
@@ -320,6 +321,16 @@ def test_ensure_bytes():
         assert isinstance(result, bytes)
         assert result == b'1'
 
+
+def test_nbytes():
+    multi_dim = np.ones(shape=(10,10))
+    scalar = np.array(1)
+
+    assert nbytes(scalar) == scalar.nbytes
+    assert nbytes(multi_dim) == multi_dim.nbytes
+
+    assert nbytes(memoryview(scalar)) == scalar.nbytes
+    assert nbytes(memoryview(multi_dim)) == multi_dim.nbytes
 
 def dump_logger_list():
     root = logging.getLogger()

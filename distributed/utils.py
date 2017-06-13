@@ -5,8 +5,10 @@ from collections import Iterable
 from contextlib import contextmanager
 from datetime import timedelta
 import inspect
+import functools
 import logging
 import multiprocessing
+import operator
 import os
 import re
 import shutil
@@ -826,14 +828,20 @@ def format_bytes(n):
 if PY2:
     def nbytes(frame):
         """ Number of bytes of a frame or memoryview """
-        if type(frame) in (bytes, buffer):
+        if isinstance(frame, (bytes, buffer)):
             return len(frame)
+        elif isinstance(frame, memoryview):
+            if frame.shape is None:
+                return frame.itemsize
+            else:
+                return functools.reduce(operator.mul, frame.shape,
+                                                      frame.itemsize)
         else:
             return frame.nbytes
 else:
     def nbytes(frame):
         """ Number of bytes of a frame or memoryview """
-        if type(frame) is bytes:
+        if isinstance(frame, bytes):
             return len(frame)
         else:
             return frame.nbytes
