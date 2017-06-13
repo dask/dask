@@ -12,10 +12,10 @@ from tornado import gen
 
 from dask import delayed
 from distributed import Client, Nanny, wait
+from distributed.comm import CommClosedError
 from distributed.compatibility import PY3
 from distributed.client import _wait
 from distributed.metrics import time
-from distributed.nanny import isalive
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
         slowinc, slowadd)
@@ -42,7 +42,7 @@ def test_submit_after_failed_worker_async(c, s, a, b):
     L = c.map(inc, range(10))
     yield _wait(L)
 
-    s.loop.add_callback(n._kill)
+    s.loop.add_callback(n.kill)
     total = c.submit(sum, L)
     result = yield total
     assert result == sum(map(inc, range(10)))
@@ -98,10 +98,11 @@ def test_failed_worker_without_warning(c, s, a, b):
     L = c.map(inc, range(10))
     yield _wait(L)
 
-    original_process = a.process
-    a.process.terminate()
+    original_pid = a.pid
+    with ignoring(CommClosedError):
+        yield c._run(os._exit, 1, workers=[a.worker_address])
     start = time()
-    while a.process is original_process and not isalive(a.process):
+    while a.pid == original_pid:
         yield gen.sleep(0.01)
         assert time() - start < 10
 
@@ -311,11 +312,11 @@ def test_broken_worker_during_computation(c, s, a, b):
 
     from random import random
     yield gen.sleep(random() / 2)
-    with ignoring(OSError):
-        n.process.terminate()
+    with ignoring(CommClosedError):  # comm will be closed abrupty
+        yield c._run(os._exit, 1, workers=[n.worker_address])
     yield gen.sleep(random() / 2)
-    with ignoring(OSError):
-        n.process.terminate()
+    with ignoring(CommClosedError, EnvironmentError):  # perhaps new worker can't be contacted yet
+        yield c._run(os._exit, 1, workers=[n.worker_address])
 
     result = yield c._gather(L)
     assert isinstance(result[0], int)
@@ -358,7 +359,8 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
         a.release_dep(dep, report=True)
 
     n_worker_address = n.worker_address
-    n.process.terminate()
+    with ignoring(CommClosedError):
+        yield c._run(os._exit, 1, workers=[n_worker_address])
 
     while len(s.workers) > 2:
         yield gen.sleep(0.01)

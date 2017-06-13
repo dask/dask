@@ -13,7 +13,6 @@ from time import sleep
 
 import click
 from distributed import Nanny, Worker, rpc
-from distributed.nanny import isalive
 from distributed.utils import All, get_ip_interface
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
@@ -26,22 +25,6 @@ from tornado.ioloop import IOLoop, TimeoutError
 from tornado import gen
 
 logger = logging.getLogger('distributed.dask_worker')
-
-global_nannies = []
-
-
-def handle_signal(sig, frame):
-    loop = IOLoop.instance()
-    for nanny in global_nannies:
-        try:
-            shutil.rmtree(nanny.worker_dir)
-        except (OSError, IOError, TypeError):
-            pass
-    if loop._running:
-        loop.add_callback_from_signal(loop.stop)
-    else:
-        loop.close()
-        exit(1)
 
 
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
@@ -184,14 +167,6 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         raise ValueError("Need to provide scheduler address like\n"
                          "dask-worker SCHEDULER_ADDRESS:8786")
 
-    nannies = [t(scheduler, ncores=nthreads,
-                 services=services, name=name, loop=loop, resources=resources,
-                 memory_limit=memory_limit, reconnect=reconnect,
-                 local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, security=sec,
-                 **kwargs)
-               for i in range(nprocs)]
-
     if interface:
         if host:
             raise ValueError("Can not specify both interface and host")
@@ -204,10 +179,36 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         # Choose appropriate address for scheduler
         addr = None
 
+    nannies = [t(scheduler, ncores=nthreads,
+                 services=services, name=name, loop=loop, resources=resources,
+                 memory_limit=memory_limit, reconnect=reconnect,
+                 local_dir=local_directory, death_timeout=death_timeout,
+                 preload=preload, security=sec,
+                 **kwargs)
+               for i in range(nprocs)]
+
+    @gen.coroutine
+    def close_all():
+        try:
+            if nanny:
+                yield [n._close(timeout=2) for n in nannies]
+        finally:
+            loop.stop()
+
+    def handle_signal(signum, frame):
+        logger.info("Exiting on signal %d", signum)
+        if loop._running:
+            loop.add_callback_from_signal(loop.stop)
+        else:
+            exit(0)
+
+    # NOTE: We can't use the generic install_signal_handlers() function from
+    # distributed.cli.utils because we're handling the signal differently.
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
     for n in nannies:
         n.start(addr)
-        if t is Nanny:
-            global_nannies.append(n)
 
     @gen.coroutine
     def run():
@@ -220,47 +221,12 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         pass
     finally:
         logger.info("End worker")
-        loop.close()
 
     # Clean exit: unregister all workers from scheduler
-
-    loop2 = IOLoop()
-
-    @gen.coroutine
-    def f():
-        if nanny:
-            w = nannies[0]
-            with w.rpc(w.scheduler.address) as scheduler:
-                yield gen.with_timeout(
-                        timeout=timedelta(seconds=2),
-                        future=All([scheduler.unregister(address=n.worker_address, close=True)
-                                    for n in nannies if n.process and n.worker_address]),
-                        io_loop=loop2)
-
-    loop2.run_sync(f)
-    loop2.close()
-
-    if nanny:
-        for n in nannies:
-            if isalive(n.process):
-                n.process.terminate()
-
-    if nanny:
-        start = time()
-        while (any(isalive(n.process) for n in nannies)
-                and time() < start + 1):
-            sleep(0.1)
-
-    for nanny in nannies:
-        nanny.stop()
+    loop.run_sync(close_all)
 
 
 def go():
-    # NOTE: We can't use the generic install_signal_handlers() function from
-    # distributed.cli.utils because we're handling the signal differently.
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
-
     check_python_3()
     main()
 

@@ -85,7 +85,8 @@ class LocalCluster(object):
 
         self.loop = loop or IOLoop()
         if start and not self.loop._running:
-            self._thread = Thread(target=self.loop.start)
+            self._thread = Thread(target=self.loop.start,
+                                  name="LocalCluster loop")
             self._thread.daemon = True
             self._thread.start()
             while not self.loop._running:

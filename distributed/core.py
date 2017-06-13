@@ -128,6 +128,7 @@ class Server(object):
                 # raising EBADF.
                 # The demonstrator for this is Worker.terminate(), which
                 # closes the server socket in response to an incoming message.
+                # See https://github.com/tornadoweb/tornado/issues/2069
                 self.io_loop.add_callback(self.listener.stop)
 
     def _measure_tick(self):

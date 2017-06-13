@@ -14,6 +14,7 @@ import sys
 from threading import Thread, Semaphore
 from time import sleep
 import traceback
+import weakref
 import zipfile
 
 import mock
@@ -3303,11 +3304,15 @@ def test_reconnect(loop):
     sync(loop, w._close)
 
 
+# On Python 2, heavy process spawning can deadlock (e.g. on a logging IO lock)
+_params = ([(Worker, 100, 5), (Nanny, 10, 20)]
+           if sys.version_info >= (3,)
+           else [(Worker, 100, 5)])
+
 @slow
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="num_fds not supported on windows")
-@pytest.mark.parametrize("worker,count,repeat", [(Worker, 100, 5),
-                                                 (Nanny, 10, 20)])
+@pytest.mark.parametrize("worker,count,repeat", _params)
 def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
@@ -3316,15 +3321,21 @@ def test_open_close_many_workers(loop, worker, count, repeat):
         gc.collect()
         before = proc.num_fds()
         done = Semaphore(0)
+        running = weakref.WeakKeyDictionary()
 
         @gen.coroutine
         def start_worker(sleep, duration, repeat=1):
             for i in range(repeat):
                 yield gen.sleep(sleep)
                 w = worker(s['address'], loop=loop)
+                running[w] = None
                 yield w._start()
+                addr = w.worker_address
+                running[w] = addr
                 yield gen.sleep(duration)
                 yield w._close()
+                running[w] = None
+                del w
             done.release()
 
         for i in range(count):
@@ -3336,6 +3347,9 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
             for i in range(count):
                 done.acquire()
+                gc.collect()
+                print("still running:", dict(running))
+                print("ncores:", c.ncores())
 
             start = time()
             while c.ncores():
@@ -3344,6 +3358,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
     start = time()
     while proc.num_fds() > before:
+        print("fds:", before, proc.num_fds())
         sleep(0.1)
         assert time() < start + 10
 

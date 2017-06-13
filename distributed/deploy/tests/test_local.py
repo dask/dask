@@ -262,11 +262,12 @@ def test_silent_startup():
 
     out = subprocess.check_output([sys.executable, "-Wi", "-c", code],
                                   stderr=subprocess.STDOUT)
+    out = out.decode()
     try:
         assert not out
     except AssertionError:
         print("=== Cluster stdout / stderr ===")
-        print(out.decode())
+        print(out)
         raise
 
 

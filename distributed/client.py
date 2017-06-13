@@ -555,7 +555,8 @@ class Client(Node):
             return
         if not asynchronous and not self.loop._running:
             from threading import Thread
-            self._loop_thread = Thread(target=self.loop.start)
+            self._loop_thread = Thread(target=self.loop.start,
+                                       name="Client loop")
             self._loop_thread.daemon = True
             self._loop_thread.start()
             if self._should_close_loop is None:
@@ -1038,8 +1039,10 @@ class Client(Node):
             all(isinstance(i, Iterator) for i in iterables)):
             maxsize = kwargs.pop('maxsize', 0)
             q_out = pyQueue(maxsize=maxsize)
-            t = Thread(target=self._threaded_map, args=(q_out, func, iterables),
-                                                  kwargs=kwargs)
+            t = Thread(target=self._threaded_map,
+                       name="Threaded map()",
+                       args=(q_out, func, iterables),
+                       kwargs=kwargs)
             t.daemon = True
             t.start()
             if isqueue(iterables[0]):
@@ -1245,7 +1248,9 @@ class Client(Node):
         """
         if isqueue(futures):
             qout = pyQueue(maxsize=maxsize)
-            t = Thread(target=self._threaded_gather, args=(futures, qout),
+            t = Thread(target=self._threaded_gather,
+                       name="Threaded gather()",
+                       args=(futures, qout),
                        kwargs={'errors': errors, 'direct': direct})
             t.daemon = True
             t.start()
@@ -1405,6 +1410,7 @@ class Client(Node):
             qout = pyQueue(maxsize=maxsize)
 
             t = Thread(target=self._threaded_scatter,
+                       name="Threaded scatter()",
                        args=(data, qout),
                        kwargs={'workers': workers, 'broadcast': broadcast})
             t.daemon = True

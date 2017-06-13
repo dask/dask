@@ -57,7 +57,9 @@ def _worker(executor, work_queue):
 class ThreadPoolExecutor(thread.ThreadPoolExecutor):
     def _adjust_thread_count(self):
         if len(self._threads) < self._max_workers:
-            t = Thread(target=_worker, args=(self, self._work_queue))
+            t = Thread(target=_worker,
+                       name="ThreadPool worker %d" % len(self._threads,),
+                       args=(self, self._work_queue))
             t.daemon = True
             self._threads.add(t)
             t.start()

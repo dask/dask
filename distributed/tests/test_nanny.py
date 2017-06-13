@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import datetime
+import gc
 import os
 import random
 import sys
@@ -18,7 +19,6 @@ from distributed.metrics import time
 from distributed.protocol.pickle import dumps, loads
 from distributed.utils import ignoring
 from distributed.utils_test import gen_cluster, gen_test, slow
-from distributed.nanny import isalive
 
 
 @gen_cluster(ncores=[])
@@ -27,29 +27,38 @@ def test_nanny(s):
 
     yield n._start(0)
     with rpc(n.address) as nn:
-        assert isalive(n.process)  # alive
+        assert n.is_alive()
         assert s.ncores[n.worker_address] == 2
-
         assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
         yield nn.kill()
-        assert not n.process
+        assert not n.is_alive()
         assert n.worker_address not in s.ncores
         assert n.worker_address not in s.worker_info
 
         yield nn.kill()
+        assert not n.is_alive()
         assert n.worker_address not in s.ncores
         assert n.worker_address not in s.worker_info
-        assert not n.process
 
         yield nn.instantiate()
-        assert isalive(n.process)
+        assert n.is_alive()
         assert s.ncores[n.worker_address] == 2
         assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
 
         yield nn.terminate()
-        assert not n.process
+        assert not n.is_alive()
 
+    yield n._close()
+
+
+@gen_cluster(ncores=[])
+def test_many_kills(s):
+    n = Nanny(s.address, ncores=2, loop=s.loop)
+    yield n._start(0)
+    assert n.is_alive()
+    yield [n.kill() for i in range(5)]
+    yield [n.kill() for i in range(5)]
     yield n._close()
 
 
@@ -69,21 +78,25 @@ def test_nanny_process_failure(c, s):
 
     assert os.path.exists(first_dir)
 
-    original_process = n.process
+    original_address = n.worker_address
     ww = rpc(n.worker_address)
     yield ww.update_data(data=valmap(dumps, {'x': 1, 'y': 2}))
+    pid = n.pid
+    assert pid is not None
     with ignoring(CommClosedError):
-        yield c._run(sys.exit, 0, workers=[n.worker_address])
+        yield c._run(os._exit, 0, workers=[n.worker_address])
 
     start = time()
-    while n.process is original_process:  # wait while process dies
+    while n.pid == pid:  # wait while process dies and comes back
         yield gen.sleep(0.01)
         assert time() - start < 5
 
     start = time()
-    while not isalive(n.process):  # wait while process comes back
+    while not n.is_alive():  # wait while process comes back
         yield gen.sleep(0.01)
         assert time() - start < 5
+
+    assert n.worker_address != original_address  # most likely
 
     start = time()
     while n.worker_address not in s.ncores or n.worker_dir is None:
@@ -105,31 +118,6 @@ def test_nanny_no_port():
 
 
 @gen_cluster(ncores=[])
-def test_monitor_resources(s):
-    pytest.importorskip('psutil')
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
-
-    yield n._start()
-    assert isalive(n.process)
-    d = n.resource_collect()
-    assert {'cpu_percent', 'memory_percent'}.issubset(d)
-
-    assert 'timestamp' in d
-
-    comm = yield connect(n.address)
-    yield comm.write({'op': 'monitor_resources', 'interval': 0.01})
-
-    for i in range(3):
-        msg = yield comm.read()
-        assert isinstance(msg, dict)
-        assert {'cpu_percent', 'memory_percent'}.issubset(msg)
-
-    yield comm.close()
-    yield n._close()
-    s.stop()
-
-
-@gen_cluster(ncores=[])
 def test_run(s):
     pytest.importorskip('psutil')
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
@@ -143,7 +131,7 @@ def test_run(s):
     yield n._close()
 
 
-
+@slow
 @gen_cluster(Worker=Nanny,
              ncores=[('127.0.0.1', 1)],
              worker_kwargs={'reconnect': False})
@@ -152,7 +140,7 @@ def test_close_on_disconnect(s, w):
 
     start = time()
     while w.status != 'closed':
-        yield gen.sleep(0.01)
+        yield gen.sleep(0.05)
         assert time() < start + 9
 
 
@@ -180,3 +168,32 @@ def test_random_seed(c, s, a, b):
 
     yield check_func(lambda a, b: random.randint(a, b))
     yield check_func(lambda a, b: np.random.randint(a, b))
+
+
+@pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="num_fds not supported on windows")
+@gen_cluster(client=False, ncores=[])
+def test_num_fds(s):
+    psutil = pytest.importorskip('psutil')
+    proc = psutil.Process()
+
+    # Warm up
+    w = Nanny(s.address)
+    yield w._start()
+    yield w._close()
+    del w
+    gc.collect()
+
+    before = proc.num_fds()
+
+    for i in range(3):
+        w = Nanny(s.address)
+        yield w._start()
+        yield gen.sleep(0.1)
+        yield w._close()
+
+    start = time()
+    while proc.num_fds() > before:
+        print("fds:", before, proc.num_fds())
+        yield gen.sleep(0.1)
+        assert time() < start + 10
