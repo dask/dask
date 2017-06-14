@@ -217,10 +217,14 @@ class Nanny(ServerNode):
                     yield self._close()
                     return
 
-            if self.status not in ('closing', 'closed'):
-                if self.auto_restart:
-                    logger.warning("Restarting worker")
-                    yield self.instantiate()
+            try:
+                if self.status not in ('closing', 'closed'):
+                    if self.auto_restart:
+                        logger.warning("Restarting worker")
+                        yield self.instantiate()
+            except Exception:
+                logger.error("Failed to restart worker after its process exited",
+                             exc_info=True)
 
     @property
     def pid(self):

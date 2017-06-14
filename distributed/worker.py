@@ -334,8 +334,8 @@ class WorkerBase(ServerNode):
 
         self.status = 'closed'
 
-        if nanny and 'nanny' in self.services:
-            with self.rpc(self.services['nanny']) as r:
+        if nanny and 'nanny' in self.service_ports:
+            with self.rpc((self.ip, self.service_ports['nanny'])) as r:
                 yield r.terminate()
 
         self.rpc.close()

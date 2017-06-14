@@ -835,7 +835,7 @@ class Scheduler(ServerNode):
 
             return {}
 
-    def remove_worker(self, comm=None, address=None, safe=False, restart=False):
+    def remove_worker(self, comm=None, address=None, safe=False, close=True):
         """
         Remove worker from cluster
 
@@ -855,58 +855,58 @@ class Scheduler(ServerNode):
             self.log_event(['all', address], {'action': 'remove-worker',
                                               'worker': address})
             logger.info("Remove worker %s", address)
-            with ignoring(AttributeError, CommClosedError):
-                self.worker_comms[address].send({'op': 'close'})
+            if close:
+                with ignoring(AttributeError, CommClosedError):
+                    self.worker_comms[address].send({'op': 'close'})
 
-            if not restart:
-                self.host_info[host]['cores'] -= self.ncores[address]
-                self.host_info[host]['addresses'].remove(address)
-                self.total_ncores -= self.ncores[address]
+            self.host_info[host]['cores'] -= self.ncores[address]
+            self.host_info[host]['addresses'].remove(address)
+            self.total_ncores -= self.ncores[address]
 
-                if not self.host_info[host]['addresses']:
-                    del self.host_info[host]
+            if not self.host_info[host]['addresses']:
+                del self.host_info[host]
 
-                del self.worker_comms[address]
-                del self.ncores[address]
-                self.workers.remove(address)
-                del self.aliases[self.worker_info[address]['name']]
-                del self.worker_info[address]
-                if address in self.idle:
-                    self.idle.remove(address)
-                if address in self.saturated:
-                    self.saturated.remove(address)
+            del self.worker_comms[address]
+            del self.ncores[address]
+            self.workers.remove(address)
+            del self.aliases[self.worker_info[address]['name']]
+            del self.worker_info[address]
+            if address in self.idle:
+                self.idle.remove(address)
+            if address in self.saturated:
+                self.saturated.remove(address)
 
-                recommendations = OrderedDict()
+            recommendations = OrderedDict()
 
-                in_flight = set(self.processing.pop(address))
-                for k in list(in_flight):
-                    # del self.rprocessing[k]
-                    if not safe:
-                        self.suspicious_tasks[k] += 1
-                    if not safe and self.suspicious_tasks[k] > self.allowed_failures:
-                        e = pickle.dumps(KilledWorker(k, address))
-                        r = self.transition(k, 'erred', exception=e, cause=k)
-                        recommendations.update(r)
-                        in_flight.remove(k)
+            in_flight = set(self.processing.pop(address))
+            for k in list(in_flight):
+                # del self.rprocessing[k]
+                if not safe:
+                    self.suspicious_tasks[k] += 1
+                if not safe and self.suspicious_tasks[k] > self.allowed_failures:
+                    e = pickle.dumps(KilledWorker(k, address))
+                    r = self.transition(k, 'erred', exception=e, cause=k)
+                    recommendations.update(r)
+                    in_flight.remove(k)
+                else:
+                    recommendations[k] = 'released'
+
+            self.total_occupancy -= self.occupancy.pop(address)
+            del self.worker_bytes[address]
+            self.remove_resources(address)
+
+            for key in self.has_what.pop(address):
+                self.who_has[key].remove(address)
+                if not self.who_has[key]:
+                    if key in self.tasks:
+                        recommendations[key] = 'released'
                     else:
-                        recommendations[k] = 'released'
+                        recommendations[key] = 'forgotten'
 
-                self.total_occupancy -= self.occupancy.pop(address)
-                del self.worker_bytes[address]
-                self.remove_resources(address)
+            self.transitions(recommendations)
 
-                for key in self.has_what.pop(address):
-                    self.who_has[key].remove(address)
-                    if not self.who_has[key]:
-                        if key in self.tasks:
-                            recommendations[key] = 'released'
-                        else:
-                            recommendations[key] = 'forgotten'
-
-                self.transitions(recommendations)
-
-                if self.validate:
-                    assert all(self.who_has.values()), len(self.who_has)
+            if self.validate:
+                assert all(self.who_has.values()), len(self.who_has)
 
             for plugin in self.plugins[:]:
                 try:
@@ -1487,11 +1487,13 @@ class Scheduler(ServerNode):
                 self.client_releases_keys(keys=keys, client=client)
 
             nannies = {addr: self.get_worker_service_addr(addr, 'nanny')
-                       for addr in self.worker_info}
+                       for addr in self.workers}
 
             for addr in list(self.workers):
                 try:
-                    self.remove_worker(address=addr, restart=True)
+                    # Ask the worker to close if it doesn't have a nanny,
+                    # otherwise the nanny will kill it anyway
+                    self.remove_worker(address=addr, close=addr not in nannies)
                 except Exception as e:
                     logger.info("Exception while restarting.  This is normal",
                                 exc_info=True)
@@ -1502,14 +1504,13 @@ class Scheduler(ServerNode):
             for collection in self._worker_collections:
                 collection.clear()
 
-
-            logger.debug("Send kill signal to nannies: %s", nannies)
-
             for plugin in self.plugins[:]:
                 try:
                     plugin.restart(self)
                 except Exception as e:
                     logger.exception(e)
+
+            logger.debug("Send kill signal to nannies: %s", nannies)
 
             nannies = [rpc(nanny_address)
                        for nanny_address in nannies.values()
