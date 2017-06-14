@@ -521,6 +521,21 @@ def test_connection_pool_tls():
     rpc.close()
 
 
+@gen_test()
+def test_counters():
+    server = Server({'div': stream_div})
+    server.listen('tcp://')
+
+    with rpc(server.address) as r:
+        for i in range(2):
+            yield r.identity()
+        with pytest.raises(ZeroDivisionError):
+            yield r.div(x=1, y=0)
+
+        c = server.counters
+        assert c['op'].components[0] == {'identity': 2, 'div': 1}
+
+
 @gen_cluster()
 def test_ticks(s, a, b):
     pytest.importorskip('crick')

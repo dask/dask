@@ -152,7 +152,7 @@ def test_task_stream_second_plugin(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_task_stream_clear_interval(c, s, a, b):
-    ts = TaskStream(s, clear_interval=100)
+    ts = TaskStream(s, clear_interval=200)
 
     yield _wait(c.map(inc, range(10)))
     ts.update()
@@ -160,13 +160,17 @@ def test_task_stream_clear_interval(c, s, a, b):
     yield _wait(c.map(dec, range(10)))
     ts.update()
 
-    assert len(ts.source.data['start']) == 20
+    assert len(set(map(len, ts.source.data.values()))) == 1
+    assert ts.source.data['name'].count('inc') == 10
+    assert ts.source.data['name'].count('dec') == 10
 
-    yield gen.sleep(0.150)
+    yield gen.sleep(0.300)
     yield _wait(c.map(inc, range(10, 20)))
     ts.update()
 
-    assert len(ts.source.data['start']) == 10
+    assert len(set(map(len, ts.source.data.values()))) == 1
+    assert ts.source.data['name'].count('inc') == 10
+    assert ts.source.data['name'].count('dec') == 0
 
 
 @gen_cluster(client=True)
