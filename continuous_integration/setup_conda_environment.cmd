@@ -17,7 +17,29 @@ call deactivate
 
 @rem Create test environment
 @rem (note: no cytoolz as it seems to prevent faulthandler tracebacks on crash)
-%CONDA% create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz dill futures dask ipywidgets psutil bokeh requests joblib mock ipykernel jupyter_client tblib msgpack-python cloudpickle click zict lz4 tornado=4.4 -c conda-forge
+%CONDA% create -n %CONDA_ENV% -q -y ^
+    bokeh ^
+    click ^
+    cloudpickle ^
+    dask ^
+    dill ^
+    futures ^
+    lz4 ^
+    ipykernel ^
+    ipywidgets ^
+    joblib ^
+    jupyter_client ^
+    mock ^
+    msgpack-python ^
+    psutil ^
+    pytest ^
+    python=%PYTHON% ^
+    requests ^
+    toolz ^
+    tblib ^
+    tornado=4.5 ^
+    zict ^
+    -c conda-forge
 
 call activate %CONDA_ENV%
 

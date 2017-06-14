@@ -27,7 +27,7 @@ conda create -q -n test-environment python=$PYTHON
 source activate test-environment
 
 # Install dependencies
-# (Tornado pinned to 4.4 until a new Bokeh is released)
+# (Tornado pinned to 4.5 until we fix our compatibility with Tornado 5.0)
 conda install -q -c conda-forge \
     bokeh \
     click \
@@ -51,7 +51,7 @@ conda install -q -c conda-forge \
     requests \
     tblib \
     toolz \
-    tornado=4.4 \
+    tornado=4.5 \
     $PACKAGES
 
 if [[ $HDFS == true ]]; then
