@@ -92,12 +92,25 @@ def test_simple():
     t1 = time()
     yield proc.join()
     dt = time() - t1
-    assert dt <= 0.2
+    assert dt <= 0.6
 
     del proc
-    t1 = time()
     gc.collect()
-    assert wr1() is None
+    if wr1() is not None:
+        # Help diagnosing
+        from types import FrameType
+        p = wr1()
+        if p is not None:
+            rc = sys.getrefcount(p)
+            refs = gc.get_referrers(p)
+            del p
+            print("refs to proc:", rc, refs)
+            frames = [r for r in refs if isinstance(r, FrameType)]
+            for i, f in enumerate(frames):
+                print("frames #%d:" % i,
+                      f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
+        pytest.fail("AsyncProcess should have been destroyed")
+    t1 = time()
     while wr2() is not None:
         yield gen.sleep(0.01)
         gc.collect()

@@ -81,10 +81,12 @@ class AsyncProcess(object):
     def _do_terminate(self):
         self._process.terminate()
 
-    def _on_exit(self):
+    def _on_exit(self, exitcode):
+        # Called from the event loop when the child process exited
         self._process = None
         if self._exit_callback is not None:
             self._exit_callback(self)
+        self._exit_future.set_result(exitcode)
 
     @classmethod
     def _watch(cls, selfref, process, state, q, exit_future):
@@ -112,11 +114,11 @@ class AsyncProcess(object):
                 else:
                     assert 0, msg
 
-        def _maybe_call_exit_callback():
+        def _maybe_notify_exit(exitcode):
             self = selfref()  # only keep self alive when required
             try:
                 if self is not None:
-                    self._loop.add_callback(self._on_exit)
+                    self._loop.add_callback(self._on_exit, exitcode)
             finally:
                 self = None  # lose reference
 
@@ -128,17 +130,15 @@ class AsyncProcess(object):
             except SystemExit:
                 return
             # Did process end?
-            r = process.exitcode
-            if r is not None:
+            exitcode = process.exitcode
+            if exitcode is not None:
                 state.is_alive = False
-                state.exitcode = r
+                state.exitcode = exitcode
                 # Make sure the process is removed from the global list
                 # (see _children in multiprocessing/process.py)
                 process.join(timeout=0)
-                # User hooks
-                exit_future.set_result(r)
-                _maybe_call_exit_callback()
-                # No need to examine process result again
+                # Then notify the Process object
+                _maybe_notify_exit(exitcode)
                 break
 
         while True:
