@@ -797,6 +797,8 @@ def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
 def captured_logger(logger):
     """Capture output from the given Logger.
     """
+    if isinstance(logger, str):
+        logger = logging.getLogger(logger)
     orig_handlers = logger.handlers[:]
     sio = six.StringIO()
     logger.handlers[:] = [logging.StreamHandler(sio)]

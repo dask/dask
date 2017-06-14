@@ -15,7 +15,8 @@ from distributed import Client, Worker, Nanny
 from distributed.deploy.local import LocalCluster
 from distributed.metrics import time
 from distributed.utils_test import (inc, loop, raises, gen_test, pristine_loop,
-        assert_can_connect_locally_4, assert_can_connect_from_everywhere_4_6)
+        assert_can_connect_locally_4, assert_can_connect_from_everywhere_4_6,
+        captured_logger)
 from distributed.utils import ignoring, sync
 from distributed.worker import TOTAL_MEMORY, _ncores
 
@@ -30,6 +31,20 @@ def test_simple(loop):
             x.result()
             assert x.key in c.scheduler.tasks
             assert any(w.data == {x.key: 2} for w in c.workers)
+
+
+def test_close_twice(loop):
+    cluster = LocalCluster()
+    with Client(cluster.scheduler_address) as client:
+        f = client.map(inc, range(100))
+        client.gather(f)
+    with captured_logger('tornado.application') as log:
+        cluster.close()
+        cluster.close()
+        sleep(0.5)
+    log = log.getvalue()
+    print(log)
+    assert not log
 
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')

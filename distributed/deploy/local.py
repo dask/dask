@@ -203,7 +203,8 @@ class LocalCluster(object):
     @gen.coroutine
     def _stop_worker(self, w):
         yield w._close()
-        self.workers.remove(w)
+        if w in self.workers:
+            self.workers.remove(w)
 
     def stop_worker(self, w):
         """ Stop a running worker
