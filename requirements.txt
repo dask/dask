@@ -8,6 +8,6 @@ six
 tblib
 psutil
 zict >= 0.1.2
-sortedcollections
+sortedcontainers
 futures; python_version < '3.0'
 singledispatch; python_version < '3.4'

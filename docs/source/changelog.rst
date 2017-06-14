@@ -1,6 +1,15 @@
 Changelog
 =========
 
+1.17.1 - June 14th, 2017
+------------------------
+
+-  Remove Python 3.4 testing from travis-ci (:pr:`1157`)
+-  Remove ZMQ Support (:pr:`1160`)
+-  Fix memoryview nbytes issue in Python 2.7 (:pr:`1165`)
+-  Re-enable counters (:pr:`1168`)
+-  Improve scheduler.restart (:pr:`1175`)
+
 
 1.17.0 - June 9th, 2017
 -----------------------
