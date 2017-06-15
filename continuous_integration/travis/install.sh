@@ -36,6 +36,7 @@ conda install -q -c conda-forge \
     bcolz \
     blosc \
     bokeh \
+    boto3 \
     chest \
     coverage \
     cytoolz \
@@ -62,6 +63,7 @@ pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
 pip install -q git+https://github.com/mrocklin/sparse --upgrade --no-deps
+pip install -q git+https://github.com/dask/s3fs --upgrade --no-deps
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
     conda install -q -c conda-forge numba cython
@@ -89,6 +91,8 @@ pip install -q \
 
 # Install dask
 pip install -q --no-deps -e .[complete]
+echo pip freeze
+pip freeze
 
 # Display fixed versions for debugging
 python -c "import numpy,pandas;print('numpy: %s' % numpy.__version__);print('pandas: %s' % pandas.__version__)"
