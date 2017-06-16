@@ -364,7 +364,7 @@ def _to_csv_chunk(df, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, **kwargs):
+           get=None, storage_options=None, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -472,10 +472,12 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     decimal: string, default '.'
         Character recognized as decimal separator. E.g. use ',' for
         European data
+    storage_options: dict
+        Parameters passed on to the backend filesystem class.
     """
     values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
     values = write_bytes(values, filename, name_function, compression,
-                         encoding=None)
+                         encoding=None, **(storage_options or {}))
 
     if compute:
         delayed(values).compute(get=get)
