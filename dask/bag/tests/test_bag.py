@@ -822,6 +822,13 @@ def test_to_dataframe():
     dd.utils.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
 
+    # Works with iterators
+    b = db.from_sequence(range(100), npartitions=5).map_partitions(iter)
+    sol = pd.DataFrame({'a': range(100)})
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
+
 
 ext_open = [('gz', GzipFile), ('', open)]
 if not PY2:
