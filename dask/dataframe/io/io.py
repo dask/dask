@@ -343,7 +343,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
 
 
 def from_dask_array(x, columns=None):
-    """ Create Dask Array from a Dask DataFrame
+    """ Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
 
