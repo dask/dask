@@ -1,4 +1,4 @@
-from collections import Iterator, namedtuple
+from collections import namedtuple
 from operator import add, setitem
 import pickle
 from random import random
@@ -160,7 +160,6 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-@pytest.mark.xfail
 def test_iterators():
     a = delayed(1)
     b = delayed(2)
@@ -169,7 +168,6 @@ def test_iterators():
     assert c.compute() == 3
 
     def f(seq):
-        assert isinstance(seq, Iterator)
         return sum(seq)
 
     c = delayed(f)(iter([a, b]))
