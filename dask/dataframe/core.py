@@ -5,6 +5,7 @@ from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
+from contextlib import contextmanager
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -1062,7 +1063,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                        split_every=False):
         axis = self._validate_axis(axis)
 
-        meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
+        with _safe_meta_numerics():
+            meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
         token = self._token_prefix + name
 
         method = getattr(M, name)
@@ -1079,7 +1081,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def abs(self):
-        meta = self._meta_nonempty.abs()
+        with _safe_meta_numerics():
+            meta = self._meta_nonempty.abs()
         return self.map_partitions(M.abs, meta=meta)
 
     @derived_from(pd.DataFrame)
@@ -1171,7 +1174,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
+        with _safe_meta_numerics():
+            meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(M.mean, self, meta=meta,
                                   token=self._token_prefix + 'mean',
@@ -1190,7 +1194,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def var(self, axis=None, skipna=True, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        with _safe_meta_numerics():
+            meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(M.var, self, meta=meta,
                                   token=self._token_prefix + 'var',
@@ -1210,7 +1215,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        with _safe_meta_numerics():
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
         if axis == 1:
             return map_partitions(M.std, self, meta=meta,
                                   token=self._token_prefix + 'std',
@@ -1223,7 +1229,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
+        with _safe_meta_numerics():
+            meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
         if axis == 1:
             return map_partitions(M.sem, self, meta=meta,
                                   token=self._token_prefix + 'sem',
@@ -1259,7 +1266,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             return map_partitions(M.quantile, self, q, axis,
                                   token=keyname, meta=(q, 'f8'))
         else:
-            meta = self._meta.quantile(q, axis=axis)
+            with _safe_meta_numerics():
+                meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
             quantiles = tuple(quantile(self[c], q) for c in num.columns)
 
@@ -3029,6 +3037,22 @@ def _extract_meta(x, nonempty=False):
         return res
     else:
         return x
+
+
+@contextmanager
+def _safe_meta_numerics():
+    """
+    Converts "Could not convert" type errors into a more meaningful error.
+    """
+    try:
+        yield
+    except TypeError as e:
+        if "Could not convert" in e.message:
+            raise ValueError(
+                "numeric reduction not supported for object dtype."
+            )
+        else:
+            raise e
 
 
 def _emulate(func, *args, **kwargs):

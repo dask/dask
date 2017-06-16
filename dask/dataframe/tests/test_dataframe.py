@@ -2632,3 +2632,14 @@ def test_boundary_slice_same(index, left, right):
     df = pd.DataFrame({"A": range(len(index))}, index=index)
     result = boundary_slice(df, left, right)
     tm.assert_frame_equal(result, df)
+
+
+def test_meaningful_error_on_wrong_meta():
+    df = pd.DataFrame({"A": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    # simulate erroneous meta data
+    ddf._meta = pd.DataFrame(columns=["A"])
+    with pytest.raises(ValueError) as e_info:
+        ddf["A"].mean()
+    assert "foofoo" not in e_info.value.message
+    assert "numeric reduction not supported" in e_info.value.message
