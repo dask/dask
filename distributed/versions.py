@@ -14,10 +14,14 @@ required_packages = [('dask', lambda p: p.__version__),
                      ('distributed', lambda p: p.__version__),
                      ('msgpack', lambda p: '.'.join([str(v) for v in p.version])),
                      ('cloudpickle', lambda p: p.__version__),
+                     ('tornado', lambda p: p.version),
                      ('toolz', lambda p: p.__version__)]
 
 optional_packages = [('numpy', lambda p: p.__version__),
-                     ('pandas', lambda p: p.__version__)]
+                     ('pandas', lambda p: p.__version__),
+                     ('bokeh', lambda p: p.__version__),
+                     ('lz4', lambda p: p.__version__),
+                     ('blosc', lambda p: p.__version__)]
 
 
 def get_versions():
