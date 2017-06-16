@@ -17,7 +17,7 @@ import os
 import sys
 from time import sleep
 import uuid
-from threading import Thread, Lock
+import threading
 import six
 import socket
 import weakref
@@ -255,9 +255,10 @@ class Future(WrappedKey):
         return self._state.type
 
     def release(self):
-        if not self._cleared and self.client.generation == self._generation:
-            self._cleared = True
-            self.client._dec_ref(tokey(self.key))
+        with self.client._lock:
+            if not self._cleared and self.client.generation == self._generation:
+                self._cleared = True
+                self.client._dec_ref(tokey(self.key))
 
     def __getstate__(self):
         return self.key
@@ -435,6 +436,7 @@ class Client(Node):
         self.asynchronous = asynchronous
         self._loop_thread = None
         self.scheduler = None
+        self._lock = threading.Lock()
 
         if loop is None:
             self._should_close_loop = None
@@ -554,9 +556,8 @@ class Client(Node):
         if self._loop_thread is not None:
             return
         if not asynchronous and not self.loop._running:
-            from threading import Thread
-            self._loop_thread = Thread(target=self.loop.start,
-                                       name="Client loop")
+            self._loop_thread = threading.Thread(target=self.loop.start,
+                                                 name="Client loop")
             self._loop_thread.daemon = True
             self._loop_thread.start()
             if self._should_close_loop is None:
@@ -579,7 +580,7 @@ class Client(Node):
         if self.status is 'running':
             self.loop.add_callback(self.scheduler_comm.send, msg)
         elif self.status is 'connecting':
-            self._pending_msg_buffer.append(msg)
+            self.loop.add_callback(self._pending_msg_buffer.append, msg)
         else:
             raise Exception("Client not running.  Status: %s" % self.status)
 
@@ -955,8 +956,9 @@ class Client(Node):
 
         skey = tokey(key)
 
-        if skey in self.futures:
-            return self._Future(key, self)
+        with self._lock:
+            if skey in self.futures:
+                return self._Future(key, self)
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1039,10 +1041,10 @@ class Client(Node):
             all(isinstance(i, Iterator) for i in iterables)):
             maxsize = kwargs.pop('maxsize', 0)
             q_out = pyQueue(maxsize=maxsize)
-            t = Thread(target=self._threaded_map,
-                       name="Threaded map()",
-                       args=(q_out, func, iterables),
-                       kwargs=kwargs)
+            t = threading.Thread(target=self._threaded_map,
+                                 name="Threaded map()",
+                                 args=(q_out, func, iterables),
+                                 kwargs=kwargs)
             t.daemon = True
             t.start()
             if isqueue(iterables[0]):
@@ -1248,10 +1250,10 @@ class Client(Node):
         """
         if isqueue(futures):
             qout = pyQueue(maxsize=maxsize)
-            t = Thread(target=self._threaded_gather,
-                       name="Threaded gather()",
-                       args=(futures, qout),
-                       kwargs={'errors': errors, 'direct': direct})
+            t = threading.Thread(target=self._threaded_gather,
+                                 name="Threaded gather()",
+                                 args=(futures, qout),
+                                 kwargs={'errors': errors, 'direct': direct})
             t.daemon = True
             t.start()
             return qout
@@ -1409,10 +1411,11 @@ class Client(Node):
             logger.debug("Starting thread for streaming data")
             qout = pyQueue(maxsize=maxsize)
 
-            t = Thread(target=self._threaded_scatter,
-                       name="Threaded scatter()",
-                       args=(data, qout),
-                       kwargs={'workers': workers, 'broadcast': broadcast})
+            t = threading.Thread(target=self._threaded_scatter,
+                                 name="Threaded scatter()",
+                                 args=(data, qout),
+                                 kwargs={'workers': workers,
+                                         'broadcast': broadcast})
             t.daemon = True
             t.start()
 
@@ -1682,53 +1685,53 @@ class Client(Node):
     def _graph_to_futures(self, dsk, keys, restrictions=None,
             loose_restrictions=None, allow_other_workers=True, priority=None,
             resources=None):
+        with self._lock:
+            keyset = set(keys)
+            flatkeys = list(map(tokey, keys))
+            futures = {key: self._Future(key, self) for key in keyset}
 
-        keyset = set(keys)
-        flatkeys = list(map(tokey, keys))
-        futures = {key: self._Future(key, self) for key in keyset}
+            values = {k for k, v in dsk.items() if isinstance(v, Future)
+                                                and k not in keyset}
+            if values:
+                dsk = dask.optimize.inline(dsk, keys=values)
 
-        values = {k for k, v in dsk.items() if isinstance(v, Future)
-                                            and k not in keyset}
-        if values:
-            dsk = dask.optimize.inline(dsk, keys=values)
+            d = {k: unpack_remotedata(v) for k, v in dsk.items()}
+            extra_keys = set.union(*[v[1] for v in d.values()]) if d else set()
+            dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
+            dsk3 = {k: v for k, v in dsk2.items() if k is not v}
 
-        d = {k: unpack_remotedata(v) for k, v in dsk.items()}
-        extra_keys = set.union(*[v[1] for v in d.values()]) if d else set()
-        dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
-        dsk3 = {k: v for k, v in dsk2.items() if k is not v}
+            if restrictions:
+                restrictions = keymap(tokey, restrictions)
+                restrictions = valmap(list, restrictions)
 
-        if restrictions:
-            restrictions = keymap(tokey, restrictions)
-            restrictions = valmap(list, restrictions)
+            if loose_restrictions is not None:
+                loose_restrictions = list(map(tokey, loose_restrictions))
 
-        if loose_restrictions is not None:
-            loose_restrictions = list(map(tokey, loose_restrictions))
+            dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
-        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
+            for s in dependencies.values():
+                for v in s:
+                    if v not in self.futures:
+                        raise CancelledError(v)
 
-        for s in dependencies.values():
-            for v in s:
-                if v not in self.futures:
-                    raise CancelledError(v)
+            for k, v in dsk3.items():
+                dependencies[k] |= get_dependencies(dsk3, task=v)
 
-        for k, v in dsk3.items():
-            dependencies[k] |= get_dependencies(dsk3, task=v)
+            if priority is None:
+                dependencies2 = {key: {dep for dep in deps if dep in dependencies}
+                                 for key, deps in dependencies.items()}
+                priority = dask.order.order(dsk3, dependencies2)
 
-        if priority is None:
-            dependencies2 = {key: {dep for dep in deps if dep in dependencies}
-                             for key, deps in dependencies.items()}
-            priority = dask.order.order(dsk3, dependencies2)
+            self._send_to_scheduler({'op': 'update-graph',
+                                     'tasks': valmap(dumps_task, dsk3),
+                                     'dependencies': valmap(list, dependencies),
+                                     'keys': list(flatkeys),
+                                     'restrictions': restrictions or {},
+                                     'loose_restrictions': loose_restrictions,
+                                     'priority': priority,
+                                     'resources': resources})
 
-        self._send_to_scheduler({'op': 'update-graph',
-                                 'tasks': valmap(dumps_task, dsk3),
-                                 'dependencies': valmap(list, dependencies),
-                                 'keys': list(flatkeys),
-                                 'restrictions': restrictions or {},
-                                 'loose_restrictions': loose_restrictions,
-                                 'priority': priority,
-                                 'resources': resources})
-
-        return futures
+            return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
             resources=None, sync=True, **kwargs):
@@ -1814,15 +1817,17 @@ class Client(Node):
         --------
         Client.persist: trigger computation of collection's tasks
         """
-        dsk = self._optimize_insert_futures(collection.dask, collection._keys())
+        with self._lock:
+            dsk = self._optimize_insert_futures(collection.dask, collection._keys())
 
-        if dsk is collection.dask:
-            return collection
-        else:
-            return redict_collection(collection, dsk)
+            if dsk is collection.dask:
+                return collection
+            else:
+                return redict_collection(collection, dsk)
 
     def compute(self, collections, sync=False, optimize_graph=True,
-            workers=None, allow_other_workers=False, resources=None, **kwargs):
+                workers=None, allow_other_workers=False, resources=None,
+                **kwargs):
         """ Compute dask collections on cluster
 
         Parameters
@@ -1866,7 +1871,6 @@ class Client(Node):
         Also support single arguments
 
         >>> xx = client.compute(x)  # doctest: +SKIP
-
 
         See Also
         --------
@@ -1953,7 +1957,6 @@ class Client(Node):
         --------
         >>> xx = client.persist(x)  # doctest: +SKIP
         >>> xx, yy = client.persist([x, y])  # doctest: +SKIP
-
 
         See Also
         --------
@@ -2772,7 +2775,7 @@ class as_completed(object):
             futures = []
         self.futures = defaultdict(lambda: 0)
         self.queue = pyQueue()
-        self.lock = Lock()
+        self.lock = threading.Lock()
         self.loop = loop or default_client().loop
         self.condition = Condition()
         self.with_results = with_results

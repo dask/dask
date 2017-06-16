@@ -2,14 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 from operator import add
 
-from collections import Iterator
+from collections import Iterator, deque
 from concurrent.futures import CancelledError
 from datetime import timedelta
 import gc
 import itertools
 import os
 import pickle
-from random import random, choice
+import random
 import sys
 from threading import Thread, Semaphore
 from time import sleep
@@ -715,15 +715,14 @@ def test_map_quotes(c, s, a, b):
 
 @gen_cluster()
 def test_two_consecutive_clients_share_results(s, a, b):
-    from random import randint
     c = yield Client((s.ip, s.port), asynchronous=True)
 
-    x = c.submit(randint, 0, 1000, pure=True)
+    x = c.submit(random.randint, 0, 1000, pure=True)
     xx = yield x
 
     f = yield Client((s.ip, s.port), asynchronous=True)
 
-    y = f.submit(randint, 0, 1000, pure=True)
+    y = f.submit(random.randint, 0, 1000, pure=True)
     yy = yield y
 
     assert xx == yy
@@ -3339,7 +3338,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
             done.release()
 
         for i in range(count):
-            loop.add_callback(start_worker, random() / 5, random() / 5,
+            loop.add_callback(start_worker, random.random() / 5, random.random() / 5,
                               repeat=repeat)
 
         with Client(s['address'], loop=loop) as c:
@@ -4179,6 +4178,64 @@ def test_quiet_client_shutdown(loop):
 
         out = logger.getvalue()
         assert not out
+
+
+def test_threadsafe(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f(_):
+                d = deque(maxlen=50)
+                for i in range(100):
+                    future = c.submit(inc, random.randint(0, 100))
+                    d.append(future)
+                    sleep(0.001)
+                c.gather(list(d))
+                total = c.submit(sum, list(d))
+                return total.result()
+
+            from multiprocessing.pool import ThreadPool
+            pool = ThreadPool(20)
+            results = pool.map(f, range(20))
+            assert results and all(results)
+
+
+@slow
+def test_threadsafe_get(loop):
+    da = pytest.importorskip('dask.array')
+    x = da.arange(100, chunks=(10,))
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f(_):
+                total = 0
+                for i in range(20):
+                    total += (x + random.randint(0, 20)).sum().compute()
+                    sleep(0.001)
+                return total
+
+            from multiprocessing.pool import ThreadPool
+            pool = ThreadPool(30)
+            results = pool.map(f, range(30))
+            assert results and all(results)
+
+
+@slow
+def test_threadsafe_compute(loop):
+    da = pytest.importorskip('dask.array')
+    x = da.arange(100, chunks=(10,))
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f(_):
+                total = 0
+                for i in range(20):
+                    future = c.compute((x + random.randint(0, 20)).sum())
+                    total += future.result()
+                    sleep(0.001)
+                return total
+
+            from multiprocessing.pool import ThreadPool
+            pool = ThreadPool(30)
+            results = pool.map(f, range(30))
+            assert results and all(results)
 
 
 if sys.version_info >= (3, 5):
