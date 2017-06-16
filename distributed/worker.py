@@ -1657,7 +1657,7 @@ class Worker(WorkerBase):
         self.release_dep(dep)
 
     @gen.coroutine
-    def handle_missing_dep(self, *deps):
+    def handle_missing_dep(self, *deps, **kwargs):
         original_deps = list(deps)
         self.log.append(('handle-missing', deps))
         try:
@@ -1693,8 +1693,14 @@ class Worker(WorkerBase):
                         if key in self.waiting_for_data:
                             self.data_needed.append(key)
 
-        except Exception as e:
-            logger.exception(e)
+        except Exception:
+            logger.error("Handle missing dep failed, retrying", exc_info=True)
+            retries = kwargs.get('retries', 5)
+            self.log.append(('handle-missing-failed', retries, deps))
+            if retries > 0:
+                yield self.handle_missing_dep(self, *deps, retries=retries - 1)
+            else:
+                raise
         finally:
             for dep in original_deps:
                 self._missing_dep_flight.remove(dep)
