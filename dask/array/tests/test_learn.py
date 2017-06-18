@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 pytest.importorskip('sklearn')
 
@@ -30,8 +28,7 @@ Y = da.from_array(y, chunks=(3,))
 Z = da.from_array(z, chunks=(2, 2))
 
 
-@pytest.mark.skipif(sys.version_info >= (3, 6),
-                    reason="Hangs")
+@pytest.mark.skipif(reason="Hangs")
 def test_fit():
     sgd = SGDClassifier()
 
