@@ -7,6 +7,11 @@ import uuid
 from tornado import gen
 import tornado.queues
 
+try:
+    from cytoolz import assoc
+except ImportError:
+    from toolz import assoc
+
 from .client import Future, _get_global_client, Client
 from .utils import tokey, sync
 
@@ -76,6 +81,17 @@ class QueueExtension(object):
     @gen.coroutine
     def get(self, stream=None, name=None, client=None, timeout=None,
             batch=False):
+        def process(record):
+            """ Add task status if known """
+            if record['type'] == 'Future':
+                try:
+                    state = self.scheduler.task_state[record['value']]
+                except KeyError:
+                    state = 'lost'
+                return assoc(record, 'state', state)
+            else:
+                return record
+
         if batch:
             q = self.queues[name]
             out = []
@@ -91,9 +107,11 @@ class QueueExtension(object):
                 for i in range(batch):
                     record = yield q.get()
                     out.append(record)
+            out = [process(o) for o in out]
             raise gen.Return(out)
         else:
             record = yield self.queues[name].get(timeout=timeout)
+            record = process(record)
             raise gen.Return(record)
 
     def qsize(self, stream=None, name=None, client=None):
@@ -184,14 +202,17 @@ class Queue(object):
         resp = yield self.client.scheduler.queue_get(timeout=timeout,
                                                      name=self.name,
                                                      batch=batch)
+
         def process(d):
             if d['type'] == 'Future':
-                value = Future(d['value'], self.client, inform=True)
+                value = Future(d['value'], self.client, inform=True,
+                               state=d['state'])
                 self.client._send_to_scheduler({'op': 'queue-future-release',
                                                 'name': self.name,
                                                 'key': d['value']})
             else:
                 value = d['value']
+
             return value
 
         if batch is False:

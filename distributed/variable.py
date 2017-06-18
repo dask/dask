@@ -7,6 +7,11 @@ import uuid
 from tornado import gen
 import tornado.locks
 
+try:
+    from cytoolz import merge
+except ImportError:
+    from toolz import merge
+
 from .client import Future, _get_global_client, Client
 from .metrics import time
 from .utils import tokey, log_errors
@@ -82,9 +87,14 @@ class VariableExtension(object):
             yield self.started.wait(timeout=left)
         record = self.variables[name]
         if record['type'] == 'Future':
+            key = record['value']
             token = uuid.uuid4().hex
-            record['token'] = token
-            self.waiting[record['value'], name].add(token)
+            try:
+                state = self.scheduler.task_state[key]
+            except KeyError:
+                state = 'lost'
+            record = merge(record, {'token': token, 'state': state})
+            self.waiting[key, name].add(token)
         raise gen.Return(record)
 
     @gen.coroutine
@@ -161,7 +171,7 @@ class Variable(object):
                                                      name=self.name,
                                                      client=self.client.id)
         if d['type'] == 'Future':
-            value = Future(d['value'], self.client, inform=True)
+            value = Future(d['value'], self.client, inform=True, state=d['state'])
             self.client._send_to_scheduler({'op': 'variable-future-release',
                                             'name': self.name,
                                             'key': d['value'],

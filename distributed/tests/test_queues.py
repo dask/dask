@@ -9,10 +9,10 @@ import pytest
 from toolz import take
 from tornado import gen
 
-from distributed import Client, Queue, Nanny, worker_client
+from distributed import Client, Queue, Nanny, worker_client, wait
 from distributed.metrics import time
 from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
-                                    slow)
+                                    slow, div)
 
 
 @gen_cluster(client=True)
@@ -194,3 +194,36 @@ def test_get_many(c, s, a, b):
     with pytest.raises(gen.TimeoutError):
         data = yield gen.with_timeout(timedelta(seconds=0.100),
                                       xx.get(batch=2))
+
+
+@gen_cluster(client=True)
+def test_Future_knows_status_immediately(c, s, a, b):
+    x = yield c.scatter(123)
+    q = yield Queue('q')
+    yield q.put(x)
+
+    c2 = yield Client(s.address, asynchronous=True)
+    q2 = yield Queue('q', client=c2)
+    future = yield q2.get()
+    assert future.status == 'finished'
+
+    x = c.submit(div, 1, 0)
+    yield wait(x)
+    yield q.put(x)
+
+    future2 = yield q2.get()
+    assert future2.status == 'error'
+    with pytest.raises(Exception):
+        yield future2
+
+    start = time()
+    while True:  # we learn about the true error eventually
+        try:
+            yield future2
+        except ZeroDivisionError:
+            break
+        except Exception:
+            assert time() < start + 5
+            yield gen.sleep(0.05)
+
+    yield c2.shutdown()

@@ -94,7 +94,7 @@ class Future(WrappedKey):
     _cb_executor = None
     _cb_executor_pid = None
 
-    def __init__(self, key, client, inform=False):
+    def __init__(self, key, client, inform=False, state=None):
         self.key = key
         self._cleared = False
         tkey = tokey(key)
@@ -111,6 +111,14 @@ class Future(WrappedKey):
             self.client._send_to_scheduler({'op': 'client-desires-keys',
                                             'keys': [tokey(key)],
                                             'client': self.client.id})
+
+        if state is not None:
+            try:
+                handler = self.client._state_handlers[state]
+            except KeyError:
+                pass
+            else:
+                handler(key=key)
 
     @property
     def executor(self):
@@ -467,6 +475,12 @@ class Client(Node):
             'task-erred': self._handle_task_erred,
             'restart': self._handle_restart,
             'error': self._handle_error
+        }
+
+        self._state_handlers = {
+            'memory': self._handle_key_in_memory,
+            'lost': self._handle_lost_data,
+            'erred': self._handle_task_erred
         }
 
         super(Client, self).__init__(connection_args=self.connection_args,

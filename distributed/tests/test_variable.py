@@ -8,10 +8,10 @@ import pytest
 from toolz import take
 from tornado import gen
 
-from distributed import Client, Variable, worker_client, Nanny
+from distributed import Client, Variable, worker_client, Nanny, wait
 from distributed.metrics import time
 from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
-                                    slow)
+                                    slow, div)
 
 
 @gen_cluster(client=True)
@@ -172,3 +172,36 @@ def test_race(c, s, *workers):
         yield gen.sleep(0.01)
         if not time() - start < 2:
             import pdb; pdb.set_trace()
+
+
+@gen_cluster(client=True)
+def test_Future_knows_status_immediately(c, s, a, b):
+    x = yield c.scatter(123)
+    v = Variable('x')
+    yield v.set(x)
+
+    c2 = yield Client(s.address, asynchronous=True)
+    v2 = Variable('x', client=c2)
+    future = yield v2.get()
+    assert future.status == 'finished'
+
+    x = c.submit(div, 1, 0)
+    yield wait(x)
+    yield v.set(x)
+
+    future2 = yield v2.get()
+    assert future2.status == 'error'
+    with pytest.raises(Exception):
+        yield future2
+
+    start = time()
+    while True:  # we learn about the true error eventually
+        try:
+            yield future2
+        except ZeroDivisionError:
+            break
+        except Exception:
+            assert time() < start + 5
+            yield gen.sleep(0.05)
+
+    yield c2.shutdown()
