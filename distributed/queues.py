@@ -74,9 +74,27 @@ class QueueExtension(object):
             del self.future_refcount[name, key]
 
     @gen.coroutine
-    def get(self, stream=None, name=None, client=None, timeout=None):
-        record = yield self.queues[name].get(timeout=timeout)
-        raise gen.Return(record)
+    def get(self, stream=None, name=None, client=None, timeout=None,
+            batch=False):
+        if batch:
+            q = self.queues[name]
+            out = []
+            if batch is True:
+                while not q.empty():
+                    record = yield q.get()
+                    out.append(record)
+            else:
+                if timeout is not None:
+                    msg = ("Dask queues don't support simultaneous use of "
+                           "integer batch sizes and timeouts")
+                    raise NotImplementedError(msg)
+                for i in range(batch):
+                    record = yield q.get()
+                    out.append(record)
+            raise gen.Return(out)
+        else:
+            record = yield self.queues[name].get(timeout=timeout)
+            raise gen.Return(record)
 
     def qsize(self, stream=None, name=None, client=None):
         return self.queues[name].qsize()
@@ -143,25 +161,45 @@ class Queue(object):
         """ Put data into the queue """
         return self.client.sync(self._put, value, timeout=timeout)
 
-    def get(self, timeout=None):
-        """ Get data from the queue """
-        return self.client.sync(self._get, timeout=timeout)
+    def get(self, timeout=None, batch=False):
+        """ Get data from the queue
+
+        Parameters
+        ----------
+        timeout: Number (optional)
+            Time in seconds to wait before timing out
+        batch: boolean, int (optional)
+            If True then return all elements currently waiting in the queue.
+            If an integer than return that many elements from the queue
+            If False (default) then return one item at a time
+         """
+        return self.client.sync(self._get, timeout=timeout, batch=batch)
 
     def qsize(self):
         """ Current number of elements in the queue """
         return self.client.sync(self._qsize)
 
     @gen.coroutine
-    def _get(self, timeout=None):
-        d = yield self.client.scheduler.queue_get(timeout=timeout, name=self.name)
-        if d['type'] == 'Future':
-            value = Future(d['value'], self.client, inform=True)
-            self.client._send_to_scheduler({'op': 'queue-future-release',
-                                            'name': self.name,
-                                            'key': d['value']})
+    def _get(self, timeout=None, batch=False):
+        resp = yield self.client.scheduler.queue_get(timeout=timeout,
+                                                     name=self.name,
+                                                     batch=batch)
+        def process(d):
+            if d['type'] == 'Future':
+                value = Future(d['value'], self.client, inform=True)
+                self.client._send_to_scheduler({'op': 'queue-future-release',
+                                                'name': self.name,
+                                                'key': d['value']})
+            else:
+                value = d['value']
+            return value
+
+        if batch is False:
+            result = process(resp)
         else:
-            value = d['value']
-        raise gen.Return(value)
+            result = list(map(process, resp))
+
+        raise gen.Return(result)
 
     @gen.coroutine
     def _qsize(self):
