@@ -1769,7 +1769,7 @@ def test_abs():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[['A', 'B']].abs(), df[['A', 'B']].abs())
-    pytest.raises(TypeError, lambda: ddf.C.abs())
+    pytest.raises(ValueError, lambda: ddf.C.abs())
     pytest.raises(TypeError, lambda: ddf.abs())
 
 
@@ -2642,4 +2642,4 @@ def test_meaningful_error_on_wrong_meta():
     with pytest.raises(ValueError) as e_info:
         ddf["A"].mean()
     assert "foofoo" not in e_info.value.message
-    assert "numeric reduction not supported" in e_info.value.message
+    assert "not supported" in e_info.value.message
