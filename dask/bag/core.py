@@ -1989,5 +1989,5 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
-    res = pd.DataFrame(seq, columns=list(columns))
+    res = pd.DataFrame(reify(seq), columns=list(columns))
     return res.astype(dtypes, copy=False)

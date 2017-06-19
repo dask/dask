@@ -1,4 +1,4 @@
-from collections import Iterator, namedtuple
+from collections import namedtuple
 from operator import add, setitem
 import pickle
 from random import random
@@ -32,6 +32,10 @@ def test_to_task_dask():
     assert task == x
     assert dict(dask) == {}
 
+    task, dask = to_task_dask(slice(a, b, 3))
+    assert task == (slice, 'a', 'b', 3)
+    assert dict(dask) == merge(a.dask, b.dask)
+
     # Issue https://github.com/dask/dask/issues/2107
     class MyClass(dict):
         pass
@@ -58,6 +62,8 @@ def test_operators():
     a = delayed([1, 2, 3])
     assert a[0].compute() == 1
     assert (a + a).compute() == [1, 2, 3, 1, 2, 3]
+    b = delayed(2)
+    assert a[:b].compute() == [1, 2]
 
     a = delayed(10)
     assert (a + 1).compute() == 11
@@ -154,7 +160,6 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-@pytest.mark.xfail
 def test_iterators():
     a = delayed(1)
     b = delayed(2)
@@ -163,7 +168,6 @@ def test_iterators():
     assert c.compute() == 3
 
     def f(seq):
-        assert isinstance(seq, Iterator)
         return sum(seq)
 
     c = delayed(f)(iter([a, b]))

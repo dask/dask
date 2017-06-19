@@ -602,6 +602,7 @@ def test_can_use_dict_to_make_concrete():
 
 @pytest.mark.slow
 @pytest.mark.network
+@pytest.mark.skip(reason="Hangs")
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
@@ -818,6 +819,13 @@ def test_to_dataframe():
     # Single column
     b = b.pluck('a')
     sol = sol[['a']]
+    df = b.to_dataframe(columns=sol)
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
+
+    # Works with iterators
+    b = db.from_sequence(range(100), npartitions=5).map_partitions(iter)
+    sol = pd.DataFrame({'a': range(100)})
     df = b.to_dataframe(columns=sol)
     dd.utils.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)

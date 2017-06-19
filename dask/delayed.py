@@ -64,26 +64,33 @@ def to_task_dask(expr):
     """
     if isinstance(expr, Delayed):
         return expr.key, expr.dask
+
     if isinstance(expr, base.Base):
         name = 'finalize-' + tokenize(expr, pure=True)
         keys = expr._keys()
         dsk = expr._optimize(ensure_dict(expr.dask), keys)
         dsk[name] = (expr._finalize, (concrete, keys))
         return name, dsk
-    if isinstance(expr, tuple) and type(expr) != tuple:
-        return expr, {}
-    if isinstance(expr, (Iterator, list, tuple, set)):
+
+    if isinstance(expr, Iterator):
+        expr = list(expr)
+    typ = type(expr)
+
+    if typ in (list, tuple, set):
         args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
         dsk = sharedict.merge(*dasks)
         # Ensure output type matches input type
-        if isinstance(expr, (tuple, set)):
-            return (type(expr), args), dsk
-        else:
-            return args, dsk
-    if type(expr) is dict:
+        return (args, dsk) if typ is list else ((typ, args), dsk)
+
+    if typ is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
+
+    if typ is slice:
+        args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
+        return (slice,) + tuple(args), dsk
+
     return expr, {}
 
 
