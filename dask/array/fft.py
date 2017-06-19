@@ -228,9 +228,9 @@ def _fftfreq_helper(n, d=1.0, chunks=None, real=False):
     s = n // 2 + 1 if real else n
     t = l - s
 
-    chunks = _normalize_chunks(chunks, (s,))[0] + (t,)
+    chunks = _normalize_chunks(chunks, (s,))
 
-    r = _linspace(0, 1, l, chunks=chunks)
+    r = _linspace(0, 1, l, chunks=(chunks[0] + (t,),))
 
     if real:
         n_2 = n // 2 + 1
