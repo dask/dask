@@ -239,6 +239,9 @@ def _fftfreq_helper(n, d=1.0, chunks=None, real=False):
         n_2 = (n + 1) // 2
         r = _concatenate([r[:n_2], r[n_2:-1] - 1])
 
+    if r.chunks != chunks:
+        r = r.rechunk(chunks)
+
     r /= d
 
     return r
