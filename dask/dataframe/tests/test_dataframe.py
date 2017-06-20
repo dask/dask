@@ -2640,4 +2640,4 @@ def test_better_errors_object_reductions():
     ds = dd.from_pandas(s, npartitions=2)
     with pytest.raises(ValueError) as err:
         ds.mean()
-    assert err.value.message == "`mean` not supported with object series"
+    assert str(err.value) == "`mean` not supported with object series"
