@@ -2634,12 +2634,10 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
-def test_meaningful_error_on_wrong_meta():
-    df = pd.DataFrame({"A": [1, 2, 3]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    # simulate erroneous meta data
-    ddf._meta = pd.DataFrame(columns=["A"])
-    with pytest.raises(ValueError) as e_info:
-        ddf["A"].mean()
-    assert "foofoo" not in e_info.value.message
-    assert "not supported" in e_info.value.message
+def test_better_errors_object_reductions():
+    # GH2452
+    s = pd.Series(['a', 'b', 'c', 'd'])
+    ds = dd.from_pandas(s, npartitions=2)
+    with pytest.raises(ValueError) as err:
+        ds.mean()
+    assert err.value.message == "`mean` not supported with object series"
