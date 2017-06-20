@@ -5,6 +5,7 @@ import gc
 import os
 import signal
 import sys
+import threading
 from time import sleep
 import weakref
 
@@ -37,6 +38,10 @@ def exit_with_signal(signum):
 def wait():
     while True:
         sleep(0.01)
+
+def threads_info(q):
+    q.put(len(threading.enumerate()))
+    q.put(threading.current_thread().name)
 
 
 @gen_test()
@@ -215,6 +220,21 @@ def test_exit_callback():
     yield proc.terminate()
     yield evt.wait(timedelta(seconds=3))
     assert evt.is_set()
+
+
+@gen_test()
+def test_child_main_thread():
+    """
+    The main thread in the child should be called "MainThread".
+    """
+    q = mp_context.Queue()
+    proc = AsyncProcess(target=threads_info, args=(q,))
+    yield proc.start()
+    yield proc.join()
+    n_threads = q.get()
+    main_name = q.get()
+    assert n_threads == 1
+    assert main_name == "MainThread"
 
 
 @pytest.mark.skipif(sys.platform.startswith('win'),

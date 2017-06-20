@@ -20,13 +20,15 @@ from tornado.ioloop import IOLoop
 logger = logging.getLogger(__name__)
 
 
-def _call_and_set_future(future, func, *args, **kwargs):
+def _call_and_set_future(loop, future, func, *args, **kwargs):
     try:
         res = func(*args, **kwargs)
     except:
-        future.set_exc_info(sys.exc_info())
+        # Tornado futures are not thread-safe, need to
+        # set_result() / set_exc_info() from the loop's thread
+        loop.add_callback(future.set_exc_info, sys.exc_info())
     else:
-        future.set_result(res)
+        loop.add_callback(future.set_result, res)
 
 
 class _ProcessState(object):
@@ -48,29 +50,34 @@ class AsyncProcess(object):
         self._state = _ProcessState()
         self._loop = loop or IOLoop.current(instance=False)
 
-        self._process = mp_context.Process(target=target, name=name,
-                                           args=args, kwargs=kwargs)
+        self._process = mp_context.Process(target=self._run, name=name,
+                                           args=(target, args, kwargs))
         _dangling.add(self._process)
+        self._name = self._process.name
         self._watch_q = PyQueue()
         self._exit_future = Future()
         self._exit_callback = None
 
         self._start_thread()
 
+    def __repr__(self):
+        return "<%s %s>" % (self.__class__.__name__, self._name)
+
     def _start_thread(self):
         self._thread = threading.Thread(
             target=self._watch,
-            name="AsyncProcess %s watch" % self._process.name,
-            args=(weakref.ref(self), self._process, self._state,
-                  self._watch_q, self._exit_future,))
+            name="AsyncProcess %s watch" % self.name,
+            args=(weakref.ref(self), self._process, self._loop,
+                  self._state, self._watch_q, self._exit_future,))
         self._thread.daemon = True
         self._thread.start()
 
-        def stop_thread(q, t):
-            q.put({'op': 'stop'})
-            t.join()
+        def stop_thread(q):
+            q.put_nowait({'op': 'stop'})
+            # We don't join the thread here as a finalizer can be called
+            # asynchronously from anywhere
 
-        self._finalizer = finalize(self, stop_thread, q=self._watch_q, t=self._thread)
+        self._finalizer = finalize(self, stop_thread, q=self._watch_q)
         self._finalizer.atexit = False
 
     def _do_start(self):
@@ -89,14 +96,23 @@ class AsyncProcess(object):
         self._exit_future.set_result(exitcode)
 
     @classmethod
-    def _watch(cls, selfref, process, state, q, exit_future):
+    def _run(cls, target, args, kwargs):
+        # Child process entry point
+        threading.current_thread().name = "MainThread"
+        target(*args, **kwargs)
+
+    @classmethod
+    def _watch(cls, selfref, process, loop, state, q, exit_future):
         # As multiprocessing.Process is not thread-safe, we run all
         # blocking operations from this single loop and ship results
         # back to the caller when needed.
+        r = repr(selfref())
+
         def _start():
             process.start()
             state.is_alive = True
             state.pid = process.pid
+            logger.debug("[%s] created process with pid %r" % (r, state.pid))
 
         def _process_one_message(timeout):
             try:
@@ -104,11 +120,12 @@ class AsyncProcess(object):
             except Empty:
                 pass
             else:
+                logger.debug("[%s] got message %r" % (r, msg))
                 op = msg['op']
                 if op == 'start':
-                    _call_and_set_future(msg['future'], _start)
+                    _call_and_set_future(loop, msg['future'], _start)
                 elif op == 'terminate':
-                    _call_and_set_future(msg['future'], process.terminate)
+                    _call_and_set_future(loop, msg['future'], process.terminate)
                 elif op == 'stop':
                     raise SystemExit
                 else:
@@ -132,6 +149,8 @@ class AsyncProcess(object):
             # Did process end?
             exitcode = process.exitcode
             if exitcode is not None:
+                logger.debug("[%s] process %r exited with code %r",
+                             r, state.pid, exitcode)
                 state.is_alive = False
                 state.exitcode = exitcode
                 # Make sure the process is removed from the global list
@@ -196,7 +215,7 @@ class AsyncProcess(object):
 
     @property
     def name(self):
-        return self._process.name
+        return self._name
 
     @property
     def daemon(self):
