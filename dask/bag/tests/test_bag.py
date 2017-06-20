@@ -823,12 +823,13 @@ def test_to_dataframe():
     dd.utils.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
 
-    # Works with iterators
-    b = db.from_sequence(range(100), npartitions=5).map_partitions(iter)
+    # Works with iterators and tuples
     sol = pd.DataFrame({'a': range(100)})
-    df = b.to_dataframe(columns=sol)
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
+    b = db.from_sequence(range(100), npartitions=5)
+    for f in [iter, tuple]:
+        df = b.map_partitions(f).to_dataframe(columns=sol)
+        dd.utils.assert_eq(df, sol, check_index=False)
+        check_parts(df, sol)
 
 
 ext_open = [('gz', GzipFile), ('', open)]
