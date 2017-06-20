@@ -240,14 +240,10 @@ def rfftfreq(n, d=1.0, chunks=None):
     n = int(n)
     d = float(d)
 
-    def _rfftfreq_block(i, n, d):
-        r = i.copy()
-        r /= n * d
-        return r
-
     r = _arange(n // 2 + 1, dtype=float, chunks=chunks)
+    r /= n * d
 
-    return r.map_blocks(_rfftfreq_block, dtype=float, n=n, d=d)
+    return r
 
 
 def _fftshift_helper(x, axes=None, inverse=False):
