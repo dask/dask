@@ -12,11 +12,8 @@ try:
 except ImportError:
     scipy = None
 
-from .creation import linspace as _linspace
-from .core import (
-    concatenate as _concatenate,
-    normalize_chunks as _normalize_chunks,
-)
+from .core import concatenate as _concatenate
+from .creation import arange as _arange
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -221,40 +218,32 @@ hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
 ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
 
 
-def _fftfreq_helper(n, d=1.0, chunks=None, real=False):
-    n = int(n)
-
-    l = n + 1
-    s = n // 2 + 1 if real else n
-    t = l - s
-
-    chunks = _normalize_chunks(chunks, (s,))
-
-    r = _linspace(0, 1, l, chunks=(chunks[0] + (t,),))
-
-    if real:
-        n_2 = n // 2 + 1
-        r = r[:n_2]
-    else:
-        n_2 = (n + 1) // 2
-        r = _concatenate([r[:n_2], r[n_2:-1] - 1])
-
-    if r.chunks != chunks:
-        r = r.rechunk(chunks)
-
-    r /= d
-
+def _fftfreq_block(i, n, d):
+    r = i.copy()
+    r[i >= (n + 1) // 2] -= n
+    r /= n * d
     return r
 
 
 @wraps(np.fft.fftfreq)
 def fftfreq(n, d=1.0, chunks=None):
-    return _fftfreq_helper(n, d=d, chunks=chunks, real=False)
+    n = int(n)
+    d = float(d)
+
+    r = _arange(n, dtype=float, chunks=chunks)
+
+    return r.map_blocks(_fftfreq_block, dtype=float, n=n, d=d)
 
 
 @wraps(np.fft.rfftfreq)
 def rfftfreq(n, d=1.0, chunks=None):
-    return _fftfreq_helper(n, d=d, chunks=chunks, real=True)
+    n = int(n)
+    d = float(d)
+
+    r = _arange(n // 2 + 1, dtype=float, chunks=chunks)
+    r /= n * d
+
+    return r
 
 
 def _fftshift_helper(x, axes=None, inverse=False):
