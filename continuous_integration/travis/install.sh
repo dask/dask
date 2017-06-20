@@ -26,10 +26,6 @@ echo "numpy $NUMPY" >> $CONDA_PREFIX/conda-meta/pinned
 echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
 
 # Install dependencies.
-# XXX: Due to a weird conda dependency resolution issue, we need to install
-# dependencies in two separate calls, otherwise we sometimes get version
-# incompatible with the installed version of numpy leading to crashes. This
-# seems to have to do with differences between conda-forge and defaults.
 conda install -q -c conda-forge \
     numpy \
     pandas \
@@ -38,8 +34,10 @@ conda install -q -c conda-forge \
     bokeh \
     boto3 \
     chest \
+    cloudpickle \
     coverage \
     cytoolz \
+    distributed \
     graphviz \
     h5py \
     ipython \
@@ -53,19 +51,13 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
-# Specify numpy/pandas here to prevent upgrade/downgrade
-conda install -q -c conda-forge \
-    distributed \
-    cloudpickle \
-    graphviz \
-
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
 pip install -q git+https://github.com/mrocklin/sparse --upgrade --no-deps
 pip install -q git+https://github.com/dask/s3fs --upgrade --no-deps
 
-if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
+if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.13.0' ]]; then
     conda install -q -c conda-forge numba cython
     pip install -q git+https://github.com/dask/fastparquet
 fi
@@ -93,6 +85,3 @@ pip install -q \
 pip install -q --no-deps -e .[complete]
 echo pip freeze
 pip freeze
-
-# Display fixed versions for debugging
-python -c "import numpy,pandas;print('numpy: %s' % numpy.__version__);print('pandas: %s' % pandas.__version__)"
