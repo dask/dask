@@ -1769,7 +1769,7 @@ def test_abs():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[['A', 'B']].abs(), df[['A', 'B']].abs())
-    pytest.raises(TypeError, lambda: ddf.C.abs())
+    pytest.raises(ValueError, lambda: ddf.C.abs())
     pytest.raises(TypeError, lambda: ddf.abs())
 
 
@@ -2632,3 +2632,12 @@ def test_boundary_slice_same(index, left, right):
     df = pd.DataFrame({"A": range(len(index))}, index=index)
     result = boundary_slice(df, left, right)
     tm.assert_frame_equal(result, df)
+
+
+def test_better_errors_object_reductions():
+    # GH2452
+    s = pd.Series(['a', 'b', 'c', 'd'])
+    ds = dd.from_pandas(s, npartitions=2)
+    with pytest.raises(ValueError) as err:
+        ds.mean()
+    assert str(err.value) == "`mean` not supported with object series"
