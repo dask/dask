@@ -5,7 +5,6 @@ from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
-from contextlib import contextmanager
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
