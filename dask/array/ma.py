@@ -1,12 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import wraps, update_wrapper
+from functools import wraps
 from distutils.version import LooseVersion
 
 import numpy as np
 
 from ..base import normalize_token
-from .core import concatenate_lookup, tensordot_lookup, map_blocks, Array
+from .core import (concatenate_lookup, tensordot_lookup, map_blocks, elemwise,
+                   asanyarray)
 
 
 if LooseVersion(np.__version__) < '1.11.0':
@@ -17,14 +18,19 @@ if LooseVersion(np.__version__) < '1.11.0':
 def normalize_masked_array(x):
     data = normalize_token(x.data)
     mask = normalize_token(x.mask)
-    return (data, mask, x.fill_value)
+    fill_value = normalize_token(x.fill_value)
+    return (data, mask, fill_value)
 
 
 @concatenate_lookup.register(np.ma.masked_array)
 def _concatenate(arrays, axis=0):
-    fill_values = [i.fill_value for i in arrays if hasattr(i, 'fill_value')]
     out = np.ma.concatenate(arrays, axis=axis)
+    fill_values = [i.fill_value for i in arrays if hasattr(i, 'fill_value')]
+    if any(isinstance(f, np.ndarray) for f in fill_values):
+        raise ValueError("Dask doesn't support masked array's with "
+                         "non-scalar `fill_value`s")
     if fill_values:
+        # If all the fill_values are the same copy over the fill value
         fill_values = np.unique(fill_values)
         if len(fill_values) == 1:
             out.fill_value = fill_values[0]
@@ -101,65 +107,88 @@ def _tensordot(a, b, axes=2):
 
 @wraps(np.ma.filled)
 def filled(a, fill_value=None):
-    return map_blocks(np.ma.filled, a, fill_value=fill_value)
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.filled, fill_value=fill_value)
 
 
 def _wrap_masked(f):
-    return update_wrapper(lambda a, value: map_blocks(f, a, value), f)
+
+    @wraps(f)
+    def _(a, value):
+        a = asanyarray(a)
+        value = asanyarray(value)
+        return elemwise(f, a, value)
+
+    return _
 
 
 masked_greater = _wrap_masked(np.ma.masked_greater)
 masked_greater_equal = _wrap_masked(np.ma.masked_greater_equal)
 masked_less = _wrap_masked(np.ma.masked_less)
 masked_less_equal = _wrap_masked(np.ma.masked_less_equal)
-masked_equal = _wrap_masked(np.ma.masked_equal)
 masked_not_equal = _wrap_masked(np.ma.masked_not_equal)
+
+
+@wraps(np.ma.masked_equal)
+def masked_equal(a, value):
+    a = asanyarray(a)
+    if getattr(value, 'shape', ()):
+        raise ValueError("da.ma.masked_equal doesn't support array `value`s")
+    return elemwise(np.ma.masked_equal, a, value)
 
 
 @wraps(np.ma.masked_invalid)
 def masked_invalid(a):
-    return map_blocks(np.ma.masked_invalid, a)
+    return asanyarray(a).map_blocks(np.ma.masked_invalid)
 
 
 @wraps(np.ma.masked_inside)
 def masked_inside(x, v1, v2):
-    return map_blocks(np.ma.masked_inside, x, v1, v2)
+    x = asanyarray(x)
+    return x.map_blocks(np.ma.masked_inside, v1, v2)
 
 
 @wraps(np.ma.masked_outside)
 def masked_outside(x, v1, v2):
-    return map_blocks(np.ma.masked_outside, x, v1, v2)
+    x = asanyarray(x)
+    return x.map_blocks(np.ma.masked_outside, v1, v2)
 
 
 @wraps(np.ma.masked_where)
 def masked_where(condition, a):
     cshape = getattr(condition, 'shape', ())
-    if not isinstance(a, Array):
-        raise TypeError("a must be a dask.Array")
     if cshape and cshape != a.shape:
         raise IndexError("Inconsistant shape between the condition and the "
                          "input (got %s and %s)" % (cshape, a.shape))
-    return map_blocks(np.ma.masked_where, condition, a)
+    condition = asanyarray(condition)
+    a = asanyarray(a)
+    return elemwise(np.ma.masked_where, condition, a)
 
 
 @wraps(np.ma.masked_values)
 def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
+    x = asanyarray(x)
+    if getattr(value, 'shape', ()):
+        raise ValueError("da.ma.masked_values doesn't support array `value`s")
     return map_blocks(np.ma.masked_values, x, value, rtol=rtol,
                       atol=atol, shrink=shrink)
 
 
 @wraps(np.ma.fix_invalid)
-def fix_invalid(a, mask=False, fill_value=None):
-    return map_blocks(np.ma.fix_invalid, a, mask, fill_value=fill_value)
+def fix_invalid(a, fill_value=None):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.fix_invalid, fill_value=fill_value)
 
 
 @wraps(np.ma.getdata)
 def getdata(a):
+    a = asanyarray(a)
     return a.map_blocks(np.ma.getdata)
 
 
 @wraps(np.ma.getmaskarray)
 def getmaskarray(a):
+    a = asanyarray(a)
     return a.map_blocks(np.ma.getmaskarray)
 
 
@@ -172,6 +201,9 @@ def _set_fill_value(x, fill_value):
 
 @wraps(np.ma.set_fill_value)
 def set_fill_value(a, fill_value):
+    a = asanyarray(a)
+    if getattr(fill_value, 'shape', ()):
+        raise ValueError("da.ma.set_fill_value doesn't support array `value`s")
     fill_value = np.ma.core._check_fill_value(fill_value, a.dtype)
     res = a.map_blocks(_set_fill_value, fill_value)
     a.dask = res.dask

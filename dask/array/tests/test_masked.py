@@ -1,4 +1,5 @@
 import random
+from itertools import product
 
 import numpy as np
 import pytest
@@ -131,14 +132,23 @@ def test_mixed_output_type():
 
 def test_creation_functions():
     x = np.array([-2, -1, 0, 1, 2] * 20).reshape((10, 10))
+    y = np.array([-2, 0, 1, 1, 0] * 2)
     dx = da.from_array(x, chunks=5)
+    dy = da.from_array(y, chunks=4)
 
-    assert_eq(da.ma.masked_equal(dx, 0), np.ma.masked_equal(x, 0))
+    sol = np.ma.masked_greater(x, y)
+    for (a, b) in product([dx, x], [dy, y]):
+        assert_eq(da.ma.masked_greater(a, b), sol)
+
+    # These are all the same as masked_greater, just check for correct op
     assert_eq(da.ma.masked_greater(dx, 0), np.ma.masked_greater(x, 0))
     assert_eq(da.ma.masked_greater_equal(dx, 0), np.ma.masked_greater_equal(x, 0))
     assert_eq(da.ma.masked_less(dx, 0), np.ma.masked_less(x, 0))
     assert_eq(da.ma.masked_less_equal(dx, 0), np.ma.masked_less_equal(x, 0))
+    assert_eq(da.ma.masked_equal(dx, 0), np.ma.masked_equal(x, 0))
     assert_eq(da.ma.masked_not_equal(dx, 0), np.ma.masked_not_equal(x, 0))
+
+    # masked_where
     assert_eq(da.ma.masked_where(False, dx), np.ma.masked_where(False, x))
     assert_eq(da.ma.masked_where(dx > 2, dx), np.ma.masked_where(x > 2, x))
 
@@ -148,6 +158,15 @@ def test_creation_functions():
     assert_eq(da.ma.masked_inside(dx, -1, 1), np.ma.masked_inside(x, -1, 1))
     assert_eq(da.ma.masked_outside(dx, -1, 1), np.ma.masked_outside(x, -1, 1))
     assert_eq(da.ma.masked_values(dx, -1), np.ma.masked_values(x, -1))
+
+    # masked_equal and masked_values in numpy sets the fill_value to `value`,
+    # which can sometimes be an array. This is hard to support in dask, so we
+    # forbid it. Check that this isn't supported:
+    with pytest.raises(ValueError):
+        da.ma.masked_equal(dx, dy)
+
+    with pytest.raises(ValueError):
+        da.ma.masked_values(dx, dy)
 
     y = x.astype('f8')
     y[0, 0] = y[7, 5] = np.nan
@@ -262,3 +281,6 @@ def test_set_fill_value():
 
     with pytest.raises(TypeError):
         da.ma.set_fill_value(dmx, 1e20)
+
+    with pytest.raises(ValueError):
+        da.ma.set_fill_value(dmx, dx)
