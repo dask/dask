@@ -26,7 +26,7 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
 
     out = []
     for frame in frames:
-        if len(frame) > n or type(frame) is memoryview and frame.nbytes > n:
+        if nbytes(frame) > n:
             if isinstance(frame, bytes):
                 frame = memoryview(frame)
             try:

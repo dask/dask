@@ -71,6 +71,7 @@ def serialize_numpy_ndarray(x):
     try:
         data = data.data
     except ValueError:
+        # "ValueError: cannot include dtype 'M' in a buffer"
         data = data.view('u%d' % fractions.gcd(x.dtype.itemsize, 8)).data
 
     header = {'dtype': dt,
