@@ -1144,9 +1144,9 @@ class Bag(Base):
             Column names to use. If the passed data do not have names
             associated with them, this argument provides names for the columns.
             Otherwise this argument indicates the order of the columns in the
-            result (any names not found in the data will become all-NA columns).
-            Note that if ``meta`` is provided the columns will be taken from
-            ``meta`` instead and this parameter will be ignored.
+            result (any names not found in the data will become all-NA
+            columns).  Note that if ``meta`` is provided, column names will be
+            taken from there and this parameter is invalid.
 
         Examples
         --------
@@ -1173,6 +1173,8 @@ class Bag(Base):
             else:
                 head = self.take(1)[0]
                 meta = pd.DataFrame([head], columns=columns)
+        elif columns is not None:
+            raise ValueError("Can't specify both `meta` and `columns`")
         else:
             meta = dd.utils.make_meta(meta)
         # Serializing the columns and dtypes is much smaller than serializing

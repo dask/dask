@@ -820,6 +820,10 @@ def test_to_dataframe():
         dd.utils.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
 
+    # Error to specify both columns and meta
+    with pytest.raises(ValueError):
+        b.to_dataframe(columns=['a', 'b'], meta=sol)
+
     # Single column
     b = b.pluck('a')
     sol = sol[['a']]
