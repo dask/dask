@@ -1119,7 +1119,7 @@ class Bag(Base):
             msg = "Shuffle method must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, columns=None):
+    def to_dataframe(self, meta=None, columns=None):
         """ Create Dask Dataframe from a Dask Bag
 
         Bag should contain tuples, dict records, or scalars.
@@ -1129,15 +1129,24 @@ class Bag(Base):
 
         Parameters
         ----------
-        columns : pandas.DataFrame or list, optional
-            If a ``pandas.DataFrame``, it should mirror the column names and
-            dtypes of the output dataframe. If a list, it provides the desired
-            column names. If not provided or a list, a single element from
-            the first partition will be computed, triggering a potentially
-            expensive call to ``compute``. Providing a list is only useful for
-            selecting subset of columns, to avoid an internal compute call you
-            must provide a ``pandas.DataFrame`` as dask requires dtype knowledge
-            ahead of time.
+        meta : pd.DataFrame, dict, iterable, optional
+            An empty ``pd.DataFrame`` that matches the dtypes and column names
+            of the output. This metadata is necessary for many algorithms in
+            dask dataframe to work.  For ease of use, some alternative inputs
+            are also available. Instead of a ``DataFrame``, a ``dict`` of
+            ``{name: dtype}`` or iterable of ``(name, dtype)`` can be provided.
+            If not provided or a list, a single element from the first
+            partition will be computed, triggering a potentially expensive call
+            to ``compute``. This may lead to unexpected results, so providing
+            ``meta`` is recommended. For more information, see
+            ``dask.dataframe.utils.make_meta``.
+        columns : sequence, optional
+            Column names to use. If the passed data do not have names
+            associated with them, this argument provides names for the columns.
+            Otherwise this argument indicates the order of the columns in the
+            result (any names not found in the data will become all-NA
+            columns).  Note that if ``meta`` is provided, column names will be
+            taken from there and this parameter is invalid.
 
         Examples
         --------
@@ -1156,11 +1165,18 @@ class Bag(Base):
         """
         import pandas as pd
         import dask.dataframe as dd
-        if isinstance(columns, pd.DataFrame):
-            meta = columns
+        if meta is None:
+            if isinstance(columns, pd.DataFrame):
+                warn("Passing metadata to `columns` is deprecated. Please "
+                     "use the `meta` keyword instead.")
+                meta = columns
+            else:
+                head = self.take(1)[0]
+                meta = pd.DataFrame([head], columns=columns)
+        elif columns is not None:
+            raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            head = self.take(1)[0]
-            meta = pd.DataFrame([head], columns=columns)
+            meta = dd.utils.make_meta(meta)
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)

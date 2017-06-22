@@ -803,6 +803,9 @@ def test_to_dataframe():
     df = b.to_dataframe(columns=['a', 'b'])
     dd.utils.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
+    df = b.to_dataframe(meta=[('a', 'i8'), ('b', 'i8')])
+    dd.utils.assert_eq(df, sol, check_index=False)
+    check_parts(df, sol)
 
     # Elements are dictionaries
     b = b.map(lambda x: dict(zip(['a', 'b'], x)))
@@ -812,14 +815,19 @@ def test_to_dataframe():
     assert df._name == b.to_dataframe()._name
 
     # With metadata specified
-    df = b.to_dataframe(columns=sol)
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
+    for meta in [sol, [('a', 'i8'), ('b', 'i8')]]:
+        df = b.to_dataframe(meta=meta)
+        dd.utils.assert_eq(df, sol, check_index=False)
+        check_parts(df, sol)
+
+    # Error to specify both columns and meta
+    with pytest.raises(ValueError):
+        b.to_dataframe(columns=['a', 'b'], meta=sol)
 
     # Single column
     b = b.pluck('a')
     sol = sol[['a']]
-    df = b.to_dataframe(columns=sol)
+    df = b.to_dataframe(meta=sol)
     dd.utils.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
 
@@ -827,7 +835,7 @@ def test_to_dataframe():
     sol = pd.DataFrame({'a': range(100)})
     b = db.from_sequence(range(100), npartitions=5)
     for f in [iter, tuple]:
-        df = b.map_partitions(f).to_dataframe(columns=sol)
+        df = b.map_partitions(f).to_dataframe(meta=sol)
         dd.utils.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
 
