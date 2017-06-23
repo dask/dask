@@ -6,54 +6,65 @@ import dask
 import dask.array as da
 from dask.optimize import fuse
 from dask.utils import SerializableLock
-from dask.array.core import getarray, getarray_nofancy
+from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import (getitem, optimize, optimize_slices,
                                      fuse_slice)
 from dask.array.utils import assert_eq
 
 
 def test_fuse_getitem():
-    pairs = [((getarray, (getarray, 'x', slice(1000, 2000)), slice(15, 20)),
-              (getarray, 'x', slice(1015, 1020))),
+    pairs = [((getter, (getter, 'x', slice(1000, 2000)), slice(15, 20)),
+              (getter, 'x', slice(1015, 1020))),
 
-             ((getitem, (getarray, 'x', (slice(1000, 2000), slice(100, 200))),
+             ((getitem, (getter, 'x', (slice(1000, 2000), slice(100, 200))),
                         (slice(15, 20), slice(50, 60))),
-              (getarray, 'x', (slice(1015, 1020), slice(150, 160)))),
+              (getter, 'x', (slice(1015, 1020), slice(150, 160)))),
 
-             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), slice(100, 200))),
+             ((getitem, (getter_nofancy, 'x', (slice(1000, 2000), slice(100, 200))),
                         (slice(15, 20), slice(50, 60))),
-              (getarray_nofancy, 'x', (slice(1015, 1020), slice(150, 160)))),
+              (getter_nofancy, 'x', (slice(1015, 1020), slice(150, 160)))),
 
-             ((getarray, (getarray, 'x', slice(1000, 2000)), 10),
-              (getarray, 'x', 1010)),
+             ((getter, (getter, 'x', slice(1000, 2000)), 10),
+              (getter, 'x', 1010)),
 
-             ((getitem, (getarray, 'x', (slice(1000, 2000), 10)),
+             ((getitem, (getter, 'x', (slice(1000, 2000), 10)),
                         (slice(15, 20),)),
-              (getarray, 'x', (slice(1015, 1020), 10))),
+              (getter, 'x', (slice(1015, 1020), 10))),
 
-             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), 10)),
+             ((getitem, (getter_nofancy, 'x', (slice(1000, 2000), 10)),
                         (slice(15, 20),)),
-              (getarray_nofancy, 'x', (slice(1015, 1020), 10))),
+              (getter_nofancy, 'x', (slice(1015, 1020), 10))),
 
-             ((getarray, (getarray, 'x', (10, slice(1000, 2000))),
+             ((getter, (getter, 'x', (10, slice(1000, 2000))),
                (slice(15, 20), )),
-              (getarray, 'x', (10, slice(1015, 1020)))),
+              (getter, 'x', (10, slice(1015, 1020)))),
 
-             ((getarray, (getarray, 'x', (slice(1000, 2000), slice(100, 200))),
+             ((getter, (getter, 'x', (slice(1000, 2000), slice(100, 200))),
                (slice(None, None), slice(50, 60))),
-              (getarray, 'x', (slice(1000, 2000), slice(150, 160)))),
+              (getter, 'x', (slice(1000, 2000), slice(150, 160)))),
 
-             ((getarray, (getarray, 'x', (None, slice(None, None))),
+             ((getter, (getter, 'x', (None, slice(None, None))),
                (slice(None, None), 5)),
-              (getarray, 'x', (None, 5))),
+              (getter, 'x', (None, 5))),
 
-             ((getarray, (getarray, 'x', (slice(1000, 2000), slice(10, 20))),
+             ((getter, (getter, 'x', (slice(1000, 2000), slice(10, 20))),
                (slice(5, 10),)),
-              (getarray, 'x', (slice(1005, 1010), slice(10, 20)))),
+              (getter, 'x', (slice(1005, 1010), slice(10, 20)))),
 
              ((getitem, (getitem, 'x', (slice(1000, 2000),)),
                (slice(5, 10), slice(10, 20))),
-              (getitem, 'x', (slice(1005, 1010), slice(10, 20))))]
+              (getitem, 'x', (slice(1005, 1010), slice(10, 20)))),
+
+             ((getter, (getter, 'x', slice(1000, 2000), True, False), slice(15, 20)),
+              (getter, 'x', slice(1015, 1020))),
+
+             ((getter, (getter, 'x', slice(1000, 2000)), slice(15, 20), True, False),
+              (getter, 'x', slice(1015, 1020))),
+
+             ((getter, (getter_nofancy, 'x', slice(1000, 2000), True, False),
+               slice(15, 20), True, False),
+              (getter_nofancy, 'x', slice(1015, 1020), True, False)),
+             ]
 
     for inp, expected in pairs:
         result = optimize_slices({'y': inp})
@@ -64,19 +75,19 @@ def test_fuse_getitem_lock():
     lock1 = SerializableLock()
     lock2 = SerializableLock()
 
-    pairs = [((getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20)),
-              (getarray, 'x', slice(1015, 1020), lock1)),
+    pairs = [((getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20)),
+              (getter, 'x', slice(1015, 1020), False, lock1)),
 
-             ((getitem, (getarray, 'x', (slice(1000, 2000), slice(100, 200)), lock1),
+             ((getitem, (getter, 'x', (slice(1000, 2000), slice(100, 200)), False, lock1),
                         (slice(15, 20), slice(50, 60))),
-              (getarray, 'x', (slice(1015, 1020), slice(150, 160)), lock1)),
+              (getter, 'x', (slice(1015, 1020), slice(150, 160)), False, lock1)),
 
-             ((getitem, (getarray_nofancy, 'x', (slice(1000, 2000), slice(100, 200)), lock1),
+             ((getitem, (getter_nofancy, 'x', (slice(1000, 2000), slice(100, 200)), False, lock1),
                         (slice(15, 20), slice(50, 60))),
-              (getarray_nofancy, 'x', (slice(1015, 1020), slice(150, 160)), lock1)),
+              (getter_nofancy, 'x', (slice(1015, 1020), slice(150, 160)), False, lock1)),
 
-             ((getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20), lock2),
-              (getarray, (getarray, 'x', slice(1000, 2000), lock1), slice(15, 20), lock2))]
+             ((getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20), False, lock2),
+              (getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20), False, lock2))]
 
     for inp, expected in pairs:
         result = optimize_slices({'y': inp})
@@ -85,30 +96,30 @@ def test_fuse_getitem_lock():
 
 def test_optimize_with_getitem_fusion():
     dsk = {'a': 'some-array',
-           'b': (getarray, 'a', (slice(10, 20), slice(100, 200))),
-           'c': (getarray, 'b', (5, slice(50, 60)))}
+           'b': (getter, 'a', (slice(10, 20), slice(100, 200))),
+           'c': (getter, 'b', (5, slice(50, 60)))}
 
     result = optimize(dsk, ['c'])
-    expected_task = (getarray, 'some-array', (15, slice(150, 160)))
+    expected_task = (getter, 'some-array', (15, slice(150, 160)))
     assert any(v == expected_task for v in result.values())
     assert len(result) < len(dsk)
 
 
 def test_optimize_slicing():
     dsk = {'a': (range, 10),
-           'b': (getarray, 'a', (slice(None, None, None),)),
-           'c': (getarray, 'b', (slice(None, None, None),)),
-           'd': (getarray, 'c', (slice(0, 5, None),)),
-           'e': (getarray, 'd', (slice(None, None, None),))}
+           'b': (getter, 'a', (slice(None, None, None),)),
+           'c': (getter, 'b', (slice(None, None, None),)),
+           'd': (getter, 'c', (slice(0, 5, None),)),
+           'e': (getter, 'd', (slice(None, None, None),))}
 
-    expected = {'e': (getarray, (range, 10), (slice(0, 5, None),))}
+    expected = {'e': (getter, (range, 10), (slice(0, 5, None),))}
     result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
     assert result == expected
 
     # protect output keys
-    expected = {'c': (getarray, (range, 10), (slice(0, None, None),)),
-                'd': (getarray, 'c', (slice(0, 5, None),)),
-                'e': (getarray, 'd', (slice(None, None, None),))}
+    expected = {'c': (getter, (range, 10), (slice(0, None, None),)),
+                'd': (getter, 'c', (slice(0, 5, None),)),
+                'e': (getter, 'd', (slice(None, None, None),))}
     result = optimize_slices(fuse(dsk, ['c', 'd', 'e'], rename_keys=False)[0])
 
     assert result == expected
@@ -157,9 +168,9 @@ def test_nonfusible_fancy_indexing():
 
 
 def test_hard_fuse_slice_cases():
-    dsk = {'x': (getarray, (getarray, 'x', (None, slice(None, None))),
+    dsk = {'x': (getter, (getter, 'x', (None, slice(None, None))),
                  (slice(None, None), 5))}
-    assert optimize_slices(dsk) == {'x': (getarray, 'x', (None, 5))}
+    assert optimize_slices(dsk) == {'x': (getter, 'x', (None, 5))}
 
 
 def test_dont_fuse_numpy_arrays():
@@ -185,33 +196,33 @@ def test_minimize_data_transfer():
 
     assert len(deps) == 4
     for dep in deps:
-        assert dsk[dep][0] in (getitem, getarray)
+        assert dsk[dep][0] in (getitem, getter)
         assert dsk[dep][1] == big_key
 
 
 def test_fuse_slices_with_alias():
     dsk = {'x': np.arange(16).reshape((4, 4)),
-           ('dx', 0, 0): (getarray, 'x', (slice(0, 4), slice(0, 4))),
+           ('dx', 0, 0): (getter, 'x', (slice(0, 4), slice(0, 4))),
            ('alias', 0, 0): ('dx', 0, 0),
            ('dx2', 0): (getitem, ('alias', 0, 0), (slice(None), 0))}
     keys = [('dx2', 0)]
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
     fused_key = set(dsk2).difference(['x', ('dx2', 0)]).pop()
-    assert dsk2[fused_key] == (getarray, 'x', (slice(0, 4), 0))
+    assert dsk2[fused_key] == (getter, 'x', (slice(0, 4), 0))
 
 
-def test_dont_fuse_fancy_indexing_in_getarray_nofancy():
-    dsk = {'a': (getitem, (getarray_nofancy, 'x', (slice(10, 20, None), slice(100, 200, None))),
+def test_dont_fuse_fancy_indexing_in_getter_nofancy():
+    dsk = {'a': (getitem, (getter_nofancy, 'x', (slice(10, 20, None), slice(100, 200, None))),
                  ([1, 3], slice(50, 60, None)))}
     assert optimize_slices(dsk) == dsk
 
-    dsk = {'a': (getitem, (getarray_nofancy, 'x', [1, 2, 3]), 0)}
+    dsk = {'a': (getitem, (getter_nofancy, 'x', [1, 2, 3]), 0)}
     assert optimize_slices(dsk) == dsk
 
 
 @pytest.mark.parametrize('chunks', [10, 5, 3])
-def test_fuse_getarray_with_asarray(chunks):
+def test_fuse_getter_with_asarray(chunks):
     x = np.ones(10) * 1234567890
     y = da.ones(10, chunks=chunks)
     z = x + y
@@ -219,14 +230,14 @@ def test_fuse_getarray_with_asarray(chunks):
     assert any(v is x for v in dsk.values())
     for v in dsk.values():
         s = str(v)
-        assert s.count('getitem') + s.count('getarray') <= 1
+        assert s.count('getitem') + s.count('getter') <= 1
         if v is not x:
             assert '1234567890' not in s
-    n_getarrays = len([v for v in dsk.values() if v[0] in (getitem, getarray)])
+    n_getters = len([v for v in dsk.values() if v[0] in (getitem, getter)])
     if y.npartitions > 1:
-        assert n_getarrays == y.npartitions
+        assert n_getters == y.npartitions
     else:
-        assert n_getarrays == 0
+        assert n_getters == 0
 
     assert_eq(z, x + 1)
 
