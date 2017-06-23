@@ -1,6 +1,6 @@
 language: generic
 sudo: false
-os: linux
+dist: trusty
 
 env:
   matrix:
