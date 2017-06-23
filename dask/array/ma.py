@@ -5,11 +5,19 @@ from distutils.version import LooseVersion
 
 import numpy as np
 
+from ..base import normalize_token
 from .core import concatenate_lookup, tensordot_lookup, map_blocks, Array
 
 
 if LooseVersion(np.__version__) < '1.11.0':
     raise ImportError("dask.array.ma requires numpy >= 1.11.0")
+
+
+@normalize_token.register(np.ma.masked_array)
+def normalize_masked_array(x):
+    data = normalize_token(x.data)
+    mask = normalize_token(x.mask)
+    return (data, mask, x.fill_value)
 
 
 @concatenate_lookup.register(np.ma.masked_array)
