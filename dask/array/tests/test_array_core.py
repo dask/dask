@@ -1712,9 +1712,6 @@ def test_from_array_getitem():
 
     assert_eq(x, y)
 
-    with pytest.raises(ValueError):
-        da.from_array(x, chunks=(5,), getitem=my_getitem, lock=True)
-
 
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
@@ -1732,6 +1729,14 @@ def test_asarray_h5py():
             x = da.asarray(d)
             assert d in x.dask.values()
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+
+
+def test_asanyarray():
+    x = np.matrix([1, 2, 3])
+    dx = da.asanyarray(x)
+    assert dx.numblocks == (1, 1)
+    assert isinstance(dx._get(dx.dask, dx._keys())[0][0], np.matrix)
+    assert da.asanyarray(dx) is dx
 
 
 def test_from_func():

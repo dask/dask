@@ -1890,8 +1890,6 @@ def from_array(x, chunks, name=None, lock=False, subok=False, fancy=True,
 
     if getitem is None:
         getitem = getter if fancy else getter_nofancy
-    elif subok or lock:
-        raise ValueError("Can't specify lock/subok and custom getitem")
 
     dsk = getem(original_name, chunks, getitem=getitem, shape=x.shape,
                 out_name=name, lock=lock, subok=subok)
@@ -2584,19 +2582,31 @@ def asarray(array):
     --------
     >>> x = np.arange(3)
     >>> asarray(x)
-    dask.array<asarray, shape=(3,), dtype=int64, chunksize=(3,)>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
     """
     if isinstance(array, Array):
         return array
-
-    name = 'asarray-' + tokenize(array)
     if not isinstance(getattr(array, 'shape', None), Iterable):
         array = np.asarray(array)
-    dsk = {(name,) + (0,) * len(array.shape):
-           (getter_inline, name) + ((slice(None, None),) * len(array.shape),),
-           name: array}
-    chunks = tuple((d,) for d in array.shape)
-    return Array(dsk, name, chunks, dtype=array.dtype)
+    return from_array(array, chunks=array.shape, getitem=getter_inline)
+
+
+def asanyarray(array):
+    """Coerce argument into a dask array.
+
+    Subclasses of `np.ndarray` will be passed through as chunks unchanged.
+
+    Examples
+    --------
+    >>> x = np.arange(3)
+    >>> asanyarray(x)
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+    """
+    if isinstance(array, Array):
+        return array
+    if not isinstance(getattr(array, 'shape', None), Iterable):
+        array = np.asanyarray(array)
+    return from_array(array, chunks=array.shape, getitem=getter_inline, subok=True)
 
 
 def partial_by_order(*args, **kwargs):
