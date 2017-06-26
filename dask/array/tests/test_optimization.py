@@ -55,15 +55,15 @@ def test_fuse_getitem():
                (slice(5, 10), slice(10, 20))),
               (getitem, 'x', (slice(1005, 1010), slice(10, 20)))),
 
-             ((getter, (getter, 'x', slice(1000, 2000), True, False), slice(15, 20)),
+             ((getter, (getter, 'x', slice(1000, 2000), False, False), slice(15, 20)),
               (getter, 'x', slice(1015, 1020))),
 
-             ((getter, (getter, 'x', slice(1000, 2000)), slice(15, 20), True, False),
+             ((getter, (getter, 'x', slice(1000, 2000)), slice(15, 20), False, False),
               (getter, 'x', slice(1015, 1020))),
 
-             ((getter, (getter_nofancy, 'x', slice(1000, 2000), True, False),
-               slice(15, 20), True, False),
-              (getter_nofancy, 'x', slice(1015, 1020), True, False)),
+             ((getter, (getter_nofancy, 'x', slice(1000, 2000), False, False),
+               slice(15, 20), False, False),
+              (getter_nofancy, 'x', slice(1015, 1020), False, False)),
              ]
 
     for inp, expected in pairs:
@@ -75,19 +75,19 @@ def test_fuse_getitem_lock():
     lock1 = SerializableLock()
     lock2 = SerializableLock()
 
-    pairs = [((getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20)),
-              (getter, 'x', slice(1015, 1020), False, lock1)),
+    pairs = [((getter, (getter, 'x', slice(1000, 2000), True, lock1), slice(15, 20)),
+              (getter, 'x', slice(1015, 1020), True, lock1)),
 
-             ((getitem, (getter, 'x', (slice(1000, 2000), slice(100, 200)), False, lock1),
+             ((getitem, (getter, 'x', (slice(1000, 2000), slice(100, 200)), True, lock1),
                         (slice(15, 20), slice(50, 60))),
-              (getter, 'x', (slice(1015, 1020), slice(150, 160)), False, lock1)),
+              (getter, 'x', (slice(1015, 1020), slice(150, 160)), True, lock1)),
 
-             ((getitem, (getter_nofancy, 'x', (slice(1000, 2000), slice(100, 200)), False, lock1),
+             ((getitem, (getter_nofancy, 'x', (slice(1000, 2000), slice(100, 200)), True, lock1),
                         (slice(15, 20), slice(50, 60))),
-              (getter_nofancy, 'x', (slice(1015, 1020), slice(150, 160)), False, lock1)),
+              (getter_nofancy, 'x', (slice(1015, 1020), slice(150, 160)), True, lock1)),
 
-             ((getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20), False, lock2),
-              (getter, (getter, 'x', slice(1000, 2000), False, lock1), slice(15, 20), False, lock2))]
+             ((getter, (getter, 'x', slice(1000, 2000), True, lock1), slice(15, 20), True, lock2),
+              (getter, (getter, 'x', slice(1000, 2000), True, lock1), slice(15, 20), True, lock2))]
 
     for inp, expected in pairs:
         result = optimize_slices({'y': inp})

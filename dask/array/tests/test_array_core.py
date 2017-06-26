@@ -1627,7 +1627,7 @@ def test_slicing_with_non_ndarrays():
 
 def test_getter():
     assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
-    assert type(getter(np.matrix([[1]]), 0, subok=True)) is np.matrix
+    assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
     assert_eq(getter([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
 
     assert_eq(getter(np.arange(5), (None, slice(None, None))),
@@ -1682,7 +1682,7 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
-def test_from_array_subok():
+def test_from_array_no_asarray():
 
     def assert_chunks_are_of_type(x, cls):
         chunks = x._get(x.dask, x._keys())
@@ -1691,8 +1691,8 @@ def test_from_array_subok():
 
     x = np.matrix(np.arange(100).reshape((10, 10)))
 
-    for subok, cls in [(False, np.ndarray), (True, np.matrix)]:
-        dx = da.from_array(x, chunks=(5, 5), subok=subok)
+    for asarray, cls in [(True, np.ndarray), (False, np.matrix)]:
+        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
         assert_chunks_are_of_type(dx, cls)
         assert_chunks_are_of_type(dx[0:5], cls)
         assert_chunks_are_of_type(dx[0:5][:, 0], cls)
