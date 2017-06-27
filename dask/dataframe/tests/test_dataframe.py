@@ -1143,6 +1143,17 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     assert all(map(len, parts))
 
 
+def test_repartition_npartitions_same_limits():
+    df = pd.DataFrame({'x': [1, 2, 3]},
+                     index=[pd.Timestamp('2017-05-09 00:00:00.006000'),
+                            pd.Timestamp('2017-05-09 02:45:00.017999'),
+                            pd.Timestamp('2017-05-09 05:59:58.938999')])
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf.repartition(npartitions=10)
+
+
 def test_repartition_object_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10},
                       index=list('abdabd') * 10)
