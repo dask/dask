@@ -455,7 +455,7 @@ class WorkerProcess(object):
             try:
                 yield worker._start(*worker_start_args)
             except Exception as e:
-                logger.exception(e)
+                logger.exception("Failed to start worker")
                 init_result_q.put(e)
             else:
                 assert worker.address

@@ -236,7 +236,7 @@ class WorkerBase(ServerNode):
             except gen.TimeoutError:
                 pass
         if resp != 'OK':
-            raise ValueError(resp)
+            raise ValueError("Unexpected response from register: %r" % (resp,))
         self.heartbeat_callback.start()
 
     def start_services(self, listen_ip=''):
