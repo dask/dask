@@ -57,11 +57,16 @@ class AsyncProcess(object):
         self._watch_q = PyQueue()
         self._exit_future = Future()
         self._exit_callback = None
+        self._closed = False
 
         self._start_thread()
 
     def __repr__(self):
         return "<%s %s>" % (self.__class__.__name__, self._name)
+
+    def _check_closed(self):
+        if self._closed:
+            raise ValueError("invalid operation on closed AsyncProcess")
 
     def _start_thread(self):
         self._thread = threading.Thread(
@@ -168,17 +173,35 @@ class AsyncProcess(object):
                 return
 
     def start(self):
+        """
+        Start the child process.
+
+        This method is a coroutine.
+        """
+        self._check_closed()
         fut = Future()
         self._watch_q.put_nowait({'op': 'start', 'future': fut})
         return fut
 
     def terminate(self):
+        """
+        Terminate the child process.
+
+        This method is a coroutine.
+        """
+        self._check_closed()
         fut = Future()
         self._watch_q.put_nowait({'op': 'terminate', 'future': fut})
         return fut
 
     @gen.coroutine
     def join(self, timeout=None):
+        """
+        Wait for the child process to exit.
+
+        This method is a coroutine.
+        """
+        self._check_closed()
         assert self._state.pid is not None, 'can only join a started process'
         if self._state.exitcode is not None:
             return
@@ -189,6 +212,16 @@ class AsyncProcess(object):
                 yield gen.with_timeout(timedelta(seconds=timeout), self._exit_future)
             except gen.TimeoutError:
                 pass
+
+    def close(self):
+        """
+        Stop helper thread and release resources.  This method returns
+        immediately and does not ensure the child process has exited.
+        """
+        if not self._closed:
+            self._finalizer()
+            self._process = None
+            self._closed = True
 
     def set_exit_callback(self, func):
         """

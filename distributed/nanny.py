@@ -333,6 +333,7 @@ class WorkerProcess(object):
             self.status = 'stopped'
             self.stopped.set()
             # Release resources
+            self.process.close()
             self.init_result_q = None
             self.child_stop_q = None
             self.process = None

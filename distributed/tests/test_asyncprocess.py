@@ -179,6 +179,28 @@ def test_terminate():
 
 
 @gen_test()
+def test_close():
+    proc = AsyncProcess(target=exit_now)
+    proc.close()
+    with pytest.raises(ValueError):
+        yield proc.start()
+
+    proc = AsyncProcess(target=exit_now)
+    yield proc.start()
+    proc.close()
+    with pytest.raises(ValueError):
+        yield proc.terminate()
+
+    proc = AsyncProcess(target=exit_now)
+    yield proc.start()
+    yield proc.join()
+    proc.close()
+    with pytest.raises(ValueError):
+        yield proc.join()
+    proc.close()
+
+
+@gen_test()
 def test_exit_callback():
     to_child = mp_context.Queue()
     from_child = mp_context.Queue()
