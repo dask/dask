@@ -240,7 +240,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         List of filters to apply, like ``[('x', '>' 0), ...]``. This implements
         row-group (partition) -level filtering only, i.e., to prevent the
         loading of some chunks of the data, and only if relevant statistics
-        have been included in the metadata. 
+        have been included in the metadata.
     index: string or None (default) or False
         Name of index column to use if that column is sorted;
         False to force dask to not use any column as the index
