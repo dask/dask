@@ -147,8 +147,18 @@ Misc options
 ``logging``
 """""""""""
 
-This key configures the desired verbosity level for each logger.  Note
-that the Python :mod:`logging` module uses a hierarchical logger tree,
-so for example configuration the logging level for the ``distributed``
-logger will also affect its children such as ``distributed.scheduler``,
-unless explicitly overriden.
+This key configures the logging settings.  There are two possible formats.
+The simple, recommended format configures the desired verbosity level
+for each logger.  It also sets default values for several loggers such
+as ``distributed`` unless explicitly configured.
+
+A more extended format is possible following the :mod:`logging` module's
+`Configuration dictionary schema <https://docs.python.org/2/library/logging.config.html#logging-config-dictschema>`_.
+To enable this extended format, there must be a ``version`` sub-key as
+mandated by the schema.  The extended format does not set any default values.
+
+.. note::
+   Python's :mod:`logging` module uses a hierarchical logger tree.
+   For example, configuring the logging level for the ``distributed``
+   logger will also affect its children such as ``distributed.scheduler``,
+   unless explicitly overriden.

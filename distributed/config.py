@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import logging.config
 import os
 import sys
 import warnings
@@ -68,7 +69,17 @@ def load_env_vars(config):
             config[varname] = value
 
 
-def initialize_logging(config):
+def _initialize_logging_old_style(config):
+    """
+    Initialize logging using the "old-style" configuration scheme, e.g.:
+        {
+        'logging': {
+            'distributed': 'info',
+            'tornado': 'critical',
+            'tornado.application': 'error',
+            }
+        }
+    """
     loggers = config.get('logging', {})
     loggers.setdefault('distributed', 'info')
     # We could remove those lines and let the default config.yaml handle it
@@ -84,8 +95,27 @@ def initialize_logging(config):
             level = logging_names[level.upper()]
         logger = logging.getLogger(name)
         logger.setLevel(level)
+        logger.handlers[:] = []
         logger.addHandler(handler)
         logger.propagate = False
+
+
+def _initialize_logging_new_style(config):
+    """
+    Initialize logging using logging's "Configuration dictionary schema".
+    (ref.: https://docs.python.org/2/library/logging.config.html#logging-config-dictschema)
+    """
+    logging.config.dictConfig(config['logging'])
+
+
+def initialize_logging(config):
+    log_config = config.get('logging', {})
+    if 'version' in log_config:
+        # logging module mandates version to be an int
+        log_config['version'] = int(log_config['version'])
+        _initialize_logging_new_style(config)
+    else:
+        _initialize_logging_old_style(config)
 
 
 try:
