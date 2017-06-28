@@ -1141,7 +1141,7 @@ class Scheduler(ServerNode):
         finally:
             if not comm.closed():
                 self.comms[client].send({'op': 'stream-closed'})
-                yield self.comms[client].close()
+            yield self.comms[client].close()
             del self.comms[client]
             logger.info("Close client connection: %s", client)
 
