@@ -45,23 +45,18 @@ from .. import sharedict
 from ..sharedict import ShareDict
 
 
-def getarray(a, b, lock=None):
-    """ Mimics getitem but includes call to np.asarray
-
-    >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
-    array([2, 3, 4])
-    """
+def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
         b3 = tuple(None if x is None else slice(None, None)
                    for x in b if not isinstance(x, (int, long)))
-        return getarray(a, b2, lock)[b3]
+        return getter(a, b2, asarray=asarray, lock=lock)[b3]
 
     if lock:
         lock.acquire()
     try:
         c = a[b]
-        if type(c) != np.ndarray:
+        if asarray:
             c = np.asarray(c)
     finally:
         if lock:
@@ -69,17 +64,17 @@ def getarray(a, b, lock=None):
     return c
 
 
-def getarray_nofancy(a, b, lock=None):
-    """ A simple wrapper around ``getarray``.
+def getter_nofancy(a, b, asarray=True, lock=None):
+    """ A simple wrapper around ``getter``.
 
     Used to indicate to the optimization passes that the backend doesn't
     support fancy indexing.
     """
-    return getarray(a, b, lock=lock)
+    return getter(a, b, asarray=asarray, lock=lock)
 
 
-def getarray_inline(a, b, lock=None):
-    """ A getarray function that optimizations feel comfortable inlining
+def getter_inline(a, b, asarray=True, lock=None):
+    """ A getter function that optimizations feel comfortable inlining
 
     Slicing operations with this function may be inlined into a graph, such as
     in the following rewrite
@@ -97,7 +92,7 @@ def getarray_inline(a, b, lock=None):
 
     This inlining can be relevant to operations when running off of disk.
     """
-    return getarray(a, b, lock=lock)
+    return getter(a, b, asarray=asarray, lock=lock)
 
 
 from .optimization import optimize, fuse_slice
@@ -121,20 +116,21 @@ def slices_from_chunks(chunks):
             for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, getitem=getarray, shape=None, out_name=None, lock=False):
+def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
+          asarray=True):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
 
     >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape)
@@ -142,9 +138,10 @@ def getem(arr, chunks, getitem=getarray, shape=None, out_name=None, lock=False):
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if lock:
-        values = [(getitem, arr, x, lock) for x in slices]
+    if not asarray or lock:
+        values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
+        # Common case, drop extra parameters
         values = [(getitem, arr, x) for x in slices]
 
     return dict(zip(keys, values))
@@ -1831,7 +1828,8 @@ def normalize_chunks(chunks, shape=None):
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
-def from_array(x, chunks, name=None, lock=False, fancy=True, getitem=None):
+def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
+               getitem=None):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -1851,6 +1849,9 @@ def from_array(x, chunks, name=None, lock=False, fancy=True, getitem=None):
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
+    asarray : bool, optional
+        If True (default), then chunks will be converted to instances of
+        ``ndarray``. Set to False to pass passed chunks through unchanged.
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
@@ -1887,12 +1888,12 @@ def from_array(x, chunks, name=None, lock=False, fancy=True, getitem=None):
         lock = SerializableLock()
 
     if getitem is None:
-        if fancy:
-            getitem = getarray
-        else:
-            getitem = getarray_nofancy
-    dsk = getem(original_name, chunks, getitem, out_name=name, lock=lock)
+        getitem = getter if fancy else getter_nofancy
+
+    dsk = getem(original_name, chunks, getitem=getitem, shape=x.shape,
+                out_name=name, lock=lock, asarray=asarray)
     dsk[original_name] = x
+
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
@@ -2580,19 +2581,32 @@ def asarray(array):
     --------
     >>> x = np.arange(3)
     >>> asarray(x)
-    dask.array<asarray, shape=(3,), dtype=int64, chunksize=(3,)>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
     """
     if isinstance(array, Array):
         return array
-
-    name = 'asarray-' + tokenize(array)
     if not isinstance(getattr(array, 'shape', None), Iterable):
         array = np.asarray(array)
-    dsk = {(name,) + (0,) * len(array.shape):
-           (getarray_inline, name) + ((slice(None, None),) * len(array.shape),),
-           name: array}
-    chunks = tuple((d,) for d in array.shape)
-    return Array(dsk, name, chunks, dtype=array.dtype)
+    return from_array(array, chunks=array.shape, getitem=getter_inline)
+
+
+def asanyarray(array):
+    """Coerce argument into a dask array.
+
+    Subclasses of `np.ndarray` will be passed through as chunks unchanged.
+
+    Examples
+    --------
+    >>> x = np.arange(3)
+    >>> asanyarray(x)
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+    """
+    if isinstance(array, Array):
+        return array
+    if not isinstance(getattr(array, 'shape', None), Iterable):
+        array = np.asanyarray(array)
+    return from_array(array, chunks=array.shape, getitem=getter_inline,
+                      asarray=False)
 
 
 def partial_by_order(*args, **kwargs):

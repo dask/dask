@@ -25,7 +25,7 @@ from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
-from dask.array.core import (getem, getarray, top, dotmany,
+from dask.array.core import (getem, getter, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
@@ -56,10 +56,10 @@ def same_keys(a, b):
 
 
 def test_getem():
-    sol = {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
-           ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
-           ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
-           ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
+    sol = {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
+           ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
+           ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
+           ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     assert getem('X', (2, 3), shape=(4, 6)) == sol
 
 
@@ -1625,11 +1625,12 @@ def test_slicing_with_non_ndarrays():
     assert_eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
 
-def test_getarray():
-    assert type(getarray(np.matrix([[1]]), 0)) == np.ndarray
-    assert_eq(getarray([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
+def test_getter():
+    assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
+    assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
+    assert_eq(getter([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
 
-    assert_eq(getarray(np.arange(5), (None, slice(None, None))),
+    assert_eq(getter(np.arange(5), (None, slice(None, None))),
               np.arange(5)[None, :])
 
 
@@ -1669,8 +1670,8 @@ def test_from_array_with_lock():
 
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
 
-    assert hasattr(tasks[0][3], 'acquire')
-    assert len(set(task[3] for task in tasks)) == 1
+    assert hasattr(tasks[0][4], 'acquire')
+    assert len(set(task[4] for task in tasks)) == 1
 
     assert_eq(d, x)
 
@@ -1681,15 +1682,20 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
-def test_from_array_slicing_results_in_ndarray():
+def test_from_array_no_asarray():
+
+    def assert_chunks_are_of_type(x, cls):
+        chunks = x._get(x.dask, x._keys())
+        for c in concat(chunks):
+            assert type(c) is cls
+
     x = np.matrix(np.arange(100).reshape((10, 10)))
-    dx = da.from_array(x, chunks=(5, 5))
-    s1 = dx[0:5]
-    assert type(dx[0:5].compute()) == np.ndarray
-    s2 = s1[0:3]
-    assert type(s2.compute()) == np.ndarray
-    s3 = s2[:, 0]
-    assert type(s3.compute()) == np.ndarray
+
+    for asarray, cls in [(True, np.ndarray), (False, np.matrix)]:
+        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+        assert_chunks_are_of_type(dx, cls)
+        assert_chunks_are_of_type(dx[0:5], cls)
+        assert_chunks_are_of_type(dx[0:5][:, 0], cls)
 
 
 def test_from_array_getitem():
@@ -1723,6 +1729,14 @@ def test_asarray_h5py():
             x = da.asarray(d)
             assert d in x.dask.values()
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+
+
+def test_asanyarray():
+    x = np.matrix([1, 2, 3])
+    dx = da.asanyarray(x)
+    assert dx.numblocks == (1, 1)
+    assert isinstance(dx._get(dx.dask, dx._keys())[0][0], np.matrix)
+    assert da.asanyarray(dx) is dx
 
 
 def test_from_func():
