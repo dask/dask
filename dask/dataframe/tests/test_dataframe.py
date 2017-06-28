@@ -1145,9 +1145,9 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
 
 def test_repartition_npartitions_same_limits():
     df = pd.DataFrame({'x': [1, 2, 3]},
-                     index=[pd.Timestamp('2017-05-09 00:00:00.006000'),
-                            pd.Timestamp('2017-05-09 02:45:00.017999'),
-                            pd.Timestamp('2017-05-09 05:59:58.938999')])
+                      index=[pd.Timestamp('2017-05-09 00:00:00.006000'),
+                             pd.Timestamp('2017-05-09 02:45:00.017999'),
+                             pd.Timestamp('2017-05-09 05:59:58.938999')])
 
     ddf = dd.from_pandas(df, npartitions=2)
 
