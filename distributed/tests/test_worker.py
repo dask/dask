@@ -801,3 +801,8 @@ def test_fail_write_many_to_disk(c, s, a, b):
     assert result == 2
     result = yield c.submit(inc, 2, workers=b.address)
     assert result == 3
+
+
+@gen_cluster()
+def test_pid(s, a, b):
+    assert s.worker_info[a.address]['pid'] == os.getpid()
