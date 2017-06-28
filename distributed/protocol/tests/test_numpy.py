@@ -138,6 +138,8 @@ def test_itemsize(dt, size):
     assert itemsize(np.dtype(dt)) == size
 
 
+@pytest.mark.skipif(sys.version_info[0] < 3,
+                    reason='numpy doesnt use memoryviews')
 def test_compress_numpy():
     pytest.importorskip('lz4')
     x = np.ones(10000000, dtype='i4')
@@ -189,6 +191,8 @@ def test_dumps_large_blosc(c, s, a, b):
     result = yield x
 
 
+@pytest.mark.skipif(sys.version_info[0] < 3,
+                    reason='numpy doesnt use memoryviews')
 def test_compression_takes_advantage_of_itemsize():
     blosc = pytest.importorskip('blosc')
     x = np.arange(1000000, dtype='i8')
