@@ -83,7 +83,7 @@ class Server(object):
     def __init__(self, handlers, connection_limit=512, deserialize=True,
                  io_loop=None):
         self.handlers = assoc(handlers, 'identity', self.identity)
-        self.id = str(uuid.uuid1())
+        self.id = type(self).__name__ + '-' + str(uuid.uuid1())
         self._address = None
         self._listen_address = None
         self._port = None

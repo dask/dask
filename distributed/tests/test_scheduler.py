@@ -274,6 +274,7 @@ def test_server_listens_to_other_ops(s, a, b):
     with rpc(s.address) as r:
         ident = yield r.identity()
         assert ident['type'] == 'Scheduler'
+        assert ident['id'].lower().startswith('scheduler')
 
 
 @gen_cluster()

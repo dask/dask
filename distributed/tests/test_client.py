@@ -4238,5 +4238,13 @@ def test_threadsafe_compute(loop):
             assert results and all(results)
 
 
+@gen_cluster(client=True)
+def test_identity(c, s, a, b):
+    assert c.id.lower().startswith('client')
+    assert a.id.lower().startswith('worker')
+    assert b.id.lower().startswith('worker')
+    assert s.id.lower().startswith('scheduler')
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *

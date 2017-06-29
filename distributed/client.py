@@ -430,7 +430,7 @@ class Client(Node):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.coroutines = []
-        self.id = str(uuid.uuid1())
+        self.id = type(self).__name__ + '-' + str(uuid.uuid1())
         self.generation = 0
         self.status = None
         self._pending_msg_buffer = []
