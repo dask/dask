@@ -3640,7 +3640,11 @@ def repartition_npartitions(df, npartitions):
                 divisions = divisions.astype(original_divisions.dtype)
 
             if isinstance(divisions, np.ndarray):
-                divisions = tuple(divisions.tolist())
+                divisions = divisions.tolist()
+
+            divisions = list(divisions)
+            divisions[0] = df.divisions[0]
+            divisions[-1] = df.divisions[-1]
 
             return df.repartition(divisions=divisions)
         else:
