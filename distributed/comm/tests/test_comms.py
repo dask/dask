@@ -866,7 +866,7 @@ def check_deserialize(addr):
 
     msg = {'op': 'update',
            'x': b'abc',
-           'y': b'def\n' * (2 ** 20),
+           'y': b'def\n' * (3 * 1024 ** 2),  # end size: 12 MB
            }
     msg_orig = msg.copy()
 

@@ -182,7 +182,7 @@ class TCP(Comm):
             convert_stream_closed_error(self, e)
 
         try:
-            msg = from_frames(frames, deserialize=self.deserialize)
+            msg = yield from_frames(frames, deserialize=self.deserialize)
         except EOFError:
             # Frames possibly garbled or truncated by communication error
             self.abort()
@@ -195,10 +195,9 @@ class TCP(Comm):
         if stream is None:
             raise CommClosedError
 
-        if self._iostream_allows_memoryview:
-            frames = to_frames(msg)
-        else:
-            frames = [ensure_bytes(f) for f in to_frames(msg)]
+        frames = yield to_frames(msg)
+        if not self._iostream_allows_memoryview:
+            frames = [ensure_bytes(f) for f in frames]
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +
