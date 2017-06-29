@@ -11,6 +11,7 @@ import os
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -926,3 +927,22 @@ def tls_only_security():
         sec = Security()
     assert sec.require_encryption
     return sec
+
+
+def get_server_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
+                           ca_file='tls-ca-cert.pem'):
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH,
+                                     cafile=get_cert(ca_file))
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
+    return ctx
+
+def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
+                           ca_file='tls-ca-cert.pem'):
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH,
+                                     cafile=get_cert(ca_file))
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
+    return ctx

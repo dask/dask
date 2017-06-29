@@ -15,7 +15,8 @@ from distributed.core import pingpong
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (slow, loop, gen_test, gen_cluster,
-                                    requires_ipv6, has_ipv6, get_cert)
+                                    requires_ipv6, has_ipv6, get_cert,
+                                    get_server_ssl_context, get_client_ssl_context)
 
 from distributed.protocol import (loads, dumps,
                                   to_serialize, Serialized, serialize, deserialize)
@@ -52,20 +53,35 @@ def check_tls_extra(info):
     assert secret_bits >= 128
 
 
-def get_server_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem'):
-    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=ca_file)
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_REQUIRED
-    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
-    return ctx
+tls_kwargs = dict(listen_args={'ssl_context': get_server_ssl_context()},
+                  connect_args={'ssl_context': get_client_ssl_context()})
 
-def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem'):
-    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca_file)
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_REQUIRED
-    ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
-    return ctx
 
+@gen.coroutine
+def get_comm_pair(listen_addr, listen_args=None, connect_args=None):
+    q = queues.Queue()
+
+    def handle_comm(comm):
+        q.put(comm)
+
+    listener = listen(listen_addr, handle_comm,
+                      connection_args=listen_args)
+    listener.start()
+
+    comm = yield connect(listener.contact_address,
+                         connection_args=connect_args)
+    serv_comm = yield q.get()
+    raise gen.Return((comm, serv_comm))
+
+
+def get_tcp_comm_pair():
+    return get_comm_pair('tcp://')
+
+def get_tls_comm_pair():
+    return get_comm_pair('tls://', **tls_kwargs)
+
+def get_inproc_comm_pair():
+    return get_comm_pair('inproc://')
 
 
 @gen.coroutine
@@ -508,23 +524,15 @@ def test_tcp_client_server_ipv6():
 
 @gen_test()
 def test_tls_client_server_ipv4():
-    listen_args = {'ssl_context': get_server_ssl_context()}
-    connect_args = {'ssl_context': get_client_ssl_context()}
-    kwargs = dict(listen_args=listen_args, connect_args=connect_args)
-
-    yield check_client_server('tls://127.0.0.1', tls_eq('127.0.0.1'), **kwargs)
-    yield check_client_server('tls://127.0.0.1:3221', tls_eq('127.0.0.1', 3221), **kwargs)
+    yield check_client_server('tls://127.0.0.1', tls_eq('127.0.0.1'), **tls_kwargs)
+    yield check_client_server('tls://127.0.0.1:3221', tls_eq('127.0.0.1', 3221), **tls_kwargs)
     yield check_client_server('tls://', tls_eq('0.0.0.0'),
-                              tls_eq(EXTERNAL_IP4), **kwargs)
+                              tls_eq(EXTERNAL_IP4), **tls_kwargs)
 
 @requires_ipv6
 @gen_test()
 def test_tls_client_server_ipv6():
-    listen_args = {'ssl_context': get_server_ssl_context()}
-    connect_args = {'ssl_context': get_client_ssl_context()}
-    kwargs = dict(listen_args=listen_args, connect_args=connect_args)
-
-    yield check_client_server('tls://[::1]', tls_eq('::1'), **kwargs)
+    yield check_client_server('tls://[::1]', tls_eq('::1'), **tls_kwargs)
 
 
 @gen_test()
@@ -621,12 +629,7 @@ def test_tcp_comm_closed_implicit():
 
 @gen_test()
 def test_tls_comm_closed_implicit():
-    listen_args = {'ssl_context': get_server_ssl_context()}
-    connect_args = {'ssl_context': get_client_ssl_context()}
-
-    yield check_comm_closed_implicit('tls://127.0.0.1',
-                                     listen_args=listen_args,
-                                     connect_args=connect_args)
+    yield check_comm_closed_implicit('tls://127.0.0.1', **tls_kwargs)
 
 @gen_test()
 def test_inproc_comm_closed_implicit():
@@ -666,12 +669,7 @@ def test_tcp_comm_closed_explicit():
 
 @gen_test()
 def test_tls_comm_closed_explicit():
-    listen_args = {'ssl_context': get_server_ssl_context()}
-    connect_args = {'ssl_context': get_client_ssl_context()}
-
-    yield check_comm_closed_explicit('tls://127.0.0.1',
-                                     listen_args=listen_args,
-                                     connect_args=connect_args)
+    yield check_comm_closed_explicit('tls://127.0.0.1', **tls_kwargs)
 
 @gen_test()
 def test_inproc_comm_closed_explicit():
@@ -920,3 +918,61 @@ def check_deserialize_eoferror(addr):
 @gen_test()
 def test_tcp_deserialize_eoferror():
     yield check_deserialize_eoferror('tcp://')
+
+
+#
+# Test various properties
+#
+
+@gen.coroutine
+def check_repr(a, b):
+    assert 'closed' not in repr(a)
+    assert 'closed' not in repr(b)
+    yield a.close()
+    assert 'closed' in repr(a)
+    yield b.close()
+    assert 'closed' in repr(b)
+
+@gen_test()
+def test_tcp_repr():
+    a, b = yield get_tcp_comm_pair()
+    assert a.local_address in repr(b)
+    assert b.local_address in repr(a)
+    yield check_repr(a, b)
+
+@gen_test()
+def test_tls_repr():
+    a, b = yield get_tls_comm_pair()
+    assert a.local_address in repr(b)
+    assert b.local_address in repr(a)
+    yield check_repr(a, b)
+
+@gen_test()
+def test_inproc_repr():
+    a, b = yield get_inproc_comm_pair()
+    assert a.local_address in repr(b)
+    assert b.local_address in repr(a)
+    yield check_repr(a, b)
+
+
+@gen.coroutine
+def check_addresses(a, b):
+    assert a.peer_address == b.local_address
+    assert a.local_address == b.peer_address
+    a.abort()
+    b.abort()
+
+@gen_test()
+def test_tcp_adresses():
+    a, b = yield get_tcp_comm_pair()
+    yield check_addresses(a, b)
+
+@gen_test()
+def test_tls_adresses():
+    a, b = yield get_tls_comm_pair()
+    yield check_addresses(a, b)
+
+@gen_test()
+def test_inproc_adresses():
+    a, b = yield get_inproc_comm_pair()
+    yield check_addresses(a, b)

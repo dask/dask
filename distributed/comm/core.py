@@ -73,6 +73,12 @@ class Comm(with_metaclass(ABCMeta)):
         """
 
     @abstractproperty
+    def local_address(self):
+        """
+        The local address.  For logging and debugging purposes only.
+        """
+
+    @abstractproperty
     def peer_address(self):
         """
         The peer's address.  For logging and debugging purposes only.
@@ -86,6 +92,14 @@ class Comm(with_metaclass(ABCMeta)):
         when the communication is established and doesn't vary afterwards.
         """
         return {}
+
+    def __repr__(self):
+        clsname = self.__class__.__name__
+        if self.closed():
+            return "<closed %s>" % (clsname,)
+        else:
+            return ("<%s local=%s remote=%s>"
+                    % (clsname, self.local_address, self.peer_address))
 
 
 class Listener(with_metaclass(ABCMeta)):

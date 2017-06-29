@@ -94,16 +94,30 @@ def set_tcp_timeout(stream):
         logger.warning("Could not set timeout on TCP stream: %s", e)
 
 
-def convert_stream_closed_error(exc):
+def get_stream_address(stream):
+    """
+    Get a stream's local address.
+    """
+    if stream.closed():
+        return "<closed>"
+
+    try:
+        return unparse_host_port(*stream.socket.getsockname()[:2])
+    except EnvironmentError:
+        # Probably EBADF
+        return "<closed>"
+
+
+def convert_stream_closed_error(obj, exc):
     """
     Re-raise StreamClosedError as CommClosedError.
     """
     if exc.real_error is not None:
         # The stream was closed because of an underlying OS error
         exc = exc.real_error
-        raise CommClosedError("%s: %s" % (exc.__class__.__name__, exc))
+        raise CommClosedError("in %s: %s: %s" % (obj, exc.__class__.__name__, exc))
     else:
-        raise CommClosedError(str(exc))
+        raise CommClosedError("in %s: %s" % (obj, exc))
 
 
 class TCP(Comm):
@@ -112,7 +126,8 @@ class TCP(Comm):
     """
     _iostream_allows_memoryview = tornado.version_info >= (4, 5)
 
-    def __init__(self, stream, peer_addr, deserialize=True):
+    def __init__(self, stream, local_addr, peer_addr, deserialize=True):
+        self._local_addr = local_addr
         self._peer_addr = peer_addr
         self.stream = stream
         self.deserialize = deserialize
@@ -135,8 +150,9 @@ class TCP(Comm):
 
         return finalize
 
-    def __repr__(self):
-        return "<%s %r>" % (self.__class__.__name__, self._peer_addr,)
+    @property
+    def local_address(self):
+        return self._local_addr
 
     @property
     def peer_address(self):
@@ -163,7 +179,7 @@ class TCP(Comm):
                 frames.append(frame)
         except StreamClosedError as e:
             self.stream = None
-            convert_stream_closed_error(e)
+            convert_stream_closed_error(self, e)
 
         try:
             msg = from_frames(frames, deserialize=self.deserialize)
@@ -196,7 +212,7 @@ class TCP(Comm):
                 stream.write(frame)
         except StreamClosedError as e:
             stream = None
-            convert_stream_closed_error(e)
+            convert_stream_closed_error(self, e)
 
         raise gen.Return(sum(map(len, frames)))
 
@@ -278,10 +294,11 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
                                           **kwargs)
         except StreamClosedError as e:
             # The socket connect() call failed
-            convert_stream_closed_error(e)
+            convert_stream_closed_error(self, e)
 
-        # XXX
+        local_address = self.prefix + get_stream_address(stream)
         raise gen.Return(self.comm_class(stream,
+                                         local_address,
                                          self.prefix + address,
                                          deserialize))
 
@@ -320,7 +337,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
     def start(self):
         self.tcp_server = TCPServer(max_buffer_size=MAX_BUFFER_SIZE,
                                     **self.server_args)
-        self.tcp_server.handle_stream = self.handle_stream
+        self.tcp_server.handle_stream = self._handle_stream
         for i in range(5):
             try:
                 # When shuffling data between workers, there can
@@ -349,6 +366,19 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
     def _check_started(self):
         if self.tcp_server is None:
             raise ValueError("invalid operation on non-started TCPListener")
+
+    @gen.coroutine
+    def _handle_stream(self, stream, address):
+        address = self.prefix + unparse_host_port(*address[:2])
+        stream = yield self._prepare_stream(stream, address)
+        if stream is None:
+            # Preparation failed
+            return
+        logger.debug("Incoming connection from %r to %r",
+                     address, self.contact_address)
+        local_address = self.prefix + get_stream_address(stream)
+        comm = self.comm_class(stream, local_address, address, self.deserialize)
+        self.comm_handler(comm)
 
     def get_host_port(self):
         """
@@ -380,19 +410,20 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
 
 class TCPListener(BaseTCPListener):
     prefix = 'tcp://'
+    comm_class = TCP
     encrypted = False
 
     def _get_server_args(self, **connection_args):
         return {}
 
-    def handle_stream(self, stream, address):
-        address = self.prefix + unparse_host_port(*address[:2])
-        comm = TCP(stream, address, self.deserialize)
-        self.comm_handler(comm)
+    @gen.coroutine
+    def _prepare_stream(self, stream, address):
+        raise gen.Return(stream)
 
 
 class TLSListener(BaseTCPListener):
     prefix = 'tls://'
+    comm_class = TLS
     encrypted = True
 
     def _get_server_args(self, **connection_args):
@@ -400,18 +431,16 @@ class TLSListener(BaseTCPListener):
         return {'ssl_options': ctx}
 
     @gen.coroutine
-    def handle_stream(self, stream, address):
-        address = self.prefix + unparse_host_port(*address[:2])
+    def _prepare_stream(self, stream, address):
         try:
             yield stream.wait_for_handshake()
         except EnvironmentError as e:
             # The handshake went wrong, log and ignore
-            logger.warning("listener on %r: TLS handshake failed with remote %r: %s",
+            logger.warning("Listener on %r: TLS handshake failed with remote %r: %s",
                            self.listen_address, address,
                            getattr(e, "real_error", None) or e)
         else:
-            comm = TLS(stream, address, self.deserialize)
-            self.comm_handler(comm)
+            raise gen.Return(stream)
 
 
 class BaseTCPBackend(Backend):
