@@ -21,7 +21,7 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
     if not frames:
         return frames
 
-    if max(map(len, frames)) <= n:
+    if max(map(nbytes, frames)) <= n:
         return frames
 
     out = []
@@ -33,8 +33,8 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
                 itemsize = frame.itemsize
             except AttributeError:
                 itemsize = 1
-            for i in range(0, nbytes(frame), n // itemsize):
-                out.append(frame[i: i + n])
+            for i in range(0, nbytes(frame) // itemsize, n // itemsize):
+                out.append(frame[i: i + n // itemsize])
         else:
             out.append(frame)
     return out
@@ -55,7 +55,7 @@ def merge_frames(header, frames):
     if not frames:
         return frames
 
-    assert sum(lengths) == sum(map(len, frames))
+    assert sum(lengths) == sum(map(nbytes, frames))
 
     if all(len(f) == l for f, l in zip(frames, lengths)):
         return frames
@@ -69,9 +69,9 @@ def merge_frames(header, frames):
         L = []
         while l:
             frame = frames.pop()
-            if len(frame) <= l:
+            if nbytes(frame) <= l:
                 L.append(frame)
-                l -= len(frame)
+                l -= nbytes(frame)
             else:
                 mv = memoryview(frame)
                 L.append(mv[:l])

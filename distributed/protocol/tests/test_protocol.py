@@ -10,6 +10,7 @@ from distributed.protocol import (loads, dumps, msgpack, maybe_compress,
 from distributed.protocol.compression import compressions
 from distributed.protocol.serialize import (Serialize, Serialized,
                                             serialize, deserialize)
+from distributed.utils import nbytes
 from distributed.utils_test import slow
 
 
@@ -23,7 +24,7 @@ def test_compression_1():
     np = pytest.importorskip('numpy')
     x = np.ones(1000000)
     frames = dumps({'x': Serialize(x.tobytes())})
-    assert sum(map(len, frames)) < x.nbytes
+    assert sum(map(nbytes, frames)) < x.nbytes
     y = loads(frames)
     assert {'x': x.tobytes()} == y
 
@@ -50,8 +51,8 @@ def test_compression_without_deserialization():
 
 
 def test_small():
-    assert sum(map(len, dumps(b''))) < 10
-    assert sum(map(len, dumps(1))) < 10
+    assert sum(map(nbytes, dumps(b''))) < 10
+    assert sum(map(nbytes, dumps(1))) < 10
 
 
 def test_small_and_big():
@@ -154,10 +155,10 @@ def test_loads_without_deserialization_avoids_compression():
     msg = {'x': 1, 'data': to_serialize(b)}
     frames = dumps(msg)
 
-    assert sum(map(len, frames)) < 10000
+    assert sum(map(nbytes, frames)) < 10000
 
     msg2 = loads(frames, deserialize=False)
-    assert sum(map(len, msg2['data'].frames)) < 10000
+    assert sum(map(nbytes, msg2['data'].frames)) < 10000
 
     msg3 = dumps(msg2)
     msg4 = loads(msg3)

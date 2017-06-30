@@ -213,7 +213,7 @@ class TCP(Comm):
             stream = None
             convert_stream_closed_error(self, e)
 
-        raise gen.Return(sum(map(len, frames)))
+        raise gen.Return(sum(map(nbytes, frames)))
 
     @gen.coroutine
     def close(self):

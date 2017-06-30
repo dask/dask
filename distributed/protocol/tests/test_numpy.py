@@ -10,7 +10,7 @@ import six
 from distributed.protocol import (serialize, deserialize, decompress, dumps,
         loads, to_serialize, msgpack)
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
-from distributed.utils import tmpfile
+from distributed.utils import tmpfile, nbytes
 from distributed.utils_test import slow, gen_cluster
 from distributed.protocol.numpy import itemsize
 from distributed.protocol.compression import maybe_compress
@@ -144,7 +144,7 @@ def test_compress_numpy():
     pytest.importorskip('lz4')
     x = np.ones(10000000, dtype='i4')
     frames = dumps({'x': to_serialize(x)})
-    assert sum(map(len, frames)) < x.nbytes
+    assert sum(map(nbytes, frames)) < x.nbytes
 
     header = msgpack.loads(frames[2], encoding='utf8', use_list=False)
     try:
@@ -205,4 +205,10 @@ def test_compression_takes_advantage_of_itemsize():
     _, b = serialize(x.view('u1'))
     bb = [maybe_compress(frame)[1] for frame in b]
 
-    assert sum(map(len, aa)) < sum(map(len, bb))
+    assert sum(map(nbytes, aa)) < sum(map(nbytes, bb))
+
+
+def test_large_numpy_array():
+    x = np.ones((100000000,), dtype='u4')
+    header, frames = serialize(x)
+    assert sum(header['lengths']) == sum(map(nbytes, frames))

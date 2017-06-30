@@ -9,8 +9,9 @@ from toolz import identity
 
 from distributed.protocol import (register_serialization, serialize,
         deserialize, nested_deserialize, Serialize, Serialized,
-        to_serialize, serialize_bytes, deserialize_bytes, serialize_bytelist)
-from distributed.protocol import decompress
+        to_serialize, serialize_bytes, deserialize_bytes, serialize_bytelist,
+        decompress)
+from distributed.utils import nbytes
 
 
 class MyObj(object):
@@ -175,7 +176,7 @@ def test_serialize_list_compress():
     pytest.importorskip('lz4')
     x = np.ones(1000000)
     L = serialize_bytelist(x)
-    assert sum(map(len, L)) < x.nbytes / 2
+    assert sum(map(nbytes, L)) < x.nbytes / 2
 
     b = b''.join(L)
     y = deserialize_bytes(b)

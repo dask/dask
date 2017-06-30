@@ -179,3 +179,16 @@ def test_dataframe_groupby_tasks(loop):
                 b = ddf.groupby(['A', 'B']).apply(len)
 
                 assert_equal(a, b.compute(get=dask.get).sort_index())
+
+
+@gen_cluster(client=True)
+def test_sparse_arrays(c, s, a, b):
+    sparse = pytest.importorskip('sparse')
+    da = pytest.importorskip('dask.array')
+
+    x = da.random.random((100, 10), chunks=(10, 10))
+    x[x < 0.95] = 0
+    s = x.map_blocks(sparse.COO)
+    future = c.compute(s.sum(axis=0)[:10])
+
+    yield future

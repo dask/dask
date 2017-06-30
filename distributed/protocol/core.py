@@ -16,6 +16,7 @@ from .compression import compressions, maybe_compress, decompress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
         extract_serialize)
 from .utils import frame_split_size, merge_frames
+from ..utils import nbytes
 
 _deserialize = deserialize
 
@@ -51,7 +52,7 @@ def dumps(msg):
 
         for key, (head, frames) in data.items():
             if 'lengths' not in head:
-                head['lengths'] = tuple(map(len, frames))
+                head['lengths'] = tuple(map(nbytes, frames))
             if 'compression' not in head:
                 frames = frame_split_size(frames)
                 if frames:
@@ -66,7 +67,7 @@ def dumps(msg):
 
         for key, (head, frames) in pre.items():
             if 'lengths' not in head:
-                head['lengths'] = tuple(map(len, frames))
+                head['lengths'] = tuple(map(nbytes, frames))
             head['count'] = len(frames)
             header['headers'][key] = head
             header['keys'].append(key)
