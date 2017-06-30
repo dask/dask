@@ -29,7 +29,8 @@ def test_submit_from_worker(c, s, a, b):
     assert yy == 20 + 1 + (20 + 1) * 2
 
     assert len(s.transition_log) > 10
-    assert len(s.wants_what) == 1
+    assert len([id for id in s.wants_what
+                if id.lower().startswith('client')]) == 1
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)

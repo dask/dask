@@ -2405,6 +2405,9 @@ class Scheduler(ServerNode):
 
             self.task_state[key] = 'memory'
 
+            if key in self.wants_what['fire-and-forget']:
+                self.client_releases_keys(client='fire-and-forget', keys=[key])
+
             if self.validate:
                 assert key not in self.rprocessing
                 assert key not in self.waiting
@@ -2649,6 +2652,9 @@ class Scheduler(ServerNode):
                          'key': key,
                          'exception': self.exceptions[failing_key],
                          'traceback': self.tracebacks.get(failing_key)})
+
+            if key in self.wants_what['fire-and-forget']:
+                self.client_releases_keys(client='fire-and-forget', keys=[key])
 
             if self.validate:
                 assert key not in self.rprocessing

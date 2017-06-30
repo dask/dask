@@ -2967,6 +2967,36 @@ def futures_of(o, client=None):
     return list(futures)
 
 
+def fire_and_forget(obj):
+    """ Run tasks at least once, even if we release the futures
+
+    Under normal operation Dask will not run any tasks for which there is not
+    an active future (this avoids unnecessary work in many situations).
+    However sometimes you want to just fire off a task, not track its future,
+    and expect it to finish eventually.  You can use this function on a future
+    or collection of futures to ask Dask to complete the task even if no active
+    client is tracking it.
+
+    The results will not be kept in memory after the task completes (unless
+    there is an active future) so this is only useful for tasks that depend on
+    side effects.
+
+    Parameters
+    ----------
+    obj: Future, list, dict, dask collection
+        The futures that you want to run at least once
+
+    Examples
+    --------
+    >>> fire_and_forget(client.submit(func, *args))  # doctest: +SKIP
+    """
+    futures = futures_of(obj)
+    for future in futures:
+        future.client._send_to_scheduler({'op': 'client-desires-keys',
+                                          'keys': [tokey(future.key)],
+                                          'client': 'fire-and-forget'})
+
+
 @contextmanager
 def temp_default_client(c):
     """ Set the default client for the duration of the context

@@ -78,6 +78,8 @@ API
    as_completed
    distributed.diagnostics.progress
    wait
+   fire_and_forget
+
 
 Asynchronous methods
 --------------------

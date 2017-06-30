@@ -27,7 +27,7 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import Worker, Nanny, recreate_exceptions
+from distributed import Worker, Nanny, recreate_exceptions, fire_and_forget
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, _wait,
@@ -1767,7 +1767,9 @@ def test_multi_client(s, a, b):
 
     yield wait([x, y])
 
-    assert s.wants_what == {c.id: {x.key, y.key}, f.id: {y.key}}
+    assert s.wants_what == {c.id: {x.key, y.key},
+                            f.id: {y.key},
+                            'fire-and-forget': set()}
     assert s.who_wants == {x.key: {c.id}, y.key: {c.id, f.id}}
 
     yield c.shutdown()
@@ -1835,7 +1837,9 @@ def test_multi_garbage_collection(s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    assert s.wants_what == {c.id: {y.key}, f.id: {y.key}}
+    assert s.wants_what == {c.id: {y.key},
+                            f.id: {y.key},
+                            'fire-and-forget': set()}
     assert s.who_wants == {y.key: {c.id, f.id}}
 
     y.__del__()
@@ -1846,7 +1850,9 @@ def test_multi_garbage_collection(s, a, b):
 
     yield gen.sleep(0.1)
     assert y.key in a.data or y.key in b.data
-    assert s.wants_what == {c.id: {y.key}, f.id: set()}
+    assert s.wants_what == {c.id: {y.key},
+                            f.id: set(),
+                            'fire-and-forget': set()}
     assert s.who_wants == {y.key: {c.id}}
 
     y2.__del__()
@@ -4166,6 +4172,46 @@ def test_robust_undeserializable_function(c, s, a, b):
 
     assert results == list(map(inc, range(10)))
     assert a.data and b.data
+
+
+@gen_cluster(client=True)
+def test_fire_and_forget(c, s, a, b):
+    future = c.submit(slowinc, 1, delay=0.1)
+    import distributed
+
+    def f(x):
+        distributed.foo = 123
+
+    try:
+        fire_and_forget(c.submit(f, future))
+
+        start = time()
+        while not hasattr(distributed, 'foo'):
+            yield gen.sleep(0.01)
+            assert time() < start + 2
+        assert distributed.foo == 123
+    finally:
+        del distributed.foo
+
+    start = time()
+    while len(s.task_state) > 1:
+        yield gen.sleep(0.01)
+        assert time() < start + 2
+
+    assert set(s.who_wants) == {future.key}
+    assert set(s.task_state) == {future.key}
+
+
+@gen_cluster(client=True)
+def test_fire_and_forget_err(c, s, a, b):
+    fire_and_forget(c.submit(div, 1, 0))
+    yield gen.sleep(0.1)
+
+    # erred task should clear out quickly
+    start = time()
+    while s.task_state:
+        yield gen.sleep(0.01)
+        assert time() < start + 1
 
 
 def test_quiet_client_shutdown(loop):
