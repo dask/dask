@@ -12,17 +12,33 @@ These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.readthedocs.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
-Basics
-------
-
 .. currentmodule:: distributed
+
+Start Dask Client
+-----------------
+
+You must start a ``Client`` to use the futures interface.  This tracks state
+among the various worker processes or threads.
+
+.. code-block:: python
+
+   from dask.distributed import Client
+
+   client = Client()  # start local workers as processes
+   # or
+   client = Client(processes=False)  # start local workers as threads
+
+If you have `Bokeh <https://bokeh.pydata.org>`_ installed then this starts up a
+diagnostic dashboard at http://localhost:8786 .
+
+Submit Tasks
+------------
 
 .. autosummary::
    Client.submit
    Client.map
    Future.result
 
-You must start a ``Client`` to use the futures interface:
 Then can submit individual tasks using the ``submit`` method.
 
 .. code-block:: python
@@ -33,7 +49,6 @@ Then can submit individual tasks using the ``submit`` method.
    def add(x, y):
        return x + y
 
-   client = Client()  # start local workers
    a = client.submit(inc, 10)  # calls inc(10) in background thread or process
    b = client.submit(inc, 20)  # calls inc(20) in background thread or process
 
@@ -203,6 +218,8 @@ You can wait on a future or collection of futures using the ``wait`` function:
 
 .. code-block:: python
 
+   from dask.distributed import wait, as_completed
+
    >>> wait(futures)
 
 This blocks until all futures are finished or have erred.
@@ -235,7 +252,6 @@ Or collect futures all futures in batches that had arrived since the last iterat
    for batch in as_completed(futures, results=True).batches():
       for future in batch:
           ...
-
 
 Additionally, for iterative algorithms you can add more futures into the ``as_completed`` iterator
 
@@ -271,6 +287,8 @@ can tell Dask to compute a task anyway, even if there are no active futures,
 using the ``fire_and_forget`` function:
 
 .. code-block:: python
+
+   from dask.distributed import fire_and_forget
 
    >>> fire_and_forget(c)
 
@@ -427,8 +445,6 @@ If you want to share large pieces of information then scatter the data first
    >>> parameters = np.array(...)
    >>> future = client.scatter(parameters)
    >>> var.set(future)
-
-
 
 API
 ---
