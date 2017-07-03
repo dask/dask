@@ -41,7 +41,7 @@ on Dask's distributed scheduler,
 Familiar user interface
 -----------------------
 
-**Dask DataFrame** mimics Pandas
+**Dask DataFrame** mimics Pandas - :doc:`documentation <dataframe>`
 
 .. code-block:: python
 
@@ -49,7 +49,7 @@ Familiar user interface
     df = pd.read_csv('2015-01-01.csv')      df = dd.read_csv('2015-*-*.csv')
     df.groupby(df.user_id).value.mean()     df.groupby(df.user_id).value.mean().compute()
 
-**Dask Array** mimics NumPy
+**Dask Array** mimics NumPy - :doc:`documentation <array>`
 
 .. code-block:: python
 
@@ -59,7 +59,7 @@ Familiar user interface
                                                               chunks=(1000, 1000))
    x - x.mean(axis=1)                       x - x.mean(axis=1).compute()
 
-**Dask Bag** mimics iterators, Toolz, and PySpark
+**Dask Bag** mimics iterators, Toolz, and PySpark - :doc:`documentation <bag>`
 
 .. code-block:: python
 
@@ -67,7 +67,7 @@ Familiar user interface
    b = db.read_text('2015-*-*.json.gz').map(json.loads)
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
-**Dask Delayed** mimics for loops and wraps custom code
+**Dask Delayed** mimics for loops and wraps custom code - :doc:`documentation <delayed>`
 
 .. code-block:: python
 
@@ -81,7 +81,7 @@ Familiar user interface
    result.compute()
 
 The **concurrent.futures** interface provides general submission of custom
-tasks:
+tasks: - :doc:`documentation <futures>`
 
 .. code-block:: python
 
@@ -156,6 +156,7 @@ then you should start here.
 * :doc:`bag`
 * :doc:`dataframe`
 * :doc:`delayed`
+* :doc:`futures`
 
 .. toctree::
    :maxdepth: 1
@@ -166,6 +167,7 @@ then you should start here.
    bag.rst
    dataframe.rst
    delayed.rst
+   futures.rst
    machine-learning.rst
 
 **Scheduling**
