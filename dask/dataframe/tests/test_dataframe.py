@@ -259,11 +259,11 @@ def test_describe_empty():
     ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
     with pytest.raises(ValueError) as rec:
         ddf.describe()
-    assert rec.match('DataFrame contains only non-numeric data.')
+    assert 'DataFrame contains only non-numeric data.' in str(rec)
 
     with pytest.raises(ValueError) as rec:
         ddf.A.describe()
-    assert rec.match('Cannot compute ``describe`` on object dtype.')
+    assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
 
 
 def test_cumulative():
