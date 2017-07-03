@@ -108,14 +108,27 @@ def _initialize_logging_new_style(config):
     logging.config.dictConfig(config['logging'])
 
 
+def _initialize_logging_file_config(config):
+    """
+    Initialize logging using logging's "Configuration file format".
+    (ref.: https://docs.python.org/2/library/logging.config.html#configuration-file-format)
+    """
+    logging.config.fileConfig(config['logging-file-config'])
+
+
 def initialize_logging(config):
-    log_config = config.get('logging', {})
-    if 'version' in log_config:
-        # logging module mandates version to be an int
-        log_config['version'] = int(log_config['version'])
-        _initialize_logging_new_style(config)
+    if 'logging-file-config' in config:
+        if 'logging' in config:
+            raise RuntimeError("Config options 'logging-file-config' and 'logging' are mutually exclusive.")
+        _initialize_logging_file_config(config)
     else:
-        _initialize_logging_old_style(config)
+        log_config = config.get('logging', {})
+        if 'version' in log_config:
+            # logging module mandates version to be an int
+            log_config['version'] = int(log_config['version'])
+            _initialize_logging_new_style(config)
+        else:
+            _initialize_logging_old_style(config)
 
 
 try:

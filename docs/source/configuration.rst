@@ -162,3 +162,15 @@ mandated by the schema.  The extended format does not set any default values.
    For example, configuring the logging level for the ``distributed``
    logger will also affect its children such as ``distributed.scheduler``,
    unless explicitly overriden.
+
+
+``logging-file-config``
+"""""""""""""""""""""""
+
+As an alternative to the two logging settings formats discussed above,
+you can specify a logging config file.
+Its format adheres to the :mod:`logging` module's
+`Configuration file format <https://docs.python.org/2/library/logging.config.html#configuration-file-format>`_.
+
+.. note::
+   The configuration options `logging-file-config` and `logging` are mutually exclusive.

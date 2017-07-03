@@ -3,11 +3,14 @@ from __future__ import print_function, division, absolute_import
 import logging
 import subprocess
 import sys
+import tempfile
+import os
 
 import pytest
 
 from distributed.utils_test import (captured_handler, captured_logger,
                                     new_config, new_config_file)
+from distributed.config import initialize_logging
 
 
 def dump_logger_list():
@@ -204,3 +207,65 @@ def test_logging_extended():
             """
 
         subprocess.check_call([sys.executable, "-c", code])
+
+
+def test_logging_mutual_exclusive():
+    """
+    Ensure that 'logging-file-config' and 'logging' have to be mutual exclusive.
+    """
+    config = {'logging': {'dask': 'warning'}, 'logging-file-config': '/path/to/config'}
+    with pytest.raises(RuntimeError):
+        initialize_logging(config)
+
+
+def test_logging_file_config():
+    """
+    Test `logging-file-config` logging configuration
+    """
+    logging_config_contents = """
+[handlers]
+keys=console
+
+[formatters]
+keys=simple
+
+[loggers]
+keys=root, foo, foo_bar
+
+[handler_console]
+class=StreamHandler
+level=INFO
+formatter=simple
+args=(sys.stdout,)
+
+[formatter_simple]
+format=%(levelname)s: %(name)s: %(message)s
+
+[logger_root]
+level=WARNING
+handlers=console
+
+[logger_foo]
+level=INFO
+handlers=console
+qualname=foo
+
+[logger_foo_bar]
+level=ERROR
+handlers=console
+qualname=foo.bar
+"""
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as logging_config:
+        logging_config.write(logging_config_contents)
+    dask_config = {'logging-file-config': logging_config.name}
+    with new_config_file(dask_config):
+        code = """if 1:
+            import logging
+            from distributed import config
+            foo = logging.getLogger('foo')
+            bar = logging.getLogger('foo.bar')
+            assert logging.INFO == foo.getEffectiveLevel()
+            assert logging.ERROR == bar.getEffectiveLevel()
+            """
+        subprocess.check_call([sys.executable, "-c", code])
+    os.remove(logging_config.name)
