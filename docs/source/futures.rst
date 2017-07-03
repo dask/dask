@@ -433,10 +433,64 @@ If you want to share large pieces of information then scatter the data first
 API
 ---
 
+**Client**
+
+.. autosummary::
+   Client
+   Client.cancel
+   Client.compute
+   Client.gather
+   Client.get
+   Client.get_dataset
+   Client.get_executor
+   Client.has_what
+   Client.list_datasets
+   Client.map
+   Client.ncores
+   Client.persist
+   Client.publish_dataset
+   Client.rebalance
+   Client.replicate
+   Client.restart
+   Client.run
+   Client.run_on_scheduler
+   Client.scatter
+   Client.shutdown
+   Client.scheduler_info
+   Client.shutdown
+   Client.start_ipython_workers
+   Client.start_ipython_scheduler
+   Client.submit
+   Client.unpublish_dataset
+   Client.upload_file
+   Client.who_has
+
+**Future**
+
+.. autosummary::
+   Future
+   Future.add_done_callback
+   Future.cancel
+   Future.cancelled
+   Future.done
+   Future.exception
+   Future.result
+   Future.traceback
+
+**Functions**
+
+.. autosummary::
+   as_completed
+   fire_and_forget
+   get_client
+   secede
+   wait
+
 .. autofunction:: as_completed
 .. autofucntion:: fire_and_forget
 .. autofunction:: get_client
 .. autofunction:: secede
+.. autofunction:: wait
 
 .. autoclass:: Client
    :members:
