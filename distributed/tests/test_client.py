@@ -4292,5 +4292,16 @@ def test_identity(c, s, a, b):
     assert s.id.lower().startswith('scheduler')
 
 
+@gen_cluster(client=True)
+def test_bytes_keys(c, s, a, b):
+    key = b'inc-123'
+    future = c.submit(inc, 1, key=key)
+    result = yield future
+    assert type(future.key) is bytes
+    assert list(s.task_state)[0] == key
+    assert key in a.data or key in b.data
+    assert result == 2
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *

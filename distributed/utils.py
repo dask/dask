@@ -506,10 +506,8 @@ def tokey(o):
     '1'
     """
     t = type(o)
-    if t is str:
+    if t is str or t is bytes:
         return o
-    elif t is bytes:
-        return o.decode('latin1')
     else:
         return str(o)
 
@@ -517,7 +515,8 @@ def tokey(o):
 def validate_key(k):
     """Validate a key as received on a stream.
     """
-    if type(k) is not str:
+    typ = type(k)
+    if typ is not str and typ is not bytes:
         raise TypeError("Unexpected key type %s (value: %r)"
                         % (type(k), k))
 
