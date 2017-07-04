@@ -535,7 +535,7 @@ from bokeh.application.handlers.function import FunctionHandler
 from bokeh.application import Application
 
 
-def main_doc(worker, doc):
+def main_doc(worker, extra, doc):
     with log_errors():
         statetable = StateTable(worker)
         executing_ts = ExecutingTimeSeries(worker, sizing_mode='scale_width')
@@ -559,11 +559,11 @@ def main_doc(worker, doc):
                             communicating_stream.root,
                             sizing_mode='scale_width'))
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'main'
+        doc.template_variables.update(extra)
 
 
-def crossfilter_doc(worker, doc):
+def crossfilter_doc(worker, extra, doc):
     with log_errors():
         statetable = StateTable(worker)
         crossfilter = CrossFilter(worker)
@@ -574,11 +574,11 @@ def crossfilter_doc(worker, doc):
 
         doc.add_root(column(statetable.root, crossfilter.root))
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'crossfilter'
+        doc.template_variables.update(extra)
 
 
-def systemmonitor_doc(worker, doc):
+def systemmonitor_doc(worker, extra, doc):
     with log_errors():
         sysmon = SystemMonitor(worker, sizing_mode='scale_width')
         doc.title = "Dask Worker Monitor"
@@ -586,11 +586,11 @@ def systemmonitor_doc(worker, doc):
 
         doc.add_root(sysmon.root)
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'system'
+        doc.template_variables.update(extra)
 
 
-def counters_doc(server, doc):
+def counters_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Counters"
         counter = Counters(server, sizing_mode='stretch_both')
@@ -598,18 +598,28 @@ def counters_doc(server, doc):
 
         doc.add_root(counter.root)
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'counters'
+        doc.template_variables.update(extra)
 
 
 class BokehWorker(BokehServer):
-    def __init__(self, worker, io_loop=None, **kwargs):
+    def __init__(self, worker, io_loop=None, prefix='', **kwargs):
         self.worker = worker
         self.server_kwargs = kwargs
-        main = Application(FunctionHandler(partial(main_doc, worker)))
-        crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker)))
-        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker)))
-        counters = Application(FunctionHandler(partial(counters_doc, worker)))
+        self.server_kwargs['prefix'] = prefix or None
+        prefix = prefix or ''
+        prefix = prefix.rstrip('/')
+        if prefix and not prefix.startswith('/'):
+            prefix = '/' + prefix
+
+        extra = {'prefix': prefix}
+
+        extra.update(template_variables)
+
+        main = Application(FunctionHandler(partial(main_doc, worker, extra)))
+        crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker, extra)))
+        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker, extra)))
+        counters = Application(FunctionHandler(partial(counters_doc, worker, extra)))
 
         self.apps = {'/main': main,
                      '/counters': counters,

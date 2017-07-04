@@ -103,7 +103,7 @@
       <ul>
           <li><a href="http://dask.pydata.org/en/latest/" style="padding:0px 0px;"><img src="https://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg"></a></li>
           {% for page in pages %}
-          <li{% if page == active_page %} class="active"{% endif %}><a href="/{{ page }}">{{ page|title }}</a></li>
+          <li{% if page == active_page %} class="active"{% endif %}><a href="{{ prefix }}/{{ page }}">{{ page|title }}</a></li>
           {% endfor %}
       </ul>
     </div>

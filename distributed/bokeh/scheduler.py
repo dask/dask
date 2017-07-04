@@ -876,7 +876,7 @@ class WorkerTable(DashboardComponent):
         self.source.data.update(data)
 
 
-def systemmonitor_doc(scheduler, doc):
+def systemmonitor_doc(scheduler, extra, doc):
     with log_errors():
         table = StateTable(scheduler)
         sysmon = SystemMonitor(scheduler, sizing_mode='scale_width')
@@ -887,11 +887,11 @@ def systemmonitor_doc(scheduler, doc):
         doc.add_root(column(table.root, sysmon.root,
                             sizing_mode='scale_width'))
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'system'
+        doc.template_variables.update(extra)
 
 
-def stealing_doc(scheduler, doc):
+def stealing_doc(scheduler, extra, doc):
     with log_errors():
         table = StateTable(scheduler)
         occupancy = Occupancy(scheduler, height=200, sizing_mode='scale_width')
@@ -909,11 +909,11 @@ def stealing_doc(scheduler, doc):
                             sizing_mode='scale_width'))
 
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'stealing'
+        doc.template_variables.update(extra)
 
 
-def events_doc(scheduler, doc):
+def events_doc(scheduler, extra, doc):
     with log_errors():
         events = Events(scheduler, 'all', height=250)
         events.update()
@@ -921,11 +921,11 @@ def events_doc(scheduler, doc):
         doc.title = "Dask Scheduler Events"
         doc.add_root(column(events.root, sizing_mode='scale_width'))
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'events'
+        doc.template_variables.update(extra)
 
 
-def workers_doc(scheduler, doc):
+def workers_doc(scheduler, extra, doc):
     with log_errors():
         table = WorkerTable(scheduler)
         table.update()
@@ -933,11 +933,11 @@ def workers_doc(scheduler, doc):
         doc.title = "Dask Workers"
         doc.add_root(table.root)
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'workers'
+        doc.template_variables.update(extra)
 
 
-def tasks_doc(scheduler, doc):
+def tasks_doc(scheduler, extra, doc):
     with log_errors():
         ts = TaskStream(scheduler, n_rectangles=100000, clear_interval=60000,
                         sizing_mode='stretch_both')
@@ -946,11 +946,11 @@ def tasks_doc(scheduler, doc):
         doc.title = "Dask Task Stream"
         doc.add_root(ts.root)
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'tasks'
+        doc.template_variables.update(extra)
 
 
-def status_doc(scheduler, doc):
+def status_doc(scheduler, extra, doc):
     with log_errors():
         task_stream = TaskStream(scheduler, n_rectangles=1000, clear_interval=10000, height=350)
         task_stream.update()
@@ -982,23 +982,30 @@ def status_doc(scheduler, doc):
                             task_progress.root,
                             sizing_mode='scale_width'))
         doc.template = template
-        doc.template_variables.update(template_variables)
         doc.template_variables['active_page'] = 'status'
+        doc.template_variables.update(extra)
 
 
 class BokehScheduler(BokehServer):
-    def __init__(self, scheduler, io_loop=None, **kwargs):
+    def __init__(self, scheduler, io_loop=None, prefix='', **kwargs):
         self.scheduler = scheduler
         self.server_kwargs = kwargs
+        self.server_kwargs['prefix'] = prefix or None
+        prefix = prefix or ''
+        prefix = prefix.rstrip('/')
+        if prefix and not prefix.startswith('/'):
+            prefix = '/' + prefix
 
-        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc,
-                                                            scheduler)))
-        workers = Application(FunctionHandler(partial(workers_doc, scheduler)))
-        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler)))
-        counters = Application(FunctionHandler(partial(counters_doc, scheduler)))
-        events = Application(FunctionHandler(partial(events_doc, scheduler)))
-        tasks = Application(FunctionHandler(partial(tasks_doc, scheduler)))
-        status = Application(FunctionHandler(partial(status_doc, scheduler)))
+        extra = {'prefix': prefix}
+        extra.update(template_variables)
+
+        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, scheduler, extra)))
+        workers = Application(FunctionHandler(partial(workers_doc, scheduler, extra)))
+        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler, extra)))
+        counters = Application(FunctionHandler(partial(counters_doc, scheduler, extra)))
+        events = Application(FunctionHandler(partial(events_doc, scheduler, extra)))
+        tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, extra)))
+        status = Application(FunctionHandler(partial(status_doc, scheduler, extra)))
 
         self.apps = {
                 '/system': systemmonitor,
