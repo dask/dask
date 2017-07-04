@@ -133,8 +133,14 @@ class Server(object):
 
     def _measure_tick(self):
         now = time()
-        self.digests['tick-duration'].add(now - self._last_tick)
+        diff = now - self._last_tick
+        self.digests['tick-duration'].add(diff)
         self._last_tick = now
+        if diff > 1:
+            logger.warn("Event loop was unresponsive for %.1fs.  "
+                        "This is often caused by long-running GIL-holding "
+                        "functions.  This can cause timeouts and instability.",
+                        diff)
 
     def log_event(self, name, msg):
         msg['time'] = time()
