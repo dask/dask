@@ -18,6 +18,7 @@ transition-log-length: 100000
 multiprocessing-method: forkserver
 
 # Communication options
+connect-timeout: 3      # seconds delay before connecting fails
 tcp-timeout: 30         # seconds delay before calling an unresponsive connection dead
 default-scheme: tcp
 require-encryption: False   # whether to require encryption on non-local comms

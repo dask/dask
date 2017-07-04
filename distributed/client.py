@@ -673,7 +673,7 @@ class Client(Node):
                     yield gen.sleep(timeout)
 
     @gen.coroutine
-    def _ensure_connected(self, timeout=5):
+    def _ensure_connected(self, timeout=None):
         if (self.scheduler_comm and not self.scheduler_comm.closed() or
             self._connecting_to_scheduler):
             return

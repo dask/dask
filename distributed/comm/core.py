@@ -8,6 +8,7 @@ from six import with_metaclass
 
 from tornado import gen
 
+from ..config import config
 from ..metrics import time
 from . import registry
 from .addressing import parse_address
@@ -152,12 +153,15 @@ class Connector(with_metaclass(ABCMeta)):
 
 
 @gen.coroutine
-def connect(addr, timeout=3, deserialize=True, connection_args=None):
+def connect(addr, timeout=None, deserialize=True, connection_args=None):
     """
     Connect to the given address (a URI such as ``tcp://127.0.0.1:1234``)
     and yield a ``Comm`` object.  If the connection attempt fails, it is
     retried until the *timeout* is expired.
     """
+    if timeout is None:
+        timeout = float(config.get('connect-timeout', 3))  # default 3 s.
+
     scheme, loc = parse_address(addr)
     backend = registry.get_backend(scheme)
     connector = backend.get_connector()

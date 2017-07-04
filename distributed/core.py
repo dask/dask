@@ -353,7 +353,7 @@ class rpc(object):
     comms = ()
     address = None
 
-    def __init__(self, arg=None, comm=None, deserialize=True, timeout=3,
+    def __init__(self, arg=None, comm=None, deserialize=True, timeout=None,
                  connection_args=None):
         self.comms = {}
         self.address = coerce_to_address(arg)
@@ -550,7 +550,7 @@ class ConnectionPool(object):
         return PooledRPCCall(addr, self)
 
     @gen.coroutine
-    def connect(self, addr, timeout=3):
+    def connect(self, addr, timeout=None):
         """
         Get a Comm to the given address.  For internal use.
         """
