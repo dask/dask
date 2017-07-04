@@ -137,7 +137,7 @@ class Future(WrappedKey):
         return self.event.is_set()
 
     def result(self, timeout=None):
-        """ Wait until computation completes. Gather result to local process.
+        """ Wait until computation completes, gather result to local process.
 
         If *timeout* seconds are elapsed before returning, a TimeoutError
         is raised.
