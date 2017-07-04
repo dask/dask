@@ -510,4 +510,3 @@ def test_array_nondim():
     x = da.ones((100,3), chunks=10)
     y = da.array(x)
     assert isinstance(y, da.Array)
-
