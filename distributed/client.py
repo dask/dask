@@ -263,10 +263,9 @@ class Future(WrappedKey):
         return self._state.type
 
     def release(self):
-        with self.client._lock:
-            if not self._cleared and self.client.generation == self._generation:
-                self._cleared = True
-                self.client._dec_ref(tokey(self.key))
+        if not self._cleared and self.client.generation == self._generation:
+            self._cleared = True
+            self.client._dec_ref(tokey(self.key))
 
     def __getstate__(self):
         return self.key
@@ -278,7 +277,9 @@ class Future(WrappedKey):
                               'keys': [tokey(self.key)], 'client': c.id})
 
     def __del__(self):
-        self.release()
+        if not self._cleared and self.client.generation == self._generation:
+            self._cleared = True
+            self.client.loop.add_callback(self.client._dec_ref, tokey(self.key))
 
     def __str__(self):
         if self.type:
@@ -445,6 +446,7 @@ class Client(Node):
         self._loop_thread = None
         self.scheduler = None
         self._lock = threading.Lock()
+        self._refcount_lock = threading.Lock()
 
         if loop is None:
             self._should_close_loop = None
@@ -729,13 +731,15 @@ class Client(Node):
         self.shutdown()
 
     def _inc_ref(self, key):
-        self.refcount[key] += 1
+        with self._refcount_lock:
+            self.refcount[key] += 1
 
     def _dec_ref(self, key):
-        self.refcount[key] -= 1
-        if self.refcount[key] == 0:
-            del self.refcount[key]
-            self._release_key(key)
+        with self._refcount_lock:
+            self.refcount[key] -= 1
+            if self.refcount[key] == 0:
+                del self.refcount[key]
+                self._release_key(key)
 
     def _release_key(self, key):
         """ Release key from distributed memory """
@@ -2042,7 +2046,8 @@ class Client(Node):
         self._restart_event = Event()
         yield self._restart_event.wait()
         self.generation += 1
-        self.refcount.clear()
+        with self._refcount_lock:
+            self.refcount.clear()
 
         raise gen.Return(self)
 

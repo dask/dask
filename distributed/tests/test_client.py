@@ -211,6 +211,7 @@ def test_gc(s, a, b):
     assert s.who_has[x.key]
 
     x.__del__()
+    yield gen.moment
 
     yield c.shutdown()
 
@@ -408,16 +409,19 @@ def test_garbage_collection(c, s, a, b):
 
     assert c.refcount[x.key] == 2
     x.__del__()
+    yield gen.moment
     assert c.refcount[x.key] == 1
 
     z = c.submit(inc, y)
     y.__del__()
+    yield gen.moment
 
     result = yield z
     assert result == 3
 
     ykey = y.key
     y.__del__()
+    yield gen.moment
     assert ykey not in c.futures
 
 
@@ -431,6 +435,7 @@ def test_garbage_collection_with_scatter(c, s, a, b):
 
     assert c.refcount[a.key] == 1
     a.__del__()
+    yield gen.moment
     assert c.refcount[a.key] == 0
 
     start = time()
@@ -449,6 +454,7 @@ def test_recompute_released_key(c, s, a, b):
     xkey = x.key
     del x
     import gc; gc.collect()
+    yield gen.moment
     assert c.refcount[xkey] == 0
 
     # 1 second batching needs a second action to trigger
@@ -487,6 +493,7 @@ def test_missing_data_heals(c, s, a, b):
     if y.key in b.data:
         del b.data[y.key]
         b.release_key(y.key)
+    yield gen.moment
 
     w = c.submit(add, y, z)
 
@@ -526,6 +533,7 @@ def test_gather_robust_to_missing_data(c, s, a, b):
         for w in [a, b]:
             if f.key in w.data:
                 del w.data[f.key]
+                yield gen.moment
                 w.release_key(f.key)
 
     xx, yy, zz = yield c.gather([x, y, z])
@@ -548,6 +556,7 @@ def test_gather_robust_to_nested_missing_data(c, s, a, b):
         for datum in [y, z]:
             if datum.key in worker.data:
                 del worker.data[datum.key]
+                yield gen.moment
                 worker.release_key(datum.key)
 
     result = yield c.gather([z])
@@ -758,6 +767,7 @@ def test_aliases_2(c, s, a, b):
     for dsk, keys in dsk_keys:
         result = yield c.get(dsk, keys, sync=False)
         assert list(result) == list(dask.get(dsk, keys))
+        yield gen.moment
 
 
 @gen_cluster(client=True)
@@ -857,6 +867,7 @@ def test_scatter_singletons(c, s, a, b):
 def test_get_releases_data(c, s, a, b):
     [x] = yield c.get({'x': (inc, 1)}, ['x'], sync=False)
     import gc; gc.collect()
+    yield gen.moment
     assert c.refcount['x'] == 0
 
 
@@ -2289,6 +2300,7 @@ def test_dont_delete_recomputed_results(c, s, w):
     x = c.submit(inc, 1)                        # compute first time
     yield wait([x])
     x.__del__()                                 # trigger garbage collection
+    yield gen.moment
     xx = c.submit(inc, 1)                       # compute second time
 
     start = time()
@@ -3145,6 +3157,7 @@ def test_Client_clears_references_after_restart(c, s, a, b):
     key = x.key
     del x
     import gc; gc.collect()
+    yield gen.moment
 
     assert key not in c.refcount
 
@@ -3341,6 +3354,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
                 yield w._close()
                 running[w] = None
                 del w
+                yield gen.moment
             done.release()
 
         for i in range(count):
