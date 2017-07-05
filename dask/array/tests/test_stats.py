@@ -132,4 +132,4 @@ def test_skew_raises():
     with pytest.raises(ValueError) as rec:
         dask.array.stats.skewtest(a)
 
-    assert rec.match("7 samples")
+    assert "7 samples" in str(rec)
