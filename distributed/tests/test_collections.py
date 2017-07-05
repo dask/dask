@@ -163,20 +163,20 @@ def test_dataframe_groupby_tasks(loop):
             with dask.set_options(get=c.get):
                 for ind in [lambda x: 'A', lambda x: x.A]:
                     a = df.groupby(ind(df)).apply(len)
-                    b = ddf.groupby(ind(ddf)).apply(len)
+                    b = ddf.groupby(ind(ddf)).apply(len, meta=int)
                     assert_equal(a, b.compute(get=dask.get).sort_index())
                     assert not any('partd' in k[0] for k in b.dask)
 
                     a = df.groupby(ind(df)).B.apply(len)
-                    b = ddf.groupby(ind(ddf)).B.apply(len)
+                    b = ddf.groupby(ind(ddf)).B.apply(len, meta=('B', int))
                     assert_equal(a, b.compute(get=dask.get).sort_index())
                     assert not any('partd' in k[0] for k in b.dask)
 
                 with pytest.raises(NotImplementedError):
-                    ddf.groupby(ddf[['A', 'B']]).apply(len)
+                    ddf.groupby(ddf[['A', 'B']]).apply(len, meta=int)
 
                 a = df.groupby(['A', 'B']).apply(len)
-                b = ddf.groupby(['A', 'B']).apply(len)
+                b = ddf.groupby(['A', 'B']).apply(len, meta=int)
 
                 assert_equal(a, b.compute(get=dask.get).sort_index())
 
