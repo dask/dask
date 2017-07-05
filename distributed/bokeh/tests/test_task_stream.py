@@ -1,3 +1,8 @@
+from __future__ import absolute_import, division, print_function
+
+import pytest
+pytest.importorskip('bokeh')
+
 from toolz import frequencies
 
 from distributed.utils_test import gen_cluster, div
