@@ -24,13 +24,13 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import thread
 import logging
-from threading import local, Thread
+import threading
 
 from .compatibility import get_thread_identity
 
 logger = logging.getLogger(__name__)
 
-thread_state = local()
+thread_state = threading.local()
 
 
 def _worker(executor, work_queue):
@@ -57,23 +57,31 @@ def _worker(executor, work_queue):
 class ThreadPoolExecutor(thread.ThreadPoolExecutor):
     def _adjust_thread_count(self):
         if len(self._threads) < self._max_workers:
-            t = Thread(target=_worker,
-                       name="ThreadPool worker %d" % len(self._threads,),
-                       args=(self, self._work_queue))
+            t = threading.Thread(target=_worker,
+                                 name="ThreadPool worker %d" % len(self._threads,),
+                                 args=(self, self._work_queue))
             t.daemon = True
             self._threads.add(t)
             t.start()
+
+    def shutdown(self):
+        with threads_lock:
+            thread.ThreadPoolExecutor.shutdown(self)
 
 
 def secede():
     """ Have this thread secede from the ThreadPoolExecutor """
     thread_state.proceed = False
     ident = get_thread_identity()
-    for t in list(thread_state.executor._threads):
-        if t.ident == ident:
-            thread_state.executor._threads.remove(t)
-            break
+    with threads_lock:
+        for t in list(thread_state.executor._threads):
+            if t.ident == ident:
+                thread_state.executor._threads.remove(t)
+                break
+        thread_state.executor._adjust_thread_count()
 
+
+threads_lock = threading.Lock()
 
 """
 PSF LICENSE AGREEMENT FOR PYTHON 3.5.2
